@@ -53,7 +53,7 @@ export const PullSession = Schema.Struct({
   }),
   background: Schema.optionalKey(Schema.Boolean).annotate({
     description:
-      "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it (EN25). An older brain leaves it out.",
+      "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it. An older brain leaves it out.",
   }),
   touched: Schema.optionalKey(Schema.Boolean).annotate({
     description:
@@ -118,7 +118,7 @@ export const PullChat = Schema.Struct({
   }),
   hasHand: Schema.optionalKey(Schema.Boolean).annotate({
     description:
-      "False when the brain’s applied hand gives the chat no file and shell tools (EN23). It changes only at the brain’s start or wake. Omitted by an older Ren: true.",
+      "False when the brain’s applied hand gives the chat no file and shell tools. It changes only at the brain’s start or wake. Omitted by an older Ren: true.",
   }),
   directory: Schema.optionalKey(Environment.Directory).annotate({
     description:
@@ -194,7 +194,7 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
         unreachable: Schema.optional(
           Schema.Literals(["true", "false"]).annotate({
             description:
-              "`true` when the brain could not reach the session’s environment at its last URL; Ren checks its machine first (EN15).",
+              "`true` when the brain could not reach the session’s environment at its last URL; Ren checks its machine first.",
           }),
         ),
       }),

@@ -6,7 +6,7 @@ import { Bundle } from "@ren/schema/bundle"
 import { Context, Effect, FileSystem, Layer, Path, Schema, Semaphore, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
-// oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake (EN22, EN27). Only a machine that runs start.js can; any other host is replaced instead.
+// oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake. Only a machine that runs start.js can; any other host is replaced instead.
 export interface Interface {
   readonly update: (
     bundles: ReadonlyArray<Bundle.Download>,

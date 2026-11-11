@@ -80,7 +80,7 @@ const actions = {
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
 }
 
-// oxlint-disable-next-line ren/no-comments -- EN3, EN24, EN44: a space runs only machines that can run: a built template of its organization, for its brain one of its brain provider. The template read waits for an archive of it.
+// oxlint-disable-next-line ren/no-comments -- A space runs only machines that can run: a built template of its organization, for its brain one of its brain provider. The template read waits for an archive of it.
 const checkTemplate = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   actor: Actor.Info,

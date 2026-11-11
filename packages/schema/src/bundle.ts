@@ -2,7 +2,7 @@ export * as Bundle from "./bundle.js"
 
 import { Schema } from "effect"
 
-// oxlint-disable-next-line ren/no-comments -- Ren's code for a machine, in three archives: the npm dependencies, which change with bun.lock, and the brain's and the executor's own sources, which change with each deploy (EN26).
+// oxlint-disable-next-line ren/no-comments -- Ren's code for a machine, in three archives: the npm dependencies, which change with bun.lock, and the brain's and the executor's own sources, which change with each deploy.
 export const Kind = Schema.Literals(["dependencies", "brain", "executor"]).annotate({ identifier: "Bundle.Kind" })
 export type Kind = typeof Kind.Type
 

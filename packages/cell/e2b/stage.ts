@@ -19,7 +19,7 @@ const Options = Schema.Struct({
   E2B_TEMPLATE_OWNER: Schema.optionalKey(Schema.String),
   E2B_TEMPLATE_SEED: Schema.optionalKey(Schema.String).annotate({
     description:
-      "A folder of Ren’s bundles (bun machine/bundle.ts <folder>). The image then holds their dependencies, so a new machine downloads only the sources (EN26). They do not name the image: a template with the same system is not built again.",
+      "A folder of Ren’s bundles (bun machine/bundle.ts <folder>). The image then holds their dependencies, so a new machine downloads only the sources. They do not name the image: a template with the same system is not built again.",
   }),
 })
 

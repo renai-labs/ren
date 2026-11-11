@@ -58,7 +58,7 @@ export const agent_session = pgTable(
     harness_version: text(),
     revert_message_id: text(),
     files_reset_at: timestamp(),
-    // oxlint-disable-next-line ren/no-comments -- EN35: the message that continues the chat once after a forced replace of its machine; null when none waits.
+    // oxlint-disable-next-line ren/no-comments -- The message that continues the chat once after a forced replace of its machine; null when none waits.
     continue_message_id: text().$type<Session.MessageID>(),
     sync_seq: bigint({ mode: "number" }),
     sync_upload: integer().notNull().default(0),

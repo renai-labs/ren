@@ -182,7 +182,6 @@ export interface Registry {
   readonly get: (id: string) => Option.Option<Provider>
 }
 
-// oxlint-disable-next-line ren/no-comments -- The providers of one kind that a deployment registers, one per id.
 export const registry = <E, R>(providers: ReadonlyArray<Effect.Effect<Provider, E, R>>) =>
   Effect.gen(function* () {
     const all = yield* Effect.all(providers)

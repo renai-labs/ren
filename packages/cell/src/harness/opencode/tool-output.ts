@@ -58,7 +58,7 @@ const bounded = (content: ReadonlyArray<Tool.Content>, length: number, marker: s
   return isMarked ? items : [...items, { type: "text" as const, text: marker }]
 }
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's ToolOutput saves a long result on the brain's disk (`tool-output.ts:56-57`). With a remote hand it goes to the hand, beside the shell's output files, so the chat's read tool finds it there (EN13). The files go with the hand; there is no cleanup.
+// oxlint-disable-next-line ren/no-comments -- OpenCode's ToolOutput saves a long result on the brain's disk (`tool-output.ts:56-57`). With a remote hand it goes to the hand, beside the shell's output files, so the chat's read tool finds it there. The files go with the hand; there is no cleanup.
 const layer = (filesOf: (workspaceId: Workspace.ID) => EnvironmentFiles.FilesImpl) =>
   Layer.effect(
     Service,

@@ -424,7 +424,7 @@ export const make = (
         }
         const initial = yield* Ref.get(desired)
         const installed = yield* Ref.make(Option.fromUndefinedOr(initial.chats.get(sessionId)))
-        // oxlint-disable-next-line ren/no-comments -- EN23, one rule: a chat's file and shell tools leave its tool list unless it has a hand now: environments, a workspace, and a space with a hand. A chat created without a workspace never gets one; a space that loses its hand takes them at the next pull and gives them back with the hand.
+        // oxlint-disable-next-line ren/no-comments -- One rule: a chat's file and shell tools leave its tool list unless it has a hand now: environments, a workspace, and a space with a hand. A chat created without a workspace never gets one; a space that loses its hand takes them at the next pull and gives them back with the hand.
         yield* tool.transform((editor) => {
           const hasHand = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.hasHand !== false
           if (Option.isSome(connections) && workspaceID && hasHand) return

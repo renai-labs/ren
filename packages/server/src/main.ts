@@ -94,7 +94,7 @@ const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide([AppResol
 // oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: the egress, Ren's code and the host list of their template.
 const environments = Environments.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))
 
-// oxlint-disable-next-line ren/no-comments -- The deployment's brain providers (EN2). A Ren whose brains run in cells registers none, so a space's provider checks pass.
+// oxlint-disable-next-line ren/no-comments -- The deployment's brain providers. A Ren whose brains run in cells registers none, so a space's provider checks pass.
 const brainProviders = Layer.unwrap(
   Effect.gen(function* () {
     const provider = yield* sandboxProvider
@@ -119,7 +119,7 @@ const brainProviders = Layer.unwrap(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today (EN3).
+// oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today.
 const handProviders = Layer.unwrap<
   EnvironmentProvider.Registry,
   Config.ConfigError,

@@ -37,7 +37,7 @@ export const space = pgTable(
     brain_provider: text().$type<EnvironmentProvider.ID>(),
     brain_template_id: text().$type<EnvironmentTemplate.ID>(),
     hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
-    // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused (EN24).
+    // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused.
     environment_template_id: text().$type<EnvironmentTemplate.ID>(),
     // oxlint-disable-next-line ren/no-comments -- The number of the brain and hand settings. Each change of them takes the next; a brain records the number it applied at its last start or wake.
     compute_revision: integer().notNull().default(0),

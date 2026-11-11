@@ -77,7 +77,7 @@ restore)
 esac
 `
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's snapshots run git on the brain's machine (`snapshot.ts:77-96`). With a remote hand, a revert reads and restores the chat's files on the hand (EN13). The config's "snapshots" switch still turns them off.
+// oxlint-disable-next-line ren/no-comments -- OpenCode's snapshots run git on the brain's machine (`snapshot.ts:77-96`). With a remote hand, a revert reads and restores the chat's files on the hand. The config's "snapshots" switch still turns them off.
 const layer = (spawnerOf: (workspaceId: Workspace.ID) => ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
   Layer.effect(
     Snapshot.Service,

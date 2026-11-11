@@ -96,7 +96,7 @@ export interface Interface {
   ) => Effect.Effect<void, EffectDrizzleQueryError>
   // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of the provider keeps its chats' folders.
   readonly workspaceOf: (provider: EnvironmentProvider.ID) => string
-  // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
+  // oxlint-disable-next-line ren/no-comments -- `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
     subject: Subject,
     applied: Applied,
@@ -105,7 +105,6 @@ export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- A turn, or a file or diff request, of each chat: a chat that holds a place on its machine keeps it for 3 more days. An expired place is taken again only at the chat's next access, when the machine has room.
   readonly renew: (sessionIds: ReadonlyArray<Session.ID>) => Effect.Effect<void>
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list.
   readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- The hosts the machines of a remote hand's template answer on. A brain with a host list must reach them.
   readonly handHosts: (environmentTemplateId: EnvironmentTemplate.ID) => Effect.Effect<ReadonlyArray<string>>

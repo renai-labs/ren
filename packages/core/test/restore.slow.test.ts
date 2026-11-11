@@ -629,7 +629,7 @@ it.live("a chat that Ren deleted leaves its brain's harness at the next pull", (
 )
 
 it.live(
-  "a chat that was busy when its machine was lost continues once on the new machine, with the replace notice, and no one asks for it (EN35, EN36, I5)",
+  "a chat that was busy when its machine was lost continues once on the new machine, with the replace notice, and no one asks for it",
   () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

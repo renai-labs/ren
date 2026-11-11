@@ -61,7 +61,7 @@ export const diffsOf = (text: string) =>
     return [{ file, patch: chunk, additions: counts.additions, deletions: counts.deletions, status: statusOf(chunk) }]
   })
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's git provider runs git on the brain's machine (`vcs.ts:261`). With a remote hand, the workspace panel's branch and diff come from git on the hand (EN13). Plugins add no providers here, so `transform` keeps nothing, as in OpenCode's workerd profile.
+// oxlint-disable-next-line ren/no-comments -- OpenCode's git provider runs git on the brain's machine (`vcs.ts:261`). With a remote hand, the workspace panel's branch and diff come from git on the hand. Plugins add no providers here, so `transform` keeps nothing, as in OpenCode's workerd profile.
 const layer = (spawnerOf: (workspaceId: Workspace.ID) => ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
   Layer.effect(
     Vcs.Service,

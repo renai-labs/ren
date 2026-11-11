@@ -62,7 +62,7 @@ describe("brain runs", () => {
     await second.dispose()
   })
 
-  test("a sandbox that is gone marks its brain's busy chats interrupted, and the brain is replaced with no access (EN35)", async () => {
+  test("a sandbox that is gone marks its brain's busy chats interrupted, and the brain is replaced with no access", async () => {
     const found = await runs.seeded()
     const current = await runs.ren({ lostEvery: "50 millis" })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
@@ -86,7 +86,7 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
-  test("a failed brain whose retry time passed starts again with no access when a chat waits to continue (EN19, EN35)", async () => {
+  test("a failed brain whose retry time passed starts again with no access when a chat waits to continue", async () => {
     const found = await runs.seeded()
     const current = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_PULL_TIMEOUT: "3 seconds" } })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
@@ -543,7 +543,7 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
-  test("a brain whose space moved its hand to a remote machine is replaced at its resume, and the new one is for a remote hand (EN13)", async () => {
+  test("a brain whose space moved its hand to a remote machine is replaced at its resume, and the new one is for a remote hand", async () => {
     const found = await runs.seeded()
     const current = await runs.ren()
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))

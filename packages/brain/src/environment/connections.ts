@@ -85,7 +85,7 @@ export const layer = Layer.effect(
     const http = yield* HttpClient.HttpClient
     const liveEntries = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
     const renDown = new Map<Session.ID, { readonly untilMs: number; readonly error: Unavailable }>()
-    // oxlint-disable-next-line ren/no-comments -- EN15: sessions whose environment gave no answer; their next access asks Ren to check the machine.
+    // oxlint-disable-next-line ren/no-comments -- Sessions whose environment gave no answer; their next access asks Ren to check the machine.
     const unanswered = new Set<Session.ID>()
     const openAccess = Effect.fn("EnvironmentConnections.openAccess")(function* (sessionId: Session.ID) {
       const down = renDown.get(sessionId)

@@ -16,7 +16,7 @@ import path from "node:path"
 const unavailable = (what: string) =>
   Effect.die(new Error(`${what} needs the chat's hand, and this chat has none on a brain with remote hands`))
 
-// oxlint-disable-next-line ren/no-comments -- OpenCode's FileSystem reads the brain's disk (`filesystem.ts:114-119`, OpenCode #44568); with a remote hand, the workspace panel reads the hand's files instead (EN13).
+// oxlint-disable-next-line ren/no-comments -- OpenCode's FileSystem reads the brain's disk (`filesystem.ts:114-119`, OpenCode #44568); with a remote hand, the workspace panel reads the hand's files instead.
 const layer = (filesOf: (workspaceId: Workspace.ID) => EnvironmentFiles.FilesImpl) =>
   Layer.effect(
     FileSystem.Service,

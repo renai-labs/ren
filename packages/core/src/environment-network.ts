@@ -12,7 +12,6 @@ import { Credentials } from "./credentials.js"
 import { Deployment } from "./deployment.js"
 import { Models } from "./models.js"
 
-// oxlint-disable-next-line ren/no-comments -- Npm, PyPI and its file host, the Debian and Ubuntu mirrors, and the Go module proxy with its checksum database.
 export const packageManagerHosts = [
   "registry.npmjs.org",
   "pypi.org",

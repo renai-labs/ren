@@ -4,7 +4,7 @@ RUN apt-get update \
   && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo \
   && rm -rf /var/lib/apt/lists/*
 
-# A template's packages reach a running machine in place, as root through sudo (EN22).
+# A template's packages reach a running machine in place, as root through sudo.
 RUN (id -u user >/dev/null 2>&1 || useradd --create-home --shell /bin/bash user) \
   && echo 'user ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/user \
   && chmod 0440 /etc/sudoers.d/user
@@ -20,7 +20,7 @@ RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && unzip -q -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
   && rm /tmp/rclone.zip
 
-# Ren's code is not in the image: start.js downloads it as bundles (EN26).
+# Ren's code is not in the image: start.js downloads it as bundles.
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=70%' >>/etc/systemd/system/ren-tools.slice
 

@@ -15,7 +15,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("EnvironmentA
 }) {}
 
 export interface Interface {
-  // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the last connection to the session's environment got no answer.
+  // oxlint-disable-next-line ren/no-comments -- `unreachable` when the last connection to the session's environment got no answer.
   readonly open: (
     sessionId: Session.ID,
     options: { readonly unreachable: boolean },

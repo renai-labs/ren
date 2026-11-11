@@ -605,7 +605,7 @@ it.live("a session that has no access or a dead sandbox leaves the connection of
   }),
 )
 
-it.live("after its environment gave no answer, a session's next access asks Ren to check the machine (EN15)", () =>
+it.live("after its environment gave no answer, a session's next access asks Ren to check the machine", () =>
   Effect.gen(function* () {
     const relay = yield* Relay.make(Relay.portOf(yield* TestEnvironment.url))
     const access = yield* accessAt(relay.url)

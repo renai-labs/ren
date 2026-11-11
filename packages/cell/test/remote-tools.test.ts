@@ -465,7 +465,7 @@ it.live("a background command's output file on the sandbox grows while the comma
 )
 
 it.live(
-  "a chat with a shell that still runs after its turn reports a background process, and stops after the shell ends (EN25)",
+  "a chat with a shell that still runs after its turn reports a background process, and stops after the shell ends",
   () =>
     Effect.gen(function* () {
       const opened = yield* open()
@@ -574,7 +574,7 @@ it.live("a client runs a command on the session's sandbox, follows its output an
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- The workspace panel reads the chat's hand: the brain's own machine (co-located), or another machine through the Environment API (remote, EN13).
+// oxlint-disable-next-line ren/no-comments -- The workspace panel reads the chat's hand: the brain's own machine (co-located), or another machine through the Environment API (remote).
 const places = [
   { name: "the sandbox", it, isRemoteHand: false, folderOf: folder, real: (path: string) => path },
   { name: "a remote hand", it: hand, isRemoteHand: true, folderOf: handFolder, real: onHand },

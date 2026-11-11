@@ -154,7 +154,6 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   ) => Effect.Effect<Option.Option<string>, E>
 }
 
-// oxlint-disable-next-line ren/no-comments -- How each kind is named in spans (`BrainLifecycle.step`), messages (`Brain brn_…`) and log annotations (`ren.brain.id`).
 const kindNames = {
   brain: { name: "BrainLifecycle", noun: "Brain", annotation: "brain" },
   hand: { name: "EnvironmentLifecycle", noun: "Environment", annotation: "environment" },
@@ -187,13 +186,12 @@ const phaseAfterResume = (
 
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
-// oxlint-disable-next-line ren/no-comments -- A time some duration after another, as the rows keep times.
 export const later = (at: Date, duration: Duration.Input) =>
   DateTime.toDateUtc(DateTime.addDuration(DateTime.makeUnsafe(at), duration))
 
 const sameHosts = Option.makeEquivalence(Array.makeEquivalence(Equivalence.strictEqual<string>()))
 
-// oxlint-disable-next-line ren/no-comments -- Ready and inside its keep-alive. A machine past its keep-alive may be paused.
+// oxlint-disable-next-line ren/no-comments -- A machine past its keep-alive may be paused.
 const isAwake = (row: Pick<Row<string>, "phase" | "keep_alive_until">, at: Date) =>
   row.phase === "ready" && (row.keep_alive_until?.getTime() ?? 0) > at.getTime()
 
@@ -624,7 +622,6 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   const ensure = (id: Id) => Effect.flatMap(read(id), definition.ensure)
 
-  // oxlint-disable-next-line ren/no-comments -- Starts a failed machine's steps again under a new run epoch, with no failures.
   const restart = (row: R, retries: number) =>
     update(row.id, {
       phase: row.binding ? "resuming" : "creating",

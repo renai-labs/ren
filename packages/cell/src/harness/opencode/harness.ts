@@ -88,7 +88,7 @@ const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
     Effect.orDie,
   )
 
-// oxlint-disable-next-line ren/no-comments -- The chat's instruction about its file and shell tools matches what it has: at start, and at each pull that adds or takes away its hand (EN23).
+// oxlint-disable-next-line ren/no-comments -- The chat's instruction about its file and shell tools matches what it has: at start, and at each pull that adds or takes away its hand.
 const applyEnvironmentInstructions = Effect.fnUntraced(function* (
   client: OpenCodeClient,
   server: OpenCodeServer.Instance,
@@ -909,7 +909,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             ),
             Stream.runHead,
           )
-          // oxlint-disable-next-line ren/no-comments -- EN25: a shell that still runs, such as one the agent put in the background, keeps the machine awake.
+          // oxlint-disable-next-line ren/no-comments -- A shell that still runs, such as one the agent put in the background, keeps the machine awake.
           const background = yield* server
             .shells(info.id, (shells) => shells.list())
             .pipe(

@@ -26,7 +26,7 @@ export interface Desired {
 // oxlint-disable-next-line ren/no-comments -- The machine a brain runs on now. None for a new machine, or a host with no machine of its own, such as a cell: either runs the desired settings as they are.
 export interface Machine {
   readonly provider: string | null
-  // oxlint-disable-next-line ren/no-comments -- The brain was made for a remote hand: OpenCode's saved output, file panel, git and snapshots go to the hand (EN13). It is fixed for the life of the process.
+  // oxlint-disable-next-line ren/no-comments -- The brain was made for a remote hand: OpenCode's saved output, file panel, git and snapshots go to the hand. It is fixed for the life of the process.
   readonly isRemote: boolean
   readonly hand: Space.AppliedHand | null
   readonly workspace: Option.Option<string>
@@ -63,7 +63,6 @@ export interface Interface {
     brainId: Brain.ID,
     options: { readonly machine: "new" | "running" | "none" },
   ) => Effect.Effect<Plan>
-  // oxlint-disable-next-line ren/no-comments -- The plan for the brain's running machine, without applying it.
   readonly check: (brainId: Brain.ID) => Effect.Effect<Plan>
   // oxlint-disable-next-line ren/no-comments -- The hand the brain's chats use now, and the space revision it applied. A brain that has applied none yet applies the space's now, when its machine can run it.
   readonly appliedOrApply: (brainId: Brain.ID) => Effect.Effect<Applied>

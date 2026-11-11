@@ -48,7 +48,7 @@ test("saved history leaves out a row it cannot show, logs it, and keeps the othe
   expect(logged).toHaveLength(1)
 })
 
-test("a stand-in for a message too large to sync decodes on restore, in the place of the message it stands for (EN37)", () => {
+test("a stand-in for a message too large to sync decodes on restore, in the place of the message it stands for", () => {
   const row = OpenCodeFixtures.recordings
     .flatMap((recording) => recording.chats)
     .flatMap((chat) => chat.messages)

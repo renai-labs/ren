@@ -69,7 +69,7 @@ export const tooLarge = "Output too large, not saved."
 
 const Created = Schema.fromJsonString(Schema.Struct({ time: Schema.Struct({ created: Schema.Number }) }))
 
-// oxlint-disable-next-line ren/no-comments -- EN37: a message larger than the sync limit syncs as a short synthetic message with its id and time, so the rest of its chat syncs and a restore still has the message's place.
+// oxlint-disable-next-line ren/no-comments -- A message larger than the sync limit syncs as a short synthetic message with its id and time, so the rest of its chat syncs and a restore still has the message's place.
 export const standIn = (row: Sync.OpenCodeMessageRow): Sync.OpenCodeMessageRow => ({
   id: row.id,
   session_id: row.session_id,

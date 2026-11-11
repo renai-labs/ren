@@ -378,7 +378,7 @@ export const layer = Layer.effect(
     const background = yield* Effect.scope
     const continuing = new Set<Session.ID>()
 
-    // oxlint-disable-next-line ren/no-comments -- EN35, EN36: one message continues each chat that a replace marked. The brain sends a message id once, so a try after a crash sends nothing twice; a failed try stays marked for the next pull.
+    // oxlint-disable-next-line ren/no-comments -- One message continues each chat that a replace marked. The brain sends a message id once, so a try after a crash sends nothing twice; a failed try stays marked for the next pull.
     const continueMarked = Effect.fnUntraced(function* (brainId: Brain.ID) {
       const marked = yield* database.db
         .select({ sessionId: chats.id, messageId: chats.continue_message_id, createdBy: chats.created_by })
@@ -603,7 +603,7 @@ export const layer = Layer.effect(
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
         const inference = yield* models.inference
-        // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake (EN23).
+        // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake.
         const applied = yield* compute.appliedOrApply(host.brainId)
         const tools = yield* appliedOf(host.brainId, applied.hand)
         const capabilities = yield* environments.capabilities(

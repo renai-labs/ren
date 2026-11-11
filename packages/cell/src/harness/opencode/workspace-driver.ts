@@ -86,7 +86,7 @@ export const session = (connections: EnvironmentConnections.Interface, sessionId
   return { spawner: environment.spawner, spawnerWith: environment.spawnerWith, overrides: files(environment.files) }
 }
 
-// oxlint-disable-next-line ren/no-comments -- A brain with a remote hand also moves OpenCode's saved tool output, workspace panel files, git and snapshots to the hand, because they use the brain's disk (EN13). A co-located brain keeps OpenCode's own: its disk is the hand's.
+// oxlint-disable-next-line ren/no-comments -- A brain with a remote hand also moves OpenCode's saved tool output, workspace panel files, git and snapshots to the hand, because they use the brain's disk. A co-located brain keeps OpenCode's own: its disk is the hand's.
 export const replacements = (
   connections: EnvironmentConnections.Interface,
   options: { readonly isRemoteHand?: boolean } = {},

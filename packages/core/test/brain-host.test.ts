@@ -337,7 +337,7 @@ describe("BrainHost pull", () => {
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
-  it.live("a pull tells each chat the hand its brain applied, not the space's newer setting (EN23)", () =>
+  it.live("a pull tells each chat the hand its brain applied, not the space's newer setting", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
       const database = yield* Database.Service

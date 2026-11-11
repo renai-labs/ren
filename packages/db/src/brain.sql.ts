@@ -37,13 +37,13 @@ export const brain = pgTable(
       readonly config: Schema.Json
       readonly system: string | null
     }>(),
-    // oxlint-disable-next-line ren/no-comments -- The space's hand when the machine was created. A brain made for a remote hand runs OpenCode's saved tool output, files and git on the hand (EN13); null on a machine made before this column, which runs them on its own disk.
+    // oxlint-disable-next-line ren/no-comments -- The space's hand when the machine was created. A brain made for a remote hand runs OpenCode's saved tool output, files and git on the hand; null on a machine made before this column, which runs them on its own disk.
     hand_placement: text().$type<Space.Hand["placement"]>(),
     // oxlint-disable-next-line ren/no-comments -- The hand the brain's chats use now, and the space's compute_revision it came from. Both change only at the brain's start or wake; null on a brain that has not applied one yet.
     hand: jsonb().$type<Space.AppliedHand>(),
     compute_revision: integer().notNull().default(0),
     // oxlint-disable-next-line ren/no-comments -- Set by a shutdown. A stopped brain wakes only for new work or a person who opens a chat, never for a reconnect or file poll.
-    // oxlint-disable-next-line ren/no-comments -- The bundle versions the machine runs; null on a machine whose image holds Ren's code (EN26).
+    // oxlint-disable-next-line ren/no-comments -- The bundle versions the machine runs; null on a machine whose image holds Ren's code.
     bundles: jsonb().$type<Readonly<Record<Bundle.Kind, string>>>(),
     // oxlint-disable-next-line ren/no-comments -- Set at create and read by every later step: the sandbox sends its traffic through the egress, so the brain holds placeholders, never real keys or its host token.
     egress: boolean().notNull().default(false),
@@ -55,10 +55,10 @@ export const brain = pgTable(
     failure: text(),
     keep_alive_until: timestamp(),
     last_active_at: timestamp(),
-    // oxlint-disable-next-line ren/no-comments -- EN19: a failed brain starts again at its first access after retry_at; retries counts these starts since the last ready.
+    // oxlint-disable-next-line ren/no-comments -- A failed brain starts again at its first access after retry_at; retries counts these starts since the last ready.
     retry_at: timestamp(),
     retries: integer().notNull().default(0),
-    // oxlint-disable-next-line ren/no-comments -- EN17: the first check that found the brain silent while its machine runs.
+    // oxlint-disable-next-line ren/no-comments -- The first check that found the brain silent while its machine runs.
     unanswered_since: timestamp(),
     network_hosts: jsonb().$type<ReadonlyArray<string>>(),
     last_progress_at: timestamp(),
