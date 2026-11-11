@@ -339,7 +339,7 @@ const matches = (query: ReturnType<typeof terms>, haystack: ReadonlyArray<string
 }
 
 const pageAt = <A>(found: ReadonlyArray<A>, cursor: string | undefined, limit: number) => {
-  const start = Number(cursor ?? "0") || 0
+  const start = Option.getOrElse(Schema.decodeUnknownOption(Schema.FiniteFromString)(cursor), () => 0)
   return {
     page: found.slice(start, start + limit),
     next_cursor: start + limit < found.length ? String(start + limit) : null,

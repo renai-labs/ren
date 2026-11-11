@@ -210,6 +210,7 @@ function TemplateDialog(props: {
                 max={100}
                 value={draft.sessionsPerEnvironment}
                 onChange={(event) =>
+                  // ast-grep-ignore: no-number-or-default -- The field's minimum is 1, so an empty field and 0 both mean 1.
                   setDraft({ ...draft, sessionsPerEnvironment: Number(event.currentTarget.value) || 1 })
                 }
               />

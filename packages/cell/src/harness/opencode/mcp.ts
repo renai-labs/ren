@@ -9,7 +9,7 @@ import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import { Models } from "@ren/schema/models"
-import { Clock, Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
+import { Clock, Duration, Effect, Equal, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
 import { HostToken } from "../../host-token.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
@@ -313,7 +313,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const changed = Effect.gen(function* () {
     const next = yield* desired(Ref.getUnsafe(latest))
     const before = yield* Ref.getAndSet(applied, next)
-    return JSON.stringify(before) === JSON.stringify(next) ? Option.none<ReadonlyArray<Server>>() : Option.some(before)
+    return Equal.equals(before, next) ? Option.none<ReadonlyArray<Server>>() : Option.some(before)
   })
 
   const reload = (before: ReadonlyArray<Server>, only?: ReadonlyArray<string>) =>

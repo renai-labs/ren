@@ -111,7 +111,7 @@ export const deadlineOf = (
   run: { readonly scheduledAt: Date; readonly claimedAt: Date; readonly trigger: "timed" | "manual" },
 ) => {
   const from = run.claimedAt.getTime() > run.scheduledAt.getTime() ? run.claimedAt : run.scheduledAt
-  const hourLater = new Date(from.getTime() + hour)
+  const hourLater = DateTime.toDateUtc(DateTime.addDuration(DateTime.makeUnsafe(from), Duration.hours(1)))
   if (run.trigger === "manual" || row.run_at) return hourLater
   return Option.getOrElse(nextFire({ ...row, until_at: null }, from), () => hourLater)
 }

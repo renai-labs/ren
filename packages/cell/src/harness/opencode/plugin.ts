@@ -28,6 +28,7 @@ import {
   Clock,
   Deferred,
   Effect,
+  Equal,
   Option,
   Predicate,
   Record,
@@ -272,7 +273,7 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
           const instance = (yield* Ref.get(instances)).get(sessionId)
           if (!next || !instance) return
           const previous = Option.getOrUndefined(yield* Ref.getAndSet(instance.installed, Option.some(next)))
-          if (JSON.stringify(previous?.resolved) !== JSON.stringify(next.resolved)) yield* instance.reload
+          if (!Equal.equals(previous?.resolved, next.resolved)) yield* instance.reload
           const sessionID = SessionID.make(sessionId)
           const info = Option.getOrUndefined(yield* instance.session.get({ sessionID }).pipe(Effect.option))
           if (!info) return
@@ -719,7 +720,7 @@ export const make = (
           applying.withPermit(
             Effect.gen(function* () {
               if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
-              const modelChanged = JSON.stringify(snapshot.models) !== JSON.stringify((yield* Ref.get(applied)).models)
+              const modelChanged = !Equal.equals(snapshot.models, (yield* Ref.get(applied)).models)
               yield* Ref.set(models, snapshot.models)
               if (modelChanged) {
                 yield* integration.reload()

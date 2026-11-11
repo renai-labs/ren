@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Brain } from "@ren/schema/brain"
-import { Effect, Option, Random, Schema } from "effect"
+import { Effect, Equal, Option, Random, Schema } from "effect"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
@@ -65,9 +65,7 @@ const faulty = () => {
         ),
         destroy: (binding) =>
           Effect.gen(function* () {
-            const listed = (yield* provider.list.pipe(Effect.orDie)).find(
-              (each) => JSON.stringify(each.binding) === JSON.stringify(binding),
-            )
+            const listed = (yield* provider.list.pipe(Effect.orDie)).find((each) => Equal.equals(each.binding, binding))
             if (faults.recording && listed && Schema.is(Brain.ID)(listed.id)) {
               const id = listed.id
               const row = yield* Effect.promise(() => runs.row(id))

@@ -6,7 +6,7 @@ import type { EnvironmentProvider } from "@ren/schema/environment-provider"
 import type { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Effect } from "effect"
+import { Effect, Equal } from "effect"
 import type { Access } from "../access.js"
 import { Actor } from "../actor.js"
 import { SessionPolicy } from "../session/policy.js"
@@ -70,8 +70,10 @@ export const isComputeChanged = (
   current: ReturnType<typeof machines>,
   input: Pick<Space.UpdateInput, "brain" | "hand">,
 ) =>
-  JSON.stringify([brainColumns(input.brain ?? current.brain), handColumns(input.hand ?? current.hand)]) !==
-  JSON.stringify([brainColumns(current.brain), handColumns(current.hand)])
+  !Equal.equals(
+    [brainColumns(input.brain ?? current.brain), handColumns(input.hand ?? current.hand)],
+    [brainColumns(current.brain), handColumns(current.hand)],
+  )
 
 export const slugs = Effect.fnUntraced(function* (
   transaction: Database.Transaction,

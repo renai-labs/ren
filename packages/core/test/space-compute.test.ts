@@ -5,7 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Equal, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Bundles } from "../src/bundles.js"
@@ -172,7 +172,7 @@ describe("SpaceCompute", () => {
           return {
             name: each.name,
             plan: plan._tag,
-            isKept: JSON.stringify(yield* subject.state) === JSON.stringify(before),
+            isKept: Equal.equals(yield* subject.state, before),
           }
         }),
       )

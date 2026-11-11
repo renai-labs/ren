@@ -1,0 +1,9 @@
+id: no-new-date-now
+language: Tsx
+message: "`new Date()` reads the wall clock, which `TestClock` cannot move. Read the time from `Clock` or `DateTime.now`."
+severity: error
+files:
+  - "packages/core/src/**"
+  - "packages/cell/src/**"
+rule:
+  pattern: new Date()

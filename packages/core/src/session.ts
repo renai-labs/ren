@@ -478,7 +478,7 @@ export const layer = Layer.effect(
             if (row.session.archived_at) return toInfo(row)
             yield* transaction
               .update(Database.Schema.agent_session)
-              .set({ archived_at: new Date() })
+              .set({ archived_at: sql`now()` })
               .where(eq(Database.Schema.agent_session.id, id))
             return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
           }),

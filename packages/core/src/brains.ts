@@ -29,7 +29,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
 import { Cause, Clock, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Struct } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
@@ -332,7 +332,7 @@ export const layer = Layer.effect(
         Effect.andThen(
           database.db
             .update(Database.Schema.agent_session)
-            .set({ started_at: new Date() })
+            .set({ started_at: sql`now()` })
             .where(
               and(
                 eq(Database.Schema.agent_session.id, input.sessionId),

@@ -4,6 +4,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tans
 import { Link, useNavigate } from "@tanstack/react-router"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
+import { DateTime } from "effect"
 import { toast } from "@ren/ui/sonner"
 import { cn } from "cn"
 import {
@@ -383,11 +384,15 @@ type Origin = (typeof origins)[number]["value"]
 
 const isOrigin = (value: string): value is Origin => origins.some((origin) => origin.value === value)
 
-const startOfDayAgo = (daysAgo: number) => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return new Date(today.getTime() - daysAgo * 86_400_000).toISOString()
-}
+const startOfDayAgo = (daysAgo: number) =>
+  DateTime.toDateUtc(
+    DateTime.startOf(
+      DateTime.subtract(DateTime.makeZonedUnsafe(DateTime.nowUnsafe(), { timeZone: DateTime.zoneMakeLocal() }), {
+        days: daysAgo,
+      }),
+      "day",
+    ),
+  ).toISOString()
 
 const chatFilter = (filters: Filters, userId: string): SessionFilter => {
   const status = filters.status?.length === 1 ? filters.status.at(0) : undefined

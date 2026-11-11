@@ -22,6 +22,7 @@ import {
   Clock,
   DateTime,
   Effect,
+  Equal,
   Layer,
   Option,
   Ref,
@@ -246,7 +247,7 @@ const overrideOf = (session: Option.Option<Session.Info>, input: StartBody) => {
   const saved = Option.getOrUndefined(Option.flatMap(session, SessionSettings.savedOf))
   const start = input.model ?? null
   return {
-    model: saved && JSON.stringify(saved.start) === JSON.stringify(start) ? saved.model : start,
+    model: saved && Equal.equals(saved.start, start) ? saved.model : start,
     defaultModels: input.defaultModels ?? saved?.defaultModels ?? {},
   }
 }

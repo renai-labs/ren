@@ -2,7 +2,7 @@ export * as HotReload from "./hot-reload.js"
 
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { Session } from "@ren/schema/session"
-import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
+import { Clock, Context, DateTime, Duration, Effect, Equal, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AppStore } from "./app-store.js"
 import { ChannelStore } from "./channel-store.js"
@@ -159,8 +159,7 @@ export const layer = Layer.effect(
           const next = Object.fromEntries(reply.deleted.map((id) => [id, since[id] ?? now]))
           const due = reply.deleted.filter((id) => now - (next[id] ?? now) >= Duration.toMillis(folderAfter))
           yield* Effect.forEach(due, (id) => opened.transcript.removeFolder(id), { discard: true })
-          if (JSON.stringify(next) !== JSON.stringify(since))
-            yield* Effect.promise(() => storage.put(deletedKey, JSON.stringify(next)))
+          if (!Equal.equals(next, since)) yield* Effect.promise(() => storage.put(deletedKey, JSON.stringify(next)))
         }),
       )
     }).pipe(

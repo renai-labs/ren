@@ -6,7 +6,7 @@ import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { ChannelPlace } from "@ren/schema/channel-place"
-import { and, asc, count, eq, inArray, isNull } from "drizzle-orm"
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Context, DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
 import { Access } from "./access.js"
@@ -267,7 +267,7 @@ export const layer = Layer.effect(
             const moved = before.space_id !== input.spaceId
             yield* transaction
               .update(table)
-              .set({ ...values, updated_at: new Date() })
+              .set({ ...values, updated_at: sql`now()` })
               .where(eq(table.id, before.id))
             return { where, announce: moved ? Option.some(target.name) : Option.none() }
           }),

@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Equal, Schema } from "effect"
 
 const OpenApiDocument = Schema.Struct({
   components: Schema.Struct({ schemas: Schema.Record(Schema.String, Schema.Unknown) }),
@@ -69,7 +69,7 @@ export function stabilizeOpenApi(source: object) {
   for (const [name, schema] of Object.entries(result.components.schemas)) {
     const target = renames.get(name) ?? name
     const previous = stable.get(target)
-    if (previous !== undefined && JSON.stringify(canonical(previous)) !== JSON.stringify(canonical(schema))) {
+    if (previous !== undefined && !Equal.equals(canonical(previous), canonical(schema))) {
       throw new Error(`Content-addressed OpenAPI component collision: ${target}`)
     }
     stable.set(target, schema)

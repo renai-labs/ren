@@ -1,0 +1,8 @@
+id: no-json-equality
+language: Tsx
+message: "Comparing JSON text depends on key order. Use an `Equivalence` (`Array.makeEquivalence`, `Option.makeEquivalence`) or `Equal.equals`."
+severity: error
+rule:
+  any:
+    - pattern: JSON.stringify($LEFT) === JSON.stringify($RIGHT)
+    - pattern: JSON.stringify($LEFT) !== JSON.stringify($RIGHT)
