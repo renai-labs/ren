@@ -1,5 +1,15 @@
 import { DateTime, Option } from "effect"
-import { useState, type ReactNode } from "react"
+import { flushSync } from "react-dom"
+import {
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  type TouchEvent,
+  type UIEvent,
+  type WheelEvent,
+} from "react"
 import {
   AppConnect,
   ChannelReply,
@@ -58,6 +68,7 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
 } from "@ren/ui/message-scroller"
 import { Spinner } from "@ren/ui/spinner"
 import {
@@ -228,7 +239,7 @@ function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string
   }, [])
 }
 
-function groupTurns(blocks: ReadonlyArray<Block>) {
+function groupTurns(blocks: ReadonlyArray<Block>, runningTurn: string | undefined) {
   const lastSteps = new Map(
     blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
   )
@@ -237,7 +248,7 @@ function groupTurns(blocks: ReadonlyArray<Block>) {
       grouped.push(block)
       return grouped
     }
-    if (block.kind === "answer" && (lastSteps.get(block.turn) ?? -1) < index) {
+    if (block.kind === "answer" && (block.turn === runningTurn || (lastSteps.get(block.turn) ?? -1) < index)) {
       grouped.push(block)
       return grouped
     }
@@ -1279,6 +1290,42 @@ function History(props: { loading: boolean; onLoadMore: () => void }) {
   return <MessagesSkeleton label="Loading earlier messages" />
 }
 
+function WorkingMarker(props: { busy: boolean; working: boolean }) {
+  if (!props.busy && !props.working) return null
+  return (
+    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
+    <MessageScrollerItem messageId="working">
+      <Marker
+        aria-hidden={!props.working}
+        className={cn("transition-opacity duration-150", !props.working && "opacity-0")}
+      >
+        <MarkerContent className="shimmer motion-reduce:shimmer-none">Working on the next step</MarkerContent>
+      </Marker>
+    </MessageScrollerItem>
+  )
+}
+
+const liveItems = 3
+
+const scrollUpKeys = new Set(["ArrowUp", "PageUp", "Home"])
+
+const bottomSlack = 8
+
+const atBottom = (viewport: HTMLElement) =>
+  viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= bottomSlack
+
+function useFollow(turn: string | undefined) {
+  const [paused, setPaused] = useState<{ readonly turn: string | undefined }>()
+  const following = paused === undefined || paused.turn !== turn
+  return {
+    following,
+    pause: () => {
+      if (following) setPaused({ turn })
+    },
+    resume: () => setPaused(undefined),
+  }
+}
+
 function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMessage.Info>): Context {
   return {
     admin: props.admin ?? false,
@@ -1301,15 +1348,33 @@ function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMess
 }
 
 export function Transcript(props: TranscriptProps) {
+  const follow = useFollow(props.activeMessageID)
+  return (
+    <MessageScrollerProvider autoScroll={follow.following}>
+      <TranscriptScroller transcript={props} follow={follow} />
+    </MessageScrollerProvider>
+  )
+}
+
+function TranscriptScroller(input: { transcript: TranscriptProps; follow: ReturnType<typeof useFollow> }) {
+  const props = input.transcript
+  const follow = input.follow
+  const scroller = useMessageScroller()
+  const touchY = useRef(0)
+  const lastTop = useRef(0)
+  const toEnd = () => {
+    flushSync(follow.resume)
+    scroller.scrollToEnd()
+  }
   const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
   const context = contextOf(props, byId)
   const turns = context.turns
-  const blocks = groupTurns(blocksOf(props.rows, byId))
+  const activeTurn = props.busy ? props.activeMessageID : undefined
+  const blocks = groupTurns(blocksOf(props.rows, byId), activeTurn)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(
     blocks.flatMap((block) => (block.kind === "answer" ? [[block.turn, block.key] as const] : [])),
   )
-  const activeTurn = props.busy ? props.activeMessageID : undefined
   const workedFor = (turn: string) => {
     const user = byId.get(turn)
     const milliseconds = TimelineText.turnDuration(user?.type === "user" ? user : undefined, turns.get(turn) ?? [])
@@ -1320,63 +1385,80 @@ export function Transcript(props: TranscriptProps) {
   const empty =
     props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
-    <MessageScrollerProvider autoScroll>
-      <MessageScroller className="@container flex-1">
-        <MessageScrollerViewport
-          preserveScrollOnPrepend
-          className="scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)]"
-        >
-          <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
-            {props.more ? (
-              <MessageScrollerItem
-                messageId="history"
-                className={props.loadingHistory ? "mb-6" : "absolute inset-x-6 top-1"}
-              >
-                <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} />
-              </MessageScrollerItem>
-            ) : null}
-            {props.loading ? (
-              <MessageScrollerItem messageId="loading">
-                <MessagesSkeleton />
-              </MessageScrollerItem>
-            ) : null}
-            {blocks.map((block) => (
-              <MessageScrollerItem
-                key={block.key}
-                messageId={block.key}
-                {...(block.kind === "user" && {
-                  scrollAnchor: true,
-                  className: "@transcript:-mr-13.5 @transcript:pr-13.5",
-                })}
-              >
-                <BlockView
-                  block={block}
-                  transcript={props}
-                  context={context}
-                  editing={editing}
-                  onEditing={setEditing}
-                  activeTurn={activeTurn}
-                  copyOf={copyOf}
-                  workedFor={workedFor}
-                />
-              </MessageScrollerItem>
-            ))}
-            {empty ? (
-              <MessageScrollerItem messageId="empty">
-                <EmptyState>{props.empty}</EmptyState>
-              </MessageScrollerItem>
-            ) : null}
-            {props.working ? (
-              <MessageScrollerItem messageId="working">
-                <Marker>
-                  <MarkerContent className="shimmer motion-reduce:shimmer-none">Working on the next step</MarkerContent>
-                </Marker>
-              </MessageScrollerItem>
-            ) : null}
-          </MessageScrollerContent>
-        </MessageScrollerViewport>
-        <MessageScrollerButton />
-      </MessageScroller>
-    </MessageScrollerProvider>
+    <MessageScroller className="@container flex-1">
+      <MessageScrollerViewport
+        preserveScrollOnPrepend
+        className="scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)]"
+        onWheel={(event: WheelEvent<HTMLDivElement>) => {
+          if (event.deltaY < 0) follow.pause()
+          else if (atBottom(event.currentTarget)) toEnd()
+        }}
+        onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
+          touchY.current = event.touches[0]?.clientY ?? 0
+        }}
+        onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
+          if ((event.touches[0]?.clientY ?? 0) > touchY.current) follow.pause()
+        }}
+        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+          if (scrollUpKeys.has(event.key)) follow.pause()
+        }}
+        onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
+          const viewport = event.currentTarget
+          if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
+            follow.pause()
+        }}
+        onScroll={(event: UIEvent<HTMLDivElement>) => {
+          const viewport = event.currentTarget
+          const down = viewport.scrollTop > lastTop.current
+          lastTop.current = viewport.scrollTop
+          if (!follow.following && down && atBottom(viewport)) toEnd()
+        }}
+      >
+        <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
+          {props.more ? (
+            <MessageScrollerItem
+              messageId="history"
+              className={props.loadingHistory ? "mb-6" : "absolute inset-x-6 top-1"}
+            >
+              <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} />
+            </MessageScrollerItem>
+          ) : null}
+          {props.loading ? (
+            <MessageScrollerItem messageId="loading">
+              <MessagesSkeleton />
+            </MessageScrollerItem>
+          ) : null}
+          {blocks.map((block, index) => (
+            <MessageScrollerItem
+              key={block.key}
+              messageId={block.key}
+              scrollAnchor={block.kind === "user"}
+              className={cn(
+                block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
+                index >= blocks.length - liveItems && "[content-visibility:visible]",
+              )}
+            >
+              <BlockView
+                block={block}
+                transcript={props}
+                context={context}
+                editing={editing}
+                onEditing={setEditing}
+                activeTurn={activeTurn}
+                copyOf={copyOf}
+                workedFor={workedFor}
+              />
+            </MessageScrollerItem>
+          ))}
+          {empty ? (
+            <MessageScrollerItem messageId="empty">
+              <EmptyState>{props.empty}</EmptyState>
+            </MessageScrollerItem>
+          ) : null}
+          <WorkingMarker busy={props.busy} working={props.working} />
+        </MessageScrollerContent>
+      </MessageScrollerViewport>
+      <MessageScrollerButton />
+    </MessageScroller>
   )
 }
