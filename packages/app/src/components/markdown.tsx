@@ -32,15 +32,14 @@ const maxHighlightedCharacters = 200_000
 
 const shellCommand = (code: string, language: string) => {
   const name = language.toLowerCase()
-  if (!shellLanguages.has(name)) return undefined
-  const command = promptLanguages.has(name)
+  if (!shellLanguages.has(name)) return ""
+  return promptLanguages.has(name)
     ? code
         .split("\n")
         .filter((line) => line.startsWith("$ "))
         .map((line) => line.slice(2))
         .join("\n")
     : code.trim()
-  return command || undefined
 }
 
 type RunCommand = (command: string) => void
@@ -69,7 +68,7 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
   const run = use(RunCommands)
   const [wrap, setWrap] = useState(false)
   const plain = props.code.length > maxHighlightedCharacters || props.code.split("\n").length > maxHighlightedLines
-  const command = run && !incomplete ? shellCommand(props.code, props.language) : undefined
+  const command = run && !incomplete ? shellCommand(props.code, props.language) : ""
   return (
     <CodeBlock className="my-3">
       <CodeBlockHeader>
@@ -81,7 +80,7 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={wrap ? "Don't wrap lines" : "Wrap lines"}
+            aria-label={wrap ? "Don’t wrap lines" : "Wrap lines"}
             aria-pressed={wrap}
             className={cn(wrap && "bg-muted")}
             onClick={() => setWrap(!wrap)}

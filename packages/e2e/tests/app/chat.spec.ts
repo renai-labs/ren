@@ -191,7 +191,7 @@ test("a member wraps a long code line with the toggle, and Copy still copies the
   const height = (await content.boundingBox())?.height ?? 0
   await block.hover()
   await block.getByRole("button", { name: "Wrap lines" }).click()
-  await expect(block.getByRole("button", { name: "Don't wrap lines" })).toHaveAttribute("aria-pressed", "true")
+  await expect(block.getByRole("button", { name: "Don’t wrap lines" })).toHaveAttribute("aria-pressed", "true")
   await expect.poll(async () => (await content.boundingBox())?.height ?? 0).toBeGreaterThan(height)
 
   await block.getByRole("button", { name: "Copy" }).click()
