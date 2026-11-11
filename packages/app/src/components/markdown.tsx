@@ -1,12 +1,17 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, useEffect, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
+  defaultComponents,
   defaultRehypePlugins,
   defaultUrlTransform,
   useIsCodeFenceIncomplete,
+  type DiagramPlugin,
   type ExtraProps,
+  type MermaidErrorComponentProps,
   type UrlTransform,
 } from "streamdown"
+import { math } from "@streamdown/math"
+import { TexMath } from "@ren/util/tex-math"
 import {
   CodeBlock,
   CodeBlockActions,
@@ -22,6 +27,39 @@ import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
+
+let mermaidLoad: Promise<DiagramPlugin | undefined> | undefined
+const loadMermaid = () =>
+  (mermaidLoad ??= import("@streamdown/mermaid").then(
+    (module) => module.mermaid,
+    () => {
+      mermaidLoad = undefined
+      return undefined
+    },
+  ))
+
+const mermaidFence = /^ {0,3}(`{3,}|~{3,})[ \t]*mermaid\b[^\n]*\n[\s\S]*?\n {0,3}\1[`~]*[ \t]*$/mu
+
+const subscribeDark = (notify: () => void) => {
+  const observer = new MutationObserver(notify)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+  return () => observer.disconnect()
+}
+const isDark = () => document.documentElement.classList.contains("dark")
+
+function MermaidError(props: MermaidErrorComponentProps) {
+  return (
+    <div className="my-3 flex flex-col gap-2">
+      <p className="text-xs text-destructive">{`Diagram error: ${props.error.split("\n")[0]}`}</p>
+      <MarkdownCodeBlock code={props.chart} language="mermaid" />
+    </div>
+  )
+}
+
+const mermaidOptions = {
+  light: { config: { theme: "default" }, errorComponent: MermaidError },
+  dark: { config: { theme: "dark" }, errorComponent: MermaidError },
+}
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -44,7 +82,15 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
   )
 }
 
-function MarkdownCode({ node: _node, className, children, ...props }: ComponentProps<"code"> & ExtraProps) {
+function MarkdownCode({ node, className, children, ...props }: ComponentProps<"code"> & ExtraProps) {
+  const incomplete = useIsCodeFenceIncomplete()
+  const mermaidLoaded = use(MermaidLoaded)
+  if ("data-block" in props && mermaidLoaded && !incomplete && /language-mermaid(?:\s|$)/u.test(className ?? ""))
+    return (
+      <StreamdownCode node={node} className={className} {...props}>
+        {children}
+      </StreamdownCode>
+    )
   if (!("data-block" in props))
     return (
       <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]" {...props}>
@@ -67,6 +113,9 @@ function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"
     </ImageLightbox>
   )
 }
+
+const StreamdownCode = defaultComponents.code
+const MermaidLoaded = createContext(false)
 
 type WorkspaceImageRenderer = (path: string, alt: string) => ReactNode
 const WorkspaceImages = createContext<WorkspaceImageRenderer | undefined>(undefined)
@@ -152,10 +201,20 @@ export function Markdown(props: {
             )
           },
         }
+  const text = TexMath.rewrite(props.children)
+  const [mermaid, setMermaid] = useState<DiagramPlugin | undefined>(undefined)
+  const wantsMermaid = mermaidFence.test(text)
+  useEffect(() => {
+    if (wantsMermaid) void loadMermaid().then(setMermaid)
+  }, [wantsMermaid])
+  const dark = useSyncExternalStore(subscribeDark, isDark, () => false)
   return (
     <WorkspaceImages value={props.workspaceImage}>
+      <MermaidLoaded value={mermaid !== undefined}>
       <Streamdown
-        controls={false}
+        controls={{ code: false, table: false, mermaid: true }}
+        plugins={{ math, ...(mermaid ? { mermaid } : {}) }}
+        mermaid={dark ? mermaidOptions.dark : mermaidOptions.light}
         tableMaxHeight={0}
         urlTransform={urlTransform}
         rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
@@ -164,8 +223,9 @@ export function Markdown(props: {
         animated={streamAnimation}
         className={cn("min-w-0 text-sm/relaxed", props.className)}
       >
-        {mentionLinks(props.children, apps)}
+        {mentionLinks(text, apps)}
       </Streamdown>
+      </MermaidLoaded>
     </WorkspaceImages>
   )
 }
