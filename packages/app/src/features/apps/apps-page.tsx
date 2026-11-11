@@ -29,7 +29,7 @@ import {
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
-const route = getRouteApi("/_authed/_shell/marketplace")
+const route = getRouteApi("/_authed/_shell/apps/")
 
 const matches = (app: { name: string; description: string }, query: string) =>
   `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
@@ -112,7 +112,7 @@ function AppListing(props: {
   )
 }
 
-function MarketplaceSheet(props: {
+function AppsSheet(props: {
   app: CatalogApp | undefined
   onAdded: Added
   onProfile: (target: ProfileTarget) => void
@@ -161,7 +161,7 @@ function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) 
   )
 }
 
-export function MarketplacePage() {
+export function AppsPage() {
   const { api } = RouterContext.useRouterContext()
   const search = route.useSearch()
   const page = currentPage(search)
@@ -210,7 +210,7 @@ export function MarketplacePage() {
   }
   return (
     <Page
-      title="Marketplace"
+      title="Apps"
       description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
       footer={<ListPagination page={page} pageSize={pageSize} total={registry.data?.total ?? 0} noun="app" />}
@@ -229,7 +229,7 @@ export function MarketplacePage() {
           />
         )}
       </Loading>
-      <MarketplaceSheet app={app} onAdded={added} onProfile={setProfile} onClose={() => setOpened(undefined)} />
+      <AppsSheet app={app} onAdded={added} onProfile={setProfile} onClose={() => setOpened(undefined)} />
       {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
     </Page>
   )

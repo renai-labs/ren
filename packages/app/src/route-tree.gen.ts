@@ -20,9 +20,10 @@ import { Route as AuthedShellRouteImport } from "./routes/_authed/_shell"
 import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
-import { Route as AuthedShellMarketplaceRouteImport } from "./routes/_authed/_shell/marketplace"
 import { Route as AuthedShellSchedulesRouteImport } from "./routes/_authed/_shell/schedules"
 import { Route as AuthedOrganizationsNewRouteImport } from "./routes/_authed/organizations/new"
+import { Route as AuthedShellAppsIndexRouteImport } from "./routes/_authed/_shell/apps/index"
+import { Route as AuthedShellMarketplaceIndexRouteImport } from "./routes/_authed/_shell/marketplace/index"
 import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_shell/settings/index"
 import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
 import { Route as AuthedShellSettingsCredentialsRouteImport } from "./routes/_authed/_shell/settings/credentials"
@@ -105,11 +106,6 @@ const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
   path: "/$",
   getParentRoute: () => AuthedShellRoute,
 } as any)
-const AuthedShellMarketplaceRoute = AuthedShellMarketplaceRouteImport.update({
-  id: "/marketplace",
-  path: "/marketplace",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
 const AuthedShellSchedulesRoute = AuthedShellSchedulesRouteImport.update({
   id: "/schedules",
   path: "/schedules",
@@ -120,6 +116,17 @@ const AuthedOrganizationsNewRoute = AuthedOrganizationsNewRouteImport.update({
   path: "/organizations/new",
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedShellAppsIndexRoute = AuthedShellAppsIndexRouteImport.update({
+  id: "/apps/",
+  path: "/apps/",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellMarketplaceIndexRoute =
+  AuthedShellMarketplaceIndexRouteImport.update({
+    id: "/marketplace/",
+    path: "/marketplace/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSettingsIndexRoute =
   AuthedShellSettingsIndexRouteImport.update({
     id: "/settings/",
@@ -301,7 +308,6 @@ export interface FileRoutesByFullPath {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
-  "/marketplace": typeof AuthedShellMarketplaceRoute
   "/schedules": typeof AuthedShellSchedulesRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -309,6 +315,8 @@ export interface FileRoutesByFullPath {
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/settings/providers": typeof AuthedShellSettingsProvidersRoute
+  "/apps/": typeof AuthedShellAppsIndexRoute
+  "/marketplace/": typeof AuthedShellMarketplaceIndexRoute
   "/settings/": typeof AuthedShellSettingsIndexRoute
   "/spaces/": typeof AuthedShellSpacesIndexRoute
   "/tasks/": typeof AuthedShellTasksIndexRoute
@@ -343,13 +351,14 @@ export interface FileRoutesByTo {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
-  "/marketplace": typeof AuthedShellMarketplaceRoute
   "/schedules": typeof AuthedShellSchedulesRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/settings/providers": typeof AuthedShellSettingsProvidersRoute
+  "/apps": typeof AuthedShellAppsIndexRoute
+  "/marketplace": typeof AuthedShellMarketplaceIndexRoute
   "/spaces": typeof AuthedShellSpacesIndexRoute
   "/tasks": typeof AuthedShellTasksIndexRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
@@ -385,7 +394,6 @@ export interface FileRoutesById {
   "/_authed/_shell": typeof AuthedShellRouteWithChildren
   "/invites/accept": typeof InvitesAcceptRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
-  "/_authed/_shell/marketplace": typeof AuthedShellMarketplaceRoute
   "/_authed/_shell/schedules": typeof AuthedShellSchedulesRoute
   "/_authed/organizations/new": typeof AuthedOrganizationsNewRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
@@ -394,6 +402,8 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/_authed/_shell/settings/providers": typeof AuthedShellSettingsProvidersRoute
+  "/_authed/_shell/apps/": typeof AuthedShellAppsIndexRoute
+  "/_authed/_shell/marketplace/": typeof AuthedShellMarketplaceIndexRoute
   "/_authed/_shell/settings/": typeof AuthedShellSettingsIndexRoute
   "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
   "/_authed/_shell/tasks/": typeof AuthedShellTasksIndexRoute
@@ -430,7 +440,6 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
-    | "/marketplace"
     | "/schedules"
     | "/organizations/new"
     | "/spaces/$spaceId"
@@ -438,6 +447,8 @@ export interface FileRouteTypes {
     | "/settings/credentials"
     | "/settings/preferences"
     | "/settings/providers"
+    | "/apps/"
+    | "/marketplace/"
     | "/settings/"
     | "/spaces/"
     | "/tasks/"
@@ -472,13 +483,14 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
-    | "/marketplace"
     | "/schedules"
     | "/organizations/new"
     | "/settings"
     | "/settings/credentials"
     | "/settings/preferences"
     | "/settings/providers"
+    | "/apps"
+    | "/marketplace"
     | "/spaces"
     | "/tasks"
     | "/settings/general"
@@ -513,7 +525,6 @@ export interface FileRouteTypes {
     | "/_authed/_shell"
     | "/invites/accept"
     | "/_authed/_shell/$"
-    | "/_authed/_shell/marketplace"
     | "/_authed/_shell/schedules"
     | "/_authed/organizations/new"
     | "/_authed/_shell/"
@@ -522,6 +533,8 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/credentials"
     | "/_authed/_shell/settings/preferences"
     | "/_authed/_shell/settings/providers"
+    | "/_authed/_shell/apps/"
+    | "/_authed/_shell/marketplace/"
     | "/_authed/_shell/settings/"
     | "/_authed/_shell/spaces/"
     | "/_authed/_shell/tasks/"
@@ -637,13 +650,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSplatRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/marketplace": {
-      id: "/_authed/_shell/marketplace"
-      path: "/marketplace"
-      fullPath: "/marketplace"
-      preLoaderRoute: typeof AuthedShellMarketplaceRouteImport
-      parentRoute: typeof AuthedShellRoute
-    }
     "/_authed/_shell/schedules": {
       id: "/_authed/_shell/schedules"
       path: "/schedules"
@@ -657,6 +663,20 @@ declare module "@tanstack/react-router" {
       fullPath: "/organizations/new"
       preLoaderRoute: typeof AuthedOrganizationsNewRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    "/_authed/_shell/apps/": {
+      id: "/_authed/_shell/apps/"
+      path: "/apps"
+      fullPath: "/apps/"
+      preLoaderRoute: typeof AuthedShellAppsIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/marketplace/": {
+      id: "/_authed/_shell/marketplace/"
+      path: "/marketplace"
+      fullPath: "/marketplace/"
+      preLoaderRoute: typeof AuthedShellMarketplaceIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/settings/": {
       id: "/_authed/_shell/settings/"
@@ -923,7 +943,6 @@ const AuthedShellSettingsAdminRouteWithChildren =
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
-  AuthedShellMarketplaceRoute: typeof AuthedShellMarketplaceRoute
   AuthedShellSchedulesRoute: typeof AuthedShellSchedulesRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -931,6 +950,8 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellSettingsProvidersRoute: typeof AuthedShellSettingsProvidersRoute
+  AuthedShellAppsIndexRoute: typeof AuthedShellAppsIndexRoute
+  AuthedShellMarketplaceIndexRoute: typeof AuthedShellMarketplaceIndexRoute
   AuthedShellSettingsIndexRoute: typeof AuthedShellSettingsIndexRoute
   AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
   AuthedShellTasksIndexRoute: typeof AuthedShellTasksIndexRoute
@@ -942,7 +963,6 @@ interface AuthedShellRouteChildren {
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
-  AuthedShellMarketplaceRoute: AuthedShellMarketplaceRoute,
   AuthedShellSchedulesRoute: AuthedShellSchedulesRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSpacesSpaceIdRouteRoute:
@@ -951,6 +971,8 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellSettingsProvidersRoute: AuthedShellSettingsProvidersRoute,
+  AuthedShellAppsIndexRoute: AuthedShellAppsIndexRoute,
+  AuthedShellMarketplaceIndexRoute: AuthedShellMarketplaceIndexRoute,
   AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
   AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
   AuthedShellTasksIndexRoute: AuthedShellTasksIndexRoute,
