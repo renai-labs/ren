@@ -6,8 +6,8 @@ import { Digest } from "effect/crypto"
 import { SqlClient } from "effect/sql"
 import { Workflow, WorkflowEngine } from "effect/workflow"
 
-// oxlint-disable-next-line ren/no-comments -- The names of the runs this Ren registered. purge deletes rows of these runs only.
-const registered = new Set<string>()
+// oxlint-disable-next-line ren/no-comments -- The names of Ren's runs. make adds each name when its module loads, before any layer starts, so purge sees every run; it deletes rows of these runs only.
+const names = new Set<string>()
 
 // oxlint-disable-next-line ren/no-comments -- A run is named and keyed: one execution per key at a time, also across Ren replicas. A key that finished does not run again, so a run that must run again puts a counter in its key.
 export type Run<Name extends string, Payload extends Workflow.AnyStructSchema> = Workflow.Workflow<
@@ -17,7 +17,10 @@ export type Run<Name extends string, Payload extends Workflow.AnyStructSchema> =
   Schema.Never
 >
 
-export const make = Workflow.make
+export const make: typeof Workflow.make = (tag, options) => {
+  names.add(tag)
+  return Workflow.make(tag, options)
+}
 
 export const retry = Schedule.exponential(Duration.seconds(1)).pipe(
   Schedule.modifyDelay((metadata) => Effect.succeed(Duration.min(metadata.duration, Duration.minutes(1)))),
@@ -38,12 +41,11 @@ export const register = <Name extends string, Payload extends Workflow.AnyStruct
   Effect.gen(function* () {
     const engine = yield* WorkflowEngine.WorkflowEngine
     yield* engine.register(run, (payload) => handler(payload))
-    registered.add(run._tag)
   })
 
-// oxlint-disable-next-line ren/no-comments -- Effect's cluster engine keeps the message and reply rows of a run after it ends. This deletes the rows of each run of a registered name whose messages are all processed and were last read before cutoff, and only the replies of the messages it deletes. Every key is used once (a time slot, a day, an id, or an epoch that moves on when its run ends), so no deleted key runs again. Rows of other entity types, and of runs still in progress, stay.
+// oxlint-disable-next-line ren/no-comments -- Effect's cluster engine keeps the message and reply rows of a run after it ends. This deletes the rows of each run of Ren's names whose messages are all processed and were last read before cutoff, and only the replies of the messages it deletes. Every key is used once (a time slot, a day, an id, or an epoch that moves on when its run ends), so no deleted key runs again. Rows of other entity types, and of runs still in progress, stay.
 export const purge = Effect.fnUntraced(function* (sql: SqlClient.SqlClient, cutoff: Date) {
-  const types = [...registered].map((name) => `Workflow/${name}`)
+  const types = [...names].map((name) => `Workflow/${name}`)
   if (types.length === 0) return 0
   const deleted = yield* sql<{ readonly id: string }>`
     with ended as (
