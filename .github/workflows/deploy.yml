@@ -99,9 +99,9 @@ jobs:
           DEPLOY: ${{ vars.DEPLOY_NAME }}
           E2B_TEMPLATE_NAME: ${{ vars.E2B_TEMPLATE_NAME }}
           E2B_TEMPLATE_OWNER: ${{ vars.E2B_OWNER }}
-          E2B_TEMPLATE_CPU: "8"
-          E2B_TEMPLATE_MEMORY_MB: "8192"
-          E2B_TEMPLATE_TOOLS: full
+          E2B_TEMPLATE_CPU: "2"
+          E2B_TEMPLATE_MEMORY_MB: "2048"
+          E2B_TEMPLATE_TOOLS: base
           E2B_TEMPLATE_SEED: ${{ runner.temp }}/bundles
         run: |
           set -euo pipefail
