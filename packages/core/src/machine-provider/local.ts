@@ -1,7 +1,7 @@
 export * as LocalSandbox from "./local.js"
 
 import { Workload } from "@ren/schema/workload"
-import { Duration, Effect, FiberMap, Option, Schema, Stream } from "effect"
+import { DateTime, Duration, Effect, FiberMap, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
@@ -9,8 +9,12 @@ import { join } from "node:path"
 import { EnvironmentProvider } from "../environment-provider.js"
 import { MachineProvider } from "../machine-provider.js"
 
-const loop = (entry: string, file: string) =>
-  `while true; do bun ${JSON.stringify(entry)} >>${JSON.stringify(`${file}.log`)} 2>&1 || echo "$?" >${JSON.stringify(`${file}.exit`)}; sleep 1; done`
+// oxlint-disable-next-line ren/no-comments -- Runs the executor and the brain, each again 1 s after it ends. Paths and ports come in as arguments, so the shell quotes nothing.
+const supervisor = `loop() { while true; do bun "$1" >>"$2.log" 2>&1 || echo "$?" >"$2.exit"; sleep 1; done; }
+(export PORT="$1"; loop "$2" "$3") & loop "$4" "$5"`
+
+// oxlint-disable-next-line ren/no-comments -- Ends the brain's process group once the owner (a test run) is gone. SIGKILL also ends a paused (stopped) brain.
+const ownerWatcher = `while kill -0 "$1" 2>/dev/null && kill -0 -- "-$2" 2>/dev/null; do sleep 1; done; kill -KILL -- "-$2" 2>/dev/null`
 
 const Binding = Schema.Struct({
   pid: Schema.Int,
@@ -28,11 +32,15 @@ const BindingFile = Schema.fromJsonString(Binding)
 const workloadOf = (binding: Binding) =>
   Schema.decodeUnknownOption(Workload.Info)({ kind: "brain", id: binding.brainId, generation: binding.generation })
 
-const isAlive = (pid: number) =>
-  Effect.sync(() => {
-    const result = Effect.runSyncExit(Effect.try(() => process.kill(pid, 0)))
-    return result._tag === "Success"
-  })
+// oxlint-disable-next-line ren/no-comments -- What the process is doing, from the system, so it is right after Ren restarts.
+const processOf = (pid: number) =>
+  Effect.promise(() => Bun.$`ps -o stat= -p ${pid}`.nothrow().quiet().text()).pipe(
+    Effect.map((stat) => {
+      const code = stat.trim()
+      if (code === "" || code.startsWith("Z")) return "gone" as const
+      return code.startsWith("T") ? ("stopped" as const) : ("running" as const)
+    }),
+  )
 
 const signal = (pid: number, name: NodeJS.Signals) => Effect.try(() => process.kill(-pid, name)).pipe(Effect.ignore)
 
@@ -59,22 +67,35 @@ export const provider = (options: {
 }) =>
   Effect.gen(function* () {
     const timers = yield* FiberMap.make<number>()
-    const paused = new Set<number>()
+    yield* Effect.promise(() => mkdir(options.root, { recursive: true }))
     const failed = (error: unknown) =>
       new MachineProvider.Failed({ message: error instanceof Error ? error.message : String(error) })
     const homeOf = (brainId: string, generation: number) => join(options.root, `${brainId}-${generation}`)
     const bindingFile = (home: string) => join(home, ".ren", "sandbox.json")
-    const stored = (home: string) =>
-      Effect.promise(() =>
-        Bun.file(bindingFile(home))
-          .text()
-          .catch(() => ""),
-      ).pipe(Effect.map((text) => Schema.decodeUnknownOption(BindingFile)(text)))
+    const stored = Effect.fnUntraced(function* (home: string) {
+      const file = Bun.file(bindingFile(home))
+      if (!(yield* Effect.promise(() => file.exists()))) return Option.none<Binding>()
+      return Schema.decodeUnknownOption(BindingFile)(yield* Effect.promise(() => file.text()))
+    })
+    // oxlint-disable-next-line ren/no-comments -- Every machine this provider made and has not destroyed, from the binding file in its home.
+    const bindings = Effect.promise(() => readdir(options.root)).pipe(
+      Effect.flatMap((names) => Effect.forEach(names, (name) => stored(join(options.root, name)))),
+      Effect.map((found) => found.flatMap(Option.toArray)),
+    )
+    const pausedFile = (binding: Binding) => join(binding.home, ".ren", "paused")
+    // oxlint-disable-next-line ren/no-comments -- A brain is paused only when this provider stopped it (the paused file says so). One stopped otherwise is frozen: it reports as running and gives no sample, so Ren replaces it.
+    const stateOf = Effect.fnUntraced(function* (binding: Binding) {
+      const state = yield* processOf(binding.pid)
+      if (state !== "stopped") return state
+      return (yield* Effect.promise(() => Bun.file(pausedFile(binding)).exists()))
+        ? ("paused" as const)
+        : ("running" as const)
+    })
     const live = (binding: Binding) =>
-      Effect.flatMap(isAlive(binding.pid), (alive) =>
-        alive
-          ? Effect.void
-          : Effect.fail(new MachineProvider.Gone({ message: `Brain process ${binding.pid} is gone` })),
+      Effect.flatMap(processOf(binding.pid), (state) =>
+        state === "gone"
+          ? Effect.fail(new MachineProvider.Gone({ message: `Brain process ${binding.pid} is gone` }))
+          : Effect.void,
       )
 
     return MachineProvider.make({
@@ -89,14 +110,11 @@ export const provider = (options: {
       create: Effect.fn("LocalSandbox.create")(function* (input) {
         const home = homeOf(input.labels.id, input.labels.generation)
         const existing = yield* stored(home)
-        if (Option.isSome(existing) && (yield* isAlive(existing.value.pid)))
+        if (Option.isSome(existing) && (yield* processOf(existing.value.pid)) !== "gone")
           return { binding: existing.value, url: urlOf(existing.value) }
         if (options.maxRunning) {
-          const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
-          const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
-          const running = yield* Effect.filter(
-            found.flatMap((each) => (Option.isSome(each) ? [each.value] : [])),
-            (each) => Effect.map(isAlive(each.pid), (alive) => alive && !paused.has(each.pid)),
+          const running = yield* Effect.filter(yield* bindings, (each) =>
+            Effect.map(stateOf(each), (state) => state === "running"),
           )
           if (running.length >= options.maxRunning)
             return yield* new MachineProvider.Capacity({
@@ -104,24 +122,27 @@ export const provider = (options: {
               retryAfter: Duration.seconds(1),
             })
         }
+        const state = join(home, ".ren")
         yield* Effect.tryPromise({
           try: () =>
-            Promise.all([
-              mkdir(join(home, ".ren"), { recursive: true }),
-              mkdir(join(home, "workspace"), { recursive: true }),
-            ]),
+            Promise.all([mkdir(state, { recursive: true }), mkdir(join(home, "workspace"), { recursive: true })]),
           catch: failed,
         })
         const port = yield* freePort
         const handPort = yield* freePort
-        const state = join(home, ".ren")
         const ca = Option.flatMap(input.network.proxy, (proxy) => proxy.ca)
         if (Option.isSome(ca)) yield* Effect.promise(() => Bun.write(join(state, "egress-ca.pem"), ca.value))
         const child = spawn(
           "sh",
           [
             "-c",
-            `(export PORT=${handPort}; ${loop(options.executor, join(state, "executor"))}) & ${loop(options.entry, join(state, "brain"))}`,
+            supervisor,
+            "sh",
+            String(handPort),
+            options.executor,
+            join(state, "executor"),
+            options.entry,
+            join(state, "brain"),
           ],
           {
             detached: true,
@@ -143,16 +164,11 @@ export const provider = (options: {
         )
         child.unref()
         if (!child.pid) return yield* new MachineProvider.Failed({ message: "The brain process did not start" })
-        // oxlint-disable-next-line ren/no-comments -- A brain outlives Ren's process on purpose, but not its owner's (a test run): when the owner is gone, a watcher in its own process group kills the brain's group. SIGKILL also ends a paused (stopped) brain.
         if (options.owner)
-          spawn(
-            "sh",
-            [
-              "-c",
-              `while kill -0 ${options.owner} 2>/dev/null && kill -0 -- -${child.pid} 2>/dev/null; do sleep 1; done; kill -KILL -- -${child.pid} 2>/dev/null`,
-            ],
-            { detached: true, stdio: "ignore" },
-          ).unref()
+          spawn("sh", ["-c", ownerWatcher, "sh", String(options.owner), String(child.pid)], {
+            detached: true,
+            stdio: "ignore",
+          }).unref()
         const binding: Binding = {
           pid: child.pid,
           port,
@@ -168,7 +184,7 @@ export const provider = (options: {
         yield* live(binding)
         yield* FiberMap.remove(timers, binding.pid)
         yield* signal(binding.pid, "SIGCONT")
-        paused.delete(binding.pid)
+        yield* Effect.promise(() => rm(pausedFile(binding), { force: true }))
         return { url: urlOf(binding) }
       }),
       keepAlive: Effect.fn("LocalSandbox.keepAlive")(function* (binding, duration) {
@@ -178,7 +194,7 @@ export const provider = (options: {
           binding.pid,
           Effect.sleep(duration).pipe(
             Effect.andThen(signal(binding.pid, "SIGSTOP")),
-            Effect.andThen(Effect.sync(() => paused.add(binding.pid))),
+            Effect.andThen(Effect.promise(() => Bun.write(pausedFile(binding), ""))),
             Effect.andThen(Effect.logInfo(`Paused local brain ${binding.brainId} (pid ${binding.pid})`)),
             Effect.withErrorReporting,
           ),
@@ -188,12 +204,25 @@ export const provider = (options: {
         yield* FiberMap.remove(timers, binding.pid)
         yield* signal(binding.pid, "SIGCONT")
         yield* signal(binding.pid, "SIGKILL")
-        paused.delete(binding.pid)
         yield* Effect.promise(() => rm(binding.home, { recursive: true, force: true }))
       }),
-      status: Effect.fn("LocalSandbox.status")(function* (binding) {
-        if (!(yield* isAlive(binding.pid))) return "gone" as const
-        return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
+      status: stateOf,
+      // oxlint-disable-next-line ren/no-comments -- A running brain's share of the machine's memory, and the use of the disk that holds its home. A stopped or gone one gives no sample, so a frozen brain is replaced.
+      lastSample: Effect.fn("LocalSandbox.lastSample")(function* (binding) {
+        if ((yield* processOf(binding.pid)) !== "running") return Option.none()
+        const memory = Number(
+          yield* Effect.promise(() => Bun.$`ps -o %mem= -p ${binding.pid}`.nothrow().quiet().text()),
+        )
+        const disk = (yield* Effect.promise(() => Bun.$`df -P ${binding.home}`.nothrow().quiet().text()))
+          .split("\n")
+          .at(1)
+          ?.split(/\s+/u)
+          .at(4)
+        return Option.some({
+          at: yield* DateTime.now,
+          memory: Number.isFinite(memory) ? memory / 100 : 0,
+          disk: disk ? Number(disk.replace("%", "")) / 100 : 0,
+        })
       }),
       hand: (binding) => ({
         url: `http://127.0.0.1:${binding.handPort}`,
@@ -201,26 +230,14 @@ export const provider = (options: {
       }),
       lost: Stream.tick(options.lostEvery ?? "2 seconds").pipe(
         Stream.mapEffect(() =>
-          Effect.gen(function* () {
-            const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
-            const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
-            const bindings = found.flatMap((binding) => (Option.isSome(binding) ? [binding.value] : []))
-            const dead = yield* Effect.filter(bindings, (binding) =>
-              Effect.map(isAlive(binding.pid), (alive) => !alive),
-            )
-            return dead.flatMap((binding) => Option.toArray(workloadOf(binding)))
-          }),
+          Effect.flatMap(bindings, (all) =>
+            Effect.filter(all, (binding) => Effect.map(processOf(binding.pid), (state) => state === "gone")),
+          ),
         ),
-        Stream.flatMap(Stream.fromIterable),
+        Stream.flatMap((dead) => Stream.fromIterable(dead.flatMap((binding) => Option.toArray(workloadOf(binding))))),
       ),
-      list: Effect.gen(function* () {
-        const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
-        const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
-        return found.flatMap((binding) =>
-          Option.isSome(binding)
-            ? Option.toArray(Option.map(workloadOf(binding.value), (found) => ({ ...found, binding: binding.value })))
-            : [],
-        )
-      }),
+      list: Effect.map(bindings, (all) =>
+        all.flatMap((binding) => Option.toArray(Option.map(workloadOf(binding), (found) => ({ ...found, binding })))),
+      ),
     })
   })

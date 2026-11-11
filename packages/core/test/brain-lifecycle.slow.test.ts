@@ -536,9 +536,9 @@ describe("brain runs", () => {
       access: access._tag,
     }).toMatchObject({
       problems: [],
-      row: { generation: 2, phase: "failed", binding: null, stopped_at: expect.any(Date) },
+      row: { generation: 2, phase: "stopped", binding: null },
       listed: [],
-      access: "Failed",
+      access: "Stopped",
     })
     await current.dispose()
   })
