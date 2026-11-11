@@ -13,6 +13,9 @@ import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 import { TestCloudflare } from "./lib/cloudflare.js"
+import { ArtifactCloudflareUpload } from "../src/artifact-provider/cloudflare-upload.js"
+import { Config, Schema } from "effect"
+import { HttpClient, HttpClientRequest } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 
@@ -53,6 +56,123 @@ const bounded = testEffect(
 describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
   "real Cloudflare through Ren's durable Artifact workflows",
   () => {
+    it.live("migrates application SQLite on object initialization across update and redeploy", () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* Seed.owner()
+        const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
+        const config = { entry: "index.html", durableObjects: { STATE: "SampleState" } }
+        const publish = (files: Artifact.Files) =>
+          Effect.gen(function* () {
+            const deploymentId = Artifact.DeploymentID.make(crypto.randomUUID())
+            yield* artifacts.deploy(owner, id, { deploymentId, title: "SQL migration smoke", config, files })
+            yield* ArtifactSamples.idle(id)
+            return yield* artifacts.status(owner, id, deploymentId)
+          })
+        yield* Effect.addFinalizer(() => artifacts.stop(owner, id).pipe(Effect.ignore))
+        const files = yield* Effect.promise(() => ArtifactSamples.files("state-candidate"))
+        const first = yield* publish(files)
+        expect(first.status).toBe("ready")
+        const origin = new URL(first.url ?? "").origin
+        yield* ArtifactSamples.schemaUpgrade({
+          files,
+          origin,
+          publish,
+          restart: (files) =>
+            artifacts.stop(owner, id).pipe(
+              Effect.andThen(publish(files)),
+              Effect.map((result) => new URL(result.url ?? "").origin),
+            ),
+        })
+      }),
+    )
+    testEffect(TestCloudflare.layer).live(
+      "legacy SQLite classes transition to exports and reject a stale ETag",
+      () =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem
+          const account = yield* Config.String("CLOUDFLARE_ACCOUNT_ID")
+          const token = yield* Config.Redacted("CLOUDFLARE_API_TOKEN")
+          const directory = yield* fs.makeTempDirectoryScoped()
+          const script = `ren-artifact-smoke-etag-${crypto.randomUUID().slice(0, 8)}`
+          yield* fs.writeFileString(
+            join(directory, "parent.mjs"),
+            'process.stdin.resume(); process.stdin.unref?.(); process.stdin.once("end", () => process.exit(1));',
+          )
+          yield* fs.writeFileString(
+            join(directory, "main.js"),
+            'import {DurableObject} from "cloudflare:workers"; export class Guard extends DurableObject {} export default {fetch(){return new Response("first",{status:410})}}',
+          )
+          yield* fs.writeFileString(
+            join(directory, "wrangler.json"),
+            JSON.stringify({
+              name: script,
+              main: "main.js",
+              no_bundle: true,
+              compatibility_date: "2026-06-01",
+              workers_dev: false,
+              migrations: [{ tag: "legacy-v1", new_sqlite_classes: ["Guard"] }],
+            }),
+          )
+          const input = {
+            account,
+            token,
+            directory,
+            script,
+            node: "node",
+            wrangler: join(
+              new URL(import.meta.resolve("wrangler/package.json")).pathname,
+              "..",
+              "wrangler-dist",
+              "cli.js",
+            ),
+          }
+          const first = yield* ArtifactCloudflareUpload.stage({ ...input, guard: Option.none() })
+          yield* fs.writeFileString(
+            join(directory, "wrangler.json"),
+            JSON.stringify({
+              name: script,
+              main: "main.js",
+              no_bundle: true,
+              compatibility_date: "2026-06-01",
+              workers_dev: false,
+              exports: { Guard: { type: "durable-object", storage: "sqlite" } },
+            }),
+          )
+          yield* fs.writeFileString(
+            join(directory, "main.js"),
+            'import {DurableObject} from "cloudflare:workers"; export class Guard extends DurableObject {} export default {fetch(){return new Response("second",{status:410})}}',
+          )
+          const second = yield* ArtifactCloudflareUpload.stage({ ...input, guard: Option.some(JSON.stringify(first)) })
+          expect(second).not.toBe(first)
+          const stale = yield* ArtifactCloudflareUpload.stage({
+            ...input,
+            guard: Option.some(JSON.stringify(first)),
+          }).pipe(Effect.result)
+          expect(stale).toMatchObject({ _tag: "Failure" })
+          if (stale._tag === "Failure") expect(stale.failure.message).toContain("HTTP 412")
+          const http = yield* HttpClient.HttpClient
+          const response = yield* http.execute(
+            HttpClientRequest.get(
+              `https://api.cloudflare.com/client/v4/accounts/${account}/workers/services/${script}`,
+            ).pipe(HttpClientRequest.bearerToken(token)),
+          )
+          const current = yield* response.json.pipe(
+            Effect.flatMap(
+              Schema.decodeUnknownEffect(
+                Schema.Struct({
+                  result: Schema.Struct({
+                    default_environment: Schema.Struct({ script: Schema.Struct({ etag: Schema.String }) }),
+                  }),
+                }),
+              ),
+            ),
+          )
+          expect(current.result.default_environment.script.etag).toBe(second)
+          yield* Effect.log(`Declarative ETag smoke retained: ${script}; no workers.dev route enabled`)
+        }),
+      120_000,
+    )
     bounded.live(
       "bounds a real Wrangler timeout, cleans staging, and repairs pending state with a fresh provider",
       () =>
