@@ -3,29 +3,17 @@ import { Loading } from "@ren/ui/loading"
 import { useState, type ReactNode } from "react"
 import { EmptyState } from "../../components/empty-state.js"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { getRouteApi } from "@tanstack/react-router"
-import { Button } from "@ren/ui/button"
-import { IconPlus } from "@tabler/icons-react"
-import { AddToSpace, type Added } from "../../components/add-to-space.js"
-import { AccountList, AppRow, AppSection, AppSheet, SeeAllRow } from "../../components/app-list.js"
+import { getRouteApi, useNavigate } from "@tanstack/react-router"
+import { IconChevronRight } from "@tabler/icons-react"
+import { AppRow, AppSection, SeeAllRow } from "../../components/app-list.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Page, useShapeId } from "../../components/page.js"
-import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { useApp } from "../../lib/use-app.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { pageSize, currentPage, pickerPageSize } from "../../lib/pagination.js"
-import {
-  audience,
-  connectLabel,
-  fromApp,
-  fromRegistry,
-  isSpaceApp,
-  needsAttention,
-  type CatalogApp,
-} from "../../lib/apps.js"
+import { fromApp, fromRegistry, isSpaceApp, needsAttention, type CatalogApp } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -112,60 +100,10 @@ function AppListing(props: {
   )
 }
 
-function AppsSheet(props: {
-  app: CatalogApp | undefined
-  onAdded: Added
-  onProfile: (target: ProfileTarget) => void
-  onClose: () => void
-}) {
-  const app = props.app
-  return (
-    <AppSheet
-      app={app}
-      action={app ? <AddToSpace app={app} primary onAdded={props.onAdded} /> : null}
-      onClose={props.onClose}
-    >
-      {app ? <AppAccounts appId={app.id} onProfile={props.onProfile} /> : null}
-    </AppSheet>
-  )
-}
-
-function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) => void }) {
-  const profiles = useAppProfiles([props.appId]).of(props.appId)
-  return (
-    <AccountList
-      title="Accounts"
-      actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => props.onProfile({ appId: props.appId })}
-        >
-          <IconPlus />
-          New account
-        </Button>
-      }
-      profiles={profiles}
-      caption={audience}
-      onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
-      action={(each) => {
-        const label = connectLabel(each)
-        return label ? (
-          <Button size="sm" onClick={() => props.onProfile({ appId: each.appId, profileId: each.id })}>
-            {label}
-          </Button>
-        ) : null
-      }}
-    />
-  )
-}
-
 export function AppsPage() {
   const { api } = RouterContext.useRouterContext()
   const search = route.useSearch()
   const page = currentPage(search)
-  const spaces = useSpaces()
   const shapeId = useShapeId("apps")
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
@@ -180,34 +118,23 @@ export function AppsPage() {
   const used = new Set(usedApps.map((app) => app.id))
   const profiles = useAppProfiles([...usedApps, ...browse].map((app) => app.id))
   const loading = registry.isPending || connected.pending
-  const navigate = route.useNavigate()
-  const opened = search.app
-  const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
-  const [profile, setProfile] = useState<ProfileTarget>()
-  const app = useApp(opened).app
-  const added: Added = (added) =>
-    setProfile({
-      appId: added.app.id,
-      profileId: added.profileId,
-      from: {
-        spaceId: added.space.id,
-        name: added.space.name,
-        members: spaces.space(added.space.id)?.memberCount ?? 1,
-      },
-    })
-  const row = (each: CatalogApp) => {
-    return (
-      <AppRow
-        key={each.id}
-        name={each.name}
-        icon={each.icon}
-        caption={each.description}
-        attention={needsAttention(profiles.of(each.id))}
-        onOpen={() => setOpened(each.id)}
-        action={<AddToSpace app={each} onAdded={added} />}
-      />
-    )
-  }
+  const navigate = useNavigate()
+  const row = (each: CatalogApp) => (
+    <AppRow
+      key={each.id}
+      name={each.name}
+      icon={each.icon}
+      caption={each.description}
+      attention={needsAttention(profiles.of(each.id))}
+      onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: each.id } })}
+      action={
+        <IconChevronRight
+          aria-hidden
+          className="size-4 text-muted-foreground transition-transform duration-150 ease-out group-hover/item:translate-x-0.5"
+        />
+      }
+    />
+  )
   return (
     <Page
       title="Apps"
@@ -229,8 +156,6 @@ export function AppsPage() {
           />
         )}
       </Loading>
-      <AppsSheet app={app} onAdded={added} onProfile={setProfile} onClose={() => setOpened(undefined)} />
-      {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
     </Page>
   )
 }

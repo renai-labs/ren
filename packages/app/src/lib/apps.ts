@@ -70,6 +70,8 @@ export const connectLabel = (profile: AppProfile) => {
   return counted.set === 0 ? "Connect" : `Add ${counted.total - counted.set} missing`
 }
 
+export const categoryLabel = (slug: string) => slug.charAt(0).toUpperCase() + slug.slice(1).replaceAll("-", " ")
+
 export const listsSpace = (profile: AppProfile, spaceId: string) =>
   profile.allSpaces || profile.spaces.some((space) => space.id === spaceId)
 
@@ -122,7 +124,11 @@ export type CatalogApp = {
   readonly ownerSpaceId: string | null
   readonly mcps: AppInfo["mcps"]
   readonly skills: AppInfo["skills"] | AppRegistryInfo["skills"]
-  readonly listing: { readonly body: string | null; readonly examplePrompts: ReadonlyArray<string> } | null
+  readonly listing: {
+    readonly body: string | null
+    readonly examplePrompts: ReadonlyArray<string>
+    readonly categories: AppRegistryInfo["listing"]["categories"]
+  } | null
 }
 
 const brandColorOf = (app: object) =>
@@ -153,7 +159,11 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
   ownerSpaceId: null,
   mcps: app.mcps,
   skills: app.skills,
-  listing: { body: app.listing.body, examplePrompts: app.listing.examplePrompts },
+  listing: {
+    body: app.listing.body,
+    examplePrompts: app.listing.examplePrompts,
+    categories: app.listing.categories,
+  },
 })
 
 export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"

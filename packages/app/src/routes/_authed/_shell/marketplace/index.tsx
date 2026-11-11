@@ -5,6 +5,8 @@ export const Route = createFileRoute("/_authed/_shell/marketplace/")({
   head: () => ({ meta: [{ title: "Apps · Ren" }] }),
   validateSearch: Routing.AppSearch,
   beforeLoad: (options) => {
-    throw redirect({ to: "/apps", search: options.search, replace: true })
+    const app = options.search.app
+    if (app) throw redirect({ to: "/apps/$appId", params: { appId: app }, replace: true })
+    throw redirect({ to: "/apps", replace: true })
   },
 })

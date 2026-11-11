@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Avatar, AvatarGroup } from "@ren/ui/avatar"
 import { AppAvatarFallback, AppAvatarImage, AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
-import { gaps } from "../lib/apps.js"
+import { categoryLabel, gaps } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { cn } from "cn"
 import type { AppProfileInfo } from "@ren/client"
@@ -164,10 +164,6 @@ export function SeeAllRow(props: {
 
 function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode }) {
   const app = props.app
-  const spaceName = useSpaces().spaceName
-  const mcps = Object.entries(app.mcps)
-  const skills = Object.entries(app.skills)
-  const tile = appTile(app)
   return (
     <div className="flex flex-1 flex-col gap-9 overflow-y-auto overscroll-contain px-7 pt-7 pb-10">
       <SheetHeader className="gap-4 p-0">
@@ -186,6 +182,34 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
         </div>
       </SheetHeader>
       {props.children}
+      <AppSections app={app} />
+    </div>
+  )
+}
+
+export function AppSections(props: { app: App }) {
+  const app = props.app
+  const spaceName = useSpaces().spaceName
+  const mcps = Object.entries(app.mcps)
+  const skills = Object.entries(app.skills)
+  const tile = appTile(app)
+  const categories = [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel)
+  const facts = [
+    ...(categories.length > 0 ? [["Category", categories.join(", ")] as const] : []),
+    ["Source", app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`],
+    [
+      "Slug",
+      <span key="slug" className="font-mono">
+        {app.slug}
+      </span>,
+    ],
+    [
+      "Capabilities",
+      [skills.length ? "Skills" : undefined, mcps.length ? "MCP servers" : undefined].filter(Boolean).join(", "),
+    ],
+  ] as const
+  return (
+    <>
       {mcps.length > 0 ? (
         <SheetSection title="MCPs">
           <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -227,19 +251,17 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
           </div>
         </SheetSection>
       ) : null}
-      <SheetSection title="Metadata">
-        <dl className="grid grid-cols-2 gap-y-4 text-sm">
-          <dt className="text-muted-foreground">Source</dt>
-          <dd>{app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`}</dd>
-          <dt className="text-muted-foreground">Slug</dt>
-          <dd className="font-mono">{app.slug}</dd>
-          <dt className="text-muted-foreground">Capabilities</dt>
-          <dd>
-            {[skills.length ? "Skills" : undefined, mcps.length ? "MCP servers" : undefined].filter(Boolean).join(", ")}
-          </dd>
+      <SheetSection title="Information">
+        <dl className="divide-y rounded-xl border text-sm">
+          {facts.map(([term, value]) => (
+            <div key={term} className="grid grid-cols-[--spacing(40)_1fr] gap-4 px-4 py-3">
+              <dt className="text-muted-foreground">{term}</dt>
+              <dd className="min-w-0 truncate">{value}</dd>
+            </div>
+          ))}
         </dl>
       </SheetSection>
-    </div>
+    </>
   )
 }
 
