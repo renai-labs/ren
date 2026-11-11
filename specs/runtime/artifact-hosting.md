@@ -15,8 +15,8 @@ dispatch route before the provider's `deploy` returns. Needs `CLOUDFLARE_ACCOUNT
 Keep the existing `Artifact.Config.durableObjects` binding-to-exported-class
 contract. Provision SQLite Durable Objects with stable artifact/class identity
 across updates and stop/redeploy. Existing bindings/classes cannot be removed or
-renamed. Production must persist migration history rather than replay local
-Wrangler's initial migration on every upload. Stop removes only the deployment;
+renamed. Use declarative class exports, retaining every provisioned class, rather
+than replaying imperative namespace migrations. Stop removes only the deployment;
 source archives and application data remain.
 
 Done when switching the layer at the composition root changes no caller and the
@@ -38,13 +38,11 @@ supported. Other per-Worker CPU, memory, script-size and asset limits still appl
 - [Namespace script deletion](https://developers.cloudflare.com/api/node/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/methods/delete/)
 - [Patch namespace script settings](https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/subresources/settings/methods/edit/)
 
-Installed Wrangler 4.149.0 independently confirms namespace-aware migration
-reconciliation in `getMigrationsToUpload`: it reads the namespace script's
-`migration_tag`, sends `old_tag`/`new_tag`, and uploads only the subsequent steps.
-`resolveDoLifecyclePayload` also supports the newer declarative `exports` flow.
-Do not combine that flow with legacy `migrations`. The ordinary Worker provider
-already retains cumulative migration state in object storage. Reuse that logic
-for namespace scripts rather than introducing a second history mechanism.
+Installed Wrangler 4.149.0 supports declarative `exports` through
+`resolveDoLifecyclePayload`. Do not combine that flow with legacy `migrations`.
+The ordinary provider uses conditional script PUTs with ETags; validate equivalent
+backend fencing on the namespace endpoint before enabling WFP. Reuse retained
+class maps and immutable archives rather than adding a second history mechanism.
 
 Two constraints block a literal upload/delete/rollback adapter:
 
@@ -61,15 +59,12 @@ Two constraints block a literal upload/delete/rollback adapter:
    durable recovery plan, not a request-local best-effort undo. Restoring code
    cannot undo application data writes made by an unsuccessful deployment.
 
-The provider must retain migration state separately from Ren's active `binding`,
-which Core clears on stop. Persist the intended cumulative history **before**
-the remote write, and reconcile the remote tag on recovery. Persist the last
-acknowledged tag too: an interrupted first upload with no remote tag can replay,
-but a previously acknowledged namespace disappearing must fail closed. Preserve
-the binding/class map even for a pending update whose remote outcome is unknown.
-The planner tests cover these rules without pretending that a mock API proves
-Cloudflare integration. Provider state can live in the existing object storage;
-no additional artifact history table or provider registry is necessary.
+Keep provider state separately from Ren's active `binding`, which Core clears on
+stop. Preserve the binding/class map even for a pending update whose remote
+outcome is unknown. Reuse the ordinary provider's S3 write intents and conditional
+publication model, but do not assume the namespaced API has identical conditional
+write semantics until tested. No additional artifact history table or provider
+registry is necessary.
 
 Readiness must go through the public dispatch URL and return a deployment UUID
 from platform-owned code before user code or asset routing runs. A user response

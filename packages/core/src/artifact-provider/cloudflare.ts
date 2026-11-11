@@ -2,9 +2,9 @@ export * as ArtifactCloudflare from "./cloudflare.js"
 
 import { GetObjectCommand, NoSuchKey, PutObjectCommand } from "@aws-sdk/client-s3"
 import { Artifact } from "@ren/schema/artifact"
-import { Config, Duration, Effect, FileSystem, Layer, Option, Redacted, Result, Schedule, Schema, Stream } from "effect"
+import { Config, Duration, Effect, FileSystem, Layer, Option, Result, Schedule, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
-import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { ChildProcessSpawner } from "effect/process"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -13,6 +13,7 @@ import { ArtifactProvider } from "../artifact-provider.js"
 import { ObjectStorage } from "../object-storage.js"
 import { ArtifactCloudflareCode } from "./cloudflare-code.js"
 import { ArtifactCloudflarePlan } from "./cloudflare-plan.js"
+import { ArtifactCloudflareUpload } from "./cloudflare-upload.js"
 
 export const id = Artifact.ProviderID.make("cloudflare")
 
@@ -31,6 +32,7 @@ const State = Schema.fromJsonString(
     pending: Schema.NullOr(Schema.Struct({ ...Snapshot.fields, ready: Schema.Boolean })),
     stopped: Schema.Boolean,
     stop: Schema.NullOr(Version),
+    publication: Schema.optional(Schema.String),
   }),
 )
 type State = typeof State.Type
@@ -38,7 +40,7 @@ const Binding = Schema.Struct({ account: Schema.String, script: Schema.String, d
 type Binding = typeof Binding.Type
 const Metadata = Schema.Struct({
   result: Schema.Struct({
-    default_environment: Schema.Struct({ script: Schema.Struct({ migration_tag: Schema.optional(Schema.String) }) }),
+    default_environment: Schema.Struct({ script: Schema.Struct({ etag: Schema.NonEmptyString }) }),
   }),
 })
 const Subdomain = Schema.Struct({ result: Schema.Struct({ subdomain: Schema.NonEmptyString }) })
@@ -73,8 +75,8 @@ export const layer = Layer.effect(
       )
     const storage = yield* ObjectStorage.Service
     const fs = yield* FileSystem.FileSystem
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const http = yield* HttpClient.HttpClient
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const base = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(config.account)}/workers`
     const api = (request: HttpClientRequest.HttpClientRequest) =>
       http.execute(request.pipe(HttpClientRequest.bearerToken(config.token))).pipe(
@@ -91,31 +93,17 @@ export const layer = Layer.effect(
     const wrangler = join(dirname(fileURLToPath(import.meta.resolve("wrangler/package.json"))), "wrangler-dist/cli.js")
     yield* fs.makeDirectory(config.root, { recursive: true }).pipe(Effect.mapError(failed))
 
-    const migrationTag = Effect.fnUntraced(function* (state: Pick<State, "script" | "plan">) {
-      const acknowledged = state.plan.history.findIndex((step) => step.tag === state.plan.acknowledgedTag)
-      return yield* Effect.gen(function* () {
-        const response = yield* api(
-          HttpClientRequest.get(`${base}/services/${state.script}`).pipe(
-            HttpClientRequest.setHeader("cache-control", "no-cache"),
-          ),
-        )
-        if (response.status === 404) return null
-        if (response.status !== 200) return yield* failed(`Cannot read Cloudflare Worker metadata (${response.status})`)
-        return (
-          (yield* Schema.decodeUnknownEffect(Metadata)(response.body).pipe(Effect.mapError(failed))).result
-            .default_environment.script.migration_tag ?? null
-        )
-      }).pipe(
-        Effect.repeat({
-          schedule: Schedule.spaced("250 millis"),
-          until: (tag) => {
-            const index = state.plan.history.findIndex((step) => step.tag === tag)
-            return (Boolean(tag) && index === -1) || index >= acknowledged
-          },
-        }),
-        Effect.timeout("10 seconds"),
-        Effect.mapError(() => failed("Cloudflare's acknowledged migration tag did not settle")),
+    const remote = Effect.fnUntraced(function* (script: string) {
+      const response = yield* api(
+        HttpClientRequest.get(`${base}/services/${script}`).pipe(
+          HttpClientRequest.setHeader("cache-control", "no-cache"),
+        ),
       )
+      if (response.status === 404) return Option.none<string>()
+      if (response.status !== 200) return yield* failed(`Cannot read Cloudflare Worker metadata (${response.status})`)
+      const etag = (yield* Schema.decodeUnknownEffect(Metadata)(response.body).pipe(Effect.mapError(failed))).result
+        .default_environment.script.etag
+      return Option.some(etag.startsWith('"') ? etag : JSON.stringify(etag))
     })
     const probe = (state: State, version: Version) =>
       http
@@ -136,15 +124,32 @@ export const layer = Layer.effect(
           Effect.timeout("3 seconds"),
           Effect.orElseSucceed(() => false),
         )
-    const ready = (state: State, version: Version) =>
-      probe(state, version).pipe(
+    const ready = (state: State, version: Version, source: Option.Option<Snapshot>) =>
+      Effect.all(
+        {
+          marker: probe(state, version),
+          route: http
+            .get(
+              `https://${state.script}.${state.subdomain}.workers.dev${Option.isSome(source) && source.value.config.entry !== "index.html" ? `/${source.value.config.entry}` : "/"}`,
+            )
+            .pipe(
+              Effect.map((response) =>
+                Option.isSome(source) ? response.status >= 200 && response.status < 400 : response.status === 410,
+              ),
+              Effect.timeout("3 seconds"),
+              Effect.orElseSucceed(() => false),
+            ),
+        },
+        { concurrency: "unbounded" },
+      ).pipe(
+        Effect.map((result) => result.marker && result.route),
         Effect.repeat({ schedule: Schedule.spaced("1 second"), until: Boolean }),
         Effect.timeout("25 seconds"),
         Effect.mapError(() => failed("Cloudflare did not serve the matching artifact deployment version")),
       )
 
     const upload = Effect.fnUntraced(
-      function* (state: State, source: Option.Option<Snapshot>, version: Version) {
+      function* (state: State, source: Option.Option<Snapshot>, version: Version, guard: Option.Option<string>) {
         const directory = yield* fs.makeTempDirectoryScoped({ directory: config.root, prefix: `${state.script}-` })
         const archiveSource = Option.orElse(source, () => Option.fromNullishOr(state.active ?? state.pending))
         const files = Option.isSome(archiveSource)
@@ -199,60 +204,28 @@ export const layer = Layer.effect(
               assets: { directory: "public", binding: "ASSETS", run_worker_first: true },
             }),
             durable_objects: {
+              code_update_strategy: { mode: "immediate" },
               bindings: Object.entries(objects).map(([name, className]) => ({
                 name,
                 class_name: className,
               })),
             },
-            migrations: state.plan.history,
+            exports: ArtifactCloudflarePlan.exports(state.plan.objects),
           }),
         )
-        const handle = yield* spawner.spawn(
-          ChildProcess.make(
-            config.node,
-            [
-              "--import",
-              join(directory, "parent.mjs"),
-              wrangler,
-              "deploy",
-              "--config",
-              join(directory, "wrangler.json"),
-            ],
-            {
-              cwd: directory,
-              forceKillAfter: "3 seconds",
-              stdin: "pipe",
-              stdout: "pipe",
-              stderr: "pipe",
-              env: {
-                PATH: process.env.PATH,
-                HOME: process.env.HOME,
-                CLOUDFLARE_ACCOUNT_ID: config.account,
-                CLOUDFLARE_API_TOKEN: config.token,
-                WRANGLER_SEND_METRICS: "false",
-                CI: "1",
-                BROWSER: "none",
-              },
-            },
-          ),
+        return yield* ArtifactCloudflareUpload.stage({
+          account: config.account,
+          script: state.script,
+          token: config.token,
+          node: config.node,
+          directory,
+          wrangler,
+          guard,
+        }).pipe(
+          Effect.provideService(HttpClient.HttpClient, http),
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.timeout(Duration.min(config.uploadWithin, Duration.seconds(55))),
         )
-        const result = yield* Effect.all(
-          {
-            code: handle.exitCode,
-            output: handle.all.pipe(
-              Stream.decodeText,
-              Stream.runFold(
-                () => "",
-                (text, chunk) => (text + chunk).slice(-4000),
-              ),
-            ),
-          },
-          { concurrency: "unbounded" },
-        ).pipe(Effect.timeout(Duration.min(config.uploadWithin, Duration.seconds(55))))
-        if (result.code !== 0)
-          return yield* failed(
-            `Cloudflare upload failed: ${result.output.replaceAll(Redacted.value(config.token), "[redacted]")}`,
-          )
       },
       Effect.scoped,
       Effect.mapError(failed),
@@ -297,7 +270,7 @@ export const layer = Layer.effect(
         account: config.account,
         script: ArtifactCloudflareCode.name(artifactId),
         subdomain,
-        plan: { objects: {}, history: [], acknowledgedTag: null },
+        plan: { objects: {} },
         active: null,
         pending: null,
         stopped: true,
@@ -333,20 +306,31 @@ export const layer = Layer.effect(
         yield* save({ ...current, active: current.pending, pending: null })
 
       const publish = Effect.fnUntraced(function* (source: Option.Option<Snapshot>, version: Version) {
-        const planned = ArtifactCloudflarePlan.migrations({
-          previous: current.plan,
-          objects: current.plan.objects,
-          migrationTag: yield* migrationTag(current),
-        })
-        if (Result.isFailure(planned)) return yield* failed(planned.failure)
-        const tag = `ren-write-${crypto.randomUUID()}`
-        yield* save({ ...current, plan: ArtifactCloudflarePlan.fence(planned.success.state, tag) })
-        yield* upload(current, source, version)
-        const actual = yield* migrationTag({ ...current, plan: { ...current.plan, acknowledgedTag: tag } })
-        if (actual !== tag)
-          return yield* failed(`Cloudflare publication was superseded: expected ${tag}, observed ${actual ?? "no tag"}`)
-        yield* save({ ...current, plan: { ...current.plan, acknowledgedTag: actual } })
-        yield* ready(current, version)
+        const guard = yield* remote(current.script)
+        if (Option.isNone(guard) && (current.active || current.publication))
+          return yield* failed(
+            "The previously published Cloudflare Worker is missing; refusing to recreate its namespaces",
+          )
+        yield* save({ ...current })
+        const etag = yield* upload(current, source, version, guard)
+        yield* save({ ...current, publication: etag })
+        const route = yield* api(HttpClientRequest.get(`${base}/scripts/${current.script}/subdomain`))
+        const serving =
+          route.status === 200
+            ? yield* Schema.decodeUnknownEffect(
+                Schema.Struct({ result: Schema.Struct({ enabled: Schema.Boolean, previews_enabled: Schema.Boolean }) }),
+              )(route.body).pipe(Effect.mapError(failed))
+            : null
+        if (!serving?.result.enabled || serving.result.previews_enabled) {
+          const enable = yield* HttpClientRequest.post(`${base}/scripts/${current.script}/subdomain`).pipe(
+            HttpClientRequest.bodyJson({ enabled: true, previews_enabled: false }),
+            Effect.mapError(failed),
+          )
+          const enabled = yield* api(enable)
+          if (enabled.status !== 200)
+            return yield* failed(`Cannot enable the artifact public route (${enabled.status})`)
+        }
+        yield* ready(current, version, source)
       })
       const recover = Effect.fnUntraced(
         function* () {
@@ -391,12 +375,6 @@ export const layer = Layer.effect(
           desired: input.config.durableObjects ?? {},
         })
         if (Result.isFailure(bindings)) return yield* failed(bindings.failure)
-        const planned = ArtifactCloudflarePlan.migrations({
-          previous: before.plan,
-          objects: bindings.success,
-          migrationTag: yield* migrationTag(before),
-        })
-        if (Result.isFailure(planned)) return yield* failed(planned.failure)
         const snapshot = {
           deploymentId: input.deploymentId,
           config: input.config,
@@ -407,7 +385,7 @@ export const layer = Layer.effect(
             Option.getOrElse(() => crypto.randomUUID()),
           ),
         }
-        yield* stored.save({ ...before, plan: planned.success.state, pending: { ...snapshot, ready: false } })
+        yield* stored.save({ ...before, plan: { objects: bindings.success }, pending: { ...snapshot, ready: false } })
         yield* Effect.gen(function* () {
           yield* stored.publish(Option.some(snapshot), snapshot)
           yield* stored.save({ ...stored.state(), pending: { ...snapshot, ready: true }, stopped: false, stop: null })
