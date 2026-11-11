@@ -42,8 +42,6 @@ export const messagePageLimit = 20
 export const olderPageLimit = 200
 export const settleMs = 150
 export const headersTimeout = "60 seconds"
-const respondedLimit = 1_000
-const autoApproveRetries = 2
 const refreshBefore = 60_000
 
 const startingPollMs = 2_000
@@ -108,7 +106,6 @@ export interface Options {
   readonly initialMessageLimit?: number
   readonly sender?: SessionMessage.Sender
   readonly handoff?: Handoff
-  readonly autoApprove?: boolean
   readonly connection?: Partial<Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay">>
   readonly onError?: (error: unknown) => Effect.Effect<void>
 }
@@ -990,46 +987,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       Effect.andThen(removePermission(sessionID, requestID)),
     )
 
-  const autoApprove = yield* SubscriptionRef.make(options.autoApprove ?? false)
-  const responded = new Set<string>()
-
-  const approve = (request: Permission.Request) => {
-    const attempt = (retries: number): Effect.Effect<void, unknown> =>
-      replyPermission(request.sessionID, request.id, "once").pipe(
-        Effect.catch((error) =>
-          Effect.gen(function* () {
-            if (retries >= autoApproveRetries) return yield* Effect.fail(error)
-            yield* Effect.sleep(`${retries + 1} seconds`)
-            if (!(yield* SubscriptionRef.get(autoApprove))) return
-            return yield* attempt(retries + 1)
-          }),
-        ),
-      )
-    return attempt(0).pipe(
-      Effect.catch((error) => Effect.sync(() => responded.delete(request.id)).pipe(Effect.andThen(report(error)))),
-    )
-  }
-
-  yield* Stream.zipLatestWith(
-    SubscriptionRef.changes(state),
-    SubscriptionRef.changes(autoApprove),
-    (current, enabled) => (enabled ? Object.values(current.permissions).flat() : []),
-  ).pipe(
-    Stream.runForEach((requests) =>
-      Effect.forEach(
-        requests.filter((request) => !responded.has(request.id)),
-        (request) =>
-          Effect.suspend(() => {
-            responded.add(request.id)
-            if (responded.size > respondedLimit) responded.delete(responded.values().next().value ?? request.id)
-            return Effect.forkIn(approve(request), scope)
-          }),
-        { discard: true },
-      ),
-    ),
-    Effect.forkIn(scope),
-  )
-
   yield* Effect.addFinalizer(() =>
     Effect.forEach([...settling.values()], (fiber) => Fiber.interrupt(fiber), { discard: true }),
   )
@@ -1089,7 +1046,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),
     switchModel: (model: SessionModel.Ref) =>
       send(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
-    autoApprove,
     replyPermission,
     webSearchProviders: (sessionID: Session.ID) =>
       Effect.flatMap(client, (api) => api.websearch.providers({ sessionID })),

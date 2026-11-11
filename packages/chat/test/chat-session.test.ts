@@ -819,40 +819,6 @@ test("a permission request arrives live and leaves once the member answers it", 
     }),
   ))
 
-test("auto-approve answers a live request once, and one asked before it was enabled", () =>
-  ChatTest.live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      yield* brain.driver.permissions(brain.id, [{ action: "webfetch", resource: "*", effect: "ask" }])
-      const chat = yield* open(brain)
-      yield* chat.open(brain.id)
-      yield* ChatTest.until(chat.status, (status) => status === "connected")
-      const fetch = { tool: { name: "webfetch", input: { url: "https://example.com" } } }
-      yield* chat.prompt({ text: stub.script(fetch).marker })
-      yield* ChatTest.until(chat.state, (state) => (state.permissions[brain.id] ?? []).length > 0)
-      yield* SubscriptionRef.set(chat.autoApprove, true)
-      yield* ChatTest.until(chat.state, settled(brain.id))
-      yield* chat.prompt({ text: stub.script(fetch).marker })
-      const done = yield* ChatTest.until(
-        chat.state,
-        (state) =>
-          settled(brain.id)(state) &&
-          ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === 2,
-      )
-      expect(done.permissions[brain.id]).toEqual([])
-      const tools = ChatState.messages(done, brain.id).flatMap((message) =>
-        message.type === "assistant"
-          ? message.content.flatMap((part) => (part.type === "tool" ? [part.state] : []))
-          : [],
-      )
-      expect(tools).toHaveLength(2)
-      expect(
-        tools.filter((tool) => tool.status === "error" && tool.error.message.toLowerCase().includes("reject")),
-      ).toEqual([])
-    }),
-  ))
-
 test("coalesces duplicate gestures until the admission request settles", () =>
   ChatTest.live(
     Effect.gen(function* () {

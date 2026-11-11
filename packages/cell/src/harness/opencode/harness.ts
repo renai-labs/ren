@@ -51,6 +51,7 @@ import { Harness } from "../harness.js"
 import { OpenCodeAttachments } from "./attachments.js"
 import { OpenCodeVersion } from "./version.js"
 import { OpenCodeChat } from "./chat.js"
+import { OpenCodePermissionSweep } from "./permission-sweep.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import type { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
@@ -616,6 +617,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (
     update: HarnessConfig.Update,
   ): Effect.fn.Return<void> {
+    const changes: Array<OpenCodePermissionSweep.Change> = []
     const models = update.models ?? state.models
     const pulled =
       update.settings ??
@@ -668,7 +670,8 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               restate: restate.delete(chat.id),
             })
             const next = { resolved: resolved.success, interactive: saved?.interactive ?? true }
-            yield* Ref.update(known.latest, (all) => new Map([...all, [chat.id, next]]))
+            const previous = yield* Ref.getAndUpdate(known.latest, (all) => new Map([...all, [chat.id, next]]))
+            changes.push({ directory: session.value.location.directory, previous: previous.get(chat.id), next })
             if (Option.isSome(settings)) yield* settings.value.keep(chat.id, next)
           }),
         { discard: true },
@@ -682,6 +685,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       ...(update.channels && { channels: update.channels }),
       ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
     })
+    yield* Effect.forEach(changes, (change) => OpenCodePermissionSweep.run(client, change), { discard: true })
   })
   // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers and memory; an opening resolves each chat from them, not from what the chat had before.
   yield* configure({
