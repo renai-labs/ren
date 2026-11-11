@@ -214,6 +214,9 @@ export function AppSections(props: { app: App }) {
   const skills = Object.entries(app.skills)
   const tile = appTile(app)
   const categories = [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel)
+  const capabilities = [skills.length ? "Skills" : undefined, mcps.length ? "MCP servers" : undefined]
+    .filter(Boolean)
+    .join(", ")
   const facts = [
     ...(categories.length > 0 ? [["Category", categories.join(", ")] as const] : []),
     ["Source", app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`],
@@ -223,10 +226,7 @@ export function AppSections(props: { app: App }) {
         {app.slug}
       </span>,
     ],
-    [
-      "Capabilities",
-      [skills.length ? "Skills" : undefined, mcps.length ? "MCP servers" : undefined].filter(Boolean).join(", "),
-    ],
+    ...(capabilities ? [["Capabilities", capabilities] as const] : []),
   ] as const
   return (
     <>
