@@ -82,6 +82,7 @@ export function MentionOverlay(props: {
       style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
     >
       <div
+        dir="auto"
         className="wrap-break-word whitespace-pre-wrap text-foreground"
         style={{ ...box.style, transform: `translateY(${-box.scroll}px)` }}
       >

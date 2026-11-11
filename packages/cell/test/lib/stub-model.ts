@@ -72,6 +72,7 @@ export interface Server {
     readonly down: (isDown: boolean) => void
     readonly reads: ReadonlyArray<string | null>
   }
+  readonly replies: Map<string, string>
   readonly calls: ReadonlyArray<Call>
   readonly script: (behaviour?: Behaviour) => Script
   readonly waitFor: (predicate: (call: Call) => boolean) => Promise<Call>
@@ -293,6 +294,7 @@ const statusOf = (behaviour: Behaviour, call: Call) =>
 export const start = (): Server => {
   const calls: Array<Call> = []
   const scripts = new Map<string, Entry>()
+  const replies = new Map<string, string>()
   const waiters = new Set<Waiter>()
 
   const waitFor = (predicate: (call: Call) => boolean) => {
@@ -343,7 +345,12 @@ export const start = (): Server => {
     const behaviour: Behaviour = {
       title: { reply: "Stub title" },
       compaction: summary === undefined ? {} : { reply: summary },
-      turn: entry?.behaviour ?? {},
+      turn:
+        entry?.behaviour ??
+        Option.match(Option.fromNullishOr(replies.get(call.text)), {
+          onNone: () => ({}),
+          onSome: (reply) => ({ reply }),
+        }),
     }[call.kind]
     const status = statusOf(behaviour, call)
     if (status)
@@ -385,6 +392,7 @@ export const start = (): Server => {
       },
       reads: info.reads,
     },
+    replies,
     calls,
     waitFor,
     script: (behaviour = {}) => {

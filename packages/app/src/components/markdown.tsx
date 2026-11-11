@@ -27,7 +27,7 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
   const lines = useHighlightedCode(props.code, props.language)
   return (
-    <CodeBlock className="my-3">
+    <CodeBlock dir="ltr" className="my-3">
       <CodeBlockHeader>
         <CodeBlockTitle>{props.language || "text"}</CodeBlockTitle>
         <CodeBlockActions>
@@ -47,7 +47,7 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
 function MarkdownCode({ node: _node, className, children, ...props }: ComponentProps<"code"> & ExtraProps) {
   if (!("data-block" in props))
     return (
-      <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]" {...props}>
+      <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%] [unicode-bidi:isolate]" {...props}>
         {children}
       </code>
     )
@@ -155,6 +155,7 @@ export function Markdown(props: {
   return (
     <WorkspaceImages value={props.workspaceImage}>
       <Streamdown
+        dir="auto"
         controls={false}
         tableMaxHeight={0}
         urlTransform={urlTransform}

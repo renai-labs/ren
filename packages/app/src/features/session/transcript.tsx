@@ -348,6 +348,7 @@ function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: 
     <div className="flex flex-col gap-1.5">
       <InputGroup className="rounded-xl bg-card dark:bg-card">
         <InputGroupTextarea
+          dir="auto"
           value={text}
           aria-label="Edit message"
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens because the person asked to edit
@@ -529,7 +530,10 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
       {parts.typed ? (
         <Bubble variant="muted" align="end">
-          <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
+          <BubbleContent
+            dir="auto"
+            className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
+          >
             {withAppMentions(parts.typed, apps)}
           </BubbleContent>
         </Bubble>

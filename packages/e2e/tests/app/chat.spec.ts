@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
+import { ports } from "../lib/env.js"
 import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
@@ -173,4 +174,22 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("right-to-left replies align per block while code stays left to right", async ({ page }) => {
+  const prompt = "Summarise the meeting"
+  const repliesURL = `http://127.0.0.1:${ports.mailbox}/replies`
+  const reply = ["Here is the summary:", "", "هذا ملخص الاجتماع مع الفريق.", "", "```ts", "const total = 3", "```"].join(
+    "\n",
+  )
+  expect((await page.request.post(repliesURL, { data: { prompt, reply } })).status()).toBe(204)
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill(prompt)
+  await page.getByRole("button", { name: "Send" }).click()
+
+  const arabic = page.locator("[dir]", { hasText: "هذا ملخص الاجتماع مع الفريق." }).last()
+  await expect(arabic).toHaveAttribute("dir", "rtl", { timeout: brainStart })
+  await expect(page.locator("[dir]", { hasText: "Here is the summary:" }).last()).toHaveAttribute("dir", "ltr")
+  await expect(page.locator('[data-slot="code-block"]')).toHaveAttribute("dir", "ltr")
 })

@@ -645,6 +645,7 @@ export function PromptInput(props: {
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
+          dir="auto"
           value={text}
           onChange={(event) => {
             const next = event.target.value
