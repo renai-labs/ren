@@ -1,13 +1,11 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
-import { Duration, Effect, Layer, Option, Queue, Ref, Stream } from "effect"
+import { Duration, Effect, Layer, Queue, Ref, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { Shell } from "@opencode/schema/shell"
 import { Watchdog } from "../src/harness/opencode/watchdog.js"
 
 const it = testEffect(Layer.empty)
-
-const mebibyte = 1024 * 1024
 
 interface Call {
   readonly kind: "background" | "notify"
@@ -19,13 +17,11 @@ interface Call {
 const harness = Effect.fnUntraced(function* (settings?: Partial<Watchdog.Settings>) {
   const events = yield* Queue.unbounded<{ readonly type: string; readonly data: unknown }>()
   const shells = yield* Ref.make<ReadonlyMap<string, ReadonlyArray<Watchdog.Shell>>>(new Map())
-  const memory = yield* Ref.make<Option.Option<Watchdog.Memory>>(Option.none())
   const calls = yield* Ref.make<ReadonlyArray<Call>>([])
   const record = (call: Call) => Ref.update(calls, (all) => [...all, call])
   yield* Watchdog.run({
     events: Stream.fromQueue(events),
     shells: (sessionID) => Effect.map(Ref.get(shells), (all) => all.get(sessionID) ?? []),
-    memory: () => Ref.get(memory),
     background: (sessionID) => record({ kind: "background", sessionID }),
     notify: (input) => record({ kind: "notify", ...input }),
     ...(settings && { settings }),
@@ -34,7 +30,7 @@ const harness = Effect.fnUntraced(function* (settings?: Partial<Watchdog.Setting
     Queue.offer(events, { type, data: { sessionID } }).pipe(Effect.andThen(TestClock.adjust(0)))
   const running = (sessionID: string, list: ReadonlyArray<Watchdog.Shell>) =>
     Ref.update(shells, (all) => new Map([...all, [sessionID, list]]))
-  return { emit, running, memory, calls: Ref.get(calls) }
+  return { emit, running, calls: Ref.get(calls) }
 })
 
 const check = { id: Shell.ID.ascending(), pid: 10, command: "bun run check" }
@@ -93,38 +89,5 @@ it.effect("a stall with no running command does nothing", () =>
     yield* test.emit("session.execution.started", "S")
     yield* TestClock.adjust(Watchdog.defaults.stallAfter)
     expect(yield* test.calls).toEqual([])
-  }),
-)
-
-it.effect("memory above the high mark tells the session once per rise, with its command's share", () =>
-  Effect.gen(function* () {
-    const test = yield* harness()
-    yield* test.running("S", [check])
-    yield* test.emit("session.execution.started", "S")
-    const report = (used: number) =>
-      Ref.set(
-        test.memory,
-        Option.some({
-          usedBytes: used * mebibyte,
-          limitBytes: 100 * mebibyte,
-          processes: [
-            { pid: 10, rssBytes: 40 * mebibyte },
-            { pid: 20, rssBytes: 30 * mebibyte },
-          ],
-        }),
-      )
-    yield* report(81)
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    const calls = yield* test.calls
-    expect(calls.map((call) => call.kind)).toEqual(["notify"])
-    expect(calls.at(0)?.text).toContain("81%")
-    expect(calls.at(0)?.text).toContain("`bun run check` uses 40 MB")
-    expect(calls.at(0)?.description).toBe("Memory is at 81% of the limit.")
-    yield* report(70)
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    yield* report(85)
-    yield* TestClock.adjust(Watchdog.defaults.sampleEvery)
-    expect((yield* test.calls).map((call) => call.kind)).toEqual(["notify", "notify"])
   }),
 )

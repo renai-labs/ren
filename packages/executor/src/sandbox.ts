@@ -30,7 +30,6 @@ import { Executor } from "./executor.js"
 import { SandboxArchive } from "./sandbox/archive.js"
 import { SandboxDrives } from "./sandbox/drives.js"
 import { SandboxFiles } from "./sandbox/files.js"
-import { SandboxMemory } from "./sandbox/memory.js"
 import { OutputLog } from "./sandbox/output-log.js"
 
 const exitedLimitBytes = 64 * 1024 * 1024
@@ -266,22 +265,7 @@ export const layer = Layer.effect(
         )
     })
 
-    const memory = Effect.fn("Executor.memory")(function* (brain: Brain.ID) {
-      const running = [...processes.values()].filter((entry) => entry.brain === brain && !entry.log.exit)
-      const usage = yield* SandboxMemory.usage()
-      const rows = running.length ? yield* SandboxMemory.processes(spawner) : []
-      return {
-        ...usage,
-        processes: running.map((entry) => ({
-          id: entry.id,
-          pid: entry.handle.pid,
-          rssBytes: SandboxMemory.treeBytes(rows, entry.handle.pid),
-        })),
-      }
-    })
-
     return Executor.Service.of({
-      memory,
       hello: {
         protocol: EnvironmentApi.protocol,
         version: manifest.version,
