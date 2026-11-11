@@ -315,6 +315,65 @@ test("a chat in the device cache paints before Ren gives access, the brain's rea
     }),
   ))
 
+test("messages an event or a prompt put in the chat before its first read do not make the read walk the whole history", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const first = yield* open(brain)
+      yield* first.open(brain.id)
+      yield* Effect.forEach(
+        Array.from({ length: 10 }, (_, index) => index + 1),
+        (turns) =>
+          first
+            .prompt({ text: stub.script().marker })
+            .pipe(
+              Effect.andThen(
+                ChatTest.until(
+                  first.state,
+                  (state) =>
+                    settled(brain.id)(state) &&
+                    ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === turns,
+                ),
+              ),
+            ),
+        { discard: true },
+      )
+      const reads: Array<string> = []
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access,
+        handoff: { id: SessionMessage.ID.create(), text: stub.script().marker },
+        sender: { userId: "user_1" },
+      }).pipe(
+        Effect.provide(
+          FetchHttpClient.layer.pipe(
+            Layer.provide(
+              Layer.succeed(
+                FetchHttpClient.Fetch,
+                Object.assign(
+                  (input: string | URL | Request, init?: RequestInit) => {
+                    const url = new URL(input instanceof Request ? input.url : String(input))
+                    if (url.pathname.endsWith("/message")) reads.push(url.search)
+                    return brain.chatFetch(
+                      `${url.pathname}${url.search}`,
+                      input instanceof Request ? input : (init ?? {}),
+                    )
+                  },
+                  { preconnect: fetch.preconnect },
+                ),
+              ),
+            ),
+          ),
+        ),
+      )
+      yield* chat.open(brain.id)
+      yield* ChatTest.until(chat.state, settled(brain.id))
+      expect(reads.filter((search) => search.includes("cursor="))).toEqual([])
+      expect(ChatState.more(yield* SubscriptionRef.get(chat.state), brain.id)).toBe(true)
+    }),
+  ))
+
 test("a message sent while access is starting outlives a rebuilt runtime and is sent once after ready with its id; one the brain already accepted is not sent twice (E118)", () =>
   ChatTest.live(
     Effect.gen(function* () {

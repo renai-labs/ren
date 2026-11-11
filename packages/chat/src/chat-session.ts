@@ -399,9 +399,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             select: (current) => current.messages[read.sessionID],
             load: (before) =>
               Effect.gen(function* () {
-                const oldest = before?.at(0)?.id
                 const known = yield* SubscriptionRef.get(state)
-                const complete = before && !known.cursor[read.sessionID] && !known.partial.has(read.sessionID)
+                const oldest = known.loaded.has(read.sessionID) ? before?.at(0)?.id : undefined
+                const complete = !known.cursor[read.sessionID] && !known.partial.has(read.sessionID)
                 const fetch = (cursor?: string): Effect.Effect<SessionMessage.Page, unknown> =>
                   api.session
                     .messages({

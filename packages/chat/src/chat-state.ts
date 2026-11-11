@@ -34,6 +34,8 @@ export interface State {
   readonly history: ReadonlySet<string>
   // oxlint-disable-next-line ren/no-comments -- Sessions that show a page of Ren's saved history with older messages behind it: the brain's read stops at its oldest message (#253).
   readonly partial: ReadonlySet<string>
+  // oxlint-disable-next-line ren/no-comments -- Sessions whose messages came from a read, not only from events or a prompt: only those can be a complete history or need older pages to cover what shows.
+  readonly loaded: ReadonlySet<string>
   readonly connection: number
   readonly activeOverlay: ReadonlyMap<string, Activity | undefined> | undefined
   readonly pendingOverlay: Readonly<Record<string, ReadonlyMap<string, PendingUpdate>>>
@@ -53,6 +55,7 @@ export const empty: State = {
   compacting: {},
   history: new Set(),
   partial: new Set(),
+  loaded: new Set(),
   connection: 0,
   activeOverlay: undefined,
   pendingOverlay: {},

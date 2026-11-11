@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { ChatPage } from "../../../../../features/session/chat-page.js"
+import { ChatQueries } from "../../../../../lib/chat-queries.js"
 import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
       options.context.queryClient.query(
         options.context.api.session.get.queryOptions({ idOrSlug: options.params.sessionId }),
       ),
+      ...ChatQueries.start(options.context, options.context.me.organization?.id),
     )
   },
   component: ChatPage,

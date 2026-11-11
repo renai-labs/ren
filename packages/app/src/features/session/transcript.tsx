@@ -239,7 +239,7 @@ function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string
   }, [])
 }
 
-function groupTurns(blocks: ReadonlyArray<Block>, runningTurn: string | undefined) {
+function groupTurns(blocks: ReadonlyArray<Block>, live: (turn: string) => boolean) {
   const lastSteps = new Map(
     blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
   )
@@ -248,7 +248,7 @@ function groupTurns(blocks: ReadonlyArray<Block>, runningTurn: string | undefine
       grouped.push(block)
       return grouped
     }
-    if (block.kind === "answer" && (block.turn === runningTurn || (lastSteps.get(block.turn) ?? -1) < index)) {
+    if (block.kind === "answer" && (live(block.turn) || (lastSteps.get(block.turn) ?? -1) < index)) {
       grouped.push(block)
       return grouped
     }
@@ -256,10 +256,9 @@ function groupTurns(blocks: ReadonlyArray<Block>, runningTurn: string | undefine
       block.kind === "steps"
         ? block.steps
         : [{ kind: "text", key: block.key, text: block.text, streaming: block.streaming }]
-    const group =
-      block.turn === runningTurn
-        ? grouped.find((each) => each.kind === "steps" && each.turn === block.turn)
-        : grouped.at(-1)
+    const group = live(block.turn)
+      ? grouped.find((each) => each.kind === "steps" && each.turn === block.turn)
+      : grouped.at(-1)
     if (group?.kind === "steps" && group.turn === block.turn) group.steps.push(...items)
     else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
     return grouped
@@ -1090,6 +1089,7 @@ function LoadEarlier(props: { onVisible: () => void }) {
       ref={(node) => {
         if (!node) return
         const observer = new IntersectionObserver((entries) => {
+          if (node.closest("[data-pending-scroll]")) return
           if (entries.some((entry) => entry.isIntersecting)) props.onVisible()
         })
         observer.observe(node)
@@ -1289,8 +1289,18 @@ function BlockView(props: {
 }
 
 function History(props: { loading: boolean; onLoadMore: () => void }) {
-  if (!props.loading) return <LoadEarlier onVisible={props.onLoadMore} />
-  return <MessagesSkeleton label="Loading earlier messages" />
+  return (
+    <div className="absolute inset-x-0 top-0 flex h-6 items-center justify-center text-xs text-muted-foreground">
+      {props.loading ? (
+        <output className="flex items-center gap-2">
+          <Spinner />
+          Loading earlier messages
+        </output>
+      ) : (
+        <LoadEarlier onVisible={props.onLoadMore} />
+      )}
+    </div>
+  )
 }
 
 function WorkingMarker(props: { busy: boolean; working: boolean }) {
@@ -1308,7 +1318,20 @@ function WorkingMarker(props: { busy: boolean; working: boolean }) {
   )
 }
 
-const liveItems = 3
+const liveItems = 20
+
+function useEasedSend(blocks: ReadonlyArray<Block>) {
+  const sent = blocks.filter((block) => block.kind === "user").length
+  const [opened, setOpened] = useState(sent)
+  if (sent < opened) setOpened(sent)
+  return sent > opened && blocks.at(-1)?.kind === "user" ? "" : undefined
+}
+
+function useWatchedTurns(running: string | undefined) {
+  const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set())
+  if (running && !watched.has(running)) setWatched(new Set([...watched, running]))
+  return { live: (turn: string | undefined) => turn !== undefined && (turn === running || watched.has(turn)) }
+}
 
 const scrollUpKeys = new Set(["ArrowUp", "PageUp", "Home"])
 
@@ -1352,6 +1375,15 @@ function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMess
 
 export function Transcript(props: TranscriptProps) {
   const follow = useFollow(props.activeMessageID)
+  if (props.loading)
+    return (
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {props.more && !props.loadingHistory ? <LoadEarlier onVisible={props.onLoadMore} /> : null}
+        <div className="mx-auto w-full max-w-3xl p-6">
+          <MessagesSkeleton />
+        </div>
+      </div>
+    )
   return (
     <MessageScrollerProvider autoScroll={follow.following}>
       <TranscriptScroller transcript={props} follow={follow} />
@@ -1373,7 +1405,9 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const context = contextOf(props, byId)
   const turns = context.turns
   const activeTurn = props.busy ? props.activeMessageID : undefined
-  const blocks = groupTurns(blocksOf(props.rows, byId), activeTurn)
+  const watched = useWatchedTurns(activeTurn)
+  const blocks = groupTurns(blocksOf(props.rows, byId), watched.live)
+  const easing = useEasedSend(blocks)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(
     blocks.flatMap((block) => (block.kind === "answer" ? [[block.turn, block.key] as const] : [])),
@@ -1391,7 +1425,8 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     <MessageScroller className="@container flex-1">
       <MessageScrollerViewport
         preserveScrollOnPrepend
-        className="scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)]"
+        data-easing={easing}
+        className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
         onWheel={(event: WheelEvent<HTMLDivElement>) => {
           if (event.deltaY < 0) follow.pause()
           else if (atBottom(event.currentTarget)) toEnd()
@@ -1417,20 +1452,8 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
           if (!follow.following && down && atBottom(viewport)) toEnd()
         }}
       >
+        {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
         <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
-          {props.more ? (
-            <MessageScrollerItem
-              messageId="history"
-              className={props.loadingHistory ? "mb-6" : "absolute inset-x-6 top-1"}
-            >
-              <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} />
-            </MessageScrollerItem>
-          ) : null}
-          {props.loading ? (
-            <MessageScrollerItem messageId="loading">
-              <MessagesSkeleton />
-            </MessageScrollerItem>
-          ) : null}
           {blocks.map((block, index) => (
             <MessageScrollerItem
               key={block.key}
@@ -1458,7 +1481,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
               <EmptyState>{props.empty}</EmptyState>
             </MessageScrollerItem>
           ) : null}
-          <WorkingMarker busy={props.busy} working={props.working} />
+          <WorkingMarker busy={props.busy || watched.live(props.activeMessageID)} working={props.working} />
         </MessageScrollerContent>
       </MessageScrollerViewport>
       <MessageScrollerButton />
