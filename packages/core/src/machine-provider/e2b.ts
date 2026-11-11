@@ -8,7 +8,7 @@ import { Space } from "@ren/schema/space"
 import { Workload } from "@ren/schema/workload"
 import { Config, DateTime, Duration, Effect, Option, Redacted, Schema } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { EnvironmentProvider } from "../environment-provider.js"
+import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { MachineProvider } from "../machine-provider.js"
 
 // oxlint-disable-next-line ren/no-comments -- Sandboxes are tagged with the Ren that made them. One E2B team can serve several Rens (developers); each lists, counts and cleans up only its own (E2B_OWNER).

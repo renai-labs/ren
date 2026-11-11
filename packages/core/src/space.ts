@@ -164,7 +164,9 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const registry = yield* BrainProvider.Registry
-    const deploymentProvider = registry.providers.at(0)?.info.id ?? null
+    const deploymentProvider = Option.getOrNull(
+      Option.map(BrainProvider.defaultOf(registry), (provider) => provider.info.id),
+    )
     const database = yield* Database.Service
     const access = yield* Access.Service
     const control = yield* EgressControl.Service

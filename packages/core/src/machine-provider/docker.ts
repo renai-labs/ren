@@ -3,7 +3,7 @@ export * as Docker from "./docker.js"
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Duration, Effect, Option, Schedule, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { EnvironmentProvider } from "../environment-provider.js"
+import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { MachineProvider } from "../machine-provider.js"
 
 const Config = Schema.Struct({

@@ -86,7 +86,9 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const environments = yield* Environments.Service
     const brainProviders = yield* BrainProvider.Registry
-    const deploymentProvider = brainProviders.providers.at(0)?.info.id ?? null
+    const deploymentProvider = Option.getOrNull(
+      Option.map(BrainProvider.defaultOf(brainProviders), (provider) => provider.info.id),
+    )
 
     const versionOf = Effect.fnUntraced(function* (
       transaction: Database.Transaction,

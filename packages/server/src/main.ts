@@ -78,14 +78,15 @@ import { EgressControl } from "@ren/core/egress-control"
 import { EnvironmentNetwork } from "@ren/core/environment-network"
 import { AppResolve } from "@ren/core/app/resolve"
 
+// oxlint-disable-next-line ren/no-comments -- Where brains run: local processes, E2B sandboxes, or cells. One setting picks the brain host, the machine providers and the egress.
+const sandboxProvider = Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(Config.withDefault("local"))
+
 // oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
 const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
 
 // oxlint-disable-next-line ren/no-comments -- One proxy login per machine for brains and remote hands. An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
 const sandboxEgress = Layer.unwrap(
-  Effect.map(Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local")), (provider) =>
-    provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig,
-  ),
+  Effect.map(sandboxProvider, (provider) => (provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig)),
 ).pipe(Layer.provide(CredentialCallers.layer), Layer.provide(envelope))
 
 const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide([AppResolve.layer, Bundles.layer]))
@@ -96,9 +97,7 @@ const environments = Environments.layer.pipe(Layer.provide([sandboxEgress, Bundl
 // oxlint-disable-next-line ren/no-comments -- The deployment's brain providers (EN2). A Ren whose brains run in cells registers none, so a space's provider checks pass.
 const brainProviders = Layer.unwrap(
   Effect.gen(function* () {
-    const provider = yield* Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(
-      Config.withDefault("local"),
-    )
+    const provider = yield* sandboxProvider
     if (provider === "cell") return BrainProvider.layer([])
     if (provider === "e2b") return BrainProvider.layer([E2BSandbox.provider])
     const root = yield* Config.String("LOCAL_BRAIN_ROOT").pipe(Config.withDefault(join(tmpdir(), "ren-brains")))
@@ -129,29 +128,27 @@ const handProviders = Layer.unwrap<
   never
 >(
   Effect.gen(function* () {
-    const provider = yield* Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local"))
+    const provider = yield* sandboxProvider
     if (provider === "e2b") return EnvironmentProvider.layer([E2BSandbox.provider])
     return EnvironmentProvider.layer([Docker.provider])
   }),
 )
 
 const host = Layer.unwrap(
-  Effect.map(
-    Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(Config.withDefault("local")),
-    (provider) =>
-      provider === "cell"
-        ? BrainHost.layerCell
-        : BrainHost.layerSandbox.pipe(
-            Layer.provide(
-              BrainLifecycle.layer.pipe(
-                Layer.provide(sandboxEgress),
-                Layer.provide(Bundles.layer),
-                Layer.provide(environmentNetwork),
-              ),
+  Effect.map(sandboxProvider, (provider) =>
+    provider === "cell"
+      ? BrainHost.layerCell
+      : BrainHost.layerSandbox.pipe(
+          Layer.provide(
+            BrainLifecycle.layer.pipe(
+              Layer.provide(sandboxEgress),
+              Layer.provide(Bundles.layer),
+              Layer.provide(environmentNetwork),
             ),
-            Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
-            Layer.merge(Layer.effectDiscard(ProviderCheck.run.pipe(Effect.orDie))),
           ),
+          Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
+          Layer.merge(Layer.effectDiscard(ProviderCheck.run.pipe(Effect.orDie))),
+        ),
   ),
 )
 

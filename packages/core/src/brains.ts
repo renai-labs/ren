@@ -266,21 +266,10 @@ export const layer = Layer.effect(
         return yield* new BrainRejectedError({ message: "A message’s inline files total more than 20 MiB" })
     })
 
-    const handOf = Effect.fnUntraced(function* (brainId: Brain.ID, generation: number) {
-      return Option.map(yield* brainHost.hand(brainId), (hand): Environments.Hand => ({
-        brainId,
-        generation,
-        url: hand.url,
-        workspace: hand.workspace,
-        egress: hand.egress,
-        canMount: hand.canMount,
-      }))
-    })
-
     // oxlint-disable-next-line ren/no-comments -- Where the chats of a brain run their tools, from the hand it applied: its own machine, a remote hand or none.
-    const appliedOf = (brainId: Brain.ID, generation: number, hand: Space.AppliedHand) => {
+    const appliedOf = (brainId: Brain.ID, hand: Space.AppliedHand) => {
       if (hand.placement === "colocated")
-        return Effect.map(handOf(brainId, generation), (own): Environments.Applied => ({ _tag: "Own", hand: own }))
+        return Effect.map(brainHost.hand(brainId), (own): Environments.Applied => ({ _tag: "Own", hand: own }))
       return Effect.succeed<Environments.Applied>(hand.placement === "remote" ? { _tag: "Remote" } : { _tag: "None" })
     }
 
@@ -324,7 +313,7 @@ export const layer = Layer.effect(
       const hand = (yield* compute.applied(placement.brainId)).hand
       const colocated =
         hand.placement === "colocated"
-          ? yield* environments.findDirectory(subject, yield* appliedOf(placement.brainId, target.generation, hand))
+          ? yield* environments.findDirectory(subject, yield* appliedOf(placement.brainId, hand))
           : Option.none()
       const binding =
         hand.placement === "remote"
@@ -616,7 +605,7 @@ export const layer = Layer.effect(
         const inference = yield* models.inference
         // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake (EN23).
         const applied = yield* compute.applied(host.brainId)
-        const tools = yield* appliedOf(host.brainId, host.generation, applied.hand)
+        const tools = yield* appliedOf(host.brainId, applied.hand)
         const capabilities = yield* environments.capabilities(
           host.organizationId,
           pulled.chats.map((chat) => chat.id),
@@ -672,7 +661,7 @@ export const layer = Layer.effect(
         options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        const tools = yield* appliedOf(host.brainId, host.generation, (yield* compute.applied(host.brainId)).hand)
+        const tools = yield* appliedOf(host.brainId, (yield* compute.applied(host.brainId)).hand)
         return yield* environments.access(subject, tools, options).pipe(
           Effect.catchTags({
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
@@ -686,7 +675,7 @@ export const layer = Layer.effect(
         const subject = yield* inBrain(host, sessionId)
         return yield* environments.findDirectory(
           subject,
-          yield* appliedOf(host.brainId, host.generation, (yield* compute.applied(host.brainId)).hand),
+          yield* appliedOf(host.brainId, (yield* compute.applied(host.brainId)).hand),
         )
       }),
       releaseEnvironment: Effect.fn("Brains.releaseEnvironment")(function* (

@@ -35,8 +35,8 @@ import { EnvironmentNetwork } from "./environment-network.js"
 import { Environments } from "./environments.js"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
-import { BrainProvider } from "./brain-provider.js"
 import { MachineProvider } from "./machine-provider.js"
+import { BrainProvider } from "./brain-provider.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { SandboxEgress } from "./sandbox-egress.js"
 import { SpaceCompute } from "./space-compute.js"
@@ -49,7 +49,8 @@ export interface Interface extends MachineAccess.Interface<Brain.ID, BrainClient
   ) => Effect.Effect<BrainClient.Target, MachineLifecycle.Unavailable | MachineLifecycle.Starting>
   readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
-  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
+  // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its chats' hand. It is behind the egress when its brain is (R19).
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Environments.Hand>>
   readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- A shutdown of the brain: an awake brain refuses new work and syncs within stopWithin; then Ren retires its generation, stops it until new work and destroys its machine. Returns what it could not confirm.
@@ -71,12 +72,6 @@ export const timing = {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
-
-// oxlint-disable-next-line ren/no-comments -- The brain's own machine as an environment. It is behind the egress when its brain is (R19).
-export interface Hand extends MachineProvider.Hand {
-  readonly egress: boolean
-  readonly canMount: boolean
-}
 
 const CleanupRun = DurableRunner.make("BrainCleanup", {
   payload: { day: Schema.String },
@@ -655,39 +650,15 @@ export const layer = Layer.effect(
             .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.brain.id} failed`, error))),
         { discard: true },
       )
-      const listed = (yield* Effect.forEach(registry.providers, (provider) =>
-        provider.list.pipe(
-          Effect.map((all) => all.map((each) => ({ ...each, provider }))),
-          Effect.catch((error) =>
-            Effect.logWarning(`Cleanup could not list the machines of ${provider.info.id}`, error).pipe(Effect.as([])),
-          ),
-        ),
-      ))
-        .flat()
-        .flatMap((each) =>
-          each.kind === "brain"
-            ? [{ binding: each.binding, brainId: each.id, generation: each.generation, provider: each.provider }]
-            : [],
-        )
-      const known = new Map(
-        (yield* database.db
+      yield* MachineProvider.destroyStray(registry.providers, "brain", (ids) =>
+        database.db
           .select({ id: brains.id, generation: brains.generation })
           .from(brains)
-          .where(
-            inArray(
-              brains.id,
-              listed.map((each) => each.brainId),
-            ),
-          )
-          .pipe(Effect.orDie)).map((each) => [each.id, each.generation]),
-      )
-      yield* Effect.forEach(
-        listed.filter((each) => known.get(each.brainId) !== each.generation),
-        (each) =>
-          each.provider
-            .destroy(each.binding)
-            .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of a sandbox of ${each.brainId} failed`, error))),
-        { discard: true },
+          .where(inArray(brains.id, ids.map((id) => Brain.ID.make(id))))
+          .pipe(
+            Effect.orDie,
+            Effect.map((rows) => new Map(rows.map((row) => [row.id, row.generation]))),
+          ),
       )
       const busy = yield* database.db
         .selectDistinct({ brainId: chats.brain_id })
@@ -826,8 +797,12 @@ export const layer = Layer.effect(
         if (!row.binding || row.hand_placement === "remote") return Option.none()
         const provider = yield* providerOf(row)
         if (Option.isNone(provider.hand)) return Option.none()
-        return Option.some({
-          ...(yield* provider.hand.value(row.binding).pipe(Effect.orDie)),
+        const own = yield* provider.hand.value(row.binding).pipe(Effect.orDie)
+        return Option.some<Environments.Hand>({
+          brainId,
+          generation: row.generation,
+          url: own.url,
+          workspace: own.workspace,
           egress: row.egress,
           canMount: provider.canMount,
         })

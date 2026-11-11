@@ -27,7 +27,6 @@ import {
   notInArray,
   or,
   type SQL,
-  sql,
 } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
@@ -160,14 +159,6 @@ interface Target {
   readonly egress: boolean
 }
 
-const isSessionOf = (subject: Subject) =>
-  and(
-    eq(sessions.session_id, subject.sessionId),
-    exists(
-      sql`(select 1 from ${spaces} where ${and(eq(spaces.id, sessions.space_id), eq(spaces.organization_id, subject.organizationId))})`,
-    ),
-  )
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -176,14 +167,29 @@ export const layer = Layer.effect(
       directory: Config.String("ENVIRONMENT_DIRECTORY").pipe(Config.withDefault("/workspace")),
     })
     const database = yield* Database.Service
+    const isSessionOf = (subject: Subject) =>
+      and(
+        eq(sessions.session_id, subject.sessionId),
+        exists(
+          database.db
+            .select({ id: spaces.id })
+            .from(spaces)
+            .where(and(eq(spaces.id, sessions.space_id), eq(spaces.organization_id, subject.organizationId))),
+        ),
+      )
     const registry = yield* EnvironmentProvider.Registry
     // oxlint-disable-next-line ren/no-comments -- A remote hand goes through the egress as a brain does, with its own proxy login, so its processes get placeholders that work (C2).
     const sandboxEgress = yield* SandboxEgress.Service
     const isBehindEgress = (provider: MachineProvider.Provider) => sandboxEgress.enabled && provider.canEgress
     const sandboxVariables = yield* Deployment.sandboxVariables
     // oxlint-disable-next-line ren/no-comments -- EN42: a chat's folder on a remote hand is fixed when the chat starts, from the provider's workspace.
+    const workspaceIn = (provider: Option.Option<MachineProvider.Provider>) =>
+      Option.getOrElse(
+        Option.flatMap(provider, (found) => found.workspace),
+        () => config.directory,
+      )
     const directoryOf = (provider: MachineProvider.Provider, sessionId: Session.ID) =>
-      `${Option.getOrElse(provider.workspace, () => config.directory)}/${sessionId}`
+      `${workspaceIn(Option.some(provider))}/${sessionId}`
     const signer = yield* Signer.Service
     const signingKeys = signer.publicKeys("environment").pipe(
       Effect.map((publicKeys) => ({ publicKeys })),
@@ -317,7 +323,7 @@ export const layer = Layer.effect(
     const http = yield* HttpClient.HttpClient
     const code = yield* Bundles.Service
     const network = yield* EnvironmentNetwork.Service
-    const renUrl = yield* Config.option(Config.String("REN_URL"))
+    const renUrl = yield* Deployment.renUrl
 
     type Row = MachineLifecycle.Row<Environment.ID> & {
       readonly environment_template_id: EnvironmentTemplate.ID
@@ -443,7 +449,7 @@ export const layer = Layer.effect(
             and(
               eq(environments.id, environmentId),
               eq(environments.generation, generation),
-              sql`${environments.phase} not in ('creating', 'replacing')`,
+              notInArray(environments.phase, ["creating", "replacing"]),
             ),
           )
           .returning({ id: environments.id })
@@ -656,7 +662,7 @@ export const layer = Layer.effect(
         generation: target.generation,
         egress: target.egress,
         // oxlint-disable-next-line ren/no-comments -- R49, R59: the folder beside the session folders, which every session on the environment shares.
-        sharedDirectory: `${Option.getOrElse(provider.value.workspace, () => config.directory)}/.ren`,
+        sharedDirectory: `${workspaceIn(provider)}/.ren`,
       } satisfies Environment.Access
     })
 
@@ -783,11 +789,7 @@ export const layer = Layer.effect(
           )
           .onConflictDoNothing()
       }),
-      workspaceOf: (provider: EnvironmentProvider.ID) =>
-        Option.getOrElse(
-          Option.flatMap(registry.get(provider), (found) => found.workspace),
-          () => config.directory,
-        ),
+      workspaceOf: (provider: EnvironmentProvider.ID) => workspaceIn(registry.get(provider)),
       handHosts: Effect.fn("Environments.handHosts")(function* (environmentTemplateId: EnvironmentTemplate.ID) {
         const found = (yield* database.db
           .select({ provider: templates.provider })
@@ -860,35 +862,15 @@ export const layer = Layer.effect(
             Effect.forEach(problems, (problem) => Effect.logWarning(problem), { discard: true }),
           ),
         )
-        const listed = (yield* Effect.forEach(registry.providers, (provider) =>
-          provider.list.pipe(
-            Effect.map((all) => all.flatMap((each) => (each.kind === "hand" ? [{ ...each, provider }] : []))),
-            Effect.catch((error) =>
-              Effect.logWarning(`Cleanup could not list the machines of ${provider.info.id}`, error).pipe(
-                Effect.as([]),
-              ),
-            ),
-          ),
-        )).flat()
-        const known = new Map(
-          (yield* database.db
+        yield* MachineProvider.destroyStray(registry.providers, "hand", (ids) =>
+          database.db
             .select({ id: environments.id, generation: environments.generation })
             .from(environments)
-            .where(
-              inArray(
-                environments.id,
-                listed.map((each) => each.id),
-              ),
-            )
-            .pipe(Effect.orDie)).map((each) => [each.id, each.generation]),
-        )
-        yield* Effect.forEach(
-          listed.filter((each) => known.get(each.id) !== each.generation),
-          (each) =>
-            each.provider
-              .destroy(each.binding)
-              .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of a sandbox of ${each.id} failed`, error))),
-          { discard: true },
+            .where(inArray(environments.id, ids.map((id) => Environment.ID.make(id))))
+            .pipe(
+              Effect.orDie,
+              Effect.map((rows) => new Map(rows.map((row) => [row.id, row.generation]))),
+            ),
         )
       }).pipe(Effect.withSpan("Environments.cleanup")),
       refreshNetworks: Effect.fn("Environments.refreshNetworks")(function* (spaceId: Space.ID) {

@@ -3,12 +3,13 @@ export * as EnvironmentNetwork from "./environment-network.js"
 import { Credential } from "@ren/schema/credential"
 import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Workload } from "@ren/schema/workload"
-import { Config, Context, Effect, Layer, Option } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 import { AppProfiles } from "./app/profiles.js"
 import { AppResolve } from "./app/resolve.js"
 import { Bundles } from "./bundles.js"
 import { CredentialSource } from "./credential-source.js"
 import { Credentials } from "./credentials.js"
+import { Deployment } from "./deployment.js"
 import { Models } from "./models.js"
 
 // oxlint-disable-next-line ren/no-comments -- Networking rule 1: npm, PyPI and its file host, the Debian and Ubuntu mirrors, and the Go module proxy with its checksum database.
@@ -42,7 +43,7 @@ const ofTemplate = (networking: Extract<EnvironmentTemplate.Networking, { readon
 ]
 
 // oxlint-disable-next-line ren/no-comments -- Every machine reaches Ren's server: a brain pulls from it (EN40).
-const renServer = Config.option(Config.String("REN_URL")).pipe(
+const renServer = Deployment.renUrl.pipe(
   Effect.map((url) => Option.toArray(Option.flatMap(url, hostOf))),
   Effect.orDie,
 )

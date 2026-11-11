@@ -1,15 +1,10 @@
 export * as CodeUpdate from "./code-update.js"
 
+import type { Step } from "@ren/host-api/brain-api"
 import { BrainRejectedError } from "@ren/host-api/errors"
 import { Bundle } from "@ren/schema/bundle"
 import { Context, Effect, FileSystem, Layer, Path, Schema, Semaphore, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-
-// oxlint-disable-next-line ren/no-comments -- A command of the machine's template, as root or as the machine's user (EN22).
-interface Step {
-  readonly command: string
-  readonly user: "root" | "user"
-}
 
 // oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake (EN22, EN27). Only a machine that runs start.js can; any other host is replaced instead.
 export interface Interface {

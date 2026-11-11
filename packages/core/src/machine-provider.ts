@@ -1,6 +1,7 @@
 export * as MachineProvider from "./machine-provider.js"
 
 import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import type { Step as BrainApiStep } from "@ren/host-api/brain-api"
 import type { Auth } from "@ren/schema/auth"
 import type { Environment } from "@ren/schema/environment"
 import type { EnvironmentProvider } from "@ren/schema/environment-provider"
@@ -51,11 +52,7 @@ interface CreateInput<Config> {
   readonly network: Network
 }
 
-// oxlint-disable-next-line ren/no-comments -- A command that changes a running machine in place, as root or as the machine's user.
-export interface Step {
-  readonly command: string
-  readonly user: "root" | "user"
-}
+export type Step = BrainApiStep
 
 interface BuildInput<Config> {
   readonly environmentTemplateId: EnvironmentTemplate.ID
@@ -334,3 +331,28 @@ export const proxyEnv = (proxy: Proxy, caPath: string): Readonly<Record<string, 
     ...(Option.isSome(proxy.ca) ? Object.fromEntries(caVariables.map((name) => [name, caPath])) : {}),
   }
 }
+
+// oxlint-disable-next-line ren/no-comments -- Daily: destroys each machine of this kind that no row knows at its generation: a row that is gone or replaced, or a create that half worked. A provider that cannot list is skipped and logged.
+export const destroyStray = Effect.fnUntraced(function* (
+  providers: ReadonlyArray<Provider>,
+  kind: Labels["kind"],
+  knownGenerations: (ids: ReadonlyArray<string>) => Effect.Effect<ReadonlyMap<string, number>>,
+) {
+  const listed = (yield* Effect.forEach(providers, (provider) =>
+    provider.list.pipe(
+      Effect.map((all) => all.flatMap((each) => (each.kind === kind ? [{ ...each, provider }] : []))),
+      Effect.catch((error) =>
+        Effect.logWarning(`Cleanup could not list the machines of ${provider.info.id}`, error).pipe(Effect.as([])),
+      ),
+    ),
+  )).flat()
+  const known = yield* knownGenerations(listed.map((each) => each.id))
+  yield* Effect.forEach(
+    listed.filter((each) => known.get(each.id) !== each.generation),
+    (each) =>
+      each.provider
+        .destroy(each.binding)
+        .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of a sandbox of ${each.id} failed`, error))),
+    { discard: true },
+  )
+})

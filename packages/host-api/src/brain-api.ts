@@ -45,12 +45,18 @@ export const State = Schema.Struct({
   }),
 }).annotate({ identifier: "Brain.State" })
 
+// oxlint-disable-next-line ren/no-comments -- A command that changes a running machine in place, as root or as the machine's user (EN22).
+export interface Step extends Schema.Schema.Type<typeof Step> {}
+export const Step = Schema.Struct({ command: Schema.String, user: Schema.Literals(["root", "user"]) }).annotate({
+  identifier: "Brain.Step",
+})
+
 export const UpdateBody = Schema.Struct({
   bundles: Schema.Array(Bundle.Download).annotate({
     description: "The current bundles, the dependencies first, each with a link that downloads it.",
   }),
   steps: Schema.optionalKey(
-    Schema.Array(Schema.Struct({ command: Schema.String, user: Schema.Literals(["root", "user"]) })).annotate({
+    Schema.Array(Step).annotate({
       description:
         "Commands that bring the machine to its template’s new config in place, in order: package installs and build commands (EN22). They run before the bundles unpack.",
     }),

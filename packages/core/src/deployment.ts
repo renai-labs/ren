@@ -31,3 +31,6 @@ export const sandboxVariables = Effect.gen(function* () {
     ...Telemetry.variables({ ...server.attributes, ...tenant }),
   })
 })
+
+// oxlint-disable-next-line ren/no-comments -- Where machines reach this Ren; none for a Ren that machines do not call.
+export const renUrl = Config.option(Config.String("REN_URL"))
