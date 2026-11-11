@@ -541,12 +541,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       (current) => current._tag !== "Failed" && current._tag !== "Stopped",
     ),
     onFrames,
+    onUnreachable: lost,
     onStatus: (next) =>
       Effect.gen(function* () {
         if (next !== "connected") reads.invalidate()
         // oxlint-disable-next-line ren/no-comments -- A parked brain may be asleep or gone: the next read or send asks Ren first, which wakes it (E128).
         if (next === "reconnecting" || next === "parked") cached.current = Option.none()
-        yield* SubscriptionRef.set(status, next)
+        // oxlint-disable-next-line ren/no-comments -- Each retry reports reconnecting again; publishing it again would make every reader of the status ask Ren for access again (#196).
+        if ((yield* SubscriptionRef.get(status)) !== next) yield* SubscriptionRef.set(status, next)
       }),
   })
 
