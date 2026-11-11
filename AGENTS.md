@@ -2,19 +2,21 @@
 
 This file has only the rules for all of Ren. Load the other instructions when your task needs them.
 
-| Task                                    | Instructions                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------------- |
-| Change a package                        | `packages/<name>/AGENTS.md`. Read a file in the package to load it.          |
-| Change the egress (Go)                  | `repos/iron-proxy/AGENTS.md`.                                                |
-| Write Effect code                       | The `effect` skill.                                                          |
-| Write React or interface code           | The `react` and `interface` skills.                                          |
-| Run, debug or verify Ren                | The `ren-dev` skill.                                                         |
-| Review code or prepare commits          | The `ren-dev` skill (scope, review checkpoints and test selection).          |
-| Change a UI component or the theme      | `packages/ui/AGENTS.md` and the `shadcn` skill.                              |
-| Change lint rules or `oxlint.config.ts` | `script/AGENTS.md`.                                                          |
-| Change Turborepo config                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
-| Write a spec                            | `specs/README.md`.                                                           |
-| Add a feature flag                      | `specs/runtime/README.md`.                                                   |
+| Task                                                                    | Instructions                                                                 |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Change a package                                                        | `packages/<name>/AGENTS.md`. Read a file in the package to load it.          |
+| Change the egress (Go)                                                  | `repos/iron-proxy/AGENTS.md`.                                                |
+| Write Effect code                                                       | The `effect` skill.                                                          |
+| Write React or interface code                                           | The `react` and `interface` skills.                                          |
+| Run tests, sign off a push, regenerate clients, prepare commits and PRs | The `ren-dev` skill.                                                         |
+| Review a change                                                         | The `ren-review` skill.                                                      |
+| Check a change end to end on E2B, with recorded evidence                | The `ren-e2e` skill.                                                         |
+| Screens in Ren Design (Figma)                                           | The `ren-design` skill.                                                      |
+| Change a UI component or the theme                                      | `packages/ui/AGENTS.md` and the `shadcn` skill.                              |
+| Change lint rules or `oxlint.config.ts`                                 | `script/AGENTS.md`.                                                          |
+| Change Turborepo config                                                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
+| Write a spec                                                            | `specs/README.md`.                                                           |
+| Add a feature flag                                                      | `specs/runtime/README.md`.                                                   |
 
 ## Vocabulary
 

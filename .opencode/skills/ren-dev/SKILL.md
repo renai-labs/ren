@@ -1,16 +1,9 @@
 ---
 name: ren-dev
-description: Use when reviewing, running, debugging, or verifying Ren, preparing commits and PRs, selecting tests, or regenerating clients.
+description: Use when changing Ren's code: local services, which tests to run, the signoff of a push, generated code, commits and PRs. For a recorded end-to-end check use ren-e2e; for a review use ren-review.
 ---
 
 # Developing Ren
-
-## Scope and handoffs
-
-- Keep the current scope, deferred work, review checkpoint, commit permission and target branch in handoffs and compaction summaries. Apply the user's latest instructions.
-- For a review-only task, report findings. Tool feedback does not grant permission to edit files.
-- Before staging, inspect the diff and select only the requested changes. Keep unrelated work and deferred features out of the commit.
-- Report what changed, what remains and any blocker when a step finishes or progress stalls. Distinguish static review, checks that passed and checks still running.
 
 ## Services
 
@@ -40,9 +33,11 @@ Test databases are named `ren_test_clone_<uuid>`, cloned from a cached migrated 
 - Before adding a test, find existing coverage and name the distinct behavior it will prove. Extend that coverage where possible. Test shared user behavior through the public Ren surface; adapter tests cover translation and upstream behavior Ren relies on.
 - For a recovery test, observe the fault before removing it. Observe the intended recovery mechanism before making a request that could itself trigger recovery. Use events or latches to establish ordering, and scoped finalizers to release faults and held requests.
 - Keep distinct race and failure scenarios. Prune repeated happy paths and fixture-shape assertions that another test already proves.
+- While you write code: `bun typecheck` in the package you change.
 - One package: `cd packages/<name> && bun run test`. It runs the test files that import a changed file; `bun run test:all` runs every file. Both skip `*.slow.test.ts` files; set `REN_SLOW=1` to run them too.
 - Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
-- End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
+- Playwright journeys: `cd packages/e2e && bun run test`. It starts its own server on port 4010, with local brains and a stub model.
+- A test that needs Docker, E2B or a credential skips without it (`test.skipIf`). A skipped test is not a passing one.
 - Everything: `bun run test:all` from the repo root.
 - `bun run test` runs files in isolated parallel workers and waits, or runs fewer workers, when free memory or the machine's memory budget is short. `bun run check`, `bun run lint` and `bun run typecheck` share the budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
 - `bun run memory` shows who holds the budget. Run another heavy command, such as a build, with `bun run memory queue -- <cmd>`.
@@ -56,6 +51,10 @@ Ren has no CI: `git push` signs off each commit (`CONTRIBUTING.md`, Signoff).
 - The pre-push hook reuses the recorded lint and typecheck of the pushed files, or runs them. It never runs tests. Then it posts `signoff/lint`, `signoff/typecheck` and `signoff/test` on the commit.
 - To push without running lint and typecheck twice, do not run them before the push: the hook runs them once. Run `bun run test` in each changed package on the final commit.
 - `signoff/test` says `Not run for <packages>` when a package that the change affects has no recorded run.
+
+## Commits and PRs
+
+Before staging, read the diff and stage only the change. Commit and PR titles: `type(scope): summary` (`AGENTS.md`, Git). Fill in `.github/pull_request_template.md`.
 
 ## Generated code
 
