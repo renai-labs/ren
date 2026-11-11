@@ -14,9 +14,9 @@ description: Use when reviewing, running, debugging, or verifying Ren, preparing
 
 ## Services
 
-- Postgres: `docker compose up -d` from the repo root. Connection: `postgres://ren:ren@localhost:54320/ren` (`DATABASE_URL`).
+- Postgres: `docker compose up -d postgres` from the repo root. Tests need only Postgres. Connection: `postgres://ren:ren@localhost:54320/ren` (`DATABASE_URL`). `docker compose up -d` also starts the drive store (`rustfs`) and `celld`; the egress needs `--profile egress`.
 - API server: `bun run dev` from the repo root (port 4000, override with `PORT`). Logs go to stdout.
-- Web app: `bun run dev:app`. Vite proxies the API routes (`/auth`, `/spaces`, `/me`, …) to the API server; browser page loads (`Accept: text/html`) still get the SPA.
+- Web app: `bun run dev:app` serves `http://localhost:5173/app/`. It calls the API at `VITE_REN_API_URL`, `http://localhost:4000` by default (`packages/app/README.md`).
 - Docs site: `bun run dev:site`.
 
 ## Checking the server
@@ -46,6 +46,16 @@ Test databases are named `ren_test_clone_<uuid>`, cloned from a cached migrated 
 - Everything: `bun run test:all` from the repo root.
 - `bun run test` runs files in isolated parallel workers and waits, or runs fewer workers, when free memory or the machine's memory budget is short. `bun run check`, `bun run lint` and `bun run typecheck` share the budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
 - `bun run memory` shows who holds the budget. Run another heavy command, such as a build, with `bun run memory queue -- <cmd>`.
+
+## Signoff
+
+Ren has no CI: `git push` signs off each commit (`CONTRIBUTING.md`, Signoff).
+
+- Root `bun run lint` and `bun run typecheck`, and `bun run test` or `bun run test:all` in a package, record their result for the exact files they ran on. A run with extra arguments is not recorded.
+- `bun run check` records nothing. Use it in the inner loop, not to sign off.
+- The pre-push hook reuses the recorded lint and typecheck of the pushed files, or runs them. It never runs tests. Then it posts `signoff/lint`, `signoff/typecheck` and `signoff/test` on the commit.
+- To push without running lint and typecheck twice, do not run them before the push: the hook runs them once. Run `bun run test` in each changed package on the final commit.
+- `signoff/test` says `Not run for <packages>` when a package that the change affects has no recorded run.
 
 ## Generated code
 
