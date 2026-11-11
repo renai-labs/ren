@@ -5,7 +5,19 @@ import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
-import { Cause, Clock, DateTime, Duration, Effect, ErrorReporter, Option, Schedule, Schema } from "effect"
+import {
+  Array as Arr,
+  Cause,
+  Clock,
+  DateTime,
+  Duration,
+  Effect,
+  Equivalence,
+  ErrorReporter,
+  Option,
+  Schedule,
+  Schema,
+} from "effect"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineProvider } from "./machine-provider.js"
 import type { SandboxEgress } from "./sandbox-egress.js"
@@ -175,6 +187,12 @@ const phaseAfterResume = (
 
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
+// oxlint-disable-next-line ren/no-comments -- A time some duration after another, as the rows keep times.
+export const later = (at: Date, duration: Duration.Input) =>
+  DateTime.toDateUtc(DateTime.addDuration(DateTime.makeUnsafe(at), duration))
+
+const sameHosts = Option.makeEquivalence(Arr.makeEquivalence(Equivalence.strictEqual<string>()))
+
 // oxlint-disable-next-line ren/no-comments -- Ready and inside its keep-alive. A machine past its keep-alive may be paused.
 const isAwake = (row: Pick<Row<string>, "phase" | "keep_alive_until">, at: Date) =>
   row.phase === "ready" && row.keep_alive_until !== null && row.keep_alive_until.getTime() > at.getTime()
@@ -226,7 +244,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     if (left > Duration.toMillis(window) / 2) return
     const provider = yield* definition.providerOf(row)
     yield* provider.keepAlive(row.binding, window)
-    yield* update(row.id, { keep_alive_until: new Date(at.getTime() + Duration.toMillis(window)) })
+    yield* update(row.id, { keep_alive_until: later(at, window) })
   })
 
   // oxlint-disable-next-line ren/no-comments -- EN38: Ren sends an error report when a machine fails, waits for capacity, or is replaced by force.
@@ -265,7 +283,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       failures,
       failure: reason,
       phase: "failed",
-      retry_at: new Date((yield* now).getTime() + Duration.toMillis(wait)),
+      retry_at: later(yield* now, wait),
     })
     yield* report(row, new Failed({ message: `${noun} ${row.id} failed: ${reason}` }))
     return true
@@ -329,7 +347,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       network_hosts: Option.getOrNull(desired.hosts),
       url: created.value.url,
       phase: "booting",
-      keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(timing.idle)),
+      keep_alive_until: later(yield* now, timing.idle),
     })
     return false
   })
@@ -588,16 +606,12 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       const found = yield* definition.find(id)
       if (Option.isNone(found)) return
       const first = found.value
-      let worked = false
-      while (!(yield* step(id))) {
-        worked = true
-        yield* Effect.yieldNow
-      }
-      if (worked)
-        yield* Effect.annotateCurrentSpan(
-          `ren.${names.annotation}.start_kind`,
-          startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
-        )
+      if (yield* step(id)) return
+      yield* Effect.yieldNow.pipe(Effect.andThen(step(id)), Effect.repeat({ until: (isDone) => isDone }))
+      yield* Effect.annotateCurrentSpan(
+        `ren.${names.annotation}.start_kind`,
+        startKinds[first.phase] ?? (first.binding ? "resume" : "new"),
+      )
     }).pipe(
       // oxlint-disable-next-line ren/no-comments -- EN18: every provider failure counts, so an outage ends in failed and its report, not in endless retries. The run tries again until the machine is failed, then ends.
       Effect.catchIf(Schema.is(MachineProvider.Failed), (error) =>
@@ -653,7 +667,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     if (!row.binding || !isAwake(row, at)) return
     const applied = yield* definition.appliedHosts(row)
     const hosts = Option.getOrNull(applied)
-    if (JSON.stringify(hosts) === JSON.stringify(row.network_hosts)) return
+    if (sameHosts(applied, Option.fromNullishOr(row.network_hosts))) return
     const provider = yield* definition.providerOf(row)
     if (Option.isNone(provider.updateNetwork)) return
     yield* provider.updateNetwork.value(row.binding, { proxy: yield* proxyOf(row, provider), hosts: applied }).pipe(

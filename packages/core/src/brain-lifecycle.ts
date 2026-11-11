@@ -2,7 +2,6 @@ export * as BrainLifecycle from "./brain-lifecycle.js"
 
 import { Observability } from "@ren/schema/observability"
 import { Database } from "@ren/db/database"
-import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Bundle } from "@ren/schema/bundle"
@@ -22,6 +21,7 @@ import {
   Layer,
   Option,
   Ref,
+  Result,
   Schedule,
   Schema,
   Stream,
@@ -420,30 +420,26 @@ export const layer = Layer.effect(
       target: targetOf,
       boot: Effect.fnUntraced(function* (target, within) {
         const api = yield* client.brain(target)
-        const answered = { last: Option.none<BrainState>() }
-        // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1). An older brain does not report pulledAt.
-        const state = yield* api.brain["brain.state"]().pipe(
-          Effect.tap((found) =>
-            Effect.sync(() => {
-              answered.last = Option.some(found)
-            }),
-          ),
+        // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1). The last try's reason is the one reported. An older brain does not report pulledAt.
+        const booted = yield* api.brain["brain.state"]().pipe(
+          Effect.mapError(() => `The brain did not answer within ${Duration.format(within)}`),
           Effect.flatMap((found) =>
             // ast-grep-ignore: no-nullish-comparison, -- null is "not yet pulled"; an older brain leaves pulledAt out and is not waited for
             found.pulledAt === null
-              ? Effect.fail(new MachineLifecycle.Unavailable({ message: "not reached Ren" }))
-              : Effect.succeed(found),
+              ? Effect.fail(`The brain answers but did not reach Ren within ${Duration.format(within)}`)
+              : Effect.void,
           ),
-          Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
-          Effect.timeoutOption(within),
+          Effect.timeoutOrElse({
+            duration: MachineLifecycle.timing.probeTimeout,
+            orElse: () => Effect.fail(`The brain did not answer within ${Duration.format(within)}`),
+          }),
+          Effect.retry({
+            schedule: Schedule.spaced(MachineLifecycle.timing.poll).pipe(Schedule.upTo({ duration: within })),
+          }),
+          Effect.result,
         )
-        if (Option.isSome(state))
-          return yield* update(target.brainId, { last_pulled_at: yield* now }).pipe(Effect.as(Option.none()))
-        return Option.some(
-          Option.isSome(answered.last)
-            ? `The brain answers but did not reach Ren within ${Duration.format(within)}`
-            : `The brain did not answer within ${Duration.format(within)}`,
-        )
+        if (Result.isFailure(booted)) return Option.some(booted.failure)
+        return yield* update(target.brainId, { last_pulled_at: yield* now }).pipe(Effect.as(Option.none()))
       }),
       wake: Effect.fnUntraced(function* (target, within) {
         const api = yield* client.brain(target)
@@ -547,7 +543,10 @@ export const layer = Layer.effect(
             gt(brains.keep_alive_until, at),
             or(
               isNull(brains.last_pulled_at),
-              lt(brains.last_pulled_at, new Date(at.getTime() - Duration.toMillis(pullWithin))),
+              lt(
+                brains.last_pulled_at,
+                DateTime.toDateUtc(DateTime.subtractDuration(DateTime.makeUnsafe(at), pullWithin)),
+              ),
             ),
           ),
         )
@@ -768,9 +767,7 @@ export const layer = Layer.effect(
                 answer.drained ? [] : [`Brain ${brainId} did not sync all its chats before it stopped`],
               ),
               Effect.catchCause((cause) =>
-                Effect.succeed([
-                  `Brain ${brainId} did not confirm that it stopped and synced: ${Cause.pretty(cause).split("\n").at(0)}`,
-                ]),
+                Effect.succeed([`Brain ${brainId} did not confirm that it stopped and synced: ${String(Cause.squash(cause))}`]),
               ),
             ),
         })
@@ -810,7 +807,7 @@ export const layer = Layer.effect(
           Effect.as<ReadonlyArray<string>>([]),
           Effect.catchCause((cause) =>
             Effect.succeed([
-              `The machine of brain ${brainId} was not destroyed; the daily cleanup tries again: ${Cause.pretty(cause).split("\n").at(0)}`,
+              `The machine of brain ${brainId} was not destroyed; the daily cleanup tries again: ${String(Cause.squash(cause))}`,
             ]),
           ),
         )

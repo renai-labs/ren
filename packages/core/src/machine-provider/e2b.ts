@@ -223,7 +223,12 @@ export const provider = Effect.gen(function* () {
     if (response.status === 429)
       return yield* new MachineProvider.Capacity({
         message: `E2B ${operation} answered 429: ${text.slice(0, 300)}`,
-        retryAfter: Duration.seconds(Number(response.headers["retry-after"] ?? "10") || 10),
+        retryAfter: Duration.seconds(
+          Option.getOrElse(
+            Schema.decodeUnknownOption(Schema.NumberFromString)(response.headers["retry-after"]),
+            () => 10,
+          ),
+        ),
       })
     return yield* new MachineProvider.Failed({
       message: `E2B ${operation} answered ${response.status}: ${text.slice(0, 300)}`,

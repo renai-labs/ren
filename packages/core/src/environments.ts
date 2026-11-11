@@ -295,7 +295,7 @@ export const layer = Layer.effect(
             .update(sessions)
             .set({
               environment_id: environmentId,
-              reserved_until: new Date(at.getTime() + Duration.toMillis(reservation)),
+              reserved_until: MachineLifecycle.later(at, reservation),
             })
             .where(eq(sessions.session_id, subject.sessionId))
           const environment = yield* transaction
@@ -547,7 +547,7 @@ export const layer = Layer.effect(
                 .delete(environments)
                 .where(and(eq(environments.id, machine.id), where))
                 .returning({ binding: environments.binding })
-              return deleted.map((row) => Object.assign(machine, { binding: row.binding }))
+              return deleted.map((row) => ({ id: machine.id, provider: machine.provider, binding: row.binding }))
             }),
           )
           .pipe(Effect.orDie),
@@ -809,7 +809,7 @@ export const layer = Layer.effect(
         const at = new Date(yield* Clock.currentTimeMillis)
         yield* database.db
           .update(sessions)
-          .set({ reserved_until: new Date(at.getTime() + Duration.toMillis(reservation)) })
+          .set({ reserved_until: MachineLifecycle.later(at, reservation) })
           .where(and(inArray(sessions.session_id, [...sessionIds]), gt(sessions.reserved_until, at)))
           .pipe(Effect.orDie)
       }),
