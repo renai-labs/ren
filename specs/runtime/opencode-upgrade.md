@@ -200,7 +200,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 
 ## 8. Failures that are not from this upgrade
 
-On a Mac without a container memory limit, the executor reads used memory as `totalmem() - freemem()`, which counts cache (98% here). The watchdog then kills any shell after one 5-second sample above 92%, so J30, J24 and J52 fail with `Shell.NotFoundError`. They pass with the critical line raised. Fix the reading in `executor/src/sandbox/memory.ts`, outside this upgrade.
+On a Mac without a container memory limit, the executor read used memory as `totalmem() - freemem()`, which counts cache (98% here). The watchdog then killed any shell after one 5-second sample above 92%, so J30, J24 and J52 failed with `Shell.NotFoundError`. Fixed on 11 Nov 2026: the watchdog no longer kills (renai-labs/ren#317) and no longer reads memory.
 
 A command with no description is dropped from `command.list`: OpenCode sends `description: undefined`, which `SessionCatalog.Command` does not accept.
 

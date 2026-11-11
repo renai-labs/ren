@@ -70,25 +70,6 @@ export const SpawnResult = Schema.Struct({ id: ProcessID, pid: Schema.Int }).ann
   identifier: "Executor.SpawnResult",
 })
 
-export interface ProcessMemory extends Schema.Schema.Type<typeof ProcessMemory> {}
-export const ProcessMemory = Schema.Struct({
-  id: ProcessID,
-  pid: Schema.Int,
-  rssBytes: Schema.Int.annotate({
-    description: "The resident memory of the process and every descendant, as the kernel reports it per process",
-  }),
-}).annotate({ identifier: "Executor.ProcessMemory" })
-
-export interface MemoryReport extends Schema.Schema.Type<typeof MemoryReport> {}
-export const MemoryReport = Schema.Struct({
-  usedBytes: Schema.Int.annotate({
-    description:
-      "The memory in use by the executor’s cgroup without the file cache the kernel can reclaim, or by the whole machine when it has no cgroup limit",
-  }),
-  limitBytes: Schema.Int.annotate({ description: "The cgroup’s memory limit, or the machine’s memory" }),
-  processes: Schema.Array(ProcessMemory).annotate({ description: "The brain’s running processes" }),
-}).annotate({ identifier: "Executor.MemoryReport" })
-
 export const maxWindowBytes = 1024 * 1024
 
 const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
@@ -279,7 +260,6 @@ const ProcessRef = { id: ProcessID }
 
 export const Rpcs = RpcGroup.make(
   Rpc.make("executor.hello", { success: Hello }),
-  Rpc.make("executor.memory", { success: MemoryReport }),
   Rpc.make("process.spawn", { payload: SpawnInput, success: SpawnResult, error: SpawnFailedError }),
   Rpc.make("process.output", {
     payload: { ...ProcessRef, cursor: Schema.optionalKey(Offset), window: Schema.optionalKey(OutputWindow) },

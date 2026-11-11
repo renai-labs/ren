@@ -26,7 +26,6 @@ import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session service is imported by that name above
-import { Session as RenSession } from "@ren/schema/session"
 import {
   Context,
   Deferred,
@@ -270,12 +269,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         located(sessionId, Shell.Service).pipe(
           Effect.flatMap((shell) => shell.list()),
           Effect.orElseSucceed(() => []),
-        ),
-      memory: (sessionId) =>
-        connections.value.connect(RenSession.ID.make(sessionId)).pipe(
-          Effect.flatMap((connection) => connection.client["executor.memory"]()),
-          Effect.scoped,
-          Effect.option,
         ),
       background: (sessionId) => sessions.background(SessionID.make(sessionId)).pipe(Effect.orDie),
       notify: (notice) =>
