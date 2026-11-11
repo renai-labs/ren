@@ -207,7 +207,7 @@ const trustEgress = async (home: string): Promise<Readonly<Record<string, string
   return Object.fromEntries(caVariables.map((name) => [name, bundle]))
 }
 
-// oxlint-disable-next-line ren/no-comments -- The executor runs in the ren-tools slice when the machine has systemd, so the tools' memory has its own limit (75%) and the brain survives a tool that fills memory. OOMPolicy=continue: an out-of-memory kill stops one process, not the whole scope.
+// oxlint-disable-next-line ren/no-comments -- The executor runs in the ren-tools slice when the machine has systemd, so the tools' memory has its own limit (75%) and the brain survives a tool that fills memory. OOMPolicy=continue: an out-of-memory kill stops one process, not the whole scope. setpriv gives the user's groups (docker); systemd-run --uid gives root's.
 const toolsOf = async (home: string) => {
   const slice = ["systemd-run", "--quiet", "--scope", "--slice=ren-tools.slice", "-p", "OOMPolicy=continue"]
   if ((await Bun.$`sudo -n ${slice} true`.nothrow().quiet()).exitCode !== 0) return { prefix: [], env: {} }
@@ -219,8 +219,11 @@ const toolsOf = async (home: string) => {
       `PATH=${process.env.PATH ?? ""}`,
       `HOME=${home}`,
       ...slice,
-      `--uid=${process.getuid?.() ?? 0}`,
-      `--gid=${process.getgid?.() ?? 0}`,
+      "--",
+      "setpriv",
+      `--reuid=${process.getuid?.() ?? 0}`,
+      `--regid=${process.getgid?.() ?? 0}`,
+      "--init-groups",
       "--",
     ],
     env: { REN_TOOLS_MEMORY_EVENTS: "/sys/fs/cgroup/ren.slice/ren-tools.slice/memory.events" },
