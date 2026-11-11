@@ -35,6 +35,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       connects: true,
       alive: true,
       capacity: false,
+      full: false,
       changeAtWake: "current" as "current" | "update" | "replace",
       updates: true,
       wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
@@ -76,7 +77,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       create: (input) => {
         images.push(input.image)
         networks.push(input.network.hosts)
-        if (switches.capacity) {
+        if (switches.capacity || switches.full) {
           switches.capacity = false
           return Effect.fail(new MachineProvider.Capacity({ message: "no room", retryAfter: capacityFor }))
         }
@@ -99,8 +100,17 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
     })
     const read = (id: string) =>
       Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
-    const update = (id: string, values: Partial<MachineLifecycle.Row<string>>) =>
-      Effect.flatMap(read(id), (row) => Effect.sync(() => void rows.set(id, { ...row, ...values })))
+    const update = (
+      id: string,
+      values: Partial<MachineLifecycle.Row<string>>,
+      only?: Pick<MachineLifecycle.Row<string>, "phase" | "generation">,
+    ) =>
+      Effect.flatMap(read(id), (row) =>
+        Effect.sync(() => {
+          if (only && (row.phase !== only.phase || row.generation !== only.generation)) return
+          rows.set(id, { ...row, ...values })
+        }),
+      )
     const holder: { run?: (id: string) => Effect.Effect<void, unknown> } = {}
     const machines = MachineLifecycle.make({
       name: "TestLifecycle",
@@ -340,6 +350,37 @@ describe("MachineLifecycle", () => {
       expect(yield* memory.read(id)).toMatchObject({ phase: "ready", failures: 0 })
       expect(reports.filter((report) => report.includes("no room"))).toHaveLength(1)
     }),
+  )
+
+  it.effect("a change made while a machine waits for capacity stays: the wait does not write its old phase back", () =>
+    Effect.gen(function* () {
+      const memory = yield* kind
+      memory.switches.boots = true
+      memory.switches.capacity = true
+      const id = memory.add()
+      const access = yield* memory.machines.access(id).pipe(Effect.forkChild)
+      yield* TestClock.adjust(Duration.seconds(1))
+      expect(yield* memory.read(id)).toMatchObject({ phase: "capacity", generation: 1 })
+      yield* memory.update(id, { phase: "failed", generation: 2 })
+      yield* TestClock.adjust(capacityFor)
+      yield* Fiber.join(access)
+      expect(yield* memory.read(id)).toMatchObject({ phase: "failed", generation: 2 })
+      expect(memory.images).toHaveLength(1)
+    }),
+  )
+
+  it.effect(
+    "a wait for a machine whose provider stays full ends after boot and wake time as Starting, so the caller tries again",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kind
+        memory.switches.full = true
+        const id = memory.add()
+        const ready = yield* memory.machines.ready(id).pipe(Effect.flip, Effect.forkChild)
+        yield* TestClock.adjust(Duration.minutes(10))
+        expect(ready.pollUnsafe()).toBeDefined()
+        expect((yield* Fiber.join(ready))._tag).toBe("MachineLifecycle.Starting")
+      }),
   )
 })
 

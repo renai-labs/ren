@@ -111,7 +111,12 @@ export const layerSandbox = Layer.effect(
     return Service.of({
       isManaged: true,
       target: (brainId) =>
-        lifecycle.ready(brainId).pipe(Effect.mapError((error) => new BrainFailed({ reason: error.message }))),
+        lifecycle.ready(brainId).pipe(
+          Effect.catchTags({
+            "MachineLifecycle.Unavailable": (error) => Effect.fail(new BrainFailed({ reason: error.message })),
+            "MachineLifecycle.Starting": (cause) => Effect.fail(new BrainUnavailable({ cause })),
+          }),
+        ),
       access: lifecycle.access,
       ensure: lifecycle.ensure,
       observe: lifecycle.observe,

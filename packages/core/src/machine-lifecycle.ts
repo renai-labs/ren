@@ -12,6 +12,10 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("MachineLifec
   message: Schema.String,
 }) {}
 
+export class Starting extends Schema.TaggedError<Starting>()("MachineLifecycle.Starting", {
+  message: Schema.String,
+}) {}
+
 export class Unreachable extends Schema.TaggedError<Unreachable>()("MachineLifecycle.Unreachable", {
   message: Schema.String,
 }) {}
@@ -98,7 +102,12 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   readonly bootWithin: Duration.Duration
   readonly wakeWithin: Duration.Duration
   readonly read: (id: Id) => Effect.Effect<R>
-  readonly update: (id: Id, values: Partial<Row<Id>>) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- With `only`, the write happens only while the row still has that phase and generation, so a write after a wait cannot undo a change made during it.
+  readonly update: (
+    id: Id,
+    values: Partial<Row<Id>>,
+    only?: Pick<Row<Id>, "phase" | "generation">,
+  ) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- In one transaction: the next generation, no binding, url or keep-alive, `creating`, and the kind's own work, such as interrupting busy chats.
   readonly replace: (row: R, at: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Marks the machine of this generation `replacing`, unless it is already creating or replacing, and does the kind's own work in the same transaction. True when it marked it.
@@ -243,9 +252,9 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const waitForCapacity = Effect.fnUntraced(function* (row: R, error: MachineProvider.Capacity) {
     yield* Effect.logWarning(`Waiting for capacity: ${error.message}`)
     yield* report(row, error)
-    yield* update(row.id, { phase: "capacity" })
+    yield* update(row.id, { phase: "capacity" }, { phase: row.phase, generation: row.generation })
     yield* Effect.sleep(error.retryAfter)
-    yield* update(row.id, { phase: row.phase })
+    yield* update(row.id, { phase: row.phase }, { phase: "capacity", generation: row.generation })
   })
 
   const proxyOf = (row: R, provider: MachineProvider.Provider) =>
@@ -291,7 +300,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       network_hosts: Option.getOrNull(desired.hosts),
       url: created.value.url,
       phase: "booting",
-      keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(Duration.minutes(10))),
+      keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(timing.idle)),
     })
     return false
   })
@@ -646,8 +655,14 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         if (result._tag === "Failed") return yield* new Unavailable({ message: result.reason })
         return Option.none<Target>()
       }).pipe(Effect.withTracerEnabled(false))
+      const within = Duration.sum(definition.bootWithin, definition.wakeWithin)
       return yield* wait.pipe(
         Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced(timing.poll) }),
+        Effect.timeoutOrElse({
+          duration: within,
+          orElse: () =>
+            Effect.fail(new Starting({ message: `${noun} ${id} is still starting after ${Duration.format(within)}` })),
+        }),
         Effect.flatMap((found) =>
           Option.isSome(found)
             ? Effect.succeed(found.value)

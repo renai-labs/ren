@@ -370,11 +370,21 @@ export const layer = Layer.effect(
         )
 
     // oxlint-disable-next-line ren/no-comments -- The provider and the labels of a hand come from its template and space, so only its own columns change.
-    const update = (environmentId: Environment.ID, values: Partial<MachineLifecycle.Row<Environment.ID>>) =>
+    const update = (
+      environmentId: Environment.ID,
+      values: Partial<MachineLifecycle.Row<Environment.ID>>,
+      only?: Pick<MachineLifecycle.Row<Environment.ID>, "phase" | "generation">,
+    ) =>
       database.db
         .update(environments)
         .set(Struct.omit(values, ["id", "organization_id", "space_id", "provider"]))
-        .where(eq(environments.id, environmentId))
+        .where(
+          and(
+            eq(environments.id, environmentId),
+            only && eq(environments.phase, only.phase),
+            only && eq(environments.generation, only.generation),
+          ),
+        )
         .pipe(Effect.orDie, Effect.asVoid)
 
     const providerOf = (row: Row) =>

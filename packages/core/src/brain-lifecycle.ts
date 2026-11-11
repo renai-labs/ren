@@ -44,7 +44,9 @@ import { SpaceCompute } from "./space-compute.js"
 export type Access = MachineAccess.Access<BrainClient.Target>
 
 export interface Interface extends MachineAccess.Interface<Brain.ID, BrainClient.Target> {
-  readonly ready: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, MachineLifecycle.Unavailable>
+  readonly ready: (
+    brainId: Brain.ID,
+  ) => Effect.Effect<BrainClient.Target, MachineLifecycle.Unavailable | MachineLifecycle.Starting>
   readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hand>>
@@ -129,8 +131,22 @@ export const layer = Layer.effect(
           ),
         )
 
-    const update = (brainId: Brain.ID, values: Partial<typeof brains.$inferInsert>) =>
-      database.db.update(brains).set(values).where(eq(brains.id, brainId)).pipe(Effect.orDie, Effect.asVoid)
+    const update = (
+      brainId: Brain.ID,
+      values: Partial<typeof brains.$inferInsert>,
+      only?: Pick<MachineLifecycle.Row<Brain.ID>, "phase" | "generation">,
+    ) =>
+      database.db
+        .update(brains)
+        .set(values)
+        .where(
+          and(
+            eq(brains.id, brainId),
+            only && eq(brains.phase, only.phase),
+            only && eq(brains.generation, only.generation),
+          ),
+        )
+        .pipe(Effect.orDie, Effect.asVoid)
 
     type Row = typeof brains.$inferSelect
 
