@@ -44,6 +44,8 @@ export function HomePage(props: {
   const [createdId, setCreatedId] = useState(() => Session.ID.create())
   const sessionId = draft.chat?.sessionId ?? createdId
   const [sent, setSent] = useState<Composer.Draft>()
+  const [picking, setPicking] = useState(false)
+  const history = Drafts.useHistory()
   const models = useModels(sessionId)
   const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
   const model = pickModel(models.models, [saved])
@@ -80,6 +82,7 @@ export function HomePage(props: {
       ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
     }
     setSent(draft)
+    history.prepend(draft)
     create.mutate(
       { id: sessionId, spaceId, message, ...(model && { model }) },
       {
@@ -94,6 +97,7 @@ export function HomePage(props: {
           void navigate({ to: "/sessions/$sessionId", params: { sessionId } })
         },
         onError: (error) => {
+          history.remove(draft)
           setSent(undefined)
           const next = Session.ID.create()
           setCreatedId(next)
@@ -132,6 +136,7 @@ export function HomePage(props: {
             value={sent ?? draft}
             onChange={type}
             onSubmit={send}
+            onChooseModel={() => setPicking(true)}
             sending={starting}
             files={{
               sessionId,
@@ -153,6 +158,8 @@ export function HomePage(props: {
                 loading={modelsLoading}
                 disabled={starting}
                 onChange={chooseModel}
+                open={picking}
+                onOpenChange={setPicking}
               />
             }
           />
