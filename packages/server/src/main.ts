@@ -2,6 +2,7 @@ import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
 import { BrainProvider } from "@ren/core/brain-provider"
 import { Access } from "@ren/core/access"
 import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
+import { ArtifactCloudflare } from "@ren/core/artifact-provider/cloudflare"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
 import { CredentialSource } from "@ren/core/credential-source"
@@ -154,6 +155,13 @@ const host = Layer.unwrap(
   ),
 )
 
+const artifactProvider = Layer.unwrap(
+  Effect.map(
+    Config.Literals(["workerd", "cloudflare"], "ARTIFACT_PROVIDER").pipe(Config.withDefault("workerd")),
+    (provider) => (provider === "cloudflare" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer),
+  ),
+)
+
 const models = Layer.unwrap(
   Effect.map(RenInferenceProvider.configured, (isConfigured) =>
     Models.layer(isConfigured ? [RenInferenceProvider.make] : []),
@@ -226,7 +234,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provideMerge(brainProviders),
   Layer.provide(handProviders),
-  Layer.provide(ArtifactWorkerd.layer),
+  Layer.provide(artifactProvider),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide(PostHog.layer),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
