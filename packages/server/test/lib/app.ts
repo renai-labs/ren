@@ -5,6 +5,7 @@ import { EnvironmentNetwork } from "@ren/core/environment-network"
 import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { GitHubApp } from "@ren/core/github-app"
@@ -111,7 +112,7 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
   )
 
 export const services = Layer.mergeAll(
-  Brains.layer.pipe(
+  Layer.merge(Brains.layer, SpaceShutdown.layer).pipe(
     Layer.provideMerge(BrainHost.layerCell),
     Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provide(CredentialEnv.layerNone),

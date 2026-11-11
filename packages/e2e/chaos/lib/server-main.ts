@@ -7,6 +7,7 @@ import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { Intake } from "@ren/core/intake"
@@ -75,7 +76,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
-    Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(
+    Layer.mergeAll(Brains.layer, BrainPush.layer, SpaceShutdown.layer).pipe(
       Layer.provideMerge(BrainHost.layerCell),
       Layer.provide(DurableRunner.layerEffect),
       Layer.provide(CredentialEnv.layerNone),

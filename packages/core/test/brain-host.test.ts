@@ -836,12 +836,7 @@ describe("BrainHost environments", () => {
           .update(Database.Schema.space)
           .set({ shutdown_state: "running", shutdown_epoch: 1 })
           .where(eq(Database.Schema.space.id, subject.owner.spaceId))
-        yield* Layer.build(
-          SpaceShutdown.layer.pipe(
-            Layer.provide(Layer.succeedContext(host)),
-            Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ SPACE_SHUTDOWN_POLL: "20 millis" }))),
-          ),
-        )
+        yield* Layer.build(SpaceShutdown.layer.pipe(Layer.provide(Layer.succeedContext(host))))
         const space = yield* database.db
           .select({ state: Database.Schema.space.shutdown_state, report: Database.Schema.space.shutdown_report })
           .from(Database.Schema.space)

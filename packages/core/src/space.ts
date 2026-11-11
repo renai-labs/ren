@@ -377,7 +377,7 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      // oxlint-disable-next-line ren/no-comments -- Marks the space for a shutdown under the next epoch; SpaceShutdown runs it. Anyone who can edit the space can shut it down. A second request while one runs changes nothing.
+      // oxlint-disable-next-line ren/no-comments -- Marks the space for a shutdown under the next epoch; the API then starts its run (SpaceShutdown.start). Anyone who can edit the space can shut it down. A second request while one runs changes nothing.
       shutdown: Effect.fn("Space.shutdown")(function* (actor: Actor.Info, id: Space.ID) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
