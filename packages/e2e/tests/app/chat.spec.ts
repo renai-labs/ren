@@ -179,9 +179,8 @@ test("task list items in a reply render as read-only checkboxes", async ({ page 
   await createOrganization(page.request, { name: "Grace Hopper" })
   const marker = await scriptReply(page.request, "- [x] a\n- [ ] b\n- c\n")
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill(`List ${marker}`)
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill(`List ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
 
   const done = page.getByRole("checkbox", { checked: true })
   const open = page.getByRole("checkbox", { checked: false })
