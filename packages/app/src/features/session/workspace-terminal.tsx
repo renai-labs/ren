@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { lazy, Suspense, useState } from "react"
 import { TimelineText } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
@@ -17,6 +17,8 @@ import {
 } from "@ren/ui/message-scroller"
 import { Spinner } from "@ren/ui/spinner"
 import { errorMessage } from "../../lib/errors.js"
+
+const TerminalOutput = lazy(() => import("./terminal-output.js").then((module) => ({ default: module.TerminalOutput })))
 
 interface Run {
   readonly id: string
@@ -46,7 +48,13 @@ function Command(props: { root: Session.ID; shell: Shell.Info; byRen?: boolean }
   return (
     <div className="flex flex-col gap-1">
       <Prompt command={props.shell.command} byRen={props.byRen} />
-      {output ? <div className="wrap-break-word whitespace-pre-wrap">{TimelineText.shellOutput(output)}</div> : null}
+      {output ? (
+        <Suspense
+          fallback={<div className="wrap-break-word whitespace-pre-wrap">{TimelineText.shellOutput(output)}</div>}
+        >
+          <TerminalOutput output={output} label={`Output of ${props.shell.command}`} />
+        </Suspense>
+      ) : null}
       {running ? (
         <div className="flex items-center gap-2 text-muted-foreground">
           <Spinner className="size-3" />
