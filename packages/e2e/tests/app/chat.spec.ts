@@ -180,7 +180,7 @@ test("a member wraps a long code line with the toggle, and Copy still copies the
   const line = Array.from({ length: 80 }, (_, index) => `word${index}`).join(" ")
   const marker = await scriptedReply(page.request, `\`\`\`text\n${line}\n\`\`\``)
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
+  const start = page.getByRole("main")
   await start.getByRole("textbox", { name: "Message" }).fill(`Show the code ${marker}`)
   await start.getByRole("button", { name: "Send" }).click()
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
@@ -195,7 +195,7 @@ test("a member wraps a long code line with the toggle, and Copy still copies the
   await expect.poll(async () => (await content.boundingBox())?.height ?? 0).toBeGreaterThan(height)
 
   await block.getByRole("button", { name: "Copy" }).click()
-  const message = page.getByRole("form", { name: "Message Ren" }).getByRole("textbox", { name: "Message" })
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.press("ControlOrMeta+V")
   await expect(message).toHaveText(line)
 })
