@@ -21,7 +21,7 @@
       "path": "../db/tsconfig.src.json"
     },
     {
-      "path": "../environment-api/tsconfig.src.json"
+      "path": "../hand-api/tsconfig.src.json"
     },
     {
       "path": "../executor/tsconfig.src.json"

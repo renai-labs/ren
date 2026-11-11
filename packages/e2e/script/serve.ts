@@ -4,7 +4,7 @@ import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import { Signature } from "@ren/schema/signature"
 import { Effect, Layer, Redacted, Schema } from "effect"
 import { realpathSync } from "fs"
@@ -141,8 +141,8 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     // oxlint-disable-next-line ren/no-comments -- A brain's start signs its environment's executor variables, also when it has no environment.
     ENVIRONMENT_KEYS: JSON.stringify([
       {
-        id: TestEnvironment.keys.privateKey.id,
-        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestEnvironment.keys.privateKey.key),
+        id: TestHand.keys.privateKey.id,
+        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestHand.keys.privateKey.key),
       },
     ]),
     REN_INFERENCE_GATEWAY_URL: Shared.stub().root,

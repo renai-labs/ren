@@ -31,7 +31,7 @@ interface Sent {
 }
 
 describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across every link", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Hand } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")

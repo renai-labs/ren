@@ -1,6 +1,6 @@
 import { Brain } from "@ren/schema/brain"
 import { Bundle } from "@ren/schema/bundle"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
@@ -17,7 +17,7 @@ export const hostTokenHeader = "ren-host-token"
 export const StartBody = Session.StartInput.mapFields((fields) => ({
   ...Struct.omit(fields, ["hand"]),
   directory: Schema.optionalKey(
-    Environment.Directory.annotate({
+    Hand.Directory.annotate({
       description: "The session’s directory on its environment. Only a session with an environment has one.",
     }),
   ),

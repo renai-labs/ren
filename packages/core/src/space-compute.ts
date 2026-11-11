@@ -1,14 +1,14 @@
 export * as SpaceCompute from "./space-compute.js"
 
+import type { MachineProvider } from "./machine-provider.js"
 import { Database } from "@ren/db/database"
 import type { Brain } from "@ren/schema/brain"
-import type { EnvironmentProvider } from "@ren/schema/environment-provider"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Layer, Option } from "effect"
 import { BrainProvider } from "./brain-provider.js"
-import { Environments } from "./environments.js"
+import { Hands } from "./hands.js"
 
 // oxlint-disable-next-line ren/no-comments -- What a brain's start or wake does with the space's settings: apply them to the running machine, or replace the machine first because it cannot run them.
 export type Plan =
@@ -16,7 +16,7 @@ export type Plan =
   | { readonly _tag: "Replace"; readonly reason: string }
 
 export interface Desired {
-  readonly provider: EnvironmentProvider.ID | null
+  readonly provider: MachineProvider.ID | null
   readonly hand: Space.AppliedHand
   // oxlint-disable-next-line ren/no-comments -- The folder of a remote hand's chats on its provider; none for another hand.
   readonly workspace: Option.Option<string>
@@ -83,7 +83,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const environments = yield* Environments.Service
+    const environments = yield* Hands.Service
     const brainProviders = yield* BrainProvider.Registry
     const deploymentProvider = Option.getOrNull(
       Option.map(BrainProvider.defaultOf(brainProviders), (provider) => provider.info.id),
@@ -91,7 +91,7 @@ export const layer = Layer.effect(
 
     const versionOf = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
-      environmentTemplateId: EnvironmentTemplate.ID,
+      environmentTemplateId: MachineTemplate.ID,
     ) {
       const template = (yield* transaction
         .select({

@@ -1,8 +1,8 @@
 import { expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { existsSync, watch } from "node:fs"
@@ -32,7 +32,7 @@ const executor = Sandbox.layer.pipe(
   Layer.provide(
     ConfigProvider.layer(
       ConfigProvider.fromUnknown({
-        EXECUTOR_ENVIRONMENT_ID: Environment.ID.create(),
+        EXECUTOR_ENVIRONMENT_ID: Hand.ID.create(),
         EXECUTOR_WORKSPACE: workspace,
         ...(process.env.SHELL && { SHELL: process.env.SHELL }),
       }),
@@ -44,7 +44,7 @@ const brain = Brain.ID.create()
 const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 
-const run = Effect.fnUntraced(function* (input: EnvironmentApi.SpawnInput) {
+const run = Effect.fnUntraced(function* (input: HandApi.SpawnInput) {
   const executor = yield* Executor.Service
   const spawned = yield* executor.spawn(brain, input)
   return { executor, id: spawned.id, pid: spawned.pid, events: yield* executor.output(brain, spawned.id) }
@@ -53,10 +53,10 @@ const run = Effect.fnUntraced(function* (input: EnvironmentApi.SpawnInput) {
 const bun = process.execPath
 const mebibyte = 1024 * 1024
 
-const bytesOf = (events: ReadonlyArray<EnvironmentApi.ProcessEvent>, type: "stdout" | "stderr") =>
+const bytesOf = (events: ReadonlyArray<HandApi.ProcessEvent>, type: "stdout" | "stderr") =>
   new Uint8Array(Buffer.concat(events.flatMap((event) => (event.type === type ? [event.bytes] : []))))
 
-const collect = (events: Stream.Stream<EnvironmentApi.ProcessEvent>) =>
+const collect = (events: Stream.Stream<HandApi.ProcessEvent>) =>
   Stream.runCollect(events).pipe(
     Effect.map((all) => ({
       stdout: all.flatMap((event) => (event.type === "stdout" ? [decoder.decode(event.bytes)] : [])).join(""),
@@ -271,7 +271,7 @@ it.live("replays output from a cursor, and gives each chunk its offset", () =>
       command: "sh",
       arguments: ["-c", "printf abc; sleep 0.3; printf def"],
     })
-    const chunks = (events: ReadonlyArray<EnvironmentApi.ProcessEvent>) =>
+    const chunks = (events: ReadonlyArray<HandApi.ProcessEvent>) =>
       events.flatMap((event) =>
         event.type === "stdout" ? [{ offset: event.offset, text: decoder.decode(event.bytes) }] : [],
       )
@@ -395,17 +395,17 @@ it.live(
       const executor = yield* Executor.Service
       yield* Effect.promise(() =>
         writeFile(join(workspace, "large.bin"), "").then(() =>
-          truncate(join(workspace, "large.bin"), EnvironmentApi.maxFileBytes + 1),
+          truncate(join(workspace, "large.bin"), HandApi.maxFileBytes + 1),
         ),
       )
       expect((yield* executor.read("large.bin").pipe(Effect.flip))._tag).toBe("FileTooLargeError")
       expect((yield* executor.read("large.bin", { offset: 0, length: 4 })).bytes).toEqual(new Uint8Array(4))
-      expect(
-        (yield* executor.read("large.bin", { offset: 0, length: EnvironmentApi.maxFileBytes + 1 })).bytes.length,
-      ).toBe(EnvironmentApi.maxFileBytes)
-      expect(
-        (yield* executor.write("copy.bin", new Uint8Array(EnvironmentApi.maxFileBytes + 1)).pipe(Effect.flip))._tag,
-      ).toBe("FileTooLargeError")
+      expect((yield* executor.read("large.bin", { offset: 0, length: HandApi.maxFileBytes + 1 })).bytes.length).toBe(
+        HandApi.maxFileBytes,
+      )
+      expect((yield* executor.write("copy.bin", new Uint8Array(HandApi.maxFileBytes + 1)).pipe(Effect.flip))._tag).toBe(
+        "FileTooLargeError",
+      )
       expect((yield* executor.stat("copy.bin").pipe(Effect.flip))._tag).toBe("FileNotFoundError")
     }),
 )

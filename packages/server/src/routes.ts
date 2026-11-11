@@ -18,7 +18,7 @@ import { ChannelTurns } from "@ren/core/channel-turns"
 import { ChannelEventRun } from "@ren/core/channel-event-run"
 import { Intake } from "@ren/core/intake"
 import { IntakeThreads } from "@ren/core/intake-threads"
-import { EnvironmentTemplates } from "@ren/core/environment-templates"
+import { MachineTemplates } from "@ren/core/machine-templates"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
 import { Insights } from "@ren/core/insights"
@@ -74,12 +74,12 @@ import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
 import { DriveHandler } from "./handlers/api/drive.js"
-import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
+import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
-import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
+import { HostHandsHandler } from "./handlers/ren-host/hand.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
@@ -168,8 +168,8 @@ export const layer = Layer.mergeAll(
         InvitationHandler,
         SpaceHandler,
         SpaceMemberHandler,
-        EnvironmentTemplateHandler,
-        EnvironmentProviderHandler,
+        MachineTemplateHandler,
+        MachineProviderHandler,
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
         MemoryHandler,
@@ -210,7 +210,7 @@ export const layer = Layer.mergeAll(
         Invitation.layer,
         Space.layer,
         SpaceMember.layer,
-        EnvironmentTemplates.layer,
+        MachineTemplates.layer,
         Memory.layer,
         Insights.layer.pipe(Layer.provide(Space.layer)),
         settingsAndAgents,
@@ -244,7 +244,7 @@ export const layer = Layer.mergeAll(
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([HostPullHandler, HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
+      Layer.provide([HostPullHandler, HostModelsHandler, HostHandsHandler, HostTokenHandler]),
       Layer.provide(Brains.hostAuthentication),
     ),
     HttpApiBuilder.layer(UsageIngestApi).pipe(

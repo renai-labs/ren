@@ -1,11 +1,11 @@
 import { describe, expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
-import { ExecutorVariables } from "@ren/environment-api/executor-variables"
-import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
-import { Image, TestEnvironment } from "@ren/executor/testing"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
+import { HandToken } from "@ren/hand-api/hand-token"
+import { HandClient } from "@ren/hand-api/hand-client"
+import { Image, TestHand } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { Effect, Layer, Option } from "effect"
@@ -26,7 +26,7 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         const provider = yield* Docker.provider
         const image = yield* Effect.promise(Image.build)
         const config = yield* provider.check({ image, memoryMiB: 512 })
-        const environmentId = Environment.ID.create()
+        const environmentId = Hand.ID.create()
         const input = {
           labels: {
             kind: "hand" as const,
@@ -36,7 +36,7 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
             spaceId: Space.ID.create(),
           },
           config,
-          variables: ExecutorVariables.make(environmentId, [TestEnvironment.keys.publicKey]),
+          variables: ExecutorVariables.make(environmentId, [TestHand.keys.publicKey]),
           image: Option.none(),
           network: MachineProvider.unrestricted,
         }
@@ -50,12 +50,12 @@ describe.skipIf(!hasDocker)("the Docker environment provider", () => {
         yield* Effect.addFinalizer(() => provider.destroy(replaced.binding).pipe(Effect.ignore))
         expect(replaced.binding).not.toEqual(binding)
         const url = new URL((yield* provider.connect(binding, MachineProvider.unrestricted)).url)
-        const token = yield* EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
+        const token = yield* HandToken.sign(TestHand.keys.privateKey, {
           environment: environmentId,
           brain: Brain.ID.create(),
           exp: Math.floor(Date.now() / 1000) + 60,
         })
-        const client = yield* EnvironmentClient.make({ url, token: Effect.succeed(token) })
+        const client = yield* HandClient.make({ url, token: Effect.succeed(token) })
         const hello = yield* client["executor.hello"]()
         expect(hello.environmentId).toBe(environmentId)
         const written = new TextEncoder().encode("written by the executor")

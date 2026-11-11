@@ -3,8 +3,8 @@ export * as Space from "./space.js"
 import { Schema } from "effect"
 import { Auth } from "./auth.js"
 import { Brain } from "./brain.js"
-import { EnvironmentProvider } from "./environment-provider.js"
-import { EnvironmentTemplate } from "./environment-template.js"
+import { MachineProvider } from "./machine-provider.js"
+import { MachineTemplate } from "./machine-template.js"
 import { Factory } from "./factory.js"
 import { Identifier } from "./identifier.js"
 import { Machine } from "./machine.js"
@@ -28,10 +28,10 @@ export const Kind = Schema.Literals(["shared", "private"]).annotate({
 export type Kind = typeof Kind.Type
 
 export const BrainMachine = Schema.Struct({
-  provider: Schema.NullOr(EnvironmentProvider.ID).annotate({
+  provider: Schema.NullOr(MachineProvider.ID).annotate({
     description: "The brain provider of the space’s brains. Null when the deployment runs brains in cells.",
   }),
-  environmentTemplateId: Schema.NullOr(EnvironmentTemplate.ID).annotate({
+  environmentTemplateId: Schema.NullOr(MachineTemplate.ID).annotate({
     description:
       "A built template of the brain provider: the image, size and host list of the brain’s machine. Null: Ren’s system image.",
   }),
@@ -43,7 +43,7 @@ export type BrainMachine = typeof BrainMachine.Type
 
 export const Hand = Schema.Union([
   Schema.Struct({ placement: Schema.Literal("colocated") }),
-  Schema.Struct({ placement: Schema.Literal("remote"), environmentTemplateId: EnvironmentTemplate.ID }),
+  Schema.Struct({ placement: Schema.Literal("remote"), environmentTemplateId: MachineTemplate.ID }),
   Schema.Struct({ placement: Schema.Literal("none") }),
 ]).annotate({
   identifier: "Space.Hand",

@@ -1,15 +1,17 @@
 export * as MachineProvider from "./machine-provider.js"
 
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HandClient } from "@ren/hand-api/hand-client"
 import type { Step as BrainApiStep } from "@ren/host-api/brain-api"
 import type { Auth } from "@ren/schema/auth"
-import type { Environment } from "@ren/schema/environment"
-import type { EnvironmentProvider } from "@ren/schema/environment-provider"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { Hand } from "@ren/schema/hand"
+import { ID, Info, Infos } from "@ren/schema/machine-provider"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
 import { type DateTime, Duration, Effect, Option, Redacted, Schedule, Schema, Stream } from "effect"
 import { type HttpClient, HttpClientRequest } from "effect/http"
+
+export { ID, Info, Infos }
 
 export class InvalidConfig extends Schema.TaggedError<InvalidConfig>()("MachineProvider.InvalidConfig", {
   message: Schema.String,
@@ -55,7 +57,7 @@ interface CreateInput<Config> {
 export type Step = BrainApiStep
 
 interface BuildInput<Config> {
-  readonly environmentTemplateId: EnvironmentTemplate.ID
+  readonly environmentTemplateId: MachineTemplate.ID
   readonly config: Config
 }
 
@@ -79,7 +81,7 @@ export interface Created {
 
 export interface Hand {
   readonly url: string
-  readonly workspace: Environment.Directory
+  readonly workspace: Hand.Directory
 }
 
 // oxlint-disable-next-line ren/no-comments -- A machine that a provider found gone, named by the labels it was made with.
@@ -115,7 +117,7 @@ export interface Proxy {
 }
 
 interface Definition<Config, Binding> {
-  readonly id: EnvironmentProvider.ID
+  readonly id: ID
   readonly title: string
   readonly description: string
   // oxlint-disable-next-line ren/no-comments -- Whether this provider can send a machine's traffic through the egress with a proxy login (E2B BYOP, HTTPS_PROXY locally), which replaces ren:<LABEL> placeholders (R19, R57).
@@ -152,7 +154,7 @@ interface Definition<Config, Binding> {
 }
 
 export interface Provider {
-  readonly info: EnvironmentProvider.Info
+  readonly info: Info
   readonly canEgress: boolean
   readonly canMount: boolean
   readonly machineHosts: ReadonlyArray<string>
@@ -291,7 +293,7 @@ const executorAskedEvery = Duration.millis(200)
 // oxlint-disable-next-line ren/no-comments -- The executor answers an unsigned call itself, with 401. A 5xx comes from in front of it: E2B's edge answers 502 for a sandbox or a port that is not there.
 export const executorAnswers = (http: HttpClient.HttpClient, url: URL) =>
   http
-    .execute(HttpClientRequest.post(EnvironmentClient.rpcUrl(url)))
+    .execute(HttpClientRequest.post(HandClient.rpcUrl(url)))
     .pipe(
       Effect.flatMap((response) =>
         response.status < 500 ? Effect.void : Effect.fail(new Error(`${url} answered ${response.status}`)),

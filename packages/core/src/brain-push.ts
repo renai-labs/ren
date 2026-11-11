@@ -7,7 +7,7 @@ import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Duration, Effect, Layer, Queue, Schedule } from "effect"
 import { BrainHost } from "./brain-host.js"
-import { Environments } from "./environments.js"
+import { Hands } from "./hands.js"
 
 export const channel = "ren_brains"
 
@@ -20,7 +20,7 @@ export const layer = Layer.effectDiscard(
     const pg = yield* PgClient.PgClient
     const database = yield* Database.Service
     const host = yield* BrainHost.Service
-    const environments = yield* Environments.Service
+    const environments = yield* Hands.Service
     const brains = Database.Schema.brain
     const idsOf = (scope: string) => {
       const query = database.db.select({ id: brains.id, spaceId: brains.space_id }).from(brains)

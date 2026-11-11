@@ -1,8 +1,8 @@
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Brain } from "@ren/schema/brain"
-import type { EnvironmentProvider } from "@ren/schema/environment-provider"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { MachineProvider } from "@ren/schema/machine-provider"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
@@ -34,11 +34,11 @@ export const space = pgTable(
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
     // oxlint-disable-next-line ren/no-comments -- Null: the deployment's first brain provider.
-    brain_provider: text().$type<EnvironmentProvider.ID>(),
-    brain_template_id: text().$type<EnvironmentTemplate.ID>(),
+    brain_provider: text().$type<MachineProvider.ID>(),
+    brain_template_id: text().$type<MachineTemplate.ID>(),
     hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
     // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused.
-    environment_template_id: text().$type<EnvironmentTemplate.ID>(),
+    environment_template_id: text().$type<MachineTemplate.ID>(),
     // oxlint-disable-next-line ren/no-comments -- The number of the brain and hand settings. Each change of them takes the next; a brain records the number it applied at its last start or wake.
     compute_revision: integer().notNull().default(0),
     // oxlint-disable-next-line ren/no-comments -- "running" while a shutdown runs. Each shutdown takes the next epoch, the key of its durable run.

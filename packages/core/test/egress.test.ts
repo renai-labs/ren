@@ -7,7 +7,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Credential } from "@ren/schema/credential"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
@@ -328,7 +328,7 @@ describe("Egress.resolve", () => {
         hosts: ["api.stripe.com"],
         value: { type: "key", value: Redacted.make("sk_live_real") },
       })
-      const environmentId = Environment.ID.create()
+      const environmentId = Hand.ID.create()
       const environmentTemplateId = yield* Seed.environmentTemplate(found.organizationId)
       yield* database.db.insert(Database.Schema.environment).values({
         id: environmentId,
@@ -1006,7 +1006,7 @@ describe("GitHub through the egress", () => {
         expect(reply).toMatchObject({ expiresAt: Date.parse(github.options.tokenExpiresAt) / 1000 })
         const hand = yield* callers.issue(
           {
-            workload: { kind: "hand", id: Environment.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
+            workload: { kind: "hand", id: Hand.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
             organizationId: found.organizationId,
           },
           "ProxyLogin",

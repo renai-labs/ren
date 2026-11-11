@@ -2,7 +2,7 @@ export * as Space from "./space.js"
 
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Factory } from "@ren/schema/factory"
 import { FactoryCheck } from "@ren/schema/factory-check"
 import { Space } from "@ren/schema/space"
@@ -84,7 +84,7 @@ const actions = {
 const checkTemplate = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   actor: Actor.Info,
-  templateId: EnvironmentTemplate.ID,
+  templateId: MachineTemplate.ID,
   field: "brain" | "hand",
 ) {
   const template = (yield* transaction

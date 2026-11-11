@@ -7,10 +7,10 @@ import { Agent, Model, Provider } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentCopies } from "@ren/brain/environment/copies"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { HandCopies } from "@ren/brain/hand/copies"
 import { DriveFiles } from "@ren/brain/reference/drive-files"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
+import type { HandClient } from "@ren/hand-api/hand-client"
 import { Drives } from "@ren/brain/reference/drives"
 import { BrainSettings } from "@ren/brain/settings"
 import { UsageClaims } from "@ren/brain/usage-claims"
@@ -21,7 +21,7 @@ import { Models } from "@ren/schema/models"
 import { Channel } from "@ren/schema/channel"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { WebhookOrigin } from "@ren/schema/webhook-origin"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import {
@@ -51,7 +51,7 @@ import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
 import type { GitSources } from "../../git-sources.js"
 import { OpenCodeCopies } from "./copies.js"
-import { OpenCodeEnvironmentTools } from "./environment-tools.js"
+import { OpenCodeHandTools } from "./hand-tools.js"
 import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
 import type { HarnessConfig } from "../config.js"
@@ -230,7 +230,7 @@ const withoutModel = (value: unknown) =>
 const maxErrorDepth = 8
 
 const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
-  const failure = EnvironmentConnections.failureOf(value)
+  const failure = HandConnections.failureOf(value)
   if (failure) return failure
   if (depth > maxErrorDepth || !Predicate.isObject(value)) return undefined
   return ["cause", "error", "reason"]
@@ -297,7 +297,7 @@ export const make = (
   renew: (endpointId: string) => Effect.Effect<boolean>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   settings: Option.Option<Chats>,
   confinement: Option.Option<Confinement>,
   approvals: (
@@ -429,7 +429,7 @@ export const make = (
         yield* tool.transform((editor) => {
           const hasHand = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.hasHand !== false
           if (Option.isSome(connections) && workspaceID && hasHand) return
-          for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
+          for (const id of OpenCodeHandTools.names) editor.remove(id)
         })
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(
@@ -439,7 +439,7 @@ export const make = (
           context,
           boundary: boundaryOf(context.location),
           isSession,
-          hasEnvironment: Boolean(workspaceID),
+          hasWorkspace: Boolean(workspaceID),
           apps: (yield* Ref.get(applied)).apps,
           channels: initial.channels,
           sessionId,
@@ -448,13 +448,13 @@ export const make = (
         const refreshSkills = yield* Ref.make<Effect.Effect<void>>(Effect.void)
         const copies = Option.map(
           Option.filter(connections, () => Boolean(workspaceID)),
-          (each) => EnvironmentCopies.make(each, Session.ID.make(sessionId)),
+          (each) => HandCopies.make(each, Session.ID.make(sessionId)),
         )
-        const hasEnvironment = Option.isSome(copies)
+        const hasWorkspace = Option.isSome(copies)
         const skills = yield* OpenCodeSkills.make({
           context,
           isSession,
-          hasEnvironment,
+          hasWorkspace,
           sources: sources.skills,
           apps: (yield* Ref.get(applied)).apps,
           onPrompt: Effect.flatten(Ref.get(refreshSkills)),
@@ -509,7 +509,7 @@ export const make = (
           })
           const references = yield* OpenCodeReferences.make({
             context,
-            hasEnvironment,
+            hasWorkspace,
             repositories: sources.repositories,
             references: Effect.sync(() =>
               Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
@@ -517,8 +517,8 @@ export const make = (
             drives: () => Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives,
           })
           copySources.push(references.items)
-          const spaceDrive = `${Environment.sharedDirectoryOf({ directory: folder })}/${Drives.root}/space`
-          const onSpaceDrive = <A>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, DriveFiles.Refused>) =>
+          const spaceDrive = `${Hand.sharedDirectoryOf({ directory: folder })}/${Drives.root}/space`
+          const onSpaceDrive = <A>(use: (client: HandClient.Client) => Effect.Effect<A, DriveFiles.Refused>) =>
             Effect.gen(function* () {
               const drive = references.items().find((item) => item.path === spaceDrive)
               if (Option.isNone(copies) || Option.isNone(connections) || !drive) {
@@ -539,7 +539,7 @@ export const make = (
               )
             })
           yield* tool.transform((editor) => {
-            if (!hasEnvironment || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
+            if (!hasWorkspace || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
               return
             editor.add({
               name: SessionMessage.showFileTool,

@@ -1,7 +1,7 @@
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Bundle } from "@ren/schema/bundle"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import type { Machine } from "@ren/schema/machine"
 import { Space } from "@ren/schema/space"
 import { sql } from "drizzle-orm"
@@ -33,7 +33,7 @@ export const brain = pgTable(
     image: text(),
     // oxlint-disable-next-line ren/no-comments -- The template and config that built the image of a co-located hand's machine; null for the provider's own image.
     image_template: jsonb().$type<{
-      readonly environmentTemplateId: EnvironmentTemplate.ID
+      readonly environmentTemplateId: MachineTemplate.ID
       readonly config: Schema.Json
       readonly system: string | null
     }>(),

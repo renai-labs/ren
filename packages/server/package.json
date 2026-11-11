@@ -45,7 +45,7 @@
   "devDependencies": {
     "@ren/brain": "workspace:*",
     "@ren/cell": "workspace:*",
-    "@ren/environment-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/executor": "workspace:*",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",

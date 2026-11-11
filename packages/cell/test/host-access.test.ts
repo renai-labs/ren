@@ -1,11 +1,11 @@
 import { afterAll, expect } from "bun:test"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { Probe } from "@ren/brain/testing"
-import { TestEnvironment, Relay, testEffect } from "@ren/executor/testing"
+import { TestHand, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Duration, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -28,10 +28,10 @@ afterAll(() => ren.stop())
 
 const it = testEffect(Layer.empty)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 
 const accessFor = (sessionId: Session.ID) =>
-  TestEnvironment.access({
+  TestHand.access({
     url: "http://127.0.0.1:9",
     environmentId,
     brain: TestToken.brain,
@@ -70,7 +70,7 @@ const build = Effect.fnUntraced(function* (url: string = ren.url, stored = new M
     brainId,
     store,
     hostToken: Context.get(context, HostToken.Service),
-    access: Context.get(context, EnvironmentAccess.Service),
+    access: Context.get(context, HandAccess.Service),
     configure: (hostToken: string) => store.write(Shared.access(undefined, Shared.stub().url), hostToken),
   }
 })
@@ -118,7 +118,7 @@ it.live("without a host token it fails at once as Ren does not answer, and asks 
   Effect.gen(function* () {
     const subject = yield* build()
     const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
-    expect([error._tag, error.message]).toEqual(["EnvironmentAccess.Unavailable", "the cell has no valid host token"])
+    expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "the cell has no valid host token"])
     expect(ren.accessCalls(subject.sessionId)).toBe(0)
   }),
 )
@@ -131,7 +131,7 @@ it.live("a host token that Ren refuses is not a revoke: it is Ren does not answe
     const error = yield* subject.access
       .open(subject.sessionId, { unreachable: false })
       .pipe(Effect.flip, Effect.ensuring(Effect.sync(() => ren.refuseHosts(false))))
-    expect(error._tag).toBe("EnvironmentAccess.Unavailable")
+    expect(error._tag).toBe("HandAccess.Unavailable")
     expect(yield* subject.store.readHostToken).toEqual(Option.none())
   }),
 )
@@ -142,11 +142,11 @@ it.live("Ren's no access is NotFound, and a sandbox Ren cannot give is unavailab
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     ren.answer(subject.sessionId, () => ({ type: "not_found" }))
     expect((yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip))._tag).toBe(
-      "EnvironmentAccess.NotFound",
+      "HandAccess.NotFound",
     )
     ren.answer(subject.sessionId, () => ({ type: "unavailable", message: "Every sandbox of env_1 is full" }))
     const full = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
-    expect([full._tag, full.message]).toEqual(["EnvironmentAccess.Unavailable", "Every sandbox of env_1 is full"])
+    expect([full._tag, full.message]).toEqual(["HandAccess.Unavailable", "Every sandbox of env_1 is full"])
   }),
 )
 
@@ -157,7 +157,7 @@ it.live("a refused connection to Ren fails at once and is not NotFound", () =>
     const subject = yield* build(relay.url)
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     expect((yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip))._tag).toBe(
-      "EnvironmentAccess.Unavailable",
+      "HandAccess.Unavailable",
     )
   }),
 )
@@ -172,7 +172,7 @@ it.effect("a Ren that accepts the request and never answers fails the access in 
       .pipe(Effect.flip, Effect.forkScoped)
     yield* Effect.promise(() => ren.reached(subject.brainId))
     yield* TestClock.adjust(HostToken.renAnswersWithin)
-    expect((yield* Fiber.join(opening))._tag).toBe("EnvironmentAccess.Unavailable")
+    expect((yield* Fiber.join(opening))._tag).toBe("HandAccess.Unavailable")
   }),
 )
 
@@ -248,10 +248,7 @@ it.effect("a hand that is still starting after 3 minutes fails the access as una
       Duration.sum(HostAccess.handStartsWithin, Duration.seconds(30)),
     )
     const error = yield* Fiber.join(opening)
-    expect([error._tag, error.message]).toEqual([
-      "EnvironmentAccess.Unavailable",
-      "The hand did not start within 3 minutes",
-    ])
+    expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "The hand did not start within 3 minutes"])
   }),
 )
 
@@ -278,7 +275,7 @@ it.live("removing the models removes the host token, so the access fails at once
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     yield* subject.store.remove
     const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
-    expect([error._tag, error.message]).toEqual(["EnvironmentAccess.Unavailable", "the cell has no valid host token"])
+    expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "the cell has no valid host token"])
     expect(ren.calls.filter((call) => call.brainId === subject.brainId)).toEqual([])
   }),
 )
@@ -332,7 +329,7 @@ it.live("an expired host token fails the access at once without asking Ren; a ne
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, -60)))
     expect(yield* subject.hostToken.isValid).toBe(false)
     const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
-    expect([error._tag, error.message]).toEqual(["EnvironmentAccess.Unavailable", "the cell has no valid host token"])
+    expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "the cell has no valid host token"])
     expect(ren.accessCalls(subject.sessionId)).toBe(0)
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     expect([
@@ -349,12 +346,12 @@ it.effect("20 file calls on a Ren that never answers all end in 10 seconds, on o
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
     const environments = Context.get(
       yield* Layer.build(
-        EnvironmentConnections.layer.pipe(
-          Layer.provide(Layer.succeed(EnvironmentAccess.Service, subject.access)),
+        HandConnections.layer.pipe(
+          Layer.provide(Layer.succeed(HandAccess.Service, subject.access)),
           Layer.provide(FetchHttpClient.layer),
         ),
       ),
-      EnvironmentConnections.Service,
+      HandConnections.Service,
     )
     const driver = RenWorkspaceDriver.session(environments, subject.sessionId)
     const calls = yield* Effect.forEach(

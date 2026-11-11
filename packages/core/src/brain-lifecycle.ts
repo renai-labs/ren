@@ -5,8 +5,8 @@ import { Database } from "@ren/db/database"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Bundle } from "@ren/schema/bundle"
-import { Environment } from "@ren/schema/environment"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { Hand } from "@ren/schema/hand"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Signature } from "@ren/schema/signature"
 import type { Session } from "@ren/schema/session"
 import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, notInArray, or, sql } from "drizzle-orm"
@@ -31,8 +31,8 @@ import { BrainClient } from "./brain-client.js"
 import { Bundles } from "./bundles.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Deployment } from "./deployment.js"
-import { EnvironmentNetwork } from "./environment-network.js"
-import { Environments } from "./environments.js"
+import { MachineNetwork } from "./machine-network.js"
+import { Hands } from "./hands.js"
 import type { MachineAccess } from "./machine-access.js"
 import { MachineLifecycle } from "./machine-lifecycle.js"
 import { MachineProvider } from "./machine-provider.js"
@@ -50,7 +50,7 @@ export interface Interface extends MachineAccess.Interface<Brain.ID, BrainClient
   readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its chats' hand. It is behind the egress when its brain is (R19).
-  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Environments.Hand>>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hands.Hand>>
   readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly cleanup: Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- A shutdown of the brain: an awake brain refuses new work and syncs within stopWithin; then Ren retires its generation, stops it until new work and destroys its machine. Returns what it could not confirm.
@@ -95,7 +95,7 @@ export const layer = Layer.effect(
     const registry = yield* BrainProvider.Registry
     const client = yield* BrainClient.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
-    const environments = yield* Environments.Service
+    const environments = yield* Hands.Service
     const compute = yield* SpaceCompute.Service
     const egress = yield* SandboxEgress.Service
     const code = yield* Bundles.Service
@@ -109,7 +109,7 @@ export const layer = Layer.effect(
     const sandboxVariables = yield* Deployment.sandboxVariables
     const scope = yield* Effect.scope
     const interruptedListeners = yield* Ref.make<ReadonlyArray<(interrupted: Interrupted) => Effect.Effect<void>>>([])
-    const network = yield* EnvironmentNetwork.Service
+    const network = yield* MachineNetwork.Service
 
     const find = (brainId: Brain.ID) =>
       database.db
@@ -262,7 +262,7 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- A brain with a host list reaches the machines of its remote hand's template too.
     const withHandHosts = Effect.fnUntraced(function* (
       limited: Option.Option<ReadonlyArray<string>>,
-      handTemplate: Option.Option<EnvironmentTemplate.ID>,
+      handTemplate: Option.Option<MachineTemplate.ID>,
     ) {
       if (Option.isNone(limited)) return limited
       const handHosts = Option.isSome(handTemplate) ? yield* environments.handHosts(handTemplate.value) : []
@@ -398,7 +398,7 @@ export const layer = Layer.effect(
             "ren.brain.id": row.id,
             "ren.brain.generation": String(row.generation),
           }),
-          ...(yield* environments.executorVariables(Environment.ofBrain(row.id), row.generation)),
+          ...(yield* environments.executorVariables(Hand.ofBrain(row.id), row.generation)),
           ...(isRemote && { REN_HAND_PLACEMENT: "remote" }),
           ...(Option.isSome(bundles) && {
             REN_BUNDLES: Schema.encodeSync(Bundle.Downloads)(yield* code.downloads(bundles.value)),
@@ -803,7 +803,7 @@ export const layer = Layer.effect(
         const provider = yield* providerOf(row)
         if (Option.isNone(provider.hand)) return Option.none()
         const own = yield* provider.hand.value(row.binding).pipe(Effect.orDie)
-        return Option.some<Environments.Hand>({
+        return Option.some<Hands.Hand>({
           brainId,
           generation: row.generation,
           url: own.url,

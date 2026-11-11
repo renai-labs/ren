@@ -1,7 +1,8 @@
 export * as RealStack from "./real-stack.js"
 
+import { HandProvider } from "@ren/core/hand-provider"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
-import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { MachineNetwork } from "@ren/core/machine-network"
 import { Bundles } from "@ren/core/bundles"
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
@@ -19,8 +20,7 @@ import { BrainHost } from "@ren/core/brain-host"
 import { BrainProvider } from "@ren/core/brain-provider"
 import { Brains } from "@ren/core/brains"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Environments } from "@ren/core/environments"
+import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { ReferenceCheck } from "@ren/core/reference-check"
@@ -29,11 +29,11 @@ import { SessionRunner } from "@ren/core/session/runner"
 import { SpaceSettings } from "@ren/core/space/settings"
 import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
-import { TestEnvironment } from "@ren/executor/testing"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { TestHand } from "@ren/executor/testing"
+import { MachineTemplate } from "@ren/schema/machine-template"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import type { Session as SessionSchema } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Option, Redacted, Schema } from "effect"
@@ -45,7 +45,7 @@ import { ExecutorAdapter } from "./adapters/executor.js"
 import { SessionDriver } from "./drivers/session.js"
 import { FaultProxy } from "./faults/proxy.js"
 import { Process } from "./process.js"
-import { ChaosEnvironments } from "./provider/environments.js"
+import { ChaosHands } from "./provider/hands.js"
 import { ChaosModels } from "./provider/models.js"
 import { ModelProvider } from "./provider/model.js"
 import { Wait } from "./wait.js"
@@ -73,7 +73,7 @@ export interface EnvironmentOptions {
 }
 
 export interface Sandbox {
-  readonly environmentTemplateId: EnvironmentTemplate.ID
+  readonly environmentTemplateId: MachineTemplate.ID
   readonly container: ExecutorAdapter.Container
   readonly proxy: () => FaultProxy.Instance
   readonly generation: () => number
@@ -150,7 +150,7 @@ export const start = async (options: {
 
   const sandboxes = await Promise.all(
     options.environments.map(async (environment) => {
-      const environmentTemplateId = EnvironmentTemplate.ID.create()
+      const environmentTemplateId = MachineTemplate.ID.create()
       const container = await ExecutorAdapter.dockerContainer({ label: `real-${environment.label}` })
       const state = { generation: 1, proxy: await FaultProxy.make(container.url()) }
       const retired: Array<FaultProxy.Instance> = []
@@ -180,9 +180,9 @@ export const start = async (options: {
             id: sandbox.environmentTemplateId,
             organization_id: owner.organizationId,
             name: sandbox.environment.label,
-            provider: ChaosEnvironments.providerId,
+            provider: ChaosHands.providerId,
             config: { environmentTemplateId: sandbox.environmentTemplateId },
-            sessions_per_environment: EnvironmentTemplate.maximumSessionsPerEnvironment,
+            sessions_per_environment: MachineTemplate.maximumSessionsPerEnvironment,
           })),
         )
         .pipe(
@@ -216,7 +216,7 @@ export const start = async (options: {
     BRAIN_KEYS: JSON.stringify([encodedKey(brainKey.privateKey)]),
     REN_URL: renProxy.url,
     SANDBOX_PROVIDER: "cell",
-    ENVIRONMENT_KEYS: JSON.stringify([encodedKey(TestEnvironment.keys.privateKey)]),
+    ENVIRONMENT_KEYS: JSON.stringify([encodedKey(TestHand.keys.privateKey)]),
     ...(options.tokenLifetime && { ENVIRONMENT_TOKEN_LIFETIME: options.tokenLifetime }),
   }
   const server = { child: undefined as Bun.Subprocess | undefined, log: "" }
@@ -238,7 +238,7 @@ export const start = async (options: {
         GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
         SIGNUP_MX_CHECK: "false",
         CELL_URL: cellProxy.url,
-        [ChaosEnvironments.fileVariable]: environmentsFile,
+        [ChaosHands.fileVariable]: environmentsFile,
         [ChaosModels.fileVariable]: modelsFile,
       },
       stdout: "pipe",
@@ -275,17 +275,17 @@ export const start = async (options: {
           Layer.provide([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
           Layer.provide(ChaosModels.layer),
           Layer.provide(
-            Environments.layer
+            Hands.layer
               .pipe(
                 Layer.provide([
                   SandboxEgress.layerNone,
-                  EnvironmentNetwork.layerNone,
+                  MachineNetwork.layerNone,
                   Bundles.layer,
                   DurableRunner.layerMemory,
                 ]),
               )
               .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
-              .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
+              .pipe(Layer.provide(HandProvider.layer(ChaosHands.providers))),
           ),
           Layer.provide(BrainProvider.layer([])),
           Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
@@ -296,7 +296,7 @@ export const start = async (options: {
                 ...keys,
                 ...TestDrives.config,
                 CELL_URL: cell.url,
-                [ChaosEnvironments.fileVariable]: environmentsFile,
+                [ChaosHands.fileVariable]: environmentsFile,
                 [ChaosModels.fileVariable]: modelsFile,
               }),
             ),
@@ -309,7 +309,7 @@ export const start = async (options: {
   const core = <A, E>(effect: Effect.Effect<A, E, Brains.Service | SessionRunner.Service>) =>
     coreRuntime.runPromise(effect)
   const replaceContainer = async (entry: (typeof sandboxes)[number]) => {
-    const environmentId = Environment.ID.create()
+    const environmentId = Hand.ID.create()
     await entry.container.replace(environmentId)
     await direct`DELETE FROM environment WHERE environment_template_id = ${entry.environmentTemplateId} AND binding IS NULL`
     await direct`INSERT INTO environment (id, environment_template_id) VALUES (${environmentId}, ${entry.environmentTemplateId})`

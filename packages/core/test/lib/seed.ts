@@ -1,14 +1,14 @@
 export * as Seed from "./seed.js"
 
+import { MachineProvider } from "../../src/machine-provider.js"
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
 import { App } from "@ren/schema/app"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Credential } from "@ren/schema/credential"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { MachineTemplate } from "@ren/schema/machine-template"
 import type { Machine } from "@ren/schema/machine"
-import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Session } from "@ren/schema/session"
 import type { Skill } from "@ren/schema/skill"
 import { Space } from "@ren/schema/space"
@@ -237,7 +237,7 @@ export const team = Effect.fnUntraced(function* (organizationId: Auth.Organizati
 })
 
 // oxlint-disable-next-line ren/no-comments -- The version of a seeded template that a brain applies: no image, the seeded config.
-export const version = (environmentTemplateId: EnvironmentTemplate.ID): Machine.Version => ({
+export const version = (environmentTemplateId: MachineTemplate.ID): Machine.Version => ({
   environmentTemplateId,
   image: null,
   config: { label: "seeded" },
@@ -247,18 +247,18 @@ export const version = (environmentTemplateId: EnvironmentTemplate.ID): Machine.
 export const environmentTemplate = Effect.fnUntraced(function* (
   organizationId: Auth.OrganizationID,
   options: {
-    readonly id?: EnvironmentTemplate.ID
+    readonly id?: MachineTemplate.ID
     readonly provider?: string
     readonly sessionsPerEnvironment?: number
   } = {},
 ) {
   const database = yield* Database.Service
-  const id = options.id ?? EnvironmentTemplate.ID.create()
+  const id = options.id ?? MachineTemplate.ID.create()
   yield* database.db.insert(Database.Schema.environment_template).values({
     id,
     organization_id: organizationId,
     name: "Sandbox",
-    provider: EnvironmentProvider.ID.make(options.provider ?? "test"),
+    provider: MachineProvider.ID.make(options.provider ?? "test"),
     config: { label: "seeded" },
     sessions_per_environment: options.sessionsPerEnvironment ?? 8,
   })

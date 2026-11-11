@@ -6,7 +6,6 @@ import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
 import { join } from "node:path"
-import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { MachineProvider } from "../machine-provider.js"
 
 // oxlint-disable-next-line ren/no-comments -- Runs the executor and the brain, each again 1 s after it ends. Paths and ports come in as arguments, so the shell quotes nothing.
@@ -99,7 +98,7 @@ export const provider = (options: {
       )
 
     return MachineProvider.make({
-      id: EnvironmentProvider.ID.make("local"),
+      id: MachineProvider.ID.make("local"),
       title: "Local",
       description: "A process on the machine that runs Ren.",
       canEgress: true,

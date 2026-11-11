@@ -1,6 +1,6 @@
 export * as HotReload from "./hot-reload.js"
 
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { Session } from "@ren/schema/session"
 import { Clock, Context, DateTime, Duration, Effect, Equal, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -47,7 +47,7 @@ export const layer = Layer.effect(
     const harness = yield* Harness.Service
     const credentialEnv = yield* CredentialEnv.Service
     const inference = yield* Inference.Service
-    const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
+    const connections = yield* Effect.serviceOption(HandConnections.Service)
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void, push: Effect.void, tick: Effect.void })
     const host = yield* HostToken.client(url).pipe(

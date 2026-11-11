@@ -1,7 +1,7 @@
 export * as Machine from "./machine.js"
 
 import { Schema } from "effect"
-import { EnvironmentTemplate } from "./environment-template.js"
+import { MachineTemplate } from "./machine-template.js"
 
 export const Phase = Schema.Literals([
   "creating",
@@ -19,7 +19,7 @@ export type Phase = typeof Phase.Type
 
 export interface Version extends Schema.Schema.Type<typeof Version> {}
 export const Version = Schema.Struct({
-  environmentTemplateId: EnvironmentTemplate.ID,
+  environmentTemplateId: MachineTemplate.ID,
   image: Schema.NullOr(Schema.String).annotate({
     description: "The template’s image that the machine runs. Null for a provider that builds no image.",
   }),

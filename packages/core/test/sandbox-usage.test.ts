@@ -1,3 +1,4 @@
+import { HandProvider } from "../src/hand-provider.js"
 import { expect } from "bun:test"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
@@ -6,7 +7,6 @@ import { asc } from "drizzle-orm"
 import { ConfigProvider, Effect, Fiber, Latch, Layer, Option } from "effect"
 import { HttpClient, HttpClientResponse, UrlParams } from "effect/http"
 import { DurableRunner } from "../src/durable-runner.js"
-import { EnvironmentProvider } from "../src/environment-provider.js"
 import { SandboxUsage } from "../src/sandbox-usage.js"
 import { E2BSandbox } from "../src/machine-provider/e2b.js"
 import { Usage } from "../src/usage.js"
@@ -87,7 +87,7 @@ const it = testEffect(
   SandboxUsage.layer.pipe(
     Layer.provideMerge(Usage.layer),
     Layer.provide(
-      Layer.merge(BrainProvider.layer([E2BSandbox.provider]), EnvironmentProvider.layer([E2BSandbox.provider])).pipe(
+      Layer.merge(BrainProvider.layer([E2BSandbox.provider]), HandProvider.layer([E2BSandbox.provider])).pipe(
         Layer.provide(e2b),
         Layer.provide(
           ConfigProvider.layer(

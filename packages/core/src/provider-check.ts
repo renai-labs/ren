@@ -1,10 +1,10 @@
 export * as ProviderCheck from "./provider-check.js"
 
+import { HandProvider } from "./hand-provider.js"
 import { Database } from "@ren/db/database"
 import { isNotNull, isNull } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { BrainProvider } from "./brain-provider.js"
-import { EnvironmentProvider } from "./environment-provider.js"
 import type { MachineProvider } from "./machine-provider.js"
 
 export class Missing extends Schema.TaggedError<Missing>()("ProviderCheck.Missing", { message: Schema.String }) {}
@@ -13,7 +13,7 @@ export class Missing extends Schema.TaggedError<Missing>()("ProviderCheck.Missin
 export const run = Effect.gen(function* () {
   const database = yield* Database.Service
   const brainProviders = yield* BrainProvider.Registry
-  const handProviders = yield* EnvironmentProvider.Registry
+  const handProviders = yield* HandProvider.Registry
   const brains = yield* database.db
     .selectDistinct({ provider: Database.Schema.brain.provider })
     .from(Database.Schema.brain)

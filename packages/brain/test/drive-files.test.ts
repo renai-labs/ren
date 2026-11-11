@@ -1,21 +1,21 @@
 import { expect } from "bun:test"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
-import { EnvironmentConnections } from "../src/environment/connections.js"
+import type { HandClient } from "@ren/hand-api/hand-client"
+import { HandConnections } from "../src/hand/connections.js"
 import { DriveFiles } from "../src/reference/drive-files.js"
 import { TestAccess } from "./lib/access.js"
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 
 const long = Array.from({ length: 1_200_000 }, (_, line) => `${String(line).padStart(9, "0")}\n`).join("")
 
@@ -32,8 +32,8 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
       }),
     ),
   )
-  const access = yield* Effect.flatMap(TestEnvironment.url, (url) =>
-    TestEnvironment.access({
+  const access = yield* Effect.flatMap(TestHand.url, (url) =>
+    TestHand.access({
       url,
       environmentId,
       brain: Brain.ofSession(sessionId),
@@ -44,14 +44,11 @@ const driveOf = Effect.fnUntraced(function* (files: Readonly<Record<string, stri
   const context = yield* Layer.build(TestAccess.memory(new Map([[sessionId, access]])))
   const connections = Context.get(
     yield* Layer.build(
-      EnvironmentConnections.layer.pipe(
-        Layer.provide(Layer.succeedContext(context)),
-        Layer.provide(FetchHttpClient.layer),
-      ),
+      HandConnections.layer.pipe(Layer.provide(Layer.succeedContext(context)), Layer.provide(FetchHttpClient.layer)),
     ),
-    EnvironmentConnections.Service,
+    HandConnections.Service,
   )
-  const connected = <A, E>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, E>) =>
+  const connected = <A, E>(use: (client: HandClient.Client) => Effect.Effect<A, E>) =>
     connections.connect(sessionId).pipe(
       Effect.flatMap((connection) => use(connection.client)),
       Effect.scoped,

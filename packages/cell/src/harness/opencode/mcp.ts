@@ -152,14 +152,14 @@ export const make = Effect.fnUntraced(function* (input: {
   readonly context: Pick<Plugin.Context, "mcp" | "tool" | "session">
   readonly boundary: OpenCodeExecution.Boundary
   readonly isSession: boolean
-  readonly hasEnvironment: boolean
+  readonly hasWorkspace: boolean
   readonly apps: Option.Option<AppCatalog.Info>
   readonly channels: ReadonlyArray<Channel.Provider>
   readonly sessionId: string
   readonly ren: Option.Option<Ren>
 }) {
   if (!input.isSession) return { apply: () => Effect.void, reloading: Effect.succeed(false) }
-  const local = { local: input.hasEnvironment }
+  const local = { local: input.hasWorkspace }
   const latest = yield* Ref.make(input.apps)
   const channels = yield* Ref.make(input.channels)
   const speaker = yield* Ref.make(Option.none<OpenCodeChat.Speaker>())

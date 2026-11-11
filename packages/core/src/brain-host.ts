@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm"
 import { Config, Context, Duration, Effect, Layer, Option, Schema } from "effect"
 import { BrainClient } from "./brain-client.js"
 import { BrainLifecycle } from "./brain-lifecycle.js"
-import type { Environments } from "./environments.js"
+import type { Hands } from "./hands.js"
 
 export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("BrainUnavailable", {
   cause: Schema.Defect(),
@@ -22,7 +22,7 @@ export interface Interface {
   readonly access: (brainId: Brain.ID) => Effect.Effect<BrainLifecycle.Access>
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
-  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Environments.Hand>>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hands.Hand>>
   // oxlint-disable-next-line ren/no-comments -- Sends an awake brain's machine its new host list. A cell has none.
   readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>

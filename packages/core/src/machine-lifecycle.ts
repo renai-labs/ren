@@ -1,7 +1,7 @@
 export * as MachineLifecycle from "./machine-lifecycle.js"
 
 import type { Auth } from "@ren/schema/auth"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
@@ -91,7 +91,7 @@ export interface Row<Id extends string> {
 }
 
 export interface TemplateConfig {
-  readonly environmentTemplateId: EnvironmentTemplate.ID
+  readonly environmentTemplateId: MachineTemplate.ID
   readonly config: Schema.Json
   // oxlint-disable-next-line ren/no-comments -- The system image the template's image was built on. Only a new machine changes it.
   readonly system: string | null

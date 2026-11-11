@@ -1,8 +1,8 @@
 import { expect } from "bun:test"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HandClient } from "@ren/hand-api/hand-client"
 import { Duration, Effect, Fiber, Option, Stream } from "effect"
 import { Socket } from "node:net"
-import { TestEnvironment } from "./lib/test-environment.js"
+import { TestHand } from "./lib/test-hand.js"
 import { testEffect } from "./lib/effect.js"
 import { TestServer } from "./lib/server.js"
 
@@ -25,7 +25,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const bearer = `Bearer ${yield* TestServer.token()}`
-      const address = new URL(yield* TestEnvironment.url)
+      const address = new URL(yield* TestHand.url)
       const startedAt = Date.now()
       const stalled = (options: { readonly trickle: boolean }) =>
         Effect.promise(
@@ -33,7 +33,7 @@ it.live(
             new Promise<number>((resolve) => {
               const socket = new Socket().connect(Number(address.port), address.hostname, () => {
                 socket.write(
-                  `POST ${EnvironmentClient.path} HTTP/1.1\r\nHost: ${address.host}\r\nAuthorization: ${bearer}\r\nContent-Type: application/ndjson\r\nContent-Length: 1000\r\n\r\n{"_tag":"Request"`,
+                  `POST ${HandClient.path} HTTP/1.1\r\nHost: ${address.host}\r\nAuthorization: ${bearer}\r\nContent-Type: application/ndjson\r\nContent-Length: 1000\r\n\r\n{"_tag":"Request"`,
                 )
                 const timer = options.trickle ? setInterval(() => socket.write(" "), 4000) : undefined
                 socket.on("close", () => clearInterval(timer))

@@ -7,7 +7,7 @@ import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainHost } from "./brain-host.js"
 import { DurableRunner } from "./durable-runner.js"
-import { Environments } from "./environments.js"
+import { Hands } from "./hands.js"
 
 // oxlint-disable-next-line ren/no-comments -- One run per shutdown: Space.shutdown takes the next epoch, so a later shutdown of the same space runs again.
 const Run = DurableRunner.make("SpaceShutdown", {
@@ -30,7 +30,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const brainHost = yield* BrainHost.Service
-    const environments = yield* Environments.Service
+    const environments = yield* Hands.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
 
     const shutdown = Effect.fnUntraced(function* (payload: typeof Run.payloadSchema.Type) {

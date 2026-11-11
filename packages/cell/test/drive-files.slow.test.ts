@@ -1,6 +1,6 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
-import { DriveEnvironment, testEffect } from "@ren/executor/testing"
+import { DriveHand, testEffect } from "@ren/executor/testing"
 import type { Drive } from "@ren/schema/drive"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Layer, Schedule } from "effect"
@@ -20,14 +20,14 @@ const drives: Drive.Availability = {
       kind: "space",
       alias: "drive:space",
       description: "The space’s files",
-      remote: DriveEnvironment.remote(DriveEnvironment.key, "org_1/drives/spaces/spc_1/"),
+      remote: DriveHand.remote(DriveHand.key, "org_1/drives/spaces/spc_1/"),
       access: "write",
     },
     {
       kind: "org",
       alias: "drive:org",
       description: "The organization’s files",
-      remote: DriveEnvironment.remote(DriveEnvironment.key),
+      remote: DriveHand.remote(DriveHand.key),
       access: "read",
     },
   ],
@@ -36,7 +36,7 @@ const drives: Drive.Availability = {
 const uploads = "chats/ses_1/uploads"
 
 const open = Effect.gen(function* () {
-  const environment = yield* DriveEnvironment.start
+  const environment = yield* DriveHand.start
   const github = yield* TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
   const chat = yield* ReferenceChat.open(
     {
@@ -51,7 +51,7 @@ const open = Effect.gen(function* () {
   return { environment, chat }
 })
 
-describe.skipIf(!DriveEnvironment.hasDocker)("drive files", () => {
+describe.skipIf(!DriveHand.hasDocker)("drive files", () => {
   it.live(
     "the first message of a chat connects its environment and mounts the drive, then attaches files that the browser put there a moment before: the model reads a text file and gets the path of every file, and the transcript gives them as uploads",
     () =>

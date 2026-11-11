@@ -20,7 +20,7 @@ import {
 } from "@ren/host-api/ren-host-api"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
@@ -38,7 +38,7 @@ import { TestToken } from "./token.js"
 export type Refresh = { readonly type: "grant"; readonly access: Models.Access } | { readonly type: "unavailable" }
 
 export type Answer =
-  | { readonly type: "access"; readonly access: Environment.Access }
+  | { readonly type: "access"; readonly access: Hand.Access }
   | { readonly type: "not_found" }
   | { readonly type: "unavailable"; readonly message: string }
   | { readonly type: "starting" }

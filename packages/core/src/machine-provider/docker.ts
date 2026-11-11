@@ -1,15 +1,14 @@
 export * as Docker from "./docker.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { Duration, Effect, Option, Schedule, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { MachineProvider } from "../machine-provider.js"
 
 const Config = Schema.Struct({
   image: Schema.NonEmptyString.annotate({
     title: "Image",
-    description: `A Docker image that runs Ren’s executor on port ${EnvironmentApi.port}.`,
+    description: `A Docker image that runs Ren’s executor on port ${HandApi.port}.`,
   }),
   cpus: Schema.optionalKey(
     Schema.Finite.check(Schema.isGreaterThan(0)).annotate({ title: "CPUs", description: "Docker’s --cpus." }),
@@ -24,7 +23,7 @@ const Config = Schema.Struct({
 
 const Binding = Schema.Struct({ containerId: Schema.NonEmptyString })
 
-const executorPort = `${EnvironmentApi.port}/tcp`
+const executorPort = `${HandApi.port}/tcp`
 
 const nameRaceChecks = 100
 
@@ -87,7 +86,7 @@ export const provider = Effect.gen(function* () {
   })
 
   return MachineProvider.make({
-    id: EnvironmentProvider.ID.make("docker"),
+    id: MachineProvider.ID.make("docker"),
     title: "Docker",
     description:
       "A container on the machine that runs Ren, made from an image that runs Ren’s executor. For development and self-hosting: its executor listens on 127.0.0.1, so the brain must run on the same machine.",

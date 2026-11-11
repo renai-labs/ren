@@ -26,7 +26,7 @@ import {
 } from "@ren/host-api/ren-host-api"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
@@ -42,7 +42,7 @@ import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
 import { Drives } from "./drives.js"
-import { Environments } from "./environments.js"
+import { Hands } from "./hands.js"
 import { Memory } from "./memory.js"
 import { Models } from "./models.js"
 import { Settings } from "./settings.js"
@@ -92,7 +92,7 @@ export interface Interface {
     sessionId: Session.ID,
     options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<
-    Environment.Access,
+    Hand.Access,
     EnvironmentNotFoundError | EnvironmentUnavailableError | EnvironmentStartingError | ForbiddenError
   >
   readonly releaseEnvironment: (
@@ -102,7 +102,7 @@ export interface Interface {
   readonly directoryOf: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
-  ) => Effect.Effect<Option.Option<Environment.Directory>, ForbiddenError>
+  ) => Effect.Effect<Option.Option<Hand.Directory>, ForbiddenError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Brains") {}
@@ -189,7 +189,7 @@ export const layer = Layer.effect(
     const models = yield* Models.Service
     const credentialEnv = yield* CredentialEnv.Service
     const settings = yield* Settings.Service
-    const environments = yield* Environments.Service
+    const environments = yield* Hands.Service
     const compute = yield* SpaceCompute.Service
     const drives = yield* Drives.Service
     const brainHost = yield* BrainHost.Service
@@ -269,8 +269,8 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- Where the chats of a brain run their tools, from the hand it applied: its own machine, a remote hand or none.
     const appliedOf = (brainId: Brain.ID, hand: Space.AppliedHand) => {
       if (hand.placement === "colocated")
-        return Effect.map(brainHost.hand(brainId), (own): Environments.Applied => ({ _tag: "Own", hand: own }))
-      return Effect.succeed<Environments.Applied>(hand.placement === "remote" ? { _tag: "Remote" } : { _tag: "None" })
+        return Effect.map(brainHost.hand(brainId), (own): Hands.Applied => ({ _tag: "Own", hand: own }))
+      return Effect.succeed<Hands.Applied>(hand.placement === "remote" ? { _tag: "Remote" } : { _tag: "None" })
     }
 
     const creatorSees = Effect.fnUntraced(function* (sessionId: Session.ID, placement: Placement) {
@@ -664,10 +664,9 @@ export const layer = Layer.effect(
         const tools = yield* appliedOf(host.brainId, (yield* compute.appliedOrApply(host.brainId)).hand)
         return yield* environments.access(subject, tools, options).pipe(
           Effect.catchTags({
-            "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
-            "Environments.Unavailable": (error) =>
-              Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
-            "Environments.Starting": (error) => Effect.fail(new EnvironmentStartingError({ message: error.message })),
+            "Hands.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
+            "Hands.Unavailable": (error) => Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Hands.Starting": (error) => Effect.fail(new EnvironmentStartingError({ message: error.message })),
           }),
         )
       }),

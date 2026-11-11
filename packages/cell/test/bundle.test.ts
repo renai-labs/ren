@@ -4,7 +4,7 @@ import { BundleBuild } from "../machine/bundle.js"
 test("the staged sources are the workspace files the brain and its hand import, at any depth, and no others", async () => {
   const sources = await BundleBuild.sources(BundleBuild.root)
   expect([
-    sources.includes("packages/environment-api/src/environment-token.ts"),
+    sources.includes("packages/hand-api/src/environment-token.ts"),
     sources.includes("packages/schema/src/signature.ts"),
     sources.includes("packages/schema/src/infra.ts"),
     sources.every((file) => /^packages\/[^/]+\/src\//.test(file)),

@@ -2,7 +2,7 @@ import { afterAll, describe, expect } from "bun:test"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { MachineTemplate } from "@ren/schema/machine-template"
 import { Space } from "@ren/schema/space"
 import { ConfigProvider, DateTime, Duration, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
@@ -301,7 +301,7 @@ describe("E2BSandbox template builds", () => {
     () =>
       Effect.gen(function* () {
         const build = yield* buildOf
-        const environmentTemplateId = EnvironmentTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ00")
+        const environmentTemplateId = MachineTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ00")
         const config = {
           cpuCount: 4,
           memoryMiB: 4096,
@@ -343,7 +343,7 @@ describe("E2BSandbox template builds", () => {
       const build = yield* buildOf
       builds.status = "error"
       const started = yield* build.start({
-        environmentTemplateId: EnvironmentTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ01"),
+        environmentTemplateId: MachineTemplate.ID.make("tpl_01ABCDEFGHJKMNPQRSTVWXYZ01"),
         config: { packages: { apt: ["nope"] } },
       })
       const failed = started._tag === "Building" ? yield* build.status(started.id) : started

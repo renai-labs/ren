@@ -11,10 +11,10 @@ import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Workspace } from "@opencode/schema/workspace"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import type { Signal } from "@ren/environment-api/signal"
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentSession } from "@ren/brain/environment/session"
+import { HandApi } from "@ren/hand-api/hand-api"
+import type { Signal } from "@ren/hand-api/signal"
+import type { HandConnections } from "@ren/brain/hand/connections"
+import { HandSession } from "@ren/brain/hand/session"
 import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer } from "effect"
@@ -32,12 +32,12 @@ export const sessionIdOf = (workspaceId: Workspace.ID) => Session.ID.make(`ses_$
 
 const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
-const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImpl => {
+const files = (environment: HandSession.Files): EnvironmentFiles.FilesImpl => {
   const fileError = (path: string) => (cause: unknown) =>
     new EnvironmentFiles.Failed({
       path,
       cause:
-        cause instanceof EnvironmentApi.FileTooLargeError
+        cause instanceof HandApi.FileTooLargeError
           ? new Error(
               `The file ${path} is too large (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); use a range`,
             )
@@ -47,16 +47,16 @@ const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImp
     new EnvironmentFiles.Failed({
       path,
       cause:
-        cause instanceof EnvironmentApi.FileTooLargeError
+        cause instanceof HandApi.FileTooLargeError
           ? new Error(
               `The file ${path} is too large to write in one call (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); write it in parts`,
             )
           : cause,
     })
   const fileLookupError = (path: string) => (error: unknown) =>
-    error instanceof EnvironmentApi.FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
+    error instanceof HandApi.FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
   const fileKindError = (path: string) => (error: unknown) =>
-    error instanceof EnvironmentApi.WrongKindError
+    error instanceof HandApi.WrongKindError
       ? new EnvironmentFiles.WrongKind({ path, actual: error.actual })
       : fileLookupError(path)(error)
   return {
@@ -81,14 +81,14 @@ const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImp
   }
 }
 
-export const session = (connections: EnvironmentConnections.Interface, sessionId: Session.ID) => {
-  const environment = EnvironmentSession.make(connections, sessionId, killedBySignal)
+export const session = (connections: HandConnections.Interface, sessionId: Session.ID) => {
+  const environment = HandSession.make(connections, sessionId, killedBySignal)
   return { spawner: environment.spawner, spawnerWith: environment.spawnerWith, overrides: files(environment.files) }
 }
 
 // oxlint-disable-next-line ren/no-comments -- A brain with a remote hand also moves OpenCode's saved tool output, workspace panel files, git and snapshots to the hand, because they use the brain's disk. A co-located brain keeps OpenCode's own: its disk is the hand's.
 export const replacements = (
-  connections: EnvironmentConnections.Interface,
+  connections: HandConnections.Interface,
   options: { readonly isRemoteHand?: boolean } = {},
 ): LayerNode.Replacements => {
   const environmentOf = (workspaceId: Workspace.ID) => session(connections, sessionIdOf(workspaceId))

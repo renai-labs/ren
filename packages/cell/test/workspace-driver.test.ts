@@ -2,10 +2,10 @@ import { expect } from "bun:test"
 import { TestAccess } from "@ren/brain/testing"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -13,27 +13,24 @@ import { ChildProcess } from "effect/process"
 import { mkdtemp, realpath, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "workspace-driver-")))
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 
-const sessionFor = Effect.fnUntraced(function* (
-  accesses: ReadonlyMap<Session.ID, Environment.Access>,
-  sessionId: Session.ID,
-) {
+const sessionFor = Effect.fnUntraced(function* (accesses: ReadonlyMap<Session.ID, Hand.Access>, sessionId: Session.ID) {
   const environments = yield* Layer.build(
-    EnvironmentConnections.layer.pipe(Layer.provide(TestAccess.fixed(accesses)), Layer.provide(FetchHttpClient.layer)),
-  ).pipe(Effect.map((context) => Context.get(context, EnvironmentConnections.Service)))
+    HandConnections.layer.pipe(Layer.provide(TestAccess.fixed(accesses)), Layer.provide(FetchHttpClient.layer)),
+  ).pipe(Effect.map((context) => Context.get(context, HandConnections.Service)))
   return RenWorkspaceDriver.session(environments, sessionId)
 })
 
 const bound = Effect.gen(function* () {
   const sessionId = Session.ID.create()
-  const access = yield* TestEnvironment.access({
-    url: yield* TestEnvironment.url,
+  const access = yield* TestHand.access({
+    url: yield* TestHand.url,
     environmentId,
     brain: Brain.ofSession(sessionId),
     directory: join(workspace, sessionId),
@@ -93,7 +90,7 @@ it.live("a file or shell call with no access, or on a sandbox that does not answ
       new Map([
         [
           sessionId,
-          yield* TestEnvironment.access({
+          yield* TestHand.access({
             url: "http://127.0.0.1:9",
             environmentId,
             brain: Brain.ofSession(sessionId),
@@ -117,13 +114,13 @@ it.live(
       yield* subject.driver.overrides.mkdir(root)
       yield* Effect.promise(() =>
         writeFile(join(workspace, subject.sessionId, "large.bin"), "").then(() =>
-          truncate(join(workspace, subject.sessionId, "large.bin"), EnvironmentApi.maxFileBytes + 1),
+          truncate(join(workspace, subject.sessionId, "large.bin"), HandApi.maxFileBytes + 1),
         ),
       )
       const error = yield* subject.driver.overrides.read(`${root}/large.bin`).pipe(Effect.flip)
       expect(error instanceof EnvironmentFiles.Failed && String(error.cause)).toContain("use a range")
       const written = yield* subject.driver.overrides
-        .write(`${root}/copy.bin`, new Uint8Array(EnvironmentApi.maxFileBytes + 1))
+        .write(`${root}/copy.bin`, new Uint8Array(HandApi.maxFileBytes + 1))
         .pipe(Effect.flip)
       expect(written instanceof EnvironmentFiles.Failed && String(written.cause)).toContain("write it in parts")
       expect(yield* subject.driver.overrides.stat(`${root}/copy.bin`).pipe(Effect.flip)).toBeInstanceOf(

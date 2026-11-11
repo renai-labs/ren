@@ -1,8 +1,8 @@
 import type { Auth } from "@ren/schema/auth"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
-import type { Environment } from "@ren/schema/environment"
+import { MachineTemplate } from "@ren/schema/machine-template"
+import type { Hand } from "@ren/schema/hand"
 import type { Machine } from "@ren/schema/machine"
-import type { EnvironmentProvider } from "@ren/schema/environment-provider"
+import type { MachineProvider } from "@ren/schema/machine-provider"
 import { Primitive } from "@ren/schema/primitive"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
@@ -15,18 +15,18 @@ import { space } from "./space.sql.js"
 export const environment_template = pgTable(
   "environment_template",
   {
-    id: text().$type<EnvironmentTemplate.ID>().primaryKey(),
+    id: text().$type<MachineTemplate.ID>().primaryKey(),
     organization_id: text()
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
-    provider: text().$type<EnvironmentProvider.ID>().notNull(),
+    provider: text().$type<MachineProvider.ID>().notNull(),
     config: jsonb().$type<Schema.Json>().notNull(),
     sessions_per_environment: integer().notNull(),
-    networking: jsonb().$type<EnvironmentTemplate.Networking>().notNull().default({ type: "unrestricted" }),
-    build_status: text().$type<EnvironmentTemplate.BuildStatus>().notNull().default("ready"),
+    networking: jsonb().$type<MachineTemplate.Networking>().notNull().default({ type: "unrestricted" }),
+    build_status: text().$type<MachineTemplate.BuildStatus>().notNull().default("ready"),
     image: text(),
     // oxlint-disable-next-line ren/no-comments -- The config that built `image`; a machine updates in place from the config of its image.
     image_config: jsonb().$type<Schema.Json>(),
@@ -59,7 +59,7 @@ export const environment_template = pgTable(
     ),
     check(
       "environment_template_sessions_per_environment_check",
-      sql`${table.sessions_per_environment} between 1 and ${sql.raw(String(EnvironmentTemplate.maximumSessionsPerEnvironment))}`,
+      sql`${table.sessions_per_environment} between 1 and ${sql.raw(String(MachineTemplate.maximumSessionsPerEnvironment))}`,
     ),
   ],
 )
@@ -67,9 +67,9 @@ export const environment_template = pgTable(
 export const environment = pgTable(
   "environment",
   {
-    id: text().$type<Environment.ID>().primaryKey(),
+    id: text().$type<Hand.ID>().primaryKey(),
     environment_template_id: text()
-      .$type<EnvironmentTemplate.ID>()
+      .$type<MachineTemplate.ID>()
       .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
     // oxlint-disable-next-line ren/no-comments -- private-spaces PS8: one space per environment; null on older ones.
@@ -80,7 +80,7 @@ export const environment = pgTable(
     // oxlint-disable-next-line ren/no-comments -- The columns of MachineLifecycle.Row: a remote hand's machine has the same state machine as a brain's.
     image: text(),
     image_template: jsonb().$type<{
-      readonly environmentTemplateId: EnvironmentTemplate.ID
+      readonly environmentTemplateId: MachineTemplate.ID
       readonly config: Schema.Json
       readonly system: string | null
     }>(),
@@ -119,11 +119,11 @@ export const session_environment = pgTable(
       .notNull()
       .references(() => space.id, { onDelete: "cascade" }),
     environment_template_id: text()
-      .$type<EnvironmentTemplate.ID>()
+      .$type<MachineTemplate.ID>()
       .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
     environment_id: text()
-      .$type<Environment.ID>()
+      .$type<Hand.ID>()
       .references(() => environment.id, { onDelete: "set null" }),
     generation: integer().default(1).notNull(),
     // oxlint-disable-next-line ren/no-comments -- The template version of the hand the chat's brain applied. The chat gets a machine of this version only.

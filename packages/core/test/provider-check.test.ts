@@ -1,3 +1,4 @@
+import { HandProvider } from "../src/hand-provider.js"
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -5,16 +6,15 @@ import { Brain } from "@ren/schema/brain"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { BrainProvider } from "../src/brain-provider.js"
-import { EnvironmentProvider } from "../src/environment-provider.js"
 import { ProviderCheck } from "../src/provider-check.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/environment-provider.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { Seed } from "./lib/seed.js"
 
 const brains = Effect.map(TestProvider.make({ id: "brains" }), (probe) => probe.provider)
 
 const it = testEffect(
-  Layer.mergeAll(BrainProvider.layer([brains]), EnvironmentProvider.layer<never, never>([])).pipe(
+  Layer.mergeAll(BrainProvider.layer([brains]), HandProvider.layer<never, never>([])).pipe(
     Layer.provideMerge(Testing.layer),
   ),
 )

@@ -1,7 +1,7 @@
 export * as DriveFiles from "./drive-files.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HandApi } from "@ren/hand-api/hand-api"
+import type { HandClient } from "@ren/hand-api/hand-client"
 import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -16,25 +16,22 @@ export interface Attached {
 
 const readable = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/json"])
 
-const read = (client: EnvironmentClient.Client, path: string, size: number) =>
+const read = (client: HandClient.Client, path: string, size: number) =>
   Effect.forEach(
-    Array.from(
-      { length: Math.ceil(size / EnvironmentApi.maxFileBytes) },
-      (_, part) => part * EnvironmentApi.maxFileBytes,
-    ),
+    Array.from({ length: Math.ceil(size / HandApi.maxFileBytes) }, (_, part) => part * HandApi.maxFileBytes),
     (offset) =>
-      client["files.read"]({ path, range: { offset, length: Math.min(EnvironmentApi.maxFileBytes, size - offset) } }),
+      client["files.read"]({ path, range: { offset, length: Math.min(HandApi.maxFileBytes, size - offset) } }),
   ).pipe(
     Effect.map((parts) =>
       parts.reduce((all, part, index) => {
-        all.set(part.bytes, index * EnvironmentApi.maxFileBytes)
+        all.set(part.bytes, index * HandApi.maxFileBytes)
         return all
       }, new Uint8Array(size)),
     ),
   )
 
 export const attach = Effect.fn("DriveFiles.attach")(function* (
-  client: EnvironmentClient.Client,
+  client: HandClient.Client,
   root: string,
   files: ReadonlyArray<Session.DriveFile>,
 ) {
@@ -89,7 +86,7 @@ export const attach = Effect.fn("DriveFiles.attach")(function* (
 })
 
 export const show = Effect.fn("DriveFiles.show")(function* (
-  client: EnvironmentClient.Client,
+  client: HandClient.Client,
   root: string,
   sessionId: string,
   source: string,

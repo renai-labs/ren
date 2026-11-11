@@ -1,6 +1,6 @@
 export * as SandboxArchive from "./archive.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { Deferred, Duration, Effect, Exit, Stream } from "effect"
 import { type FileHandle, lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises"
 import { basename, dirname, join, resolve, sep } from "node:path"
@@ -109,19 +109,16 @@ const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : 
 
 // oxlint-disable-next-line ren/no-comments -- Downloads into a staging folder beside the path and renames it at the end, so the path exists only with every file in it. R41: one download runs for each path; a second unpack waits for it, and downloads itself when the first was interrupted.
 export const unpack = (workspace: string) => {
-  const running = new Map<
-    string,
-    Deferred.Deferred<Exit.Exit<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>>
-  >()
-  const download = (input: EnvironmentApi.UnpackInput, target: string) =>
+  const running = new Map<string, Deferred.Deferred<Exit.Exit<void, HandApi.ArchiveError | HandApi.FileSystemError>>>()
+  const download = (input: HandApi.UnpackInput, target: string) =>
     Effect.gen(function* () {
-      const failed = (message: string) => new EnvironmentApi.ArchiveError({ url: input.url, message })
+      const failed = (message: string) => new HandApi.ArchiveError({ url: input.url, message })
       const fileSystem = (path: string) => (cause: unknown) =>
-        new EnvironmentApi.FileSystemError({ path, message: messageOf(cause) })
+        new HandApi.FileSystemError({ path, message: messageOf(cause) })
       const staging = `${target}.${crypto.randomUUID()}.staging`
       const totals = { bytes: 0, files: 0 }
-      const maxBytes = input.maxBytes ?? EnvironmentApi.maxUnpackBytes
-      const maxFiles = input.maxFiles ?? EnvironmentApi.maxUnpackFiles
+      const maxBytes = input.maxBytes ?? HandApi.maxUnpackBytes
+      const maxFiles = input.maxFiles ?? HandApi.maxUnpackFiles
       const writing: { file: FileHandle | undefined; destination: string } = { file: undefined, destination: staging }
       const close = Effect.promise(async () => {
         await writing.file?.close().catch(() => undefined)
@@ -153,9 +150,7 @@ export const unpack = (workspace: string) => {
           catch: fileSystem(destination),
         })
       }
-      const write = (
-        event: Event,
-      ): Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError> => {
+      const write = (event: Event): Effect.Effect<void, HandApi.ArchiveError | HandApi.FileSystemError> => {
         if (event.type === "start") return start(event)
         if (event.type === "end") return close
         const file = writing.file
@@ -227,16 +222,16 @@ export const unpack = (workspace: string) => {
       ),
     )
   const once = (
-    input: EnvironmentApi.UnpackInput,
+    input: HandApi.UnpackInput,
     target: string,
-  ): Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError> =>
+  ): Effect.Effect<void, HandApi.ArchiveError | HandApi.FileSystemError> =>
     Effect.suspend(() => {
       const current = running.get(target)
       if (current)
         return Deferred.await(current).pipe(
           Effect.flatMap((exit) => (Exit.hasInterrupts(exit) ? once(input, target) : exit)),
         )
-      const done = Deferred.makeUnsafe<Exit.Exit<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>>()
+      const done = Deferred.makeUnsafe<Exit.Exit<void, HandApi.ArchiveError | HandApi.FileSystemError>>()
       running.set(target, done)
       return Effect.flatMap(isThere(target), (isUnpacked) => (isUnpacked ? Effect.void : download(input, target))).pipe(
         Effect.onExit((exit) =>
@@ -247,7 +242,7 @@ export const unpack = (workspace: string) => {
         ),
       )
     })
-  return Effect.fn("Executor.unpack")(function* (input: EnvironmentApi.UnpackInput) {
+  return Effect.fn("Executor.unpack")(function* (input: HandApi.UnpackInput) {
     yield* once(input, resolve(workspace, input.path))
   })
 }

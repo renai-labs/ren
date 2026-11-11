@@ -20,7 +20,7 @@ import { WebSearch } from "@opencode/core/websearch"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import type { HandConnections } from "@ren/brain/hand/connections"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
@@ -75,7 +75,7 @@ export const open = Effect.fn("OpenCodeServer.open")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   options: Options,
 ) {
   const serverOptions = {
@@ -106,7 +106,7 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   options: Options,
 ) {
   return yield* make(
@@ -150,7 +150,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   >,
   initial: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   options: Options = {
     saved: Option.none(),
     directoryOf: (sessionId) => `/workspace/${sessionId}`,
@@ -360,7 +360,7 @@ export const client = (fetch: (request: Request) => Promise<Response>): Effect.E
     Effect.provideService(FetchHttpClient.Fetch, (input, init) => fetch(new Request(input, init))),
   )
 
-interface Environment {
+interface Hand {
   readonly files: FileSystem.Interface
   readonly vcs: Vcs.Interface
   readonly shell: Shell.Interface
@@ -375,7 +375,7 @@ export interface Instance {
   ) => Effect.Effect<A, E | Harness.NotFound>
   readonly environment: <A, E>(
     sessionId: string,
-    use: (services: Environment) => Effect.Effect<A, E>,
+    use: (services: Hand) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E | Harness.NotFound | Harness.Rejected>
   readonly agents: (sessionId: string) => Effect.Effect<ReadonlyArray<Agent.Info>, Harness.NotFound>
   readonly skills: (sessionId: string) => Effect.Effect<ReadonlyArray<Skill.Info>, Harness.NotFound>

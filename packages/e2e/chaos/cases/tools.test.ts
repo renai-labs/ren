@@ -1,8 +1,8 @@
 import { StubModel } from "@ren/cell/testing"
 import { TestAccess } from "@ren/brain/testing"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentSession } from "@ren/brain/environment/session"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { HandSession } from "@ren/brain/hand/session"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Stream } from "effect"
@@ -17,7 +17,7 @@ import { Stack } from "../lib/stack.js"
 import { Wait } from "../lib/wait.js"
 
 describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispatcher", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Hand } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
@@ -212,7 +212,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
       const after = await environment.container.memoryBytes()
       expect(spawned.length).toBe(40)
       expect(after - before).toBeLessThan(64 * 1024 * 1024 + 64 * 1024 * 1024)
-      expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: EnvironmentApi.protocol })
+      expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: HandApi.protocol })
       await driver.dispose()
     },
     300_000,
@@ -251,14 +251,14 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
         Effect.gen(function* () {
           const connections = Context.get(
             yield* Layer.build(
-              EnvironmentConnections.layer.pipe(
+              HandConnections.layer.pipe(
                 Layer.provide(TestAccess.fixed(new Map([[sessionId, access]]))),
                 Layer.provide(FetchHttpClient.layer),
               ),
             ),
-            EnvironmentConnections.Service,
+            HandConnections.Service,
           )
-          const session = EnvironmentSession.make(connections, sessionId, (signal) => signal)
+          const session = HandSession.make(connections, sessionId, (signal) => signal)
           const handle = yield* session.spawner.spawn(ChildProcess.make("/bin/zsh", ["-c", "echo $((6 * 7))"]))
           return yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString)
         }).pipe(Effect.scoped),

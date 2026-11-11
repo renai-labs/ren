@@ -2,13 +2,13 @@ export * as ReferenceChat from "./reference-chat.js"
 
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { TestAccess, type TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import type { Drive } from "@ren/schema/drive"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import type { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -27,7 +27,7 @@ import type { StubModel } from "./stub-model.js"
 
 export interface Place {
   readonly url: string | URL
-  readonly environmentId: Environment.ID
+  readonly environmentId: Hand.ID
   readonly directoryOf: (sessionId: string) => string
 }
 
@@ -44,12 +44,9 @@ export const open = Effect.fnUntraced(function* (
   const memory = Context.get(context, TestAccess.Memory)
   const environments = Context.get(
     yield* Layer.build(
-      EnvironmentConnections.layer.pipe(
-        Layer.provide(Layer.succeedContext(context)),
-        Layer.provide(FetchHttpClient.layer),
-      ),
+      HandConnections.layer.pipe(Layer.provide(Layer.succeedContext(context)), Layer.provide(FetchHttpClient.layer)),
     ),
-    EnvironmentConnections.Service,
+    HandConnections.Service,
   )
   const settings = Context.get(
     yield* Layer.build(ChatSettings.layer.pipe(Layer.provide(ModelsTest.storage()))),
@@ -84,7 +81,7 @@ export const open = Effect.fnUntraced(function* (
   const harness = yield* OpenCodeHarness.make(host, endpoints, Option.some(settings))
   const directory = place.directoryOf(sessionId)
   const accessOf = (generation: number) =>
-    TestEnvironment.access({
+    TestHand.access({
       url: String(place.url),
       environmentId: place.environmentId,
       brain: Brain.ofSession(sessionId),

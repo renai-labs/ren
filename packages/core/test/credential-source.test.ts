@@ -4,7 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Space } from "@ren/schema/space"
 import {
   ConfigProvider,
@@ -165,7 +165,7 @@ describe("CredentialSource.layerMinted", () => {
     () =>
       Effect.gen(function* () {
         const source = yield* CredentialSource.Minted
-        const hand = { ...scope, workload: { kind: "hand" as const, id: Environment.ID.make("env_01"), generation: 1 } }
+        const hand = { ...scope, workload: { kind: "hand" as const, id: Hand.ID.make("env_01"), generation: 1 } }
         expect((yield* source.candidates(hand, [])).map((candidate) => candidate.label)).toEqual(["DRIVE"])
       }),
   )

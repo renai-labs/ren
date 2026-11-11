@@ -223,7 +223,7 @@ const conflict = <A, E, R>(effect: Effect.Effect<A, E | Harness.Conflict, R>) =>
 // oxlint-disable-next-line ren/no-comments -- OpenCode's file and git services have no error channel for a hand that does not answer, so they die. The panel gets a 503 that it asks again after, not an unknown error.
 const unreachable = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.catchDefect(effect, (defect) =>
-    Predicate.isTagged(defect, "Environment.Failed") || Predicate.isTagged(defect, "EnvironmentConnections.Unavailable")
+    Predicate.isTagged(defect, "Environment.Failed") || Predicate.isTagged(defect, "HandConnections.Unavailable")
       ? Effect.fail(
           new UnavailableError({
             message: `The chat’s hand did not answer: ${Predicate.hasProperty(defect, "message") ? String(defect.message) : "no reason"}`,

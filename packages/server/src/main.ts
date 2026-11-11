@@ -38,9 +38,9 @@ import { Deployment } from "@ren/core/deployment"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
+import { HandProvider } from "@ren/core/hand-provider"
 import { Docker } from "@ren/core/machine-provider/docker"
-import { Environments } from "@ren/core/environments"
+import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -75,7 +75,7 @@ import { SlackApp } from "@ren/core/slack-app"
 import { SlackTaskCard } from "@ren/core/slack-task-card"
 import { TaskCard } from "@ren/core/task-card"
 import { EgressControl } from "@ren/core/egress-control"
-import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { MachineNetwork } from "@ren/core/machine-network"
 import { AppResolve } from "@ren/core/app/resolve"
 
 // oxlint-disable-next-line ren/no-comments -- Where brains run: local processes, E2B sandboxes, or cells. One setting picks the brain host, the machine providers and the egress.
@@ -89,10 +89,10 @@ const sandboxEgress = Layer.unwrap(
   Effect.map(sandboxProvider, (provider) => (provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig)),
 ).pipe(Layer.provide(CredentialCallers.layer), Layer.provide(envelope))
 
-const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide([AppResolve.layer, Bundles.layer]))
+const environmentNetwork = MachineNetwork.layer.pipe(Layer.provide([AppResolve.layer, Bundles.layer]))
 
 // oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: the egress, Ren's code and the host list of their template.
-const environments = Environments.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))
+const environments = Hands.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))
 
 // oxlint-disable-next-line ren/no-comments -- The deployment's brain providers. A Ren whose brains run in cells registers none, so a space's provider checks pass.
 const brainProviders = Layer.unwrap(
@@ -121,7 +121,7 @@ const brainProviders = Layer.unwrap(
 
 // oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today.
 const handProviders = Layer.unwrap<
-  EnvironmentProvider.Registry,
+  HandProvider.Registry,
   Config.ConfigError,
   HttpClient.HttpClient | ChildProcessSpawner.ChildProcessSpawner,
   Config.ConfigError,
@@ -129,8 +129,8 @@ const handProviders = Layer.unwrap<
 >(
   Effect.gen(function* () {
     const provider = yield* sandboxProvider
-    if (provider === "e2b") return EnvironmentProvider.layer([E2BSandbox.provider])
-    return EnvironmentProvider.layer([Docker.provider])
+    if (provider === "e2b") return HandProvider.layer([E2BSandbox.provider])
+    return HandProvider.layer([Docker.provider])
   }),
 )
 

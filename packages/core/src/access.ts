@@ -14,7 +14,7 @@ import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
 import { DrivePolicy } from "./drives/policy.js"
-import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
+import { MachineTemplatePolicy } from "./machine-templates/policy.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
 import { SchedulePolicy } from "./schedule/policy.js"
@@ -94,7 +94,7 @@ export const where = (plan: Plan, facts: ReadonlyMap<string, SQL>): SQL => {
 export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SpacePolicy.documents,
   ...SessionPolicy.documents,
-  ...EnvironmentTemplatePolicy.documents,
+  ...MachineTemplatePolicy.documents,
   ...SettingsPolicy.documents,
   ...MemoryPolicy.documents,
   ...DrivePolicy.documents,

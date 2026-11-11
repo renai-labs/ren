@@ -2,7 +2,7 @@ export * as Workload from "./workload.js"
 
 import { Schema } from "effect"
 import { Brain } from "./brain.js"
-import { Environment } from "./environment.js"
+import { Hand } from "./hand.js"
 
 const Generation = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
 
@@ -11,7 +11,7 @@ export type Kind = typeof Kind.Type
 
 export const Info = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("brain"), id: Brain.ID, generation: Generation }),
-  Schema.Struct({ kind: Schema.Literal("hand"), id: Environment.ID, generation: Generation }),
+  Schema.Struct({ kind: Schema.Literal("hand"), id: Hand.ID, generation: Generation }),
 ]).annotate({
   identifier: "Workload.Info",
   description: "Code that runs for Ren, a brain or a hand, in one generation of its machine.",

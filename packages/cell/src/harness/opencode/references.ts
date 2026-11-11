@@ -5,7 +5,7 @@ import type { Plugin } from "@opencode/plugin/effect"
 import { Drives } from "@ren/brain/reference/drives"
 import { References } from "@ren/brain/reference/references"
 import { Repositories } from "@ren/brain/reference/repositories"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import type { Drive } from "@ren/schema/drive"
 import type { Reference } from "@ren/schema/reference"
 import { Effect } from "effect"
@@ -15,18 +15,18 @@ const writes = new Set(["edit", "write", "patch"])
 
 // oxlint-disable-next-line ren/no-comments -- R2, R49: one root in the folder that every session on the environment shares.
 export const rootsOf = (directory: string) =>
-  [Repositories.root, Drives.root].map((root) => `${Environment.sharedDirectoryOf({ directory })}/${root}`)
+  [Repositories.root, Drives.root].map((root) => `${Hand.sharedDirectoryOf({ directory })}/${root}`)
 
 export const make = Effect.fnUntraced(function* (input: {
   readonly context: Pick<Plugin.Context, "reference" | "session" | "permission" | "location">
-  readonly hasEnvironment: boolean
+  readonly hasWorkspace: boolean
   readonly repositories: Repositories.Interface
   readonly references: Effect.Effect<ReadonlyArray<Reference.Info>>
   readonly drives: () => Drive.Availability | undefined
 }) {
   // oxlint-disable-next-line ren/no-comments -- R7: a chat without an environment cannot read a reference, so it gets none.
-  if (!input.hasEnvironment) return { refresh: Effect.void, items: (): ReadonlyArray<OpenCodeCopies.Item> => [] }
-  const shared = Environment.sharedDirectoryOf({ directory: input.context.location.directory })
+  if (!input.hasWorkspace) return { refresh: Effect.void, items: (): ReadonlyArray<OpenCodeCopies.Item> => [] }
+  const shared = Hand.sharedDirectoryOf({ directory: input.context.location.directory })
   const sources = [
     yield* input.repositories.chat({ references: input.references, changed: input.context.reference.reload() }),
     Drives.chat({ drives: input.drives, changed: input.context.reference.reload() }),

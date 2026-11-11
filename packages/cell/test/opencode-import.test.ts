@@ -5,7 +5,7 @@ import { Location } from "@opencode/schema/location"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { OpenCodeFixtures } from "@ren/opencode-transcript/testing"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { TestAccess } from "@ren/brain/testing"
 import { Sync } from "@ren/schema/sync"
 import { testEffect } from "@ren/executor/testing"
@@ -231,8 +231,8 @@ it.live("import drops an unsettled assistant message and a running shell and num
 const withWorkspaces = Effect.fnUntraced(function* () {
   const database = join(yield* folder, "opencode.db")
   const connections = yield* Layer.build(
-    EnvironmentConnections.layer.pipe(Layer.provide(TestAccess.fixed(new Map())), Layer.provide(FetchHttpClient.layer)),
-  ).pipe(Effect.map((context) => Context.get(context, EnvironmentConnections.Service)))
+    HandConnections.layer.pipe(Layer.provide(TestAccess.fixed(new Map())), Layer.provide(FetchHttpClient.layer)),
+  ).pipe(Effect.map((context) => Context.get(context, HandConnections.Service)))
   const host = yield* OpenCodeServer.make(
     (replacements) =>
       createEmbeddedRoutes(

@@ -1,6 +1,7 @@
+import { HandProvider } from "../src/hand-provider.js"
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { SandboxEgress } from "../src/sandbox-egress.js"
-import { EnvironmentNetwork } from "../src/environment-network.js"
+import { MachineNetwork } from "../src/machine-network.js"
 import { Bundles } from "../src/bundles.js"
 import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
@@ -10,8 +11,8 @@ import { BrainToken } from "@ren/host-api/brain-token"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
-import { Environment } from "@ren/schema/environment"
+import { MachineTemplate } from "@ren/schema/machine-template"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
@@ -40,13 +41,12 @@ import { Credentials } from "../src/credentials.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
-import { EnvironmentProvider } from "../src/environment-provider.js"
-import { Environments } from "../src/environments.js"
+import { Hands } from "../src/hands.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { Models } from "../src/models.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/environment-provider.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { Host } from "./lib/host.js"
 import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
@@ -379,7 +379,7 @@ describe("BrainHost pull", () => {
         generation: 1,
       }
       const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
-      const environmentId = Environment.ID.create()
+      const environmentId = Hand.ID.create()
       yield* database.db.insert(Database.Schema.environment).values({
         id: environmentId,
         environment_template_id: template,
@@ -521,7 +521,7 @@ describe("BrainHost pull", () => {
         const creator = yield* Seed.user()
         const brainId = Brain.ID.create()
         const owner = { organizationId, spaceId, createdBy: creator.id, brainId }
-        const environments = yield* Environments.Service
+        const environments = yield* Hands.Service
         const versions = yield* Effect.forEach(["mounting", "unmountable", "direct"], (provider) =>
           Effect.map(Seed.environmentTemplate(organizationId, { provider }), Seed.version),
         )
@@ -583,15 +583,15 @@ describe("BrainHost pull", () => {
                 TestProvider.make({ id: "direct", canMount: true }),
               ]),
               (probes) => {
-                const environments = Environments.layer.pipe(
+                const environments = Hands.layer.pipe(
                   Layer.provide(DurableRunner.layerMemory),
-                  Layer.provide([EnvironmentNetwork.layerNone, Bundles.layer]),
+                  Layer.provide([MachineNetwork.layerNone, Bundles.layer]),
                   Layer.provide([
                     Signer.layerLocal,
                     Layer.succeed(HttpClient.HttpClient, TestProvider.executors(probes)),
                     TestSandboxEgress.layer,
                   ]),
-                  Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
+                  Layer.provide(HandProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
                 return Layer.merge(
                   Host.cellLayer({ CELL_URL: "http://127.0.0.1:9" }, fixed, environments),
@@ -717,13 +717,13 @@ describe("BrainHost environments", () => {
     const probe = yield* TestProvider.make()
     const environments = yield* Layer.build(
       Layer.fresh(
-        Environments.layer.pipe(
+        Hands.layer.pipe(
           Layer.provide(DurableRunner.layerMemory),
-          Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+          Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer]),
           Layer.provide([Signer.layerLocal, Layer.succeed(HttpClient.HttpClient, probe.executor)]),
         ),
       ).pipe(
-        Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+        Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
         Layer.provide(
           ConfigProvider.layer(
             ConfigProvider.fromUnknown({
@@ -780,7 +780,7 @@ describe("BrainHost environments", () => {
       yield* Brains.StartRun.execute({ input, placement, epoch: 0 }).pipe(Effect.provideContext(context))
     })
 
-  const remote = (environmentTemplateId: EnvironmentTemplate.ID) =>
+  const remote = (environmentTemplateId: MachineTemplate.ID) =>
     ({ placement: "remote", environmentTemplateId }) as const
 
   it.live("a remote hand gives the brain the chat's folder on it at every start; no hand gives none", () =>
@@ -825,7 +825,7 @@ describe("BrainHost environments", () => {
         const host = yield* hostWith(recording.url)
         const subject = yield* seeded
         const database = yield* Database.Service
-        const environments = Context.get(host, Environments.Service)
+        const environments = Context.get(host, Hands.Service)
         const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
         const chat = {
           sessionId: subject.sessionId,

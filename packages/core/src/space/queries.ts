@@ -1,8 +1,8 @@
 export * as SpaceQueries from "./queries.js"
 
+import type { MachineProvider } from "../machine-provider.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
-import type { EnvironmentProvider } from "@ren/schema/environment-provider"
 import type { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
@@ -46,7 +46,7 @@ export const handColumns = (hand: Space.Hand) => ({
 
 export const brainMachine = (
   row: Pick<typeof Database.Schema.space.$inferSelect, "brain_provider" | "brain_template_id">,
-  deploymentProvider: EnvironmentProvider.ID | null,
+  deploymentProvider: MachineProvider.ID | null,
 ): Space.BrainMachine => ({
   provider: row.brain_provider ?? deploymentProvider,
   environmentTemplateId: row.brain_template_id,
@@ -57,7 +57,7 @@ export const machines = (
     typeof Database.Schema.space.$inferSelect,
     "brain_provider" | "brain_template_id" | "hand_placement" | "environment_template_id"
   >,
-  deploymentProvider: EnvironmentProvider.ID | null,
+  deploymentProvider: MachineProvider.ID | null,
 ) => ({ brain: brainMachine(row, deploymentProvider), hand: hand(row) })
 
 export const brainColumns = (brain: Space.BrainMachine) => ({

@@ -1,7 +1,7 @@
 import { expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
-import { Environment } from "@ren/schema/environment"
+import { TestHand, testEffect } from "@ren/executor/testing"
+import { Hand } from "@ren/schema/hand"
 import type { Drive } from "@ren/schema/drive"
 import type { Reference } from "@ren/schema/reference"
 import { Effect, Fiber } from "effect"
@@ -14,10 +14,10 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(30_000)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const stub = Shared.stub()
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 const root = join(workspace, ".ren", "references")
 
 const pathOf = (github: TestGitHub.Instance, commit: string) =>
@@ -31,7 +31,7 @@ const open = (
   drives?: Drive.Availability,
   options?: { readonly hasWorkspace?: boolean },
 ) =>
-  Effect.flatMap(TestEnvironment.url, (url) =>
+  Effect.flatMap(TestHand.url, (url) =>
     ReferenceChat.open(
       { url, environmentId, directoryOf: (sessionId) => join(workspace, sessionId) },
       github,
@@ -84,7 +84,7 @@ it.live(
       const chat = yield* open(yield* fresh(), [], undefined, { hasWorkspace: false })
       const first = stub.script()
       const before = yield* chat.turn(first, 1)
-      yield* chat.pull([], { hasHand: true, directory: Environment.Directory.make(chat.directory) })
+      yield* chat.pull([], { hasHand: true, directory: Hand.Directory.make(chat.directory) })
       const after = yield* chat.turn(stub.script(), 1)
       expect({
         before: ["read", "shell"].filter((tool) => before.tools.includes(tool)),

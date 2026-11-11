@@ -7,13 +7,13 @@ import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { Global } from "@opencode/util/global"
 import { SessionInbox } from "@opencode/schema/session-inbox"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { BrainSettings } from "@ren/brain/settings"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullMemory } from "@ren/host-api/ren-host-api"
@@ -480,7 +480,7 @@ export const version = OpenCodeVersion.installed
 type Opener = (
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   config: string,
   settings: Option.Option<ChatSettings.Interface>,
   apps: Option.Option<AppCatalog.Info>,
@@ -495,7 +495,7 @@ const layerWith = (opener: Opener) =>
       const cell = yield* Cell.Info
       const inference = yield* Inference.Service
       const refreshKey = yield* ModelRefresh.Service
-      const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
+      const connections = yield* Effect.serviceOption(HandConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
       const apps = yield* Effect.serviceOption(AppStore.Service)
       const channels = yield* Effect.serviceOption(ChannelStore.Service)
@@ -752,7 +752,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 settings,
                 {
                   ...Struct.omit(input, ["directory"]),
-                  ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
+                  ...(input.directory && { directory: Hand.Directory.make(input.directory) }),
                 },
                 state.modelCatalogs,
               ),

@@ -1,9 +1,10 @@
 export * as Host from "./host.js"
 
+import { HandProvider } from "../../src/hand-provider.js"
 import { BrainProvider } from "../../src/brain-provider.js"
 import { BunCrypto } from "@effect/platform-bun"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
@@ -24,9 +25,8 @@ import { Bundles } from "../../src/bundles.js"
 import { SandboxEgress } from "../../src/sandbox-egress.js"
 import { Drives } from "../../src/drives.js"
 import { DurableRunner } from "../../src/durable-runner.js"
-import { EnvironmentProvider } from "../../src/environment-provider.js"
-import { EnvironmentNetwork } from "../../src/environment-network.js"
-import { Environments } from "../../src/environments.js"
+import { MachineNetwork } from "../../src/machine-network.js"
+import { Hands } from "../../src/hands.js"
 import type { Models } from "../../src/models.js"
 import { LocalSandbox } from "../../src/machine-provider/local.js"
 import { Settings } from "../../src/settings.js"
@@ -50,17 +50,17 @@ const brainKeys = JSON.stringify(
 
 const environmentKeys = JSON.stringify([
   {
-    id: TestEnvironment.keys.privateKey.id,
-    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestEnvironment.keys.privateKey.key),
+    id: TestHand.keys.privateKey.id,
+    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestHand.keys.privateKey.key),
   },
 ])
 
-export const noTemplates = Environments.layer
+export const noTemplates = Hands.layer
   .pipe(Layer.provide(DurableRunner.layerMemory))
-  .pipe(Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone]))
+  .pipe(Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone]))
   .pipe(Layer.provide(Bundles.layer))
   .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
-  .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
+  .pipe(Layer.provide(HandProvider.layer<never, never>([])))
 
 export const freePort = Effect.promise(async () => {
   const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
@@ -91,7 +91,7 @@ interface StackOptions<E, R> {
   readonly root: string
   readonly config: Record<string, string>
   readonly models: Layer.Layer<Models.Service>
-  readonly environments: Layer.Layer<Environments.Service, E, R>
+  readonly environments: Layer.Layer<Hands.Service, E, R>
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
   readonly systemImage?: string
@@ -106,7 +106,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     Layer.provideMerge(BrainHost.layerSandbox),
     Layer.provideMerge(
       BrainLifecycle.layer.pipe(
-        Layer.provide(Layer.mergeAll(SandboxEgress.layerNone, EnvironmentNetwork.layerNone)),
+        Layer.provide(Layer.mergeAll(SandboxEgress.layerNone, MachineNetwork.layerNone)),
         Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
       ),
     ),
@@ -274,7 +274,7 @@ const root = Effect.acquireRelease(
 export const layerWith = <E, R>(
   config: Record<string, string>,
   models: Layer.Layer<Models.Service>,
-  environments: Layer.Layer<Environments.Service, E, R>,
+  environments: Layer.Layer<Hands.Service, E, R>,
   around?: RenHostApiTest.Around,
   options: { readonly synced?: boolean } = {},
 ) =>
@@ -301,7 +301,7 @@ export const cellLayerWith =
   <E, R>(
     config: Record<string, string>,
     models: Layer.Layer<Models.Service>,
-    environments: Layer.Layer<Environments.Service, E, R>,
+    environments: Layer.Layer<Hands.Service, E, R>,
   ) =>
     Layer.fresh(Brains.layer).pipe(
       Layer.provide(CredentialEnv.layerNone),

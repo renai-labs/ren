@@ -1,11 +1,10 @@
 import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/schema/environment"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { Hand } from "@ren/schema/hand"
+import { MachineTemplate } from "@ren/schema/machine-template"
 import { Space } from "@ren/schema/space"
 import { Clock, DateTime, Deferred, Duration, Effect, ErrorReporter, Fiber, Option, Schema } from "effect"
 import { TestClock } from "effect/testing"
-import { EnvironmentProvider } from "../src/environment-provider.js"
 import { MachineLifecycle } from "../src/machine-lifecycle.js"
 import { MachineProvider } from "../src/machine-provider.js"
 import { testEffect } from "./lib/effect.js"
@@ -24,12 +23,12 @@ const it = testEffect(
 
 const capacityFor = Duration.seconds(30)
 
-const templateId = EnvironmentTemplate.ID.create()
+const templateId = MachineTemplate.ID.create()
 
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
 const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSample?: boolean }) =>
   Effect.gen(function* () {
-    const rows = new Map<Environment.ID, MachineLifecycle.Row<Environment.ID>>()
+    const rows = new Map<Hand.ID, MachineLifecycle.Row<Hand.ID>>()
     const switches = {
       boots: false,
       answers: true,
@@ -45,7 +44,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       sample: Option.none<MachineProvider.Sample>(),
       held: Option.none<{ readonly entered: Deferred.Deferred<void>; readonly release: Deferred.Deferred<void> }>(),
     }
-    const running = new Set<Environment.ID>()
+    const running = new Set<Hand.ID>()
     const images: Array<Option.Option<string>> = []
     const networks: Array<Option.Option<ReadonlyArray<string>>> = []
     const steps: Array<ReadonlyArray<string>> = []
@@ -53,7 +52,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
     const destroyed: Array<number> = []
     const made = { count: 0 }
     const provider = MachineProvider.make({
-      id: EnvironmentProvider.ID.make("memory"),
+      id: MachineProvider.ID.make("memory"),
       title: "Memory",
       description: "Machines in the test’s memory.",
       canEgress: false,
@@ -96,12 +95,12 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       status: () => Effect.succeed("running" as const),
       ...(options.canSample && { lastSample: () => Effect.sync(() => switches.sample) }),
     })
-    const read = (id: Environment.ID) =>
+    const read = (id: Hand.ID) =>
       Effect.sync(() => rows.get(id)).pipe(Effect.flatMap(Effect.fromNullishOr), Effect.orDie)
     const update = (
-      id: Environment.ID,
-      values: Partial<MachineLifecycle.Row<Environment.ID>>,
-      only?: Pick<MachineLifecycle.Row<Environment.ID>, "phase" | "generation">,
+      id: Hand.ID,
+      values: Partial<MachineLifecycle.Row<Hand.ID>>,
+      only?: Pick<MachineLifecycle.Row<Hand.ID>, "phase" | "generation">,
     ) =>
       Effect.flatMap(read(id), (row) =>
         Effect.sync(() => {
@@ -109,7 +108,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
           rows.set(id, { ...row, ...values })
         }),
       )
-    const holder: { run?: (id: Environment.ID) => Effect.Effect<void, unknown> } = {}
+    const holder: { run?: (id: Hand.ID) => Effect.Effect<void, unknown> } = {}
     const machines = MachineLifecycle.make({
       kind: "hand",
       egress: { enabled: false, proxyFor: () => Effect.succeedNone, retire: () => Effect.void },
@@ -152,7 +151,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       changeAtWake: () => Effect.sync(() => switches.changeAtWake),
       ...(options.canUpdateInPlace && {
         updateInPlace: (
-          row: MachineLifecycle.Row<Environment.ID>,
+          row: MachineLifecycle.Row<Hand.ID>,
           _target: string,
           applied: ReadonlyArray<MachineProvider.Step>,
         ) =>
@@ -175,8 +174,8 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       answers: () => Effect.sync(() => switches.answers),
     })
     holder.run = machines.run
-    const add = (values: Partial<MachineLifecycle.Row<Environment.ID>> = {}) => {
-      const id = Environment.ID.create()
+    const add = (values: Partial<MachineLifecycle.Row<Hand.ID>> = {}) => {
+      const id = Hand.ID.create()
       rows.set(id, {
         id,
         organization_id: Auth.OrganizationID.create(),
@@ -602,7 +601,7 @@ describe("MachineLifecycle updates", () => {
           return (yield* memory.read(id)).generation
         })
       expect(yield* wakeWith(templateImage("image-b", ["ffmpeg"]))).toBe(2)
-      expect(yield* wakeWith(templateImage("image-c", ["ffmpeg", "git"], EnvironmentTemplate.ID.create()))).toBe(3)
+      expect(yield* wakeWith(templateImage("image-c", ["ffmpeg", "git"], MachineTemplate.ID.create()))).toBe(3)
       expect(yield* wakeWith({ config: {}, image: Option.none(), hosts: Option.none() })).toBe(4)
       expect(memory.images).toEqual([
         Option.some("image-a"),

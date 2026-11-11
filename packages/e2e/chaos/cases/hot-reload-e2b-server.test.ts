@@ -1,3 +1,4 @@
+import { HandProvider } from "@ren/core/hand-provider"
 import { afterAll, describe, expect, test } from "bun:test"
 import { BrainProvider } from "@ren/core/brain-provider"
 import { BunCrypto } from "@effect/platform-bun"
@@ -7,7 +8,7 @@ import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Bundles } from "@ren/core/bundles"
-import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { MachineNetwork } from "@ren/core/machine-network"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { Brains } from "@ren/core/brains"
 import { CredentialCallers } from "@ren/core/credential-callers"
@@ -15,8 +16,7 @@ import { CredentialEnv } from "@ren/core/credential-env"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EgressControl } from "@ren/core/egress-control"
 import { Envelope } from "@ren/core/envelope"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Environments } from "@ren/core/environments"
+import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
@@ -25,7 +25,7 @@ import { Settings } from "@ren/core/settings"
 import { Signer } from "@ren/core/signer"
 import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import { EgressHarness } from "@ren/server/testing"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
@@ -128,7 +128,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     const brainKey = await Effect.runPromise(Signature.generate("e2b-server"))
     const shared = {
       BRAIN_KEYS: encoded(brainKey.privateKey),
-      ENVIRONMENT_KEYS: encoded(TestEnvironment.keys.privateKey),
+      ENVIRONMENT_KEYS: encoded(TestHand.keys.privateKey),
       REN_URL: renTunnel,
       E2B_TEMPLATE: template,
       REN_INFERENCE_GATEWAY_URL: LiteLLM.url,
@@ -204,7 +204,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(
               BrainLifecycle.layer.pipe(
                 Layer.provide(Bundles.layer.pipe(Layer.provide(Signer.layerLocal))),
-                Layer.provide(EnvironmentNetwork.layerNone),
+                Layer.provide(MachineNetwork.layerNone),
                 Layer.provide(
                   egress
                     ? SandboxEgress.layer.pipe(
@@ -221,17 +221,17 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provide(Settings.layer),
             Layer.provide(Models.layerInferenceGateway),
             Layer.provide(
-              Environments.layer
+              Hands.layer
                 .pipe(
                   Layer.provide([
                     SandboxEgress.layerNone,
-                    EnvironmentNetwork.layerNone,
+                    MachineNetwork.layerNone,
                     Bundles.layer,
                     DurableRunner.layerMemory,
                   ]),
                 )
                 .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
-                .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([]))),
+                .pipe(Layer.provide(HandProvider.layer<never, never>([]))),
             ),
             Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
             Layer.provide(FetchHttpClient.layer),

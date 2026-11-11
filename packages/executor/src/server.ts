@@ -1,9 +1,9 @@
 export * as Server from "./server.js"
 
-import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
-import { ExecutorVariables } from "@ren/environment-api/executor-variables"
+import { HandToken } from "@ren/hand-api/hand-token"
+import { HandApi } from "@ren/hand-api/hand-api"
+import { HandClient } from "@ren/hand-api/hand-client"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { Signature } from "@ren/schema/signature"
 import { Config, Effect, Layer, Option, Schema, Stream } from "effect"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -14,7 +14,7 @@ export const idleTimeoutSeconds = 10
 
 const bearerPrefix = "bearer "
 
-const unauthorized = new EnvironmentApi.UnauthorizedError({ message: "Authentication required" })
+const unauthorized = new HandApi.UnauthorizedError({ message: "Authentication required" })
 
 const authenticationCheck = Effect.gen(function* () {
   const publicKeys = yield* Config.schema(Signature.PublicKeys, ExecutorVariables.publicKeys)
@@ -25,7 +25,7 @@ const authenticationCheck = Effect.gen(function* () {
     const token = authorizationHeader?.toLowerCase().startsWith(bearerPrefix)
       ? authorizationHeader.slice(bearerPrefix.length).trim()
       : ""
-    return (!token ? Effect.succeedNone : EnvironmentToken.verify(publicKeys, token)).pipe(
+    return (!token ? Effect.succeedNone : HandToken.verify(publicKeys, token)).pipe(
       Effect.map((verifiedClaims) =>
         verifiedClaims.pipe(
           Option.filter((claims) => claims.environment === executor.hello.environmentId),
@@ -44,7 +44,7 @@ const httpAuthentication = HttpRouter.middleware()(
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
         if (Option.isNone(yield* authenticate(request.headers.authorization)))
-          return HttpServerResponse.jsonUnsafe(Schema.encodeSync(EnvironmentApi.UnauthorizedError)(unauthorized), {
+          return HttpServerResponse.jsonUnsafe(Schema.encodeSync(HandApi.UnauthorizedError)(unauthorized), {
             status: 401,
           })
         return yield* next
@@ -53,42 +53,39 @@ const httpAuthentication = HttpRouter.middleware()(
 ).layer
 
 const rpcAuthentication = Layer.effect(
-  EnvironmentApi.Authentication,
+  HandApi.Authentication,
   Effect.gen(function* () {
     const authenticate = yield* authenticationCheck
     return (next, request) =>
       authenticate(Option.getOrUndefined(Headers.get(request.headers, "authorization"))).pipe(
         Effect.flatMap((caller) =>
-          Option.isNone(caller)
-            ? Effect.fail(unauthorized)
-            : Effect.provideService(next, EnvironmentApi.Caller, caller.value),
+          Option.isNone(caller) ? Effect.fail(unauthorized) : Effect.provideService(next, HandApi.Caller, caller.value),
         ),
       )
   }),
 )
 
-const operations = EnvironmentApi.Rpcs.toLayer(
+const operations = HandApi.Rpcs.toLayer(
   Effect.gen(function* () {
     const executor = yield* Executor.Service
-    return EnvironmentApi.Rpcs.of({
+    return HandApi.Rpcs.of({
       "executor.hello": () => Effect.succeed(executor.hello),
-      "executor.memory": () => Effect.flatMap(EnvironmentApi.Caller, (caller) => executor.memory(caller.brain)),
-      "process.spawn": (input) =>
-        Effect.flatMap(EnvironmentApi.Caller, (caller) => executor.spawn(caller.brain, input)),
+      "executor.memory": () => Effect.flatMap(HandApi.Caller, (caller) => executor.memory(caller.brain)),
+      "process.spawn": (input) => Effect.flatMap(HandApi.Caller, (caller) => executor.spawn(caller.brain, input)),
       "process.output": (input) =>
         Stream.unwrap(
-          Effect.flatMap(EnvironmentApi.Caller, (caller) =>
+          Effect.flatMap(HandApi.Caller, (caller) =>
             executor.output(caller.brain, input.id, input.cursor, input.window),
           ),
         ),
       "process.write": (input) =>
-        Effect.flatMap(EnvironmentApi.Caller, (caller) =>
+        Effect.flatMap(HandApi.Caller, (caller) =>
           executor.writeStdin(caller.brain, input.id, { data: input.data, end: input.end }),
         ),
       "process.heartbeat": (input) =>
-        Effect.flatMap(EnvironmentApi.Caller, (caller) => executor.heartbeat(caller.brain, input.id)),
+        Effect.flatMap(HandApi.Caller, (caller) => executor.heartbeat(caller.brain, input.id)),
       "process.kill": (input) =>
-        Effect.flatMap(EnvironmentApi.Caller, (caller) =>
+        Effect.flatMap(HandApi.Caller, (caller) =>
           executor.kill(caller.brain, input.id, input.signal, input.forceKillAfterMs),
         ),
       "files.read": (input) => executor.read(input.path, input.range),
@@ -108,8 +105,8 @@ const operations = EnvironmentApi.Rpcs.toLayer(
 )
 
 export const layer = RpcServer.layerHttp({
-  group: EnvironmentApi.Rpcs,
-  path: EnvironmentClient.path,
+  group: HandApi.Rpcs,
+  path: HandClient.path,
   protocol: "http",
 }).pipe(
   Layer.provide(operations),

@@ -3,7 +3,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
 import { Drive } from "@ren/schema/drive"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Memory } from "@ren/schema/memory"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
@@ -120,7 +120,7 @@ export const PullChat = Schema.Struct({
     description:
       "False when the brain’s applied hand gives the chat no file and shell tools. It changes only at the brain’s start or wake. Omitted by an older Ren: true.",
   }),
-  directory: Schema.optionalKey(Environment.Directory).annotate({
+  directory: Schema.optionalKey(Hand.Directory).annotate({
     description:
       "The chat’s folder on its applied hand. A chat with tools and no workspace gets one there. Omitted when the chat has no tools, and by an older Ren.",
   }),
@@ -186,7 +186,7 @@ const ModelsGroup = HttpApiGroup.make("models")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "models" }))
 
-const EnvironmentsGroup = HttpApiGroup.make("environments")
+const HandsGroup = HttpApiGroup.make("environments")
   .add(
     HttpApiEndpoint.post("environments.access", "/host/sessions/:id/environment/access", {
       params: SessionParams,
@@ -198,7 +198,7 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
           }),
         ),
       }),
-      success: Environment.Access,
+      success: Hand.Access,
       error: [EnvironmentNotFoundError, EnvironmentUnavailableError, EnvironmentStartingError],
     }).annotateMerge(
       OpenApi.annotations({
@@ -240,7 +240,7 @@ const HostGroup = HttpApiGroup.make("host")
 export const RenHostApi = HttpApi.make("host")
   .add(PullGroup)
   .add(ModelsGroup)
-  .add(EnvironmentsGroup)
+  .add(HandsGroup)
   .add(HostGroup)
   .annotateMerge(
     OpenApi.annotations({

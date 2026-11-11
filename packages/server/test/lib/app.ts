@@ -1,7 +1,7 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { BrainProvider } from "@ren/core/brain-provider"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
-import { EnvironmentNetwork } from "@ren/core/environment-network"
+import { MachineNetwork } from "@ren/core/machine-network"
 import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
@@ -22,9 +22,9 @@ import { Intake } from "@ren/core/intake"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
+import { HandProvider } from "@ren/core/hand-provider"
 import { Docker } from "@ren/core/machine-provider/docker"
-import { Environments } from "@ren/core/environments"
+import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -139,8 +139,8 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([
     Models.layerNone,
-    Environments.layer.pipe(
-      Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
+    Hands.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
     ),
     BrainProvider.layer([]),
   ]),
@@ -158,7 +158,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(Drives.layer),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
-  Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provideMerge(HandProvider.layer([Docker.provider])),
   Layer.provideMerge(Signer.layerLocal),
   Layer.provide(BunServices.layer),
 )

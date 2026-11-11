@@ -1,5 +1,6 @@
 export * as SandboxUsage from "./sandbox-usage.js"
 
+import { HandProvider } from "./hand-provider.js"
 import { Database } from "@ren/db/database"
 import { Workload } from "@ren/schema/workload"
 import { desc, eq } from "drizzle-orm"
@@ -7,7 +8,6 @@ import { Array, Clock, Context, DateTime, Duration, Effect, Layer, Option, Schem
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
 import { BrainProvider } from "./brain-provider.js"
-import { EnvironmentProvider } from "./environment-provider.js"
 import type { MachineProvider } from "./machine-provider.js"
 import { Usage } from "./usage.js"
 
@@ -33,7 +33,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const brains = yield* BrainProvider.Registry
-    const hands = yield* EnvironmentProvider.Registry
+    const hands = yield* HandProvider.Registry
     const providers = [
       ...brains.providers,
       ...hands.providers.filter((provider) => Option.isNone(brains.get(provider.info.id))),

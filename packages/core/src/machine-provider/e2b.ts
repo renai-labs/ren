@@ -1,6 +1,6 @@
 export * as E2BSandbox from "./e2b.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { App } from "@ren/schema/app"
 import { Auth } from "@ren/schema/auth"
 import { Identifier } from "@ren/schema/identifier"
@@ -8,7 +8,6 @@ import { Space } from "@ren/schema/space"
 import { Workload } from "@ren/schema/workload"
 import { Config, DateTime, Duration, Effect, Option, Redacted, Schema } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { MachineProvider } from "../machine-provider.js"
 
 // oxlint-disable-next-line ren/no-comments -- Sandboxes are tagged with the Ren that made them. One E2B team can serve several Rens (developers); each lists, counts and cleans up only its own (E2B_OWNER).
@@ -324,7 +323,7 @@ export const provider = Effect.gen(function* () {
   })
 
   return MachineProvider.make({
-    id: EnvironmentProvider.ID.make("e2b"),
+    id: MachineProvider.ID.make("e2b"),
     title: "E2B",
     description: "A sandbox at E2B.",
     canEgress: true,
@@ -339,7 +338,7 @@ export const provider = Effect.gen(function* () {
     create: Effect.fn("E2BSandbox.create")(function* (input) {
       // oxlint-disable-next-line ren/no-comments -- The kind label keeps hands apart from brains; Ren reaches a brain at its port and a remote hand at its executor's.
       const metadata = { brain: input.labels.id, generation: String(input.labels.generation), kind: input.labels.kind }
-      const port = input.labels.kind === "hand" ? EnvironmentApi.port : config.port
+      const port = input.labels.kind === "hand" ? HandApi.port : config.port
       const existing = (yield* list(metadata, "running,paused")).at(0)
       if (existing) {
         const binding = { sandboxId: existing.sandboxID, domain: config.domain, port }
@@ -561,7 +560,7 @@ export const provider = Effect.gen(function* () {
         ]
       })
     }),
-    hand: () => ({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace }),
+    hand: () => ({ url: `http://127.0.0.1:${HandApi.port}`, workspace }),
     list: list({}, "running,paused").pipe(
       Effect.map((sandboxes) =>
         sandboxes.flatMap((sandbox) => {
@@ -572,7 +571,7 @@ export const provider = Effect.gen(function* () {
             generation: Number(sandbox.metadata?.generation ?? "0"),
           })
           if (Option.isNone(workload)) return []
-          const port = workload.value.kind === "hand" ? EnvironmentApi.port : config.port
+          const port = workload.value.kind === "hand" ? HandApi.port : config.port
           return [{ ...workload.value, binding: { sandboxId: sandbox.sandboxID, domain: config.domain, port } }]
         }),
       ),

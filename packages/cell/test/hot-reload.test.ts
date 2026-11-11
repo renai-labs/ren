@@ -2,8 +2,8 @@ import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { SessionID } from "@opencode/schema/session-id"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { GenerationRetiredError } from "@ren/host-api/errors"
 import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-api"
 import { AppCatalog } from "@ren/schema/app-catalog"
@@ -199,20 +199,20 @@ const open = Effect.fnUntraced(function* (
   const resets = { count: 0 }
   // oxlint-disable-next-line ren/no-comments -- The brain's real connections, which count their resets; no session reaches a hand in these tests.
   const connections = Layer.effect(
-    EnvironmentConnections.Service,
-    Effect.map(EnvironmentConnections.Service, (real) =>
-      EnvironmentConnections.Service.of({
+    HandConnections.Service,
+    Effect.map(HandConnections.Service, (real) =>
+      HandConnections.Service.of({
         ...real,
         reset: Effect.sync(() => void (resets.count += 1)).pipe(Effect.andThen(real.reset)),
       }),
     ),
   ).pipe(
-    Layer.provide(EnvironmentConnections.layer),
+    Layer.provide(HandConnections.layer),
     Layer.provide(
       Layer.succeed(
-        EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({
-          open: (sessionId) => Effect.fail(new EnvironmentAccess.NotFound({ sessionId, message: "no hand here" })),
+        HandAccess.Service,
+        HandAccess.Service.of({
+          open: (sessionId) => Effect.fail(new HandAccess.NotFound({ sessionId, message: "no hand here" })),
           release: () => Effect.void,
         }),
       ),

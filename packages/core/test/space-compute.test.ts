@@ -1,23 +1,24 @@
+import { MachineProvider } from "../src/machine-provider.js"
+import { HandProvider } from "../src/hand-provider.js"
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
-import type { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Context, Effect, Equal, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainProvider } from "../src/brain-provider.js"
 import { Bundles } from "../src/bundles.js"
-import { EnvironmentNetwork } from "../src/environment-network.js"
-import { EnvironmentProvider } from "../src/environment-provider.js"
-import { Environments } from "../src/environments.js"
+import { MachineNetwork } from "../src/machine-network.js"
+import { Hands } from "../src/hands.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { SandboxEgress } from "../src/sandbox-egress.js"
 import { Signer } from "../src/signer.js"
 import { SpaceCompute } from "../src/space-compute.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/environment-provider.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(Testing.layer)
@@ -27,11 +28,11 @@ const compute = Effect.gen(function* () {
   const context = yield* Layer.build(
     Layer.fresh(SpaceCompute.layer).pipe(
       Layer.provide(
-        Environments.layer.pipe(
+        Hands.layer.pipe(
           Layer.provide(DurableRunner.layerMemory),
-          Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
+          Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer]),
           Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
-          Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+          Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
         ),
       ),
       Layer.provide(BrainProvider.layer([])),
@@ -40,7 +41,7 @@ const compute = Effect.gen(function* () {
   return Context.get(context, SpaceCompute.Service)
 })
 
-const remoteOn = (environmentTemplateId: EnvironmentTemplate.ID): Space.AppliedHand => ({
+const remoteOn = (environmentTemplateId: MachineTemplate.ID): Space.AppliedHand => ({
   placement: "remote",
   version: { environmentTemplateId, image: null, config: {}, system: null },
 })
@@ -49,7 +50,7 @@ const remoteOn = (environmentTemplateId: EnvironmentTemplate.ID): Space.AppliedH
 const seeded = Effect.fnUntraced(function* (options: {
   readonly provider?: string
   readonly isRemote: boolean
-  readonly applied: (template: EnvironmentTemplate.ID) => Space.AppliedHand
+  readonly applied: (template: MachineTemplate.ID) => Space.AppliedHand
 }) {
   const database = yield* Database.Service
   const owner = yield* Seed.owner()
@@ -61,7 +62,7 @@ const seeded = Effect.fnUntraced(function* (options: {
   yield* database.db
     .update(Database.Schema.brain)
     .set({
-      provider: options.provider ? EnvironmentProvider.ID.make(options.provider) : null,
+      provider: options.provider ? MachineProvider.ID.make(options.provider) : null,
       hand_placement: options.isRemote ? "remote" : "colocated",
       hand: applied,
     })
@@ -81,7 +82,7 @@ const seeded = Effect.fnUntraced(function* (options: {
       .set({
         hand_placement: hand.placement,
         environment_template_id: hand.placement === "remote" ? hand.environmentTemplateId : null,
-        brain_provider: provider ? EnvironmentProvider.ID.make(provider) : null,
+        brain_provider: provider ? MachineProvider.ID.make(provider) : null,
         compute_revision: 1,
       })
       .where(eq(Database.Schema.space.id, owner.spaceId))
@@ -137,7 +138,7 @@ describe("SpaceCompute", () => {
       const cases: ReadonlyArray<{
         readonly name: string
         readonly isRemote: boolean
-        readonly applied: (template: EnvironmentTemplate.ID) => Space.AppliedHand
+        readonly applied: (template: MachineTemplate.ID) => Space.AppliedHand
         readonly to: "colocated" | "remote"
         readonly provider?: string
         readonly desiredProvider?: string
