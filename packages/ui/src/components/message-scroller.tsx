@@ -24,7 +24,8 @@ function MessageScroller({ className, ...props }: React.ComponentProps<typeof Me
   )
 }
 
-function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>) {
+function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>, options: { readonly enabled: boolean }) {
+  const pinning = React.useEffectEvent(() => options.enabled)
   React.useEffect(() => {
     const element = viewport.current
     const content = element?.querySelector("[data-slot=message-scroller-content]")
@@ -36,10 +37,12 @@ function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>) {
     }
     const observer = new ResizeObserver(() => {
       const spacer = element.querySelector<HTMLElement>("[data-message-scroller-spacer]")
-      if (state.atEnd && (!spacer || spacer.hidden) && gap() > 1) element.scrollTop = element.scrollHeight
+      if (pinning() && state.atEnd && (spacer?.offsetHeight ?? 0) === 0 && gap() > 1)
+        element.scrollTop = element.scrollHeight
     })
     element.addEventListener("scroll", onScroll, { passive: true })
     observer.observe(content)
+    observer.observe(element)
     return () => {
       observer.disconnect()
       element.removeEventListener("scroll", onScroll)
@@ -50,10 +53,11 @@ function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>) {
 function MessageScrollerViewport({
   className,
   ref,
+  pinEnd = true,
   ...props
-}: React.ComponentProps<typeof MessageScrollerPrimitive.Viewport>) {
+}: React.ComponentProps<typeof MessageScrollerPrimitive.Viewport> & { pinEnd?: boolean }) {
   const viewport = React.useRef<HTMLDivElement | null>(null)
-  usePinnedEnd(viewport)
+  usePinnedEnd(viewport, { enabled: pinEnd })
   return (
     <MessageScrollerPrimitive.Viewport
       ref={(element: HTMLDivElement | null) => {

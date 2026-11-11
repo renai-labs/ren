@@ -19,6 +19,7 @@ import { handoff } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { useMentionSuggestions } from "./use-composer-suggestions.js"
+import { ComposerMotion } from "../../lib/composer-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const route = getRouteApi("/_authed/_shell/")
@@ -84,6 +85,7 @@ export function HomePage() {
             text: message.text,
             ...(files.length > 0 && { files }),
           })
+          ComposerMotion.leave()
           void navigate({ to: "/sessions/$sessionId", params: { sessionId } })
         },
         onError: (error) => {
