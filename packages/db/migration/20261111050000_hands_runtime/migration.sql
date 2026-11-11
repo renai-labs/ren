@@ -83,3 +83,27 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 CREATE TRIGGER environment_template_ren_notify_brains AFTER UPDATE OF networking ON environment_template FOR EACH ROW WHEN (OLD.networking IS DISTINCT FROM NEW.networking) EXECUTE FUNCTION ren_notify_brains();
+--> statement-breakpoint
+ALTER TABLE "space" ADD COLUMN "brain_provider" text;--> statement-breakpoint
+ALTER TABLE "space" ADD COLUMN "brain_template_id" text;--> statement-breakpoint
+CREATE INDEX "space_brain_template_id_idx" ON "space" ("brain_template_id");--> statement-breakpoint
+ALTER TABLE "space" DROP CONSTRAINT "space_hand_check", ADD CONSTRAINT "space_hand_check" CHECK (case "hand_placement" when 'remote' then "environment_template_id" is not null when 'colocated' then "environment_template_id" is null when 'none' then "environment_template_id" is null else false end);--> statement-breakpoint
+ALTER TABLE "environment_template" ADD COLUMN "build_epoch" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "brain" ADD COLUMN "hand" jsonb;--> statement-breakpoint
+ALTER TABLE "brain" ADD COLUMN "compute_revision" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "space" ADD COLUMN "compute_revision" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "environment" ADD COLUMN "target" jsonb;--> statement-breakpoint
+ALTER TABLE "session_environment" ADD COLUMN "target" jsonb;--> statement-breakpoint
+ALTER TABLE "session_environment" ADD COLUMN "reserved_until" timestamp;--> statement-breakpoint
+UPDATE "environment" AS e SET "target" = jsonb_build_object('environmentTemplateId', e."environment_template_id", 'image', e."image", 'config', COALESCE(e."image_template"->'config', t."config"), 'system', e."image_template"->'system') FROM "environment_template" AS t WHERE t."id" = e."environment_template_id";--> statement-breakpoint
+UPDATE "session_environment" AS s SET "target" = e."target" FROM "environment" AS e WHERE e."id" = s."environment_id";--> statement-breakpoint
+UPDATE "session_environment" AS s SET "target" = jsonb_build_object('environmentTemplateId', t."id", 'image', t."image", 'config', COALESCE(t."image_config", t."config"), 'system', t."image_system") FROM "environment_template" AS t WHERE t."id" = s."environment_template_id" AND s."target" IS NULL;--> statement-breakpoint
+UPDATE "session_environment" SET "reserved_until" = now() + interval '3 days' WHERE "environment_id" IS NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "session_environment" DROP COLUMN "idle_at";--> statement-breakpoint
+ALTER TABLE "environment" ALTER COLUMN "target" SET NOT NULL;--> statement-breakpoint
+ALTER TABLE "session_environment" ALTER COLUMN "target" SET NOT NULL;--> statement-breakpoint
+ALTER TABLE "brain" ADD COLUMN "stopped_at" timestamp;--> statement-breakpoint
+ALTER TABLE "space" ADD COLUMN "shutdown_state" text;--> statement-breakpoint
+ALTER TABLE "space" ADD COLUMN "shutdown_epoch" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "space" ADD COLUMN "shutdown_report" jsonb;
