@@ -16,7 +16,7 @@ export type Action = (typeof actions)[number]
 
 export const apple = /Mac|iPhone|iPad/u.test(navigator.userAgent)
 
-export const keys: Readonly<Record<Action, ReadonlyArray<string>>> = {
+const keys: Readonly<Record<Action, ReadonlyArray<string>>> = {
   send: ["Enter"],
   sendOther: ["Mod+Enter"],
   stop: ["Escape", "Ctrl+g"],
