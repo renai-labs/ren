@@ -28,6 +28,7 @@ import {
   SubscriptionRef,
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
+import { ChatCache } from "./chat-cache.js"
 import { ChatState } from "./chat-state.js"
 import { Connection } from "./connection.js"
 import { Hydrate } from "./hydrate.js"
@@ -98,6 +99,8 @@ export interface Options {
   // oxlint-disable-next-line ren/no-comments -- Starts the chat again after its space was shut down (Ren's `chat.retry`). A prompt to a stopped chat calls it first; reads and reconnects never do.
   readonly restart?: Effect.Effect<void, unknown>
   readonly saved?: (query: { readonly limit: number }) => Effect.Effect<SessionMessage.Page, unknown>
+  // oxlint-disable-next-line ren/no-comments -- The chat's newest turns on this device: they paint before any network call, and the brain's read replaces them (#254).
+  readonly cache?: ChatCache.Cache
   readonly outbox?: {
     readonly load: Effect.Effect<ReadonlyArray<Outbox.Kept>>
     readonly keep: (items: ReadonlyArray<Outbox.Kept>) => Effect.Effect<void>
@@ -200,6 +203,26 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   )
   const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
   const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Ready" })
+  if (options.cache) {
+    const cache = options.cache
+    yield* cache.read.pipe(
+      Effect.flatMap((items) =>
+        items?.length
+          ? SubscriptionRef.update(state, (current) =>
+              current.messages[root] ? current : Hydrate.cached(current, root, items),
+            )
+          : Effect.void,
+      ),
+      Effect.forkIn(scope),
+    )
+    yield* SubscriptionRef.changes(state).pipe(
+      Stream.filter((current) => Boolean(current.messages[root]) && !current.partial.has(root)),
+      Stream.map((current) => ChatState.messages(current, root).filter((message) => !current.outbox.has(message.id))),
+      Stream.debounce(ChatCache.writeDelay),
+      Stream.runForEach((messages) => cache.write(ChatCache.newestTurns(messages))),
+      Effect.forkIn(scope),
+    )
+  }
   const events = yield* PubSub.unbounded<SessionEvent.Event>()
   const reads = yield* Reads.make<unknown>()
   const accessLock = yield* Semaphore.make(1)

@@ -133,6 +133,15 @@ export const messages = (state: ChatState.State, sessionID: string, page: Sessio
   }
 }
 
+export const cached = (
+  state: ChatState.State,
+  sessionID: string,
+  items: ReadonlyArray<SessionMessage.Info>,
+): ChatState.State => {
+  const shown = messages(state, sessionID, { items: items.toReversed(), cursor: {} })
+  return { ...shown, partial: new Set([...shown.partial, sessionID]) }
+}
+
 export const saved = (state: ChatState.State, sessionID: string, page: SessionMessage.Page): ChatState.State => {
   const shown = messages(state, sessionID, { items: page.items, cursor: {} })
   return page.cursor.next ? { ...shown, partial: new Set([...shown.partial, sessionID]) } : shown

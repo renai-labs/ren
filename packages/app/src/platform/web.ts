@@ -12,7 +12,10 @@ const decodeShared = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.String, value: Schema.UndefinedOr(Schema.String) }),
 )
 
-export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
+export function createWebPlatform(stores: {
+  readonly large?: DraftStore.Large | undefined
+  readonly chatCache?: Platform.ChatCache | undefined
+}): Platform.Info {
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   const posthogKey = import.meta.env.VITE_POSTHOG_KEY
   const posthogUiHost = import.meta.env.VITE_POSTHOG_UI_HOST
@@ -50,10 +53,11 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       set: (key, value) => localStorage.setItem(prefix + key, value),
       remove: (key) => localStorage.removeItem(prefix + key),
     },
+    ...(stores.chatCache && { chatCache: stores.chatCache }),
     drafts: DraftStore.make({
       storage: Result.getOrUndefined(Result.try(() => window.localStorage)),
       prefix: draftPrefix,
-      large,
+      large: stores.large,
       watch: (handler) => {
         const changed = (event: StorageEvent) => handler(event.key)
         window.addEventListener("storage", changed)

@@ -646,6 +646,7 @@ function UserRow() {
         onConfirm={async () => {
           await auth.signOut()
           platform.analytics?.reset()
+          await platform.chatCache?.forget()
           resetSession(queryClient)
           await navigate({ to: "/login" })
         }}
