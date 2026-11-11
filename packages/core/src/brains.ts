@@ -309,8 +309,8 @@ export const layer = Layer.effect(
         })
       const target = yield* brainHost.target(placement.brainId)
       // oxlint-disable-next-line ren/no-comments -- A chat starts with its brain's applied hand, not the space's newer setting: a brain that is awake keeps one coherent setup until its next wake. A host with no wake of its own applies the space's setting at each start.
-      if (!brainHost.isManaged) yield* compute.publish(placement.brainId, { machine: "none" })
-      const hand = (yield* compute.applied(placement.brainId)).hand
+      if (!brainHost.isManaged) yield* compute.applySettings(placement.brainId, { machine: "none" })
+      const hand = (yield* compute.appliedOrApply(placement.brainId)).hand
       const colocated =
         hand.placement === "colocated"
           ? yield* environments.findDirectory(subject, yield* appliedOf(placement.brainId, hand))
@@ -604,7 +604,7 @@ export const layer = Layer.effect(
                 .pipe(Effect.orDie)
         const inference = yield* models.inference
         // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake (EN23).
-        const applied = yield* compute.applied(host.brainId)
+        const applied = yield* compute.appliedOrApply(host.brainId)
         const tools = yield* appliedOf(host.brainId, applied.hand)
         const capabilities = yield* environments.capabilities(
           host.organizationId,
@@ -661,7 +661,7 @@ export const layer = Layer.effect(
         options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        const tools = yield* appliedOf(host.brainId, (yield* compute.applied(host.brainId)).hand)
+        const tools = yield* appliedOf(host.brainId, (yield* compute.appliedOrApply(host.brainId)).hand)
         return yield* environments.access(subject, tools, options).pipe(
           Effect.catchTags({
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
@@ -675,7 +675,7 @@ export const layer = Layer.effect(
         const subject = yield* inBrain(host, sessionId)
         return yield* environments.findDirectory(
           subject,
-          yield* appliedOf(host.brainId, (yield* compute.applied(host.brainId)).hand),
+          yield* appliedOf(host.brainId, (yield* compute.appliedOrApply(host.brainId)).hand),
         )
       }),
       releaseEnvironment: Effect.fn("Brains.releaseEnvironment")(function* (

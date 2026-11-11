@@ -380,12 +380,12 @@ export const layer = Layer.effect(
         ),
       desiredSetup,
       appliedHosts,
-      publish: (row) =>
-        compute.publish(row.id, { machine: "running" }).pipe(Effect.map((plan) => plan._tag === "Apply")),
+      applySettings: (row) =>
+        compute.applySettings(row.id, { machine: "running" }).pipe(Effect.map((plan) => plan._tag === "Apply")),
       startup: Effect.fnUntraced(function* (row) {
         const bundles = yield* code.current
         // oxlint-disable-next-line ren/no-comments -- A new machine applies the space's hand before it starts, so its first pull already has it. A brain for a remote hand runs OpenCode's tool output, files and git on the hand for the life of its process (EN13).
-        const plan = yield* compute.publish(row.id, { machine: "new" })
+        const plan = yield* compute.applySettings(row.id, { machine: "new" })
         const isRemote = plan._tag === "Apply" && plan.hand.placement === "remote"
         const variables = {
           REN_URL: client.renUrl,
@@ -646,7 +646,7 @@ export const layer = Layer.effect(
         resting,
         (row) =>
           machines
-            .rest(row.brain)
+            .destroyIdle(row.brain)
             .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.brain.id} failed`, error))),
         { discard: true },
       )

@@ -109,7 +109,7 @@ describe("SpaceCompute", () => {
       const service = yield* compute
       const subject = yield* seeded({ isRemote: true, applied: remoteOn })
       yield* subject.desire({ placement: "remote", environmentTemplateId: subject.second })
-      const plan = yield* service.publish(subject.brainId, { machine: "running" })
+      const plan = yield* service.applySettings(subject.brainId, { machine: "running" })
       expect([plan._tag, yield* subject.state]).toEqual([
         "Apply",
         { placement: "remote", template: subject.second, revision: 1, bound: [subject.second, subject.second] },
@@ -122,7 +122,7 @@ describe("SpaceCompute", () => {
       const service = yield* compute
       const subject = yield* seeded({ isRemote: true, applied: remoteOn })
       yield* subject.desire({ placement: "none" })
-      const plan = yield* service.publish(subject.brainId, { machine: "running" })
+      const plan = yield* service.applySettings(subject.brainId, { machine: "running" })
       expect([plan._tag, yield* subject.state]).toEqual([
         "Apply",
         { placement: "none", template: null, revision: 1, bound: [null, null] },
@@ -168,7 +168,7 @@ describe("SpaceCompute", () => {
               : { placement: each.to },
             each.desiredProvider,
           )
-          const plan = yield* service.publish(subject.brainId, { machine: "running" })
+          const plan = yield* service.applySettings(subject.brainId, { machine: "running" })
           return {
             name: each.name,
             plan: plan._tag,

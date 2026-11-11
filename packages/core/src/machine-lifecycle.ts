@@ -137,7 +137,7 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
   // oxlint-disable-next-line ren/no-comments -- The hosts of the template the running machine applied, which keep to that template's live host list while a newer one waits for the next wake. None: any host.
   readonly appliedHosts: (row: R) => Effect.Effect<Option.Option<ReadonlyArray<string>>>
   // oxlint-disable-next-line ren/no-comments -- Applies the owner's settings to a woken machine before its wake call. False when the machine cannot run them, so it is replaced instead.
-  readonly publish?: (row: R) => Effect.Effect<boolean>
+  readonly applySettings?: (row: R) => Effect.Effect<boolean>
   readonly target: (row: R) => Option.Option<Target>
   // oxlint-disable-next-line ren/no-comments -- The kind's ready check: none when the machine is ready within the time, or the reason it is not.
   readonly boot: (target: Target, within: Duration.Duration) => Effect.Effect<Option.Option<string>, E>
@@ -451,7 +451,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   const wake = Effect.fnUntraced(function* (row: R) {
     const target = Option.getOrUndefined(definition.target(row))
-    if (definition.publish && !(yield* definition.publish(row))) {
+    if (definition.applySettings && !(yield* definition.applySettings(row))) {
       yield* Effect.logInfo(`${noun} ${row.id} cannot run its owner's new settings; Ren replaces it`)
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
@@ -560,7 +560,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   })
 
   // oxlint-disable-next-line ren/no-comments -- Ends a machine that nothing uses: destroys it and leaves the row at the next generation, `creating`.
-  const rest = Effect.fnUntraced(function* (row: R) {
+  const destroyIdle = Effect.fnUntraced(function* (row: R) {
     if (!row.binding) return
     yield* retire(row)
     const provider = yield* definition.providerOf(row)
@@ -574,7 +574,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     })
   })
 
-  const settle = Effect.fnUntraced(function* (row: R) {
+  const resumeIfExpired = Effect.fnUntraced(function* (row: R) {
     const at = yield* now
     if (row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()) return true
     return yield* update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false))
@@ -587,7 +587,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     updating,
     waking: wake,
     replacing: replace,
-    ready: settle,
+    ready: resumeIfExpired,
     failed: () => Effect.succeed(true),
     stopped: () => Effect.succeed(true),
     capacity: (row) => update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false)),
@@ -682,7 +682,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     refreshNetwork,
     keepAwake,
     forceReplace,
-    rest,
+    destroyIdle,
     access,
     ensure,
     check,

@@ -59,14 +59,14 @@ export const plan = (machine: Option.Option<Machine>, desired: Desired): Plan =>
 
 export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- Applies the space's settings to the brain, in one transaction with the bindings of its chats, unless the plan is to replace its machine. A new machine also takes the space's hand as its kind.
-  readonly publish: (
+  readonly applySettings: (
     brainId: Brain.ID,
     options: { readonly machine: "new" | "running" | "none" },
   ) => Effect.Effect<Plan>
   // oxlint-disable-next-line ren/no-comments -- The plan for the brain's running machine, without applying it.
   readonly check: (brainId: Brain.ID) => Effect.Effect<Plan>
   // oxlint-disable-next-line ren/no-comments -- The hand the brain's chats use now, and the space revision it applied. A brain that has applied none yet applies the space's now, when its machine can run it.
-  readonly applied: (brainId: Brain.ID) => Effect.Effect<Applied>
+  readonly appliedOrApply: (brainId: Brain.ID) => Effect.Effect<Applied>
 }
 
 export interface Applied {
@@ -184,7 +184,7 @@ export const layer = Layer.effect(
       return { plan: plan(running, desired), revision: desired.revision }
     })
 
-    const publish = Effect.fn("SpaceCompute.publish")(function* (
+    const applySettings = Effect.fn("SpaceCompute.applySettings")(function* (
       brainId: Brain.ID,
       options: { readonly machine: "new" | "running" | "none" },
     ) {
@@ -209,11 +209,11 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      publish,
+      applySettings,
       check: Effect.fn("SpaceCompute.check")(function* (brainId: Brain.ID) {
         return (yield* database.transaction((transaction) => decide(transaction, brainId, "running"))).plan
       }),
-      applied: Effect.fn("SpaceCompute.applied")(function* (brainId: Brain.ID) {
+      appliedOrApply: Effect.fn("SpaceCompute.appliedOrApply")(function* (brainId: Brain.ID) {
         const read = database.db
           .select({ hand: brains.hand, revision: brains.compute_revision })
           .from(brains)
@@ -228,7 +228,7 @@ export const layer = Layer.effect(
         const row = yield* read
         if (row.hand) return { hand: row.hand, revision: row.revision } satisfies Applied
         // oxlint-disable-next-line ren/no-comments -- A brain made before applied hands were kept: its machine keeps its kind, so it takes the space's hand only when it can run it, and no tools until its next wake otherwise.
-        const decided = yield* publish(brainId, { machine: "running" })
+        const decided = yield* applySettings(brainId, { machine: "running" })
         if (decided._tag === "Replace") return { hand: { placement: "none" }, revision: row.revision } satisfies Applied
         const published = yield* read
         return { hand: decided.hand, revision: published.revision } satisfies Applied
