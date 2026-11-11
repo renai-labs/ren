@@ -1,5 +1,5 @@
 import { PgClient } from "@effect/sql-pg"
-import { Shared } from "@ren/brain-runtime/testing"
+import { Shared } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed, TestDrives } from "@ren/core/testing"

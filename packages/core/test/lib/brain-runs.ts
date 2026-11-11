@@ -1,7 +1,7 @@
 export * as BrainRuns from "./brain-runs.js"
 
 import { BrainProvider } from "../../src/brain-provider.js"
-import { Shared } from "@ren/brain-runtime/testing"
+import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
@@ -38,7 +38,7 @@ export const pidOf = (binding: unknown) => Schema.decodeUnknownSync(Schema.Struc
 export const brainOf = (binding: unknown) =>
   Number(
     new TextDecoder()
-      .decode(Bun.spawnSync(["pgrep", "-g", String(pidOf(binding)), "-f", "^bun .*brain-runtime/src/bun\\.ts"]).stdout)
+      .decode(Bun.spawnSync(["pgrep", "-g", String(pidOf(binding)), "-f", "^bun .*cell/src/bun\\.ts"]).stdout)
       .trim()
       .split("\n")[0],
   )

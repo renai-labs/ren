@@ -12,7 +12,7 @@
       "path": "./tsconfig.src.json"
     },
     {
-      "path": "../brain-runtime/tsconfig.worker.json"
+      "path": "../cell/tsconfig.worker.json"
     },
     {
       "path": "../client/tsconfig.src.json"

@@ -1,6 +1,6 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
-import { Shared } from "@ren/brain-runtime/testing"
-import { BrainTest } from "@ren/brain-runtime/testing/brain"
+import { Shared } from "@ren/cell/testing"
+import { BrainTest } from "@ren/cell/testing/brain"
 import { DateTime, Effect, Fiber, Layer, Schedule, Schema, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"

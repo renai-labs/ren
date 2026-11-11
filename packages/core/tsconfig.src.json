@@ -15,7 +15,7 @@
   "include": ["src"],
   "references": [
     {
-      "path": "../brain-runtime/tsconfig.worker.json"
+      "path": "../cell/tsconfig.worker.json"
     },
     {
       "path": "../db/tsconfig.src.json"

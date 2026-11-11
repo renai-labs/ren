@@ -7,7 +7,7 @@ files:
 ignores:
   - packages/telemetry/**
   - packages/server/src/main.ts
-  - packages/brain-runtime/src/bun.ts
+  - packages/cell/src/bun.ts
   - packages/executor/src/main.ts
 rule:
   kind: string_fragment

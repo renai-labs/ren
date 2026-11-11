@@ -5,7 +5,7 @@ severity: error
 files:
   - packages/core/src/**
   - packages/server/src/**
-  - packages/brain-runtime/src/**
+  - packages/cell/src/**
   - packages/brain/src/**
   - packages/executor/src/**
 rule:

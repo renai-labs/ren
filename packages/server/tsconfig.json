@@ -8,7 +8,7 @@
   },
   "references": [
     { "path": "../brain/tsconfig.src.json" },
-    { "path": "../brain-runtime/tsconfig.worker.json" },
+    { "path": "../cell/tsconfig.worker.json" },
     { "path": "../core/tsconfig.src.json" },
     { "path": "../db/tsconfig.src.json" },
     { "path": "../egress-api/tsconfig.src.json" },

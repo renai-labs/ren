@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@ren/brain": "workspace:*",
-    "@ren/brain-runtime": "workspace:*",
+    "@ren/cell": "workspace:*",
     "@ren/environment-api": "workspace:*",
     "@ren/executor": "workspace:*",
     "@types/bun": "catalog:",

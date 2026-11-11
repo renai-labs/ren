@@ -1,6 +1,6 @@
 export * as Stack from "./stack.js"
 
-import { FakeRen, Shared, Wrangler } from "@ren/brain-runtime/testing"
+import { FakeRen, Shared, Wrangler } from "@ren/cell/testing"
 import { Brain } from "@ren/schema/brain"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"

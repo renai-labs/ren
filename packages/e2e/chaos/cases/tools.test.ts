@@ -1,4 +1,4 @@
-import { StubModel } from "@ren/brain-runtime/testing"
+import { StubModel } from "@ren/cell/testing"
 import { TestAccess } from "@ren/brain/testing"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentSession } from "@ren/brain/environment/session"

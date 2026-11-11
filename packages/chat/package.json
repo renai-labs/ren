@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "@effect/atom-react": "catalog:",
-    "@ren/brain-runtime": "workspace:*",
+    "@ren/cell": "workspace:*",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@typescript/native-preview": "catalog:",

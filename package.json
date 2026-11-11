@@ -20,7 +20,7 @@
     "generate": "bun run script/generate.ts",
     "test:opencode": "bun turbo test:opencode --concurrency=1 --continue",
     "opencode:bump": "bun run script/opencode-bump.ts",
-    "opencode:record": "bun run --cwd packages/brain-runtime opencode:record && oxfmt packages/opencode-transcript/test/fixtures packages/brain-runtime/test/fixtures/databases",
+    "opencode:record": "bun run --cwd packages/cell opencode:record && oxfmt packages/opencode-transcript/test/fixtures packages/cell/test/fixtures/databases",
     "memory": "bun script/memory.ts",
     "keys": "bun run packages/schema/script/keys.ts",
     "format": "bun run script/format.ts",

@@ -173,7 +173,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(await session.tool("shell", { command: "echo thawed" })).toBe("thawed\n")
     }, 600_000)
 
-    // oxlint-disable-next-line ren/no-comments -- A turn's end gives its environment seat back to Ren (brain-runtime/src/harness/opencode/plugin.ts), so the cached token serves the rest of the turn, not the next turn.
+    // oxlint-disable-next-line ren/no-comments -- A turn's end gives its environment seat back to Ren (cell/src/harness/opencode/plugin.ts), so the cached token serves the rest of the turn, not the next turn.
     test("a command works while the server is down for the rest of its turn, fails after the token expires, and works 30 seconds after the failure when the server is back", async () => {
       const session = await stack().session()
       const turn = await session.turn([

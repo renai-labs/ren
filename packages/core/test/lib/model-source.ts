@@ -1,6 +1,6 @@
 export * as ModelSource from "./model-source.js"
 
-import { Shared } from "@ren/brain-runtime/testing"
+import { Shared } from "@ren/cell/testing"
 import { Testing } from "@ren/db/testing"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"

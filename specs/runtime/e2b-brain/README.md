@@ -34,7 +34,7 @@ Rules for every piece:
 
 ## 3. Harness-neutral sync (piece J)
 
-Needed before a second harness (Pi, Claude Code, Codex). Today Ren stores OpenCode rows end to end: `opencode_session`, `opencode_message` and `opencode_inbox` (`db/src/session.sql.ts:74`, `:108`, `:127`), and the brain's `Transcript.restore` takes `Sync.OpenCodeSessionRow` (`brain-runtime/src/harness/harness.ts:137`).
+Needed before a second harness (Pi, Claude Code, Codex). Today Ren stores OpenCode rows end to end: `opencode_session`, `opencode_message` and `opencode_inbox` (`db/src/session.sql.ts:74`, `:108`, `:127`), and the brain's `Transcript.restore` takes `Sync.OpenCodeSessionRow` (`cell/src/harness/harness.ts:137`).
 
 Decisions:
 

@@ -2,7 +2,7 @@ import { defineRule } from "@oxlint/plugins"
 import type { ESTree } from "@oxlint/plugins"
 
 const OPENCODE = /^@opencode\/|(^|[/\\])node_modules[/\\]@opencode[/\\]/
-const BOUNDARY = /[/\\]packages[/\\](brain-runtime[/\\](src[/\\]harness[/\\]opencode|test)|opencode-transcript)[/\\]/
+const BOUNDARY = /[/\\]packages[/\\](cell[/\\](src[/\\]harness[/\\]opencode|test)|opencode-transcript)[/\\]/
 const E2E = /[/\\]packages[/\\]e2e[/\\]/
 
 export const opencodeBoundary = defineRule({
@@ -11,7 +11,7 @@ export const opencodeBoundary = defineRule({
     docs: { description: "Keep OpenCode inside its boundary, so an OpenCode upgrade changes only the boundary." },
     messages: {
       outside:
-        "Only brain-runtime/src/harness/opencode, opencode-transcript and brain-runtime's tests use OpenCode. Core takes a harness's code through a registry such as TranscriptCodec; other packages use Ren's types and @ren/brain-runtime/testing.",
+        "Only cell/src/harness/opencode, opencode-transcript and cell's tests use OpenCode. Core takes a harness's code through a registry such as TranscriptCodec; other packages use Ren's types and @ren/cell/testing.",
       e2e: "End-to-end tests drive a brain from outside, with @opencode/client only.",
     },
   },

@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { BrainProvider } from "@ren/core/brain-provider"
 import { OpenCode } from "@opencode/client"
-import { FakeRen, TestSettings, TestToken } from "@ren/brain-runtime/testing"
+import { FakeRen, TestSettings, TestToken } from "@ren/cell/testing"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
 import { MachineProvider } from "@ren/core/machine-provider"
 const hostTokenHeader = "ren-host-token"

@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",
-    "@ren/brain-runtime": "workspace:*",
+    "@ren/cell": "workspace:*",
     "@ren/executor": "workspace:*",
     "@ren/opencode-transcript": "workspace:*",
     "@types/bun": "catalog:",

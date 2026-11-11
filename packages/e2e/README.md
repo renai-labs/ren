@@ -13,7 +13,7 @@ End-to-end tests across server, client, CLI and app (Playwright), and the chaos 
 
 ## Dependencies
 
-Any package, test-only. Chaos reuses `@ren/brain-runtime/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestEnvironment` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Ren Host API's `environments.access` and `host.refresh` for the environment each session was placed on. The issuer keeps no sessions: it answers the sync checkpoints and restore with no sessions, and refuses each upload. The real-stack cases run the real Ren server with Postgres instead, so sessions sync and restore there.
+Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestEnvironment` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Ren Host API's `environments.access` and `host.refresh` for the environment each session was placed on. The issuer keeps no sessions: it answers the sync checkpoints and restore with no sessions, and refuses each upload. The real-stack cases run the real Ren server with Postgres instead, so sessions sync and restore there.
 
 ## Two runners
 
@@ -55,7 +55,7 @@ script/chaos/    template.ts builds the E2B template
 
 `Stack.start` composes one local lane. Each link (core and user to brain, brain to environment, brain to core, brain to provider) goes through its own fault proxy, so a case can refuse a request before delivery, drop the reply after the upstream committed it, answer with a status, hold it, cut the reply after some bytes or lines, partition the link or cut every open connection. `cases/fault-proxy.test.ts` checks where each fault lands.
 
-The scripted model provider answers each call of a turn with the next step of its script: text, a tool call, a status with headers, a cut stream, a malformed frame or malformed tool arguments. `StubModel` from `@ren/brain-runtime/testing` gives one behaviour per script, and the provider and stream-fault cases need a different answer for each call of one turn.
+The scripted model provider answers each call of a turn with the next step of its script: text, a tool call, a status with headers, a cut stream, a malformed frame or malformed tool arguments. `StubModel` from `@ren/cell/testing` gives one behaviour per script, and the provider and stream-fault cases need a different answer for each call of one turn.
 
 A case that needs a platform or a credential uses `describe.skipIf` or `test.skipIf` with a reason from `lib/platform.ts`. The preload prints each unmet reason once.
 

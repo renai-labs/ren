@@ -3,8 +3,8 @@ import { SandboxEgress } from "../src/sandbox-egress.js"
 import { EnvironmentNetwork } from "../src/environment-network.js"
 import { Bundles } from "../src/bundles.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Shared } from "@ren/brain-runtime/testing"
-import type { StubModel } from "@ren/brain-runtime/testing"
+import { Shared } from "@ren/cell/testing"
+import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { SqlClient } from "effect/sql"
@@ -272,7 +272,7 @@ const answers = async (url: string): Promise<void> => {
 const crashBrain = async () => {
   const brain = await brainRow()
   const binding = await Bun.file(join(brain.home, ".ren", "sandbox.json")).json()
-  await Bun.spawn(["pkill", "-KILL", "-g", String(binding.pid), "-f", "^bun .*brain-runtime/src/bun\\.ts"]).exited
+  await Bun.spawn(["pkill", "-KILL", "-g", String(binding.pid), "-f", "^bun .*cell/src/bun\\.ts"]).exited
   // ast-grep-ignore: no-test-sleep -- the loop waits 1 second before it starts the brain again
   await Bun.sleep(500)
   await answers(brain.url)

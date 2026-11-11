@@ -1,6 +1,6 @@
 export * as TaskFixture from "./task-fixture.js"
 
-import { Shared } from "@ren/brain-runtime/testing"
+import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Agent } from "@ren/schema/agent"

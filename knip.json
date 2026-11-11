@@ -9,7 +9,7 @@
     "packages/*": {
       "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
     },
-    "packages/brain-runtime": {
+    "packages/cell": {
       "entry": [
         "src/worker.ts",
         "src/bun.ts",

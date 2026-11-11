@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { FakeRen, TestToken } from "@ren/brain-runtime/testing"
+import { FakeRen, TestToken } from "@ren/cell/testing"
 import { Brain } from "@ren/schema/brain"
 import { Result } from "effect"
 import { CloudflareBrain } from "../lib/adapters/cloudflare.js"

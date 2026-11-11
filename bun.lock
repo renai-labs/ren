@@ -85,8 +85,8 @@
         "@typescript/native-preview": "catalog:",
       },
     },
-    "packages/brain-runtime": {
-      "name": "@ren/brain-runtime",
+    "packages/cell": {
+      "name": "@ren/cell",
       "version": "0.0.0",
       "dependencies": {
         "@effect/ai-openai": "catalog:",
@@ -129,7 +129,7 @@
       },
       "devDependencies": {
         "@effect/atom-react": "catalog:",
-        "@ren/brain-runtime": "workspace:*",
+        "@ren/cell": "workspace:*",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@typescript/native-preview": "catalog:",
@@ -213,7 +213,7 @@
       },
       "devDependencies": {
         "@effect/platform-bun": "catalog:",
-        "@ren/brain-runtime": "workspace:*",
+        "@ren/cell": "workspace:*",
         "@ren/executor": "workspace:*",
         "@ren/opencode-transcript": "workspace:*",
         "@types/bun": "catalog:",
@@ -244,7 +244,7 @@
         "@opencode/client": "catalog:",
         "@playwright/test": "catalog:",
         "@ren/brain": "workspace:*",
-        "@ren/brain-runtime": "workspace:*",
+        "@ren/cell": "workspace:*",
         "@ren/client": "workspace:*",
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
@@ -401,7 +401,7 @@
       },
       "devDependencies": {
         "@ren/brain": "workspace:*",
-        "@ren/brain-runtime": "workspace:*",
+        "@ren/cell": "workspace:*",
         "@ren/environment-api": "workspace:*",
         "@ren/executor": "workspace:*",
         "@types/bun": "catalog:",
@@ -1560,7 +1560,7 @@
 
     "@ren/brain": ["@ren/brain@workspace:packages/brain"],
 
-    "@ren/brain-runtime": ["@ren/brain-runtime@workspace:packages/brain-runtime"],
+    "@ren/cell": ["@ren/cell@workspace:packages/cell"],
 
     "@ren/chat": ["@ren/chat@workspace:packages/chat"],
 

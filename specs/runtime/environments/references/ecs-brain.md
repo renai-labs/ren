@@ -11,7 +11,7 @@ Goal: decide if a brain can run as a Bun process on AWS ECS, always on, with its
 
 ## 2. What OpenCode runs where
 
-OpenCode runs a session's tools through its `WorkspaceDriver` when the session has a workspace. Ren's driver is `brain-runtime/src/harness/opencode/workspace-driver.ts`.
+OpenCode runs a session's tools through its `WorkspaceDriver` when the session has a workspace. Ren's driver is `cell/src/harness/opencode/workspace-driver.ts`.
 
 | OpenCode service           | Feature                                   | With a workspace | Evidence (`~/Documents/opencode/packages/core/src`)  | Ren with a remote hand (EN13)            |
 | -------------------------- | ----------------------------------------- | ---------------- | ---------------------------------------------------- | ---------------------------------------- |
@@ -58,7 +58,7 @@ Ren can remove `RenToolOutput` when it upgrades to an OpenCode that has #56524. 
 
 Done when each question has an answer with a number or a passing check:
 
-1. Memory of one Bun brain process (`brain-runtime/src/bun.ts`) with no local executor: idle, and with 5 chats that run tool calls on a remote hand.
+1. Memory of one Bun brain process (`cell/src/bun.ts`) with no local executor: idle, and with 5 chats that run tool calls on a remote hand.
 2. The OpenCode process with the four replacements of EN13: the Chat API suites pass.
 3. `RenToolOutput` (§3): a tool result over 2000 lines or 50 KB is saved on the hand, and the read tool reads the saved path.
 4. Egress: each brain process has `HTTPS_PROXY` with its own login from `SandboxEgress.proxyFor` (`core/src/sandbox-egress.ts`). The task's subnet has no route to the internet, so the egress is the only way out.

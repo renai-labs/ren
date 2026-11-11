@@ -5,7 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { Process } from "../process.js"
 
-const cell = path.resolve(path.dirname(Bun.resolveSync("@ren/brain-runtime/testing", import.meta.dir)), "../..")
+const cell = path.resolve(path.dirname(Bun.resolveSync("@ren/cell/testing", import.meta.dir)), "../..")
 
 const wrangler = async (args: ReadonlyArray<string>, cwd: string, input?: string) => {
   const child = Bun.spawn(["node", path.join(cell, "node_modules/wrangler/wrangler-dist/cli.js"), ...args], {

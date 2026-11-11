@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
-import { StubModel } from "@ren/brain-runtime/testing"
+import { StubModel } from "@ren/cell/testing"
 import { Effect } from "effect"
 import { testEffect } from "./lib/effect.js"
 import { ModelSource } from "./lib/model-source.js"

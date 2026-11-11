@@ -8,7 +8,7 @@ import { OpenCode } from "@opencode/client"
 import { Ren } from "@ren/client/chat"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Signature } from "@ren/schema/signature"
-import { Shared, TestToken, Wrangler } from "@ren/brain-runtime/testing"
+import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { Settings } from "@ren/core/settings"
@@ -399,7 +399,7 @@ export const start = async (options: {
       if (found.status === "failed") throw new Error(`the brain of ${sessionId} failed: ${found.reason}`)
       return found.status === "ready" ? found : undefined
     })
-    // oxlint-disable-next-line ren/no-comments -- A client token reaches only the Chat API (brain-runtime/src/entry.ts:49), so the test reads OpenCode as Ren does: with a server token for the same brain and generation.
+    // oxlint-disable-next-line ren/no-comments -- A client token reaches only the Chat API (cell/src/entry.ts:49), so the test reads OpenCode as Ren does: with a server token for the same brain and generation.
     const claims = Option.getOrThrow(await Effect.runPromise(BrainToken.verify([brainKey.publicKey], access.token)))
     const serverToken = await Effect.runPromise(
       BrainToken.sign(brainKey.privateKey, { scope: "server", brain: brainId, gen: claims.gen, exp: claims.exp }),

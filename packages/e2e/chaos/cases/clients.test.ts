@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { Ren } from "@ren/client/chat"
-import { TestToken } from "@ren/brain-runtime/testing"
+import { TestToken } from "@ren/cell/testing"
 import { Session } from "@ren/schema/session"
 import { SessionDriver } from "../lib/drivers/session.js"
 import { Platform } from "../lib/platform.js"
@@ -28,7 +28,7 @@ describe.skipIf(Platform.wrangler !== undefined)("clients on the user link", () 
 
   afterAll(() => lane.stack?.dispose())
 
-  // oxlint-disable-next-line ren/no-comments -- A second person reaches the brain as every client does: through the Chat API with a client token (brain-runtime/src/entry.ts:49).
+  // oxlint-disable-next-line ren/no-comments -- A second person reaches the brain as every client does: through the Chat API with a client token (cell/src/entry.ts:49).
   const second = (session: SessionDriver.Driver) =>
     Ren.make({ baseUrl: stack().cellProxy.url, headers: { authorization: TestToken.basic(session.client) } })
 

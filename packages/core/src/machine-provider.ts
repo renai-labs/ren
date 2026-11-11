@@ -75,7 +75,7 @@ interface Build<Config> {
   readonly status: (id: string) => Effect.Effect<BuildState, Failed>
 }
 
-// oxlint-disable-next-line ren/no-comments -- A system image's tag can end with the version of Ren's dependencies built into it (`<name>:<system>-<dependencies>`, brain-runtime/e2b/stage.ts). They only save start.sh a download, so a machine on other dependencies keeps its image; the bundles update them in place (EN26).
+// oxlint-disable-next-line ren/no-comments -- A system image's tag can end with the version of Ren's dependencies built into it (`<name>:<system>-<dependencies>`, cell/e2b/stage.ts). They only save start.sh a download, so a machine on other dependencies keeps its image; the bundles update them in place (EN26).
 export const systemOf = (image: string) => image.replace(/(:[^:-]*)-[^:]*$/, "$1")
 
 export interface Created {
