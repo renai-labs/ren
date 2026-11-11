@@ -235,10 +235,7 @@ describe("start.sh prepare", () => {
       stderr: "ignore",
     }).exited
     const started = await readFile(join(home, ".ren/started"), "utf8")
-    expect([started.includes("cell/src/bun.ts"), started.includes("executor/src/main.ts")]).toEqual([
-      true,
-      false,
-    ])
+    expect([started.includes("cell/src/bun.ts"), started.includes("executor/src/main.ts")]).toEqual([true, false])
   })
 
   test("an archive that does not match its sha256 fails the prepare and changes nothing", async () => {

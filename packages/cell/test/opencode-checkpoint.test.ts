@@ -158,9 +158,7 @@ const open = Effect.fnUntraced(function* () {
 
 type Opened = Effect.Success<ReturnType<typeof open>>
 
-class SharedBrain extends Context.Service<SharedBrain, Opened>()(
-  "@ren/cell/test/OpenCodeCheckpoint/SharedBrain",
-) {}
+class SharedBrain extends Context.Service<SharedBrain, Opened>()("@ren/cell/test/OpenCodeCheckpoint/SharedBrain") {}
 
 const shared = ManagedRuntime.make(Layer.effect(SharedBrain, open()))
 

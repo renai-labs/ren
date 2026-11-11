@@ -16,10 +16,9 @@ test("a changed staged file changes the hash, and the same files give the same h
     { path: "packages/cell/src/a.ts", content: new TextEncoder().encode("one") },
     { path: "packages/cell/src/b.ts", content: new TextEncoder().encode("two") },
   ]
-  const changed = [
-    files[0],
-    { path: "packages/cell/src/b.ts", content: new TextEncoder().encode("three") },
-  ].flatMap((file) => (file ? [file] : []))
+  const changed = [files[0], { path: "packages/cell/src/b.ts", content: new TextEncoder().encode("three") }].flatMap(
+    (file) => (file ? [file] : []),
+  )
   expect([
     BundleBuild.hash(files) === BundleBuild.hash(files.toReversed()),
     BundleBuild.hash(files) === BundleBuild.hash(changed),
