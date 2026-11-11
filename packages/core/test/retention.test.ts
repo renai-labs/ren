@@ -5,7 +5,9 @@ import { Schedule } from "@ren/schema/schedule"
 import { ScheduleRun } from "@ren/schema/schedule-run"
 import { Session } from "@ren/schema/session"
 import { eq, inArray } from "drizzle-orm"
-import { Duration, Effect, Layer } from "effect"
+import { Deferred, Duration, Effect, Layer, Schema } from "effect"
+import { SqlClient } from "effect/sql"
+import { WorkflowEngine } from "effect/workflow"
 import { Access } from "../src/access.js"
 import { Drives } from "../src/drives.js"
 import { DurableRunner } from "../src/durable-runner.js"
@@ -20,13 +22,18 @@ const it = testEffect(
   Layer.mergeAll(Retention.layer, SessionSync.layer).pipe(
     Layer.provideMerge(Drives.layer),
     Layer.provideMerge(Access.layer),
-    Layer.provideMerge(DurableRunner.layerMemory),
+    Layer.provideMerge(DurableRunner.layerEffect),
     Layer.provideMerge(Testing.layer),
     Layer.provide(TestDrives.layer),
   ),
 )
 
 const now = Date.now()
+
+const Probe = DurableRunner.make("RetentionProbe", {
+  payload: { key: Schema.String },
+  idempotencyKey: (payload) => payload.key,
+})
 
 const daysAgo = (days: number) => new Date(now - Duration.toMillis(Duration.days(days)))
 
@@ -113,6 +120,78 @@ describe("Retention", () => {
           messages.map((row) => row.id).toSorted(),
           kept.map((row) => row.id),
         ]).toEqual([[recent], ["msg_kept", "msg_live"], runs.slice(1).map((run) => run.id)])
+      }),
+  )
+
+  it.live(
+    "the rows of a durable run that ended 8 days ago go with its replies; a run that ended 6 days ago, a run still in progress and another entity's rows stay",
+    () =>
+      Effect.gen(function* () {
+        const client = yield* SqlClient.SqlClient
+        const retention = yield* Retention.Service
+        const engine = yield* WorkflowEngine.WorkflowEngine
+        const held = yield* Deferred.make<void>()
+        const started = yield* Deferred.make<void>()
+        const keys = {
+          old: `old-${crypto.randomUUID()}`,
+          recent: `recent-${crypto.randomUUID()}`,
+          running: `running-${crypto.randomUUID()}`,
+        }
+        yield* DurableRunner.register(Probe, (payload) =>
+          payload.key === keys.running
+            ? Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(held)))
+            : Effect.void,
+        ).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+        yield* Effect.forEach([keys.old, keys.recent], (key) =>
+          DurableRunner.join(Probe, { key }).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine)),
+        )
+        yield* DurableRunner.ensure(Probe, { key: keys.running }).pipe(
+          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+        )
+        const idsOf = (key: string) =>
+          Effect.map(
+            client<{ readonly id: string }>`select id::text from cluster_messages where payload like ${`%${key}%`}`,
+            (rows) => rows.map((row) => row.id),
+          )
+        yield* Deferred.await(started)
+        const running = yield* idsOf(keys.running)
+        const old = yield* idsOf(keys.old)
+        const foreign = `foreign-${crypto.randomUUID()}`
+        yield* client`insert into cluster_messages
+          (id, rowid, message_id, shard_id, entity_type, entity_id, kind, tag, payload, headers, trace_id, span_id, sampled, processed, request_id, reply_id, last_reply_id, last_read, deliver_at)
+          select id + 1000000, rowid + 1000000, message_id || '-foreign', shard_id, 'Workflow/NotRen', ${foreign}, kind, tag, payload, headers, trace_id, span_id, sampled, true, request_id, reply_id, last_reply_id, last_read, deliver_at
+          from cluster_messages where id::text in ${client.in(old)}`
+        yield* Effect.forEach(
+          [
+            [keys.old, daysAgo(8)],
+            [keys.recent, daysAgo(6)],
+            [keys.running, daysAgo(8)],
+          ] as const,
+          (entry) => client`update cluster_messages set last_read = ${entry[1]} where payload like ${`%${entry[0]}%`}`,
+        )
+        yield* client`update cluster_messages set last_read = ${daysAgo(8)} where entity_id = ${foreign}`
+        const recent = yield* idsOf(keys.recent)
+        yield* retention.run
+        const left = yield* Effect.forEach([old, recent, running], (each) =>
+          Effect.map(
+            client<{ readonly messages: number; readonly replies: number }>`select
+              (select count(*)::int from cluster_messages where id::text in ${client.in(each)}) as messages,
+              (select count(*)::int from cluster_replies where request_id::text in ${client.in(each)}) as replies`,
+            (rows) => rows[0],
+          ),
+        )
+        const others = yield* client<{
+          readonly count: number
+        }>`select count(*)::int as count from cluster_messages where entity_id = ${foreign}`
+        yield* Deferred.succeed(held, undefined)
+        expect([left, others[0]?.count]).toEqual([
+          [
+            { messages: 0, replies: 0 },
+            { messages: 1, replies: 1 },
+            { messages: 1, replies: 0 },
+          ],
+          1,
+        ])
       }),
   )
 
