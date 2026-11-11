@@ -232,8 +232,11 @@ const tunnel = async (suffix: string, proto: "tcp" | "http", port: number) => {
   if (!response.ok) throw new Error(`ngrok ${proto} tunnel: ${response.status} ${await response.text()}`)
   return Schema.decodeUnknownSync(Tunnel)(await response.json()).public_url
 }
-const publicUrl = (suffix: string, port: number) =>
-  sandboxId ? Promise.resolve(`https://${port}-${sandboxId}.e2b.app`) : tunnel(suffix, "http", port)
+const publicUrl = async (suffix: string, port: number, proto: "tcp" | "http") => {
+  if (sandboxId) return `https://${port}-${sandboxId}.e2b.app`
+  if (proto === "http") return tunnel(suffix, "http", port)
+  return (await tunnel(suffix, "tcp", port)).replace("tcp://", "http://")
+}
 
 const trustSandboxEgress = async () => {
   const caFile = path.join(os.homedir(), ".ren/egress-ca.pem")
@@ -366,7 +369,10 @@ const main = async () => {
   const egress = await egressUp()
   const templateTag = await brainImage()
   await bundlesUp()
-  const [renUrl, driveUrl] = await Promise.all([publicUrl("-server", ports.server), publicUrl("-drive", ports.drive)])
+  const [renUrl, driveUrl] = await Promise.all([
+    publicUrl("-server", ports.server, "http"),
+    publicUrl("-drive", ports.drive, "tcp"),
+  ])
   const encode = (key: Signature.PrivateKey) =>
     JSON.stringify([{ id: key.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.key) }])
   const brain = await Effect.runPromise(Signature.generate("e2e-brain"))
