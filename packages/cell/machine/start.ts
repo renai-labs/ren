@@ -8,9 +8,9 @@ import { dirname, join } from "node:path"
 import { Entrypoints } from "./entrypoints.js"
 
 // oxlint-disable-next-line ren/no-comments -- What a machine runs: a brain with its tools' executor, a brain whose tools run on remote hands (no executor), or a remote hand (the executor only, open to the brains).
-export type Mode = "brain" | "brain-remote" | "hand"
+type Mode = "brain" | "brain-remote" | "hand"
 
-export const modeOf = (env: Readonly<Record<string, string | undefined>>): Mode => {
+const modeOf = (env: Readonly<Record<string, string | undefined>>): Mode => {
   if (env.REN_HAND) return "hand"
   return env.REN_HAND_PLACEMENT === "remote" ? "brain-remote" : "brain"
 }
@@ -280,7 +280,7 @@ const watch = async (brain: Bun.Subprocess, port: string, home: string) => {
   while (brain.exitCode === null) missed = await probe(brain, port, home, missed)
 }
 
-export const main = async (env: Readonly<Record<string, string | undefined>>) => {
+const main = async (env: Readonly<Record<string, string | undefined>>) => {
   const home = env.HOME ?? "/home/user"
   const ren = join(home, ".ren")
   await mkdir(join(home, "workspace"), { recursive: true })
