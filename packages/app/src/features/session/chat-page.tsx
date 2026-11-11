@@ -28,7 +28,6 @@ type Chat = ReturnType<typeof useChat>
 function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
   const admin = useCanAdminister()
-  const [picking, setPicking] = useState(false)
   const find = useFind({
     messages: chat.messages,
     rows: chat.rows,
@@ -63,25 +62,20 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         onTryAgain={chat.child ? undefined : chat.resend}
         onContinue={chat.child ? undefined : () => chat.resend("Continue.")}
         onConnected={chat.connected}
-        onChangeModel={chat.child || !chat.canChooseModel ? undefined : () => setPicking(true)}
+        onChangeModel={chat.child || !chat.canChooseModel ? undefined : () => chat.setPicking(true)}
         onStop={chat.stop}
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
       <div className="px-6 pb-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <ChatComposer chat={chat} dock={props.dock} picking={picking} onPickingChange={setPicking} />
+          <ChatComposer chat={chat} dock={props.dock} />
         </div>
       </div>
     </>
   )
 }
 
-function ChatComposer(props: {
-  chat: Chat
-  dock?: ReactNode
-  picking: boolean
-  onPickingChange: (open: boolean) => void
-}) {
+function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
   return (
     <>
@@ -116,6 +110,7 @@ function ChatComposer(props: {
           onChange={chat.setDraft}
           files={chat.files}
           onSubmit={chat.send}
+          onChooseModel={chat.canChooseModel ? () => chat.setPicking(true) : undefined}
           boot={chat.bootStatus}
           onRetry={chat.retry}
           running={chat.running}
@@ -128,8 +123,8 @@ function ChatComposer(props: {
                 value={chat.model}
                 loading={chat.modelsLoading}
                 onChange={chat.chooseModel}
-                open={props.picking}
-                onOpenChange={props.onPickingChange}
+                open={chat.picking}
+                onOpenChange={chat.setPicking}
               />
             ) : null
           }

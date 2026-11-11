@@ -6,7 +6,7 @@ import { Preference } from "./preference.js"
 
 export const detail = Preference.make("chat.detail.v1", Schema.Literals(["compact", "detailed"]), "compact")
 
-export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "steer")
+export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "queue")
 
 export const notify = Preference.make("chat.notify.v1", Schema.Boolean, true)
 

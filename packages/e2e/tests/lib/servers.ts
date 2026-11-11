@@ -8,7 +8,7 @@ export const password = "correct horse battery"
 export const serverURL = `http://127.0.0.1:${ports.server}`
 export const appOrigin = `http://127.0.0.1:${ports.app}`
 export const appURL = `${appOrigin}/app`
-const mailboxURL = `http://127.0.0.1:${ports.mailbox}`
+export const mailboxURL = `http://127.0.0.1:${ports.mailbox}`
 
 export const uniqueEmail = (label: string) => `${label}-${crypto.randomUUID()}@example.com`
 
