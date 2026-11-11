@@ -104,9 +104,12 @@ export function SpaceAppsTab() {
   const page = Math.min(currentPage(search), pageCount(rows.length, pageSize))
   if (hiddenBy(reach.error))
     return (
-      <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
-        Only members of this space see its apps.
-      </p>
+      <AppsTable
+        rows={[]}
+        empty="Only members of this space see its apps."
+        onOpen={setOpened}
+        onNew={(appId) => setProfile({ appId, from })}
+      />
     )
   return (
     <div className="flex flex-1 flex-col gap-4">

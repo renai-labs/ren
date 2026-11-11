@@ -1,28 +1,14 @@
-import type { ReactNode } from "react"
 import {
   IconArrowLeft,
   IconArrowRight,
-  IconDeviceDesktop,
   IconHandFinger,
   IconRefresh,
   IconWorld,
 } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { Progress } from "@ren/ui/progress"
-
-function Waiting(props: { icon: ReactNode; title: string; description: string }) {
-  return (
-    <Empty className="h-full border-0">
-      <EmptyHeader>
-        <EmptyMedia className="text-muted-foreground [&_svg]:size-6">{props.icon}</EmptyMedia>
-        <EmptyTitle>{props.title}</EmptyTitle>
-        <EmptyDescription>{props.description}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  )
-}
+import { EmptyState } from "../../components/empty-state.js"
 
 function Playback(props: { label: string }) {
   return (
@@ -56,13 +42,7 @@ function Playback(props: { label: string }) {
 export function ComputerTab() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1">
-        <Waiting
-          icon={<IconDeviceDesktop />}
-          title="Computer"
-          description="The environment’s desktop streams here once it’s connected."
-        />
-      </div>
+      <EmptyState>The environment’s desktop streams here once it’s connected.</EmptyState>
       <Playback label="Computer" />
     </div>
   )
@@ -88,13 +68,7 @@ export function BrowserTab() {
           <InputGroupInput aria-label="Address" placeholder="about:blank" readOnly disabled />
         </InputGroup>
       </div>
-      <div className="min-h-0 flex-1">
-        <Waiting
-          icon={<IconWorld />}
-          title="Browser"
-          description="The pages Ren opens in the environment’s browser stream here."
-        />
-      </div>
+      <EmptyState>The pages Ren opens in the environment’s browser stream here.</EmptyState>
       <Playback label="Browser" />
     </div>
   )

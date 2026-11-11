@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { IconChevronRight } from "@tabler/icons-react"
 import { ChannelMark } from "../../components/channel-mark.js"
+import { EmptyState } from "../../components/empty-state.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { Channels } from "../../lib/channels.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -24,11 +25,7 @@ export function ChannelsSettingsPage() {
     .filter((section) => section.rows.length > 0)
   return (
     <Page title="Channels" description="Invoke Ren from where your team already works.">
-      {sections.length === 0 ? (
-        <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
-          No channels are set up on this server yet.
-        </p>
-      ) : null}
+      {sections.length === 0 ? <EmptyState>No channels are set up on this server yet.</EmptyState> : null}
       {sections.map((section) => (
         <Section key={section.title} title={section.title}>
           <Rows>

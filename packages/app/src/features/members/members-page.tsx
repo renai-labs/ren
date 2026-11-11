@@ -271,7 +271,7 @@ export function MembersSettingsPage() {
                 }
           }
           onRemove={(row) => remove(row.memberId, row.name)}
-          empty="No members match these filters"
+          empty="No members match"
         />
       ) : (
         <TableCard>

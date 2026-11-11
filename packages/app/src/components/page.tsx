@@ -233,7 +233,7 @@ export function TableSample(props: { columns: ReadonlyArray<string>; count?: num
           </TableRow>
         </TableHeader>
         <TableBody>
-          {props.count === 0 ? <TableEmpty columns={props.columns.length}>Nothing here yet</TableEmpty> : null}
+          {props.count === 0 ? <TableEmpty columns={props.columns.length}>No items</TableEmpty> : null}
           {Array.from({ length: props.count ?? 4 }, (_, index) => (
             <TableRow key={index}>
               {props.columns.map((column) => (

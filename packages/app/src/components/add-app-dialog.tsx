@@ -5,6 +5,7 @@ import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { useAddition, type Added } from "./add-to-space.js"
+import { EmptyState } from "./empty-state.js"
 import { AppRow } from "./app-list.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
@@ -106,7 +107,7 @@ function AppResults(props: {
     >
       {loading ? <AppRowsSample count={8} /> : null}
       {!loading && found.length === 0 && !pages.hasNextPage ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">{emptyText(props.query, props.space.name)}</p>
+        <EmptyState>{emptyText(props.query, props.space.name)}</EmptyState>
       ) : null}
       {found.map((app) => (
         <AddAppRow key={app.id} app={app} space={props.space} onAdded={props.onAdded} />
