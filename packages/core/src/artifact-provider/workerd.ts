@@ -10,6 +10,8 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ArtifactProvider } from "../artifact-provider.js"
+import { ArtifactArchive } from "../artifact-archive.js"
+import { ObjectStorage } from "../object-storage.js"
 
 export const id = Artifact.ProviderID.make("workerd")
 
@@ -66,6 +68,7 @@ export const layer = Layer.effect(
       node: Config.String("ARTIFACT_NODE").pipe(Config.withDefault("node")),
     })
     const http = yield* HttpClient.HttpClient
+    const storage = yield* ObjectStorage.Service
     const wrangler = join(dirname(fileURLToPath(import.meta.resolve("wrangler/package.json"))), "wrangler-dist/cli.js")
 
     const answers = (port: number) =>
@@ -138,9 +141,10 @@ export const layer = Layer.effect(
       id,
       binding: Binding,
       deploy: Effect.fn("ArtifactWorkerd.deploy")(function* (input) {
+        const files = yield* ArtifactArchive.read(storage, input.archive).pipe(Effect.mapError(failed))
         const directory = join(config.root, input.artifactId)
         const objects = input.config.durableObjects ?? {}
-        if (Object.keys(objects).length && !Object.hasOwn(input.files, Artifact.workerPath))
+        if (Object.keys(objects).length && !Object.hasOwn(files, Artifact.workerPath))
           return yield* new ArtifactProvider.Failed({
             message: "Durable Objects require _worker.js with exported classes",
           })
@@ -174,17 +178,17 @@ export const layer = Layer.effect(
           return { binding, url }
         }
         const deploymentDirectory = join(directory, "deployments", input.deploymentId)
-        const worker = Object.hasOwn(input.files, Artifact.workerPath)
+        const worker = Object.hasOwn(files, Artifact.workerPath)
         yield* Effect.tryPromise({
           try: async () => {
             await mkdir(join(deploymentDirectory, "public"), { recursive: true })
             await Promise.all(
-              Object.keys(input.files).map((path) =>
+              Object.keys(files).map((path) =>
                 Bun.write(
                   path === Artifact.workerPath
                     ? join(deploymentDirectory, path)
                     : join(deploymentDirectory, "public", path),
-                  input.files[path] ?? new Uint8Array(),
+                  files[path] ?? new Uint8Array(),
                 ),
               ),
             )
@@ -233,4 +237,4 @@ export const layer = Layer.effect(
       }),
     })
   }),
-)
+).pipe(Layer.provide(ObjectStorage.layer))

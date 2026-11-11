@@ -1,6 +1,6 @@
 export * as Artifacts from "./artifacts.js"
 
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
+import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
 import { Auth } from "@ren/schema/auth"
@@ -10,6 +10,7 @@ import { Cause, Context, Duration, Effect, Exit, Layer, Option, Schedule, Schema
 import { ClusterSchema, EntityAddress, EntityId, EntityType, MessageStorage, Sharding } from "effect/cluster"
 import { Workflow, WorkflowEngine } from "effect/workflow"
 import { ArtifactProvider } from "./artifact-provider.js"
+import { ArtifactArchive } from "./artifact-archive.js"
 import { DurableRunner } from "./durable-runner.js"
 import { ObjectStorage } from "./object-storage.js"
 import { Primitive } from "./primitive.js"
@@ -93,21 +94,6 @@ export const layer = Layer.effect(
         catch: (cause) => new Failed({ message: `Ren could not reach its storage: ${String(cause)}` }),
       })
 
-    const read = (key: string) =>
-      store(async (signal) => {
-        const object = await storage.s3.send(new GetObjectCommand({ Bucket: storage.bucket, Key: key }), {
-          abortSignal: signal,
-        })
-        const archive = (await object.Body?.transformToByteArray()) ?? new Uint8Array()
-        return Object.fromEntries(
-          await Promise.all(
-            [...(await new Bun.Archive(archive).files()).values()].map(
-              async (file) => [file.name, await file.bytes()] as const,
-            ),
-          ),
-        )
-      })
-
     const requested = Effect.fnUntraced(function* (run: Workflow.Any, executionId: string) {
       const entityId = EntityId.make(executionId)
       const group = Context.get(run.annotations, ClusterSchema.ShardGroup)(entityId)
@@ -158,15 +144,19 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)).at(0)
         if (!row || row.active_deployment_id !== payload.deploymentId)
           return { deployment: result("stopped", null, null), binding: null }
+        if (row.provider !== provider.id)
+          return {
+            deployment: result("failed", row.url, "This deployment belongs to another artifact provider"),
+            binding: null,
+          }
         const current = and(eq(artifacts.id, payload.id), eq(artifacts.active_deployment_id, payload.deploymentId))
         return yield* Effect.gen(function* () {
-          const files = yield* read(payload.codeArchive)
           const deployed = yield* provider
             .deploy({
               artifactId: payload.id,
               deploymentId: payload.deploymentId,
               config: payload.config,
-              files,
+              archive: payload.codeArchive,
               previous: Option.fromNullishOr(row.binding),
             })
             .pipe(
@@ -233,6 +223,8 @@ export const layer = Layer.effect(
           .where(eq(artifacts.id, payload.id))
           .pipe(Effect.orDie)).at(0)
         if (!row || row.active_deployment_id !== claimId) return
+        if (row.provider !== provider.id)
+          return yield* Effect.die(new Error("Restore this artifact's original provider to finish stopping it"))
         const binding =
           Option.isSome(completed) && completed.value._tag === "Complete" && Exit.isSuccess(completed.value.exit)
             ? (completed.value.exit.value.binding ?? row.binding)
@@ -374,13 +366,19 @@ export const layer = Layer.effect(
         const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
         if (!row || !ownedBy(row, owner) || !row.code_archive)
           return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
-        return yield* read(row.code_archive)
+        return yield* ArtifactArchive.read(storage, row.code_archive).pipe(
+          Effect.mapError((error) => new Failed({ message: error.message })),
+        )
       }),
       stop: Effect.fn("Artifacts.stop")(function* (owner, id) {
         const pending = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = (yield* transaction.select().from(artifacts).where(eq(artifacts.id, id)).for("update")).at(0)
             if (!row || !ownedBy(row, owner)) return
+            if (row.provider !== provider.id)
+              return yield* new Failed({
+                message: `Artifact ${id} runs on another provider; stop it using its original provider`,
+              })
             if (row.active_deployment_id) {
               const executionId = yield* DeployRun.executionId({
                 id,

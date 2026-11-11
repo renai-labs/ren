@@ -9,7 +9,7 @@ interface DeployInput<Binding> {
   readonly artifactId: Artifact.ID
   readonly deploymentId: Artifact.DeploymentID
   readonly config: Artifact.Config
-  readonly files: Artifact.Files
+  readonly archive: string
   readonly previous: Option.Option<Binding>
 }
 
