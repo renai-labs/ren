@@ -14,11 +14,23 @@ export interface Drafts extends Storage {
   readonly subscribe?: (listener: (key: string) => void) => () => void
 }
 
+export interface ChatCache {
+  readonly read: (userId: string, sessionID: string) => Promise<string | void>
+  readonly write: (
+    userId: string,
+    sessionID: string,
+    entry: { readonly body: string; readonly tier: number },
+  ) => Promise<void>
+  readonly remove: (userId: string, sessionID: string) => Promise<void>
+  readonly forget: (keep?: string) => Promise<void>
+}
+
 interface Base {
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
   readonly drafts?: Drafts
+  readonly chatCache?: ChatCache
   readonly openExternal: (url: string) => void
   readonly redirect?: (url: string) => void
   readonly blankTab?: () => Window | null

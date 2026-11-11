@@ -7,7 +7,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import { DateTime, Effect, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
+import { DateTime, Deferred, Effect, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
@@ -261,6 +261,57 @@ test("a saved page that holds only the newest messages makes the brain's read st
       expect(shown.filter((id) => !loaded.includes(id))).toEqual([])
       expect(loaded.length).toBeLessThan(all)
       expect(reads.filter((search) => search.includes("cursor=")).length).toBeLessThanOrEqual(1)
+    }),
+  ))
+
+test("a chat in the device cache paints before Ren gives access, the brain's read replaces it with each message once, and the cache gets the live turns (#254)", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const first = yield* open(brain)
+      yield* first.open(brain.id)
+      yield* first.prompt({ text: stub.script().marker })
+      const done = yield* ChatTest.until(first.state, settled(brain.id))
+      const expected = ChatState.messages(done, brain.id).map((message) => message.id)
+      const cached = ChatState.messages(done, brain.id).slice(1)
+      const ready = { value: false }
+      const written = yield* Deferred.make<ReadonlyArray<string>>()
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() =>
+            ready.value
+              ? {
+                  status: "ready" as const,
+                  url: "http://cell",
+                  token: "a-client-token",
+                  expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+                }
+              : { status: "starting" as const, phase: "waking" },
+          ),
+        cache: {
+          read: Effect.succeed(cached),
+          write: (messages) =>
+            Deferred.succeed(
+              written,
+              messages.map((message) => message.id),
+            ).pipe(Effect.asVoid),
+        },
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* chat.open(brain.id).pipe(Effect.forkChild)
+      const shown = yield* ChatTest.until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
+      expect(ChatState.messages(shown, brain.id).map((message) => message.id)).toEqual(
+        cached.map((message) => message.id),
+      )
+      ready.value = true
+      const live = yield* ChatTest.until(
+        chat.state,
+        (state) => ChatState.messages(state, brain.id).length === expected.length && !state.partial.has(brain.id),
+      )
+      expect(ChatState.messages(live, brain.id).map((message) => message.id)).toEqual(expected)
+      expect(yield* Deferred.await(written)).toEqual(expected)
     }),
   ))
 

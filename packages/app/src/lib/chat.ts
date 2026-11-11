@@ -3,8 +3,9 @@ import { ChatAtoms, type ChatSession, Outbox } from "@ren/chat"
 import { Ren } from "@ren/client/effect"
 import type { SessionInfo, SessionPage } from "@ren/client"
 import type { Session } from "@ren/schema/session"
+import { SessionMessage } from "@ren/schema/session/message"
 import { useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query"
-import { Effect, Layer, Option, Schema } from "effect"
+import { Effect, Layer, Option, Predicate, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { Atom, AtomRegistry } from "effect/reactivity"
 import { useEffect } from "react"
@@ -19,6 +20,32 @@ export interface Chat {
 }
 
 const Kept = Schema.fromJsonString(Schema.Array(Outbox.Kept))
+
+const Cached = Schema.fromJsonString(Schema.Array(SessionMessage.Info))
+
+const chatBytes = 5 * 1024 * 1024
+
+const fitted = (messages: ReadonlyArray<SessionMessage.Info>): string | undefined => {
+  const body = Schema.encodeSync(Cached)(messages)
+  if (body.length <= chatBytes) return body
+  return messages.length > 1 ? fitted(messages.slice(Math.ceil(messages.length / 4))) : undefined
+}
+
+function cacheFor(cache: Platform.ChatCache, userId: string) {
+  return (sessionID: Session.ID) => ({
+    read: Effect.promise(() => cache.read(userId, sessionID)).pipe(
+      Effect.map((body) =>
+        typeof body === "string" ? Option.getOrUndefined(Schema.decodeUnknownOption(Cached)(body)) : undefined,
+      ),
+    ),
+    write: (messages: ReadonlyArray<SessionMessage.Info>) =>
+      Effect.promise(() => {
+        const body = fitted(messages)
+        const sent = messages.some((message) => message.type === "user" && message.sender?.userId === userId)
+        return body === undefined ? Promise.resolve() : cache.write(userId, sessionID, { body, tier: sent ? 2 : 3 })
+      }),
+  })
+}
 
 function makeAtoms(platform: Platform.Info, userId: string) {
   const server = Layer.mergeAll(
@@ -35,8 +62,14 @@ function makeAtoms(platform: Platform.Info, userId: string) {
         Effect.flatMap((ren) =>
           ren.chat.access({ id: sessionID, ...(input.unreachable && { unreachable: "true" as const }) }),
         ),
+        Effect.tapError((error) =>
+          Predicate.isTagged(error, "NotFoundError") && platform.chatCache
+            ? Effect.promise(() => platform.chatCache?.remove(userId, sessionID) ?? Promise.resolve())
+            : Effect.void,
+        ),
         Effect.provide(server),
       ),
+    ...(platform.chatCache && { cache: cacheFor(platform.chatCache, userId) }),
     restart: (sessionID: Session.ID) =>
       Ren.make({ baseUrl: platform.serverUrl }).pipe(
         Effect.flatMap((ren) => ren.chat.retry({ id: sessionID })),
@@ -75,6 +108,7 @@ function forget() {
 export function chatFor(platform: Platform.Info, userId: string): Chat {
   if (current.chat?.userId === userId) return current.chat
   forget()
+  void platform.chatCache?.forget(userId)
   const chat = {
     userId,
     atoms: makeAtoms(platform, userId),

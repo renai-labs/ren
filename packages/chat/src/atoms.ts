@@ -8,6 +8,7 @@ import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Queue, Stream, SubscriptionRef } from "effect"
 import type { HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
+import type { ChatCache } from "./chat-cache.js"
 import { ChatSession } from "./chat-session.js"
 import { ChatState } from "./chat-state.js"
 import { Family } from "./family.js"
@@ -50,6 +51,7 @@ export interface Options<R, ER> {
     query: { readonly limit: number },
   ) => Effect.Effect<SessionMessage.Page, unknown, R>
   readonly outbox?: (sessionID: Session.ID) => NonNullable<ChatSession.Options["outbox"]>
+  readonly cache?: (sessionID: Session.ID) => ChatCache.Cache
   readonly sender?: SessionMessage.Sender
   readonly detail?: TimelineDetail.Detail
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
@@ -102,6 +104,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
             ...(options.sender && { sender: options.sender }),
             ...(handed && { handoff: handed }),
             ...(options.outbox && { outbox: options.outbox(sessionID) }),
+            ...(options.cache && { cache: options.cache(sessionID) }),
           })
           yield* opened.open(sessionID).pipe(
             Effect.andThen(opened.enrich(sessionID)),
