@@ -9,7 +9,7 @@ import { dirname, join, relative, resolve } from "node:path"
 
 export const root = join(import.meta.dir, "../../..")
 
-// oxlint-disable-next-line ren/no-comments -- Follows imports at any depth (ren-v1 INV-105). A file that no entry point imports never reaches the image, so its change never rebuilds the template.
+// oxlint-disable-next-line ren/no-comments -- Follows imports at any depth. A file that no entry point imports never reaches the image, so its change never rebuilds the template.
 export const entrypoints = {
   brain: "packages/cell/src/bun.ts",
   executor: "packages/executor/src/main.ts",

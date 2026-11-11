@@ -2,12 +2,12 @@
 
 Status: in progress on branch `opencode-upgrade`. Two pull requests. PR 1 makes an OpenCode upgrade a routine bump, on 2.0.27, and deploys first. PR 2 bumps to 2.2.6 with the command that PR 1 adds and fixes what its tests find. Tick an item in the change that does it; remove this file in the change that finishes PR 2, after moving the procedure (§0.4) to its owner.
 
-| Word          | Meaning                                                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------------- |
-| Old, new      | OpenCode 2.0.27 and 2.2.6.                                                                                     |
+| Word          | Meaning                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| Old, new      | OpenCode 2.0.27 and 2.2.6.                                                                            |
 | DO cell       | A brain hosted in a Cloudflare Durable Object (`cell/src/worker.ts`). OpenCode migrates its database. |
 | Process brain | A brain run by Bun in a sandbox (`cell/src/bun.ts`, E2B). It deletes its database and restores chats. |
-| Boundary      | `cell/src/harness/opencode/**`, `opencode-transcript`, and the OpenCode tests of `cell`.     |
+| Boundary      | `cell/src/harness/opencode/**`, `opencode-transcript`, and the OpenCode tests of `cell`.              |
 
 ## 0. PR 1: the boundary (on 2.0.27)
 

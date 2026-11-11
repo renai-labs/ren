@@ -40,8 +40,6 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
 - `features/session/use-chat.ts` (`useChat`) returns one object for a chat: the route's chat page and the task page's session sheet both render a chat from it, and its sections take narrow values from it. It reads the chat state through `useView` from `chat-view.ts`.
 - `lib/use-schedules.ts` (`useSchedules`) returns the list, filters and sheet state shared by the Scheduled page and a space's Scheduled tab.
 - Task list, task detail and task activity refresh every 5 seconds (`refreshEvery` in `lib/tasks.ts`), as main does, until tasks have a realtime subscription.
-- Settings → Environments refreshes every 5 seconds while a template's build is queued or running (`refreshEvery` in `features/environments/environments-page.tsx`), until builds have a realtime subscription.
-- A space's Compute tab refreshes the space every 5 seconds while its shutdown runs (`refreshEvery` in `features/environments/space-compute.tsx`).
 
 ## Testing
 

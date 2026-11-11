@@ -237,7 +237,7 @@ The push exists for `credential`, `app_profile`, `app_profile_space` and `app_pr
 | A credential insert, then a delete, changes the fingerprint and swaps the server                                                                           | ren `core`           |
 | `App.create` with a managed MCP is refused; a managed MCP with auth that is not `none` fails decoding                                                      | ren `core`, `schema` |
 | `INTEGRATIONS` exists only with `REN_INTEGRATIONS_URL`, and its token has the five claims                                                                  | ren `core`           |
-| A managed entry gets the token placeholder and the claim headers; a new sender reloads them                                                                | ren `cell`  |
+| A managed entry gets the token placeholder and the claim headers; a new sender reloads them                                                                | ren `cell`           |
 | An `api.call` event is stored; `INTEGRATIONS_INGEST_KEY` with another `source` gets 403                                                                    | ren `server`         |
 | A token of another purpose gets 401                                                                                                                        | integrations         |
 | The gate contract cases of billing §4.4, on a real Postgres with the real view. A refusal is a tool error, not an HTTP status. Each refusal calls no tool. | integrations         |

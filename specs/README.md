@@ -28,7 +28,6 @@ Generated clients follow the protocol `HttpApi`.
 | [runtime/README.md](runtime/README.md)                               | The `FeatureFlags` service and the flag list                                                                                    |
 | [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                                                                |
 | [runtime/opencode-upgrade.md](runtime/opencode-upgrade.md)           | The OpenCode boundary and bump command, then the 2.2.6 upgrade                                                                  |
-| [runtime/environments/README.md](runtime/environments/README.md)     | Brain and hand providers, co-located and remote hands, templates, bundles, machine lifecycle and recovery                       |
 | [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                                                        |
 | [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                                                                      |
 | [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                                                                 |

@@ -428,7 +428,7 @@ export const layer = Layer.effect(
       boot: Effect.fnUntraced(function* (target, within) {
         const api = yield* client.brain(target)
         const answered = { last: Option.none<BrainState>() }
-        // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1; ren-v1 INV-15). An older brain does not report pulledAt.
+        // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1). An older brain does not report pulledAt.
         const state = yield* api.brain["brain.state"]().pipe(
           Effect.tap((found) =>
             Effect.sync(() => {
