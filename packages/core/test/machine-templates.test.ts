@@ -656,6 +656,37 @@ describe("MachineTemplates", () => {
       }),
   )
 
+  it.live(
+    "a running Ren builds again a template that an older Ren marked ready on another system image (rolling deploy)",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const setup = yield* team()
+        const label = `overlap-${crypto.randomUUID()}`
+        const id = MachineTemplate.ID.create()
+        yield* database.db.insert(Database.Schema.environment_template).values({
+          id,
+          organization_id: setup.organizationId,
+          name: "Older Ren",
+          provider: MachineProvider.ID.make("built"),
+          config: { label },
+          sessions_per_environment: 8,
+          build_status: "ready",
+          image: "image-old",
+          image_config: { label },
+          image_system: "ren-brain:sys1",
+        })
+        expect(yield* Queue.take(started)).toBe(label)
+        yield* Deferred.succeed(gate(label), undefined)
+        expect(yield* settled(id, setup.admin)).toMatchObject({ buildStatus: "ready", image: `image-${label}` })
+        const row = (yield* database.db
+          .select({ system: Database.Schema.environment_template.image_system })
+          .from(Database.Schema.environment_template)
+          .where(eq(Database.Schema.environment_template.id, id))).at(0)
+        expect(row?.system).toBe("ren-brain:sys2")
+      }),
+  )
+
   it.live("at start, Ren builds again a template left queued without a build", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
