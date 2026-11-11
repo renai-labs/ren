@@ -75,7 +75,7 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
       <CodeBlockHeader>
         <CodeBlockTitle>
           {props.language || "text"}
-          {plain && <span className="font-normal text-muted-foreground"> · not highlighted</span>}
+          {plain ? <span className="font-normal text-muted-foreground"> · not highlighted</span> : null}
         </CodeBlockTitle>
         <CodeBlockActions>
           <Button
@@ -88,12 +88,12 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
           >
             <IconTextWrap />
           </Button>
-          {run && command && (
+          {run && command ? (
             <Button variant="ghost" size="sm" onClick={() => run(command)}>
               <IconPlayerPlay />
               Run
             </Button>
-          )}
+          ) : null}
           <CodeBlockCopyButton value={props.code} disabled={incomplete} />
         </CodeBlockActions>
       </CodeBlockHeader>

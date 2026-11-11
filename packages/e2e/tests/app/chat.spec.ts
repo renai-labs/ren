@@ -174,10 +174,7 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
 })
 
-test("a member wraps a long code line with the toggle, and Copy still copies the source", async ({
-  context,
-  page,
-}) => {
+test("a member wraps a long code line with the toggle, and Copy still copies the source", async ({ context, page }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   await createOrganization(page.request, { name: "Katherine Johnson" })
   const line = Array.from({ length: 80 }, (_, index) => `word${index}`).join(" ")
@@ -198,5 +195,7 @@ test("a member wraps a long code line with the toggle, and Copy still copies the
   await expect.poll(async () => (await content.boundingBox())?.height ?? 0).toBeGreaterThan(height)
 
   await block.getByRole("button", { name: "Copy" }).click()
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(line)
+  const message = page.getByRole("form", { name: "Message Ren" }).getByRole("textbox", { name: "Message" })
+  await message.press("ControlOrMeta+V")
+  await expect(message).toHaveText(line)
 })
