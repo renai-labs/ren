@@ -1,6 +1,4 @@
-import { Loading } from "@ren/ui/loading"
-import { Bubble, BubbleContent } from "@ren/ui/bubble"
-import { Message, MessageContent } from "@ren/ui/message"
+import { Spinner } from "@ren/ui/spinner"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { IconArrowUp, IconChevronDown, IconCube, IconPlus } from "@tabler/icons-react"
 
@@ -24,32 +22,6 @@ export function ComposerFrame() {
   )
 }
 
-export function MessagesSkeleton(props: { label?: string | undefined }) {
-  return (
-    <Loading label={props.label ?? "Loading messages"}>
-      <div className="flex flex-col gap-8">
-        <Message align="end">
-          <MessageContent>
-            <Bubble variant="secondary" align="end">
-              <BubbleContent>Help me with this task.</BubbleContent>
-            </Bubble>
-          </MessageContent>
-        </Message>
-        <Message>
-          <MessageContent>
-            <Bubble variant="ghost">
-              <BubbleContent>
-                <p>Here is the information for your task.</p>
-                <p>Review the details and choose the next step for your team.</p>
-              </BubbleContent>
-            </Bubble>
-          </MessageContent>
-        </Message>
-      </div>
-    </Loading>
-  )
-}
-
 export function ChatSkeleton() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -59,8 +31,8 @@ export function ChatSkeleton() {
           Chat
         </span>
       </header>
-      <div className="mx-auto w-full max-w-3xl flex-1 p-6">
-        <MessagesSkeleton />
+      <div className="flex flex-1 items-center justify-center text-muted-foreground">
+        <Spinner aria-label="Loading messages" />
       </div>
       <div className="px-6 pb-4">
         <div className="mx-auto max-w-3xl">

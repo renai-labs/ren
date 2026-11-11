@@ -36,7 +36,6 @@ test("chat placeholders remain until the first message page arrives", async ({ p
     await requested.promise
     await expect(page.getByRole("button", { name: "Open panel", exact: true })).toBeVisible()
     await expect(page.getByRole("status", { name: "Loading messages", exact: true })).toBeVisible()
-    await expect(page.getByText("Help me with this task.", { exact: true })).toBeHidden()
     await page.screenshot({ path: test.info().outputPath("chat-loading-dark.png") })
   } finally {
     held.resolve()

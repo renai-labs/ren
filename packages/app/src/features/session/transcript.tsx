@@ -1,5 +1,5 @@
 import { DateTime, Option } from "effect"
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import {
   AppConnect,
   ChannelReply,
@@ -76,7 +76,7 @@ import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { useSubagentCard } from "./chat-view.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
-import { MessagesSkeleton } from "../../components/chat-skeleton.js"
+import { useStableScroll } from "../../lib/use-stable-scroll.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ImageLightbox } from "../../components/image-lightbox.js"
 import { withAppMentions } from "@ren/ui/app-mention"
@@ -1276,7 +1276,11 @@ function BlockView(props: {
 
 function History(props: { loading: boolean; onLoadMore: () => void }) {
   if (!props.loading) return <LoadEarlier onVisible={props.onLoadMore} />
-  return <MessagesSkeleton label="Loading earlier messages" />
+  return (
+    <div className="flex justify-center text-muted-foreground">
+      <Spinner aria-label="Loading earlier messages" />
+    </div>
+  )
 }
 
 function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMessage.Info>): Context {
@@ -1317,37 +1321,35 @@ export function Transcript(props: TranscriptProps) {
   }
   const copyOf = (turn: string, key: string) =>
     lastAnswer.get(turn) === key && activeTurn !== turn ? TimelineText.copyText(turns.get(turn) ?? [])?.text : undefined
+  const viewport = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+  const sent = blocks.findLast((block) => block.kind === "user" && props.statuses.has(block.message.id))?.key
+  useStableScroll({ viewport, content, streaming: props.busy, sent })
   const empty =
     props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
-    <MessageScrollerProvider autoScroll>
+    <MessageScrollerProvider>
       <MessageScroller className="@container flex-1">
         <MessageScrollerViewport
-          preserveScrollOnPrepend
+          ref={viewport}
           className="scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)]"
         >
-          <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
+          <MessageScrollerContent ref={content} className="relative mx-auto w-full max-w-3xl p-6">
             {props.more ? (
-              <MessageScrollerItem
-                messageId="history"
-                className={props.loadingHistory ? "mb-6" : "absolute inset-x-6 top-1"}
-              >
+              <div className="absolute inset-x-6 top-1">
                 <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} />
-              </MessageScrollerItem>
+              </div>
             ) : null}
             {props.loading ? (
-              <MessageScrollerItem messageId="loading">
-                <MessagesSkeleton />
+              <MessageScrollerItem messageId="loading" className="flex flex-1 items-center justify-center">
+                <Spinner aria-label="Loading messages" className="text-muted-foreground" />
               </MessageScrollerItem>
             ) : null}
             {blocks.map((block) => (
               <MessageScrollerItem
                 key={block.key}
                 messageId={block.key}
-                {...(block.kind === "user" && {
-                  scrollAnchor: true,
-                  className: "@transcript:-mr-13.5 @transcript:pr-13.5",
-                })}
+                {...(block.kind === "user" && { className: "@transcript:-mr-13.5 @transcript:pr-13.5" })}
               >
                 <BlockView
                   block={block}
