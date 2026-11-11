@@ -200,9 +200,15 @@ export const layer = Layer.effect(
                 ...(worker && { main: Artifact.workerPath, no_bundle: true }),
                 assets: { directory: "public", ...(worker && { binding: "ASSETS" }) },
                 durable_objects: {
+                  code_update_strategy: { mode: "immediate" },
                   bindings: Object.entries(objects).map(([name, className]) => ({ name, class_name: className })),
                 },
-                migrations: [{ tag: "sqlite-v1", new_sqlite_classes: [...new Set(Object.values(objects))] }],
+                exports: Object.fromEntries(
+                  [...new Set(Object.values(objects))].map((name) => [
+                    name,
+                    { type: "durable-object", storage: "sqlite" },
+                  ]),
+                ),
               }),
             )
           },

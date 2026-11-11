@@ -85,7 +85,9 @@ in another account. Do not rename the account subdomain after publishing.
   deployment UUID and an independent random upload proof retained in S3. The
   expected proof is not sent to the public Worker in a request header or query;
   an old deployment cannot impersonate a known future UUID by echoing it. No
-  application path is reserved. Normal requests remain
+  application path is reserved. Readiness also verifies a normal request to the
+  configured entry page, so a probe-only response cannot conceal an unpropagated
+  `workers.dev` route. Stop verifies its ordinary HTTP-410 response. Normal requests remain
   assets-first, and WebSocket upgrades/responses pass through unchanged.
 - Worker modules are uploaded without server-side bundling. The generated module
   directory is separate from public assets; an untrusted import cannot pull a
@@ -94,23 +96,41 @@ in another account. Do not rename the account subdomain after publishing.
   as `cloudflare:workers`.
 - Successful same-deployment replay checks that marker and reuses the deployment.
 - A conditional-write S3 state object retains the account, stable Worker name,
-  full SQLite migration history, last acknowledged remote migration tag, and
+  accumulated binding/class map, last publication ETag, and
   references to the existing immutable compressed source archives. It does not
   duplicate the file map as base64 on every metadata write. A ready pending
   source becomes the active source when Core supplies its committed binding,
   so a lost acknowledgement cannot silently replace the last committed source.
   The write-ahead state survives a runner restart and Core clearing `binding`
   after stop. There is no new database migration or artifact version table.
-- Wrangler reconciles the stored migration history with Cloudflare's remote
-  `migration_tag`; it does not replay the initial SQLite migration on every
-  update. Every upload also appends a unique no-op migration fence. Cloudflare
-  rejects a stale migration-tag precondition (HTTP 412), including for Workers
-  without DO classes. Metadata reads wait boundedly for an acknowledged tag to
-  become visible, rather than mistaking a lagging replica for a newer writer.
-  Missing/backwards acknowledged remote history that does not settle is an error.
+- Durable Object namespaces use declarative `exports`: every retained class is
+  declared as `{type:"durable-object",storage:"sqlite"}`. Ren never generates
+  deletion, rename or transfer entries. Applied additions remain represented
+  during recovery/stop even when absent from the restored app's manifest.
+- Ren sets `durable_objects.code_update_strategy` to `{mode:"immediate"}` on
+  uploads, recovery and stop. Cloudflare's newer default defers active objects
+  for up to five minutes, which would let an old object's code/schema keep
+  accepting requests after publication. Immediate updates reset active objects;
+  clients must reconnect interrupted WebSockets and retry interrupted operations.
+  Global rollout is still eventually consistent, so use backwards-compatible
+  application/SQL changes. See [Cloudflare's code-update contract](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+- Ren reads the remote script ETag, records a conditional S3 write intent, then
+  publishes with `If-Match`. Creation uses `If-None-Match: *`. Cloudflare rejects
+  stale writes with HTTP 412. These backend conditions—not process termination,
+  an in-memory lock or an S3 lease—fence delayed uploads. Recovery uses a fresh
+  embedded proof so its source cannot have an ABA-identical ETag to the previous
+  upload. A read from a lagging metadata replica can cause a safe, retryable 412;
+  it cannot authorize an overwrite.
+- Installed Wrangler does not expose conditional upload headers. A scoped
+  loopback staging adapter lets it read metadata and stage asset content, but
+  captures its script PUT instead of forwarding it. It forces the script-upload
+  path even for static apps; version/deployment/settings mutations are blocked.
+  Ren owns the single final conditional PUT. The temporary server closes with
+  the child process scope. This retains Wrangler's asset/multipart machinery
+  without silently bypassing the publication guard.
 - Existing successful binding/class mappings cannot be removed, renamed or
   rebound. A terminated process or failed request does not prove an upload was
-  rejected. Recovery therefore keeps pending migration intents and can provision
+  rejected. Recovery therefore keeps pending class intents and can provision
   neutral exports for uncertain additions. Those bindings need not appear in a
   subsequently restored application's manifest; their storage remains retained.
 - Recovery republishes the previous source plus neutral, storage-preserving
@@ -139,6 +159,17 @@ The archive-reference metadata format is version 2. Earlier local experimental
 state containing file maps is rejected explicitly, without modifying its Worker
 or SQLite data. Do not delete that metadata to force migration. Use a fresh
 artifact for new development tests or migrate the old references deliberately.
+
+Existing format-2 Workers with the old imperative namespace migration history
+can transition on their next update, recovery or stop. The retained binding/class
+map supplies all live SQLite exports; old history fields are ignored and removed
+on the next metadata write. No source archive or namespace is deleted. Cloudflare
+documents this as a **one-way** transition: after it succeeds, do not run an older
+Ren build that sends a `migrations` array. Roll forward with this implementation
+instead. A conditional-write conflict keeps recovery pending rather than trying
+an unconditional upload. Format-1 file-map records still need explicit migration.
+
+Application table changes are separate: see [per-object SQL migrations](artifact-sql-migrations.md).
 
 Never delete a Worker or a DO class to implement stop. Cloudflare's forced
 Worker deletion also deletes associated DOs and their data.
