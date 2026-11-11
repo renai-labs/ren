@@ -1,7 +1,7 @@
 export * as SpaceShutdown from "./space-shutdown.js"
 
 import { Database } from "@ren/db/database"
-import { Space as SpaceInfo } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq, isNotNull } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
@@ -11,13 +11,13 @@ import { Environments } from "./environments.js"
 
 // oxlint-disable-next-line ren/no-comments -- One run per shutdown: Space.shutdown takes the next epoch, so a later shutdown of the same space runs again.
 const Run = DurableRunner.make("SpaceShutdown", {
-  payload: { spaceId: SpaceInfo.ID, epoch: Schema.Int },
+  payload: { spaceId: Space.ID, epoch: Schema.Int },
   idempotencyKey: (payload) => `shutdown:${payload.spaceId}:${payload.epoch}`,
 })
 
 export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- Starts the run of the shutdown that Space.shutdown marked; nothing when none is marked.
-  readonly start: (spaceId: SpaceInfo.ID) => Effect.Effect<void>
+  readonly start: (spaceId: Space.ID) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SpaceShutdown") {}

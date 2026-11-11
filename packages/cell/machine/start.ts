@@ -33,7 +33,7 @@ const writeAtomic = async (path: string, content: string) => {
 }
 
 // oxlint-disable-next-line ren/no-comments -- Takes the lock, or waits a second and tries again. A lock whose process is gone is free.
-const acquire = async (lock: string, hasSaid: boolean): Promise<void> => {
+const acquire = async (lock: string, options: { readonly hasSaid: boolean }): Promise<void> => {
   if (
     await mkdir(lock).then(
       () => true,
@@ -44,17 +44,17 @@ const acquire = async (lock: string, hasSaid: boolean): Promise<void> => {
   const holder = Number(await readText(join(lock, "pid")))
   if (holder > 0 && !isRunning(holder)) await rm(lock, { recursive: true, force: true })
   else {
-    if (!hasSaid) process.stderr.write("Another prepare runs; this one waits\n")
+    if (!options.hasSaid) process.stderr.write("Another prepare runs; this one waits\n")
     await Bun.sleep(1000)
   }
-  return acquire(lock, true)
+  return acquire(lock, { hasSaid: true })
 }
 
 // oxlint-disable-next-line ren/no-comments -- One prepare at a time: an update can arrive while a slow download of the last one runs. mkdir is atomic.
 const withLock = async <A>(code: string, run: () => Promise<A>) => {
   const lock = join(code, ".lock")
   await mkdir(code, { recursive: true })
-  await acquire(lock, false)
+  await acquire(lock, { hasSaid: false })
   try {
     return await run()
   } finally {

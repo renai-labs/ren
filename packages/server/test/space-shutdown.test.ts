@@ -14,6 +14,7 @@ describe("space shutdown over HTTP", () => {
     const finished = async (): Promise<unknown> => {
       const compute = (await (await call(app, cookie, "GET", `/spaces/${spaceId}`)).json()).compute
       if (compute.shutdown === null && compute.lastShutdown) return compute.lastShutdown
+      // ast-grep-ignore: no-test-sleep -- the run reports only through the API, so the test asks again until it has finished
       await Bun.sleep(50)
       return finished()
     }

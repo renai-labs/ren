@@ -6,7 +6,7 @@ import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
 import {
-  Array as Arr,
+  Array,
   Cause,
   Clock,
   DateTime,
@@ -191,11 +191,11 @@ const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 export const later = (at: Date, duration: Duration.Input) =>
   DateTime.toDateUtc(DateTime.addDuration(DateTime.makeUnsafe(at), duration))
 
-const sameHosts = Option.makeEquivalence(Arr.makeEquivalence(Equivalence.strictEqual<string>()))
+const sameHosts = Option.makeEquivalence(Array.makeEquivalence(Equivalence.strictEqual<string>()))
 
 // oxlint-disable-next-line ren/no-comments -- Ready and inside its keep-alive. A machine past its keep-alive may be paused.
 const isAwake = (row: Pick<Row<string>, "phase" | "keep_alive_until">, at: Date) =>
-  row.phase === "ready" && row.keep_alive_until !== null && row.keep_alive_until.getTime() > at.getTime()
+  row.phase === "ready" && (row.keep_alive_until?.getTime() ?? 0) > at.getTime()
 
 const desiredImage = (desired: DesiredSetup, provider: MachineProvider.Provider) =>
   Option.match(desired.image, { onNone: () => provider.systemImage, onSome: (image) => image.name })
