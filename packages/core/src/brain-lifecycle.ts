@@ -163,7 +163,7 @@ export const layer = Layer.effect(
 
     const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
-    // oxlint-disable-next-line ren/no-comments -- Unless the loss repeats, each top chat of the brain that was busy or had waiting messages is marked to get one message that continues it on the new machine; then its busy chats end with the outcome.
+    // oxlint-disable-next-line ren/no-comments -- Unless the loss repeats, each top chat of the brain that was mid-turn is marked to get one message that continues it on the new machine; then its busy chats end with the outcome. A waiting item alone marks nothing: a person's queued message waits behind a turn, so its chat is busy, and Ren's own notices wait with resume: false until a turn reads them.
     const interruptBusy = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       brainId: Brain.ID,
@@ -180,7 +180,7 @@ export const layer = Layer.effect(
               eq(chats.brain_id, brainId),
               isNull(chats.parent_id),
               isNull(chats.continue_message_id),
-              or(OpenCodeStore.isBusy(chats.id), OpenCodeStore.hasWaiting(chats.id)),
+              OpenCodeStore.isBusy(chats.id),
             ),
           )
       return yield* OpenCodeStore.endBusyTurns(transaction, brainId, at, outcome)

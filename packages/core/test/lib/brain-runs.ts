@@ -173,6 +173,52 @@ export const make = async () => {
           })
         }),
       ),
+    // oxlint-disable-next-line ren/no-comments -- An idle chat whose inbox holds only the notice a restore leaves with resume: false.
+    notice: (sessionId: Session.ID) =>
+      database.runPromise(
+        Effect.gen(function* () {
+          const db = yield* Database.Service
+          yield* db.db.insert(Database.Schema.opencode_session).values({
+            session_id: sessionId,
+            project_id: "global",
+            slug: "idle",
+            directory: "/home/user/workspace",
+            version: "2",
+            cost: 0,
+            tokens_input: 0,
+            tokens_output: 0,
+            tokens_reasoning: 0,
+            tokens_cache_read: 0,
+            tokens_cache_write: 0,
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          yield* db.db.insert(Database.Schema.opencode_inbox).values({
+            id: Session.MessageID.create(),
+            session_id: sessionId,
+            type: "synthetic",
+            payload: JSON.stringify({
+              text: "This chat moved to a new machine.",
+              metadata: { source: "ren.files-reset" },
+            }),
+            delivery: "steer",
+            enqueued_seq: 1,
+            time_created: Date.now(),
+          })
+        }),
+      ),
+    mark: (sessionId: Session.ID) =>
+      database.runPromise(
+        Effect.gen(function* () {
+          const db = yield* Database.Service
+          return (
+            (yield* db.db
+              .select({ next: Database.Schema.agent_session.continue_message_id })
+              .from(Database.Schema.agent_session)
+              .where(eq(Database.Schema.agent_session.id, sessionId))).at(0)?.next ?? null
+          )
+        }),
+      ),
     marked: (sessionId: Session.ID) =>
       database.runPromise(
         Effect.gen(function* () {

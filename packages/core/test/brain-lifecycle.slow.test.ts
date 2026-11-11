@@ -219,6 +219,19 @@ describe("brain runs", () => {
     await rm(own, { recursive: true, force: true })
   })
 
+  test("a replace at a wake does not continue an idle chat whose inbox holds only Ren's notice", async () => {
+    const found = await runs.seeded()
+    await runs.notice(found.sessionId)
+    const runtime = await runs.ren({ systemImage: "t2", config: { BRAIN_PULL_TIMEOUT: "1 hour" } })
+    await runtime.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    await runs.reaches(found.brainId, "ready")
+    await runs.update(found.brainId, { image: "t1", keep_alive_until: new Date(Date.now() - 1000) })
+    await runtime.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.access(found.brainId)))
+    await runs.reaches(found.brainId, "ready", { generation: 2 })
+    expect(await runs.mark(found.sessionId)).toBeNull()
+    await runtime.dispose()
+  })
+
   test("a paused brain on an older build is replaced with the provider's build at its next access; a running one keeps its build", async () => {
     const paused = await runs.newBrain()
     const running = await runs.newBrain()
