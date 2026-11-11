@@ -46,27 +46,7 @@ const settle = (
     return yield* artifacts.status(owner, id, deploymentId)
   })
 
-const idle = (id: Artifact.ID) =>
-  Effect.gen(function* () {
-    const database = yield* Database.Service
-    const sql = yield* SqlClient.SqlClient
-    const before = (yield* database.db
-      .select()
-      .from(Database.Schema.artifact)
-      .where(eq(Database.Schema.artifact.id, id))).at(0)
-    if (before?.active_deployment_id) {
-      const messages = yield* sql<{
-        readonly payload: unknown
-      }>`select payload::jsonb as payload from cluster_messages where entity_type = 'Workflow/ArtifactSettle' and payload::jsonb ->> 'id' = ${id} and payload::jsonb ->> 'claimId' = ${before.active_deployment_id}`
-      const payload = yield* Schema.decodeUnknownEffect(Artifacts.SettleRun.payloadSchema)(messages.at(0)?.payload)
-      yield* Artifacts.SettleRun.execute(payload)
-    }
-    const after = (yield* database.db
-      .select()
-      .from(Database.Schema.artifact)
-      .where(eq(Database.Schema.artifact.id, id))).at(0)
-    expect(after?.active_deployment_id).toBeNull()
-  })
+const idle = ArtifactSamples.idle
 
 const stop = (artifacts: Artifacts.Interface, owner: Artifacts.Owner, id: Artifact.ID) =>
   Effect.gen(function* () {
@@ -104,10 +84,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         const ready = yield* settle(artifacts, owner, id, attempt)
         expect(ready.status).toBe("ready")
         const origin = new URL(ready.url ?? "").origin
-        expect((yield* read(`${origin}/report.html`)).body).toContain("Quarterly operating report")
-        expect((yield* read(`${origin}/`)).body).toContain("Operations dashboard")
-        expect((yield* read(`${origin}/api/metrics`)).body).toContain("18420")
-        expect((yield* read(`${origin}/api/missing`)).status).toBe(404)
+        yield* ArtifactSamples.pages(origin)
       }),
     120_000,
   )
@@ -138,42 +115,14 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect(first.status).toBe("ready")
         const url = first.url ?? ""
         const origin = new URL(url).origin
-        const sockets = yield* Effect.acquireRelease(
-          Effect.promise(async () => {
-            const connect = () => {
-              const socket = new WebSocket(`${origin.replace("http:", "ws:")}/room`)
-              return new Promise<WebSocket>((resolve, reject) => {
-                socket.addEventListener("open", () => resolve(socket), { once: true })
-                socket.addEventListener("error", reject, { once: true })
-              })
-            }
-            return Promise.all([connect(), connect()])
-          }),
-          (sockets) =>
-            Effect.sync(() => {
-              for (const socket of sockets) socket.close()
-            }),
-        )
-        yield* Effect.promise(async () => {
-          const second = sockets.at(1)
-          const received = new Promise<string>((resolve) =>
-            second?.addEventListener("message", (event) => resolve(String(event.data)), { once: true }),
-          )
-          sockets.at(0)?.send("Durable hello")
-          expect(await received).toContain("Durable hello")
-          for (const socket of sockets) socket.close()
-        })
-        yield* Effect.promise(() =>
-          fetch(`${origin}/api/entries/welcome`, { method: "PUT", body: JSON.stringify({ text: "Persistent" }) }),
-        )
+        yield* ArtifactSamples.guestbook(origin)
         expect(
           (yield* publish({
             ...input.files,
             "_worker.js": text(source.replace('"1" : SAMPLE_VERSION', '"2" : SAMPLE_VERSION')),
           })).status,
         ).toBe("ready")
-        expect((yield* read(`${origin}/api/entries`)).body).toContain("Persistent")
-        expect((yield* read(`${origin}/api/entries`)).body).toContain('"version":"2"')
+        yield* ArtifactSamples.retained(origin, "2")
         const broken = yield* publish({ ...input.files, "_worker.js": text("export default {") })
         expect(broken.status).toBe("failed")
         expect((yield* read(`${origin}/api/entries`)).body).toContain("Persistent")
@@ -189,17 +138,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect(resumed.status).toBe("ready")
         expect((yield* read(`${new URL(resumed.url ?? "").origin}/api/entries`)).body).toContain("Persistent")
         const resumedOrigin = new URL(resumed.url ?? "").origin
-        expect(
-          (yield* Effect.promise(() =>
-            fetch(`${resumedOrigin}/api/entries/welcome`, { method: "PUT", body: JSON.stringify({ text: "Edited" }) }),
-          )).status,
-        ).toBe(200)
-        expect((yield* read(`${resumedOrigin}/api/entries`)).body).toContain("Edited")
-        expect(
-          yield* Effect.promise(() => fetch(`${resumedOrigin}/api/entries/welcome`, { method: "DELETE" })),
-        ).toHaveProperty("status", 204)
-        expect((yield* read(`${resumedOrigin}/api/entries`)).body).not.toContain("Edited")
-        expect((yield* read(`${new URL(resumed.url ?? "").origin}/api/messages`)).body).toContain("Durable hello")
+        yield* ArtifactSamples.edit(resumedOrigin)
         const removed = deployment()
         yield* artifacts.deploy(owner, id, { ...input, config: { entry: "index.html" }, deploymentId: removed })
         expect((yield* settle(artifacts, owner, id, removed)).error).toContain("removal and renaming")

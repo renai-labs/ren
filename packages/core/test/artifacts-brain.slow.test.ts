@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
+import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
 import { Artifacts } from "../src/artifacts.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
@@ -15,6 +16,8 @@ import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
+import { TestCloudflare } from "./lib/cloudflare.js"
+import { BunServices } from "@effect/platform-bun"
 
 setDefaultTimeout(120_000)
 
@@ -27,15 +30,19 @@ const it = testEffect(
       Layer.provideMerge(Host.layer({}, Configured.models)),
       Layer.provideMerge(
         Artifacts.layer.pipe(
-          Layer.provide(ArtifactWorkerd.layer),
-          Layer.provideMerge(FetchHttpClient.layer),
+          Layer.provide(
+            process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer,
+          ),
+          Layer.provideMerge(
+            process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? TestCloudflare.layer : FetchHttpClient.layer,
+          ),
           Layer.provide(TestDrives.layer),
         ),
       ),
       Layer.provideMerge(Host.runner),
     ),
     Host.runner,
-  ).pipe(Layer.provideMerge(Testing.layer)),
+  ).pipe(Layer.provideMerge(Testing.layer), Layer.provideMerge(BunServices.layer)),
 )
 
 const create = (code: string) => ({ tool: { name: "execute", input: { code } } })
@@ -73,6 +80,7 @@ describe("artifacts from a chat", () => {
       yield* Effect.addFinalizer(() => artifacts.stop(owner, row.id).pipe(Effect.ignore))
       expect(JSON.stringify(answered.body)).toContain(row.id)
       expect(JSON.stringify(answered.body)).toContain("Deployment accepted")
+      expect(JSON.stringify(answered.body)).not.toContain(`/api/experimental/artifacts/${row.id}/view/`)
       const completed = yield* Effect.promise(() =>
         stub.waitFor((call) => call.text.includes("Artifact deployment result:") && call.text.includes(row.id)),
       )
@@ -82,6 +90,12 @@ describe("artifacts from a chat", () => {
         .from(Database.Schema.artifact)
         .where(eq(Database.Schema.artifact.id, row.id))).at(0)
       const url = deployed?.url ?? ""
+      if (process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1") {
+        expect(deployed?.provider).toBe(ArtifactCloudflare.id)
+        expect(url).toMatch(/^https:\/\/.*\.workers\.dev\//u)
+        expect(completed.text).toContain(url)
+        yield* Effect.log(`Ren chat Cloudflare artifact: ${row.id} ${url}`)
+      }
       expect(yield* http.get(url).pipe(Effect.flatMap((response) => response.text))).toBe("<h1>from a chat</h1>")
 
       const updated = stub.script(
@@ -98,14 +112,20 @@ describe("artifacts from a chat", () => {
         sender: { userId: owner.createdBy },
       })
       yield* Effect.promise(() => updated.called(2))
-      yield* Effect.promise(() =>
-        stub.waitFor(
-          (call) =>
-            call.text !== completed.text &&
-            call.text.includes("Artifact deployment result:") &&
-            call.text.includes(row.id),
+      const updateRow = (yield* database.db
+        .select()
+        .from(Database.Schema.artifact)
+        .where(eq(Database.Schema.artifact.id, row.id))).at(0)
+      if (!updateRow?.active_deployment_id)
+        return yield* Effect.die(new Error("Update did not retain its deployment claim"))
+      const updateCompleted = yield* Effect.promise(() =>
+        stub.waitFor((call) =>
+          call.text.includes(
+            `Artifact deployment result: {"artifactId":"${row.id}","deploymentId":"${updateRow.active_deployment_id}"`,
+          ),
         ),
       )
+      expect(updateCompleted.text).toContain(`"deploymentId":"${updateRow.active_deployment_id}","status":"ready"`)
       expect(yield* http.get(url).pipe(Effect.flatMap((response) => response.text))).toBe("<h1>updated</h1>")
     }),
   )

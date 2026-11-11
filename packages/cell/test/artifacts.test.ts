@@ -39,6 +39,7 @@ describe("artifacts", () => {
     const accepted = await created.called(2)
     expect(JSON.stringify(accepted.body)).toContain("Deployment accepted")
     expect(JSON.stringify(accepted.body)).toContain(first.info.activeDeploymentId ?? "missing deployment")
+    expect(JSON.stringify(accepted.body)).not.toContain(`/api/experimental/artifacts/${id}/view/`)
     celld.ren.artifactDeploying(false)
     const notification = await stub.waitFor(
       (call) => call.text.includes("Artifact deployment result:") && call.text.includes(id),
