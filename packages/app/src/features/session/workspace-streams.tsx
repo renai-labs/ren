@@ -136,13 +136,8 @@ function BrowserBody(props: {
   )
 }
 
-export function BrowserTab(props: {
-  root: Session.ID
-  ids: ReadonlyArray<string>
-  running: boolean
-  connected: boolean
-}) {
-  const browser = Browser.useWatch(props.root, { ids: props.ids, connected: props.connected })
+export function BrowserTab(props: { root: Session.ID; ids: ReadonlyArray<string>; running: boolean }) {
+  const browser = Browser.useWatch(props.root, props.ids)
   const info = browser.info
   const live = Boolean(info && !info.closed && !browser.failed)
   const [typed, setTyped] = useState<string>()

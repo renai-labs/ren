@@ -120,7 +120,6 @@ export function WorkspacePanel(props: {
   browser: string | undefined
   browserIds: ReadonlyArray<string>
   running: boolean
-  connected: boolean
   open: boolean
   maximized: boolean
   onMaximize: (maximized: boolean) => void
@@ -219,12 +218,7 @@ export function WorkspacePanel(props: {
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {/* oxlint-disable-next-line ren/no-comments -- The stream keeps the cloud browser running and billed, so a closed panel does not follow it. */}
             {tab.kind === "browser" && props.open ? (
-              <BrowserTab
-                root={props.root}
-                ids={props.browserIds}
-                running={props.running}
-                connected={props.connected}
-              />
+              <BrowserTab root={props.root} ids={props.browserIds} running={props.running} />
             ) : null}
             {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
             {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}

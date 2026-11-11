@@ -1027,13 +1027,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     readFile: (path: string) => Effect.flatMap(client, (api) => api.file.read({ sessionID: root, path })),
     vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
     vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
-    // oxlint-disable-next-line ren/no-comments -- The chat's current client token, for a service that acts for the person in this chat (the Browser panel).
-    accessToken: Effect.flatMap(client, () =>
-      Option.match(cached.current, {
-        onNone: () => Effect.fail(new AccessFailed({ cause: new Error("The chat has no access") })),
-        onSome: (found) => Effect.succeed(found.access.token),
-      }),
-    ),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
     stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),

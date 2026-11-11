@@ -260,7 +260,6 @@ export function ChatPage() {
             browser={browser}
             browserIds={chat.browserIds}
             running={chat.running}
-            connected={chat.connected}
             open={panel}
             maximized={maximized}
             onMaximize={setMaximized}
