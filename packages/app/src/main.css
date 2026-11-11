@@ -9,3 +9,15 @@
     animation: none;
   }
 }
+
+:root {
+  --container-chat: 48rem;
+}
+
+[data-timeline-width="focused"] {
+  --container-chat: 488px;
+}
+
+[data-timeline-width="wide"] {
+  --container-chat: 1000px;
+}

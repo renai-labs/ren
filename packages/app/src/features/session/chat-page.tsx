@@ -57,7 +57,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
       <div className="px-6 pb-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-2">
+        <div className="mx-auto flex max-w-(--container-chat) flex-col gap-2">
           <ChatComposer chat={chat} dock={props.dock} picking={picking} onPickingChange={setPicking} />
         </div>
       </div>

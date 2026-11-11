@@ -183,7 +183,7 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
             <SheetTitle>Task session</SheetTitle>
             <SheetDescription>Chat with the agent working on this task.</SheetDescription>
           </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col [--container-chat:48rem]">
             {props.session?.(task.humanReview ? <ReviewCard task={task} /> : null)}
           </div>
         </SheetContent>

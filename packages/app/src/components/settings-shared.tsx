@@ -74,6 +74,11 @@ export const details = [
   { value: "compact", label: "Compact" },
   { value: "detailed", label: "Detailed" },
 ]
+export const timelineWidths = [
+  { value: "focused", label: "Focused" },
+  { value: "comfortable", label: "Comfortable" },
+  { value: "wide", label: "Wide" },
+]
 export const deliveries = [
   { value: "steer", label: "Steer the current turn" },
   { value: "queue", label: "Queue for the next turn" },

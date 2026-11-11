@@ -61,7 +61,7 @@ export function TurnRail(props: { messages: ReadonlyArray<SessionMessage.Info> }
     <nav
       ref={railRef}
       aria-label="Jump to a message (Alt+J)"
-      className="pointer-events-none absolute inset-y-0 left-2 z-10 flex flex-col justify-center max-md:hidden"
+      className="pointer-events-none absolute inset-y-0 left-[max(0.5rem,calc(50%_-_var(--container-chat)/2_-_2.5rem))] z-10 flex flex-col justify-center max-md:hidden"
     >
       <div className="pointer-events-auto flex flex-col py-2 pr-3 pl-1">
         {turns.map((turn, index) => (
