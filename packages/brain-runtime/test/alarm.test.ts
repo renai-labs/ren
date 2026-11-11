@@ -45,6 +45,7 @@ const setup = Effect.gen(function* () {
     configuring: yield* Semaphore.make(1),
     closedIdle: yield* Ref.make(false),
     pulledAt: yield* Ref.make(Option.none<DateTime.Utc>()),
+    touched: yield* Ref.make<ReadonlySet<string>>(new Set()),
   })
   const sync = yield* Sync.make(
     Option.some({

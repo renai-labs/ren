@@ -231,6 +231,12 @@ const harnessed = Effect.map(
       Effect.flatMap(Cell.acquire, use).pipe(Effect.scoped, Effect.provide(context)),
 )
 
+// oxlint-disable-next-line ren/no-comments -- A person asked for a chat's files or diff: the next pull tells Ren, so the chat keeps its place on its hand.
+const touching = Effect.map(
+  Effect.service(Cell.Activity),
+  (activity) => (sessionId: string) => Ref.update(activity.touched, (all) => new Set([...all, sessionId])),
+)
+
 const access = Layer.effect(
   ChatAccess,
   Effect.gen(function* () {
@@ -484,48 +490,70 @@ const handlers = Layer.mergeAll(
     ),
   ),
   HttpApiBuilder.group(ChatApi, "file", (group) =>
-    Effect.map(harnessed, (run) =>
-      group
+    Effect.gen(function* () {
+      const run = yield* harnessed
+      const touch = yield* touching
+      return group
         .handle("file.search", (request) =>
-          run((harness) =>
-            harness.chat
-              .files(request.params.sessionID, {
-                query: request.query.query,
-                ...(request.query.type && { type: request.query.type }),
-                ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
-              })
-              .pipe(notFound),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat
+                  .files(request.params.sessionID, {
+                    query: request.query.query,
+                    ...(request.query.type && { type: request.query.type }),
+                    ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
+                  })
+                  .pipe(notFound),
+              ),
+            ),
           ),
         )
         .handle("file.list", (request) =>
-          run((harness) =>
-            harness.chat.listFiles(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat.listFiles(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+              ),
+            ),
           ),
         )
         .handle("file.read", (request) =>
-          run((harness) =>
-            harness.chat.readFile(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat.readFile(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+              ),
+            ),
           ),
-        ),
-    ),
+        )
+    }),
   ),
   HttpApiBuilder.group(ChatApi, "vcs", (group) =>
-    Effect.map(harnessed, (run) =>
-      group
+    Effect.gen(function* () {
+      const run = yield* harnessed
+      const touch = yield* touching
+      return group
         .handle("vcs.get", (request) =>
-          run((harness) => harness.chat.vcs(request.params.sessionID).pipe(notFound, rejected)),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(run((harness) => harness.chat.vcs(request.params.sessionID).pipe(notFound, rejected))),
+          ),
         )
         .handle("vcs.diff", (request) =>
-          run((harness) =>
-            harness.chat
-              .vcsDiff(request.params.sessionID, {
-                mode: request.query.mode ?? "working",
-                ...(Predicate.isNumber(request.query.context) && { context: request.query.context }),
-              })
-              .pipe(notFound, rejected),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat
+                  .vcsDiff(request.params.sessionID, {
+                    mode: request.query.mode ?? "working",
+                    ...(Predicate.isNumber(request.query.context) && { context: request.query.context }),
+                  })
+                  .pipe(notFound, rejected),
+              ),
+            ),
           ),
-        ),
-    ),
+        )
+    }),
   ),
   HttpApiBuilder.group(ChatApi, "websearch", (group) =>
     Effect.map(harnessed, (run) =>

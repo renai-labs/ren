@@ -308,7 +308,7 @@ describe("EnvironmentTemplates", () => {
       const old = yield* templates.create(setup.admin, input)
       const next = yield* templates.create(setup.admin, { ...input, name: "Next" })
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
-      yield* environments.bind(session, old.id)
+      yield* environments.bind(session, Seed.version(old.id))
       const applied = yield* environments.access(session, Option.none())
       yield* database.db
         .update(Database.Schema.space)
@@ -329,7 +329,7 @@ describe("EnvironmentTemplates", () => {
       const setup = yield* team()
       const made = yield* templates.create(setup.admin, input)
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
-      yield* environments.bind(session, made.id)
+      yield* environments.bind(session, Seed.version(made.id))
       yield* environments.access(session, Option.none())
       const environmentId = (yield* Ref.get(probe.provisions)).at(-1)
       yield* environments.unbind(session)
@@ -361,7 +361,7 @@ describe("EnvironmentTemplates", () => {
         )
         .pipe(Effect.forkChild)
       yield* Deferred.await(locked)
-      const binding = yield* environments.bind(session, made.id).pipe(Effect.forkChild)
+      const binding = yield* environments.bind(session, Seed.version(made.id)).pipe(Effect.forkChild)
       const waiting = (count: number) =>
         sql<{ readonly waiting: number }>`
         select count(*)::int as waiting from pg_stat_activity

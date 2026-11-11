@@ -329,10 +329,12 @@ describe("Egress.resolve", () => {
         value: { type: "key", value: Redacted.make("sk_live_real") },
       })
       const environmentId = Environment.ID.create()
+      const environmentTemplateId = yield* Seed.environmentTemplate(found.organizationId)
       yield* database.db.insert(Database.Schema.environment).values({
         id: environmentId,
-        environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+        environment_template_id: environmentTemplateId,
         space_id: found.space.id,
+        target: Seed.version(environmentTemplateId),
       })
       const hand = yield* callers.issue(
         { workload: { kind: "hand", id: environmentId, generation: 1 }, organizationId: found.organizationId },

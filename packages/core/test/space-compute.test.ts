@@ -70,6 +70,7 @@ const seeded = Effect.fnUntraced(function* (options: {
         session_id: sessionId,
         space_id: owner.spaceId,
         environment_template_id: first,
+        target: Seed.version(first),
       })),
     )
   const desire = (hand: Space.Hand, provider?: string) =>

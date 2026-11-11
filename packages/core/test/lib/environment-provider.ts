@@ -1,7 +1,7 @@
 export * as TestProvider from "./environment-provider.js"
 
 import { Environment } from "@ren/schema/environment"
-import { Effect, Ref, Schema } from "effect"
+import { Effect, Option, Ref, Schema } from "effect"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
 import { MachineProvider } from "../../src/machine-provider.js"
 
@@ -15,6 +15,8 @@ interface Probe {
   readonly gone: Ref.Ref<ReadonlySet<Environment.ID>>
   readonly networks: Ref.Ref<ReadonlyArray<MachineProvider.Network>>
   readonly keptAlive: Ref.Ref<ReadonlyArray<Environment.ID>>
+  // oxlint-disable-next-line ren/no-comments -- The image of each machine it made, in order: null for none.
+  readonly images: Ref.Ref<ReadonlyArray<string | null>>
   readonly failing: Ref.Ref<boolean>
   readonly provider: MachineProvider.Provider
 }
@@ -45,6 +47,7 @@ export const make = (
     const failing = yield* Ref.make(false)
     const networks = yield* Ref.make<ReadonlyArray<MachineProvider.Network>>([])
     const keptAlive = yield* Ref.make<ReadonlyArray<Environment.ID>>([])
+    const images = yield* Ref.make<ReadonlyArray<string | null>>([])
     const made = yield* Ref.make<
       ReadonlyArray<MachineProvider.Lost & { readonly binding: { readonly environmentId: Environment.ID } }>
     >([])
@@ -82,6 +85,7 @@ export const make = (
           if (yield* Ref.get(failing)) return yield* new MachineProvider.Failed({ message: "the test provider fails" })
           const environmentId = Environment.ID.make(input.labels.id)
           yield* Ref.update(provisions, (all) => [...all, environmentId])
+          yield* Ref.update(images, (all) => [...all, Option.getOrNull(input.image)])
           yield* Ref.update(made, (all) => [
             ...all,
             {
@@ -124,5 +128,5 @@ export const make = (
         },
       }),
     })
-    return { provisions, destroyed, gone, failing, networks, keptAlive, provider } satisfies Probe
+    return { provisions, destroyed, gone, failing, networks, keptAlive, images, provider } satisfies Probe
   })

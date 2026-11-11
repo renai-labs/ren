@@ -10,7 +10,7 @@ import { AppCatalog } from "@ren/schema/app-catalog"
 import { App } from "@ren/schema/app"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { Context, Effect, Fiber, Layer, Option, Schedule, Schema } from "effect"
+import { Context, Effect, Fiber, Layer, Option, Ref, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -298,6 +298,7 @@ const open = Effect.fnUntraced(function* (
     requests,
     writes,
     resets,
+    activity: Context.get(services, Cell.Activity),
     reload: Context.get(services, HotReload.Service),
     harness: Context.get(services, Harness.Service),
     holdNextPull: () => {
@@ -348,6 +349,19 @@ it.live("a pull with another compute revision closes the brain's hand connection
       return opened.resets.count
     })
     expect([yield* resetsAt(1), yield* resetsAt(1), yield* resetsAt(2)]).toEqual([0, 0, 1])
+  }),
+)
+
+it.live("a chat whose files a person asked for stays marked until a pull can name it", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const sessionId = Session.ID.create()
+    yield* Ref.set(opened.activity.touched, new Set([sessionId]))
+    yield* opened.reload.pull
+    expect([opened.requests.at(-1)?.sessions, yield* Ref.get(opened.activity.touched)]).toEqual([
+      [],
+      new Set([sessionId]),
+    ])
   }),
 )
 

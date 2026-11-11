@@ -7,6 +7,7 @@ import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Credential } from "@ren/schema/credential"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { Machine } from "@ren/schema/machine"
 import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Session } from "@ren/schema/session"
 import type { Skill } from "@ren/schema/skill"
@@ -233,6 +234,14 @@ export const team = Effect.fnUntraced(function* (organizationId: Auth.Organizati
     .insert(Database.Schema.space)
     .values({ id, organization_id: organizationId, slug: id.toLowerCase().replace("_", "-"), name: "Team" })
   return id
+})
+
+// oxlint-disable-next-line ren/no-comments -- The version of a seeded template that a brain applies: no image, the seeded config.
+export const version = (environmentTemplateId: EnvironmentTemplate.ID): Machine.Version => ({
+  environmentTemplateId,
+  image: null,
+  config: { label: "seeded" },
+  system: null,
 })
 
 export const environmentTemplate = Effect.fnUntraced(function* (

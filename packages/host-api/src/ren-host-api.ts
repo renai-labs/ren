@@ -55,6 +55,10 @@ export const PullSession = Schema.Struct({
     description:
       "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it (EN25). An older brain leaves it out.",
   }),
+  touched: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A person asked for the chat’s files or diff since the last pull. Ren keeps the chat’s place on its hand, as for a turn. An older brain leaves it out.",
+  }),
 }).annotate({ identifier: "Host.PullSession" })
 
 export interface PullRequest extends Schema.Schema.Type<typeof PullRequest> {}

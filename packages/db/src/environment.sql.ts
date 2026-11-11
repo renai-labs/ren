@@ -100,6 +100,8 @@ export const environment = pgTable(
     network_hosts: jsonb().$type<ReadonlyArray<string>>(),
     // oxlint-disable-next-line ren/no-comments -- The versions of Ren's bundles the machine started with; a newer one replaces it at its wake (EN27).
     bundles: jsonb().$type<Readonly<Record<"dependencies" | "executor", string>>>(),
+    // oxlint-disable-next-line ren/no-comments -- The template version the machine was made for. Only chats bound to this version share it, and a replace makes this version again.
+    target: jsonb().$type<Machine.Version>().notNull(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [
@@ -124,7 +126,10 @@ export const session_environment = pgTable(
       .$type<Environment.ID>()
       .references(() => environment.id, { onDelete: "set null" }),
     generation: integer().default(1).notNull(),
-    idle_at: timestamp(),
+    // oxlint-disable-next-line ren/no-comments -- The template version of the hand the chat's brain applied. The chat gets a machine of this version only.
+    target: jsonb().$type<Machine.Version>().notNull(),
+    // oxlint-disable-next-line ren/no-comments -- The chat holds a place on its machine until then. Each turn, and each file or diff request, moves it 3 days later; a machine with no place held is destroyed at the daily cleanup.
+    reserved_until: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [

@@ -191,6 +191,7 @@ export const start = async (options: {
               sandboxes.map((sandbox) => ({
                 id: sandbox.container.environmentId,
                 environment_template_id: sandbox.environmentTemplateId,
+                target: Seed.version(sandbox.environmentTemplateId),
               })),
             ),
           ),

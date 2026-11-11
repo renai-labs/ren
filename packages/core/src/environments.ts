@@ -10,8 +10,10 @@ import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Bundle } from "@ren/schema/bundle"
+import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, gt, inArray, isNull, notInArray, sql } from "drizzle-orm"
+import { and, asc, count, eq, exists, gt, inArray, isNull, lte, ne, notExists, notInArray, or, sql } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import {
   Clock,
@@ -68,10 +70,8 @@ interface Bound {
 }
 
 export interface Interface {
-  readonly bind: (
-    placement: Subject & Placement,
-    environmentTemplateId: EnvironmentTemplate.ID,
-  ) => Effect.Effect<Bound, NotFound | Changed>
+  // oxlint-disable-next-line ren/no-comments -- Binds a new chat to the template version of the hand its brain applied.
+  readonly bind: (placement: Subject & Placement, version: Machine.Version) => Effect.Effect<Bound, NotFound | Changed>
   readonly findDirectory: (
     subject: Subject,
     hand: Option.Option<Hand>,
@@ -82,7 +82,7 @@ export interface Interface {
     hand: Option.Option<Hand>,
   ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- In the transaction that applies a brain's hand: binds each of its top chats to the hand's template, or unbinds them for the brain's own machine or none. A chat whose template changes gets a new machine at its next access.
+  // oxlint-disable-next-line ren/no-comments -- In the transaction that applies a brain's hand: binds each of its top chats to the hand's template version, or unbinds them for the brain's own machine or none. A chat whose version changes gets a machine of the new version at its next access.
   readonly apply: (
     transaction: Database.Transaction,
     brainId: Brain.ID,
@@ -96,13 +96,14 @@ export interface Interface {
     hand: Option.Option<Hand>,
     options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Environment.Access, NotFound | Unavailable | Starting>
-  readonly release: (subject: Subject) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- A turn, or a file or diff request, of each chat: a chat that holds a place on its machine keeps it for 3 more days. An expired place is taken again only at the chat's next access, when the machine has room.
+  readonly renew: (sessionIds: ReadonlyArray<Session.ID>) => Effect.Effect<void>
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list (networking rule 4).
   readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- The hosts the machines of a remote hand's template answer on. A brain with a host list must reach them.
   readonly handHosts: (environmentTemplateId: EnvironmentTemplate.ID) => Effect.Effect<ReadonlyArray<string>>
-  // oxlint-disable-next-line ren/no-comments -- Destroys the hand sandboxes that no row knows at their generation: a row that is gone or replaced, or a create that half worked.
+  // oxlint-disable-next-line ren/no-comments -- Daily: destroys each hand machine that no chat holds a place on and that runs no work, with its files. Then destroys the hand sandboxes that no row knows at their generation: a row that is gone or replaced, or a create that half worked.
   readonly cleanup: Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
@@ -121,6 +122,9 @@ export class Starting extends Schema.TaggedError<Starting>()("Environments.Start
 
 // oxlint-disable-next-line ren/no-comments -- An access waits this long for a hand's machine, under the 10 s for which Ren's server keeps a quiet connection (server main.ts, idleTimeout). A hand that takes longer answers Starting, and the brain asks again.
 export const startingAfter = Duration.seconds(5)
+
+// oxlint-disable-next-line ren/no-comments -- How long a chat holds its place on a hand machine after its last turn or file request.
+export const reservation = Duration.days(3)
 
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
@@ -214,6 +218,7 @@ export const layer = Layer.effect(
         "ren.session.id": subject.sessionId,
         "ren.organization.id": subject.organizationId,
       })
+      const at = new Date(yield* Clock.currentTimeMillis)
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const sessionRows = yield* transaction
@@ -221,7 +226,8 @@ export const layer = Layer.effect(
               spaceId: sessions.space_id,
               environmentTemplateId: sessions.environment_template_id,
               environmentId: sessions.environment_id,
-              idleAt: sessions.idle_at,
+              target: sessions.target,
+              reservedUntil: sessions.reserved_until,
               generation: sessions.generation,
               brainId: Database.Schema.agent_session.brain_id,
             })
@@ -232,6 +238,7 @@ export const layer = Layer.effect(
             .for("update", { of: sessions })
           const session = sessionRows.at(0)
           if (!session) return yield* new NotFound({ message: `Session ${subject.sessionId} has no environment` })
+          // oxlint-disable-next-line ren/no-comments -- The template lock orders every assign and cleanup of its machines, on every Ren: two chats never take the last place at once.
           const templateRows = yield* transaction
             .select()
             .from(templates)
@@ -242,39 +249,52 @@ export const layer = Layer.effect(
             return yield* new NotFound({
               message: `The environment template of session ${subject.sessionId} is archived`,
             })
-          const existing = session.environmentId
-            ? Option.some(session.environmentId)
-            : Option.fromNullishOr(
-                (yield* transaction
-                  .select({ id: environments.id })
-                  .from(environments)
-                  .leftJoin(sessions, and(eq(sessions.environment_id, environments.id), isNull(sessions.idle_at)))
-                  .where(
-                    and(
-                      eq(environments.environment_template_id, template.id),
-                      eq(environments.space_id, session.spaceId),
-                    ),
-                  )
-                  .groupBy(environments.id, environments.created_at)
-                  .having(sql`${count(sessions.session_id)} < ${template.sessions_per_environment}`)
-                  .orderBy(asc(environments.created_at))
-                  .limit(1)).at(0)?.id,
-              )
-          const environmentId = yield* Option.match(existing, {
-            onSome: Effect.succeed,
-            onNone: () => {
-              const id = Environment.ID.create()
-              return transaction
-                .insert(environments)
-                .values({ id, environment_template_id: template.id, space_id: session.spaceId })
-                .pipe(Effect.as(id))
-            },
-          })
-          if (!session.environmentId || session.idleAt)
-            yield* transaction
-              .update(sessions)
-              .set({ environment_id: environmentId, idle_at: null })
-              .where(eq(sessions.session_id, subject.sessionId))
+          // oxlint-disable-next-line ren/no-comments -- The machines of the chat's version in its space, oldest first, with the places that other chats hold on each now.
+          const held = alias(sessions, "held")
+          const machines = yield* transaction
+            .select({ id: environments.id, held: count(held.session_id) })
+            .from(environments)
+            .leftJoin(
+              held,
+              and(
+                eq(held.environment_id, environments.id),
+                gt(held.reserved_until, at),
+                ne(held.session_id, subject.sessionId),
+              ),
+            )
+            .where(
+              and(
+                eq(environments.environment_template_id, template.id),
+                eq(environments.space_id, session.spaceId),
+                eq(environments.target, session.target),
+              ),
+            )
+            .groupBy(environments.id, environments.created_at)
+            .orderBy(asc(environments.created_at))
+          const hasRoom = (machine: { readonly held: number }) => machine.held < template.sessions_per_environment
+          const current = machines.find((machine) => machine.id === session.environmentId)
+          // oxlint-disable-next-line ren/no-comments -- A chat keeps its machine while it holds its place there, also when the template now allows fewer chats per machine; with an expired place, only while the machine has room.
+          const isKept = current && ((session.reservedUntil && session.reservedUntil > at) || hasRoom(current))
+          const environmentId = isKept
+            ? current.id
+            : (machines.find(hasRoom)?.id ??
+              (yield* Effect.gen(function* () {
+                const id = Environment.ID.create()
+                yield* transaction.insert(environments).values({
+                  id,
+                  environment_template_id: template.id,
+                  space_id: session.spaceId,
+                  target: session.target,
+                })
+                return id
+              })))
+          yield* transaction
+            .update(sessions)
+            .set({
+              environment_id: environmentId,
+              reserved_until: new Date(at.getTime() + Duration.toMillis(reservation)),
+            })
+            .where(eq(sessions.session_id, subject.sessionId))
           const environment = yield* transaction
             .select({ binding: environments.binding })
             .from(environments)
@@ -298,6 +318,7 @@ export const layer = Layer.effect(
 
     type Row = MachineLifecycle.Row<Environment.ID> & {
       readonly environment_template_id: EnvironmentTemplate.ID
+      readonly target: Machine.Version
       readonly bundles: Readonly<Record<"dependencies" | "executor", string>> | null
     }
 
@@ -342,38 +363,27 @@ export const layer = Layer.effect(
         onSome: Effect.succeed,
       })
 
+    // oxlint-disable-next-line ren/no-comments -- A hand's machine runs the template version it was made for, also after a failure, and keeps to its template's live host list.
     const desiredSetupOf = Effect.fnUntraced(function* (row: Row) {
       const template = (yield* database.db
-        .select({
-          id: templates.id,
-          config: templates.config,
-          image: templates.image,
-          imageConfig: templates.image_config,
-          imageSystem: templates.image_system,
-          networking: templates.networking,
-        })
+        .select({ networking: templates.networking })
         .from(templates)
         .where(eq(templates.id, row.environment_template_id))
         .pipe(Effect.orDie)).at(0)
-      if (!template)
-        return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
-      const hosts = yield* network.hostsOf(
-        { kind: "hand", id: row.id, generation: row.generation },
-        template.networking,
-      )
+      const target = row.target
       return {
-        config: template.config,
-        image: Option.map(
-          Option.all({
-            name: Option.fromNullishOr(template.image),
-            config: Option.fromNullishOr(template.imageConfig),
-          }),
-          (built) => ({
-            name: built.name,
-            template: { environmentTemplateId: template.id, config: built.config, system: template.imageSystem },
-          }),
-        ),
-        hosts,
+        config: target.config,
+        image: Option.map(Option.fromNullishOr(target.image), (name) => ({
+          name,
+          template: {
+            environmentTemplateId: target.environmentTemplateId,
+            config: target.config,
+            system: target.system,
+          },
+        })),
+        hosts: template
+          ? yield* network.hostsOf({ kind: "hand", id: row.id, generation: row.generation }, template.networking)
+          : Option.none(),
       } satisfies MachineLifecycle.DesiredSetup
     })
 
@@ -455,7 +465,7 @@ export const layer = Layer.effect(
         }
       }),
       desiredSetup: (row) => desiredSetupOf(row),
-      // oxlint-disable-next-line ren/no-comments -- A hand's machine always belongs to one template, so its live host list is that template's.
+      // oxlint-disable-next-line ren/no-comments -- A hand's machine always belongs to one template version, so its live host list is that template's.
       appliedHosts: (row) => Effect.map(desiredSetupOf(row), (desired) => desired.hosts),
       target: (row) =>
         Option.map(Option.fromNullishOr(row.url), (url) => ({
@@ -560,10 +570,8 @@ export const layer = Layer.effect(
       } satisfies Environment.Access
     })
 
-    const bind = Effect.fn("Environments.bind")(function* (
-      placement: Subject & Placement,
-      environmentTemplateId: EnvironmentTemplate.ID,
-    ) {
+    const bind = Effect.fn("Environments.bind")(function* (placement: Subject & Placement, version: Machine.Version) {
+      const environmentTemplateId = version.environmentTemplateId
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const provider = yield* checkAvailable(transaction, placement, environmentTemplateId)
@@ -573,6 +581,7 @@ export const layer = Layer.effect(
               session_id: placement.sessionId,
               space_id: placement.spaceId,
               environment_template_id: environmentTemplateId,
+              target: version,
             })
             .onConflictDoNothing()
             .returning({ session_id: sessions.session_id })
@@ -658,14 +667,25 @@ export const layer = Layer.effect(
           yield* transaction.delete(sessions).where(inArray(sessions.session_id, ids))
           return
         }
-        const templateId = hand.version.environmentTemplateId
+        const target = hand.version
         yield* transaction
           .delete(sessions)
-          .where(and(inArray(sessions.session_id, ids), notInArray(sessions.environment_template_id, [templateId])))
+          .where(
+            and(
+              inArray(sessions.session_id, ids),
+              notInArray(sessions.environment_template_id, [target.environmentTemplateId]),
+            ),
+          )
+        yield* transaction.update(sessions).set({ target }).where(inArray(sessions.session_id, ids))
         yield* transaction
           .insert(sessions)
           .values(
-            chats.map((chat) => ({ session_id: chat.id, space_id: chat.spaceId, environment_template_id: templateId })),
+            chats.map((chat) => ({
+              session_id: chat.id,
+              space_id: chat.spaceId,
+              environment_template_id: target.environmentTemplateId,
+              target,
+            })),
           )
           .onConflictDoNothing()
       }),
@@ -696,11 +716,13 @@ export const layer = Layer.effect(
       ) {
         return yield* grantAccess(subject, hand, options)
       }),
-      release: Effect.fn("Environments.release")(function* (subject: Subject) {
+      renew: Effect.fn("Environments.renew")(function* (sessionIds: ReadonlyArray<Session.ID>) {
+        if (sessionIds.length === 0) return
+        const at = new Date(yield* Clock.currentTimeMillis)
         yield* database.db
           .update(sessions)
-          .set({ idle_at: sql`now()` })
-          .where(and(isSessionOf(subject), isNull(sessions.idle_at)))
+          .set({ reserved_until: new Date(at.getTime() + Duration.toMillis(reservation)) })
+          .where(and(inArray(sessions.session_id, [...sessionIds]), gt(sessions.reserved_until, at)))
           .pipe(Effect.orDie)
       }),
       // oxlint-disable-next-line ren/no-comments -- EN25: a chat's background process runs on its remote hand, so the hand stays awake for it as the brain does, up to 2 h after the chat's last progress. A hand that is asleep stays asleep.
@@ -732,6 +754,54 @@ export const layer = Layer.effect(
         )
       }),
       cleanup: Effect.gen(function* () {
+        const at = new Date(yield* Clock.currentTimeMillis)
+        const isUnused = and(
+          notExists(
+            database.db
+              .select({ id: sessions.session_id })
+              .from(sessions)
+              .where(and(eq(sessions.environment_id, environments.id), gt(sessions.reserved_until, at))),
+          ),
+          or(isNull(environments.keep_alive_until), lte(environments.keep_alive_until, at)),
+        )
+        const unused = yield* database.db
+          .select({ id: environments.id, templateId: templates.id, provider: templates.provider })
+          .from(environments)
+          .innerJoin(templates, eq(templates.id, environments.environment_template_id))
+          .where(isUnused)
+          .pipe(Effect.orDie)
+        // oxlint-disable-next-line ren/no-comments -- Under its template's lock, as an assign takes it: a chat that takes a place on the machine meanwhile keeps it.
+        const removed = yield* Effect.forEach(unused, (machine) =>
+          database
+            .transaction((transaction) =>
+              Effect.gen(function* () {
+                yield* transaction
+                  .select({ id: templates.id })
+                  .from(templates)
+                  .where(eq(templates.id, machine.templateId))
+                  .for("update")
+                const deleted = yield* transaction
+                  .delete(environments)
+                  .where(and(eq(environments.id, machine.id), isUnused))
+                  .returning({ binding: environments.binding })
+                return deleted.map((row) => Object.assign(machine, { binding: row.binding }))
+              }),
+            )
+            .pipe(Effect.orDie),
+        )
+        yield* Effect.forEach(
+          removed.flat(),
+          Effect.fnUntraced(function* (machine) {
+            yield* FiberMap.remove(runs, machine.id)
+            yield* sandboxEgress.retire({ kind: "hand", id: machine.id })
+            const provider = registry.get(machine.provider)
+            if (machine.binding && Option.isSome(provider))
+              yield* provider.value
+                .destroy(machine.binding)
+                .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of environment ${machine.id} failed`, error)))
+          }),
+          { discard: true },
+        )
         const listed = (yield* Effect.forEach(registry.providers, (provider) =>
           provider.list.pipe(
             Effect.map((all) => all.flatMap((each) => (each.kind === "hand" ? [{ ...each, provider }] : []))),

@@ -124,6 +124,7 @@ export const make = Effect.fnUntraced(function* (
           configuring: Semaphore.make(1),
           closedIdle: Ref.make(false),
           pulledAt: Ref.make(Option.none<DateTime.Utc>()),
+          touched: Ref.make<ReadonlySet<string>>(new Set()),
         }),
       ),
       Layer.effect(Sync.Service, Sync.make(Option.none())),

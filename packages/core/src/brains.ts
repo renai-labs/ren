@@ -312,7 +312,7 @@ export const layer = Layer.effect(
         hand.placement === "remote"
           ? Option.some(
               yield* environments
-                .bind({ ...subject, spaceId: placement.spaceId }, hand.version.environmentTemplateId)
+                .bind({ ...subject, spaceId: placement.spaceId }, hand.version)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
           : Option.map(colocated, (directory) => ({ directory, isNew: false }))
@@ -578,6 +578,10 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
+        // oxlint-disable-next-line ren/no-comments -- A chat in a turn, or whose files or diff a person asked for, keeps its place on its hand. A pull alone does not.
+        yield* environments.renew(
+          request.sessions.flatMap((session) => (session.busy || session.touched ? [session.id] : [])),
+        )
         // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace marked continue now (EN35, EN36).
         yield* continueMarked(host.brainId)
         // oxlint-disable-next-line ren/no-comments -- Networking rule 4: a push makes the brain pull at once after a change, so a new connection or allowed host reaches its machines within seconds. One query first: a space with no limited template now, and no machine that still has a host list, has nothing to send.
@@ -683,7 +687,8 @@ export const layer = Layer.effect(
         host: CurrentHost["Service"],
         sessionId: Session.ID,
       ) {
-        yield* environments.release(yield* inBrain(host, sessionId))
+        // oxlint-disable-next-line ren/no-comments -- A brain calls it at the end of each turn: the turn keeps the chat's place on its hand.
+        yield* environments.renew([(yield* inBrain(host, sessionId)).sessionId])
       }),
     })
   }),

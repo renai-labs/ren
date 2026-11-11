@@ -1,0 +1,5 @@
+-- Each machine and each binding keeps the template version it was made for. A binding that holds a machine keeps its place for 3 days.
+UPDATE "environment" AS e SET "target" = jsonb_build_object('environmentTemplateId', e."environment_template_id", 'image', e."image", 'config', COALESCE(e."image_template"->'config', t."config"), 'system', e."image_template"->'system') FROM "environment_template" AS t WHERE t."id" = e."environment_template_id";--> statement-breakpoint
+UPDATE "session_environment" AS s SET "target" = e."target" FROM "environment" AS e WHERE e."id" = s."environment_id";--> statement-breakpoint
+UPDATE "session_environment" AS s SET "target" = jsonb_build_object('environmentTemplateId', t."id", 'image', t."image", 'config', COALESCE(t."image_config", t."config"), 'system', t."image_system") FROM "environment_template" AS t WHERE t."id" = s."environment_template_id" AND s."target" IS NULL;--> statement-breakpoint
+UPDATE "session_environment" SET "reserved_until" = now() + interval '3 days' WHERE "environment_id" IS NOT NULL;

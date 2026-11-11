@@ -73,6 +73,11 @@ export const layer = Layer.effect(
           return yield* opened.value.sessions
         }),
       )
+      // oxlint-disable-next-line ren/no-comments -- A chat that the harness does not hold now is named at a later pull, when it does.
+      const touched = yield* Ref.modify(activity.touched, (all) => {
+        const named = new Set(sessions.flatMap((session) => (all.has(session.id) ? [session.id] : [])))
+        return [named, new Set([...all].filter((id) => !named.has(id)))]
+      })
       const reply = yield* host.pull
         .pull({
           payload: {
@@ -83,6 +88,7 @@ export const layer = Layer.effect(
               busy: session.active,
               progress: session.progress,
               background: session.background,
+              ...(touched.has(session.id) && { touched: true }),
             })),
             roots: sessions.filter((session) => session.root).map((session) => Session.ID.make(session.id)),
           },

@@ -11,6 +11,7 @@ import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
@@ -318,6 +319,57 @@ describe("BrainHost pull", () => {
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
+  it.live("a pull keeps a chat's place on its hand only while the chat is in a turn or a person reads its files", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
+      const environmentId = Environment.ID.create()
+      yield* database.db.insert(Database.Schema.environment).values({
+        id: environmentId,
+        environment_template_id: template,
+        space_id: subject.owner.spaceId,
+        target: Seed.version(template),
+      })
+      const soon = new Date(Date.now() + Duration.toMillis("1 hour"))
+      yield* database.db.insert(Database.Schema.session_environment).values({
+        session_id: subject.sessionId,
+        space_id: subject.owner.spaceId,
+        environment_template_id: template,
+        target: Seed.version(template),
+        environment_id: environmentId,
+        reserved_until: soon,
+      })
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ hand: { placement: "remote", version: Seed.version(template) } })
+        .where(eq(Database.Schema.brain.id, host.brainId))
+      const heldAfter = Effect.fnUntraced(function* (session: { readonly busy: boolean; readonly touched?: boolean }) {
+        yield* brain.pull(host, {
+          version: "test",
+          keyIds: [],
+          sessions: [{ id: subject.sessionId, progress: "0", ...session }],
+        })
+        const found = (yield* database.db
+          .select({ until: Database.Schema.session_environment.reserved_until })
+          .from(Database.Schema.session_environment)
+          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))).at(0)?.until
+        return (found?.getTime() ?? 0) > Date.now() + Duration.toMillis("2 days")
+      })
+      expect([yield* heldAfter({ busy: false }), yield* heldAfter({ busy: false, touched: true })]).toEqual([
+        false,
+        true,
+      ])
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
   it.live("a catalog whose space is archived is omitted while the rest of pull still succeeds", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
@@ -427,7 +479,7 @@ describe("BrainHost pull", () => {
             const sessionId = yield* Seed.session(owner)
             yield* environments.bind(
               { sessionId, organizationId, spaceId },
-              yield* Seed.environmentTemplate(organizationId, { provider }),
+              Seed.version(yield* Seed.environmentTemplate(organizationId, { provider })),
             )
             return sessionId
           }),
