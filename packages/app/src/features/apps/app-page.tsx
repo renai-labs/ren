@@ -135,9 +135,9 @@ function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => 
     <section aria-label="Example prompts" className="grid gap-3 sm:grid-cols-3">
       {prompts.slice(0, 3).map((prompt) => {
         const body = (
-          <>
+          <span className="block">
             <span className="font-medium text-foreground">@{props.app.name}</span> {withoutMention(prompt)}
-          </>
+          </span>
         )
         return start ? (
           <Button
