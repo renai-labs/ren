@@ -346,6 +346,19 @@ describe("MachineLifecycle", () => {
     }),
   )
 
+  it.effect("a stopped machine answers Stopped to an access and makes nothing; a retry starts it again", () =>
+    Effect.gen(function* () {
+      const memory = yield* kind
+      memory.switches.boots = true
+      const id = memory.add({ phase: "stopped", generation: 2 })
+      expect(yield* memory.machines.access(id)).toEqual({ _tag: "Stopped" })
+      expect(memory.images).toHaveLength(0)
+      yield* memory.machines.retry(id)
+      expect(yield* memory.read(id)).toMatchObject({ phase: "ready", generation: 2 })
+      expect(memory.images).toHaveLength(1)
+    }),
+  )
+
   it.effect("a change made while a machine waits for capacity stays: the wait does not write its old phase back", () =>
     Effect.gen(function* () {
       const memory = yield* kind

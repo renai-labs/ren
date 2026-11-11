@@ -19556,6 +19556,9 @@
           },
           {
             "$ref": "#/components/schemas/Session.FailedAccess"
+          },
+          {
+            "$ref": "#/components/schemas/Session.StoppedAccess"
           }
         ]
       },
@@ -19842,6 +19845,18 @@
       "Session.Status": {
         "type": "string",
         "enum": ["idle", "busy"]
+      },
+      "Session.StoppedAccess": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["stopped"]
+          }
+        },
+        "required": ["status"],
+        "additionalProperties": false,
+        "description": "Its space was shut down. A message or a retry starts the brain again."
       },
       "SessionCapabilities.Info": {
         "type": "object",

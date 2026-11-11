@@ -190,6 +190,10 @@ export const ClientAccess = Schema.Union([
     status: Schema.Literal("failed"),
     reason: Schema.String,
   }).annotate({ identifier: "Session.FailedAccess" }),
+  Schema.Struct({ status: Schema.Literal("stopped") }).annotate({
+    identifier: "Session.StoppedAccess",
+    description: "Its space was shut down. A message or a retry starts the brain again.",
+  }),
 ]).annotate({ identifier: "Session.ClientAccess" })
 export type ClientAccess = typeof ClientAccess.Type
 

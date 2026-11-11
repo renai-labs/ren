@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "1d0ff1be-1ab1-4f15-8e12-a484da35ed51",
+  "id": "2b126203-8ab8-4bfa-acb9-177724709439",
   "prevIds": [
     "25fa7af1-4a88-4205-9ff4-91cf142a5db4"
   ],
@@ -3307,19 +3307,6 @@
       "generated": null,
       "identity": null,
       "name": "compute_revision",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "brain"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "stopped_at",
       "entityType": "columns",
       "schema": "public",
       "table": "brain"

@@ -43,7 +43,6 @@ export const brain = pgTable(
     hand: jsonb().$type<Space.AppliedHand>(),
     compute_revision: integer().notNull().default(0),
     // oxlint-disable-next-line ren/no-comments -- Set by a shutdown. A stopped brain wakes only for new work or a person who opens a chat, never for a reconnect or file poll.
-    stopped_at: timestamp(),
     // oxlint-disable-next-line ren/no-comments -- The bundle versions the machine runs; null on a machine whose image holds Ren's code (EN26).
     bundles: jsonb().$type<Readonly<Record<Bundle.Kind, string>>>(),
     // oxlint-disable-next-line ren/no-comments -- Set at create and read by every later step: the sandbox sends its traffic through the egress, so the brain holds placeholders, never real keys or its host token.

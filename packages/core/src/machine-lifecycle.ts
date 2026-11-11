@@ -175,6 +175,10 @@ const phaseAfterResume = (
 
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
+// oxlint-disable-next-line ren/no-comments -- Ready and inside its keep-alive. A machine past its keep-alive may be paused.
+const isAwake = (row: Pick<Row<string>, "phase" | "keep_alive_until">, at: Date) =>
+  row.phase === "ready" && row.keep_alive_until !== null && row.keep_alive_until.getTime() > at.getTime()
+
 const desiredImage = (desired: DesiredSetup, provider: MachineProvider.Provider) =>
   Option.match(desired.image, { onNone: () => provider.systemImage, onSome: (image) => image.name })
 
@@ -568,6 +572,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     replacing: replace,
     ready: settle,
     failed: () => Effect.succeed(true),
+    stopped: () => Effect.succeed(true),
     capacity: (row) => update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false)),
   } satisfies Record<Machine.Phase, (row: R) => Effect.Effect<boolean, unknown>>
 
@@ -620,12 +625,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const row = yield* read(id)
     const at = yield* now
     const target = definition.target(row)
-    if (
-      row.phase === "ready" &&
-      Option.isSome(target) &&
-      row.keep_alive_until &&
-      row.keep_alive_until.getTime() > at.getTime()
-    ) {
+    if (isAwake(row, at) && Option.isSome(target)) {
       yield* update(row.id, { last_active_at: at })
       const isAlive = yield* keepAlive(row, timing.idle).pipe(
         Effect.as(true),
@@ -637,6 +637,8 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       if (!isAlive) return { _tag: "Starting", phase: "replacing" } as const
       return { _tag: "Ready", target: target.value } as const
     }
+    // oxlint-disable-next-line ren/no-comments -- A stopped machine starts again only for new work or a retry, never for an access alone.
+    if (row.phase === "stopped") return { _tag: "Stopped" } as const
     if (row.phase === "failed" && !(row.retry_at && row.retry_at.getTime() <= at.getTime()))
       return { _tag: "Failed", reason: row.failure ?? `The ${noun.toLowerCase()} failed` } as const
     if (row.phase === "failed") yield* restart(row, row.retries + 1)
@@ -649,7 +651,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const refreshNetwork = Effect.fn(`${name}.refreshNetwork`)(function* (id: Id) {
     const row = yield* read(id)
     const at = yield* now
-    if (!row.binding || row.phase !== "ready" || !(row.keep_alive_until && row.keep_alive_until > at)) return
+    if (!row.binding || !isAwake(row, at)) return
     const applied = yield* definition.appliedHosts(row)
     const hosts = Option.getOrNull(applied)
     if (JSON.stringify(hosts) === JSON.stringify(row.network_hosts)) return
@@ -675,15 +677,14 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     awake: Effect.fn(`${name}.awake`)(function* (id: Id) {
       const row = yield* read(id)
       const at = yield* now
-      return row.phase === "ready" && row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()
-        ? definition.target(row)
-        : Option.none()
+      return isAwake(row, at) ? definition.target(row) : Option.none()
     }),
     ready: Effect.fn(`${name}.ready`)(function* (id: Id) {
       const wait = Effect.gen(function* () {
         const result = yield* access(id)
         if (result._tag === "Ready") return Option.some(result.target)
         if (result._tag === "Failed") return yield* new Unavailable({ message: result.reason })
+        if (result._tag === "Stopped") return yield* new Unavailable({ message: `${noun} ${id} is stopped` })
         return Option.none<Target>()
       }).pipe(Effect.withTracerEnabled(false))
       const within = Duration.sum(definition.bootWithin, definition.wakeWithin)
@@ -703,7 +704,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     }),
     retry: Effect.fn(`${name}.retry`)(function* (id: Id) {
       const row = yield* read(id)
-      if (row.phase === "failed") yield* restart(row, 0)
+      if (row.phase === "failed" || row.phase === "stopped") yield* restart(row, 0)
       yield* ensure(id)
     }),
   }

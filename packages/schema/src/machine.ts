@@ -13,6 +13,7 @@ export const Phase = Schema.Literals([
   "ready",
   "failed",
   "capacity",
+  "stopped",
 ]).annotate({ identifier: "Machine.Phase" })
 export type Phase = typeof Phase.Type
 

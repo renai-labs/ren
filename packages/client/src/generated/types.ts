@@ -134,6 +134,8 @@ export type SessionStartingAccess = { status: "starting"; phase: string }
 
 export type SessionFailedAccess = { status: "failed"; reason: string }
 
+export type SessionStoppedAccess = { status: "stopped" }
+
 export type SessionMessageID = string
 
 export type SessionModelRef = { id: string; providerID: string; variant?: string }
@@ -510,7 +512,11 @@ export type SessionInfo = {
   filesResetAt: string | null
 }
 
-export type SessionClientAccess = SessionReadyAccess | SessionStartingAccess | SessionFailedAccess
+export type SessionClientAccess =
+  | SessionReadyAccess
+  | SessionStartingAccess
+  | SessionFailedAccess
+  | SessionStoppedAccess
 
 export type SessionMessageAgentSwitched = {
   id: SessionMessageID

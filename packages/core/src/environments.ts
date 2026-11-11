@@ -579,6 +579,8 @@ export const layer = Layer.effect(
       const first = yield* hands.access(environmentId)
       if (first._tag === "Ready") return first.target
       if (first._tag === "Failed") return yield* new Unavailable({ message: first.reason })
+      if (first._tag === "Stopped")
+        return yield* new Unavailable({ message: `The environment ${environmentId} is stopped` })
       const row = yield* read(environmentId)
       yield* DurableRunner.join(HandRun, { environmentId, epoch: row.run_epoch }).pipe(
         Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
@@ -587,6 +589,8 @@ export const layer = Layer.effect(
       const next = yield* hands.access(environmentId)
       if (next._tag === "Ready") return next.target
       if (next._tag === "Failed") return yield* new Unavailable({ message: next.reason })
+      if (next._tag === "Stopped")
+        return yield* new Unavailable({ message: `The environment ${environmentId} is stopped` })
       return yield* new Starting({ message: `The environment ${environmentId} is ${next.phase}` })
     })
 

@@ -785,11 +785,10 @@ export const layer = Layer.effect(
                   url: null,
                   keep_alive_until: null,
                   hand: null,
-                  phase: "failed",
-                  failure: "The space was shut down. Send a message or press Retry to start it again.",
+                  phase: "stopped",
+                  failure: null,
                   failures: 0,
                   retry_at: null,
-                  stopped_at: new Date(),
                 })
                 .where(eq(brains.id, brainId))
               yield* transaction

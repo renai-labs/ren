@@ -276,6 +276,17 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
         </Button>
       </div>
     )
+  if (props.boot._tag === "Stopped")
+    return (
+      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
+        <span className="mr-auto min-w-0 text-sm text-muted-foreground">
+          This space was shut down. Send a message or retry to start it again.
+        </span>
+        <Button variant="outline" size="sm" onClick={props.onRetry}>
+          Retry
+        </Button>
+      </div>
+    )
   if (props.boot._tag === "Reconnecting")
     return (
       <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">

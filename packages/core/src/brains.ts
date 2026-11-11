@@ -225,7 +225,7 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- New work waits for no shutdown: it is refused while one runs, and it wakes a brain that a finished shutdown stopped. A reconnect or a file poll never comes here.
     const admit = Effect.fnUntraced(function* (brainId: Brain.ID) {
       const row = (yield* database.db
-        .select({ stoppedAt: Database.Schema.brain.stopped_at, shutdown: Database.Schema.space.shutdown_state })
+        .select({ phase: Database.Schema.brain.phase, shutdown: Database.Schema.space.shutdown_state })
         .from(Database.Schema.brain)
         .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
         .where(eq(Database.Schema.brain.id, brainId))
@@ -234,13 +234,7 @@ export const layer = Layer.effect(
         return yield* new BrainRejectedError({
           message: "The space is shutting down. Send the message again when it has finished.",
         })
-      if (!row?.stoppedAt) return
-      yield* database.db
-        .update(Database.Schema.brain)
-        .set({ stopped_at: null })
-        .where(eq(Database.Schema.brain.id, brainId))
-        .pipe(Effect.orDie)
-      yield* brainHost.retry(brainId)
+      if (row?.phase === "stopped") yield* brainHost.retry(brainId)
     })
 
     const inBrain = Effect.fnUntraced(function* (host: CurrentHost["Service"], sessionId: Session.ID) {
@@ -510,6 +504,7 @@ export const layer = Layer.effect(
         const state = yield* brainHost.access(session.brainId)
         if (state._tag === "Starting") return { status: "starting", phase: state.phase } satisfies Session.ClientAccess
         if (state._tag === "Failed") return { status: "failed", reason: state.reason } satisfies Session.ClientAccess
+        if (state._tag === "Stopped") return { status: "stopped" } satisfies Session.ClientAccess
         if (!session.startedAt) return { status: "starting", phase: "starting the chat" } satisfies Session.ClientAccess
         const signed = yield* client.clientToken(state.target, {
           sid: sessionId,

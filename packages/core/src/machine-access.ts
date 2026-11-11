@@ -6,6 +6,7 @@ export type Access<Target> =
   | { readonly _tag: "Ready"; readonly target: Target }
   | { readonly _tag: "Starting"; readonly phase: string }
   | { readonly _tag: "Failed"; readonly reason: string }
+  | { readonly _tag: "Stopped" }
 
 // oxlint-disable-next-line ren/no-comments -- The one contract that Ren calls for a machine, whatever its family (EN1). `check` is for a caller whose call to the machine failed.
 export interface Interface<Id extends string, Target> {

@@ -112,6 +112,7 @@ export type Boot =
   | { readonly _tag: "Ready" }
   | { readonly _tag: "Starting"; readonly phase: string }
   | { readonly _tag: "Failed"; readonly reason: string }
+  | { readonly _tag: "Stopped" }
 
 export interface Handoff {
   readonly id: SessionMessage.ID
@@ -262,6 +263,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     Effect.gen(function* () {
       const currentBoot = yield* SubscriptionRef.get(boot)
       if (currentBoot._tag === "Failed") return yield* new AccessFailed({ cause: new Error(currentBoot.reason) })
+      if (currentBoot._tag === "Stopped")
+        return yield* new AccessFailed({ cause: new Error("The space was shut down") })
       const now = yield* Clock.currentTimeMillis
       if (
         Option.isSome(cached.current) &&
@@ -279,6 +282,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             return SubscriptionRef.set(boot, { _tag: "Failed", reason: answer.reason }).pipe(
               Effect.andThen(showSaved),
               Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))),
+            )
+          if (answer.status === "stopped")
+            return SubscriptionRef.set(boot, { _tag: "Stopped" }).pipe(
+              Effect.andThen(showSaved),
+              Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error("The space was shut down") }))),
             )
           return SubscriptionRef.set(boot, { _tag: "Starting", phase: answer.phase }).pipe(
             Effect.andThen(showSaved),
@@ -526,7 +534,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const connection = yield* Connection.make({
     ...options.connection,
     subscribe: Effect.map(client, (api) => api.event.subscribe()),
-    canReconnect: Effect.map(SubscriptionRef.get(boot), (current) => current._tag !== "Failed"),
+    canReconnect: Effect.map(
+      SubscriptionRef.get(boot),
+      (current) => current._tag !== "Failed" && current._tag !== "Stopped",
+    ),
     onFrames,
     onStatus: (next) =>
       Effect.gen(function* () {

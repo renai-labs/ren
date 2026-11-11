@@ -139,7 +139,7 @@ describe("BrainHost calls to a brain", () => {
   )
 
   it.live(
-    "a send while the space shuts down is refused before the brain is called; after it, a send wakes the stopped brain",
+    "a send while the space shuts down is refused before the brain is called; after it, a send reaches the brain",
     () =>
       Effect.gen(function* () {
         const requests: Array<string> = []
@@ -149,7 +149,6 @@ describe("BrainHost calls to a brain", () => {
         })
         const subject = yield* seeded
         const database = yield* Database.Service
-        const brainId = Brain.ofSession(subject.sessionId)
         yield* database.db
           .update(Database.Schema.space)
           .set({ shutdown_state: "running" })
@@ -163,20 +162,11 @@ describe("BrainHost calls to a brain", () => {
           .update(Database.Schema.space)
           .set({ shutdown_state: null })
           .where(eq(Database.Schema.space.id, subject.owner.spaceId))
-        yield* database.db
-          .update(Database.Schema.brain)
-          .set({ stopped_at: new Date() })
-          .where(eq(Database.Schema.brain.id, brainId))
         yield* sendTo(subject.sessionId, "after").pipe(Effect.provide(cell(answering.url.origin)))
-        const stoppedAt = (yield* database.db
-          .select({ stoppedAt: Database.Schema.brain.stopped_at })
-          .from(Database.Schema.brain)
-          .where(eq(Database.Schema.brain.id, brainId))).at(0)?.stoppedAt
-        expect({ refused: refused._tag, before, after: requests.length, stoppedAt }).toEqual({
+        expect({ refused: refused._tag, before, after: requests.length }).toEqual({
           refused: "BrainRejectedError",
           before: 0,
           after: 1,
-          stoppedAt: null,
         })
       }),
   )
