@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, scriptedReply, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -172,4 +172,31 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("a member wraps a long code line with the toggle, and Copy still copies the source", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"])
+  await createOrganization(page.request, { name: "Katherine Johnson" })
+  const line = Array.from({ length: 80 }, (_, index) => `word${index}`).join(" ")
+  const marker = await scriptedReply(page.request, `\`\`\`text\n${line}\n\`\`\``)
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill(`Show the code ${marker}`)
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
+
+  const block = page.locator("[data-slot=code-block]")
+  const content = block.locator("[data-slot=code-block-content]")
+  await expect(content).toContainText("word79", { timeout: brainStart })
+  const height = (await content.boundingBox())?.height ?? 0
+  await block.hover()
+  await block.getByRole("button", { name: "Wrap lines" }).click()
+  await expect(block.getByRole("button", { name: "Don't wrap lines" })).toHaveAttribute("aria-pressed", "true")
+  await expect.poll(async () => (await content.boundingBox())?.height ?? 0).toBeGreaterThan(height)
+
+  await block.getByRole("button", { name: "Copy" }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(line)
 })
