@@ -767,7 +767,9 @@ export const layer = Layer.effect(
                 answer.drained ? [] : [`Brain ${brainId} did not sync all its chats before it stopped`],
               ),
               Effect.catchCause((cause) =>
-                Effect.succeed([`Brain ${brainId} did not confirm that it stopped and synced: ${String(Cause.squash(cause))}`]),
+                Effect.succeed([
+                  `Brain ${brainId} did not confirm that it stopped and synced: ${String(Cause.squash(cause))}`,
+                ]),
               ),
             ),
         })
