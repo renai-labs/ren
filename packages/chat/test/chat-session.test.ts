@@ -164,7 +164,7 @@ test("while access is starting the history comes from Ren, a page that is too la
         saved: (query) =>
           Effect.suspend(() => {
             limits.push(query.limit)
-            if (query.limit > 25) return Effect.fail({ _tag: "TooLargeError", message: "The page is too large" })
+            if (query.limit > 5) return Effect.fail({ _tag: "TooLargeError", message: "The page is too large" })
             return brain.chat.session["session.messages"]({
               params: { sessionID: brain.id },
               query: { limit: query.limit },
@@ -178,13 +178,89 @@ test("while access is starting the history comes from Ren, a page that is too la
         phase: "waking",
       })
       const saved = yield* ChatTest.until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
-      expect(limits).toEqual([100, 50, 25])
+      expect(limits).toEqual([20, 5])
       expect(ChatState.messages(saved, brain.id).map((message) => message.id)).toEqual(expected)
       ready.value = true
       yield* ChatTest.until(chat.status, (status) => status === "connected")
       expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Ready" })
       const live = yield* ChatTest.until(chat.state, settled(brain.id))
       expect(ChatState.messages(live, brain.id).map((message) => message.id)).toEqual(expected)
+    }),
+  ))
+
+test("a saved page that holds only the newest messages makes the brain's read stop at its oldest message, not read the whole history (#253)", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const first = yield* open(brain)
+      yield* first.open(brain.id)
+      yield* Effect.forEach(
+        Array.from({ length: 10 }, (_, index) => index + 1),
+        (turns) =>
+          first
+            .prompt({ text: stub.script().marker })
+            .pipe(
+              Effect.andThen(
+                ChatTest.until(
+                  first.state,
+                  (state) =>
+                    settled(brain.id)(state) &&
+                    ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === turns,
+                ),
+              ),
+            ),
+        { discard: true },
+      )
+      const all = (yield* brain.chat.session["session.messages"]({
+        params: { sessionID: brain.id },
+        query: { limit: 200 },
+      })).items.length
+      const ready = { value: false }
+      const reads: Array<string> = []
+      const logging = FetchHttpClient.layer.pipe(
+        Layer.provide(
+          Layer.succeed(
+            FetchHttpClient.Fetch,
+            Object.assign(
+              (input: string | URL | Request, init?: RequestInit) => {
+                const url = new URL(input instanceof Request ? input.url : String(input))
+                if (url.pathname.endsWith("/message")) reads.push(url.search)
+                return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
+              },
+              { preconnect: fetch.preconnect },
+            ),
+          ),
+        ),
+      )
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() =>
+            ready.value
+              ? {
+                  status: "ready" as const,
+                  url: "http://cell",
+                  token: "a-client-token",
+                  expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+                }
+              : { status: "starting" as const, phase: "waking" },
+          ),
+        saved: (query) =>
+          brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: { limit: query.limit } }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(logging))
+      yield* chat.open(brain.id).pipe(Effect.forkChild)
+      const saved = yield* ChatTest.until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
+      const shown = ChatState.messages(saved, brain.id).map((message) => message.id)
+      ready.value = true
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
+      const live = yield* ChatTest.until(chat.state, (state) => ChatState.more(state, brain.id))
+      expect(all).toBeGreaterThan(shown.length)
+      const loaded = ChatState.messages(live, brain.id).map((message) => message.id)
+      expect(shown.filter((id) => !loaded.includes(id))).toEqual([])
+      expect(loaded.length).toBeLessThan(all)
+      expect(reads.filter((search) => search.includes("cursor=")).length).toBeLessThanOrEqual(1)
     }),
   ))
 

@@ -48,7 +48,7 @@ const refreshBefore = 60_000
 const startingPollMs = 2_000
 
 // oxlint-disable-next-line ren/no-comments -- Ren refuses a page of saved history over its size limit with 413 (E111); the runtime asks again for fewer messages.
-export const savedPageSizes = [100, 50, 25, 5, 1]
+export const savedPageSizes = [messagePageLimit, 5, 1]
 
 const savedRetries = 3
 
@@ -251,9 +251,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     shown.saved = true
     return savedPage(savedPageSizes).pipe(
       Effect.flatMap((page) =>
-        update((current) =>
-          current.messages[root] ? current : Hydrate.messages(current, root, { items: page.items, cursor: {} }),
-        ),
+        update((current) => (current.messages[root] ? current : Hydrate.saved(current, root, page))),
       ),
       Effect.catch(report),
       Effect.forkIn(scope),
@@ -379,7 +377,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             load: (before) =>
               Effect.gen(function* () {
                 const oldest = before?.at(0)?.id
-                const complete = before && !(yield* SubscriptionRef.get(state)).cursor[read.sessionID]
+                const known = yield* SubscriptionRef.get(state)
+                const complete = before && !known.cursor[read.sessionID] && !known.partial.has(read.sessionID)
                 const fetch = (cursor?: string): Effect.Effect<SessionMessage.Page, unknown> =>
                   api.session
                     .messages({

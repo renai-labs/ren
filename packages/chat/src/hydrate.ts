@@ -127,7 +127,15 @@ export const messages = (state: ChatState.State, sessionID: string, page: Sessio
     cursor: page.cursor.next
       ? ChatState.set(state.cursor, sessionID, page.cursor.next)
       : ChatState.drop(state.cursor, sessionID),
+    partial: settled.partial.has(sessionID)
+      ? new Set([...settled.partial].filter((id) => id !== sessionID))
+      : settled.partial,
   }
+}
+
+export const saved = (state: ChatState.State, sessionID: string, page: SessionMessage.Page): ChatState.State => {
+  const shown = messages(state, sessionID, { items: page.items, cursor: {} })
+  return page.cursor.next ? { ...shown, partial: new Set([...shown.partial, sessionID]) } : shown
 }
 
 export const older = (
