@@ -277,9 +277,12 @@ export const layer = Layer.effect(
       }))
     })
 
-    // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its chats' hand, only while the brain applied a co-located hand.
-    const ownHand = (host: CurrentHost["Service"], hand: Space.AppliedHand) =>
-      hand.placement === "colocated" ? handOf(host.brainId, host.generation) : Effect.succeedNone
+    // oxlint-disable-next-line ren/no-comments -- Where the chats of a brain run their tools, from the hand it applied: its own machine, a remote hand or none.
+    const appliedOf = (brainId: Brain.ID, generation: number, hand: Space.AppliedHand) => {
+      if (hand.placement === "colocated")
+        return Effect.map(handOf(brainId, generation), (own): Environments.Applied => ({ _tag: "Own", hand: own }))
+      return Effect.succeed<Environments.Applied>(hand.placement === "remote" ? { _tag: "Remote" } : { _tag: "None" })
+    }
 
     const creatorSees = Effect.fnUntraced(function* (sessionId: Session.ID, placement: Placement) {
       return yield* database.transaction((transaction) =>
@@ -321,7 +324,7 @@ export const layer = Layer.effect(
       const hand = (yield* compute.applied(placement.brainId)).hand
       const colocated =
         hand.placement === "colocated"
-          ? yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation))
+          ? yield* environments.findDirectory(subject, yield* appliedOf(placement.brainId, target.generation, hand))
           : Option.none()
       const binding =
         hand.placement === "remote"
@@ -613,11 +616,11 @@ export const layer = Layer.effect(
         const inference = yield* models.inference
         // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake (EN23).
         const applied = yield* compute.applied(host.brainId)
-        const own = yield* ownHand(host, applied.hand)
+        const tools = yield* appliedOf(host.brainId, host.generation, applied.hand)
         const capabilities = yield* environments.capabilities(
           host.organizationId,
           pulled.chats.map((chat) => chat.id),
-          own,
+          tools,
         )
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
@@ -626,7 +629,7 @@ export const layer = Layer.effect(
         const directories = new Map(
           yield* Effect.forEach(hasHand ? pulled.chats : [], (chat) =>
             Effect.map(
-              environments.findDirectory({ sessionId: chat.id, organizationId: host.organizationId }, own),
+              environments.findDirectory({ sessionId: chat.id, organizationId: host.organizationId }, tools),
               (directory) => [chat.id, directory] as const,
             ),
           ),
@@ -669,8 +672,8 @@ export const layer = Layer.effect(
         options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        const own = yield* ownHand(host, (yield* compute.applied(host.brainId)).hand)
-        return yield* environments.access(subject, own, options).pipe(
+        const tools = yield* appliedOf(host.brainId, host.generation, (yield* compute.applied(host.brainId)).hand)
+        return yield* environments.access(subject, tools, options).pipe(
           Effect.catchTags({
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
             "Environments.Unavailable": (error) =>
@@ -683,7 +686,7 @@ export const layer = Layer.effect(
         const subject = yield* inBrain(host, sessionId)
         return yield* environments.findDirectory(
           subject,
-          yield* ownHand(host, (yield* compute.applied(host.brainId)).hand),
+          yield* appliedOf(host.brainId, host.generation, (yield* compute.applied(host.brainId)).hand),
         )
       }),
       releaseEnvironment: Effect.fn("Brains.releaseEnvironment")(function* (

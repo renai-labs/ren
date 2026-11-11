@@ -522,21 +522,23 @@ describe("BrainHost pull", () => {
         const brainId = Brain.ID.create()
         const owner = { organizationId, spaceId, createdBy: creator.id, brainId }
         const environments = yield* Environments.Service
-        const bound = yield* Effect.forEach(["mounting", "unmountable", "direct"], (provider) =>
+        const versions = yield* Effect.forEach(["mounting", "unmountable", "direct"], (provider) =>
+          Effect.map(Seed.environmentTemplate(organizationId, { provider }), Seed.version),
+        )
+        const bound = yield* Effect.forEach(versions, (version) =>
           Effect.gen(function* () {
             const sessionId = yield* Seed.session(owner)
-            yield* environments.bind(
-              { sessionId, organizationId, spaceId },
-              Seed.version(yield* Seed.environmentTemplate(organizationId, { provider })),
-            )
+            yield* environments.bind({ sessionId, organizationId, spaceId }, version)
             return sessionId
           }),
         )
         const without = yield* Seed.session(owner)
+        const version = versions[0]
+        if (!version) return yield* Effect.die(new Error("no template was made"))
         const database = yield* Database.Service
         yield* database.db
           .update(Database.Schema.brain)
-          .set({ hand: { placement: "colocated" } })
+          .set({ hand: { placement: "remote", version } })
           .where(eq(Database.Schema.brain.id, brainId))
         const brain = yield* Brains.Service
         const reply = yield* brain.pull(
@@ -831,7 +833,7 @@ describe("BrainHost environments", () => {
           spaceId: subject.owner.spaceId,
         }
         yield* environments.bind(chat, Seed.version(template))
-        yield* environments.access(chat, Option.none())
+        yield* environments.access(chat, { _tag: "Remote" })
         yield* database.db
           .update(Database.Schema.space)
           .set({ shutdown_state: "running", shutdown_epoch: 1 })

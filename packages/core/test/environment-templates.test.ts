@@ -11,7 +11,7 @@ import type { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Brain } from "@ren/schema/brain"
 import type { Actor } from "../src/actor.js"
-import { ConfigProvider, Deferred, Effect, Fiber, Layer, Option, Queue, Ref, Schedule, Schema } from "effect"
+import { ConfigProvider, Deferred, Effect, Fiber, Layer, Queue, Ref, Schedule, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
@@ -310,7 +310,7 @@ describe("EnvironmentTemplates", () => {
       const next = yield* templates.create(setup.admin, { ...input, name: "Next" })
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
       yield* environments.bind(session, Seed.version(old.id))
-      const applied = yield* environments.access(session, Option.none())
+      const applied = yield* environments.access(session, { _tag: "Remote" })
       yield* database.db
         .update(Database.Schema.space)
         .set({ hand_placement: "remote", environment_template_id: next.id })
@@ -319,7 +319,7 @@ describe("EnvironmentTemplates", () => {
         _tag: "Primitive.Conflict",
         message: "Spaces use this environment template: Team. Pick another brain or hand for them first.",
       })
-      expect((yield* environments.access(session, Option.none())).url.href).toBe(applied.url.href)
+      expect((yield* environments.access(session, { _tag: "Remote" })).url.href).toBe(applied.url.href)
     }),
   )
 
@@ -331,14 +331,16 @@ describe("EnvironmentTemplates", () => {
       const made = yield* templates.create(setup.admin, input)
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
       yield* environments.bind(session, Seed.version(made.id))
-      yield* environments.access(session, Option.none())
+      yield* environments.access(session, { _tag: "Remote" })
       const environmentId = (yield* Ref.get(probe.provisions)).at(-1)
       yield* environments.unbind(session)
       const archived = yield* templates.archive(setup.admin, made.id)
       expect(archived.archivedAt).not.toBeNull()
       expect(yield* templates.archive(setup.admin, made.id)).toEqual(archived)
       expect((yield* templates.get(setup.admin, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-      expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+      expect((yield* environments.access(session, { _tag: "Remote" }).pipe(Effect.flip))._tag).toBe(
+        "Environments.NotFound",
+      )
       expect((yield* Ref.get(probe.destroyed)).at(-1)).toBe(environmentId)
     }),
   )

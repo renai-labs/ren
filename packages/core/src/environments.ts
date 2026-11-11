@@ -63,6 +63,12 @@ export interface Hand {
   readonly canMount: boolean
 }
 
+// oxlint-disable-next-line ren/no-comments -- Where the chats of a brain run their tools, from the hand it applied: its own machine (none while it has no machine), a remote hand, or none.
+export type Applied =
+  | { readonly _tag: "Own"; readonly hand: Option.Option<Hand> }
+  | { readonly _tag: "Remote" }
+  | { readonly _tag: "None" }
+
 export interface Capability {
   readonly canMount: boolean
   readonly egress: boolean
@@ -76,14 +82,11 @@ interface Bound {
 export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- Binds a new chat to the template version of the hand its brain applied.
   readonly bind: (placement: Subject & Placement, version: Machine.Version) => Effect.Effect<Bound, NotFound | Changed>
-  readonly findDirectory: (
-    subject: Subject,
-    hand: Option.Option<Hand>,
-  ) => Effect.Effect<Option.Option<Environment.Directory>>
+  readonly findDirectory: (subject: Subject, applied: Applied) => Effect.Effect<Option.Option<Environment.Directory>>
   readonly capabilities: (
     organizationId: Auth.OrganizationID,
     sessionIds: ReadonlyArray<Session.ID>,
-    hand: Option.Option<Hand>,
+    applied: Applied,
   ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- In the transaction that applies a brain's hand: binds each of its top chats to the hand's template version, or unbinds them for the brain's own machine or none. A chat whose version changes gets a machine of the new version at its next access.
@@ -97,7 +100,7 @@ export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
     subject: Subject,
-    hand: Option.Option<Hand>,
+    applied: Applied,
     options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Environment.Access, NotFound | Unavailable | Starting>
   // oxlint-disable-next-line ren/no-comments -- A turn, or a file or diff request, of each chat: a chat that holds a place on its machine keeps it for 3 more days. An expired place is taken again only at the chat's next access, when the machine has room.
@@ -196,16 +199,6 @@ export const layer = Layer.effect(
     const expiry = Effect.map(Clock.currentTimeMillis, (now) =>
       Math.floor((now + Duration.toMillis(config.lifetime)) / 1000),
     )
-
-    const isBound = (subject: Subject) =>
-      database.db
-        .select({ sessionId: sessions.session_id })
-        .from(sessions)
-        .where(isSessionOf(subject))
-        .pipe(
-          Effect.orDie,
-          Effect.map((rows) => rows.length > 0),
-        )
 
     const handDirectory = (hand: Hand, sessionId: Session.ID) => `${hand.workspace}/${sessionId}`
 
@@ -594,29 +587,36 @@ export const layer = Layer.effect(
       return yield* new Starting({ message: `The environment ${environmentId} is ${next.phase}` })
     })
 
-    const grantAccess = Effect.fnUntraced(function* (
+    const ownAccess = Effect.fnUntraced(function* (subject: Subject, hand: Hand) {
+      const exp = yield* expiry
+      return {
+        directory: handDirectory(hand, subject.sessionId),
+        url: new URL(hand.url),
+        token: Redacted.make(
+          yield* signToken({
+            environment: Environment.ofBrain(hand.brainId),
+            brain: hand.brainId,
+            generation: hand.generation,
+            exp,
+          }),
+        ),
+        expiresAt: DateTime.makeUnsafe(exp * 1000),
+        generation: hand.generation,
+        egress: hand.egress,
+        sharedDirectory: `${hand.workspace}/.ren`,
+      } satisfies Environment.Access
+    })
+
+    const access = Effect.fn("Environments.access")(function* (
       subject: Subject,
-      hand: Option.Option<Hand>,
-      options: { readonly unreachable?: boolean },
+      applied: Applied,
+      options: { readonly unreachable?: boolean } = {},
     ): Effect.fn.Return<Environment.Access, NotFound | Unavailable | Starting> {
-      if (Option.isSome(hand) && !(yield* isBound(subject))) {
-        const exp = yield* expiry
-        return {
-          directory: handDirectory(hand.value, subject.sessionId),
-          url: new URL(hand.value.url),
-          token: Redacted.make(
-            yield* signToken({
-              environment: Environment.ofBrain(hand.value.brainId),
-              brain: hand.value.brainId,
-              generation: hand.value.generation,
-              exp,
-            }),
-          ),
-          expiresAt: DateTime.makeUnsafe(exp * 1000),
-          generation: hand.value.generation,
-          egress: hand.value.egress,
-          sharedDirectory: `${hand.value.workspace}/.ren`,
-        } satisfies Environment.Access
+      if (applied._tag === "None") return yield* new NotFound({ message: `Session ${subject.sessionId} has no hand` })
+      if (applied._tag === "Own") {
+        if (Option.isNone(applied.hand))
+          return yield* new NotFound({ message: `The brain of session ${subject.sessionId} has no machine` })
+        return yield* ownAccess(subject, applied.hand.value)
       }
       const templateRows = yield* database.db
         .select({ provider: templates.provider })
@@ -695,9 +695,9 @@ export const layer = Layer.effect(
 
     return Service.of({
       bind,
-      findDirectory: Effect.fn("Environments.findDirectory")(function* (subject: Subject, hand: Option.Option<Hand>) {
-        if (Option.isSome(hand) && !(yield* isBound(subject)))
-          return Option.some(handDirectory(hand.value, subject.sessionId))
+      findDirectory: Effect.fn("Environments.findDirectory")(function* (subject: Subject, applied: Applied) {
+        if (applied._tag === "None") return Option.none()
+        if (applied._tag === "Own") return Option.map(applied.hand, (hand) => handDirectory(hand, subject.sessionId))
         const rows = yield* database.db
           .select({ environmentTemplateId: sessions.environment_template_id, provider: templates.provider })
           .from(sessions)
@@ -711,8 +711,17 @@ export const layer = Layer.effect(
       capabilities: Effect.fn("Environments.capabilities")(function* (
         organizationId: Auth.OrganizationID,
         sessionIds: ReadonlyArray<Session.ID>,
-        hand: Option.Option<Hand>,
+        applied: Applied,
       ) {
+        if (applied._tag === "None") return new Map<Session.ID, Capability>()
+        if (applied._tag === "Own")
+          return new Map(
+            Option.match(applied.hand, {
+              onNone: () => [],
+              onSome: (hand) =>
+                sessionIds.map((sessionId) => [sessionId, { canMount: hand.canMount, egress: hand.egress }] as const),
+            }),
+          )
         const bound =
           sessionIds.length === 0
             ? []
@@ -725,20 +734,15 @@ export const layer = Layer.effect(
                 )
                 .where(inArray(sessions.session_id, [...sessionIds]))
                 .pipe(Effect.orDie)
-        const providers = new Map(bound.map((row) => [row.sessionId, row.provider]))
         return new Map(
-          sessionIds.flatMap((sessionId) => {
-            const capability = providers.has(sessionId)
-              ? Option.map(
-                  Option.flatMap(Option.fromNullishOr(providers.get(sessionId)), registry.get),
-                  (provider) => ({
-                    canMount: provider.canMount,
-                    egress: isBehindEgress(provider),
-                  }),
-                )
-              : Option.map(hand, (found) => ({ canMount: found.canMount, egress: found.egress }))
-            return Option.isSome(capability) ? [[sessionId, capability.value] as const] : []
-          }),
+          bound.flatMap((row) =>
+            Option.match(Option.flatMap(Option.fromNullishOr(row.provider), registry.get), {
+              onNone: () => [],
+              onSome: (provider) => [
+                [row.sessionId, { canMount: provider.canMount, egress: isBehindEgress(provider) }] as const,
+              ],
+            }),
+          ),
         )
       }),
       apply: Effect.fn("Environments.apply")(function* (
@@ -800,13 +804,7 @@ export const layer = Layer.effect(
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {
         yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)
       }),
-      access: Effect.fn("Environments.access")(function* (
-        subject: Subject,
-        hand: Option.Option<Hand>,
-        options: { readonly unreachable?: boolean } = {},
-      ) {
-        return yield* grantAccess(subject, hand, options)
-      }),
+      access,
       renew: Effect.fn("Environments.renew")(function* (sessionIds: ReadonlyArray<Session.ID>) {
         if (sessionIds.length === 0) return
         const at = new Date(yield* Clock.currentTimeMillis)

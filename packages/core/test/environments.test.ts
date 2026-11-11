@@ -121,11 +121,13 @@ describe("Environments", () => {
       const session = yield* subjectIn(organizationId)
       const binding = yield* subject.environments.bind(session, Seed.version(environmentTemplateId))
       expect(binding).toEqual({ directory: `/workspace/${session.sessionId}`, isNew: true })
-      expect(yield* subject.environments.findDirectory(session, Option.none())).toEqual(Option.some(binding.directory))
+      expect(yield* subject.environments.findDirectory(session, { _tag: "Remote" })).toEqual(
+        Option.some(binding.directory),
+      )
       expect(
         yield* subject.environments.findDirectory(
           { ...session, organizationId: yield* Seed.organization() },
-          Option.none(),
+          { _tag: "Remote" },
         ),
       ).toEqual(Option.none())
       expect(yield* Ref.get(subject.probe.provisions)).toEqual([])
@@ -152,7 +154,8 @@ describe("Environments", () => {
             ._tag,
         ).toBe("Environments.NotFound")
         expect(
-          (yield* subject.environments.access(yield* subjectIn(organizationId), Option.none()).pipe(Effect.flip))._tag,
+          (yield* subject.environments.access(yield* subjectIn(organizationId), { _tag: "Remote" }).pipe(Effect.flip))
+            ._tag,
         ).toBe("Environments.NotFound")
       }),
   )
@@ -167,9 +170,9 @@ describe("Environments", () => {
         const session = yield* subjectIn(organizationId)
         yield* subject.environments.bind(session, Seed.version(environmentTemplateId))
         const before = Date.now()
-        const access = yield* subject.environments.access(session, Option.none())
+        const access = yield* subject.environments.access(session, { _tag: "Remote" })
         const after = Date.now()
-        const again = yield* subject.environments.access(session, Option.none())
+        const again = yield* subject.environments.access(session, { _tag: "Remote" })
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
         expect([access.directory, access.generation]).toEqual([`/workspace/${session.sessionId}`, 1])
@@ -195,7 +198,7 @@ describe("Environments", () => {
           const organizationId = yield* Seed.organization()
           const session = yield* subjectIn(organizationId)
           yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
-          const access = yield* subject.environments.access(session, Option.none())
+          const access = yield* subject.environments.access(session, { _tag: "Remote" })
           const proxy = Option.flatMap(
             Option.fromNullishOr((yield* Ref.get(subject.probe.networks)).at(0)),
             (network) => network.proxy,
@@ -254,7 +257,7 @@ describe("Environments", () => {
         })
         .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
       yield* subject.environments.bind(session, Seed.version(environmentTemplateId))
-      yield* subject.environments.access(session, Option.none())
+      yield* subject.environments.access(session, { _tag: "Remote" })
       expect((yield* Ref.get(subject.probe.networks)).map((network) => network.hosts)).toEqual([
         Option.some(["api.example.com", "ren.example.com"]),
       ])
@@ -268,7 +271,7 @@ describe("Environments", () => {
       const organizationId = yield* Seed.organization()
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
-      yield* subject.environments.access(session, Option.none())
+      yield* subject.environments.access(session, { _tag: "Remote" })
       const environmentId = (yield* database.db
         .select({ id: Database.Schema.session_environment.environment_id })
         .from(Database.Schema.session_environment)
@@ -299,10 +302,10 @@ describe("Environments", () => {
       const organizationId = yield* Seed.organization()
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
-      yield* subject.environments.access(session, Option.none())
+      yield* subject.environments.access(session, { _tag: "Remote" })
       yield* bundle("executor", "e000000000000002")
       yield* database.db.update(Database.Schema.environment).set({ keep_alive_until: new Date(Date.now() - 1000) })
-      yield* subject.environments.access(session, Option.none()).pipe(Effect.ignore)
+      yield* subject.environments.access(session, { _tag: "Remote" }).pipe(Effect.ignore)
       expect(
         (yield* Ref.get(subject.probe.provisions).pipe(
           Effect.repeat({ until: (all) => all.length === 2, schedule: Schedule.spaced("20 millis") }),
@@ -322,7 +325,7 @@ describe("Environments", () => {
       yield* Effect.forEach(sessions, (session) =>
         subject.environments
           .bind(session, Seed.version(template))
-          .pipe(Effect.andThen(subject.environments.access(session, Option.none()))),
+          .pipe(Effect.andThen(subject.environments.access(session, { _tag: "Remote" }))),
       )
       const made = yield* Ref.get(subject.probe.provisions)
       const lost = made.at(1)
@@ -346,7 +349,7 @@ describe("Environments", () => {
         const template = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 1 })
         const [first, second] = yield* Effect.all([subjectIn(organizationId), subjectIn(organizationId)])
         yield* Effect.forEach([first, second], (session) => subject.environments.bind(session, Seed.version(template)))
-        yield* subject.environments.access(first, Option.none())
+        yield* subject.environments.access(first, { _tag: "Remote" })
         const holdUntil = (session: typeof first, until: Date) =>
           database.db
             .update(Database.Schema.session_environment)
@@ -358,8 +361,8 @@ describe("Environments", () => {
         yield* holdUntil(first, new Date(Date.now() - 1000))
         yield* subject.environments.renew([first.sessionId])
         const expired = (yield* bindingOf(first)).reservedUntil
-        yield* subject.environments.access(second, Option.none())
-        yield* subject.environments.access(first, Option.none())
+        yield* subject.environments.access(second, { _tag: "Remote" })
+        yield* subject.environments.access(first, { _tag: "Remote" })
         const machines = yield* Ref.get(subject.probe.provisions)
         expect({
           isRenewed: (renewed?.getTime() ?? 0) > Date.now() + Duration.toMillis("2 days"),
@@ -384,12 +387,14 @@ describe("Environments", () => {
           subjectIn(organizationId),
         ])
         yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, Seed.version(template)))
-        yield* Effect.forEach(sessions.slice(0, 2), (session) => subject.environments.access(session, Option.none()))
+        yield* Effect.forEach(sessions.slice(0, 2), (session) =>
+          subject.environments.access(session, { _tag: "Remote" }),
+        )
         yield* database.db
           .update(Database.Schema.environment_template)
           .set({ sessions_per_environment: 1 })
           .where(eq(Database.Schema.environment_template.id, template))
-        yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
+        yield* Effect.forEach(sessions, (session) => subject.environments.access(session, { _tag: "Remote" }))
         const machines = yield* Ref.get(subject.probe.provisions)
         expect(
           yield* Effect.forEach(sessions, (session) => Effect.map(bindingOf(session), (found) => found.environmentId)),
@@ -413,17 +418,17 @@ describe("Environments", () => {
         })
         const [first, second] = yield* Effect.all([subjectIn(organizationId), subjectIn(organizationId)])
         yield* Effect.forEach([first, second], (session) => subject.environments.bind(session, versionOf("image-1")))
-        yield* Effect.forEach([first, second], (session) => subject.environments.access(session, Option.none()))
+        yield* Effect.forEach([first, second], (session) => subject.environments.access(session, { _tag: "Remote" }))
         const applies = (session: typeof first, image: string) =>
           database.db
             .update(Database.Schema.session_environment)
             .set({ target: versionOf(image) })
             .where(eq(Database.Schema.session_environment.session_id, session.sessionId))
         yield* applies(first, "image-2")
-        yield* subject.environments.access(first, Option.none())
+        yield* subject.environments.access(first, { _tag: "Remote" })
         const split = [(yield* bindingOf(first)).environmentId, (yield* bindingOf(second)).environmentId]
         yield* applies(second, "image-2")
-        yield* subject.environments.access(second, Option.none())
+        yield* subject.environments.access(second, { _tag: "Remote" })
         const joined = (yield* bindingOf(second)).environmentId
         yield* database.db
           .update(Database.Schema.environment_template)
@@ -432,7 +437,7 @@ describe("Environments", () => {
         const newer = split[0]
         if (!newer) return yield* Effect.die(new Error("The chat has no machine"))
         yield* Ref.set(subject.probe.gone, new Set([newer]))
-        yield* subject.environments.access(first, Option.none(), { unreachable: true })
+        yield* subject.environments.access(first, { _tag: "Remote" }, { unreachable: true })
         const machines = yield* Ref.get(subject.probe.provisions)
         expect({ split, joined, images: yield* Ref.get(subject.probe.images) }).toEqual({
           split: [machines[1] ?? null, machines[0] ?? null],
@@ -458,7 +463,7 @@ describe("Environments", () => {
         yield* Effect.forEach(sessions, (session) =>
           subject.environments
             .bind(session, Seed.version(template))
-            .pipe(Effect.andThen(subject.environments.access(session, Option.none()))),
+            .pipe(Effect.andThen(subject.environments.access(session, { _tag: "Remote" }))),
         )
         const machines = yield* Ref.get(subject.probe.provisions)
         const past = new Date(Date.now() - 1000)
@@ -498,11 +503,11 @@ describe("Environments", () => {
         yield* Effect.forEach(sessions, (session) =>
           subject.environments
             .bind(session, Seed.version(template))
-            .pipe(Effect.andThen(subject.environments.access(session, Option.none()))),
+            .pipe(Effect.andThen(subject.environments.access(session, { _tag: "Remote" }))),
         )
         const machines = yield* Ref.get(subject.probe.provisions)
         const problems = yield* subject.environments.shutdown(spaceId)
-        yield* subject.environments.access(sessions[0], Option.none())
+        yield* subject.environments.access(sessions[0], { _tag: "Remote" })
         expect({
           problems,
           destroyed: (yield* Ref.get(subject.probe.destroyed)).toSorted(),
@@ -520,7 +525,7 @@ describe("Environments", () => {
       const template = yield* Seed.environmentTemplate(organizationId)
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, Seed.version(template))
-      yield* subject.environments.access(session, Option.none())
+      yield* subject.environments.access(session, { _tag: "Remote" })
       yield* database.db
         .update(Database.Schema.session_environment)
         .set({ reserved_until: new Date(Date.now() - 1000) })
@@ -559,7 +564,7 @@ describe("Environments", () => {
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
       const before = Date.now()
-      const access = yield* subject.environments.access(session, Option.none())
+      const access = yield* subject.environments.access(session, { _tag: "Remote" })
       const after = Date.now()
       expect(DateTime.toEpochMillis(access.expiresAt) - after).toBeLessThanOrEqual(20_000)
       expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(18_000)
@@ -580,7 +585,7 @@ describe("Environments", () => {
           discard: true,
         },
       )
-      yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()), {
+      yield* Effect.forEach(sessions, (session) => subject.environments.access(session, { _tag: "Remote" }), {
         concurrency: "unbounded",
       })
       const made = yield* environmentsOf(environmentTemplateId)
@@ -606,7 +611,7 @@ describe("Environments", () => {
             discard: true,
           },
         )
-        yield* Effect.forEach([shared, other], (session) => subject.environments.access(session, Option.none()), {
+        yield* Effect.forEach([shared, other], (session) => subject.environments.access(session, { _tag: "Remote" }), {
           discard: true,
         })
         expect((yield* environmentsOf(environmentTemplateId)).map((environment) => environment.sessions)).toEqual([
@@ -628,12 +633,14 @@ describe("Environments", () => {
         const organizationId = yield* Seed.organization()
         const session = yield* subjectIn(organizationId)
         yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
-        const first = yield* subject.environments.access(session, Option.none()).pipe(Effect.flip, Effect.forkScoped)
+        const first = yield* subject.environments
+          .access(session, { _tag: "Remote" })
+          .pipe(Effect.flip, Effect.forkScoped)
         yield* Deferred.await(entered)
         yield* TestClock.adjust(Environments.startingAfter)
         expect((yield* Fiber.join(first))._tag).toBe("Environments.Starting")
         yield* Deferred.succeed(made, undefined)
-        expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
+        expect((yield* subject.environments.access(session, { _tag: "Remote" })).generation).toBe(1)
       }),
   )
 
@@ -652,13 +659,13 @@ describe("Environments", () => {
             discard: true,
           },
         )
-        yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
+        yield* Effect.forEach(sessions, (session) => subject.environments.access(session, { _tag: "Remote" }))
         const lost = (yield* Ref.get(subject.probe.provisions))[0]
         if (!lost) return yield* Effect.die(new Error("no environment was made"))
         yield* Ref.set(subject.probe.gone, new Set([lost]))
-        const kept = yield* subject.environments.access(sessions[1], Option.none())
-        const replaced = yield* subject.environments.access(sessions[0], Option.none(), { unreachable: true })
-        const again = yield* subject.environments.access(sessions[1], Option.none())
+        const kept = yield* subject.environments.access(sessions[1], { _tag: "Remote" })
+        const replaced = yield* subject.environments.access(sessions[0], { _tag: "Remote" }, { unreachable: true })
+        const again = yield* subject.environments.access(sessions[1], { _tag: "Remote" })
         expect([kept.generation, replaced.generation, again.generation]).toEqual([1, 2, 2])
         expect(yield* Ref.get(subject.probe.provisions)).toEqual([lost, lost])
         expect((yield* environmentsOf(environmentTemplateId)).length).toBe(1)
@@ -676,7 +683,7 @@ describe("Environments", () => {
         yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
         yield* Ref.set(subject.probe.failing, true)
         const failed = yield* subject.environments
-          .access(session, Option.none())
+          .access(session, { _tag: "Remote" })
           .pipe(Effect.flip, Effect.repeat({ while: (error) => error._tag === "Environments.Starting" }))
         expect([failed._tag, failed.message]).toEqual([
           "Environments.Unavailable",
@@ -687,7 +694,7 @@ describe("Environments", () => {
           .update(Database.Schema.environment)
           .set({ retry_at: new Date(Date.now() - 1000) })
           .where(eq(Database.Schema.environment.phase, "failed"))
-        expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
+        expect((yield* subject.environments.access(session, { _tag: "Remote" })).generation).toBe(1)
       }),
   )
 
@@ -705,7 +712,7 @@ describe("Environments", () => {
           .update(Database.Schema.environment_template)
           .set({ archived_at: new Date() })
           .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
-        expect((yield* subject.environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe(
+        expect((yield* subject.environments.access(session, { _tag: "Remote" }).pipe(Effect.flip))._tag).toBe(
           "Environments.NotFound",
         )
         const elsewhere = yield* Seed.environmentTemplate(organizationId, { provider: "e2b" })
