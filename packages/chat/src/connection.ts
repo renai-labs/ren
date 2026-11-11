@@ -10,6 +10,7 @@ import {
   Fiber,
   FiberHandle,
   Latch,
+  Option,
   Pull,
   Ref,
   Semaphore,
@@ -20,16 +21,23 @@ export type Status = "connecting" | "connected" | "reconnecting" | "parked"
 
 type Ended = (typeof SessionEvent.Ended.Type)["data"]["reason"]
 
-export class Lost extends Data.TaggedError("Connection.Lost")<{ readonly message: string; readonly cause?: unknown }> {}
+export class Lost extends Data.TaggedError("Connection.Lost")<{
+  readonly message: string
+  readonly cause?: unknown
+  readonly timedOut?: boolean
+}> {}
 
 export interface Options {
   readonly subscribe: Effect.Effect<Stream.Stream<SessionEvent.Frame, unknown>, unknown>
   readonly onFrames: (frames: ReadonlyArray<SessionEvent.Frame>) => Effect.Effect<void>
   readonly onStatus: (status: Status) => Effect.Effect<void>
   readonly canReconnect?: Effect.Effect<boolean>
+  // oxlint-disable-next-line ren/no-comments -- The brain's URL took no connection, for example a paused sandbox: the next access asks Ren to check the sandbox, which wakes it (#196).
+  readonly onUnreachable?: Effect.Effect<void>
   readonly connectTimeout?: Duration.Input
   readonly idleTimeout?: Duration.Input
   readonly reconnectDelay?: number
+  readonly maxReconnectDelay?: number
   readonly flushInterval?: Duration.Input
 }
 
@@ -44,8 +52,11 @@ export const defaults = {
   connectTimeout: "2 seconds",
   idleTimeout: "45 seconds",
   reconnectDelay: 1_000,
+  maxReconnectDelay: 15_000,
   flushInterval: "16 millis",
 } as const
+
+export const unreachableAfterTimeouts = 2
 
 export const foregroundIdleThreshold = 20_000
 
@@ -59,6 +70,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const awake = yield* Latch.make(true)
   const forced = yield* Ref.make(false)
   const attempt = yield* Ref.make(0)
+  const timeouts = yield* Ref.make(0)
   const current = yield* FiberHandle.make<Ended, Lost>()
   const activity = yield* Ref.make(0)
 
@@ -95,12 +107,13 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       const opening = yield* next.pipe(
         Effect.timeoutOrElse({
           duration: settings.connectTimeout,
-          orElse: lost("Timed out connecting to the session"),
+          orElse: () => Effect.fail(new Lost({ message: "Timed out connecting to the session", timedOut: true })),
         }),
       )
       if (opening.at(0)?.type !== "server.connected")
         return yield* new Lost({ message: "The event stream did not start with server.connected" })
       yield* Ref.set(attempt, 0)
+      yield* Ref.set(timeouts, 0)
       yield* setStatus("connected")
       yield* publish(opening)
       const read: Effect.Effect<Ended, Lost> = next.pipe(
@@ -117,7 +130,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const cycle = Effect.gen(function* () {
     yield* awake.await
     const count = yield* Ref.get(attempt)
-    const startedAt = yield* Clock.currentTimeMillis
     const fiber = yield* FiberHandle.run(current, connect(count === 0))
     const exit = yield* Fiber.await(fiber)
     // oxlint-disable-next-line ren/no-comments -- closing: the client token expired (E49), so the runtime reconnects at once with new access; only idle parks (E127).
@@ -130,11 +142,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       yield* Ref.set(attempt, 0)
       return yield* setStatus("parked")
     }
-    const lasted = (yield* Clock.currentTimeMillis) - startedAt >= settings.reconnectDelay
-    yield* Ref.set(attempt, lasted ? 1 : count + 1)
+    const failures = yield* Ref.updateAndGet(attempt, (previous) => previous + 1)
+    if (Option.exists(Exit.findErrorOption(exit), (error) => error.timedOut === true)) {
+      const timedOut = yield* Ref.updateAndGet(timeouts, (previous) => previous + 1)
+      if (timedOut >= unreachableAfterTimeouts && options.onUnreachable) {
+        yield* Ref.set(timeouts, 0)
+        yield* options.onUnreachable
+      }
+    } else yield* Ref.set(timeouts, 0)
     yield* setStatus("reconnecting")
     if (yield* Ref.getAndSet(forced, false)) return
-    yield* Effect.sleep(settings.reconnectDelay)
+    yield* Effect.sleep(Math.min(settings.reconnectDelay * 2 ** (failures - 1), settings.maxReconnectDelay))
   })
 
   yield* Effect.forkIn(Effect.forever(cycle), scope)

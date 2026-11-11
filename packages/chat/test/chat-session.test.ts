@@ -440,6 +440,55 @@ test("after a request to the brain gets no answer, or the sandbox proxy answers 
     }),
   ))
 
+test("a brain URL that takes no connection, as a paused sandbox, makes the next access ask Ren to check the sandbox, and the chat connects once it wakes (#196)", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const paused = { value: true }
+      const asked: Array<boolean> = []
+      const fetching = FetchHttpClient.layer.pipe(
+        Layer.provide(
+          Layer.succeed(
+            FetchHttpClient.Fetch,
+            Object.assign(
+              (input: string | URL | Request, init?: RequestInit) => {
+                const url = new URL(input instanceof Request ? input.url : String(input))
+                const signal = input instanceof Request ? input.signal : init?.signal
+                if (paused.value)
+                  return new Promise<Response>((_resolve, reject) =>
+                    signal?.addEventListener("abort", () =>
+                      reject(new DOMException("The request was aborted", "AbortError")),
+                    ),
+                  )
+                return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
+              },
+              { preconnect: fetch.preconnect },
+            ),
+          ),
+        ),
+      )
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: (input) =>
+          Effect.sync(() => {
+            asked.push(input.unreachable)
+            if (input.unreachable) paused.value = false
+            return {
+              status: "ready" as const,
+              url: "http://cell",
+              token: "a-client-token",
+              expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+            }
+          }),
+        connection: { connectTimeout: "100 millis", reconnectDelay: 10 },
+      }).pipe(Effect.provide(fetching))
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
+      expect(asked).toContain(true)
+      expect(asked.at(-1)).toBe(true)
+    }),
+  ))
+
 test("a prompt that Ren cannot give access for stays pending, so it is not lost (E126)", () =>
   ChatTest.live(
     Effect.gen(function* () {

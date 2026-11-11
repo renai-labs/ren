@@ -237,3 +237,49 @@ effect("a stream that ends with closing reconnects at once without a wake; one t
     expect(yield* Queue.size(fake.subscriptions)).toBe(0)
   }),
 )
+
+effect("connect timeouts back off the reconnect delay, and a stream that connects resets it (#196)", () =>
+  Effect.gen(function* () {
+    const fake = yield* setup({ connectTimeout: "2 seconds" })
+    yield* Queue.take(fake.subscriptions)
+    yield* TestClock.adjust("2 seconds")
+    yield* TestClock.adjust("1 second")
+    yield* Queue.take(fake.subscriptions)
+    yield* TestClock.adjust("2 seconds")
+    yield* TestClock.adjust("1 second")
+    expect(yield* Queue.size(fake.subscriptions)).toBe(0)
+    yield* TestClock.adjust("1 second")
+    const third = yield* Queue.take(fake.subscriptions)
+    yield* Queue.offer(third.queue, connected)
+    yield* fake.until("connected")
+    yield* Queue.end(third.queue)
+    yield* fake.until("reconnecting")
+    yield* TestClock.adjust("1 second")
+    yield* Queue.take(fake.subscriptions)
+  }),
+)
+
+effect("two connect timeouts in a row report the brain unreachable once, so Ren checks its sandbox (#196)", () =>
+  Effect.gen(function* () {
+    const unreachable = yield* Queue.unbounded<void>()
+    const subscriptions = yield* Queue.unbounded<void>()
+    yield* Connection.make({
+      connectTimeout: "2 seconds",
+      subscribe: Queue.offer(subscriptions, undefined).pipe(Effect.as(Stream.never)),
+      onFrames: () => Effect.void,
+      onStatus: () => Effect.void,
+      onUnreachable: Queue.offer(unreachable, undefined).pipe(Effect.asVoid),
+    })
+    yield* Queue.take(subscriptions)
+    yield* TestClock.adjust("2 seconds")
+    expect(yield* Queue.size(unreachable)).toBe(0)
+    yield* TestClock.adjust("1 second")
+    yield* Queue.take(subscriptions)
+    yield* TestClock.adjust("2 seconds")
+    expect(yield* Queue.size(unreachable)).toBe(1)
+    yield* TestClock.adjust("2 seconds")
+    yield* Queue.take(subscriptions)
+    yield* TestClock.adjust("2 seconds")
+    expect(yield* Queue.size(unreachable)).toBe(1)
+  }),
+)
