@@ -15,14 +15,12 @@ export interface Settings {
   readonly stallAfter: Duration.Duration
   readonly sampleEvery: Duration.Duration
   readonly high: number
-  readonly critical: number
 }
 
 export const defaults: Settings = {
   stallAfter: Duration.minutes(5),
   sampleEvery: Duration.seconds(5),
   high: 0.8,
-  critical: 0.92,
 }
 
 interface Notice {
@@ -37,7 +35,6 @@ export interface Options {
   readonly memory: (sessionID: string) => Effect.Effect<Option.Option<Memory>>
   readonly background: (sessionID: string) => Effect.Effect<void>
   readonly notify: (notice: Notice) => Effect.Effect<void>
-  readonly kill: (sessionID: string, shell: Shell) => Effect.Effect<void>
   readonly settings?: Partial<Settings>
 }
 
@@ -96,25 +93,12 @@ export const run = Effect.fn("Watchdog.run")(function* (options: Options): Effec
       told.delete(sessionID)
       return
     }
-    const rss = (shell: Shell) => memory.processes.find((process) => process.pid === shell.pid)?.rssBytes ?? 0
-    const largest = memory.processes.reduce((most, process) => Math.max(most, process.rssBytes), 0)
-    const mine = shells.reduce((most, shell) => (rss(shell) > rss(most) ? shell : most))
-    const limit = megabytes(memory.limitBytes)
-    if (ratio >= settings.critical && rss(mine) > 0 && rss(mine) >= largest) {
-      yield* options.kill(sessionID, mine)
-      told.add(sessionID)
-      yield* options.notify({
-        sessionID,
-        text: `\`${mine.command}\` was stopped: it used ${megabytes(rss(mine))}, the most on a machine at ${percent(ratio)} of its ${limit} limit. Do not rerun it as it was; run a smaller part, or tell the person what it needs.`,
-        description: `Stopped \`${mine.command}\` at ${percent(ratio)} memory.`,
-      })
-      return
-    }
     if (told.has(sessionID)) return
     told.add(sessionID)
+    const rss = (shell: Shell) => memory.processes.find((process) => process.pid === shell.pid)?.rssBytes ?? 0
     yield* options.notify({
       sessionID,
-      text: `Memory is at ${percent(ratio)} of the ${limit} limit; ${shells.map((shell) => `\`${shell.command}\` uses ${megabytes(rss(shell))}`).join(", ")}. Above ${percent(settings.critical)} the largest command on the machine is stopped.`,
+      text: `Memory is at ${percent(ratio)} of the ${megabytes(memory.limitBytes)} limit; ${shells.map((shell) => `\`${shell.command}\` uses ${megabytes(rss(shell))}`).join(", ")}. At the limit the system stops the largest process.`,
       description: `Memory is at ${percent(ratio)} of the limit.`,
     })
   })

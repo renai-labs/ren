@@ -268,7 +268,7 @@ export const layer = Layer.effect(
 
     const memory = Effect.fn("Executor.memory")(function* (brain: Brain.ID) {
       const running = [...processes.values()].filter((entry) => entry.brain === brain && !entry.log.exit)
-      const usage = yield* SandboxMemory.usage
+      const usage = yield* SandboxMemory.usage()
       const rows = running.length ? yield* SandboxMemory.processes(spawner) : []
       return {
         ...usage,
