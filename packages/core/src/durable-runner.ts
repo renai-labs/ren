@@ -3,7 +3,11 @@ export * as DurableRunner from "./durable-runner.js"
 import { Duration, Effect, Layer, Schedule, type Schema } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import { Digest } from "effect/crypto"
+import { SqlClient } from "effect/sql"
 import { Workflow, WorkflowEngine } from "effect/workflow"
+
+// oxlint-disable-next-line ren/no-comments -- The names of the runs this Ren registered. purge deletes rows of these runs only.
+const registered = new Set<string>()
 
 // oxlint-disable-next-line ren/no-comments -- A run is named and keyed: one execution per key at a time, also across Ren replicas. A key that finished does not run again, so a run that must run again puts a counter in its key.
 export type Run<Name extends string, Payload extends Workflow.AnyStructSchema> = Workflow.Workflow<
@@ -34,7 +38,29 @@ export const register = <Name extends string, Payload extends Workflow.AnyStruct
   Effect.gen(function* () {
     const engine = yield* WorkflowEngine.WorkflowEngine
     yield* engine.register(run, (payload) => handler(payload))
+    registered.add(run._tag)
   })
+
+// oxlint-disable-next-line ren/no-comments -- Effect's cluster engine keeps the message and reply rows of a run after it ends. This deletes the rows of each run of a registered name whose messages are all processed and were last read before cutoff, and only the replies of the messages it deletes. Every key is used once (a time slot, a day, an id, or an epoch that moves on when its run ends), so no deleted key runs again. Rows of other entity types, and of runs still in progress, stay.
+export const purge = Effect.fnUntraced(function* (sql: SqlClient.SqlClient, cutoff: Date) {
+  const types = [...registered].map((name) => `Workflow/${name}`)
+  if (types.length === 0) return 0
+  const deleted = yield* sql<{ readonly id: string }>`
+    with ended as (
+      select entity_type, entity_id from cluster_messages
+      where entity_type in ${sql.in(types)}
+      group by entity_type, entity_id
+      having bool_and(processed) and max(last_read) < ${cutoff}
+    ), gone as (
+      delete from cluster_messages as message using ended
+      where message.entity_type = ended.entity_type and message.entity_id = ended.entity_id
+      returning message.id
+    ), replies as (
+      delete from cluster_replies as reply using gone where reply.request_id = gone.id
+    )
+    select id::text from gone`
+  return deleted.length
+})
 
 export const ensure = <Name extends string, Payload extends Workflow.AnyStructSchema>(
   run: Run<Name, Payload>,
