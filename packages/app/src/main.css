@@ -11,7 +11,7 @@
   }
 }
 
-[data-slot="terminal-output"] .wterm {
+[data-slot="terminal"] .wterm {
   --term-bg: transparent;
   --term-fg: var(--foreground);
   --term-font-family: var(--font-mono);
@@ -34,12 +34,12 @@
   --term-color-13: #a626a4;
   --term-color-14: #0184bc;
   --term-color-15: #1b1b1b;
-  padding: 0;
+  padding: 12px 16px;
   border-radius: 0;
   box-shadow: none;
 }
 
-.dark [data-slot="terminal-output"] .wterm {
+.dark [data-slot="terminal"] .wterm {
   --term-color-0: #1e1e1e;
   --term-color-1: #f44747;
   --term-color-2: #6a9955;
