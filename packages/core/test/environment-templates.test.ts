@@ -1,4 +1,4 @@
-import { FetchHttpClient } from "effect/http"
+import { HttpClient } from "effect/http"
 import { SandboxEgress } from "../src/sandbox-egress.js"
 import { EnvironmentNetwork } from "../src/environment-network.js"
 import { Bundles } from "../src/bundles.js"
@@ -82,7 +82,7 @@ const it = testEffect(
       Layer.provide(DurableRunner.layerMemory),
       Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone]),
       Layer.provide(Bundles.layer),
-      Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+      Layer.provide([Signer.layerLocal, Layer.succeed(HttpClient.HttpClient, TestProvider.executors([probe, built]))]),
     ),
     Space.layer,
     SpaceProvisioning.layer,

@@ -1,4 +1,4 @@
-import { HttpClient, HttpClientError } from "effect/http"
+import { HttpClient } from "effect/http"
 import { Bundles } from "../src/bundles.js"
 import { describe, expect } from "bun:test"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
@@ -50,18 +50,6 @@ const signingKeys = JSON.stringify(
   })),
 )
 
-// oxlint-disable-next-line ren/no-comments -- The test machines run no executor, so a probe of one gets no answer.
-const noExecutor = Layer.succeed(
-  HttpClient.HttpClient,
-  HttpClient.make((request) =>
-    Effect.fail(
-      new HttpClientError.HttpClientError({
-        reason: new HttpClientError.TransportError({ request, description: "no executor runs in this test" }),
-      }),
-    ),
-  ),
-)
-
 const environmentsWith = Effect.fnUntraced(function* (
   config: Readonly<Record<string, string>> = {},
   options: Parameters<typeof TestProvider.make>[0] = {},
@@ -75,7 +63,10 @@ const environmentsWith = Effect.fnUntraced(function* (
     Layer.fresh(
       Environments.layer.pipe(
         Layer.provide(DurableRunner.layerMemory),
-        Layer.provide([noExecutor, ren.network ?? EnvironmentNetwork.layerNone]),
+        Layer.provide([
+          Layer.succeed(HttpClient.HttpClient, probe.executor),
+          ren.network ?? EnvironmentNetwork.layerNone,
+        ]),
         Layer.provide(Bundles.layer),
         Layer.provide(Signer.layerLocal),
         Layer.provide(ren.hasEgress ? Layer.empty : SandboxEgress.layerNone),
@@ -177,6 +168,7 @@ describe("Environments", () => {
         yield* subject.environments.bind(session, Seed.version(environmentTemplateId))
         const before = Date.now()
         const access = yield* subject.environments.access(session, Option.none())
+        const after = Date.now()
         const again = yield* subject.environments.access(session, Option.none())
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
@@ -187,7 +179,7 @@ describe("Environments", () => {
           Option.some(["new", ...provisions, Brain.ofSession(session.sessionId)]),
         )
         expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
-        expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
+        expect(DateTime.toEpochMillis(access.expiresAt) - after).toBeLessThanOrEqual(15 * 60_000)
       }),
   )
 
@@ -568,7 +560,8 @@ describe("Environments", () => {
       yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
       const before = Date.now()
       const access = yield* subject.environments.access(session, Option.none())
-      expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(20_000)
+      const after = Date.now()
+      expect(DateTime.toEpochMillis(access.expiresAt) - after).toBeLessThanOrEqual(20_000)
       expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(18_000)
     }),
   )

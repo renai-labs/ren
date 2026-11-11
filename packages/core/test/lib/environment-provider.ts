@@ -2,6 +2,7 @@ export * as TestProvider from "./environment-provider.js"
 
 import { Environment } from "@ren/schema/environment"
 import { Effect, Option, Ref, Schema } from "effect"
+import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
 import { MachineProvider } from "../../src/machine-provider.js"
 
@@ -19,6 +20,7 @@ interface Probe {
   readonly images: Ref.Ref<ReadonlyArray<string | null>>
   readonly failing: Ref.Ref<boolean>
   readonly provider: MachineProvider.Provider
+  readonly executor: HttpClient.HttpClient
 }
 
 export const make = (
@@ -84,6 +86,8 @@ export const make = (
           if (options.creating) yield* options.creating
           if (yield* Ref.get(failing)) return yield* new MachineProvider.Failed({ message: "the test provider fails" })
           const environmentId = Environment.ID.make(input.labels.id)
+          // oxlint-disable-next-line ren/no-comments -- A new machine for this id is not the one that was gone.
+          yield* Ref.update(gone, (all) => new Set([...all].filter((id) => id !== environmentId)))
           yield* Ref.update(provisions, (all) => [...all, environmentId])
           yield* Ref.update(images, (all) => [...all, Option.getOrNull(input.image)])
           yield* Ref.update(made, (all) => [
@@ -128,5 +132,23 @@ export const make = (
         },
       }),
     })
-    return { provisions, destroyed, gone, failing, networks, keptAlive, images, provider } satisfies Probe
+    // oxlint-disable-next-line ren/no-comments -- The executor of each machine it made: it answers as Ren's does, 401 to an unsigned call, until the machine is gone.
+    const executor = HttpClient.make((request) =>
+      Effect.gen(function* () {
+        const host = new URL(request.url).hostname
+        const machine = (yield* Ref.get(provisions)).find((environmentId) =>
+          host.startsWith(environmentId.toLowerCase()),
+        )
+        if (!machine || (yield* isGone(machine)))
+          return yield* new HttpClientError.HttpClientError({
+            reason: new HttpClientError.TransportError({ request, description: "no executor answers" }),
+          })
+        return HttpClientResponse.fromWeb(request, new Response(null, { status: 401 }))
+      }),
+    )
+    return { provisions, destroyed, gone, failing, networks, keptAlive, images, provider, executor } satisfies Probe
   })
+
+// oxlint-disable-next-line ren/no-comments -- The executors of the machines of several test providers: the first one that knows the machine answers.
+export const executors = (probes: ReadonlyArray<Pick<Probe, "executor">>) =>
+  HttpClient.make((request) => Effect.firstSuccessOf(probes.map((probe) => probe.executor.execute(request))))

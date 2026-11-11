@@ -62,7 +62,8 @@ import { Observability } from "@ren/schema/observability"
 import { PostHog } from "@ren/telemetry/posthog"
 import { Telemetry } from "@ren/telemetry/telemetry"
 import { Config, Effect, Layer, Option, References } from "effect"
-import { FetchHttpClient, HttpRouter } from "effect/http"
+import { FetchHttpClient, type HttpClient, HttpRouter } from "effect/http"
+import type { ChildProcessSpawner } from "effect/process"
 import { PersistedQueue } from "effect/persistence"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -116,6 +117,21 @@ const brainProviders = Layer.unwrap(
         ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
       }),
     ])
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today (EN3).
+const handProviders = Layer.unwrap<
+  EnvironmentProvider.Registry,
+  Config.ConfigError,
+  HttpClient.HttpClient | ChildProcessSpawner.ChildProcessSpawner,
+  Config.ConfigError,
+  never
+>(
+  Effect.gen(function* () {
+    const provider = yield* Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local"))
+    if (provider === "e2b") return EnvironmentProvider.layer([E2BSandbox.provider])
+    return EnvironmentProvider.layer([Docker.provider])
   }),
 )
 
@@ -212,14 +228,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([models, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provideMerge(brainProviders),
-  Layer.provide(
-    Layer.unwrap(
-      Effect.map(Config.String("SANDBOX_PROVIDER").pipe(Config.withDefault("local")), (provider) =>
-        // oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today (EN3).
-        EnvironmentProvider.layer(provider === "e2b" ? [E2BSandbox.provider] : [Docker.provider]),
-      ),
-    ),
-  ),
+  Layer.provide(handProviders),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide(PostHog.layer),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

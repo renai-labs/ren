@@ -30,7 +30,7 @@ import {
   Schedule,
   Schema,
 } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Access } from "../src/access.js"
 import { App } from "../src/app.js"
@@ -594,7 +594,11 @@ describe("BrainHost pull", () => {
                 const environments = Environments.layer.pipe(
                   Layer.provide(DurableRunner.layerMemory),
                   Layer.provide([EnvironmentNetwork.layerNone, Bundles.layer]),
-                  Layer.provide([Signer.layerLocal, FetchHttpClient.layer, TestSandboxEgress.layer]),
+                  Layer.provide([
+                    Signer.layerLocal,
+                    Layer.succeed(HttpClient.HttpClient, TestProvider.executors(probes)),
+                    TestSandboxEgress.layer,
+                  ]),
                   Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
                 return Layer.merge(
@@ -724,7 +728,7 @@ describe("BrainHost environments", () => {
         Environments.layer.pipe(
           Layer.provide(DurableRunner.layerMemory),
           Layer.provide([SandboxEgress.layerNone, EnvironmentNetwork.layerNone, Bundles.layer]),
-          Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+          Layer.provide([Signer.layerLocal, Layer.succeed(HttpClient.HttpClient, probe.executor)]),
         ),
       ).pipe(
         Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),

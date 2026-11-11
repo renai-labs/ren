@@ -423,7 +423,7 @@ export const layer = Layer.effect(
 
     const engine = yield* WorkflowEngine.WorkflowEngine
 
-    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check. Its provider answers only when the executor does (MachineProvider.waitForExecutor).
+    // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check.
     const hands = MachineLifecycle.make<Environment.ID, Row, Target, never>({
       name: "EnvironmentLifecycle",
       noun: "Environment",
@@ -503,8 +503,16 @@ export const layer = Layer.effect(
           generation: row.generation,
           egress: row.egress,
         })),
-      boot: () => Effect.succeedNone,
-      wake: () => Effect.succeed(true),
+      boot: (target, within) =>
+        MachineProvider.waitForExecutor(http, new URL(target.url), within).pipe(
+          Effect.as(Option.none<string>()),
+          Effect.catch((error) => Effect.succeedSome(error.message)),
+        ),
+      wake: (target, within) =>
+        MachineProvider.waitForExecutor(http, new URL(target.url), within).pipe(
+          Effect.as(true),
+          Effect.orElseSucceed(() => false),
+        ),
       answers: (target) =>
         MachineProvider.executorAnswers(http, new URL(target.url)).pipe(
           Effect.timeoutOption(MachineLifecycle.timing.probeTimeout),

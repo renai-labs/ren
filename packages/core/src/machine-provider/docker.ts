@@ -2,7 +2,6 @@ export * as Docker from "./docker.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Duration, Effect, Option, Schedule, Schema, Stream } from "effect"
-import { HttpClient } from "effect/http"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { EnvironmentProvider } from "../environment-provider.js"
 import { MachineProvider } from "../machine-provider.js"
@@ -37,8 +36,6 @@ const isNameTaken = (stderr: string) => /is already in use/u.test(stderr)
 
 export const provider = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-  const http = yield* HttpClient.HttpClient
-
   const runDocker = (args: ReadonlyArray<string>) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -86,9 +83,7 @@ export const provider = Effect.gen(function* () {
       return yield* new MachineProvider.Failed({
         message: `The container ${binding.containerId} publishes no executor port: ${published.stderr}`,
       })
-    const url = new URL(`http://127.0.0.1:${hostPort}`)
-    yield* MachineProvider.waitForExecutor(http, url)
-    return { url: url.href }
+    return { url: `http://127.0.0.1:${hostPort}` }
   })
 
   return MachineProvider.make({
