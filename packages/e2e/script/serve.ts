@@ -25,6 +25,21 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
+const held = new Map<string, ReturnType<ReturnType<typeof Shared.stub>["script"]>>()
+
+const stubRoute = (request: Request) => {
+  const url = new URL(request.url)
+  if (request.method !== "POST") return
+  if (url.pathname === "/hold") {
+    const script = Shared.stub().script({ hold: true, reply: "held reply" })
+    held.set(script.marker, script)
+    return Response.json({ marker: script.marker })
+  }
+  if (url.pathname !== "/release") return
+  held.get(url.searchParams.get("marker") ?? "")?.release()
+  return new Response(null, { status: 204 })
+}
+
 let log = ""
 const children: Bun.Subprocess[] = []
 const mailbox = Bun.serve({
@@ -35,6 +50,8 @@ const mailbox = Bun.serve({
       Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
       return new Response(null, { status: 204 })
     }
+    const stubbed = stubRoute(request)
+    if (stubbed) return stubbed
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })

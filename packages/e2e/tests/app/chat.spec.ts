@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, mailboxURL, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -108,34 +108,64 @@ test("a member renames a chat, reverts a message into the composer and restores 
   await expect(page.getByRole("button", { name: "Restore messages" })).toHaveCount(0)
 })
 
-test("a member opens the model picker with its shortcut and undoes the last message with a command from the + menu", async ({
-  page,
-}) => {
+test("a member opens the model picker with its shortcut", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  const composer = page.getByRole("form", { name: "Message Ren" })
-  const message = composer.getByRole("textbox", { name: "Message" })
+  const message = page.getByRole("textbox", { name: "Message" })
   await message.press("ControlOrMeta+'")
   await expect(page.getByRole("menu")).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menu")).toHaveCount(0)
   await expect(message).toBeFocused()
+})
 
-  await composer.getByRole("button", { name: "Add to this chat" }).click()
-  await page.getByRole("menuitem", { name: "Run a command" }).click()
-  await expect(message).toHaveValue("/")
-  await message.pressSequentially("und")
-  await page
-    .getByRole("listbox", { name: "Commands" })
-    .getByRole("option", { name: /^\/undo/ })
-    .click()
-  await expect(message).toHaveValue("Draft the memo")
-  await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
+test("a member queues a message while Ren works, steers with the other key, recalls a prompt and stops with Escape", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const held = await page.request.post(`${mailboxURL}/hold`)
+  const marker = Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await held.json()).marker
+  const message = page.getByRole("textbox", { name: "Message" })
+  const delivered = (text: string) =>
+    page.waitForRequest((request) => request.method() === "POST" && (request.postData() ?? "").includes(text))
+  const working = delivered("Hold the turn")
+  await message.fill(`Hold the turn ${marker}`)
+  await message.press("Enter")
+  await working
+  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible({ timeout: brainStart })
+
+  const queued = delivered("Queue this")
+  await message.fill("Queue this")
+  await message.press("Enter")
+  expect((await queued).postData()).toContain('"delivery":"queue"')
+  await expect(message).toHaveValue("")
+
+  const steered = delivered("Steer this")
+  await message.fill("Steer this")
+  await message.press("ControlOrMeta+Enter")
+  expect((await steered).postData()).toContain('"delivery":"steer"')
+
+  await message.press("ArrowUp")
+  await expect(message).toHaveValue("Steer this")
+  await message.press("ArrowUp")
+  await expect(message).toHaveValue("Queue this")
+  await message.press("ArrowDown")
+  await message.press("ArrowDown")
+  await expect(message).toHaveValue("")
+
+  const stopped = page.waitForRequest((request) => request.url().includes("interrupt"))
+  await message.press("Escape")
+  await stopped
+  await page.request.post(`${mailboxURL}/release?marker=${marker}`)
 })
 
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {

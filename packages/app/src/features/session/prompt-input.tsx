@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { Composer, type ChatSession } from "@ren/chat"
+import { Composer, ComposerHistory, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
@@ -59,6 +59,8 @@ import { gaps, isSpaceApp } from "../../lib/apps.js"
 import { useStep } from "../../lib/use-step.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
+import { Drafts } from "../../lib/drafts.js"
+import { ChatKeys } from "./chat-keys.js"
 
 function AddMenu(props: {
   onInsert: (text: string) => void
@@ -532,7 +534,8 @@ function ComposerToolbar(props: {
 export function PromptInput(props: {
   value: Composer.Draft
   onChange: (draft: Composer.Draft) => void
-  onSubmit: () => void
+  onSubmit: (options: { readonly alternative: boolean }) => void
+  onChooseModel?: (() => void) | undefined
   placement: "home" | "chat"
   spaceId: string | undefined
   model: ReactNode
@@ -558,7 +561,9 @@ export function PromptInput(props: {
   const attach = (files: ReadonlyArray<File>) => {
     if (!props.sending) uploads.add(files)
   }
-  const submit = () => {
+  const history = Drafts.useHistory()
+  const [browsing, setBrowsing] = useState(ComposerHistory.idle)
+  const submit = (options: { readonly alternative: boolean }) => {
     if (props.sending || booting) return
     if (uploading) {
       toast("Wait for the files to upload", {
@@ -570,7 +575,8 @@ export function PromptInput(props: {
       if (props.running) props.onStop?.()
       return
     }
-    props.onSubmit()
+    setBrowsing(ComposerHistory.idle)
+    props.onSubmit(options)
   }
   const home = props.placement === "home"
   const status = state.status
@@ -580,7 +586,7 @@ export function PromptInput(props: {
       stop={state.stop}
       sending={state.sending}
       booting={booting || uploading}
-      onClick={submit}
+      onClick={() => submit({ alternative: false })}
     />
   )
   const place = (next: string, cursor: number) =>
@@ -590,6 +596,25 @@ export function PromptInput(props: {
       node.focus()
       node.setSelectionRange(cursor, cursor)
     })
+  const browse = (node: HTMLTextAreaElement, direction: "up" | "down") => {
+    if (node.selectionStart !== node.selectionEnd) return false
+    const moved = ComposerHistory.navigate(browsing, direction, history.read(), draft, node.selectionStart)
+    if (!moved) return false
+    setBrowsing(moved.browsing)
+    change(Composer.fromHistory(draft, moved.entry))
+    place(moved.entry.text, moved.cursor === "start" ? 0 : moved.entry.text.length)
+    return true
+  }
+  const act = (action: ChatKeys.Action | "swallow", node: HTMLTextAreaElement) => {
+    if (action === "historyUp" || action === "historyDown") return browse(node, action === "historyUp" ? "up" : "down")
+    if (action === "send" || action === "sendOther") {
+      if (!blank) submit({ alternative: action === "sendOther" })
+      return true
+    }
+    if (action === "stop") props.onStop?.()
+    if (action === "chooseModel") props.onChooseModel?.()
+    return action !== "editQueued"
+  }
   const insert = (character: string) => {
     const next = character === "/" && !text ? "/" : `${text}${text && !text.endsWith(" ") ? " " : ""}${character}`
     change(Composer.withText(draft, next))
@@ -648,6 +673,7 @@ export function PromptInput(props: {
           value={text}
           onChange={(event) => {
             const next = event.target.value
+            setBrowsing(ComposerHistory.idle)
             change(Composer.withText(draft, next))
             props.suggest?.onCursor(next, event.target.selectionStart)
           }}
@@ -683,9 +709,19 @@ export function PromptInput(props: {
               place(removed.text, removed.cursor)
               return
             }
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
-            event.preventDefault()
-            submit()
+            const action = ChatKeys.intent(
+              {
+                key: event.key,
+                metaKey: event.metaKey,
+                ctrlKey: event.ctrlKey,
+                shiftKey: event.shiftKey,
+                altKey: event.altKey,
+                repeat: event.repeat,
+                isComposing: event.nativeEvent.isComposing,
+              },
+              { apple: ChatKeys.apple, running: Boolean(props.running) },
+            )
+            if (action && act(action, event.currentTarget)) event.preventDefault()
           }}
           placeholder={status ? "" : "Ask anything, @ to add an app"}
           aria-label="Message"

@@ -47,6 +47,8 @@ function useChatSuggestions(input: {
   model: SessionModel.Ref | undefined
   spaceId: string | undefined
   mentions: ReadonlyArray<Composer.MentionedApp>
+  canChooseModel: boolean
+  onChooseModel: () => void
 }) {
   const compact = ChatReact.useAction(input.root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
   const revert = ChatReact.useAction(input.root, (opened, id: SessionMessage.ID) => opened.revert(id))
@@ -63,12 +65,13 @@ function useChatSuggestions(input: {
     mentions: input.mentions,
     commands: input.capabilities?.commands !== false,
     client: {
-      "model.choose": false,
+      "model.choose": input.canChooseModel,
       "session.compact": input.capabilities?.compact !== false && lastUser !== undefined,
       "session.undo": revertable && lastUser !== undefined,
       "session.redo": revertable && input.reverted,
     },
     onClient: (id) => {
+      if (id === "model.choose") input.onChooseModel()
       if (id === "session.compact") void compact(input.model).catch(fail("Could not compact the chat"))
       if (id === "session.undo" && lastUser) void revert(lastUser.id).catch(fail("Could not undo"))
       if (id === "session.redo") void redo().catch(fail("Could not restore messages"))
@@ -112,6 +115,7 @@ const childOf = (
 const capabilitiesOf = (info: { readonly capabilities: SessionInfo["capabilities"] } | undefined) => ({
   capabilities: info?.capabilities,
   canChooseModel: info?.capabilities.model !== false,
+  canQueue: info?.capabilities.queue !== false,
   canRevert: info?.capabilities.revert !== false,
 })
 
@@ -174,8 +178,11 @@ export function useChat(
   const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
+  const history = Drafts.useHistory()
   const setDraft = kept.set
   const [reverting, setReverting] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const abilities = capabilitiesOf(info)
   const boot = AsyncResult.getOrElse(view.session.boot, () => undefined)
   const connection = AsyncResult.getOrElse(view.session.status, () => undefined)
   const prompt = ChatReact.useAction(root, (opened, request: ChatSession.PromptInput) =>
@@ -214,6 +221,8 @@ export function useChat(
     model,
     spaceId,
     mentions: Composer.mentions(draft),
+    canChooseModel: abilities.canChooseModel,
+    onChooseModel: () => setPicking(true),
   })
   const bootStatus = bootStatusOf(connection, boot)
   return {
@@ -261,22 +270,32 @@ export function useChat(
     models: modelList,
     modelsLoading: AsyncResult.isInitial(models) && catalog.loading,
     model,
-    ...capabilitiesOf(info),
+    ...abilities,
+    picking,
+    setPicking,
     chooseModel: (next: SessionModel.Ref) => {
       ChatPreferences.model.write(platform.storage, next)
       setSaved(next)
     },
-    send: () => {
+    send: (options: { readonly alternative: boolean }) => {
       const text = Composer.message(draft).trim()
       if (!text) return
       const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
-      const sent = draft
+      const submission = Composer.submission(draft, {
+        working: running,
+        behavior: ChatPreferences.followUp.read(platform.storage),
+        alternative: options.alternative,
+        queue: abilities.canQueue,
+        current: model,
+      })
+      if (!submission) return
       void platform.requestNotifications?.()
-      setDraft(Composer.empty)
-      const followUp = ChatPreferences.followUp.read(platform.storage)
-      const selection = { delivery: running ? followUp : ("steer" as const), ...(model && { model }) }
+      history.prepend(submission.sent)
+      setDraft(submission.next)
+      const selection = { delivery: submission.delivery, ...(model && { model }) }
       void suggestions.run({ id, text, ...selection, files: Composer.files(draft) }, prompt).catch((error: unknown) => {
-        kept.update((current) => Composer.restore(current, sent, id))
+        history.remove(submission.sent)
+        kept.update((current) => Composer.restore(current, submission.sent, id))
         toast.error("Could not send your message", {
           description: `${errorMessage(error)} Your draft has been kept.`,
         })
