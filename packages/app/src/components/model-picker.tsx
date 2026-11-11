@@ -40,8 +40,19 @@ export function pickModel(
   return { id: first.id, providerID: first.providerID, ...(variant && { variant }) }
 }
 
-function ProviderIcon(props: { provider: string }) {
-  return <ProviderMark provider={providerName[props.provider] ?? props.provider} />
+const vendorNames: ReadonlyArray<readonly [RegExp, string]> = [
+  [/claude/iu, "Anthropic"],
+  [/gpt/iu, "OpenAI"],
+]
+
+function ProviderIcon(props: { model: Choice }) {
+  const prefix = props.model.id.split("/")[0] ?? ""
+  const vendor =
+    providerName[prefix] ??
+    vendorNames.find(([pattern]) => pattern.test(props.model.name))?.[1] ??
+    providerName[props.model.providerID] ??
+    props.model.providerID
+  return <ProviderMark provider={vendor} />
 }
 
 const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
@@ -135,7 +146,7 @@ const usePicker = (
 function TriggerLabel(props: { picker: Picker; effort?: boolean | undefined }) {
   return (
     <>
-      <ProviderIcon provider={props.picker.current.providerID} />
+      <ProviderIcon model={props.picker.current} />
       {props.picker.current.name}
       {props.effort !== false && props.picker.variant ? (
         <>
@@ -171,7 +182,7 @@ function FeaturedModels(props: { picker: Picker; match: (model: Choice) => boole
           }
           className="items-center gap-2.5 py-2"
         >
-          <ProviderIcon provider={each.model.providerID} />
+          <ProviderIcon model={each.model} />
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="flex h-5 min-w-0 items-center gap-1.5">
               <span className="font-medium">{each.label}</span>
@@ -198,13 +209,13 @@ function ClassicLook(props: {
     model.variants.length === 0 ? (
       // ast-grep-ignore: require-item-group -- rows render inside each provider's DropdownMenuGroup
       <DropdownMenuItem key={modelKey(model)} onClick={() => picker.pick(model)}>
-        <ProviderIcon provider={model.providerID} />
+        <ProviderIcon model={model} />
         {model.name}
       </DropdownMenuItem>
     ) : (
       <DropdownMenuSub key={modelKey(model)}>
         <DropdownMenuSubTrigger>
-          <ProviderIcon provider={model.providerID} />
+          <ProviderIcon model={model} />
           {model.name}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
