@@ -203,6 +203,7 @@ export function RouteSkeleton() {
         <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
       </PageSkeleton>
     )
+  if (path.startsWith("/apps/")) return <PageSkeleton title="Loading app" />
   if (path === "/apps")
     return (
       <PageSkeleton

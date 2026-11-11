@@ -80,6 +80,8 @@ test("Add to space offers an existing account even when the accounts load after 
   )
   await page.goto("/app/apps")
   await page.getByLabel("Search apps").fill("Zeta")
+  await page.getByRole("button", { name: "Zeta Notes", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "Zeta Notes" })).toBeVisible()
   await page.getByRole("button", { name: "Add Zeta Notes to a space" }).click()
   await page.getByRole("menuitem", { name: "Design" }).click()
   held.resolve()
