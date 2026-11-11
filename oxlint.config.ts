@@ -9,7 +9,7 @@ const vendored = {
   message: "repos/ holds vendored reference source. Import from the package dependency instead.",
 }
 const serverOnly = {
-  regex: "^@ren/(core|db|server|host-api|environment-api)(/|$)",
+  regex: "^@ren/(core|db|server|host-api|hand-api)(/|$)",
   message:
     "Client-side packages never import core, db, server or the internal Host and Environment APIs. Go through @ren/client.",
 }
@@ -52,14 +52,14 @@ const packageBoundaries: ReadonlyArray<{
     message: "The Host API depends only on schema. It holds BrainApi and RenHostApi.",
   },
   {
-    files: ["packages/environment-api/**"],
+    files: ["packages/hand-api/**"],
     group: only(["schema"]),
     message:
       "The Environment API depends only on schema. Ren signs its tokens, a brain calls it and an executor serves it.",
   },
   {
     files: ["packages/brain/**"],
-    group: only(["schema", "environment-api", "executor"]),
+    group: only(["schema", "hand-api", "executor"]),
     message:
       "Brain code runs on every host. It depends only on schema and the Environment API; tests may start an executor.",
   },
@@ -70,7 +70,7 @@ const packageBoundaries: ReadonlyArray<{
   },
   {
     files: ["packages/executor/**"],
-    group: only(["schema", "environment-api", "telemetry"]),
+    group: only(["schema", "hand-api", "telemetry"]),
     message:
       "The executor runs on an environment's machine. It depends only on schema, telemetry and the Environment API.",
   },

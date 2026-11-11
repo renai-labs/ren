@@ -2,19 +2,22 @@ export * as ReferenceChat from "./reference-chat.js"
 
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { TestAccess, type TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
+import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import type { Drive } from "@ren/schema/drive"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import type { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Context, Effect, Layer, Option } from "effect"
+import { mkdir } from "node:fs/promises"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { ChatSettings } from "../../src/chat-settings.js"
 import { GitSources } from "../../src/git-sources.js"
+import type { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../../src/harness/opencode/workspace-driver.js"
@@ -25,7 +28,7 @@ import type { StubModel } from "./stub-model.js"
 
 export interface Place {
   readonly url: string | URL
-  readonly environmentId: Environment.ID
+  readonly environmentId: Hand.ID
   readonly directoryOf: (sessionId: string) => string
 }
 
@@ -34,19 +37,21 @@ export const open = Effect.fnUntraced(function* (
   github: TestGitHub.Instance,
   references: ReadonlyArray<Reference.Info>,
   drives?: Drive.Availability,
+  options: {
+    readonly hasWorkspace?: boolean
+    readonly database?: string
+    readonly restore?: Parameters<Harness.Instance["transcript"]["restore"]>[0]
+  } = {},
 ) {
   const stub = Shared.stub()
-  const sessionId = Session.ID.create()
+  const sessionId = options.restore ? options.restore.chat.id : Session.ID.create()
   const context = yield* Layer.build(TestAccess.memory(new Map()))
   const memory = Context.get(context, TestAccess.Memory)
   const environments = Context.get(
     yield* Layer.build(
-      EnvironmentConnections.layer.pipe(
-        Layer.provide(Layer.succeedContext(context)),
-        Layer.provide(FetchHttpClient.layer),
-      ),
+      HandConnections.layer.pipe(Layer.provide(Layer.succeedContext(context)), Layer.provide(FetchHttpClient.layer)),
     ),
-    EnvironmentConnections.Service,
+    HandConnections.Service,
   )
   const settings = Context.get(
     yield* Layer.build(ChatSettings.layer.pipe(Layer.provide(ModelsTest.storage()))),
@@ -61,7 +66,7 @@ export const open = Effect.fnUntraced(function* (
     (replacements) =>
       createEmbeddedRoutes(
         {
-          database: { path: ":memory:" },
+          database: { path: options.database ?? ":memory:" },
           config: { project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
@@ -74,13 +79,14 @@ export const open = Effect.fnUntraced(function* (
     {
       saved: Option.some(settings.saved),
       directoryOf: place.directoryOf,
+      makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), references: { refresh: 0, retry: 0 } }),
     },
   )
   const harness = yield* OpenCodeHarness.make(host, endpoints, Option.some(settings))
   const directory = place.directoryOf(sessionId)
   const accessOf = (generation: number) =>
-    TestEnvironment.access({
+    TestHand.access({
       url: String(place.url),
       environmentId: place.environmentId,
       brain: Brain.ofSession(sessionId),
@@ -88,7 +94,14 @@ export const open = Effect.fnUntraced(function* (
       generation,
     })
   yield* memory.set(sessionId, yield* accessOf(1))
-  yield* harness.start({ sessionId, harness: "opencode", interactive: false, directory })
+  if (options.restore) yield* harness.transcript.restore(options.restore)
+  else
+    yield* harness.start({
+      sessionId,
+      harness: "opencode",
+      interactive: false,
+      ...(options.hasWorkspace !== false && { directory }),
+    })
   const turn = (script: StubModel.Script, calls = 2, prompt: Omit<Session.Prompt, "text"> = {}) =>
     harness
       .send({
@@ -124,11 +137,15 @@ export const open = Effect.fnUntraced(function* (
     replace: (generation: number) => Effect.flatMap(accessOf(generation), (access) => memory.set(sessionId, access)),
     forget: memory.remove(sessionId),
     read: host.client.session.get({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
-    pull: (next: ReadonlyArray<Reference.Info>) =>
+    directory,
+    pull: (next: ReadonlyArray<Reference.Info>, chat: Pick<PullChat, "hasHand" | "directory"> = {}) =>
       Effect.gen(function* () {
         yield* settings.save(TestSettings.layers({ ren: { references: next } }), [])
         yield* harness.configure({
-          settings: { layers: yield* settings.layers, chats: [{ id: sessionId, agent: null, archived: false }] },
+          settings: {
+            layers: yield* settings.layers,
+            chats: [{ id: sessionId, agent: null, archived: false, ...chat }],
+          },
         })
         yield* Shared.appsSettled(harness)
       }),

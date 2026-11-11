@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -21,7 +22,7 @@ const github = GitHubServer.start()
 afterAll(() => github.stop())
 
 const it = testEffect(
-  Layer.mergeAll(SpaceSettings.layer, Space.layer).pipe(
+  Layer.mergeAll(SpaceSettings.layer, Space.layer.pipe(Layer.provide(BrainProviders.none))).pipe(
     Layer.provideMerge(ReferenceCheck.layer),
     Layer.provideMerge(RepositoryHosts.layer),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, GitHubApp.layer)),

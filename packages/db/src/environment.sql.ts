@@ -1,12 +1,13 @@
 import type { Auth } from "@ren/schema/auth"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
-import type { Environment } from "@ren/schema/environment"
-import type { EnvironmentProvider } from "@ren/schema/environment-provider"
+import { MachineTemplate } from "@ren/schema/machine-template"
+import type { Hand } from "@ren/schema/hand"
+import type { Machine } from "@ren/schema/machine"
+import type { MachineProvider } from "@ren/schema/machine-provider"
 import { Primitive } from "@ren/schema/primitive"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, sql } from "drizzle-orm"
-import { check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 import type { Schema } from "effect"
 import { organization } from "./auth.sql.js"
 import { space } from "./space.sql.js"
@@ -14,16 +15,30 @@ import { space } from "./space.sql.js"
 export const environment_template = pgTable(
   "environment_template",
   {
-    id: text().$type<EnvironmentTemplate.ID>().primaryKey(),
+    id: text().$type<MachineTemplate.ID>().primaryKey(),
     organization_id: text()
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
-    provider: text().$type<EnvironmentProvider.ID>().notNull(),
+    provider: text().$type<MachineProvider.ID>().notNull(),
     config: jsonb().$type<Schema.Json>().notNull(),
     sessions_per_environment: integer().notNull(),
+    networking: jsonb().$type<MachineTemplate.Networking>().notNull().default({ type: "unrestricted" }),
+    build_status: text().$type<MachineTemplate.BuildStatus>().notNull().default("ready"),
+    image: text(),
+    // oxlint-disable-next-line ren/no-comments -- The config that built `image`; a machine updates in place from the config of its image.
+    image_config: jsonb().$type<Schema.Json>(),
+    // oxlint-disable-next-line ren/no-comments -- The provider's system image that `image` was built on, without its dependencies.
+    image_system: text(),
+    build_error: text(),
+    // oxlint-disable-next-line ren/no-comments -- Each saved config gets the next number; a build counts only while the template still has the config of its number.
+    config_version: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- The provider's id of the build in progress, and the config_version it builds. Null when none runs.
+    build_id: text(),
+    build_version: integer(),
+    build_epoch: integer().notNull().default(0),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
@@ -39,8 +54,12 @@ export const environment_template = pgTable(
       sql`char_length(${table.name}) between 1 and ${sql.raw(String(Primitive.maximumNameLength))}`,
     ),
     check(
+      "environment_template_build_status_check",
+      sql`${table.build_status} in ('queued', 'building', 'ready', 'failed')`,
+    ),
+    check(
       "environment_template_sessions_per_environment_check",
-      sql`${table.sessions_per_environment} between 1 and ${sql.raw(String(EnvironmentTemplate.maximumSessionsPerEnvironment))}`,
+      sql`${table.sessions_per_environment} between 1 and ${sql.raw(String(MachineTemplate.maximumSessionsPerEnvironment))}`,
     ),
   ],
 )
@@ -48,9 +67,9 @@ export const environment_template = pgTable(
 export const environment = pgTable(
   "environment",
   {
-    id: text().$type<Environment.ID>().primaryKey(),
+    id: text().$type<Hand.ID>().primaryKey(),
     environment_template_id: text()
-      .$type<EnvironmentTemplate.ID>()
+      .$type<MachineTemplate.ID>()
       .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
     // oxlint-disable-next-line ren/no-comments -- private-spaces PS8: one space per environment; null on older ones.
@@ -58,6 +77,31 @@ export const environment = pgTable(
       .$type<Space.ID>()
       .references(() => space.id, { onDelete: "cascade" }),
     binding: jsonb().$type<Schema.Json>(),
+    // oxlint-disable-next-line ren/no-comments -- The columns of MachineLifecycle.Row: a remote hand's machine has the same state machine as a brain's.
+    image: text(),
+    image_template: jsonb().$type<{
+      readonly environmentTemplateId: MachineTemplate.ID
+      readonly config: Schema.Json
+      readonly system: string | null
+    }>(),
+    egress: boolean().notNull().default(false),
+    url: text(),
+    generation: integer().notNull().default(1),
+    run_epoch: integer().notNull().default(0),
+    phase: text().$type<Machine.Phase>().notNull().default("creating"),
+    failures: integer().notNull().default(0),
+    failure: text(),
+    keep_alive_until: timestamp(),
+    last_active_at: timestamp(),
+    last_progress_at: timestamp(),
+    retry_at: timestamp(),
+    retries: integer().notNull().default(0),
+    unanswered_since: timestamp(),
+    network_hosts: jsonb().$type<ReadonlyArray<string>>(),
+    // oxlint-disable-next-line ren/no-comments -- The versions of Ren's bundles the machine started with; a newer one replaces it at its wake.
+    bundles: jsonb().$type<Readonly<Record<"dependencies" | "executor", string>>>(),
+    // oxlint-disable-next-line ren/no-comments -- The template version the machine was made for. Only chats bound to this version share it, and a replace makes this version again.
+    target: jsonb().$type<Machine.Version>().notNull(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [
@@ -75,14 +119,17 @@ export const session_environment = pgTable(
       .notNull()
       .references(() => space.id, { onDelete: "cascade" }),
     environment_template_id: text()
-      .$type<EnvironmentTemplate.ID>()
+      .$type<MachineTemplate.ID>()
       .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
     environment_id: text()
-      .$type<Environment.ID>()
+      .$type<Hand.ID>()
       .references(() => environment.id, { onDelete: "set null" }),
     generation: integer().default(1).notNull(),
-    idle_at: timestamp(),
+    // oxlint-disable-next-line ren/no-comments -- The template version of the hand the chat's brain applied. The chat gets a machine of this version only.
+    target: jsonb().$type<Machine.Version>().notNull(),
+    // oxlint-disable-next-line ren/no-comments -- The chat holds a place on its machine until then. Each turn, and each file or diff request, moves it 3 days later; a machine with no place held is destroyed at the daily cleanup.
+    reserved_until: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [

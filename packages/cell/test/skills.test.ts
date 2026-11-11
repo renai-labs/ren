@@ -1,14 +1,14 @@
 import { expect, setDefaultTimeout } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { TestAccess, TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { Skill } from "@ren/schema/skill"
@@ -27,11 +27,11 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(30_000)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-local-")))
 const stub = Shared.stub()
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const catalog = (skills: Readonly<Record<string, Skill.Declaration>>): AppCatalog.Info => {
@@ -72,18 +72,18 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({
+    HandAccess.Service,
+    HandAccess.Service.of({
       release: () => Effect.void,
-      open: (sessionId) =>
+      open: (sessionId, options) =>
         Ref.update(opens, (count) => count + 1).pipe(
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, HandAccess.Service).open(sessionId, options)),
         ),
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(EnvironmentConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    EnvironmentConnections.Service,
+    yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    HandConnections.Service,
   )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
@@ -116,8 +116,8 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
     if (onEnvironment)
       yield* memory.set(
         sessionId,
-        yield* TestEnvironment.access({
-          url: yield* TestEnvironment.url,
+        yield* TestHand.access({
+          url: yield* TestHand.url,
           environmentId,
           brain: Brain.ofSession(sessionId),
           directory: folder(sessionId),

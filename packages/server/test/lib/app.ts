@@ -1,6 +1,11 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
+import { BrainProvider } from "@ren/core/brain-provider"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
+import { MachineNetwork } from "@ren/core/machine-network"
+import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { GitHubApp } from "@ren/core/github-app"
@@ -17,9 +22,9 @@ import { Intake } from "@ren/core/intake"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Docker } from "@ren/core/environment-provider/docker"
-import { Environments } from "@ren/core/environments"
+import { HandProvider } from "@ren/core/hand-provider"
+import { Docker } from "@ren/core/machine-provider/docker"
+import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -107,7 +112,7 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
   )
 
 export const services = Layer.mergeAll(
-  Brains.layer.pipe(
+  Layer.merge(Brains.layer, SpaceShutdown.layer).pipe(
     Layer.provideMerge(BrainHost.layerCell),
     Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provide(CredentialEnv.layerNone),
@@ -131,9 +136,15 @@ export const services = Layer.mergeAll(
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
-  Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
-  Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
-  Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
+  Layer.provideMerge([BrainClient.layer, Settings.layer]),
+  Layer.provideMerge([
+    Models.layerNone,
+    Hands.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
+    ),
+    BrainProvider.layer([]),
+  ]),
+  Layer.provideMerge(RenInference.layerConfig),
   Layer.provideMerge(SlackApp.layer),
   Layer.provideMerge(
     Layer.mergeAll(
@@ -147,7 +158,8 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(Drives.layer),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
-  Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provideMerge(HandProvider.layer([Docker.provider])),
+  Layer.provideMerge(Signer.layerLocal),
   Layer.provide(BunServices.layer),
 )
 

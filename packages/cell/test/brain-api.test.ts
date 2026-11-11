@@ -207,6 +207,39 @@ it.live("each send and each chat prompt checks Ren for changes before its turn",
   }),
 )
 
+it.live("a stop during a turn refuses every later send", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start({ interactive: false })
+    const held = Shared.stub().script({ hold: true })
+    yield* brain.send(`long ${held.marker}`)
+    yield* Effect.promise(() => held.called())
+    yield* brain.client.brain["brain.stop"]()
+    held.release()
+    expect((yield* brain.send("after").pipe(Effect.flip))._tag).toBe("BrainRejectedError")
+  }),
+)
+
+it.live("a prompt that the Chat API accepted just before a stop stays in the chat", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start({ interactive: false })
+    const id = SessionMessage.ID.create()
+    yield* brain.chat.session["session.prompt"]({
+      params: { sessionID: brain.id },
+      payload: { id, text: `just before the stop ${Shared.stub().script({ hold: true }).marker}`, delivery: "steer" },
+    })
+    yield* brain.client.brain["brain.stop"]()
+    const kept = [
+      ...(yield* brain.opencode.message.list({ sessionID: SessionID.make(brain.id) })).data.map(
+        (message) => message.id,
+      ),
+      ...(yield* brain.opencode.session.inbox.list({ sessionID: SessionID.make(brain.id) })).map((item) => item.id),
+    ]
+    expect(kept.map(String)).toContain(String(id))
+  }),
+)
+
 it.live("send before start is a typed SessionNotStartedError", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service

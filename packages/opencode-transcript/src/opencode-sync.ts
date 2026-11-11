@@ -1,5 +1,6 @@
 export * as OpenCodeSync from "./opencode-sync.js"
 
+import { OpenCodeRows } from "./opencode-rows.js"
 import { Session } from "@ren/schema/session"
 import { Sync } from "@ren/schema/sync"
 import { Observability } from "@ren/schema/observability"
@@ -17,6 +18,8 @@ export class Refused extends Schema.TaggedError<Refused>()("OpenCodeSync.Refused
 
 export class RemoteError extends Schema.TaggedError<RemoteError>()("OpenCodeSync.RemoteError", {
   message: Schema.String,
+  // oxlint-disable-next-line ren/no-comments -- Ren answered, and this brain cannot read the answer: an older brain and a newer Ren. Asking again gives the same answer.
+  isIncompatible: Schema.optionalKey(Schema.Boolean),
 }) {}
 
 export interface Upload {
@@ -90,7 +93,7 @@ export interface Restore<E = never, R = never> {
 export const busyInterval = Duration.minutes(5)
 
 export const oversizedRows = Metric.counter("opencode_sync_oversized_rows", {
-  description: "Message rows that a sync pass could not send because they are larger than the SyncApi body limit.",
+  description: "Message rows larger than the SyncApi body limit, which a sync pass sent as a stand-in.",
   incremental: true,
 })
 
@@ -149,7 +152,6 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
   const remote = options.remote
   const running = yield* Semaphore.make(1)
   const refused = new Set<Session.ID>()
-  const oversized = new Map<Session.ID, number>()
   const lastPass = new Map<Session.ID, number>()
 
   const read = <A>(evaluate: (query: Query) => A) =>
@@ -200,25 +202,27 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
         message.id,
       )
       if (Option.isNone(row)) continue
-      const size = encoder.encode(JSON.stringify(row.value)).length
-      if (envelopeBytes + size > Sync.maxBodyBytes) {
+      const full = encoder.encode(JSON.stringify(row.value)).length
+      const isTooLarge = envelopeBytes + full > Sync.maxBodyBytes
+      if (isTooLarge) {
         yield* Metric.update(oversizedRows, 1)
         yield* Effect.logError(
-          `A message is more than the ${Sync.maxBodyBytes} bytes as JSON that Ren accepts. Its session cannot sync until it changes.`,
-        ).pipe(Effect.annotateLogs({ "ren.message.id": message.id, bytes: size }))
-        return Option.none()
+          `A message is more than the ${Sync.maxBodyBytes} bytes as JSON that Ren accepts. It syncs as a stand-in.`,
+        ).pipe(Effect.annotateLogs({ "ren.message.id": message.id, bytes: full }))
       }
+      const synced = isTooLarge ? OpenCodeRows.standIn(row.value) : row.value
+      const size = isTooLarge ? encoder.encode(JSON.stringify(synced)).length : full
       if (rows.length >= batchRows || (rows.length > 0 && bytes + 1 + size > batchBytes)) {
         yield* send(rows)
         rows = []
         bytes = envelopeBytes
       }
       bytes += size + (rows.length > 0 ? 1 : 0)
-      rows.push(row.value)
+      rows.push(synced)
       sent.push(message.id)
     }
     if (rows.length > 0) yield* send(rows)
-    return Option.some(sent)
+    return sent
   })
 
   const pass = Effect.fnUntraced(function* (session: Local, ren: { readonly known: boolean }) {
@@ -239,10 +243,6 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     const latest = snapshot.seq.at(0)
     if (!latest) return "failed" as const
     const sent = yield* upload(params, snapshot.ids)
-    if (Option.isNone(sent)) {
-      oversized.set(session.id, session.seq)
-      return "oversized" as const
-    }
     const row = yield* first(
       Sync.OpenCodeSessionRow,
       `select ${sessionColumns.join(", ")} from session_v2 where id = ?`,
@@ -253,7 +253,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     yield* remote.commit(params, {
       session: row.value,
       seq: latest.seq,
-      ids: sent.value,
+      ids: sent,
       inbox: snapshot.inbox,
       revertMessageId: staged
         ? Option.getOrNull(Option.map(Schema.decodeUnknownOption(Revert)(staged), (found) => found.messageID))
@@ -316,7 +316,6 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
         return (
           !refused.has(session.id) &&
           !isSkipped(session.id) &&
-          oversized.get(session.id) !== session.seq &&
           (!checkpoint || checkpoint.syncSeq !== session.seq || checkpoint.timeSuspended !== session.time_suspended)
         )
       })
@@ -359,9 +358,15 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
           const restoring = yield* options.restoring
           if (!restoring.has(input.sessionId) && (yield* input.exists(input.sessionId))) return
           yield* Effect.gen(function* () {
-            const group = yield* remote
-              .restore(input.sessionId)
-              .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
+            const group = yield* remote.restore(input.sessionId).pipe(
+              Effect.mapError(
+                (error) =>
+                  new SyncError({
+                    reason: error.isIncompatible ? "incompatible" : "unavailable",
+                    message: error.message,
+                  }),
+              ),
+            )
             const root = group.find((chat) => !chat.parentId)?.id ?? input.sessionId
             yield* options.mark(root, { isRestoring: true })
             yield* Effect.forEach(

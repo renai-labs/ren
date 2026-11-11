@@ -1,11 +1,12 @@
 export * as SpaceQueries from "./queries.js"
 
+import type { MachineProvider } from "../machine-provider.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Effect } from "effect"
+import { Effect, Equal } from "effect"
 import type { Access } from "../access.js"
 import { Actor } from "../actor.js"
 import { SessionPolicy } from "../session/policy.js"
@@ -28,6 +29,51 @@ export const where: ReadonlyMap<string, SQL> = new Map([
   [SpacePolicy.facts.private, eq(Database.Schema.space.kind, "private")],
   [SessionPolicy.facts.spaceMember, isNotNull(membership.id)],
 ])
+
+export const hand = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "hand_placement" | "environment_template_id">,
+): Space.Hand => {
+  if (row.hand_placement === "none") return { placement: "none" }
+  if (row.hand_placement === "remote" && row.environment_template_id)
+    return { placement: "remote", environmentTemplateId: row.environment_template_id }
+  return { placement: "colocated" }
+}
+
+export const handColumns = (hand: Space.Hand) => ({
+  hand_placement: hand.placement,
+  environment_template_id: hand.placement === "remote" ? hand.environmentTemplateId : null,
+})
+
+export const brainMachine = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "brain_provider" | "brain_template_id">,
+  deploymentProvider: MachineProvider.ID | null,
+): Space.BrainMachine => ({
+  provider: row.brain_provider ?? deploymentProvider,
+  environmentTemplateId: row.brain_template_id,
+})
+
+export const machines = (
+  row: Pick<
+    typeof Database.Schema.space.$inferSelect,
+    "brain_provider" | "brain_template_id" | "hand_placement" | "environment_template_id"
+  >,
+  deploymentProvider: MachineProvider.ID | null,
+) => ({ brain: brainMachine(row, deploymentProvider), hand: hand(row) })
+
+export const brainColumns = (brain: Space.BrainMachine) => ({
+  brain_provider: brain.provider,
+  brain_template_id: brain.environmentTemplateId,
+})
+
+// oxlint-disable-next-line ren/no-comments -- Whether an update changes the space's brain or hand. Each such change takes the next compute_revision: each brain applies it at its next start or wake, and shows it as pending until then.
+export const isComputeChanged = (
+  current: ReturnType<typeof machines>,
+  input: Pick<Space.UpdateInput, "brain" | "hand">,
+) =>
+  !Equal.equals(
+    [brainColumns(input.brain ?? current.brain), handColumns(input.hand ?? current.hand)],
+    [brainColumns(current.brain), handColumns(current.hand)],
+  )
 
 export const slugs = Effect.fnUntraced(function* (
   transaction: Database.Transaction,

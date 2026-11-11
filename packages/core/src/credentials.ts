@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import type { PullEnv } from "@ren/host-api/ren-host-api"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Auth } from "@ren/schema/auth"
-import { Brain } from "@ren/schema/brain"
+import { Hand } from "@ren/schema/hand"
 import { Credential } from "@ren/schema/credential"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
@@ -233,21 +233,33 @@ const listed = Database.Schema.app_profile_space
 
 const fence = (actor: Actor.Info) => Actor.fenced(actor, members.space_id) ?? sql`true`
 
+// oxlint-disable-next-line ren/no-comments -- A workload acts for one space: a brain's, a co-located hand's (its brain's), or a remote hand's (one space per environment, PS8).
 export const scopeOf = Effect.fnUntraced(function* (
   client: Pick<Database.Transaction, "select">,
   workload: Workload.Info,
 ) {
-  const brainId = workload.kind === "brain" ? workload.id : Brain.ID.make(`brn_${workload.id.slice(4)}`)
-  const found = (yield* client
-    .select({ brain: Database.Schema.brain, space: Database.Schema.space })
-    .from(Database.Schema.brain)
-    .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
-    .where(eq(Database.Schema.brain.id, brainId))).at(0)
+  const spaces = Database.Schema.space
+  const remote =
+    workload.kind === "hand"
+      ? (yield* client
+          .select({ space: spaces })
+          .from(Database.Schema.environment)
+          .innerJoin(spaces, eq(spaces.id, Database.Schema.environment.space_id))
+          .where(eq(Database.Schema.environment.id, workload.id))).at(0)
+      : undefined
+  const brainId = workload.kind === "brain" ? workload.id : Hand.brainOf(workload.id)
+  const found =
+    remote ??
+    (yield* client
+      .select({ space: spaces })
+      .from(Database.Schema.brain)
+      .innerJoin(spaces, eq(spaces.id, Database.Schema.brain.space_id))
+      .where(eq(Database.Schema.brain.id, brainId))).at(0)
   if (!found) return Option.none<Scope>()
   return Option.some({
-    organizationId: found.brain.organization_id,
+    organizationId: found.space.organization_id,
     workload,
-    spaceId: Option.some(found.brain.space_id),
+    spaceId: Option.some(found.space.id),
     person:
       found.space.kind === "private" && !found.space.archived_at
         ? Option.fromNullishOr(found.space.owner_user_id)

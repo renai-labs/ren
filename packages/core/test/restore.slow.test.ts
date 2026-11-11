@@ -1,4 +1,5 @@
 import { expect, setDefaultTimeout } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { rm } from "node:fs/promises"
 import { join } from "node:path"
 import { Shared, type StubModel, TestToken } from "@ren/cell/testing"
@@ -17,7 +18,6 @@ import { Brains } from "../src/brains.js"
 import { GitHubApp } from "../src/github-app.js"
 import { Models } from "../src/models.js"
 import { PullRequest } from "../src/pull-request.js"
-import { SandboxProvider } from "../src/sandbox-provider.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { TranscriptCodec } from "../src/transcript-codec.js"
@@ -63,11 +63,16 @@ const subagent = (child: StubModel.Script) =>
 const Page = Schema.Struct({ items: Schema.Array(Schema.Struct({ id: Schema.String })) })
 const Children = Schema.Array(Schema.Struct({ id: Schema.String }))
 
-const opened = Effect.fnUntraced(function* (text: string) {
+const opened = Effect.fnUntraced(function* (text: string, options: { readonly hasTools?: boolean } = {}) {
   const sessions = yield* SessionRunner.Service
   const brains = yield* Brains.Service
   const database = yield* Database.Service
   const owner = yield* Seed.owner()
+  if (options.hasTools === false)
+    yield* database.db
+      .update(Database.Schema.space)
+      .set({ hand_placement: "none" })
+      .where(eq(Database.Schema.space.id, owner.spaceId))
   const sessionId = Session.ID.create()
   const messageId = Session.MessageID.create()
   yield* sessions.create(owner, {
@@ -129,9 +134,9 @@ const opened = Effect.fnUntraced(function* (text: string) {
       })
       return { status: response.status, body: Schema.decodeUnknownSync(Schema.Json)(await response.json()) }
     })
-  const provider = yield* SandboxProvider.Service
+  const provider = yield* BrainProvider.first
   const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(
-    (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)?.binding,
+    (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === brainId)?.binding,
   ).home
   return { sessionId, messageId, brainId, owner, home, chat, raw, idle, synced, read }
 })
@@ -156,6 +161,40 @@ it.live(
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId)
       expect(yield* chat.read).toEqual(before)
+    }),
+)
+
+it.live(
+  "a chat that had no tools gets a workspace and its tools at its restore on a brain that applied a hand, with its history",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const first = stub.script()
+      const chat = yield* opened(`open ${first.marker}`, { hasTools: false })
+      const before = yield* Effect.promise(() => first.called())
+      yield* chat.idle
+      const history = yield* chat.read
+      yield* chat.synced
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ hand_placement: "colocated" })
+        .where(eq(Database.Schema.space.id, chat.owner.spaceId))
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ hand: { placement: "colocated" } })
+        .where(eq(Database.Schema.brain.id, chat.brainId))
+      yield* Host.forgetHarness(chat.brainId)
+      expect(yield* chat.read).toEqual(history)
+      const next = stub.script()
+      yield* chat.chat("/prompt", {
+        method: "POST",
+        body: JSON.stringify({ id: SessionMessage.ID.create(), text: next.marker, delivery: "steer" }),
+      })
+      const after = yield* Effect.promise(() => next.called())
+      expect({
+        before: ["read", "shell"].filter((tool) => before.tools.includes(tool)),
+        after: ["read", "shell"].filter((tool) => after.tools.includes(tool)),
+      }).toEqual({ before: [], after: ["read", "shell"] })
     }),
 )
 
@@ -491,7 +530,7 @@ it.live(
 )
 
 it.live(
-  "a chat restored into a missing folder on the brain's own hand gets the folder back, one note, and a files reset time in Ren; a kept folder gets no note",
+  "a chat restored into a missing folder on the brain's own hand gets the folder back, one note that the app shows, and a files reset time in Ren; a kept folder gets no note",
   () =>
     Effect.gen(function* () {
       const script = stub.script()
@@ -507,29 +546,33 @@ it.live(
       yield* chat.idle
       const Note = Schema.Struct({
         type: Schema.String,
+        description: Schema.optional(Schema.String),
         metadata: Schema.optional(Schema.Struct({ source: Schema.optional(Schema.String) })),
         payload: Schema.optional(
-          Schema.Struct({ metadata: Schema.optional(Schema.Struct({ source: Schema.optional(Schema.String) })) }),
+          Schema.Struct({
+            description: Schema.optional(Schema.String),
+            metadata: Schema.optional(Schema.Struct({ source: Schema.optional(Schema.String) })),
+          }),
         ),
       })
       const isNote = (item: typeof Note.Type) =>
         item.type === "synthetic" &&
         (item.metadata?.source === "ren.files-reset" || item.payload?.metadata?.source === "ren.files-reset")
       const notes = Effect.all([chat.chat("/message?limit=200"), chat.chat("/inbox")]).pipe(
-        Effect.map(
-          (found) =>
-            [
-              ...Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(Note) }))(found[0]).items,
-              ...Schema.decodeUnknownSync(Schema.Array(Note))(found[1]),
-            ].filter(isNote).length,
+        Effect.map((found) =>
+          [
+            ...Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(Note) }))(found[0]).items,
+            ...Schema.decodeUnknownSync(Schema.Array(Note))(found[1]),
+          ].filter(isNote),
         ),
       )
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId)
-      expect(yield* notes).toBe(0)
+      expect(yield* notes).toHaveLength(0)
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId, { folderOf: chat.sessionId })
-      expect(yield* notes).toBe(1)
+      const shown = (yield* notes).map((note) => note.description ?? note.payload?.description ?? "")
+      expect([shown.length, shown.every((description) => description.length > 0)]).toEqual([1, true])
       yield* chat.synced
       const sessions = yield* Session.Service
       const actor = { userId: chat.owner.createdBy, organizationId: chat.owner.organizationId, roles: ["owner"] }
@@ -547,8 +590,8 @@ it.live(
       yield* chat.idle
       const before = yield* chat.read
       yield* chat.synced
-      const provider = yield* SandboxProvider.Service
-      const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === chat.brainId)
+      const provider = yield* BrainProvider.first
+      const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === chat.brainId)
       const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(found?.binding).home
       const older = "0.0.1-older"
       yield* Host.restart(chat.brainId, async (folder) =>
@@ -578,9 +621,58 @@ it.live("a chat that Ren deleted leaves its brain's harness at the next pull", (
     const client = yield* BrainClient.Service
     const api = yield* client.brain(yield* host.target(chat.brainId).pipe(Effect.orDie))
     yield* api.brain["brain.wake"]().pipe(Effect.orDie)
-    const provider = yield* SandboxProvider.Service
-    const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === chat.brainId)
+    const provider = yield* BrainProvider.first
+    const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === chat.brainId)
     const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(found?.binding).home
     expect(HarnessDb.hasChat(home, chat.sessionId)).toBe(false)
   }),
+)
+
+it.live(
+  "a chat that was busy when its machine was lost continues once on the new machine, with the replace notice, and no one asks for it",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const script = stub.script({ hold: true })
+      yield* Effect.addFinalizer(() => Effect.sync(script.release))
+      const chat = yield* opened(`open ${script.marker}`)
+      yield* Effect.promise(() => script.called())
+      yield* database.db
+        .select({ at: Database.Schema.opencode_session.time_suspended })
+        .from(Database.Schema.opencode_session)
+        .where(eq(Database.Schema.opencode_session.session_id, chat.sessionId))
+        .pipe(
+          Effect.map((rows) => rows.at(0)?.at ?? null),
+          Effect.repeat({ until: (at) => at !== null, schedule: Schedule.spaced("100 millis") }),
+          Effect.timeout("30 seconds"),
+        )
+      const provider = yield* BrainProvider.first
+      const machine = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.id === chat.brainId)
+      if (!machine) return yield* Effect.die(new Error("The chat's brain has no machine"))
+      Bun.spawnSync([
+        "kill",
+        "-KILL",
+        `-${Schema.decodeUnknownSync(Schema.Struct({ pid: Schema.Int }))(machine.binding).pid}`,
+      ])
+      script.release()
+      const continued = database.db
+        .select({ data: Database.Schema.opencode_message.data })
+        .from(Database.Schema.opencode_message)
+        .where(eq(Database.Schema.opencode_message.session_id, chat.sessionId))
+        .pipe(Effect.map((rows) => rows.filter((each) => each.data.includes("Ren replaced your sandbox")).length))
+      yield* continued.pipe(
+        Effect.repeat({ until: (count) => count > 0, schedule: Schedule.spaced("200 millis") }),
+        Effect.timeout("90 seconds"),
+      )
+      yield* database.db
+        .select({ next: Database.Schema.agent_session.continue_message_id })
+        .from(Database.Schema.agent_session)
+        .where(eq(Database.Schema.agent_session.id, chat.sessionId))
+        .pipe(
+          Effect.map((rows) => rows.at(0)?.next ?? null),
+          Effect.repeat({ until: (next) => next === null, schedule: Schedule.spaced("200 millis") }),
+          Effect.timeout("30 seconds"),
+        )
+      expect(yield* continued).toBe(1)
+    }),
 )

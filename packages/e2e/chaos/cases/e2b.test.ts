@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HandClient } from "@ren/hand-api/hand-client"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { E2BEnvironment } from "../lib/adapters/e2b.js"
 import { ExecutorAdapter } from "../lib/adapters/executor.js"
 import { ExecutorDriver } from "../lib/drivers/executor.js"
@@ -16,7 +16,7 @@ afterEach(async () => {
 })
 
 const hello = (url: string, authorization?: string) =>
-  fetch(`${url}${EnvironmentClient.path}`, {
+  fetch(`${url}${HandClient.path}`, {
     method: "POST",
     headers: { "content-type": "application/ndjson", ...(authorization !== undefined && { authorization }) },
     body: `${JSON.stringify({ _tag: "Request", id: "1", tag: "executor.hello", payload: {}, headers: [] })}\n`,
@@ -25,7 +25,7 @@ const hello = (url: string, authorization?: string) =>
     () => 0,
   )
 
-const sandbox = async (environmentId = Environment.ID.create(), timeoutSeconds = 300) => {
+const sandbox = async (environmentId = Hand.ID.create(), timeoutSeconds = 300) => {
   const created = await E2BEnvironment.create({ environmentId, timeoutSeconds })
   cleanups.push(() => created.kill())
   await E2BEnvironment.ready(created.url)
@@ -79,7 +79,7 @@ describe.skipIf(Platform.e2b !== undefined)("an executor in an E2B sandbox", () 
   }, 600_000)
 
   test("racing a timeout extension with a pause settles in a state that matches reachability", async () => {
-    const environment = await sandbox(Environment.ID.create(), 60)
+    const environment = await sandbox(Hand.ID.create(), 60)
     await Promise.allSettled([environment.created.extend(300), environment.created.pause()])
     const state = await Wait.until("E2B to report a settled state", 60_000, async () => {
       const read = await environment.created.state()

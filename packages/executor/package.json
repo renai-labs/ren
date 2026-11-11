@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@effect/platform-bun": "catalog:",
-    "@ren/environment-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/telemetry": "workspace:*",
     "effect": "catalog:"

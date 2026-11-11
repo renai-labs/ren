@@ -385,19 +385,25 @@ describe("Channels", () => {
     }),
   )
 
-  it.live("every file goes to the drive, and the inline copies stop at 10 MB in total", () =>
+  it.live("every file goes to the drive, and inline copies stop at each kind's limit and at 20 MiB in total", () =>
     Effect.gen(function* () {
       const found = ChannelFixture.event((yield* routed).install, {
         files: [
-          { url: "bytes:6000000", name: "first.bin", mime: "application/octet-stream" },
-          { url: "bytes:6000000", name: "second.bin", mime: "application/octet-stream" },
+          { url: "bytes:12000000", name: "first.bin", mime: "application/octet-stream" },
+          { url: "bytes:12000000", name: "second.bin", mime: "application/octet-stream" },
           { url: "bytes:1000", name: "third.txt", mime: "text/plain" },
+          { url: "bytes:11000000", name: "long.txt", mime: "text/plain" },
         ],
       })
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
       const accepted = yield* ChannelFixture.accepted(1)
       expect(accepted[0]?.prompt.text).toBe(found.text)
-      expect(accepted[0]?.prompt.files?.map((file) => file.name)).toEqual(["first.bin", "second.bin", "third.txt"])
+      expect(accepted[0]?.prompt.files?.map((file) => file.name)).toEqual([
+        "first.bin",
+        "second.bin",
+        "third.txt",
+        "long.txt",
+      ])
       expect(accepted[0]?.prompt.fallback?.map((file) => file.name)).toEqual(["first.bin", "third.txt"])
     }),
   )

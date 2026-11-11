@@ -3,6 +3,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { testEffect } from "@ren/executor/testing"
 import { ChatApi } from "@ren/protocol/chat"
+import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
@@ -99,6 +100,23 @@ test("sending the same message id again sends nothing new", () =>
       expect(yield* brain.chat.session["session.prompt"]({ params, payload })).toEqual({ id })
       const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
       expect(page.items.filter((message) => message.type === "user")).toHaveLength(1)
+    }),
+  ))
+
+test("a message whose id comes from a client clock 1 s ahead gets exactly one reply", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const id = SessionMessage.ID.make(`msg_${Identifier.ascending(Date.now() + 1000)}`)
+      const params = { sessionID: brain.id }
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id, text: stub.script({ reply: "one reply" }).marker, delivery: "steer" },
+      })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      expect(page.items.map((message) => message.type)).toEqual(["idle", "assistant", "user"])
     }),
   ))
 

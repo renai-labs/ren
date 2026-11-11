@@ -22,7 +22,7 @@ COPY packages/core ./packages/core
 COPY packages/db ./packages/db
 COPY packages/host-api ./packages/host-api
 COPY packages/egress-api ./packages/egress-api
-COPY packages/environment-api ./packages/environment-api
+COPY packages/hand-api ./packages/hand-api
 COPY packages/opencode-transcript ./packages/opencode-transcript
 COPY packages/protocol ./packages/protocol
 COPY packages/schema ./packages/schema

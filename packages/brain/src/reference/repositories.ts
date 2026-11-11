@@ -1,6 +1,6 @@
 export * as Repositories from "./repositories.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { GitHost } from "@ren/schema/git-host"
 import type { Reference } from "@ren/schema/reference"
 import { Cache, Duration, Effect, Equal, Exit, Ref, type Scope, Semaphore } from "effect"
@@ -100,8 +100,8 @@ export const make = Effect.fnUntraced(function* (
               unpack: {
                 ...lookup.archive,
                 folder: ".",
-                maxBytes: EnvironmentApi.maxReferenceBytes,
-                maxFiles: EnvironmentApi.maxReferenceFiles,
+                maxBytes: HandApi.maxReferenceBytes,
+                maxFiles: HandApi.maxReferenceFiles,
                 links: "skip",
               },
             },

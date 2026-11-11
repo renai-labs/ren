@@ -1,6 +1,6 @@
 export * as Restore from "./restore.js"
 
-import type { BrainRejectedError } from "@ren/host-api/errors"
+import { BrainRejectedError } from "@ren/host-api/errors"
 import type { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Cell } from "./cell.js"
@@ -58,8 +58,14 @@ export const layer = Layer.effect(
           }),
         ).pipe(
           Effect.provide(context),
-          Effect.catchTag("OpenCodeSync.SyncError", (error) =>
-            Effect.fail(new Unavailable({ message: error.message })),
+          Effect.catchTag("OpenCodeSync.SyncError", (error): Effect.Effect<never, Unavailable | BrainRejectedError> =>
+            error.reason === "incompatible"
+              ? Effect.fail(
+                  new BrainRejectedError({
+                    message: `This brain cannot read the chat that Ren sent: ${error.message}. Ren updates the brain when it next wakes; shut down the space to update it now.`,
+                  }),
+                )
+              : Effect.fail(new Unavailable({ message: error.message })),
           ),
         )
       }),

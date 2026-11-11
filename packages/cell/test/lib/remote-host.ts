@@ -2,11 +2,11 @@ export * as RemoteHost from "./remote-host.js"
 
 import { TestAccess } from "@ren/brain/testing"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { TestEnvironment, Processes } from "@ren/executor/testing"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { TestHand, Processes } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Duration, Effect, Layer, Option, Ref, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -22,7 +22,7 @@ import { RenWorkspaceDriver } from "../../src/harness/opencode/workspace-driver.
 import { Shared } from "./shared.js"
 import type { StubModel } from "./stub-model.js"
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 export const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-remote-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-remote-local-")))
 const stub = Shared.stub()
@@ -40,12 +40,12 @@ export const endpoints = Shared.access(undefined, stub.url).endpoints.map((endpo
   endpoint.id === "stub" ? { ...endpoint, models: [...endpoint.models, gptModel] } : endpoint,
 )
 
-export const served = TestEnvironment.layer({ environmentId, workspace })
+export const served = TestHand.layer({ environmentId, workspace })
 
 export const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 export const accessTo = (url: string, sessionId: Session.ID) =>
-  TestEnvironment.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+  TestHand.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 export const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
   createEmbeddedRoutes(
@@ -63,18 +63,18 @@ export const open = Effect.fnUntraced(function* (confinement?: RenPlugin.Confine
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({
+    HandAccess.Service,
+    HandAccess.Service.of({
       release: () => Effect.void,
-      open: (sessionId) =>
+      open: (sessionId, options) =>
         Ref.update(opens, (count) => count + 1).pipe(
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, HandAccess.Service).open(sessionId, options)),
         ),
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(EnvironmentConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    EnvironmentConnections.Service,
+    yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    HandConnections.Service,
   )
   const host = yield* OpenCodeServer.make(
     (replacements) => embedded([...replacements, ...RenWorkspaceDriver.replacements(environments)]),
@@ -127,7 +127,7 @@ export const answered = (script: StubModel.Script) =>
 
 export const begin = Effect.fnUntraced(function* (opened: Opened, url?: string, modelId?: string) {
   const sessionId = Session.ID.create()
-  yield* opened.memory.set(sessionId, yield* accessTo(url ?? (yield* TestEnvironment.url), sessionId))
+  yield* opened.memory.set(sessionId, yield* accessTo(url ?? (yield* TestHand.url), sessionId))
   yield* restart(opened.harness, sessionId, folder(sessionId), modelId)
   return {
     sessionId,

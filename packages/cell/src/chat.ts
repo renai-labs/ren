@@ -16,6 +16,7 @@ import { Base64Url } from "effect/encoding"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
+import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HotReload } from "./hot-reload.js"
 import { Restore } from "./restore.js"
@@ -219,6 +220,19 @@ const conflict = <A, E, R>(effect: Effect.Effect<A, E | Harness.Conflict, R>) =>
     Effect.fail(new ConflictError({ message: error.message })),
   )
 
+// oxlint-disable-next-line ren/no-comments -- OpenCode's file and git services have no error channel for a hand that does not answer, so they die. The panel gets a 503 that it asks again after, not an unknown error.
+const unreachable = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.catchDefect(effect, (defect) =>
+    Predicate.isTagged(defect, "Environment.Failed") || Predicate.isTagged(defect, "HandConnections.Unavailable")
+      ? Effect.fail(
+          new UnavailableError({
+            message: `The chat’s hand did not answer: ${Predicate.hasProperty(defect, "message") ? String(defect.message) : "no reason"}`,
+            retryAfterMs: 5000,
+          }),
+        )
+      : Effect.die(defect),
+  )
+
 const rejected = <A, E, R>(effect: Effect.Effect<A, E | Harness.Rejected, R>) =>
   Effect.catchIf(effect, Schema.is(Harness.Rejected), (error) =>
     Effect.fail(new InvalidRequestError({ message: error.message })),
@@ -231,13 +245,24 @@ const harnessed = Effect.map(
       Effect.flatMap(Cell.acquire, use).pipe(Effect.scoped, Effect.provide(context)),
 )
 
+// oxlint-disable-next-line ren/no-comments -- A person asked for a chat's files or diff: the next pull tells Ren, so the chat keeps its place on its hand.
+const touching = Effect.map(
+  Effect.service(Cell.Activity),
+  (activity) => (sessionId: string) => Ref.update(activity.touched, (all) => new Set([...all, sessionId])),
+)
+
 const access = Layer.effect(
   ChatAccess,
   Effect.gen(function* () {
     const run = yield* harnessed
     const restore = yield* Restore.Service
+    const fence = yield* Effect.serviceOption(Fence.Service)
     return ChatAccess.of(
       Effect.fnUntraced(function* (httpEffect) {
+        // oxlint-disable-next-line ren/no-comments -- A brain closed for a shutdown still answers reads, and refuses each change, so no new work starts on a machine that is about to go.
+        const closed = Option.isSome(fence) ? yield* fence.value.closed : Option.none<string>()
+        if (Option.isSome(closed) && (yield* HttpServerRequest.HttpServerRequest).method !== "GET")
+          return yield* new UnavailableError({ message: closed.value, retryAfterMs: 5000 })
         const scope = yield* scopeOf
         const target = (yield* HttpRouter.params).sessionID
         if (!target) return yield* httpEffect
@@ -441,7 +466,7 @@ const handlers = Layer.mergeAll(
         )
         .handle("shell.create", (request) =>
           run((harness) =>
-            harness.chat.createShell(request.params.sessionID, request.payload).pipe(notFound, rejected),
+            harness.chat.createShell(request.params.sessionID, request.payload).pipe(notFound, rejected, unreachable),
           ),
         )
         .handle("shell.get", (request) =>
@@ -484,48 +509,76 @@ const handlers = Layer.mergeAll(
     ),
   ),
   HttpApiBuilder.group(ChatApi, "file", (group) =>
-    Effect.map(harnessed, (run) =>
-      group
+    Effect.gen(function* () {
+      const run = yield* harnessed
+      const touch = yield* touching
+      return group
         .handle("file.search", (request) =>
-          run((harness) =>
-            harness.chat
-              .files(request.params.sessionID, {
-                query: request.query.query,
-                ...(request.query.type && { type: request.query.type }),
-                ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
-              })
-              .pipe(notFound),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat
+                  .files(request.params.sessionID, {
+                    query: request.query.query,
+                    ...(request.query.type && { type: request.query.type }),
+                    ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
+                  })
+                  .pipe(notFound, unreachable),
+              ),
+            ),
           ),
         )
         .handle("file.list", (request) =>
-          run((harness) =>
-            harness.chat.listFiles(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat
+                  .listFiles(request.params.sessionID, request.query.path)
+                  .pipe(notFound, rejected, unreachable),
+              ),
+            ),
           ),
         )
         .handle("file.read", (request) =>
-          run((harness) =>
-            harness.chat.readFile(request.params.sessionID, request.query.path).pipe(notFound, rejected),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat
+                  .readFile(request.params.sessionID, request.query.path)
+                  .pipe(notFound, rejected, unreachable),
+              ),
+            ),
           ),
-        ),
-    ),
+        )
+    }),
   ),
   HttpApiBuilder.group(ChatApi, "vcs", (group) =>
-    Effect.map(harnessed, (run) =>
-      group
+    Effect.gen(function* () {
+      const run = yield* harnessed
+      const touch = yield* touching
+      return group
         .handle("vcs.get", (request) =>
-          run((harness) => harness.chat.vcs(request.params.sessionID).pipe(notFound, rejected)),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) => harness.chat.vcs(request.params.sessionID).pipe(notFound, rejected, unreachable)),
+            ),
+          ),
         )
         .handle("vcs.diff", (request) =>
-          run((harness) =>
-            harness.chat
-              .vcsDiff(request.params.sessionID, {
-                mode: request.query.mode ?? "working",
-                ...(Predicate.isNumber(request.query.context) && { context: request.query.context }),
-              })
-              .pipe(notFound, rejected),
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat
+                  .vcsDiff(request.params.sessionID, {
+                    mode: request.query.mode ?? "working",
+                    ...(Predicate.isNumber(request.query.context) && { context: request.query.context }),
+                  })
+                  .pipe(notFound, rejected, unreachable),
+              ),
+            ),
           ),
-        ),
-    ),
+        )
+    }),
   ),
   HttpApiBuilder.group(ChatApi, "websearch", (group) =>
     Effect.map(harnessed, (run) =>

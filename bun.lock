@@ -74,7 +74,7 @@
       "name": "@ren/brain",
       "version": "0.0.0",
       "dependencies": {
-        "@ren/environment-api": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
@@ -90,6 +90,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@effect/ai-openai": "catalog:",
+        "@effect/platform-bun": "catalog:",
         "@effect/platform-node-shared": "catalog:",
         "@opencode/ai": "catalog:",
         "@opencode/client": "catalog:",
@@ -99,7 +100,7 @@
         "@opencode/server": "catalog:",
         "@opencode/util": "catalog:",
         "@ren/brain": "workspace:*",
-        "@ren/environment-api": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/host-api": "workspace:*",
         "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
@@ -198,7 +199,7 @@
         "@effect/sql-pg": "catalog:",
         "@modelcontextprotocol/client": "catalog:",
         "@ren/db": "workspace:*",
-        "@ren/environment-api": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/host-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/telemetry": "workspace:*",
@@ -247,8 +248,8 @@
         "@ren/client": "workspace:*",
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
-        "@ren/environment-api": "workspace:*",
         "@ren/executor": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/host-api": "workspace:*",
         "@ren/opencode-transcript": "workspace:*",
         "@ren/schema": "workspace:*",
@@ -271,11 +272,14 @@
         "@typescript/native-preview": "catalog:",
       },
     },
-    "packages/environment-api": {
-      "name": "@ren/environment-api",
+    "packages/executor": {
+      "name": "@ren/executor",
       "version": "0.0.0",
       "dependencies": {
+        "@effect/platform-bun": "catalog:",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
+        "@ren/telemetry": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -283,14 +287,11 @@
         "@typescript/native-preview": "catalog:",
       },
     },
-    "packages/executor": {
-      "name": "@ren/executor",
+    "packages/hand-api": {
+      "name": "@ren/hand-api",
       "version": "0.0.0",
       "dependencies": {
-        "@effect/platform-bun": "catalog:",
-        "@ren/environment-api": "workspace:*",
         "@ren/schema": "workspace:*",
-        "@ren/telemetry": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
@@ -401,8 +402,8 @@
       "devDependencies": {
         "@ren/brain": "workspace:*",
         "@ren/cell": "workspace:*",
-        "@ren/environment-api": "workspace:*",
         "@ren/executor": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "auth": "catalog:",
@@ -1575,9 +1576,9 @@
 
     "@ren/egress-api": ["@ren/egress-api@workspace:packages/egress-api"],
 
-    "@ren/environment-api": ["@ren/environment-api@workspace:packages/environment-api"],
-
     "@ren/executor": ["@ren/executor@workspace:packages/executor"],
+
+    "@ren/hand-api": ["@ren/hand-api@workspace:packages/hand-api"],
 
     "@ren/host-api": ["@ren/host-api@workspace:packages/host-api"],
 

@@ -1,7 +1,7 @@
 export * as ExecutorTelemetry from "./telemetry.js"
 
-import { ExecutorVariables } from "@ren/environment-api/executor-variables"
-import { Environment } from "@ren/schema/environment"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
+import { Hand } from "@ren/schema/hand"
 import { Observability } from "@ren/schema/observability"
 import { Telemetry } from "@ren/telemetry/telemetry"
 import { Config, Effect, Layer, Option } from "effect"
@@ -10,7 +10,7 @@ import manifest from "../package.json"
 
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
-    const environmentId = yield* Config.schema(Environment.ID, ExecutorVariables.environmentId)
+    const environmentId = yield* Config.schema(Hand.ID, ExecutorVariables.environmentId)
     return Telemetry.layer({
       ...(yield* Telemetry.targets),
       metrics: Option.none(),

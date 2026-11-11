@@ -3,12 +3,12 @@ import { AbsolutePath, Model, OpenCode, Provider, Session } from "@opencode/clie
 import { SdkPlugins } from "@opencode/core/plugin/sdk"
 import { Plugin, Reference } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { TestAccess } from "@ren/brain/testing"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import { Context, Deferred, Effect, Layer, ManagedRuntime, Option, Predicate, type Scope, Stream } from "effect"
@@ -26,9 +26,9 @@ setDefaultTimeout(60_000)
 
 const it = testEffect(Layer.empty)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-driver-environment-")))
-const onEnvironment = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const onEnvironment = testEffect(TestHand.layer({ environmentId, workspace }))
 
 const stub = Shared.stub()
 
@@ -371,15 +371,15 @@ describe("OpenCode facts the Ren driver relies on", () => {
         const memory = Context.get(access, TestAccess.Memory)
         const connections = Context.get(
           yield* Layer.build(
-            EnvironmentConnections.layer.pipe(
-              Layer.provide(Layer.succeed(EnvironmentAccess.Service, Context.get(access, EnvironmentAccess.Service))),
+            HandConnections.layer.pipe(
+              Layer.provide(Layer.succeed(HandAccess.Service, Context.get(access, HandAccess.Service))),
               Layer.provide(FetchHttpClient.layer),
             ),
           ),
-          EnvironmentConnections.Service,
+          HandConnections.Service,
         )
         const connects = { count: 0 }
-        const counted = EnvironmentConnections.Service.of({
+        const counted = HandConnections.Service.of({
           ...connections,
           connect: (sessionId) =>
             Effect.sync(() => {
@@ -407,8 +407,8 @@ describe("OpenCode facts the Ren driver relies on", () => {
         const directory = join(workspace, sessionId)
         yield* memory.set(
           sessionId,
-          yield* TestEnvironment.access({
-            url: yield* TestEnvironment.url,
+          yield* TestHand.access({
+            url: yield* TestHand.url,
             environmentId,
             brain: Brain.ofSession(sessionId),
             directory,

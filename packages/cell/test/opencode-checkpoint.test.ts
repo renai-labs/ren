@@ -2,7 +2,7 @@ import { afterAll, describe, expect } from "bun:test"
 import { Database } from "bun:sqlite"
 import { AbsolutePath, Agent, Model, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import { testEffect } from "@ren/executor/testing"
-import { Context, Effect, Fiber, Layer, ManagedRuntime, Option, Schedule, Schema, Stream } from "effect"
+import { Context, Effect, Equal, Fiber, Layer, ManagedRuntime, Option, Schedule, Schema, Stream } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -76,9 +76,7 @@ const record = (db: Database) => {
 
 const changed = (write: Write) =>
   write.op === "update"
-    ? Object.keys(write.new ?? {}).filter(
-        (key) => JSON.stringify(write.old?.[key]) !== JSON.stringify(write.new?.[key]),
-      )
+    ? Object.keys(write.new ?? {}).filter((key) => !Equal.equals(write.old?.[key], write.new?.[key]))
     : [write.op]
 
 // oxlint-disable-next-line ren/no-comments -- The log has no transaction boundaries. OpenCode commits a durable event as its projector writes followed by the event_sequence write of the same session (bus.ts commitDurableEvent), so a run of writes of one session that ends with its event_sequence write is covered by E. A run that another session's write or the end of the log ends is not.

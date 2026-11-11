@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Testing } from "@ren/db/testing"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Auth } from "@ren/schema/auth"
@@ -53,7 +54,7 @@ const models = Models.layer([RenInferenceProvider.make]).pipe(
 )
 
 const it = testEffect(
-  Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
     Layer.provideMerge(BrainRegistry.layer),

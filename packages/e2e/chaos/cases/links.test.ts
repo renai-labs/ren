@@ -16,7 +16,7 @@ const failed = (work: Promise<unknown>) =>
 const inWindow = () => Date.now() + 4 * 60_000
 
 describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Hand } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")

@@ -95,6 +95,8 @@ export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{
 export interface Options {
   readonly sessionID: Session.ID
   readonly access: (input: { readonly unreachable: boolean }) => Effect.Effect<Session.ClientAccess, unknown>
+  // oxlint-disable-next-line ren/no-comments -- Starts the chat again after its space was shut down (Ren's `chat.retry`). A prompt to a stopped chat calls it first; reads and reconnects never do.
+  readonly restart?: Effect.Effect<void, unknown>
   readonly saved?: (query: { readonly limit: number }) => Effect.Effect<SessionMessage.Page, unknown>
   readonly outbox?: {
     readonly load: Effect.Effect<ReadonlyArray<Outbox.Kept>>
@@ -112,6 +114,7 @@ export type Boot =
   | { readonly _tag: "Ready" }
   | { readonly _tag: "Starting"; readonly phase: string }
   | { readonly _tag: "Failed"; readonly reason: string }
+  | { readonly _tag: "Stopped" }
 
 export interface Handoff {
   readonly id: SessionMessage.ID
@@ -260,6 +263,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const client = accessLock.withPermits(1)(
     Effect.gen(function* () {
+      const currentBoot = yield* SubscriptionRef.get(boot)
+      if (currentBoot._tag === "Failed") return yield* new AccessFailed({ cause: new Error(currentBoot.reason) })
+      if (currentBoot._tag === "Stopped")
+        return yield* new AccessFailed({ cause: new Error("The space was shut down") })
       const now = yield* Clock.currentTimeMillis
       if (
         Option.isSome(cached.current) &&
@@ -277,6 +284,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             return SubscriptionRef.set(boot, { _tag: "Failed", reason: answer.reason }).pipe(
               Effect.andThen(showSaved),
               Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))),
+            )
+          if (answer.status === "stopped")
+            return SubscriptionRef.set(boot, { _tag: "Stopped" }).pipe(
+              Effect.andThen(showSaved),
+              Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error("The space was shut down") }))),
             )
           return SubscriptionRef.set(boot, { _tag: "Starting", phase: answer.phase }).pipe(
             Effect.andThen(showSaved),
@@ -524,6 +536,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const connection = yield* Connection.make({
     ...options.connection,
     subscribe: Effect.map(client, (api) => api.event.subscribe()),
+    canReconnect: Effect.map(
+      SubscriptionRef.get(boot),
+      (current) => current._tag !== "Failed" && current._tag !== "Stopped",
+    ),
     onFrames,
     onStatus: (next) =>
       Effect.gen(function* () {
@@ -630,6 +646,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         ...(files && { files }),
       },
     ])
+    if ((yield* SubscriptionRef.get(boot))._tag === "Stopped" && options.restart) {
+      yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+      yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
+    }
     yield* connection.wake
     yield* send(
       Effect.gen(function* () {

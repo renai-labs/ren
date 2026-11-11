@@ -44,6 +44,7 @@ export interface Options<R, ER> {
     sessionID: Session.ID,
     input: { readonly unreachable: boolean },
   ) => Effect.Effect<Session.ClientAccess, unknown, R>
+  readonly restart?: (sessionID: Session.ID) => Effect.Effect<void, unknown, R>
   readonly saved?: (
     sessionID: Session.ID,
     query: { readonly limit: number },
@@ -94,6 +95,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
           const opened = yield* ChatSession.make({
             sessionID,
             access: (input) => options.access(sessionID, input).pipe(Effect.provide(context)),
+            ...(options.restart && { restart: options.restart(sessionID).pipe(Effect.provide(context)) }),
             ...(saved && {
               saved: (query: { readonly limit: number }) => saved(sessionID, query).pipe(Effect.provide(context)),
             }),

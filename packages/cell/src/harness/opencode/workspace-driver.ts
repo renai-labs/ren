@@ -1,20 +1,28 @@
 export * as RenWorkspaceDriver from "./workspace-driver.js"
 
 import { EnvironmentFiles } from "@opencode/core/environment/files"
+import { FileSystem } from "@opencode/core/filesystem"
 import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { Shell } from "@opencode/core/shell"
+import { Snapshot } from "@opencode/core/snapshot"
+import { ToolOutput } from "@opencode/core/tool-output"
+import { Vcs } from "@opencode/core/vcs"
 import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Workspace } from "@opencode/schema/workspace"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import type { Signal } from "@ren/environment-api/signal"
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentSession } from "@ren/brain/environment/session"
+import { HandApi } from "@ren/hand-api/hand-api"
+import type { Signal } from "@ren/hand-api/signal"
+import type { HandConnections } from "@ren/brain/hand/connections"
+import { HandSession } from "@ren/brain/hand/session"
 import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer } from "effect"
+import { RenFileSystem } from "./filesystem.js"
 import { RenShell } from "./shell.js"
+import { RenSnapshot } from "./snapshot.js"
+import { RenToolOutput } from "./tool-output.js"
+import { RenVcs } from "./vcs.js"
 
 export const provider = "ren"
 
@@ -24,12 +32,12 @@ export const sessionIdOf = (workspaceId: Workspace.ID) => Session.ID.make(`ses_$
 
 const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
-const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImpl => {
+const files = (environment: HandSession.Files): EnvironmentFiles.FilesImpl => {
   const fileError = (path: string) => (cause: unknown) =>
     new EnvironmentFiles.Failed({
       path,
       cause:
-        cause instanceof EnvironmentApi.FileTooLargeError
+        cause instanceof HandApi.FileTooLargeError
           ? new Error(
               `The file ${path} is too large (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); use a range`,
             )
@@ -39,16 +47,16 @@ const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImp
     new EnvironmentFiles.Failed({
       path,
       cause:
-        cause instanceof EnvironmentApi.FileTooLargeError
+        cause instanceof HandApi.FileTooLargeError
           ? new Error(
               `The file ${path} is too large to write in one call (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); write it in parts`,
             )
           : cause,
     })
   const fileLookupError = (path: string) => (error: unknown) =>
-    error instanceof EnvironmentApi.FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
+    error instanceof HandApi.FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
   const fileKindError = (path: string) => (error: unknown) =>
-    error instanceof EnvironmentApi.WrongKindError
+    error instanceof HandApi.WrongKindError
       ? new EnvironmentFiles.WrongKind({ path, actual: error.actual })
       : fileLookupError(path)(error)
   return {
@@ -73,24 +81,39 @@ const files = (environment: EnvironmentSession.Files): EnvironmentFiles.FilesImp
   }
 }
 
-export const session = (connections: EnvironmentConnections.Interface, sessionId: Session.ID) => {
-  const environment = EnvironmentSession.make(connections, sessionId, killedBySignal)
+export const session = (connections: HandConnections.Interface, sessionId: Session.ID) => {
+  const environment = HandSession.make(connections, sessionId, killedBySignal)
   return { spawner: environment.spawner, spawnerWith: environment.spawnerWith, overrides: files(environment.files) }
 }
 
-export const replacements = (connections: EnvironmentConnections.Interface): LayerNode.Replacements => [
-  WorkspaceDriver.node.replace(
-    WorkspaceDriver.registryNode({
-      [provider]: WorkspaceDriver.make({
-        create: () => Effect.succeed({ binding: {} }),
-        connect: (input) => Effect.succeed(session(connections, sessionIdOf(input.workspaceID))),
-        suspendForIdle: () => Effect.void,
-        destroy: () => Effect.void,
+// oxlint-disable-next-line ren/no-comments -- A brain with a remote hand also moves OpenCode's saved tool output, workspace panel files, git and snapshots to the hand, because they use the brain's disk. A co-located brain keeps OpenCode's own: its disk is the hand's.
+export const replacements = (
+  connections: HandConnections.Interface,
+  options: { readonly isRemoteHand?: boolean } = {},
+): LayerNode.Replacements => {
+  const environmentOf = (workspaceId: Workspace.ID) => session(connections, sessionIdOf(workspaceId))
+  return [
+    ...(options.isRemoteHand
+      ? [
+          ToolOutput.node.replace(RenToolOutput.node((workspaceId) => environmentOf(workspaceId).overrides)),
+          FileSystem.node.replace(RenFileSystem.node((workspaceId) => environmentOf(workspaceId).overrides)),
+          Vcs.node.replace(RenVcs.node((workspaceId) => environmentOf(workspaceId).spawner)),
+          Snapshot.node.replace(RenSnapshot.node((workspaceId) => environmentOf(workspaceId).spawner)),
+        ]
+      : []),
+    WorkspaceDriver.node.replace(
+      WorkspaceDriver.registryNode({
+        [provider]: WorkspaceDriver.make({
+          create: () => Effect.succeed({ binding: {} }),
+          connect: (input) => Effect.succeed(environmentOf(input.workspaceID)),
+          suspendForIdle: () => Effect.void,
+          destroy: () => Effect.void,
+        }),
       }),
-    }),
-  ),
-  RipgrepBinary.node.replace(
-    Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
-  ),
-  Shell.node.replace(RenShell.node((workspaceId) => session(connections, sessionIdOf(workspaceId)))),
-]
+    ),
+    RipgrepBinary.node.replace(
+      Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
+    ),
+    Shell.node.replace(RenShell.node(environmentOf)),
+  ]
+}

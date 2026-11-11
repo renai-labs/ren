@@ -94,7 +94,7 @@ export const layer = Layer.effect(
         if (kept) return { sessionId: claimed.sessionId, exists: Boolean(claimed.created) }
         yield* database.db
           .update(thread)
-          .set({ current_session_id: sessionId, channel_state: {}, updated_at: new Date() })
+          .set({ current_session_id: sessionId, channel_state: {}, updated_at: sql`now()` })
           .where(and(eq(thread.id, claimed.id), eq(thread.current_session_id, claimed.sessionId)))
           .pipe(Effect.orDie)
         const moved = yield* read
@@ -122,7 +122,7 @@ export const layer = Layer.effect(
             set: {
               current_session_id: sessionId,
               channel_state: sql`case when ${thread.current_session_id} = ${sessionId} then ${thread.channel_state} else '{}'::jsonb end`,
-              updated_at: new Date(),
+              updated_at: sql`now()`,
             },
           })
           .pipe(Effect.orDie)

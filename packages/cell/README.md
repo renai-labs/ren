@@ -49,7 +49,7 @@ The message is submitted after applying the session configuration and instructio
 
 ## Environments
 
-The production cell has `EnvironmentConnections` whenever `REN_URL` is set. It asks Ren for a session's access through the Ren Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor an environment. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
+The production cell has `HandConnections` whenever `REN_URL` is set. It asks Ren for a session's access through the Ren Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor an environment. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
 
 `start` takes a `directory` from Ren only for a new session, which then works in that directory in a `ren` workspace. A later `start` keeps it; a `directory` for a session that started without one answers "not supported yet". Ren refuses a change of environment before it calls the cell. A session without an environment has no read, write, edit, patch, glob, grep or shell; its other tools stay, and the `ren.environment` instruction tells the model why. When the session goes idle (OpenCode's `session.idle` for the session that owns the workspace), the Ren plugin calls `EnvironmentConnections.release`, which calls the Ren Host API's `environments.release`. A tool error names its cause (no access, Ren does not answer, the environment does not answer, token refused, not compatible) through the public `execute.after` hook.
 
@@ -76,11 +76,11 @@ bun typecheck
 - `brain-api.test.ts`: `HttpApiTest.groups` with the real Brain handlers, OpenCode adapter, in-memory SQLite and a loopback model fixture. No cell process is needed.
 - `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, first with scripted snapshots, then with the in-process OpenCode harness.
 - `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
-- `host-access.test.ts`: `HostAccess`, the cell's Ren Host API `EnvironmentAccess`, against a fake Ren (`test/lib/ren.ts`).
+- `host-access.test.ts`: `HostAccess`, the cell's Ren Host API `HandAccess`, against a fake Ren (`test/lib/ren.ts`).
 - `workspace-driver.test.ts`: the OpenCode `ren` driver's file and error mapping.
 - `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`, `sync.test.ts`: Ren's ownership, decisions and transformations.
 - `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.
 - `crash.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
-- `environment-lifecycle-cell.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.
+- `hand-lifecycle-cell.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.
 
 Integration processes are acquired and released by scoped layers.

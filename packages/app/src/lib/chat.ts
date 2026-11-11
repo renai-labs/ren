@@ -37,6 +37,12 @@ function makeAtoms(platform: Platform.Info, userId: string) {
         ),
         Effect.provide(server),
       ),
+    restart: (sessionID: Session.ID) =>
+      Ren.make({ baseUrl: platform.serverUrl }).pipe(
+        Effect.flatMap((ren) => ren.chat.retry({ id: sessionID })),
+        Effect.asVoid,
+        Effect.provide(server),
+      ),
     outbox: (sessionID: Session.ID) => {
       const key = `session.${sessionID}.outbox`
       return {

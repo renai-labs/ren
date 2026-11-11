@@ -61,6 +61,20 @@ export const SpaceArchive = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["space"]["archive"]({ ...request.params }),
   )
 
+export const SpaceShutdown = (input: Command.Command.Config.Infer<typeof Commands.SpaceShutdown>) =>
+  Operation.run(
+    ClientApi.groups["space"].endpoints["space.shutdown"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space"]["shutdown"]({ ...request.params, ...request.payload }),
+  )
+
 export const SpaceMemberList = (input: Command.Command.Config.Infer<typeof Commands.SpaceMemberList>) =>
   Operation.run(
     ClientApi.groups["space-member"].endpoints["space-member.list"],
@@ -135,50 +149,6 @@ export const AgentMembershipArchive = (input: Command.Command.Config.Infer<typeo
     ClientApi.groups["agent-membership"].endpoints["agent-membership.archive"],
     { params: { id: input["id"] }, labels: { id: "<membership>" } },
     (client, request) => client["agent-membership"]["archive"]({ ...request.params }),
-  )
-
-export const SpaceEnvironmentTemplateList = (
-  input: Command.Command.Config.Infer<typeof Commands.SpaceEnvironmentTemplateList>,
-) =>
-  Operation.run(
-    ClientApi.groups["space-environment-template"].endpoints["space-environment-template.list"],
-    {
-      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { spaceId: "<space>", page: "--page", pageSize: "--page-size" },
-      lookups: {
-        spaceId: (client, value) =>
-          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
-    (client, request) => client["space-environment-template"]["list"]({ ...request.query }),
-  )
-
-export const SpaceEnvironmentTemplateCreate = (
-  input: Command.Command.Config.Infer<typeof Commands.SpaceEnvironmentTemplateCreate>,
-) =>
-  Operation.run(
-    ClientApi.groups["space-environment-template"].endpoints["space-environment-template.create"],
-    {
-      payload: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
-      input: input["input"],
-      labels: { spaceId: "<space>", environmentTemplateId: "--template" },
-      lookups: {
-        spaceId: (client, value) =>
-          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-        environmentTemplateId: (client, value) =>
-          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
-    (client, request) => client["space-environment-template"]["create"]({ ...request.payload }),
-  )
-
-export const SpaceEnvironmentTemplateArchive = (
-  input: Command.Command.Config.Infer<typeof Commands.SpaceEnvironmentTemplateArchive>,
-) =>
-  Operation.run(
-    ClientApi.groups["space-environment-template"].endpoints["space-environment-template.archive"],
-    { params: { id: input["id"] }, labels: { id: "<environment>" } },
-    (client, request) => client["space-environment-template"]["archive"]({ ...request.params }),
   )
 
 export const SpaceSettingsGet = (input: Command.Command.Config.Infer<typeof Commands.SpaceSettingsGet>) =>
@@ -1447,6 +1417,40 @@ export const EnvironmentTemplateArchive = (
     (client, request) => client["environment-template"]["archive"]({ ...request.params }),
   )
 
+export const EnvironmentTemplateRetryBuild = (
+  input: Command.Command.Config.Infer<typeof Commands.EnvironmentTemplateRetryBuild>,
+) =>
+  Operation.run(
+    ClientApi.groups["environment-template"].endpoints["environment-template.retryBuild"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<template>" },
+      lookups: {
+        id: (client, value) =>
+          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["environment-template"]["retryBuild"]({ ...request.params, ...request.payload }),
+  )
+
+export const EnvironmentTemplateAffectedSpaces = (
+  input: Command.Command.Config.Infer<typeof Commands.EnvironmentTemplateAffectedSpaces>,
+) =>
+  Operation.run(
+    ClientApi.groups["environment-template"].endpoints["environment-template.affectedSpaces"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<template>" },
+      lookups: {
+        id: (client, value) =>
+          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["environment-template"]["affectedSpaces"]({ ...request.params, ...request.payload }),
+  )
+
 export const OauthAppList = (input: Command.Command.Config.Infer<typeof Commands.OauthAppList>) =>
   Operation.run(
     ClientApi.groups["oauth-app"].endpoints["oauth-app.list"],
@@ -1880,6 +1884,13 @@ export const EnvironmentProviderList = () =>
     ClientApi.groups["environmentProvider"].endpoints["environmentProvider.list"],
     { labels: {} },
     (client) => client["environmentProvider"]["list"](),
+  )
+
+export const EnvironmentProviderBrains = () =>
+  Operation.run(
+    ClientApi.groups["environmentProvider"].endpoints["environmentProvider.brains"],
+    { labels: {} },
+    (client) => client["environmentProvider"]["brains"](),
   )
 
 export const ChannelProviderList = () =>

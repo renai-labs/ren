@@ -4,6 +4,12 @@ import path from "path"
 import { Option, Schema } from "effect"
 import { Signoff } from "./signoff.js"
 
+const filesIn = (directory: string) =>
+  fs.readdir(directory).catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return []
+    throw error
+  })
+
 const remote = process.argv[2]
 if (remote === undefined) throw new Error("Usage: push.ts <remote>, with git's pre-push lines on stdin")
 
@@ -56,7 +62,7 @@ const pushed = await Promise.all(
 const runs = async (tree: string) => {
   const directory = await Signoff.runsDirectory(tree)
   const decoded = await Promise.all(
-    (await fs.readdir(directory).catch(() => [])).map(async (file) =>
+    (await filesIn(directory)).map(async (file) =>
       Schema.decodeUnknownOption(Schema.fromJsonString(Signoff.Run))(await Bun.file(path.join(directory, file)).text()),
     ),
   )
@@ -140,7 +146,7 @@ await Promise.all(
 const directory = await Signoff.runsDirectory()
 const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000
 await Promise.all(
-  (await fs.readdir(directory).catch(() => [])).map(async (name) =>
+  (await filesIn(directory)).map(async (name) =>
     (await fs.stat(path.join(directory, name))).mtimeMs < cutoff
       ? fs.rm(path.join(directory, name), { recursive: true, force: true })
       : undefined,

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { Duration } from "effect"
 import { SessionDriver } from "../lib/drivers/session.js"
 import { Platform } from "../lib/platform.js"
@@ -192,7 +192,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await stack().startServer()
       expect([down.endsWith("cached\n"), expired.includes("Ren does not answer")]).toEqual([true, true])
       // ast-grep-ignore: no-test-sleep -- the brain asks Ren again 30 seconds after a failure, in real time
-      await Bun.sleep(Duration.toMillis(EnvironmentConnections.retryRenAfter) + 1_000)
+      await Bun.sleep(Duration.toMillis(HandConnections.retryRenAfter) + 1_000)
       expect(await session.tool("shell", { command: "echo back" })).toBe("back\n")
     }, 600_000)
 
@@ -256,7 +256,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(await session.tool("shell", { command: "echo soon" })).toContain("StatusCode error (403 POST")
       expect(stack().issued()).toBe(asked)
       // ast-grep-ignore: no-test-sleep -- the brain asks Ren again 30 seconds after a failure, in real time
-      await Bun.sleep(Duration.toMillis(EnvironmentConnections.retryRenAfter) + 1_000)
+      await Bun.sleep(Duration.toMillis(HandConnections.retryRenAfter) + 1_000)
       expect(await session.tool("shell", { command: "echo allowed" })).toBe("allowed\n")
     }, 600_000)
 

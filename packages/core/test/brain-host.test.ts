@@ -1,4 +1,8 @@
+import { HandProvider } from "../src/hand-provider.js"
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import { SandboxEgress } from "../src/sandbox-egress.js"
+import { MachineNetwork } from "../src/machine-network.js"
+import { Bundles } from "../src/bundles.js"
 import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -7,12 +11,27 @@ import { BrainToken } from "@ren/host-api/brain-token"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
-import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { MachineTemplate } from "@ren/schema/machine-template"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
 import { eq, sql } from "drizzle-orm"
-import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option, Queue, Redacted, Schema } from "effect"
-import { FetchHttpClient } from "effect/http"
+import {
+  Clock,
+  ConfigProvider,
+  Context,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Queue,
+  Redacted,
+  Schedule,
+  Schema,
+} from "effect"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Access } from "../src/access.js"
 import { App } from "../src/app.js"
@@ -22,15 +41,17 @@ import { Credentials } from "../src/credentials.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
-import { EnvironmentProvider } from "../src/environment-provider.js"
-import { Environments } from "../src/environments.js"
+import { Hands } from "../src/hands.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { Models } from "../src/models.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/environment-provider.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { Host } from "./lib/host.js"
+import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
+import { SpaceShutdown } from "../src/space-shutdown.js"
 
 setDefaultTimeout(60_000)
 
@@ -117,6 +138,39 @@ describe("BrainHost calls to a brain", () => {
     }),
   )
 
+  it.live(
+    "a send while the space shuts down is refused before the brain is called; after it, a send reaches the brain",
+    () =>
+      Effect.gen(function* () {
+        const requests: Array<string> = []
+        const answering = yield* serve((request) => {
+          requests.push(new URL(request.url).pathname)
+          return Response.json({ messageId: Session.MessageID.create() })
+        })
+        const subject = yield* seeded
+        const database = yield* Database.Service
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ shutdown_state: "running" })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        const refused = yield* sendTo(subject.sessionId, "during").pipe(
+          Effect.flip,
+          Effect.provide(cell(answering.url.origin)),
+        )
+        const before = requests.length
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ shutdown_state: null })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        yield* sendTo(subject.sessionId, "after").pipe(Effect.provide(cell(answering.url.origin)))
+        expect({ refused: refused._tag, before, after: requests.length }).toEqual({
+          refused: "BrainRejectedError",
+          before: 0,
+          after: 1,
+        })
+      }),
+  )
+
   it.live("file limits are checked before the call, and the brain's body-size refusal is not retried", () =>
     Effect.gen(function* () {
       const requests: Array<string> = []
@@ -128,26 +182,23 @@ describe("BrainHost calls to a brain", () => {
       const file = (bytes: number) => [{ url: `data:text/plain,${"a".repeat(bytes)}`, name: "a.png" }]
       const failures = yield* Effect.all([
         sendTo(subject.sessionId, "look", Session.MessageID.create(), file(3000)).pipe(Effect.flip),
-        sendTo(subject.sessionId, "look", Session.MessageID.create(), file(3001)).pipe(Effect.flip),
+        sendTo(
+          subject.sessionId,
+          "look",
+          Session.MessageID.create(),
+          file(Session.inlineLimitOf("text/plain") + 1),
+        ).pipe(Effect.flip),
         sendTo(subject.sessionId, "look", Session.MessageID.create(), [
-          { url: `data:text/plain,${"a".repeat(6_000_000)}` },
-          { url: `data:text/plain,${"b".repeat(6_000_000)}` },
+          { url: `data:image/png;base64,${"a".repeat(16_000_000)}` },
+          { url: `data:image/png;base64,${"b".repeat(16_000_000)}` },
         ]).pipe(Effect.flip),
-      ]).pipe(Effect.provide(cell(refusing.url.origin, { BRAIN_MAX_FILE_SIZE: "8MB" })))
+      ]).pipe(Effect.provide(cell(refusing.url.origin)))
       expect(failures).toMatchObject([
         { _tag: "BrainRejectedError", message: "The host rejected the request because its body is too large" },
-        { _tag: "BrainRejectedError", message: "The host rejected the request because its body is too large" },
-        { _tag: "BrainRejectedError", message: "A message’s files total more than 10 MB" },
+        { _tag: "BrainRejectedError", message: `a.png is over the inline limit (${Session.inlineLimits})` },
+        { _tag: "BrainRejectedError", message: "A message’s inline files total more than 20 MiB" },
       ])
-      const small = yield* sendTo(subject.sessionId, "look", Session.MessageID.create(), file(3001)).pipe(
-        Effect.flip,
-        Effect.provide(cell(refusing.url.origin, { BRAIN_MAX_FILE_SIZE: "3kB" })),
-      )
-      expect(small).toMatchObject({ _tag: "BrainRejectedError", message: "a.png is larger than 3 kB" })
-      expect(requests).toEqual([
-        `/ren/sessions/${subject.sessionId}/messages`,
-        `/ren/sessions/${subject.sessionId}/messages`,
-      ])
+      expect(requests).toEqual([`/ren/sessions/${subject.sessionId}/messages`])
     }),
   )
 
@@ -286,6 +337,87 @@ describe("BrainHost pull", () => {
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
+  it.live("a pull tells each chat the hand its brain applied, not the space's newer setting", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const brainId = Brain.ofSession(subject.sessionId)
+      const host = {
+        brainId,
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const hasHand = Effect.map(
+        brain.pull(host, { version: "test", keyIds: [], sessions: [] }),
+        (reply) => reply.chats.find((chat) => chat.id === subject.sessionId)?.hasHand,
+      )
+      const before = yield* hasHand
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ hand_placement: "none" })
+        .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+      const pending = yield* hasHand
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ hand: { placement: "none" } })
+        .where(eq(Database.Schema.brain.id, brainId))
+      expect([before, pending, yield* hasHand]).toEqual([true, true, false])
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
+  it.live("a pull keeps a chat's place on its hand only while the chat is in a turn or a person reads its files", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
+      const environmentId = Hand.ID.create()
+      yield* database.db.insert(Database.Schema.environment).values({
+        id: environmentId,
+        environment_template_id: template,
+        space_id: subject.owner.spaceId,
+        target: Seed.version(template),
+      })
+      const soon = new Date(Date.now() + Duration.toMillis("1 hour"))
+      yield* database.db.insert(Database.Schema.session_environment).values({
+        session_id: subject.sessionId,
+        space_id: subject.owner.spaceId,
+        environment_template_id: template,
+        target: Seed.version(template),
+        environment_id: environmentId,
+        reserved_until: soon,
+      })
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ hand: { placement: "remote", version: Seed.version(template) } })
+        .where(eq(Database.Schema.brain.id, host.brainId))
+      const heldAfter = Effect.fnUntraced(function* (session: { readonly busy: boolean; readonly touched?: boolean }) {
+        yield* brain.pull(host, {
+          version: "test",
+          keyIds: [],
+          sessions: [{ id: subject.sessionId, progress: "0", ...session }],
+        })
+        const found = (yield* database.db
+          .select({ until: Database.Schema.session_environment.reserved_until })
+          .from(Database.Schema.session_environment)
+          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))).at(0)?.until
+        return (found?.getTime() ?? 0) > Date.now() + Duration.toMillis("2 days")
+      })
+      expect([yield* heldAfter({ busy: false }), yield* heldAfter({ busy: false, touched: true })]).toEqual([
+        false,
+        true,
+      ])
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
   it.live("a catalog whose space is archived is omitted while the rest of pull still succeeds", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
@@ -391,18 +523,25 @@ describe("BrainHost pull", () => {
         const creator = yield* Seed.user()
         const brainId = Brain.ID.create()
         const owner = { organizationId, spaceId, createdBy: creator.id, brainId }
-        const environments = yield* Environments.Service
-        const bound = yield* Effect.forEach(["mounting", "unmountable", "direct"], (provider) =>
+        const environments = yield* Hands.Service
+        const versions = yield* Effect.forEach(["mounting", "unmountable", "direct"], (provider) =>
+          Effect.map(Seed.environmentTemplate(organizationId, { provider }), Seed.version),
+        )
+        const bound = yield* Effect.forEach(versions, (version) =>
           Effect.gen(function* () {
             const sessionId = yield* Seed.session(owner)
-            yield* environments.bind(
-              { sessionId, organizationId, spaceId },
-              yield* Seed.environmentTemplate(organizationId, { provider }),
-            )
+            yield* environments.bind({ sessionId, organizationId, spaceId }, version)
             return sessionId
           }),
         )
         const without = yield* Seed.session(owner)
+        const version = versions[0]
+        if (!version) return yield* Effect.die(new Error("no template was made"))
+        const database = yield* Database.Service
+        yield* database.db
+          .update(Database.Schema.brain)
+          .set({ hand: { placement: "remote", version } })
+          .where(eq(Database.Schema.brain.id, brainId))
         const brain = yield* Brains.Service
         const reply = yield* brain.pull(
           { brainId, organizationId, spaceId, generation: 1 },
@@ -446,9 +585,15 @@ describe("BrainHost pull", () => {
                 TestProvider.make({ id: "direct", canMount: true }),
               ]),
               (probes) => {
-                const environments = Environments.layer.pipe(
-                  Layer.provide(Signer.layerLocal),
-                  Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
+                const environments = Hands.layer.pipe(
+                  Layer.provide(DurableRunner.layerMemory),
+                  Layer.provide([MachineNetwork.layerNone, Bundles.layer]),
+                  Layer.provide([
+                    Signer.layerLocal,
+                    Layer.succeed(HttpClient.HttpClient, TestProvider.executors(probes)),
+                    TestSandboxEgress.layer,
+                  ]),
+                  Layer.provide(HandProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
                 )
                 return Layer.merge(
                   Host.cellLayer({ CELL_URL: "http://127.0.0.1:9" }, fixed, environments),
@@ -572,33 +717,40 @@ describe("BrainHost environments", () => {
   const hostWith = Effect.fnUntraced(function* (cellUrl: string) {
     const keys = yield* Signature.generate("env")
     const probe = yield* TestProvider.make()
-    const context = yield* Layer.build(
-      Host.cellLayer(
-        { CELL_URL: cellUrl },
-        fixed,
-        Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
-          Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
-          Layer.provide(
-            ConfigProvider.layer(
-              ConfigProvider.fromUnknown({
-                ENVIRONMENT_KEYS: JSON.stringify([
-                  {
-                    id: keys.privateKey.id,
-                    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
-                  },
-                ]),
-              }),
-            ),
+    const environments = yield* Layer.build(
+      Layer.fresh(
+        Hands.layer.pipe(
+          Layer.provide(DurableRunner.layerMemory),
+          Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer]),
+          Layer.provide([Signer.layerLocal, Layer.succeed(HttpClient.HttpClient, probe.executor)]),
+        ),
+      ).pipe(
+        Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+        Layer.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromUnknown({
+              ENVIRONMENT_KEYS: JSON.stringify([
+                {
+                  id: keys.privateKey.id,
+                  key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
+                },
+              ]),
+            }),
           ),
         ),
       ),
     )
+    const context = Context.merge(
+      environments,
+      yield* Layer.build(Host.cellLayer({ CELL_URL: cellUrl }, fixed, Layer.succeedContext(environments))),
+    )
     return context
   })
+  // oxlint-disable-next-line ren/no-comments -- The space names the hand, as Space.update would set it; a cell applies it at each start.
   const startOn = (
     context: Effect.Success<ReturnType<typeof hostWith>>,
     subject: Effect.Success<typeof seeded>,
-    id: EnvironmentTemplate.ID | undefined,
+    hand: Space.Hand,
   ) =>
     Effect.gen(function* () {
       const database = yield* Database.Service
@@ -607,6 +759,13 @@ describe("BrainHost environments", () => {
         .from(Database.Schema.agent_session)
         .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
       if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({
+          hand_placement: hand.placement,
+          environment_template_id: hand.placement === "remote" ? hand.environmentTemplateId : null,
+        })
+        .where(eq(Database.Schema.space.id, subject.owner.spaceId))
       const input = {
         sessionId: subject.sessionId,
         harness: "opencode",
@@ -616,69 +775,89 @@ describe("BrainHost environments", () => {
           prompt: { text: "hello" },
           sender: { userId: subject.owner.createdBy },
         },
-        ...(id && { environmentTemplateId: id }),
+        hand,
       } satisfies Session.StartInput
       const placement = { organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, brainId }
       yield* Context.get(context, Brains.Service).start(input, placement)
       yield* Brains.StartRun.execute({ input, placement, epoch: 0 }).pipe(Effect.provideContext(context))
     })
 
-  it.live("a start gives the brain the chat's environment directory, also on a later start that names none", () =>
+  const remote = (environmentTemplateId: MachineTemplate.ID) =>
+    ({ placement: "remote", environmentTemplateId }) as const
+
+  it.live("a remote hand gives the brain the chat's folder on it at every start; no hand gives none", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
       const host = yield* hostWith(recording.url)
       const subject = yield* seeded
       const environmentTemplateId = yield* Seed.environmentTemplate(subject.owner.organizationId)
-      yield* startOn(host, subject, environmentTemplateId)
-      yield* startOn(host, subject, undefined)
+      yield* startOn(host, subject, remote(environmentTemplateId))
+      yield* startOn(host, subject, remote(environmentTemplateId))
+      yield* startOn(host, yield* seeded, { placement: "none" })
       expect(recording.starts.map((input) => input.directory)).toEqual([
         `/workspace/${subject.sessionId}`,
         `/workspace/${subject.sessionId}`,
+        undefined,
       ])
     }),
   )
 
-  it.live("Ren refuses an unknown environment template, or a change of template, before it calls the brain", () =>
+  it.live("a cell applies its space's hand at each start: a chat moves to the template the space names now", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
       const host = yield* hostWith(recording.url)
       const subject = yield* seeded
-      yield* startOn(host, subject, EnvironmentTemplate.ID.create())
-      expect(recording.starts).toEqual([])
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      expect(recording.starts).toHaveLength(1)
-    }),
-  )
-
-  it.live("two starts at once that name different templates leave the chat on one", () =>
-    Effect.gen(function* () {
-      const recording = yield* recordingCell()
-      const host = yield* hostWith(recording.url)
-      const subject = yield* seeded
-      const templates = [
-        yield* Seed.environmentTemplate(subject.owner.organizationId),
-        yield* Seed.environmentTemplate(subject.owner.organizationId),
-      ]
-      yield* Effect.forEach(templates, (id) => startOn(host, subject, id), { concurrency: "unbounded" })
-      expect(recording.starts).toHaveLength(1)
-    }),
-  )
-
-  it.live("a start that the brain refuses removes the binding that it made", () =>
-    Effect.gen(function* () {
-      const recording = yield* recordingCell(422)
-      const host = yield* hostWith(recording.url)
-      const subject = yield* seeded
-      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      expect(recording.starts).toHaveLength(1)
       const database = yield* Database.Service
-      expect(
-        yield* database.db
-          .select()
-          .from(Database.Schema.session_environment)
-          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId)),
-      ).toEqual([])
+      const second = yield* Seed.environmentTemplate(subject.owner.organizationId)
+      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
+      yield* startOn(host, subject, remote(second))
+      const bound = yield* database.db
+        .select({ template: Database.Schema.session_environment.environment_template_id })
+        .from(Database.Schema.session_environment)
+        .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))
+      expect([recording.starts.length, bound]).toEqual([2, [{ template: second }]])
     }),
+  )
+
+  it.live(
+    "a shutdown run stops each brain of the space, destroys its hands, and reports what it could not confirm",
+    () =>
+      Effect.gen(function* () {
+        const recording = yield* recordingCell()
+        const host = yield* hostWith(recording.url)
+        const subject = yield* seeded
+        const database = yield* Database.Service
+        const environments = Context.get(host, Hands.Service)
+        const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
+        const chat = {
+          sessionId: subject.sessionId,
+          organizationId: subject.owner.organizationId,
+          spaceId: subject.owner.spaceId,
+        }
+        yield* environments.bind(chat, Seed.version(template))
+        yield* environments.access(chat, { _tag: "Remote" })
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ shutdown_state: "running", shutdown_epoch: 1 })
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+        yield* Layer.build(SpaceShutdown.layer.pipe(Layer.provide(Layer.succeedContext(host))))
+        const space = yield* database.db
+          .select({ state: Database.Schema.space.shutdown_state, report: Database.Schema.space.shutdown_report })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+          .pipe(
+            Effect.map((rows) => rows.at(0)),
+            Effect.repeat({ until: (row) => row?.state === null, schedule: Schedule.spaced("20 millis") }),
+            Effect.timeout("10 seconds"),
+          )
+        const binding = (yield* database.db
+          .select({ environmentId: Database.Schema.session_environment.environment_id })
+          .from(Database.Schema.session_environment)
+          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))).at(0)
+        expect({ problems: space?.report?.problems, binding }).toEqual({
+          problems: [`Brain ${Brain.ofSession(subject.sessionId)} runs in a cell, which Ren cannot shut down`],
+          binding: { environmentId: null },
+        })
+      }),
   )
 })

@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import { Config, Context, Duration, Effect, Layer, Option, Schema } from "effect"
 import { BrainClient } from "./brain-client.js"
 import { BrainLifecycle } from "./brain-lifecycle.js"
+import type { Hands } from "./hands.js"
 
 export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("BrainUnavailable", {
   cause: Schema.Defect(),
@@ -15,14 +16,20 @@ export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("Br
 export class BrainFailed extends Schema.TaggedError<BrainFailed>()("BrainFailed", { reason: Schema.String }) {}
 
 export interface Interface {
+  // oxlint-disable-next-line ren/no-comments -- Whether Ren manages the host's machines, so a brain applies its space's settings at its start and wake. A cell has no wake of its own.
+  readonly isManaged: boolean
   readonly target: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, BrainUnavailable | BrainFailed>
   readonly access: (brainId: Brain.ID) => Effect.Effect<BrainLifecycle.Access>
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
-  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainLifecycle.Hand>>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<Hands.Hand>>
+  // oxlint-disable-next-line ren/no-comments -- Sends an awake brain's machine its new host list. A cell has none.
+  readonly refreshNetwork: (brainId: Brain.ID) => Effect.Effect<void>
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly notify: (brainId: Brain.ID) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Shuts the brain down for its space's shutdown. Returns what it could not confirm.
+  readonly stop: (brainId: Brain.ID) => Effect.Effect<ReadonlyArray<string>>
   readonly onInterrupted: (
     listener: (interrupted: BrainLifecycle.Interrupted) => Effect.Effect<void>,
   ) => Effect.Effect<void>
@@ -80,14 +87,18 @@ export const layerCell = Layer.effect(
       }
     })
     return Service.of({
+      isManaged: false,
       target,
       access: (brainId) => Effect.map(target(brainId), (found) => ({ _tag: "Ready", target: found }) as const),
       ensure: () => Effect.void,
       observe: () => Effect.void,
       hand: () => Effect.succeedNone,
+      refreshNetwork: () => Effect.void,
       unavailable: () => Effect.void,
       retry: () => Effect.void,
       notify: (brainId) => pushTo(client, brainId, Effect.map(target(brainId), Option.some)),
+      // oxlint-disable-next-line ren/no-comments -- A cell has no machine of its own that Ren can stop or destroy.
+      stop: (brainId) => Effect.succeed([`Brain ${brainId} runs in a cell, which Ren cannot shut down`]),
       onInterrupted: () => Effect.void,
     })
   }),
@@ -99,15 +110,23 @@ export const layerSandbox = Layer.effect(
     const lifecycle = yield* BrainLifecycle.Service
     const client = yield* BrainClient.Service
     return Service.of({
+      isManaged: true,
       target: (brainId) =>
-        lifecycle.ready(brainId).pipe(Effect.mapError((error) => new BrainFailed({ reason: error.message }))),
+        lifecycle.ready(brainId).pipe(
+          Effect.catchTags({
+            "MachineLifecycle.Unavailable": (error) => Effect.fail(new BrainFailed({ reason: error.message })),
+            "MachineLifecycle.Starting": (cause) => Effect.fail(new BrainUnavailable({ cause })),
+          }),
+        ),
       access: lifecycle.access,
       ensure: lifecycle.ensure,
       observe: lifecycle.observe,
       hand: lifecycle.hand,
+      refreshNetwork: lifecycle.refreshNetwork,
       unavailable: lifecycle.check,
       retry: lifecycle.retry,
       notify: (brainId) => pushTo(client, brainId, lifecycle.awake(brainId)),
+      stop: lifecycle.stop,
       onInterrupted: lifecycle.onInterrupted,
     })
   }),

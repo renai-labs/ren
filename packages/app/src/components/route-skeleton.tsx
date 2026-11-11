@@ -21,6 +21,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
     title: "Settings",
     description: (space) => `The name, instructions and default model of ${space}.`,
   },
+  compute: { title: "Compute", description: (space) => `Machines for ${space}’s brain and tools.` },
   members: { title: "Members", description: (space) => `People who can use ${space}.` },
   apps: { title: "Apps", description: (space) => `Apps every chat in ${space} can use.` },
   repositories: {

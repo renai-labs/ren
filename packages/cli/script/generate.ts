@@ -21,7 +21,15 @@ interface Resource {
 }
 
 const resources: ReadonlyArray<Resource> = [
-  { group: "space", about: "Manage spaces", path: ["space"], name: "space", one: "a space", many: "spaces" },
+  {
+    group: "space",
+    about: "Manage spaces",
+    path: ["space"],
+    name: "space",
+    one: "a space",
+    many: "spaces",
+    descriptions: { shutdown: "Stop all work of a space and delete the files on its machines" },
+  },
   {
     group: "space-member",
     about: "Manage space members",
@@ -44,21 +52,6 @@ const resources: ReadonlyArray<Resource> = [
     parent: "spaceId",
     verbs: { create: "add", archive: "remove" },
     descriptions: { create: "Add an agent to a space", archive: "Remove an agent from a space" },
-  },
-  {
-    group: "space-environment-template",
-    about: "Manage the environment templates of a space",
-    path: ["space", "environment"],
-    name: "environment",
-    one: "a space environment",
-    many: "a space’s environment templates",
-    alias: "environments",
-    parent: "spaceId",
-    verbs: { create: "add", archive: "remove" },
-    descriptions: {
-      create: "Add an environment template to a space",
-      archive: "Remove an environment template from a space",
-    },
   },
   {
     group: "space-settings",
@@ -212,6 +205,10 @@ const resources: ReadonlyArray<Resource> = [
     name: "template",
     one: "an environment template",
     many: "environment templates",
+    descriptions: {
+      retryBuild: "Retry the saved configuration’s failed build",
+      affectedSpaces: "List the spaces that use a machine or still run on it",
+    },
   },
   {
     group: "oauth-app",
@@ -276,7 +273,6 @@ const references: Readonly<
   parentId: { operation: "task.get", title: "Parent task" },
   scheduleId: { operation: "schedule.get", title: "Schedule" },
   webhookId: { operation: "webhook.get", title: "Webhook" },
-  environmentTemplateId: { operation: "environment-template.get", title: "Environment template", name: "template" },
   profileId: { operation: "app-profile.get", title: "App profile" },
 }
 
@@ -339,6 +335,7 @@ const extra: ReadonlyArray<EmitCli.Command> = [
   { operation: "drive.delete", path: ["drive", "delete"], arguments: ["path"] },
   { operation: "credential.connect", path: ["credential", "connect"], description: "Sign in to an MCP of a profile" },
   { operation: "environmentProvider.list", path: ["environment", "provider", "list"] },
+  { operation: "environmentProvider.brains", path: ["environment", "provider", "brains"] },
   { operation: "channel-provider.list", path: ["channel", "provider", "list"] },
   { operation: "channel-place.list", path: ["channel", "place", "list"], names: { installId: "install" } },
   { operation: "channel-install.start", path: ["channel", "install", "start"] },

@@ -15,7 +15,7 @@ export const freshKey = (label = "key") => `chaos-${label}-${crypto.randomUUID()
 
 export interface SessionOptions {
   readonly models?: Models.Access | null
-  readonly environment?: Environment
+  readonly environment?: Hand
   readonly start?: SessionDriver.StartOptions | false
 }
 
@@ -36,7 +36,7 @@ export const start = async (options: { readonly cellVars?: Readonly<Record<strin
   const brain = Brain.ID.create()
   const environments: Array<{ readonly instance: ExecutorAdapter.Instance; readonly proxy: FaultProxy.Instance }> = []
 
-  const place = (sessionId: Session.ID, brainId: Brain.ID, environment: Environment) =>
+  const place = (sessionId: Session.ID, brainId: Brain.ID, environment: Hand) =>
     ren.answer(sessionId, async () => ({
       type: "access",
       access: await ExecutorAdapter.access({
@@ -116,7 +116,7 @@ export const start = async (options: { readonly cellVars?: Readonly<Record<strin
 
 export type Instance = Awaited<ReturnType<typeof start>>
 
-export interface Environment {
+export interface Hand {
   readonly instance: ExecutorAdapter.Instance
   readonly proxy: FaultProxy.Instance
   readonly generation: () => number

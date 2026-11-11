@@ -1,10 +1,12 @@
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Brain } from "@ren/schema/brain"
+import type { MachineProvider } from "@ren/schema/machine-provider"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
-import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
 
 export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
@@ -31,6 +33,19 @@ export const space = pgTable(
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
+    // oxlint-disable-next-line ren/no-comments -- Null: the deployment's first brain provider.
+    brain_provider: text().$type<MachineProvider.ID>(),
+    brain_template_id: text().$type<MachineTemplate.ID>(),
+    hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
+    // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused.
+    environment_template_id: text().$type<MachineTemplate.ID>(),
+    // oxlint-disable-next-line ren/no-comments -- The number of the brain and hand settings. Each change of them takes the next; a brain records the number it applied at its last start or wake.
+    compute_revision: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- "running" while a shutdown runs. Each shutdown takes the next epoch, the key of its durable run.
+    shutdown_state: text().$type<"running">(),
+    shutdown_epoch: integer().notNull().default(0),
+    // oxlint-disable-next-line ren/no-comments -- The last shutdown's Space.ShutdownReport, with its time as an ISO string.
+    shutdown_report: jsonb().$type<{ readonly finishedAt: string; readonly problems: ReadonlyArray<string> }>(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
@@ -43,6 +58,12 @@ export const space = pgTable(
       .on(table.organization_id, table.owner_user_id)
       .where(sql`${table.kind} = 'private' and ${table.archived_at} is null`),
     check("space_kind_check", sql`${table.kind} in ('shared', 'private')`),
+    index("space_environment_template_id_idx").on(table.environment_template_id),
+    index("space_brain_template_id_idx").on(table.brain_template_id),
+    check(
+      "space_hand_check",
+      sql`case ${table.hand_placement} when 'remote' then ${table.environment_template_id} is not null when 'colocated' then ${table.environment_template_id} is null when 'none' then ${table.environment_template_id} is null else false end`,
+    ),
     check("space_owner_check", sql`(${table.kind} = 'private') = (${table.owner_user_id} is not null)`),
     check(
       "space_name_length_check",

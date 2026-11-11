@@ -1,7 +1,7 @@
 export * as DriveFiles from "./drive-files.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HandApi } from "@ren/hand-api/hand-api"
+import type { HandClient } from "@ren/hand-api/hand-client"
 import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -16,27 +16,22 @@ export interface Attached {
 
 const readable = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "application/json"])
 
-const maxDocumentBytes = 5_000_000
-
-const read = (client: EnvironmentClient.Client, path: string, size: number) =>
+const read = (client: HandClient.Client, path: string, size: number) =>
   Effect.forEach(
-    Array.from(
-      { length: Math.ceil(size / EnvironmentApi.maxFileBytes) },
-      (_, part) => part * EnvironmentApi.maxFileBytes,
-    ),
+    Array.from({ length: Math.ceil(size / HandApi.maxFileBytes) }, (_, part) => part * HandApi.maxFileBytes),
     (offset) =>
-      client["files.read"]({ path, range: { offset, length: Math.min(EnvironmentApi.maxFileBytes, size - offset) } }),
+      client["files.read"]({ path, range: { offset, length: Math.min(HandApi.maxFileBytes, size - offset) } }),
   ).pipe(
     Effect.map((parts) =>
       parts.reduce((all, part, index) => {
-        all.set(part.bytes, index * EnvironmentApi.maxFileBytes)
+        all.set(part.bytes, index * HandApi.maxFileBytes)
         return all
       }, new Uint8Array(size)),
     ),
   )
 
 export const attach = Effect.fn("DriveFiles.attach")(function* (
-  client: EnvironmentClient.Client,
+  client: HandClient.Client,
   root: string,
   files: ReadonlyArray<Session.DriveFile>,
 ) {
@@ -45,36 +40,53 @@ export const attach = Effect.fn("DriveFiles.attach")(function* (
     (folder) => client["drives.refresh"]({ path: folder }).pipe(Effect.ignore),
     { concurrency: 4, discard: true },
   )
-  return yield* Effect.forEach(
+  const failed = (file: Session.DriveFile) => (error: { readonly _tag: string; readonly message?: string }) =>
+    new Refused({
+      message:
+        error._tag === "FileNotFoundError"
+          ? `${file.name} is not in the space’s drive at ${file.path}`
+          : `${file.name} could not be read from the space’s drive: ${error.message ?? error._tag}`,
+    })
+  const found = yield* Effect.forEach(
     files,
     (file) =>
       Effect.gen(function* () {
-        const path = `${root}/${file.path}`
-        const failed = (error: { readonly _tag: string; readonly message?: string }) =>
-          new Refused({
-            message:
-              error._tag === "FileNotFoundError"
-                ? `${file.name} is not in the space’s drive at ${file.path}`
-                : `${file.name} could not be read from the space’s drive: ${error.message ?? error._tag}`,
-          })
-        const info = yield* client["files.stat"]({ path }).pipe(Effect.mapError(failed))
+        const info = yield* client["files.stat"]({ path: `${root}/${file.path}` }).pipe(Effect.mapError(failed(file)))
         if (info.type !== "file")
           return yield* new Refused({ message: `${file.name} is not a file in the space’s drive at ${file.path}` })
         const mime = Drive.typeOf(file.path)
         const size = info.sizeBytes
-        const bytes =
-          size <= (mime.startsWith("image/") ? Session.maxFileBytes : maxDocumentBytes) &&
-          (mime.startsWith("text/") || readable.has(mime))
-            ? Option.some(yield* read(client, path, size).pipe(Effect.mapError(failed)))
-            : Option.none<Uint8Array>()
-        return { file: { path: file.path, name: file.name, mime, size }, bytes }
+        const isInlined = size <= Session.inlineLimitOf(mime) && (mime.startsWith("text/") || readable.has(mime))
+        return { source: file, file: { path: file.path, name: file.name, mime, size }, isInlined }
       }),
+    { concurrency: 4 },
+  )
+  // oxlint-disable-next-line ren/no-comments -- As for files sent inline, a message's files come with their bytes up to Session.maxInlineBytes in all, in order; the rest come with their path only.
+  const inlined = found.reduce(
+    (sum, each) =>
+      each.isInlined && sum.bytes + each.file.size <= Session.maxInlineBytes
+        ? { bytes: sum.bytes + each.file.size, paths: new Set([...sum.paths, each.file.path]) }
+        : sum,
+    { bytes: 0, paths: new Set<string>() },
+  ).paths
+  return yield* Effect.forEach(
+    found,
+    (each) =>
+      Effect.map(
+        inlined.has(each.file.path)
+          ? Effect.map(
+              read(client, `${root}/${each.file.path}`, each.file.size).pipe(Effect.mapError(failed(each.source))),
+              Option.some,
+            )
+          : Effect.succeed(Option.none<Uint8Array>()),
+        (bytes): Attached => ({ file: each.file, bytes }),
+      ),
     { concurrency: 4 },
   )
 })
 
 export const show = Effect.fn("DriveFiles.show")(function* (
-  client: EnvironmentClient.Client,
+  client: HandClient.Client,
   root: string,
   sessionId: string,
   source: string,
@@ -92,6 +104,8 @@ export const show = Effect.fn("DriveFiles.show")(function* (
     })
   if (source !== target) yield* client["files.copy"]({ from: source, to: target }).pipe(Effect.mapError(failed))
   const info = yield* client["files.stat"]({ path: target }).pipe(Effect.mapError(failed))
+  if (info.sizeBytes > Drive.maxFileBytes)
+    return yield* new Refused({ message: `${name} is larger than the space’s drive takes (100 MiB)` })
   yield* client["drives.uploaded"]({ path: target }).pipe(
     Effect.mapError((error) => new Refused({ message: `${name} did not reach the space’s drive: ${error.message}` })),
   )

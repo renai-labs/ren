@@ -3,6 +3,7 @@ export * as FakeRen from "./ren.js"
 import { BrainToken } from "@ren/host-api/brain-token"
 import {
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -19,7 +20,7 @@ import {
 } from "@ren/host-api/ren-host-api"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
@@ -37,9 +38,10 @@ import { TestToken } from "./token.js"
 export type Refresh = { readonly type: "grant"; readonly access: Models.Access } | { readonly type: "unavailable" }
 
 export type Answer =
-  | { readonly type: "access"; readonly access: Environment.Access }
+  | { readonly type: "access"; readonly access: Hand.Access }
   | { readonly type: "not_found" }
   | { readonly type: "unavailable"; readonly message: string }
+  | { readonly type: "starting" }
   | { readonly type: "hold" }
 
 export interface Call {
@@ -127,6 +129,10 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               if (answer.type === "unavailable") {
                 record("environments.access", host.brainId, sessionId, 503)
                 return yield* new EnvironmentUnavailableError({ message: answer.message })
+              }
+              if (answer.type === "starting") {
+                record("environments.access", host.brainId, sessionId, 503)
+                return yield* new EnvironmentStartingError({ message: `The environment of ${sessionId} is creating` })
               }
               record("environments.access", host.brainId, sessionId, 200)
               return answer.access
