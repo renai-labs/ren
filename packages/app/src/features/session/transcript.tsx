@@ -1346,7 +1346,7 @@ function useFollow(turn: string | undefined) {
   return {
     following,
     pause: () => {
-      if (following) setPaused({ turn })
+      if (following) flushSync(() => setPaused({ turn }))
     },
     resume: () => setPaused(undefined),
   }
@@ -1397,6 +1397,10 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const scroller = useMessageScroller()
   const touchY = useRef(0)
   const lastTop = useRef(0)
+  const pause = (viewport: HTMLElement) => {
+    if ((viewport.querySelector<HTMLElement>("[data-message-scroller-spacer]")?.offsetHeight ?? 0) > 0) return
+    follow.pause()
+  }
   const toEnd = () => {
     flushSync(follow.resume)
     scroller.scrollToEnd()
@@ -1425,25 +1429,26 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     <MessageScroller className="@container flex-1">
       <MessageScrollerViewport
         preserveScrollOnPrepend
+        pinEnd={follow.following}
         data-easing={easing}
         className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
         onWheel={(event: WheelEvent<HTMLDivElement>) => {
-          if (event.deltaY < 0) follow.pause()
+          if (event.deltaY < 0) pause(event.currentTarget)
           else if (atBottom(event.currentTarget)) toEnd()
         }}
         onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
           touchY.current = event.touches[0]?.clientY ?? 0
         }}
         onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
-          if ((event.touches[0]?.clientY ?? 0) > touchY.current) follow.pause()
+          if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
         }}
         onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-          if (scrollUpKeys.has(event.key)) follow.pause()
+          if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
         }}
         onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
           const viewport = event.currentTarget
           if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
-            follow.pause()
+            pause(event.currentTarget)
         }}
         onScroll={(event: UIEvent<HTMLDivElement>) => {
           const viewport = event.currentTarget

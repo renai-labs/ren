@@ -400,8 +400,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             load: (before) =>
               Effect.gen(function* () {
                 const known = yield* SubscriptionRef.get(state)
-                const oldest = known.loaded.has(read.sessionID) ? before?.at(0)?.id : undefined
-                const complete = !known.cursor[read.sessionID] && !known.partial.has(read.sessionID)
+                const partial = known.partial.has(read.sessionID)
+                const shown = known.loaded.has(read.sessionID) ? (before ?? []) : []
+                const ids = new Set<string>(shown.map((message) => message.id))
+                const oldest = shown.at(0)?.id
+                const covered = (items: ReadonlyArray<SessionMessage.Info>) =>
+                  partial ? items.some((item) => item.id === oldest) : items.some((item) => ids.has(item.id))
                 const fetch = (cursor?: string): Effect.Effect<SessionMessage.Page, unknown> =>
                   api.session
                     .messages({
@@ -411,7 +415,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                     })
                     .pipe(
                       Effect.flatMap((page) =>
-                        oldest && page.cursor.next && (complete || !page.items.some((item) => item.id === oldest))
+                        oldest && page.cursor.next && !covered(page.items)
                           ? fetch(page.cursor.next).pipe(
                               Effect.map((older) => ({
                                 items: [...page.items, ...older.items],
@@ -421,7 +425,16 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                           : Effect.succeed(page),
                       ),
                     )
-                return yield* fetch()
+                const page = yield* fetch()
+                const overlap = partial
+                  ? -1
+                  : shown.findIndex((message) => page.items.some((item) => item.id === message.id))
+                if (overlap === -1) return page
+                const next = known.cursor[read.sessionID]
+                return {
+                  items: [...page.items, ...shown.slice(0, overlap).toReversed()],
+                  cursor: next ? { next } : {},
+                } satisfies SessionMessage.Page
               }),
             apply: (current, page) => Hydrate.messages(current, read.sessionID, page),
           })

@@ -58,6 +58,7 @@ import { useSpaces } from "../../lib/use-spaces.js"
 import { gaps, isSpaceApp } from "../../lib/apps.js"
 import { useStep } from "../../lib/use-step.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { ComposerMotion } from "../../lib/composer-motion.js"
 
 function AddMenu(props: {
   onInsert: (text: string) => void
@@ -604,8 +605,10 @@ export function PromptInput(props: {
   }
   const suggest = props.suggest
   const marks = suggest?.marks(text) ?? []
+  const root = useRef<HTMLDivElement | null>(null)
+  ComposerMotion.useComposer(root, { placement: props.placement })
   return (
-    <div className="relative flex flex-col gap-2">
+    <div ref={root} className="relative flex flex-col gap-2">
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
       <DropOverlay onFiles={attach} />
       <Input
