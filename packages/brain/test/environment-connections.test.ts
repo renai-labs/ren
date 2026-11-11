@@ -540,6 +540,18 @@ it.live("many first connects of one session share one lookup, one hello and one 
   }),
 )
 
+it.live("a reset closes every connection: the next call of a session asks Ren for its access again", () =>
+  Effect.gen(function* () {
+    const subject = yield* build({ failures: 0 })
+    yield* Effect.scoped(connect(subject.environments))
+    yield* Effect.scoped(connect(subject.environments))
+    const kept = yield* Ref.get(subject.opens)
+    yield* subject.environments.reset
+    yield* Effect.scoped(connect(subject.environments))
+    expect([kept, yield* Ref.get(subject.opens)]).toEqual([1, 2])
+  }),
+)
+
 it.live("a session that has no access or a dead sandbox leaves the connection of another session", () =>
   Effect.gen(function* () {
     const relay = yield* Relay.make(Relay.portOf(yield* TestEnvironment.url))

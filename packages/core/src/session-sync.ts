@@ -285,14 +285,17 @@ export const layer = Layer.effect(
                     session,
                     inbox: queued.filter((row) => row.session_id === chat.id),
                   }
-                  if (session || !chat.startInput) return restored satisfies Sync.RestoredChat
+                  // oxlint-disable-next-line ren/no-comments -- A top chat gets its folder on the hand its brain applied, also when it had none before: it then gets a workspace there. A subagent's chat uses its parent's.
+                  const directory = chat.parentId ? Option.none<string>() : yield* directoryOf(chat.id)
+                  const located = Option.match(directory, {
+                    onNone: () => restored,
+                    onSome: (found) => ({ ...restored, directory: found }),
+                  })
+                  if (session || !chat.startInput) return located satisfies Sync.RestoredChat
                   const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(chat.startInput).pipe(
                     Effect.orDie,
                   )
-                  return Option.match(yield* directoryOf(chat.id), {
-                    onNone: () => ({ ...restored, start }) satisfies Sync.RestoredChat,
-                    onSome: (directory) => ({ ...restored, start, directory }) satisfies Sync.RestoredChat,
-                  })
+                  return { ...located, start } satisfies Sync.RestoredChat
                 }),
             )
           }),

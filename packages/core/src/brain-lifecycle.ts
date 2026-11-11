@@ -7,9 +7,9 @@ import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import type { Bundle } from "@ren/schema/bundle"
 import { Environment } from "@ren/schema/environment"
+import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Signature } from "@ren/schema/signature"
 import type { Session } from "@ren/schema/session"
-import { Space } from "@ren/schema/space"
 import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, notInArray, or, sql } from "drizzle-orm"
 import {
   Clock,
@@ -38,6 +38,7 @@ import { BrainProvider } from "./brain-provider.js"
 import { MachineProvider } from "./machine-provider.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { SandboxEgress } from "./sandbox-egress.js"
+import { SpaceCompute } from "./space-compute.js"
 
 export type Access = MachineAccess.Access<BrainClient.Target>
 
@@ -94,6 +95,7 @@ export const layer = Layer.effect(
     const client = yield* BrainClient.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
+    const compute = yield* SpaceCompute.Service
     const egress = yield* SandboxEgress.Service
     const code = yield* Bundles.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(
@@ -255,17 +257,17 @@ export const layer = Layer.effect(
       })
     })
 
-    // oxlint-disable-next-line ren/no-comments -- A brain is made for its space's hand at create. A brain for a remote hand runs OpenCode's tool output, files and git on the hand; a change to or from remote replaces the brain at its wake, so the choice at boot holds for the process's life (EN13).
-    const handPlacement = Effect.fnUntraced(function* (spaceId: Space.ID) {
-      const found = (yield* database.db
-        .select({ placement: Database.Schema.space.hand_placement })
-        .from(Database.Schema.space)
-        .where(eq(Database.Schema.space.id, spaceId))
-        .pipe(Effect.orDie)).at(0)
-      return found?.placement ?? Space.defaultHand.placement
+    // oxlint-disable-next-line ren/no-comments -- A brain with a host list reaches the machines of its remote hand's template too.
+    const withHandHosts = Effect.fnUntraced(function* (
+      limited: Option.Option<ReadonlyArray<string>>,
+      handTemplate: Option.Option<EnvironmentTemplate.ID>,
+    ) {
+      if (Option.isNone(limited)) return limited
+      const handHosts = Option.isSome(handTemplate) ? yield* environments.handHosts(handTemplate.value) : []
+      return Option.some([...new Set([...limited.value, ...handHosts])].toSorted())
     })
 
-    // oxlint-disable-next-line ren/no-comments -- A space's brain template, whatever its hand: the brain's machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2).
+    // oxlint-disable-next-line ren/no-comments -- A space's brain template, whatever its hand: the brain's machine runs the template's last image that built, and keeps to its host list (EN3, networking rules 1, 2). Read only at a start or wake.
     const desiredSetup = Effect.fnUntraced(function* (row: Row) {
       const templates = Database.Schema.environment_template
       const found = (yield* database.db
@@ -275,6 +277,8 @@ export const layer = Layer.effect(
           config: templates.image_config,
           system: templates.image_system,
           networking: templates.networking,
+          placement: Database.Schema.space.hand_placement,
+          handTemplate: Database.Schema.space.environment_template_id,
         })
         .from(Database.Schema.space)
         .leftJoin(
@@ -286,12 +290,10 @@ export const layer = Layer.effect(
       if (!found?.id || !found.networking)
         return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
       const template = { environmentTemplateId: found.id, config: found.config }
-      const limited = yield* network.hostsOf(
-        { kind: "brain", id: row.id, generation: row.generation },
-        found.networking,
+      const hosts = yield* withHandHosts(
+        yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking),
+        found.placement === "remote" ? Option.fromNullishOr(found.handTemplate) : Option.none(),
       )
-      const handHosts = yield* environments.handHosts(row.space_id)
-      const hosts = Option.map(limited, (each) => [...new Set([...each, ...handHosts])].toSorted())
       return {
         config: {},
         image: Option.map(
@@ -307,6 +309,22 @@ export const layer = Layer.effect(
         ),
         hosts,
       } satisfies MachineLifecycle.DesiredSetup
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- The live host list of the template and the hand the brain applied, not of a newer setting that waits for its wake.
+    const appliedHosts = Effect.fnUntraced(function* (row: Row) {
+      const templateId = row.image_template?.environmentTemplateId
+      if (!templateId) return Option.none<ReadonlyArray<string>>()
+      const found = (yield* database.db
+        .select({ networking: Database.Schema.environment_template.networking })
+        .from(Database.Schema.environment_template)
+        .where(eq(Database.Schema.environment_template.id, templateId))
+        .pipe(Effect.orDie)).at(0)
+      if (!found) return Option.none<ReadonlyArray<string>>()
+      return yield* withHandHosts(
+        yield* network.hostsOf({ kind: "brain", id: row.id, generation: row.generation }, found.networking),
+        row.hand?.placement === "remote" ? Option.some(row.hand.version.environmentTemplateId) : Option.none(),
+      )
     })
 
     const machines = MachineLifecycle.make({
@@ -326,8 +344,10 @@ export const layer = Layer.effect(
             Effect.gen(function* () {
               yield* transaction
                 .update(brains)
+                // oxlint-disable-next-line ren/no-comments -- The next machine is made by the space's brain provider now; the old one was destroyed through its own.
                 .set({
                   generation: sql`${brains.generation} + 1`,
+                  provider: null,
                   binding: null,
                   url: null,
                   keep_alive_until: null,
@@ -365,9 +385,14 @@ export const layer = Layer.effect(
         }),
       retire: (brainId) => egress.retire({ kind: "brain", id: brainId }),
       desiredSetup,
+      appliedHosts,
+      publish: (row) =>
+        compute.publish(row.id, { machine: "running" }).pipe(Effect.map((plan) => plan._tag === "Apply")),
       startup: Effect.fnUntraced(function* (row) {
         const bundles = yield* currentBundles
-        const placement = yield* handPlacement(row.space_id)
+        // oxlint-disable-next-line ren/no-comments -- A new machine applies the space's hand before it starts, so its first pull already has it. A brain for a remote hand runs OpenCode's tool output, files and git on the hand for the life of its process (EN13).
+        const plan = yield* compute.publish(row.id, { machine: "new" })
+        const isRemote = plan._tag === "Apply" && plan.hand.placement === "remote"
         const variables = {
           REN_URL: client.renUrl,
           REN_BRAIN_ID: row.id,
@@ -380,7 +405,7 @@ export const layer = Layer.effect(
             "ren.brain.generation": String(row.generation),
           }),
           ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
-          ...(placement === "remote" && { REN_HAND_PLACEMENT: "remote" }),
+          ...(isRemote && { REN_HAND_PLACEMENT: "remote" }),
           ...(Option.isSome(bundles) && {
             REN_BUNDLES: (yield* withTokens(bundles.value))
               .map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":"))
@@ -390,7 +415,6 @@ export const layer = Layer.effect(
         return {
           variables,
           created: update(row.id, {
-            hand_placement: placement,
             key_ids: client.publicKeys.map((key) => key.id),
             bundles: Option.match(bundles, { onNone: () => null, onSome: versionsOf }),
           }),
@@ -446,8 +470,11 @@ export const layer = Layer.effect(
         return yield* update(target.brainId, { last_pulled_at: yield* now }).pipe(Effect.as(true))
       }),
       changeAtWake: Effect.fnUntraced(function* (row) {
-        if ((row.hand_placement === "remote") !== ((yield* handPlacement(row.space_id)) === "remote"))
+        const plan = yield* compute.check(row.id)
+        if (plan._tag === "Replace") {
+          yield* Effect.logInfo(`Brain ${row.id} is replaced at its wake: ${plan.reason}`)
           return "replace" as const
+        }
         const bundles = yield* currentBundles
         if (Option.isNone(bundles)) return "current" as const
         if (!row.bundles) return "replace" as const
@@ -731,4 +758,4 @@ export const layer = Layer.effect(
       }),
     })
   }),
-)
+).pipe(Layer.provide(SpaceCompute.layer))

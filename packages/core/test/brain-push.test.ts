@@ -176,6 +176,7 @@ describe("BrainPush (HR10, HR12)", () => {
       const host = Layer.succeed(
         BrainHost.Service,
         BrainHost.Service.of({
+          isManaged: false,
           notify: (brainId) => Queue.offer(notified, brainId).pipe(Effect.asVoid),
           target: () => Effect.die(new Error("a push reads no target")),
           access: () => Effect.die(new Error("a push never resumes a brain")),

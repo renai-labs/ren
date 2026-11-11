@@ -2,6 +2,8 @@ import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { SessionID } from "@opencode/schema/session-id"
+import { EnvironmentAccess } from "@ren/brain/environment/access"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { GenerationRetiredError } from "@ren/host-api/errors"
 import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-api"
 import { AppCatalog } from "@ren/schema/app-catalog"
@@ -194,6 +196,28 @@ const open = Effect.fnUntraced(function* (
     }),
     storage: { getAlarm: () => Promise.resolve(null), setAlarm: () => Promise.resolve() },
   })
+  const resets = { count: 0 }
+  // oxlint-disable-next-line ren/no-comments -- The brain's real connections, which count their resets; no session reaches a hand in these tests.
+  const connections = Layer.effect(
+    EnvironmentConnections.Service,
+    Effect.map(EnvironmentConnections.Service, (real) =>
+      EnvironmentConnections.Service.of({
+        ...real,
+        reset: Effect.sync(() => void (resets.count += 1)).pipe(Effect.andThen(real.reset)),
+      }),
+    ),
+  ).pipe(
+    Layer.provide(EnvironmentConnections.layer),
+    Layer.provide(
+      Layer.succeed(
+        EnvironmentAccess.Service,
+        EnvironmentAccess.Service.of({
+          open: (sessionId) => Effect.fail(new EnvironmentAccess.NotFound({ sessionId, message: "no hand here" })),
+          release: () => Effect.void,
+        }),
+      ),
+    ),
+  )
   const services = yield* Layer.build(
     HotReload.layer.pipe(
       Layer.provideMerge(
@@ -260,6 +284,7 @@ const open = Effect.fnUntraced(function* (
           Inference.layer,
         ),
       ),
+      Layer.provideMerge(connections),
       Layer.provideMerge(Fence.layer),
       Layer.provideMerge(storage),
       Layer.provideMerge(info),
@@ -272,6 +297,7 @@ const open = Effect.fnUntraced(function* (
     path,
     requests,
     writes,
+    resets,
     reload: Context.get(services, HotReload.Service),
     harness: Context.get(services, Harness.Service),
     holdNextPull: () => {
@@ -310,6 +336,18 @@ it.live("a pull with the same full state writes nothing and keeps the harness cl
     expect(yield* opened.saved).toEqual(empty)
     expect((yield* opened.env.current).placeholders).toEqual({})
     expect(yield* opened.harness.state).toEqual({ isOpen: false, holders: 0 })
+  }),
+)
+
+it.live("a pull with another compute revision closes the brain's hand connections; the first and the same do not", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const resetsAt = Effect.fnUntraced(function* (computeRevision: number) {
+      opened.answer(undefined, { computeRevision })
+      yield* opened.reload.pull
+      return opened.resets.count
+    })
+    expect([yield* resetsAt(1), yield* resetsAt(1), yield* resetsAt(2)]).toEqual([0, 0, 1])
   }),
 )
 

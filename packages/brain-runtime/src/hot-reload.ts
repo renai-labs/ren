@@ -1,5 +1,6 @@
 export * as HotReload from "./hot-reload.js"
 
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { Session } from "@ren/schema/session"
 import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -46,12 +47,14 @@ export const layer = Layer.effect(
     const harness = yield* Harness.Service
     const credentialEnv = yield* CredentialEnv.Service
     const inference = yield* Inference.Service
+    const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void, push: Effect.void, tick: Effect.void })
     const host = yield* HostToken.client(url).pipe(
       Effect.provide(RenAddress.http.pipe(Layer.provide(FetchHttpClient.layer))),
     )
     const pulls = yield* Semaphore.make(1)
+    const computeRevision = yield* Ref.make(Option.none<number>())
     const storage = yield* BrainStorage.Service
     const deletedSince = Effect.promise(() => storage.get(deletedKey)).pipe(
       Effect.map((text) =>
@@ -112,6 +115,11 @@ export const layer = Layer.effect(
               ),
             )
         : false
+      // oxlint-disable-next-line ren/no-comments -- Ren applied another hand at the brain's wake: each session asks for its hand again, so no call reaches the one it used before.
+      const revision = Option.fromNullishOr(reply.computeRevision)
+      const previous = yield* Ref.getAndSet(computeRevision, revision)
+      if (Option.isSome(previous) && Option.isSome(revision) && previous.value !== revision.value)
+        yield* Option.match(connections, { onNone: () => Effect.void, onSome: (found) => found.reset })
       yield* keys.save(reply.publicKeys)
       yield* credentialEnv.apply(reply.env)
       const inferenceChanged = yield* inference.saveBaseUrl(Option.fromNullishOr(reply.inference?.baseUrl))

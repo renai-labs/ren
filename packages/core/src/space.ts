@@ -296,13 +296,8 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
-            yield* checkMachines(
-              registry,
-              transaction,
-              actor,
-              input,
-              SpaceQueries.machines(visible.row.space, deploymentProvider),
-            )
+            const current = SpaceQueries.machines(visible.row.space, deploymentProvider)
+            yield* checkMachines(registry, transaction, actor, input, current)
             if (input.factory) {
               const problem = FactoryCheck.problems(input.factory).at(0)
               if (problem) return yield* new Primitive.Invalid({ message: problem, field: "factory" })
@@ -330,6 +325,9 @@ export const layer = Layer.effect(
                 brain_scope: input.brainScope,
                 ...(input.brain && SpaceQueries.brainColumns(input.brain)),
                 ...(input.hand && SpaceQueries.handColumns(input.hand)),
+                ...(SpaceQueries.isComputeChanged(current, input) && {
+                  compute_revision: sql`${Database.Schema.space.compute_revision} + 1`,
+                }),
                 factory: input.factory,
                 updated_at: sql`now()`,
               })

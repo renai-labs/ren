@@ -115,6 +115,10 @@ export interface Definition<Id extends string, R extends Row<Id>, Target, E> {
     readonly created: Effect.Effect<void>
   }>
   readonly desiredSetup: (row: R) => Effect.Effect<DesiredSetup>
+  // oxlint-disable-next-line ren/no-comments -- The hosts of the template the running machine applied, which keep to that template's live host list while a newer one waits for the next wake. None: any host.
+  readonly appliedHosts: (row: R) => Effect.Effect<Option.Option<ReadonlyArray<string>>>
+  // oxlint-disable-next-line ren/no-comments -- Applies the owner's settings to a woken machine before its wake call. False when the machine cannot run them, so it is replaced instead.
+  readonly publish?: (row: R) => Effect.Effect<boolean>
   readonly target: (row: R) => Option.Option<Target>
   // oxlint-disable-next-line ren/no-comments -- The kind's ready check: none when the machine is ready within the time, or the reason it is not.
   readonly boot: (target: Target, within: Duration.Duration) => Effect.Effect<Option.Option<string>, E>
@@ -391,6 +395,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
 
   const wake = Effect.fnUntraced(function* (row: R) {
     const target = Option.getOrUndefined(definition.target(row))
+    if (definition.publish && !(yield* definition.publish(row))) {
+      yield* Effect.logInfo(`${noun} ${row.id} cannot run its owner's new settings; Ren replaces it`)
+      return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+    }
     if (!target || !(yield* definition.wake(target, definition.wakeWithin)))
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     yield* ready(row)
@@ -603,11 +611,11 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     const row = yield* read(id)
     const at = yield* now
     if (!row.binding || row.phase !== "ready" || !(row.keep_alive_until && row.keep_alive_until > at)) return
-    const desired = yield* definition.desiredSetup(row)
-    const hosts = Option.getOrNull(desired.hosts)
+    const applied = yield* definition.appliedHosts(row)
+    const hosts = Option.getOrNull(applied)
     if (JSON.stringify(hosts) === JSON.stringify(row.network_hosts)) return
     const provider = yield* definition.providerOf(row)
-    yield* provider.updateNetwork(row.binding, { proxy: yield* proxyOf(row, provider), hosts: desired.hosts }).pipe(
+    yield* provider.updateNetwork(row.binding, { proxy: yield* proxyOf(row, provider), hosts: applied }).pipe(
       Effect.andThen(update(row.id, { network_hosts: hosts })),
       Effect.catch((error) => Effect.logWarning(`${noun} ${row.id} did not get its new host list`, error)),
       annotate(row),

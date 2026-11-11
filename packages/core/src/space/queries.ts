@@ -65,6 +65,14 @@ export const brainColumns = (brain: Space.BrainMachine) => ({
   brain_template_id: brain.environmentTemplateId,
 })
 
+// oxlint-disable-next-line ren/no-comments -- Whether an update changes the space's brain or hand. Each such change takes the next compute_revision: each brain applies it at its next start or wake, and shows it as pending until then.
+export const isComputeChanged = (
+  current: ReturnType<typeof machines>,
+  input: Pick<Space.UpdateInput, "brain" | "hand">,
+) =>
+  JSON.stringify([brainColumns(input.brain ?? current.brain), handColumns(input.hand ?? current.hand)]) !==
+  JSON.stringify([brainColumns(current.brain), handColumns(current.hand)])
+
 export const slugs = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   organizationId: Auth.OrganizationID,

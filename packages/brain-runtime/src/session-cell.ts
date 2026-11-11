@@ -20,9 +20,10 @@ export class SessionCell extends DurableObject {
       Layer.provideMerge(HotReload.layer),
       Layer.provideMerge(
         OpenCodeHarness.layer(this.ctx.storage).pipe(
-          Layer.provide([HostAccess.connections, HarnessStorage.layerDurableObject(this.ctx.storage)]),
+          Layer.provide(HarnessStorage.layerDurableObject(this.ctx.storage)),
         ),
       ),
+      Layer.provideMerge(HostAccess.connections),
       Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
       Layer.provideMerge(Cell.layer(this.ctx.storage, this.ctx.id.name, this.env)),
     ),

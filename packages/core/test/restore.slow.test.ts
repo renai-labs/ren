@@ -63,11 +63,16 @@ const subagent = (child: StubModel.Script) =>
 const Page = Schema.Struct({ items: Schema.Array(Schema.Struct({ id: Schema.String })) })
 const Children = Schema.Array(Schema.Struct({ id: Schema.String }))
 
-const opened = Effect.fnUntraced(function* (text: string) {
+const opened = Effect.fnUntraced(function* (text: string, options: { readonly hasTools?: boolean } = {}) {
   const sessions = yield* SessionRunner.Service
   const brains = yield* Brains.Service
   const database = yield* Database.Service
   const owner = yield* Seed.owner()
+  if (options.hasTools === false)
+    yield* database.db
+      .update(Database.Schema.space)
+      .set({ hand_placement: "none" })
+      .where(eq(Database.Schema.space.id, owner.spaceId))
   const sessionId = Session.ID.create()
   const messageId = Session.MessageID.create()
   yield* sessions.create(owner, {
@@ -156,6 +161,40 @@ it.live(
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId)
       expect(yield* chat.read).toEqual(before)
+    }),
+)
+
+it.live(
+  "a chat that had no tools gets a workspace and its tools at its restore on a brain that applied a hand, with its history",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const first = stub.script()
+      const chat = yield* opened(`open ${first.marker}`, { hasTools: false })
+      const before = yield* Effect.promise(() => first.called())
+      yield* chat.idle
+      const history = yield* chat.read
+      yield* chat.synced
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ hand_placement: "colocated" })
+        .where(eq(Database.Schema.space.id, chat.owner.spaceId))
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ hand: { placement: "colocated" } })
+        .where(eq(Database.Schema.brain.id, chat.brainId))
+      yield* Host.forgetHarness(chat.brainId)
+      expect(yield* chat.read).toEqual(history)
+      const next = stub.script()
+      yield* chat.chat("/prompt", {
+        method: "POST",
+        body: JSON.stringify({ id: SessionMessage.ID.create(), text: next.marker, delivery: "steer" }),
+      })
+      const after = yield* Effect.promise(() => next.called())
+      expect({
+        before: ["read", "shell"].filter((tool) => before.tools.includes(tool)),
+        after: ["read", "shell"].filter((tool) => after.tools.includes(tool)),
+      }).toEqual({ before: [], after: ["read", "shell"] })
     }),
 )
 

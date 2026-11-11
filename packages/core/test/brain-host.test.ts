@@ -288,13 +288,14 @@ describe("BrainHost pull", () => {
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
-  it.live("a pull tells each chat whether its space has a hand now (EN23, chaos row 26)", () =>
+  it.live("a pull tells each chat the hand its brain applied, not the space's newer setting (EN23)", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
       const database = yield* Database.Service
       const brain = yield* Brains.Service
+      const brainId = Brain.ofSession(subject.sessionId)
       const host = {
-        brainId: Brain.ofSession(subject.sessionId),
+        brainId,
         organizationId: subject.owner.organizationId,
         spaceId: subject.owner.spaceId,
         generation: 1,
@@ -308,61 +309,13 @@ describe("BrainHost pull", () => {
         .update(Database.Schema.space)
         .set({ hand_placement: "none" })
         .where(eq(Database.Schema.space.id, subject.owner.spaceId))
-      expect([before, yield* hasHand]).toEqual([true, false])
+      const pending = yield* hasHand
+      yield* database.db
+        .update(Database.Schema.brain)
+        .set({ hand: { placement: "none" } })
+        .where(eq(Database.Schema.brain.id, brainId))
+      expect([before, pending, yield* hasHand]).toEqual([true, true, false])
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
-  )
-
-  it.live(
-    "a pull moves an idle chat to its space's current hand only from a brain made for that hand (remote hands rules 3, 4)",
-    () =>
-      Effect.gen(function* () {
-        const subject = yield* seeded
-        const database = yield* Database.Service
-        const brain = yield* Brains.Service
-        const brainId = Brain.ofSession(subject.sessionId)
-        const host = {
-          brainId,
-          organizationId: subject.owner.organizationId,
-          spaceId: subject.owner.spaceId,
-          generation: 1,
-        }
-        const template = yield* Seed.environmentTemplate(subject.owner.organizationId)
-        yield* database.db
-          .update(Database.Schema.space)
-          .set({ hand_placement: "remote", environment_template_id: template })
-          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
-        yield* database.db.insert(Database.Schema.session_environment).values({
-          session_id: subject.sessionId,
-          space_id: subject.owner.spaceId,
-          environment_template_id: template,
-        })
-        yield* database.db
-          .update(Database.Schema.brain)
-          .set({ hand_placement: "remote" })
-          .where(eq(Database.Schema.brain.id, brainId))
-        yield* database.db
-          .update(Database.Schema.space)
-          .set({ hand_placement: "colocated", environment_template_id: null })
-          .where(eq(Database.Schema.space.id, subject.owner.spaceId))
-        const request = {
-          version: "test",
-          keyIds: [],
-          sessions: [{ id: subject.sessionId, busy: false, progress: "0" }],
-        }
-        const bound = database.db
-          .select({ template: Database.Schema.session_environment.environment_template_id })
-          .from(Database.Schema.session_environment)
-          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))
-          .pipe(Effect.map((rows) => rows.at(0)?.template ?? null))
-        yield* brain.pull(host, request)
-        const onRemoteBrain = yield* bound
-        yield* database.db
-          .update(Database.Schema.brain)
-          .set({ hand_placement: "colocated" })
-          .where(eq(Database.Schema.brain.id, brainId))
-        yield* brain.pull(host, request)
-        expect([onRemoteBrain, yield* bound]).toEqual([template, null])
-      }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
   it.live("a catalog whose space is archived is omitted while the rest of pull still succeeds", () =>
@@ -480,6 +433,11 @@ describe("BrainHost pull", () => {
           }),
         )
         const without = yield* Seed.session(owner)
+        const database = yield* Database.Service
+        yield* database.db
+          .update(Database.Schema.brain)
+          .set({ hand: { placement: "colocated" } })
+          .where(eq(Database.Schema.brain.id, brainId))
         const brain = yield* Brains.Service
         const reply = yield* brain.pull(
           { brainId, organizationId, spaceId, generation: 1 },
@@ -678,6 +636,7 @@ describe("BrainHost environments", () => {
     )
     return context
   })
+  // oxlint-disable-next-line ren/no-comments -- The space names the hand, as Space.update would set it; a cell applies it at each start.
   const startOn = (
     context: Effect.Success<ReturnType<typeof hostWith>>,
     subject: Effect.Success<typeof seeded>,
@@ -690,6 +649,13 @@ describe("BrainHost environments", () => {
         .from(Database.Schema.agent_session)
         .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
       if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({
+          hand_placement: hand.placement,
+          environment_template_id: hand.placement === "remote" ? hand.environmentTemplateId : null,
+        })
+        .where(eq(Database.Schema.space.id, subject.owner.spaceId))
       const input = {
         sessionId: subject.sessionId,
         harness: "opencode",
@@ -726,47 +692,20 @@ describe("BrainHost environments", () => {
     }),
   )
 
-  it.live("Ren refuses an unknown environment template, or a change of template, before it calls the brain", () =>
+  it.live("a cell applies its space's hand at each start: a chat moves to the template the space names now", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
       const host = yield* hostWith(recording.url)
       const subject = yield* seeded
-      yield* startOn(host, subject, remote(EnvironmentTemplate.ID.create()))
-      expect(recording.starts).toEqual([])
-      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
-      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
-      expect(recording.starts).toHaveLength(1)
-    }),
-  )
-
-  it.live("two starts at once that name different templates leave the chat on one", () =>
-    Effect.gen(function* () {
-      const recording = yield* recordingCell()
-      const host = yield* hostWith(recording.url)
-      const subject = yield* seeded
-      const templates = [
-        yield* Seed.environmentTemplate(subject.owner.organizationId),
-        yield* Seed.environmentTemplate(subject.owner.organizationId),
-      ]
-      yield* Effect.forEach(templates, (id) => startOn(host, subject, remote(id)), { concurrency: "unbounded" })
-      expect(recording.starts).toHaveLength(1)
-    }),
-  )
-
-  it.live("a start that the brain refuses removes the binding that it made", () =>
-    Effect.gen(function* () {
-      const recording = yield* recordingCell(422)
-      const host = yield* hostWith(recording.url)
-      const subject = yield* seeded
-      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
-      expect(recording.starts).toHaveLength(1)
       const database = yield* Database.Service
-      expect(
-        yield* database.db
-          .select()
-          .from(Database.Schema.session_environment)
-          .where(eq(Database.Schema.session_environment.session_id, subject.sessionId)),
-      ).toEqual([])
+      const second = yield* Seed.environmentTemplate(subject.owner.organizationId)
+      yield* startOn(host, subject, remote(yield* Seed.environmentTemplate(subject.owner.organizationId)))
+      yield* startOn(host, subject, remote(second))
+      const bound = yield* database.db
+        .select({ template: Database.Schema.session_environment.environment_template_id })
+        .from(Database.Schema.session_environment)
+        .where(eq(Database.Schema.session_environment.session_id, subject.sessionId))
+      expect([recording.starts.length, bound]).toEqual([2, [{ template: second }]])
     }),
   )
 })

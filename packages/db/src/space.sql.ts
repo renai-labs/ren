@@ -6,7 +6,7 @@ import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
-import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
 
 export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
@@ -39,6 +39,8 @@ export const space = pgTable(
     hand_placement: text().$type<Space.Hand["placement"]>().notNull().default("colocated"),
     // oxlint-disable-next-line ren/no-comments -- No foreign key: environment.sql.ts already references space. Templates are archived, never deleted, and archiving one that a space uses is refused (EN24).
     environment_template_id: text().$type<EnvironmentTemplate.ID>(),
+    // oxlint-disable-next-line ren/no-comments -- The number of the brain and hand settings. Each change of them takes the next; a brain records the number it applied at its last start or wake.
+    compute_revision: integer().notNull().default(0),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),

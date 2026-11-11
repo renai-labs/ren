@@ -7,6 +7,7 @@ import { EnvironmentProvider } from "./environment-provider.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Factory } from "./factory.js"
 import { Identifier } from "./identifier.js"
+import { Machine } from "./machine.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 
@@ -47,11 +48,22 @@ export const Hand = Schema.Union([
 ]).annotate({
   identifier: "Space.Hand",
   description:
-    "Where the space’s chats run file and shell tools: on the brain’s own machine, on machines of a template that chats share, or nowhere. A change reaches a machine when it wakes; a chat started with none never gets tools.",
+    "Where the space’s chats run file and shell tools: on the brain’s own machine, on machines of a template that chats share, or nowhere. A change reaches a brain when it wakes; a chat started with none gets tools then.",
 })
 export type Hand = typeof Hand.Type
 
 export const defaultHand: Hand = { placement: "colocated" }
+
+export const AppliedHand = Schema.Union([
+  Schema.Struct({ placement: Schema.Literal("colocated") }),
+  Schema.Struct({ placement: Schema.Literal("remote"), version: Machine.Version }),
+  Schema.Struct({ placement: Schema.Literal("none") }),
+]).annotate({
+  identifier: "Space.AppliedHand",
+  description:
+    "The hand that a brain runs its chats’ tools on now. It changes only when the brain starts or wakes, to the space’s hand at that time.",
+})
+export type AppliedHand = typeof AppliedHand.Type
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({

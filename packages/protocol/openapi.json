@@ -21287,7 +21287,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "Where the space’s chats run file and shell tools: on the brain’s own machine, on machines of a template that chats share, or nowhere. A change reaches a machine when it wakes; a chat started with none never gets tools."
+        "description": "Where the space’s chats run file and shell tools: on the brain’s own machine, on machines of a template that chats share, or nowhere. A change reaches a brain when it wakes; a chat started with none gets tools then."
       },
       "Space.ID": {
         "type": "string",

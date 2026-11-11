@@ -67,6 +67,8 @@ export interface Interface {
   // oxlint-disable-next-line ren/no-comments -- Env vars the host adds to every process a session starts, read at each start.
   readonly env?: Effect.Effect<Env>
   readonly release: (sessionId: Session.ID) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Closes every connection after Ren applied another hand at the brain's start or wake; the next call of each session asks Ren for its access again.
+  readonly reset: Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/EnvironmentConnections") {}
@@ -226,6 +228,12 @@ export const layer = Layer.effect(
       }),
     })
     return Service.of({
+      reset: Effect.gen(function* () {
+        const keys = [...(yield* RcMap.keys(connections))]
+        renDown.clear()
+        unanswered.clear()
+        yield* Effect.forEach(keys, (sessionId) => RcMap.invalidate(connections, sessionId), { discard: true })
+      }).pipe(Effect.withSpan("EnvironmentConnections.reset")),
       connect: Effect.fn("EnvironmentConnections.connect")(function* (sessionId: Session.ID) {
         const entry = yield* RcMap.get(connections, sessionId).pipe(
           Effect.tapError(() => RcMap.invalidate(connections, sessionId)),

@@ -13,6 +13,7 @@ import type { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Context, Effect, Layer, Option } from "effect"
+import { mkdir } from "node:fs/promises"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { ChatSettings } from "../../src/chat-settings.js"
 import { GitSources } from "../../src/git-sources.js"
@@ -35,6 +36,7 @@ export const open = Effect.fnUntraced(function* (
   github: TestGitHub.Instance,
   references: ReadonlyArray<Reference.Info>,
   drives?: Drive.Availability,
+  options: { readonly hasWorkspace?: boolean } = {},
 ) {
   const stub = Shared.stub()
   const sessionId = Session.ID.create()
@@ -75,6 +77,7 @@ export const open = Effect.fnUntraced(function* (
     {
       saved: Option.some(settings.saved),
       directoryOf: place.directoryOf,
+      makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), references: { refresh: 0, retry: 0 } }),
     },
   )
@@ -89,7 +92,12 @@ export const open = Effect.fnUntraced(function* (
       generation,
     })
   yield* memory.set(sessionId, yield* accessOf(1))
-  yield* harness.start({ sessionId, harness: "opencode", interactive: false, directory })
+  yield* harness.start({
+    sessionId,
+    harness: "opencode",
+    interactive: false,
+    ...(options.hasWorkspace !== false && { directory }),
+  })
   const turn = (script: StubModel.Script, calls = 2, prompt: Omit<Session.Prompt, "text"> = {}) =>
     harness
       .send({
@@ -123,7 +131,8 @@ export const open = Effect.fnUntraced(function* (
     replace: (generation: number) => Effect.flatMap(accessOf(generation), (access) => memory.set(sessionId, access)),
     forget: memory.remove(sessionId),
     read: host.client.session.get({ sessionID: SessionID.make(sessionId) }).pipe(Effect.orDie),
-    pull: (next: ReadonlyArray<Reference.Info>, chat: Pick<PullChat, "hasHand"> = {}) =>
+    directory,
+    pull: (next: ReadonlyArray<Reference.Info>, chat: Pick<PullChat, "hasHand" | "directory"> = {}) =>
       Effect.gen(function* () {
         yield* settings.save(TestSettings.layers({ ren: { references: next } }), [])
         yield* harness.configure({

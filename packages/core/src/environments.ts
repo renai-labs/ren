@@ -11,7 +11,8 @@ import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Bundle } from "@ren/schema/bundle"
 import type { Space } from "@ren/schema/space"
-import { and, asc, count, eq, exists, gt, inArray, isNull, sql } from "drizzle-orm"
+import { and, asc, count, eq, exists, gt, inArray, isNull, notInArray, sql } from "drizzle-orm"
+import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import {
   Clock,
   Config,
@@ -81,11 +82,14 @@ export interface Interface {
     hand: Option.Option<Hand>,
   ) => Effect.Effect<ReadonlyMap<Session.ID, Capability>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- Remote hands rule 4: each pull moves the chats that the brain reports idle to their space's current hand: binds a chat to the space's remote template, or unbinds it for the brain's own machine or none.
-  readonly follow: (
-    space: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
-    sessionIds: ReadonlyArray<Session.ID>,
-  ) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- In the transaction that applies a brain's hand: binds each of its top chats to the hand's template, or unbinds them for the brain's own machine or none. A chat whose template changes gets a new machine at its next access.
+  readonly apply: (
+    transaction: Database.Transaction,
+    brainId: Brain.ID,
+    hand: Space.AppliedHand,
+  ) => Effect.Effect<void, EffectDrizzleQueryError>
+  // oxlint-disable-next-line ren/no-comments -- The folder where a remote hand of the provider keeps its chats' folders (EN42).
+  readonly workspaceOf: (provider: EnvironmentProvider.ID) => string
   // oxlint-disable-next-line ren/no-comments -- EN15: `unreachable` when the brain could not reach the session's hand at its last URL; Ren checks that machine first.
   readonly access: (
     subject: Subject,
@@ -96,8 +100,8 @@ export interface Interface {
   readonly keepAwake: (sessionIds: ReadonlyArray<Session.ID>, lastProgressAt: Date) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Sends the awake remote hands of a space their new host list (networking rule 4).
   readonly refreshNetworks: (spaceId: Space.ID) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- The hosts the machines of a space's remote hand answer on; none for another hand. A brain with a host list must reach them.
-  readonly handHosts: (spaceId: Space.ID) => Effect.Effect<ReadonlyArray<string>>
+  // oxlint-disable-next-line ren/no-comments -- The hosts the machines of a remote hand's template answer on. A brain with a host list must reach them.
+  readonly handHosts: (environmentTemplateId: EnvironmentTemplate.ID) => Effect.Effect<ReadonlyArray<string>>
   // oxlint-disable-next-line ren/no-comments -- Destroys the hand sandboxes that no row knows at their generation: a row that is gone or replaced, or a create that half worked.
   readonly cleanup: Effect.Effect<void>
   readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
@@ -338,6 +342,41 @@ export const layer = Layer.effect(
         onSome: Effect.succeed,
       })
 
+    const desiredSetupOf = Effect.fnUntraced(function* (row: Row) {
+      const template = (yield* database.db
+        .select({
+          id: templates.id,
+          config: templates.config,
+          image: templates.image,
+          imageConfig: templates.image_config,
+          imageSystem: templates.image_system,
+          networking: templates.networking,
+        })
+        .from(templates)
+        .where(eq(templates.id, row.environment_template_id))
+        .pipe(Effect.orDie)).at(0)
+      if (!template)
+        return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
+      const hosts = yield* network.hostsOf(
+        { kind: "hand", id: row.id, generation: row.generation },
+        template.networking,
+      )
+      return {
+        config: template.config,
+        image: Option.map(
+          Option.all({
+            name: Option.fromNullishOr(template.image),
+            config: Option.fromNullishOr(template.imageConfig),
+          }),
+          (built) => ({
+            name: built.name,
+            template: { environmentTemplateId: template.id, config: built.config, system: template.imageSystem },
+          }),
+        ),
+        hosts,
+      } satisfies MachineLifecycle.DesiredSetup
+    })
+
     const runs = yield* FiberMap.make<Environment.ID>()
 
     // oxlint-disable-next-line ren/no-comments -- A remote hand's machine (EN1): the state machine of a brain's, with the executor's answer as its ready check. Its provider answers only when the executor does (MachineProvider.waitForExecutor). One server runs it (EN31); an access after a restart starts it again from its row.
@@ -415,40 +454,9 @@ export const layer = Layer.effect(
             .pipe(Effect.orDie, Effect.asVoid),
         }
       }),
-      desiredSetup: Effect.fnUntraced(function* (row) {
-        const template = (yield* database.db
-          .select({
-            id: templates.id,
-            config: templates.config,
-            image: templates.image,
-            imageConfig: templates.image_config,
-            imageSystem: templates.image_system,
-            networking: templates.networking,
-          })
-          .from(templates)
-          .where(eq(templates.id, row.environment_template_id))
-          .pipe(Effect.orDie)).at(0)
-        if (!template)
-          return { config: {}, image: Option.none(), hosts: Option.none() } satisfies MachineLifecycle.DesiredSetup
-        const hosts = yield* network.hostsOf(
-          { kind: "hand", id: row.id, generation: row.generation },
-          template.networking,
-        )
-        return {
-          config: template.config,
-          image: Option.map(
-            Option.all({
-              name: Option.fromNullishOr(template.image),
-              config: Option.fromNullishOr(template.imageConfig),
-            }),
-            (built) => ({
-              name: built.name,
-              template: { environmentTemplateId: template.id, config: built.config, system: template.imageSystem },
-            }),
-          ),
-          hosts,
-        } satisfies MachineLifecycle.DesiredSetup
-      }),
+      desiredSetup: (row) => desiredSetupOf(row),
+      // oxlint-disable-next-line ren/no-comments -- A hand's machine always belongs to one template, so its live host list is that template's.
+      appliedHosts: (row) => Effect.map(desiredSetupOf(row), (desired) => desired.hosts),
       target: (row) =>
         Option.map(Option.fromNullishOr(row.url), (url) => ({
           environmentId: row.id,
@@ -633,49 +641,46 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      follow: Effect.fn("Environments.follow")(function* (
-        space: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
-        sessionIds: ReadonlyArray<Session.ID>,
+      apply: Effect.fn("Environments.apply")(function* (
+        transaction: Database.Transaction,
+        brainId: Brain.ID,
+        hand: Space.AppliedHand,
       ) {
-        if (sessionIds.length === 0) return
-        const hand = (yield* database.db
-          .select({
-            placement: Database.Schema.space.hand_placement,
-            templateId: Database.Schema.space.environment_template_id,
-          })
-          .from(Database.Schema.space)
-          .where(eq(Database.Schema.space.id, space.spaceId))
-          .pipe(Effect.orDie)).at(0)
-        const wanted = hand?.placement === "remote" ? hand.templateId : null
-        const bound = new Map(
-          (yield* database.db
-            .select({ sessionId: sessions.session_id, templateId: sessions.environment_template_id })
-            .from(sessions)
-            .where(and(inArray(sessions.session_id, [...sessionIds]), eq(sessions.space_id, space.spaceId)))
-            .pipe(Effect.orDie)).map((row) => [row.sessionId, row.templateId] as const),
-        )
-        yield* Effect.forEach(
-          sessionIds.filter((sessionId) => (bound.get(sessionId) ?? null) !== wanted),
-          Effect.fnUntraced(function* (sessionId) {
-            const placement = { sessionId, ...space }
-            if (bound.has(sessionId))
-              yield* database.db.delete(sessions).where(isSessionOf(placement)).pipe(Effect.orDie)
-            if (wanted)
-              yield* bind(placement, wanted).pipe(
-                Effect.catch((error) => Effect.logWarning(`Session ${sessionId} keeps no hand`, error)),
-              )
-          }),
-          { discard: true },
-        )
+        const chats = yield* transaction
+          .select({ id: Database.Schema.agent_session.id, spaceId: Database.Schema.agent_session.space_id })
+          .from(Database.Schema.agent_session)
+          .where(
+            and(eq(Database.Schema.agent_session.brain_id, brainId), isNull(Database.Schema.agent_session.parent_id)),
+          )
+        if (chats.length === 0) return
+        const ids = chats.map((chat) => chat.id)
+        if (hand.placement !== "remote") {
+          yield* transaction.delete(sessions).where(inArray(sessions.session_id, ids))
+          return
+        }
+        const templateId = hand.version.environmentTemplateId
+        yield* transaction
+          .delete(sessions)
+          .where(and(inArray(sessions.session_id, ids), notInArray(sessions.environment_template_id, [templateId])))
+        yield* transaction
+          .insert(sessions)
+          .values(
+            chats.map((chat) => ({ session_id: chat.id, space_id: chat.spaceId, environment_template_id: templateId })),
+          )
+          .onConflictDoNothing()
       }),
-      handHosts: Effect.fn("Environments.handHosts")(function* (spaceId: Space.ID) {
+      workspaceOf: (provider: EnvironmentProvider.ID) =>
+        Option.getOrElse(
+          Option.flatMap(registry.get(provider), (found) => found.workspace),
+          () => config.directory,
+        ),
+      handHosts: Effect.fn("Environments.handHosts")(function* (environmentTemplateId: EnvironmentTemplate.ID) {
         const found = (yield* database.db
-          .select({ placement: Database.Schema.space.hand_placement, provider: templates.provider })
-          .from(Database.Schema.space)
-          .leftJoin(templates, eq(templates.id, Database.Schema.space.environment_template_id))
-          .where(eq(Database.Schema.space.id, spaceId))
+          .select({ provider: templates.provider })
+          .from(templates)
+          .where(eq(templates.id, environmentTemplateId))
           .pipe(Effect.orDie)).at(0)
-        if (found?.placement !== "remote" || !found.provider) return []
+        if (!found) return []
         return Option.match(registry.get(found.provider), {
           onNone: () => [],
           onSome: (provider) => provider.machineHosts,

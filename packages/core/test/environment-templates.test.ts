@@ -188,7 +188,7 @@ describe("EnvironmentTemplates", () => {
   )
 
   it.live(
-    "a member of a space picks an organization's template as its remote hand, or none (space settings rules 1, 5)",
+    "a member of a space picks an organization's template as its remote hand, or none, and each change takes the next compute revision (space settings rules 1, 5)",
     () =>
       Effect.gen(function* () {
         const templates = yield* EnvironmentTemplates.Service
@@ -201,10 +201,20 @@ describe("EnvironmentTemplates", () => {
         expect((yield* spaces.update(grace, setup.space.id, { hand: remote }).pipe(Effect.flip))._tag).toBe(
           "Primitive.NotFound",
         )
+        const database = yield* Database.Service
+        const revision = database.db
+          .select({ revision: Database.Schema.space.compute_revision })
+          .from(Database.Schema.space)
+          .where(eq(Database.Schema.space.id, setup.space.id))
+          .pipe(Effect.map((rows) => rows.at(0)?.revision))
         expect((yield* spaces.update(setup.ada, setup.space.id, { hand: remote })).hand).toEqual(remote)
+        const afterRemote = yield* revision
+        yield* spaces.update(setup.ada, setup.space.id, { hand: remote, name: "Same hand" })
+        const afterSame = yield* revision
         expect((yield* spaces.update(setup.ada, setup.space.id, { hand: { placement: "none" } })).hand).toEqual({
           placement: "none",
         })
+        expect([afterRemote, afterSame, yield* revision]).toEqual([1, 1, 2])
         const foreign = yield* templates.create((yield* team()).admin, input)
         expect(
           yield* spaces

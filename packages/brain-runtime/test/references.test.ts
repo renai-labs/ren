@@ -25,13 +25,19 @@ const pathOf = (github: TestGitHub.Instance, commit: string) =>
 
 const fresh = () => TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
 
-const open = (github: TestGitHub.Instance, references: ReadonlyArray<Reference.Info>, drives?: Drive.Availability) =>
+const open = (
+  github: TestGitHub.Instance,
+  references: ReadonlyArray<Reference.Info>,
+  drives?: Drive.Availability,
+  options?: { readonly hasWorkspace?: boolean },
+) =>
   Effect.flatMap(TestEnvironment.url, (url) =>
     ReferenceChat.open(
       { url, environmentId, directoryOf: (sessionId) => join(workspace, sessionId) },
       github,
       references,
       drives,
+      options,
     ),
   )
 
@@ -68,6 +74,23 @@ it.live(
         { tools: [], isToldLastItHasTools: false },
         { tools: ["read", "shell"], isToldLastItHasTools: true },
       ])
+    }),
+)
+
+it.live(
+  "a chat that started with no tools gets a workspace at the pull that gives it a folder, and keeps its history (EN23)",
+  () =>
+    Effect.gen(function* () {
+      const chat = yield* open(yield* fresh(), [], undefined, { hasWorkspace: false })
+      const first = stub.script()
+      const before = yield* chat.turn(first, 1)
+      yield* chat.pull([], { hasHand: true, directory: Environment.Directory.make(chat.directory) })
+      const after = yield* chat.turn(stub.script(), 1)
+      expect({
+        before: ["read", "shell"].filter((tool) => before.tools.includes(tool)),
+        after: ["read", "shell"].filter((tool) => after.tools.includes(tool)),
+        keepsHistory: JSON.stringify(after.body.messages).includes(first.marker),
+      }).toEqual({ before: [], after: ["read", "shell"], keepsHistory: true })
     }),
 )
 

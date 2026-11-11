@@ -114,7 +114,11 @@ export const PullChat = Schema.Struct({
   }),
   hasHand: Schema.optionalKey(Schema.Boolean).annotate({
     description:
-      "False when the chat’s space has no hand now: the chat gets no file and shell tools (EN23). Omitted by an older Ren: true.",
+      "False when the brain’s applied hand gives the chat no file and shell tools (EN23). It changes only at the brain’s start or wake. Omitted by an older Ren: true.",
+  }),
+  directory: Schema.optionalKey(Environment.Directory).annotate({
+    description:
+      "The chat’s folder on its applied hand. A chat with tools and no workspace gets one there. Omitted when the chat has no tools, and by an older Ren.",
   }),
 }).annotate({ identifier: "Host.PullChat" })
 
@@ -136,6 +140,10 @@ export const PullReply = Schema.Struct({
   layers: SessionSettings.Layers,
   memory: Schema.optionalKey(PullMemory).annotate({ description: "Omitted by a Ren that has no memory yet." }),
   chats: Schema.Array(PullChat),
+  computeRevision: Schema.optionalKey(Schema.Int).annotate({
+    description:
+      "The space setting that the brain applied at its last start or wake. When it changes, the brain drops its connections to its hands, so no call reaches the hand it used before. Omitted by an older Ren.",
+  }),
   deleted: Schema.Array(Session.ID).annotate({
     description: "Root chats of the request that Ren no longer has. The brain drops them (E109, HR22).",
   }),

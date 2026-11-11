@@ -38,6 +38,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       changeAtWake: "current" as "current" | "update" | "replace",
       updates: true,
       wanted: { config: {}, image: Option.none(), hosts: Option.none() } as MachineLifecycle.DesiredSetup,
+      applied: Option.none<ReadonlyArray<string>>(),
       system: "system",
       sample: Option.none<MachineProvider.Sample>(),
       held: Option.none<{ readonly entered: Deferred.Deferred<void>; readonly release: Deferred.Deferred<void> }>(),
@@ -140,6 +141,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       retire: () => Effect.void,
       startup: () => Effect.succeed({ variables: {}, created: Effect.void }),
       desiredSetup: () => Effect.sync(() => switches.wanted),
+      appliedHosts: () => Effect.sync(() => switches.applied),
       target: (row) => Option.fromNullishOr(row.url),
       boot: () => Effect.sync(() => (switches.boots ? Option.none() : Option.some("The machine did not answer"))),
       wake: () => Effect.succeed(true),
@@ -571,20 +573,19 @@ describe("MachineLifecycle updates", () => {
   )
 
   it.effect(
-    "an awake machine gets a changed host list at once, and the provider hears nothing when it did not change (networking rule 4)",
+    "an awake machine gets its applied template's changed host list at once, never a newer template's, and the provider hears nothing when it did not change (networking rule 4)",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
         memory.switches.boots = true
         memory.switches.wanted = { config: {}, image: Option.none(), hosts: Option.some(["api.example.com"]) }
+        memory.switches.applied = memory.switches.wanted.hosts
         const id = memory.add()
         yield* memory.machines.access(id)
         yield* memory.machines.refreshNetwork(id)
-        memory.switches.wanted = {
-          config: {},
-          image: Option.none(),
-          hosts: Option.some(["api.example.com", "github.com"]),
-        }
+        memory.switches.wanted = { config: {}, image: Option.none(), hosts: Option.some(["pending.example.com"]) }
+        yield* memory.machines.refreshNetwork(id)
+        memory.switches.applied = Option.some(["api.example.com", "github.com"])
         yield* memory.machines.refreshNetwork(id)
         yield* memory.machines.refreshNetwork(id)
         expect(memory.networks).toEqual([

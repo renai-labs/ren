@@ -15,6 +15,8 @@ export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("Br
 export class BrainFailed extends Schema.TaggedError<BrainFailed>()("BrainFailed", { reason: Schema.String }) {}
 
 export interface Interface {
+  // oxlint-disable-next-line ren/no-comments -- Whether Ren manages the host's machines, so a brain applies its space's settings at its start and wake. A cell has no wake of its own.
+  readonly isManaged: boolean
   readonly target: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, BrainUnavailable | BrainFailed>
   readonly access: (brainId: Brain.ID) => Effect.Effect<BrainLifecycle.Access>
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
@@ -82,6 +84,7 @@ export const layerCell = Layer.effect(
       }
     })
     return Service.of({
+      isManaged: false,
       target,
       access: (brainId) => Effect.map(target(brainId), (found) => ({ _tag: "Ready", target: found }) as const),
       ensure: () => Effect.void,
@@ -102,6 +105,7 @@ export const layerSandbox = Layer.effect(
     const lifecycle = yield* BrainLifecycle.Service
     const client = yield* BrainClient.Service
     return Service.of({
+      isManaged: true,
       target: (brainId) =>
         lifecycle.ready(brainId).pipe(Effect.mapError((error) => new BrainFailed({ reason: error.message }))),
       access: lifecycle.access,

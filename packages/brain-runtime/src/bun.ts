@@ -132,8 +132,9 @@ const runtime = ManagedRuntime.make(
       OpenCodeHarness.layerProcess(harnessDatabase, {
         workspace,
         allow: ["/tmp/", ...caches.map((path) => `${path}/`)],
-      }).pipe(Layer.provide([HostAccess.connections, harnessStorage])),
+      }).pipe(Layer.provide(harnessStorage)),
     ),
+    Layer.provideMerge(HostAccess.connections),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),
     Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
     Layer.provideMerge(PostHog.layer),

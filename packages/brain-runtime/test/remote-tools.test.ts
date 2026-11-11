@@ -12,7 +12,7 @@ import { Session } from "@ren/schema/session"
 import { Shell } from "@ren/schema/shell"
 import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Ref, Schedule, Schema, Scope, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { mkdtemp, realpath, rm, stat } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, stat } from "node:fs/promises"
 import { createServer, type Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -357,14 +357,15 @@ it.live("keeps a session's environment when a later start does not name one", ()
   }),
 )
 
-it.live("refuses an environment for a session that started without one", () =>
+it.live("a later start that names a folder gives a session that started without one its workspace there", () =>
   Effect.gen(function* () {
     const opened = yield* open()
     const session = yield* begin(opened, { onEnvironment: false })
-    const later = yield* restart(opened.harness, session.sessionId, folder(session.sessionId)).pipe(Effect.flip)
-    expect(later.message).toBe(`Session ${session.sessionId} cannot change its environment: not supported yet`)
-    const call = yield* session.turn(stub.script(), 1)
-    expect(fileTools.filter((tool) => call.tools.includes(tool))).toEqual([])
+    yield* opened.memory.set(session.sessionId, yield* accessTo(yield* TestEnvironment.url, session.sessionId))
+    yield* Effect.promise(() => mkdir(folder(session.sessionId), { recursive: true }))
+    yield* restart(opened.harness, session.sessionId, folder(session.sessionId))
+    yield* session.turn(stub.script(shell("echo gained > gained.txt")))
+    expect(yield* text(join(folder(session.sessionId), "gained.txt"))).toBe("gained\n")
   }),
 )
 

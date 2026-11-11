@@ -16,6 +16,7 @@ import { Brain } from "@ren/schema/brain"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { BrainHost } from "@ren/core/brain-host"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { Brains } from "@ren/core/brains"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
@@ -278,6 +279,7 @@ export const start = async (options: {
               .pipe(Layer.provide([Signer.layerLocal, FetchHttpClient.layer]))
               .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
           ),
+          Layer.provide(BrainProvider.layer([])),
           Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
           Layer.provide(FetchHttpClient.layer),
           Layer.provide(

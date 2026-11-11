@@ -127,6 +127,34 @@ const applyHandInstructions = Effect.fnUntraced(function* (
   )
 })
 
+// oxlint-disable-next-line ren/no-comments -- A chat with no workspace gets one at the folder Ren gives it on the hand its brain applied, and keeps its history. A brain for a remote hand never moves a chat: Ren replaces it, and its restore makes the workspace.
+const gainWorkspace = Effect.fnUntraced(function* (
+  server: OpenCodeServer.Instance,
+  sessionId: StartBody["sessionId"],
+  directory: string | undefined,
+) {
+  if (!directory || server.isRemoteHand || !server.hasEnvironmentConnections) return Option.none<string>()
+  const sessionID = Session.ID.make(sessionId)
+  const location = (yield* server.sessions.get(sessionID).pipe(Effect.orDie)).location
+  if (location.workspaceID) return Option.some<string>(location.directory)
+  yield* server.makeDirectory(directory)
+  const workspaceID = yield* server.workspaces
+    .create({ id: RenWorkspaceDriver.workspaceId(sessionId), provider: RenWorkspaceDriver.provider })
+    .pipe(Effect.orDie)
+  yield* server.sessions.move({ sessionID, directory: AbsolutePath.make(directory), workspaceID }).pipe(Effect.orDie)
+  return Option.some(directory)
+})
+
+// oxlint-disable-next-line ren/no-comments -- The restored chat's folder on the hand its brain applied, also when it had no workspace before: it gets one there. An older Ren names none: the chat keeps the workspace it had.
+const restoredDirectory = (
+  server: OpenCodeServer.Instance,
+  data: { readonly chat: { readonly directory?: string }; readonly session: { readonly workspace_id: string | null } },
+  saved: string,
+) => {
+  if (!server.hasEnvironmentConnections) return
+  return data.chat.directory ?? (data.session.workspace_id ? saved : undefined)
+}
+
 const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(function* (
   client: OpenCodeClient,
   model: Model | undefined,
@@ -203,8 +231,10 @@ const environmentDirectoryOf = Effect.fn("OpenCodeHarness.environmentDirectoryOf
 ): Effect.fn.Return<Option.Option<string>, BrainRejectedError> {
   if (Option.isSome(session)) {
     const location = (yield* server.sessions.get(session.value.id).pipe(Effect.orDie)).location
-    if (input.directory && !location.workspaceID) return yield* notSupported(input.sessionId)
-    return location.workspaceID ? Option.some(location.directory) : Option.none()
+    if (location.workspaceID) return Option.some(location.directory)
+    if (!input.directory) return Option.none()
+    const gained = yield* gainWorkspace(server, input.sessionId, input.directory)
+    return Option.isSome(gained) ? gained : yield* notSupported(input.sessionId)
   }
   if (!input.directory) return Option.none()
   if (!server.hasEnvironmentConnections)
@@ -626,6 +656,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               return
             }
             if (!picked) yield* dropPick(client, session, resolved.success.primary.model)
+            yield* gainWorkspace(server, chat.id, chat.directory)
             yield* applyHandInstructions(client, server, session.value.id, { hasHand: chat.hasHand !== false })
             const next = { resolved: resolved.success, interactive: saved?.interactive ?? true }
             yield* Ref.update(known.latest, (all) => new Map([...all, [chat.id, next]]))
@@ -742,18 +773,18 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               ),
             )
             // oxlint-disable-next-line ren/no-comments -- Only the brain's own hand is on this disk: its folder is made before the import, and a folder that was gone means its files were lost (E105, E113).
-            const isOwnHand =
-              server.hasEnvironmentConnections && info.location.directory === server.directoryOf(data.chat.id)
+            const directory = restoredDirectory(server, data, info.location.directory)
+            const isOwnHand = Boolean(directory) && directory === server.directoryOf(data.chat.id)
             const isLost =
               isOwnHand &&
               !(yield* Effect.promise(() =>
-                stat(info.location.directory).then(
+                stat(directory).then(
                   () => true,
                   () => false,
                 ),
               ))
-            if (isLost) yield* server.makeDirectory(info.location.directory)
-            const workspaceID = data.session.workspace_id
+            if (isLost) yield* server.makeDirectory(directory)
+            const workspaceID = directory
               ? yield* server.workspaces.create({
                   id: RenWorkspaceDriver.workspaceId(data.chat.id),
                   provider: RenWorkspaceDriver.provider,
@@ -761,7 +792,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               : undefined
             yield* server.transfer.import({
               data: { info, messages },
-              location: Location.Ref.make({ directory: info.location.directory, workspaceID }),
+              location: Location.Ref.make({
+                directory: directory ? AbsolutePath.make(directory) : info.location.directory,
+                workspaceID,
+              }),
             })
             // oxlint-disable-next-line ren/no-comments -- An opening resolves only the chats OpenCode holds; a chat imported later gets its agent, model and rules here, before any of its turns.
             if (Option.isSome(settings)) {

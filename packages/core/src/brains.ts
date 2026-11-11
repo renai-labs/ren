@@ -48,6 +48,7 @@ import { Models } from "./models.js"
 import { Settings } from "./settings.js"
 import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
+import { SpaceCompute } from "./space-compute.js"
 
 export {
   BrainRejectedError,
@@ -189,6 +190,7 @@ export const layer = Layer.effect(
     const credentialEnv = yield* CredentialEnv.Service
     const settings = yield* Settings.Service
     const environments = yield* Environments.Service
+    const compute = yield* SpaceCompute.Service
     const drives = yield* Drives.Service
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
@@ -260,6 +262,10 @@ export const layer = Layer.effect(
       }))
     })
 
+    // oxlint-disable-next-line ren/no-comments -- The brain's own machine as its chats' hand, only while the brain applied a co-located hand.
+    const ownHand = (host: CurrentHost["Service"], hand: Space.AppliedHand) =>
+      hand.placement === "colocated" ? handOf(host.brainId, host.generation) : Effect.succeedNone
+
     const creatorSees = Effect.fnUntraced(function* (sessionId: Session.ID, placement: Placement) {
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
@@ -295,7 +301,9 @@ export const layer = Layer.effect(
           message: `The creator of ${input.sessionId} can no longer see its space`,
         })
       const target = yield* brainHost.target(placement.brainId)
-      const hand = input.hand
+      // oxlint-disable-next-line ren/no-comments -- A chat starts with its brain's applied hand, not the space's newer setting: a brain that is awake keeps one coherent setup until its next wake. A host with no wake of its own applies the space's setting at each start.
+      if (!brainHost.isManaged) yield* compute.publish(placement.brainId, { machine: "none" })
+      const hand = (yield* compute.applied(placement.brainId)).hand
       const colocated =
         hand.placement === "colocated"
           ? yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation))
@@ -304,7 +312,7 @@ export const layer = Layer.effect(
         hand.placement === "remote"
           ? Option.some(
               yield* environments
-                .bind({ ...subject, spaceId: placement.spaceId }, hand.environmentTemplateId)
+                .bind({ ...subject, spaceId: placement.spaceId }, hand.version.environmentTemplateId)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
           : Option.map(colocated, (directory) => ({ directory, isNew: false }))
@@ -570,18 +578,6 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
-        // oxlint-disable-next-line ren/no-comments -- Remote hands rule 4: the chats the brain reports idle move to their space's current hand, whoever sends their next message. Only a brain made for that hand moves them (rule 3); another is replaced at its wake, and the new brain's first pull moves them.
-        const kinds = (yield* database.db
-          .select({ brain: Database.Schema.brain.hand_placement, space: Database.Schema.space.hand_placement })
-          .from(Database.Schema.brain)
-          .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
-          .where(eq(Database.Schema.brain.id, host.brainId))
-          .pipe(Effect.orDie)).at(0)
-        if (kinds && (kinds.brain === "remote") === (kinds.space === "remote"))
-          yield* environments.follow(
-            { organizationId: host.organizationId, spaceId: host.spaceId },
-            request.sessions.flatMap((session) => (session.busy ? [] : [session.id])),
-          )
         // oxlint-disable-next-line ren/no-comments -- A pull is the first sign that a new machine is up: the chats that a forced replace marked continue now (EN35, EN36).
         yield* continueMarked(host.brainId)
         // oxlint-disable-next-line ren/no-comments -- Networking rule 4: a push makes the brain pull at once after a change, so a new connection or allowed host reaches its machines within seconds. One query first: a space with no limited template now, and no machine that still has a host list, has nothing to send.
@@ -608,20 +604,26 @@ export const layer = Layer.effect(
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
         const inference = yield* models.inference
+        // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake (EN23).
+        const applied = yield* compute.applied(host.brainId)
+        const own = yield* ownHand(host, applied.hand)
         const capabilities = yield* environments.capabilities(
           host.organizationId,
           pulled.chats.map((chat) => chat.id),
-          yield* handOf(host.brainId, host.generation),
+          own,
         )
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
           .pipe(Effect.orDie)
-        // oxlint-disable-next-line ren/no-comments -- EN23: a space with no hand refuses the file and shell tools of its existing chats at their next pull.
-        const hasHand = (yield* database.db
-          .select({ placement: Database.Schema.space.hand_placement })
-          .from(Database.Schema.space)
-          .where(eq(Database.Schema.space.id, host.spaceId))
-          .pipe(Effect.orDie)).some((row) => row.placement !== "none")
+        const hasHand = applied.hand.placement !== "none"
+        const directories = new Map(
+          yield* Effect.forEach(hasHand ? pulled.chats : [], (chat) =>
+            Effect.map(
+              environments.findDirectory({ sessionId: chat.id, organizationId: host.organizationId }, own),
+              (directory) => [chat.id, directory] as const,
+            ),
+          ),
+        )
         return {
           publicKeys: client.publicKeys,
           ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
@@ -629,16 +631,16 @@ export const layer = Layer.effect(
           channels,
           layers: pulled.layers,
           memory: yield* Memory.roots(database.db, host).pipe(Effect.orDie),
+          computeRevision: applied.revision,
           chats: pulled.chats.map((chat) => {
             const capability = capabilities.get(chat.id)
-            if (!capability) return { id: chat.id, agent: chat.agent, archived: chat.archived, hasHand }
-            return {
-              id: chat.id,
-              agent: chat.agent,
-              archived: chat.archived,
-              hasHand,
-              drives: drives.availability(host, capability),
-            }
+            const directory = Option.getOrUndefined(directories.get(chat.id) ?? Option.none())
+            const found = { id: chat.id, agent: chat.agent, archived: chat.archived, hasHand }
+            return Object.assign(
+              found,
+              directory && { directory },
+              capability && { drives: drives.availability(host, capability) },
+            )
           }),
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
           env: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
@@ -660,7 +662,8 @@ export const layer = Layer.effect(
         options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        return yield* environments.access(subject, yield* handOf(host.brainId, host.generation), options).pipe(
+        const own = yield* ownHand(host, (yield* compute.applied(host.brainId)).hand)
+        return yield* environments.access(subject, own, options).pipe(
           Effect.catchTags({
             "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
             "Environments.Unavailable": (error) =>
@@ -670,9 +673,10 @@ export const layer = Layer.effect(
         )
       }),
       directoryOf: Effect.fn("Brains.directoryOf")(function* (host: CurrentHost["Service"], sessionId: Session.ID) {
+        const subject = yield* inBrain(host, sessionId)
         return yield* environments.findDirectory(
-          yield* inBrain(host, sessionId),
-          yield* handOf(host.brainId, host.generation),
+          subject,
+          yield* ownHand(host, (yield* compute.applied(host.brainId)).hand),
         )
       }),
       releaseEnvironment: Effect.fn("Brains.releaseEnvironment")(function* (
@@ -683,7 +687,7 @@ export const layer = Layer.effect(
       }),
     })
   }),
-).pipe(Layer.provide([Access.layer, AppResolve.layer]))
+).pipe(Layer.provide([Access.layer, AppResolve.layer, SpaceCompute.layer]))
 
 export const hostAuthentication = Layer.effect(
   HostAuthentication,

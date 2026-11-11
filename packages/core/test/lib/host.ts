@@ -310,6 +310,7 @@ export const cellLayerWith =
       Layer.provide(Settings.layer),
       Layer.provide(models),
       Layer.provide(environments),
+      Layer.provide(BrainProvider.layer([])),
       Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(
