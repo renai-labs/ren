@@ -321,6 +321,13 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
         </Button>
       </div>
     )
+  if (props.boot._tag === "Checking")
+    return (
+      <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 animate-in items-center gap-2 text-xs text-muted-foreground delay-1000 duration-200 fade-in-0 fill-mode-backwards">
+        <IconLoader2 className="size-3.5 animate-spin" />
+        Connecting…
+      </span>
+    )
   if (props.boot._tag === "Reconnecting")
     return (
       <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">

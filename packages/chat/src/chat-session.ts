@@ -114,6 +114,7 @@ export interface Options {
 }
 
 export type Boot =
+  | { readonly _tag: "Checking" }
   | { readonly _tag: "Ready" }
   | { readonly _tag: "Starting"; readonly phase: string }
   | { readonly _tag: "Failed"; readonly reason: string }
@@ -202,7 +203,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       : ChatState.empty,
   )
   const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
-  const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Ready" })
+  const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Checking" })
   if (options.cache) {
     const cache = options.cache
     yield* cache.read.pipe(

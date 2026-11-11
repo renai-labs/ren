@@ -188,6 +188,26 @@ test("while access is starting the history comes from Ren, a page that is too la
     }),
   ))
 
+test("the boot is Checking until Ren answers access, then Starting", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      const answer = yield* Deferred.make<{ readonly status: "starting"; readonly phase: string }>()
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => Deferred.await(answer),
+      }).pipe(Effect.provide(http(brain)))
+      expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Checking" })
+      yield* chat.open(brain.id).pipe(Effect.forkChild)
+      expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Checking" })
+      yield* Deferred.succeed(answer, { status: "starting" as const, phase: "waking" })
+      expect(yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Starting")).toEqual({
+        _tag: "Starting",
+        phase: "waking",
+      })
+    }),
+  ))
+
 test("a saved page that holds only the newest messages makes the brain's read stop at its oldest message, not read the whole history (#253)", () =>
   ChatTest.live(
     Effect.gen(function* () {
