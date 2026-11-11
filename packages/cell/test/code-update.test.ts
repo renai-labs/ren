@@ -11,8 +11,8 @@ const updater = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
   const home = yield* fs.makeTempDirectoryScoped()
-  const script = path.join(home, "prepare.sh")
-  yield* fs.writeFileString(script, "exit 0\n")
+  const script = path.join(home, "start.ts")
+  yield* fs.writeFileString(script, "process.exit(0)\n")
   yield* fs.makeDirectory(path.join(home, ".ren"))
   yield* fs.writeFileString(path.join(home, ".ren", "brain.version"), "current\n")
   return yield* Layer.build(CodeUpdate.layerProcess({ home, script, version: "current", restart: Effect.void })).pipe(

@@ -46,8 +46,8 @@ export const State = Schema.Struct({
 }).annotate({ identifier: "Brain.State" })
 
 export const UpdateBody = Schema.Struct({
-  bundles: Schema.Array(Schema.Struct({ ...Bundle.Info.fields, token: Schema.String })).annotate({
-    description: "The current bundles, the dependencies first, each with the token that downloads it.",
+  bundles: Schema.Array(Bundle.Download).annotate({
+    description: "The current bundles, the dependencies first, each with a link that downloads it.",
   }),
   steps: Schema.optionalKey(
     Schema.Array(Schema.Struct({ command: Schema.String, user: Schema.Literals(["root", "user"]) })).annotate({

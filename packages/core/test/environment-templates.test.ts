@@ -44,7 +44,7 @@ const built = await Effect.runPromise(
   TestProvider.make({
     id: "built",
     canLimitHosts: true,
-    systemImage: "ren-brain:sys2-d1",
+    systemImage: "ren-brain:sys2",
     build: {
       start: (config) =>
         Queue.offer(started, config.label).pipe(

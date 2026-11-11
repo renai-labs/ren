@@ -1,10 +1,3 @@
-CREATE TABLE "bundle" (
-	"kind" text PRIMARY KEY,
-	"version" text NOT NULL,
-	"sha256" text NOT NULL,
-	"built_at" timestamp NOT NULL
-);
---> statement-breakpoint
 DROP TABLE "space_environment_template";--> statement-breakpoint
 ALTER TABLE "brain" RENAME COLUMN "template" TO "image";--> statement-breakpoint
 ALTER TABLE "brain" ADD COLUMN "image_template" jsonb;--> statement-breakpoint

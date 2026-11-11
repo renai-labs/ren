@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "2b126203-8ab8-4bfa-acb9-177724709439",
+  "id": "844f48a3-9f6b-4107-bd1f-fb6b1fde2ae9",
   "prevIds": [
     "25fa7af1-4a88-4205-9ff4-91cf142a5db4"
   ],
@@ -147,12 +147,6 @@
     {
       "isRlsEnabled": false,
       "name": "brain",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "bundle",
       "entityType": "tables",
       "schema": "public"
     },
@@ -3557,58 +3551,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "brain"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "kind",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bundle"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "version",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bundle"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "sha256",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bundle"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "built_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bundle"
     },
     {
       "type": "text",
@@ -14512,16 +14454,6 @@
       "name": "brain_pkey",
       "schema": "public",
       "table": "brain",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "kind"
-      ],
-      "nameExplicit": false,
-      "name": "bundle_pkey",
-      "schema": "public",
-      "table": "bundle",
       "entityType": "pks"
     },
     {

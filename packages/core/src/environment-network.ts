@@ -6,6 +6,7 @@ import type { Workload } from "@ren/schema/workload"
 import { Config, Context, Effect, Layer, Option } from "effect"
 import { AppProfiles } from "./app/profiles.js"
 import { AppResolve } from "./app/resolve.js"
+import { Bundles } from "./bundles.js"
 import { CredentialSource } from "./credential-source.js"
 import { Credentials } from "./credentials.js"
 import { Models } from "./models.js"
@@ -40,7 +41,7 @@ const ofTemplate = (networking: Extract<EnvironmentTemplate.Networking, { readon
   ...(networking.allowPackageManagers ? packageManagerHosts : []),
 ]
 
-// oxlint-disable-next-line ren/no-comments -- Every machine reaches Ren's server: start.sh fetches Ren's code there (EN26), and a brain pulls from it (EN40).
+// oxlint-disable-next-line ren/no-comments -- Every machine reaches Ren's server: a brain pulls from it (EN40).
 const renServer = Config.option(Config.String("REN_URL")).pipe(
   Effect.map((url) => Option.toArray(Option.flatMap(url, hostOf))),
   Effect.orDie,
@@ -70,7 +71,8 @@ export const layer = Layer.effect(
     const sources = yield* CredentialSource.Service
     const profiles = yield* AppProfiles.Service
     const resolve = yield* AppResolve.Service
-    const server = yield* renServer
+    // oxlint-disable-next-line ren/no-comments -- Every machine reaches the host of Ren's bundles: start.js downloads Ren's code there (EN26).
+    const server = [...(yield* renServer), ...Option.toArray((yield* Bundles.Service).host)]
     // oxlint-disable-next-line ren/no-comments -- EN40: a brain also reaches the inference address it is given, which can differ from Ren's own.
     const inference = Option.toArray(
       Option.flatMap(yield* (yield* Models.Service).inference, (found) => hostOf(found.baseUrl)),

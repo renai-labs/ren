@@ -33,6 +33,7 @@ import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { testEffect } from "./lib/effect.js"
+import { TestBundles } from "./lib/bundles.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
@@ -290,20 +291,20 @@ describe("Environments", () => {
   it.live("a remote hand on older Ren code is replaced at its wake, so it never lags its brains (EN27, EN33)", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
-      const bundle = (kind: "dependencies" | "brain" | "executor", version: string) =>
-        database.db
-          .insert(Database.Schema.bundle)
-          .values({ kind, version, sha256: "0".repeat(64), built_at: new Date() })
-          .onConflictDoUpdate({ target: Database.Schema.bundle.kind, set: { version } })
-      yield* bundle("dependencies", "d000000000000001")
-      yield* bundle("brain", "b000000000000001")
-      yield* bundle("executor", "e000000000000001")
-      const subject = yield* environmentsWith({ BRAIN_KEYS: signingKeys })
+      const bucket = yield* TestBundles.bucket
+      const publish = (executor: string) =>
+        bucket.publish([
+          { kind: "dependencies", version: "d000000000000001", sha256: "0".repeat(64) },
+          { kind: "brain", version: "b000000000000001", sha256: "0".repeat(64) },
+          { kind: "executor", version: executor, sha256: "0".repeat(64) },
+        ])
+      yield* publish("e000000000000001")
+      const subject = yield* environmentsWith({ BRAIN_KEYS: signingKeys, ...bucket.config })
       const organizationId = yield* Seed.organization()
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
       yield* subject.environments.access(session, { _tag: "Remote" })
-      yield* bundle("executor", "e000000000000002")
+      yield* publish("e000000000000002")
       yield* database.db.update(Database.Schema.environment).set({ keep_alive_until: new Date(Date.now() - 1000) })
       yield* subject.environments.access(session, { _tag: "Remote" }).pipe(Effect.ignore)
       expect(

@@ -553,12 +553,12 @@ describe("MachineLifecycle updates", () => {
   )
 
   it.effect(
-    "a new system image replaces an asleep machine at its wake, but one that differs only in the dependencies built into it does not (EN26)",
+    "a new system image replaces an asleep machine at its wake, and the same one keeps it",
     () =>
       Effect.gen(function* () {
         const memory = yield* kind
         memory.switches.boots = true
-        memory.switches.system = "ren-brain:a1b2-d1"
+        memory.switches.system = "ren-brain:a1b2"
         const id = memory.add()
         yield* memory.machines.access(id)
         const wakeOn = (system: string) =>
@@ -568,9 +568,9 @@ describe("MachineLifecycle updates", () => {
             yield* memory.machines.access(id)
             return (yield* memory.read(id)).generation
           })
-        expect(yield* wakeOn("ren-brain:a1b2-d2")).toBe(1)
-        expect(yield* wakeOn("ren-brain:c3d4-d2")).toBe(2)
-        expect((yield* memory.read(id)).image).toBe("ren-brain:c3d4-d2")
+        expect(yield* wakeOn("ren-brain:a1b2")).toBe(1)
+        expect(yield* wakeOn("ren-brain:c3d4")).toBe(2)
+        expect((yield* memory.read(id)).image).toBe("ren-brain:c3d4")
       }),
   )
 

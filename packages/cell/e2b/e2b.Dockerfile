@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.2
+# stage.ts puts FROM oven/bun:<the Bun version of package.json> before this file.
 
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo \
@@ -20,15 +20,15 @@ RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && unzip -q -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
   && rm /tmp/rclone.zip
 
-# Ren's code is not in the image: start.sh downloads it from Ren as bundles (EN26).
+# Ren's code is not in the image: start.js downloads it as bundles (EN26).
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=70%' >>/etc/systemd/system/ren-tools.slice
 
-COPY start.sh /opt/ren/start.sh
+COPY start.sh start.js /opt/ren/
 RUN chmod 0755 /opt/ren/start.sh \
   && git config --system url."https://github.com/".insteadOf "git@github.com:"
 
-# Every client trusts the system store, which start.sh extends with the egress CA (C44).
+# Every client trusts the system store, which start.js extends with the egress CA (C44).
 ENV BRAIN_PORT=4800 EXECUTOR_PORT=4100 \
   SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
   REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \

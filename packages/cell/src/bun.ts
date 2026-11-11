@@ -118,7 +118,7 @@ const runtime = ManagedRuntime.make(
     Layer.provideMerge(
       CodeUpdate.layerProcess({
         home,
-        script: process.env.REN_START_SCRIPT ?? "/opt/ren/start.sh",
+        script: process.env.REN_START_SCRIPT ?? "/opt/ren/start.js",
         version: vars.REN_BRAIN_VERSION ?? manifest.version,
         restart: Effect.sleep("500 millis").pipe(
           Effect.andThen(Effect.sync(() => process.kill(process.pid, "SIGTERM"))),

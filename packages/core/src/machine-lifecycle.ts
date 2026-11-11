@@ -81,7 +81,7 @@ export interface Row<Id extends string> {
 export interface TemplateConfig {
   readonly environmentTemplateId: EnvironmentTemplate.ID
   readonly config: Schema.Json
-  // oxlint-disable-next-line ren/no-comments -- The system image the template's image was built on, without its dependencies (MachineProvider.systemOf). Only a new machine changes it.
+  // oxlint-disable-next-line ren/no-comments -- The system image the template's image was built on. Only a new machine changes it.
   readonly system: string | null
 }
 
@@ -185,8 +185,7 @@ const desiredImage = (desired: DesiredSetup, provider: MachineProvider.Provider)
 // oxlint-disable-next-line ren/no-comments -- EN22: the steps that bring a machine to the image its owner wants, in place: none needed, the steps between two configs of its template on one system image, or none possible (a replace; templates rules 1, 3).
 const stepsInPlace = <Id extends string>(row: Row<Id>, desired: DesiredSetup, provider: MachineProvider.Provider) => {
   const image = desiredImage(desired, provider)
-  if (!image || !row.image || MachineProvider.systemOf(row.image) === MachineProvider.systemOf(image))
-    return Option.some<ReadonlyArray<MachineProvider.Step>>([])
+  if (!image || !row.image || row.image === image) return Option.some<ReadonlyArray<MachineProvider.Step>>([])
   const from = row.image_template
   return Option.flatMap(
     Option.filter(

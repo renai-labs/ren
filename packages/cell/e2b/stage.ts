@@ -19,7 +19,7 @@ const Options = Schema.Struct({
   E2B_TEMPLATE_OWNER: Schema.optionalKey(Schema.String),
   E2B_TEMPLATE_SEED: Schema.optionalKey(Schema.String).annotate({
     description:
-      "A folder of Ren’s bundles (bun machine/bundle.ts <folder>). The image then holds their dependencies, so a new machine downloads only the sources (EN26).",
+      "A folder of Ren’s bundles (bun machine/bundle.ts <folder>). The image then holds their dependencies, so a new machine downloads only the sources (EN26). They do not name the image: a template with the same system is not built again.",
   }),
 })
 
@@ -36,15 +36,15 @@ const dockerfiles =
 
 const Root = Schema.Struct({ packageManager: Schema.String })
 
-// oxlint-disable-next-line ren/no-comments -- The image holds no Ren code, so the smoke run checks the system it gives: start.sh, Bun, and the seeded dependencies.
+// oxlint-disable-next-line ren/no-comments -- The image holds no Ren code, so the smoke run checks the system it gives: start.sh, start.js, Bun, and the seeded dependencies.
 const smoke = async (tag: string, seeded: Option.Option<string>) => {
   const sandbox = await Sandbox.create(tag, { metadata: { owner, smoke: "true" }, timeoutMs: 300_000 })
   const ready = Option.match(seeded, {
     onNone: () => "",
-    onSome: (version) => ` && test -e /home/user/.ren/code/dependencies/${version}/.ready`,
+    onSome: (tree) => ` && test -e /home/user/.ren/code/dependencies/${tree}/.ready`,
   })
   const checked = await sandbox.commands
-    .run(`test -x /opt/ren/start.sh && bun --version${ready}`, { timeoutMs: 60_000 })
+    .run(`test -x /opt/ren/start.sh && test -s /opt/ren/start.js && bun --version${ready}`, { timeoutMs: 60_000 })
     .then(
       (result) => result.exitCode === 0,
       () => false,
@@ -53,16 +53,25 @@ const smoke = async (tag: string, seeded: Option.Option<string>) => {
   return checked
 }
 
+// oxlint-disable-next-line ren/no-comments -- start.js is start.ts with everything it imports, in one file: the machine runs it before any of Ren's code is there.
+const startProgram = async () => {
+  const built = await Bun.build({ entrypoints: [join(import.meta.dir, "../machine/start.ts")], target: "bun" })
+  const output = built.outputs.at(0)
+  if (!built.success || !output) throw new AggregateError(built.logs, "start.ts did not build")
+  return output.bytes()
+}
+
 if (import.meta.main) {
   const context = await mkdtemp(join(tmpdir(), "ren-image-"))
-  const entries = await Promise.all(
-    [...dockerfiles.map((file) => join(import.meta.dir, file)), join(import.meta.dir, "../machine/start.sh")].map(
-      async (path) => ({
-        path: path.slice(root.length + 1),
-        content: await Bun.file(path).bytes(),
-      }),
-    ),
-  )
+  const start = await startProgram()
+  const entries = [
+    ...(await Promise.all(
+      [...dockerfiles.map((file) => join(import.meta.dir, file)), join(import.meta.dir, "../machine/start.sh")].map(
+        async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() }),
+      ),
+    )),
+    { path: "start.js", content: start },
+  ]
   const bun = Schema.decodeUnknownSync(Root)(await Bun.file(join(root, "package.json")).json()).packageManager.replace(
     /^bun@/,
     "",
@@ -72,34 +81,33 @@ if (import.meta.main) {
     { path: "bun", content: new TextEncoder().encode(bun) },
     { path: "size", content: new TextEncoder().encode(`${size.cpuCount}/${size.memoryMB}`) },
   ])
+  const tag = `${name}:${version}`
   const seed = options.E2B_TEMPLATE_SEED
   const dependencies =
     seed === undefined
       ? Option.none()
       : Option.map(
           Option.fromNullishOr(
-            Schema.decodeUnknownSync(Bundle.Manifest)(await Bun.file(join(seed, "manifest.json")).json()).bundles.find(
-              (bundle) => bundle.kind === "dependencies",
-            ),
+            Schema.decodeUnknownSync(Bundle.Manifest)(
+              await Bun.file(join(seed, Bundle.manifestKey)).json(),
+            ).bundles.find((bundle) => bundle.kind === "dependencies"),
           ),
-          (bundle) => ({ file: join(seed, Bundle.fileOf(bundle)), version: bundle.version }),
+          (bundle) => ({ file: join(seed, Bundle.keyOf(bundle)), tree: Bundle.treeOf([bundle], "dependencies") }),
         )
-  // oxlint-disable-next-line ren/no-comments -- The dependencies' version ends the tag, after a hyphen; Ren ignores it when it compares a machine's image (machine-lifecycle.ts, systemOf).
-  const tagged = Option.match(dependencies, { onNone: () => version, onSome: (found) => `${version}-${found.version}` })
-  const tag = `${name}:${tagged}`
   const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
-  const tags = await Template.getTags(name).catch(() => [])
-  if (tags.some((each) => each.tag === tagged)) {
+  const tags = (await Template.exists(name)) ? await Template.getTags(name) : []
+  if (tags.some((each) => each.tag === version)) {
     await rm(context, { recursive: true, force: true })
     process.stdout.write(`${tag} exists; nothing to build\n`)
     process.exit(0)
   }
   await Bun.write(join(context, "start.sh"), Bun.file(join(import.meta.dir, "../machine/start.sh")))
+  await Bun.write(join(context, "start.js"), start)
   const parts = await Promise.all(dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))
   const seeded = Option.match(dependencies, {
     onNone: () => [],
     onSome: (found) => {
-      const target = `/home/user/.ren/code/dependencies/${found.version}`
+      const target = `/home/user/.ren/code/dependencies/${found.tree}`
       return [
         "COPY dependencies.tar.gz /tmp/dependencies.tar.gz",
         `RUN mkdir -p ${target} && tar -xzf /tmp/dependencies.tar.gz -C ${target} && touch ${target}/.ready && rm /tmp/dependencies.tar.gz && chown -R user:user /home/user/.ren`,
@@ -108,7 +116,7 @@ if (import.meta.main) {
   })
   if (Option.isSome(dependencies))
     await Bun.write(join(context, "dependencies.tar.gz"), Bun.file(dependencies.value.file))
-  const dockerfile = `${[...parts, ...seeded].join("\n").replace(/^FROM oven\/bun:.*$/m, `FROM oven/bun:${bun}`)}\n`
+  const dockerfile = `${[`FROM oven/bun:${bun}`, ...parts, ...seeded].join("\n")}\n`
   await Template.build(
     Template({ fileContextPath: context })
       .fromDockerfile(dockerfile)
@@ -120,10 +128,10 @@ if (import.meta.main) {
   if (
     !(await smoke(
       tag,
-      Option.map(dependencies, (found) => found.version),
+      Option.map(dependencies, (found) => found.tree),
     ))
   ) {
-    process.stderr.write(`The smoke sandbox of ${tag} did not run start.sh and Bun; do not use this tag\n`)
+    process.stderr.write(`The smoke sandbox of ${tag} did not have start.sh, start.js and Bun; do not use this tag\n`)
     process.exit(1)
   }
   process.stdout.write(`E2B_TEMPLATE=${tag}${dirty ? " (built from a tree with uncommitted files)" : ""}\n`)

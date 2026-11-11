@@ -157,6 +157,8 @@ resource "aws_ecs_task_definition" "server" {
         DRIVE_BUCKET   = aws_s3_bucket.drives.id
         DRIVE_REGION   = var.region
         DRIVE_ROLE_ARN = aws_iam_role.drive_access.arn
+        BUNDLE_BUCKET  = aws_s3_bucket.artifacts.id
+        BUNDLE_REGION  = var.region
       }) : { name = key, value = value }
     ]
     secrets = [

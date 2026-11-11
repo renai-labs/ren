@@ -88,7 +88,7 @@ const sandboxEgress = Layer.unwrap(
   ),
 ).pipe(Layer.provide(CredentialCallers.layer), Layer.provide(envelope))
 
-const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide(AppResolve.layer))
+const environmentNetwork = EnvironmentNetwork.layer.pipe(Layer.provide([AppResolve.layer, Bundles.layer]))
 
 // oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: the egress, Ren's code and the host list of their template.
 const environments = Environments.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))

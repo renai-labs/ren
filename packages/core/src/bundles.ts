@@ -1,114 +1,95 @@
 export * as Bundles from "./bundles.js"
 
-import { Database } from "@ren/db/database"
+import { GetObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Bundle } from "@ren/schema/bundle"
-import { Signature } from "@ren/schema/signature"
-import { eq, sql } from "drizzle-orm"
-import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schema } from "effect"
-import { join } from "node:path"
-import { Signer } from "./signer.js"
-
-export class NotFound extends Schema.TaggedError<NotFound>()("Bundles.NotFound", { message: Schema.String }) {}
+import { Config, Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 export interface Interface {
-  readonly current: (kind: Bundle.Kind) => Effect.Effect<Option.Option<Bundle.Info>>
-  // oxlint-disable-next-line ren/no-comments -- A token that lets a machine download one bundle from Ren for 15 min.
-  readonly token: (bundle: Pick<Bundle.Info, "kind" | "version">) => Effect.Effect<string>
-  // oxlint-disable-next-line ren/no-comments -- The archive on this server's disk, for a valid token of that bundle. A server that does not have it answers NotFound; the machine asks again later.
-  readonly file: (token: string, bundle: Pick<Bundle.Info, "kind" | "version">) => Effect.Effect<string, NotFound>
+  // oxlint-disable-next-line ren/no-comments -- The bundles the deploy made current; none for a Ren whose machines run Ren's code from their image or folder.
+  readonly current: Effect.Effect<Option.Option<ReadonlyArray<Bundle.Info>>>
+  // oxlint-disable-next-line ren/no-comments -- Links that download the bundles for a short time, with the folder each one unpacks into.
+  readonly downloads: (bundles: ReadonlyArray<Bundle.Info>) => Effect.Effect<ReadonlyArray<Bundle.Download>>
+  // oxlint-disable-next-line ren/no-comments -- The host the links point to. A machine with a host list must reach it.
+  readonly host: Option.Option<string>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Bundles") {}
 
-const tokenLifetime = Duration.minutes(15)
+const linkLifetime = Duration.minutes(15)
 
-const Claims = Schema.Struct({
-  kid: Schema.String,
-  exp: Schema.Int,
-  typ: Schema.Literal("bundle"),
-  kind: Bundle.Kind,
-  version: Bundle.Version,
-})
-
-const bundles = Database.Schema.bundle
+const folder = "bundles/"
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const database = yield* Database.Service
-    const signer = yield* Signer.Service
-    const directory = yield* Config.option(Config.String("REN_BUNDLES"))
-    // oxlint-disable-next-line ren/no-comments -- At start, the bundles this server was built with become current when they are a later build (EN29), or when this server has no file for the current one: after a rollback, machines must still get code that a running server serves.
-    const built = yield* Option.match(directory, {
-      onNone: () => Effect.succeed(Option.none<Bundle.Manifest>()),
-      onSome: (path) =>
-        Effect.promise(() => Bun.file(join(path, "manifest.json")).text()).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Bundle.Manifest))),
-          Effect.map(Option.some),
-          Effect.orDie,
-        ),
+    const config = yield* Config.all({
+      bucket: Config.option(Config.String("BUNDLE_BUCKET")),
+      region: Config.String("BUNDLE_REGION").pipe(Config.withDefault("us-east-1")),
+      endpoint: Config.option(Config.String("BUNDLE_ENDPOINT")),
+      accessKeyId: Config.option(Config.String("BUNDLE_ACCESS_KEY_ID")),
+      secretAccessKey: Config.option(Config.Redacted("BUNDLE_SECRET_ACCESS_KEY")),
     })
-    if (Option.isSome(built))
-      yield* Effect.forEach(
-        built.value.bundles,
-        (bundle) =>
-          database.db
-            .insert(bundles)
-            .values({
-              kind: bundle.kind,
-              version: bundle.version,
-              sha256: bundle.sha256,
-              built_at: DateTime.toDateUtc(built.value.builtAt),
-            })
-            .onConflictDoUpdate({
-              target: bundles.kind,
-              set: {
-                version: sql`excluded.version`,
-                sha256: sql`excluded.sha256`,
-                built_at: sql`excluded.built_at`,
-              },
-              setWhere: sql`${bundles.built_at} < excluded.built_at or ${bundles.version} not in (${sql.join(
-                built.value.bundles.map((each) => sql`${each.version}`),
-                sql`, `,
-              )})`,
-            })
-            .pipe(Effect.orDie),
-        { discard: true },
+    if (Option.isNone(config.bucket))
+      return Service.of({ current: Effect.succeedNone, downloads: () => Effect.succeed([]), host: Option.none() })
+    const bucket = config.bucket.value
+    const s3 = new S3Client({
+      region: config.region,
+      forcePathStyle: Option.isSome(config.endpoint),
+      ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
+      ...(Option.isSome(config.accessKeyId) &&
+        Option.isSome(config.secretAccessKey) && {
+          credentials: {
+            accessKeyId: config.accessKeyId.value,
+            secretAccessKey: Redacted.value(config.secretAccessKey.value),
+          },
+        }),
+    })
+    yield* Effect.addFinalizer(() => Effect.sync(() => s3.destroy()))
+    const linkOf = (key: string) =>
+      Effect.promise(() =>
+        getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: `${folder}${key}` }), {
+          expiresIn: Duration.toSeconds(linkLifetime),
+        }),
       )
-    const has = (bundle: Pick<Bundle.Info, "kind" | "version">) =>
-      Option.exists(built, (manifest) =>
-        manifest.bundles.some((each) => each.kind === bundle.kind && each.version === bundle.version),
-      )
-
     return Service.of({
-      current: Effect.fn("Bundles.current")(function* (kind: Bundle.Kind) {
-        const row = (yield* database.db.select().from(bundles).where(eq(bundles.kind, kind)).pipe(Effect.orDie)).at(0)
-        return Option.map(Option.fromNullishOr(row), (found) => ({
-          kind: found.kind,
-          version: found.version,
-          sha256: found.sha256,
-        }))
+      // oxlint-disable-next-line ren/no-comments -- No manifest yet means no deploy has published bundles. A manifest Ren cannot read is a broken deploy: the machine's start fails and is reported.
+      current: Effect.tryPromise({
+        try: () =>
+          s3
+            .send(new GetObjectCommand({ Bucket: bucket, Key: `${folder}${Bundle.manifestKey}` }))
+            .then((object) => object.Body?.transformToString() ?? ""),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.map(Option.some),
+        Effect.catchIf(
+          (cause) => cause instanceof NoSuchKey,
+          () => Effect.succeed(Option.none<string>()),
+        ),
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.succeed(Option.none<ReadonlyArray<Bundle.Info>>()),
+            onSome: (text) =>
+              Effect.map(Schema.decodeUnknownEffect(Schema.fromJsonString(Bundle.Manifest))(text), (manifest) =>
+                Option.some(manifest.bundles),
+              ),
+          }),
+        ),
+        Effect.orDie,
+        Effect.withSpan("Bundles.current"),
+      ),
+      downloads: Effect.fn("Bundles.downloads")(function* (bundles: ReadonlyArray<Bundle.Info>) {
+        return yield* Effect.forEach(bundles, (bundle) =>
+          Effect.map(linkOf(Bundle.keyOf(bundle)), (url) => ({
+            kind: bundle.kind,
+            version: bundle.version,
+            sha256: bundle.sha256,
+            url,
+            tree: Bundle.treeOf(bundles, bundle.kind),
+          })),
+        )
       }),
-      token: Effect.fn("Bundles.token")(function* (bundle: Pick<Bundle.Info, "kind" | "version">) {
-        const exp = Math.floor(((yield* Clock.currentTimeMillis) + Duration.toMillis(tokenLifetime)) / 1000)
-        return yield* signer
-          .sign("brain", { typ: "bundle", kind: bundle.kind, version: bundle.version, exp })
-          .pipe(Effect.orDie)
-      }),
-      file: Effect.fn("Bundles.file")(function* (token: string, bundle: Pick<Bundle.Info, "kind" | "version">) {
-        const keys = yield* signer.publicKeys("brain").pipe(Effect.orDie)
-        const claims = yield* Signature.verify(keys, Claims, token)
-        const isFor = Option.exists(claims, (found) => found.kind === bundle.kind && found.version === bundle.version)
-        // oxlint-disable-next-line ren/no-comments -- The machine gets a bare 404 either way; the log tells a key that this server lacks apart from a missing file.
-        const refuse = Effect.fnUntraced(function* (reason: string) {
-          yield* Effect.logWarning(`The bundle ${bundle.kind} ${bundle.version} was refused: ${reason}`)
-          return yield* new NotFound({ message: `This server has no bundle ${bundle.kind} ${bundle.version} for you` })
-        })
-        if (!isFor) return yield* refuse("the token is not valid for it")
-        if (Option.isNone(directory)) return yield* refuse("REN_BUNDLES is not set")
-        if (!has(bundle)) return yield* refuse("this server was not built with it")
-        return join(directory.value, Bundle.fileOf(bundle))
-      }),
+      host: Option.some(new URL(yield* linkOf(Bundle.manifestKey)).hostname),
     })
   }),
 )

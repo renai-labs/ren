@@ -1,87 +1,61 @@
 import { describe, expect } from "bun:test"
-import { Testing } from "@ren/db/testing"
 import { Bundle } from "@ren/schema/bundle"
-import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
-import { mkdtemp, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { ConfigProvider, Context, Effect, Layer, Option } from "effect"
 import { Bundles } from "../src/bundles.js"
-import { Signer } from "../src/signer.js"
+import { TestBundles } from "./lib/bundles.js"
 import { testEffect } from "./lib/effect.js"
 
-const key = await Effect.runPromise(Signature.generate("brain"))
+const it = testEffect(Layer.empty)
 
-const it = testEffect(Testing.layer)
-
-const info = (kind: Bundle.Kind, version: string): Bundle.Info => ({ kind, version, sha256: "0".repeat(64) })
-
-// oxlint-disable-next-line ren/no-comments -- One Ren server, built with the bundles of manifest, on the test's database.
-const server = Effect.fnUntraced(function* (manifest: Bundle.Manifest) {
-  const directory = yield* Effect.acquireRelease(
-    Effect.promise(() => mkdtemp(join(tmpdir(), "ren-bundles-"))),
-    (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
-  )
-  yield* Effect.promise(() =>
-    Bun.write(join(directory, "manifest.json"), JSON.stringify(Schema.encodeSync(Bundle.Manifest)(manifest))),
-  )
+const bundlesWith = Effect.fnUntraced(function* (config: Readonly<Record<string, string>>) {
   const context = yield* Layer.build(
-    Bundles.layer.pipe(
-      Layer.provide(Signer.layerLocal),
-      Layer.provide(
-        ConfigProvider.layer(
-          ConfigProvider.fromUnknown({
-            REN_BUNDLES: directory,
-            BRAIN_KEYS: JSON.stringify([
-              { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
-            ]),
-          }),
-        ),
-      ),
-    ),
+    Bundles.layer.pipe(Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config)))),
   )
-  return { bundles: Context.get(context, Bundles.Service), directory }
+  return Context.get(context, Bundles.Service)
 })
 
 describe("Bundles", () => {
-  it.live(
-    "a later build moves the current bundles forward; a server rolled back to an earlier build moves them to the one it has (EN29, chaos row 17)",
-    () =>
-      Effect.gen(function* () {
-        const older = {
-          builtAt: DateTime.makeUnsafe("2026-11-06T10:00:00Z"),
-          bundles: [info("brain", "aaaaaaaaaaaaaaaa")],
-        }
-        const newer = {
-          builtAt: DateTime.makeUnsafe("2026-11-06T11:00:00Z"),
-          bundles: [info("brain", "bbbbbbbbbbbbbbbb")],
-        }
-        const current = (manifest: Bundle.Manifest) =>
-          Effect.map(
-            Effect.flatMap(server(manifest), (found) => found.bundles.current("brain")),
-            Option.map((found) => found.version),
-          )
-        expect([yield* current(older), yield* current(newer), yield* current(newer), yield* current(older)]).toEqual([
-          Option.some("aaaaaaaaaaaaaaaa"),
-          Option.some("bbbbbbbbbbbbbbbb"),
-          Option.some("bbbbbbbbbbbbbbbb"),
-          Option.some("aaaaaaaaaaaaaaaa"),
-        ])
-      }),
+  it.live("a Ren with no bundle bucket has no current bundles, so its machines run the code they hold", () =>
+    Effect.gen(function* () {
+      const bundles = yield* bundlesWith({})
+      expect(yield* bundles.current).toEqual(Option.none())
+    }),
   )
 
-  it.live("a token gets the one bundle it names, from a server that has it", () =>
+  it.live("a bucket that no deploy has published to yet has no current bundles", () =>
     Effect.gen(function* () {
-      const brain = info("brain", "cccccccccccccccc")
-      const found = yield* server({ builtAt: DateTime.makeUnsafe("2026-11-06T12:00:00Z"), bundles: [brain] })
-      const token = yield* found.bundles.token(brain)
-      expect(yield* found.bundles.file(token, brain)).toBe(join(found.directory, Bundle.fileOf(brain)))
-      const other = info("executor", "cccccccccccccccc")
-      expect((yield* Effect.flip(found.bundles.file(token, other)))._tag).toBe("Bundles.NotFound")
-      expect((yield* Effect.flip(found.bundles.file(yield* found.bundles.token(other), other)))._tag).toBe(
-        "Bundles.NotFound",
-      )
-      expect((yield* Effect.flip(found.bundles.file("not a token", brain)))._tag).toBe("Bundles.NotFound")
+      const bucket = yield* TestBundles.bucket
+      const bundles = yield* bundlesWith(bucket.config)
+      expect(yield* bundles.current).toEqual(Option.none())
     }),
+  )
+
+  it.live(
+    "the current bundles are the ones the deploy published; each download link fetches its archive, with the folder it unpacks into",
+    () =>
+      Effect.gen(function* () {
+        const bucket = yield* TestBundles.bucket
+        const archives = { dependencies: "deps", brain: "brain", executor: "executor" } as const
+        const published = Bundle.kinds.map((kind, index) => ({
+          kind,
+          version: `${index}`.repeat(16),
+          sha256: new Bun.CryptoHasher("sha256").update(archives[kind]).digest("hex"),
+        }))
+        yield* Effect.forEach(published, (bundle) => bucket.put(Bundle.keyOf(bundle), archives[bundle.kind]))
+        yield* bucket.publish(published)
+        const bundles = yield* bundlesWith(bucket.config)
+        expect(yield* bundles.current).toEqual(Option.some(published))
+        const downloads = yield* bundles.downloads(published)
+        const fetched = yield* Effect.promise(() =>
+          Promise.all(downloads.map((download) => fetch(download.url).then((response) => response.text()))),
+        )
+        expect({ fetched, trees: downloads.map((download) => download.tree) }).toEqual({
+          fetched: ["deps", "brain", "executor"],
+          trees: ["0000000000000000", "1111111111111111-0000000000000000", "2222222222222222-0000000000000000"],
+        })
+        expect([...new Set(downloads.map((download) => new URL(download.url).hostname))]).toEqual(
+          Option.toArray(bundles.host),
+        )
+      }),
   )
 })

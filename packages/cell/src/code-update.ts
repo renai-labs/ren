@@ -1,14 +1,9 @@
 export * as CodeUpdate from "./code-update.js"
 
 import { BrainRejectedError } from "@ren/host-api/errors"
-import type { Bundle } from "@ren/schema/bundle"
-import { Context, Effect, FileSystem, Layer, Path, Semaphore, Stream } from "effect"
+import { Bundle } from "@ren/schema/bundle"
+import { Context, Effect, FileSystem, Layer, Path, Schema, Semaphore, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-
-// oxlint-disable-next-line ren/no-comments -- A bundle, and the token with which the machine downloads it from Ren.
-interface Download extends Bundle.Info {
-  readonly token: string
-}
 
 // oxlint-disable-next-line ren/no-comments -- A command of the machine's template, as root or as the machine's user (EN22).
 interface Step {
@@ -16,10 +11,10 @@ interface Step {
   readonly user: "root" | "user"
 }
 
-// oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake (EN22, EN27). Only a machine that runs start.sh can; any other host is replaced instead.
+// oxlint-disable-next-line ren/no-comments -- How a machine takes newer bundles of Ren's code and its template's new steps at a wake (EN22, EN27). Only a machine that runs start.js can; any other host is replaced instead.
 export interface Interface {
   readonly update: (
-    bundles: ReadonlyArray<Download>,
+    bundles: ReadonlyArray<Bundle.Download>,
     steps: ReadonlyArray<Step>,
   ) => Effect.Effect<void, BrainRejectedError>
 }
@@ -82,12 +77,8 @@ export const layerProcess = (options: {
             { discard: true },
           )
           yield* run(
-            "sh",
-            [
-              options.script,
-              "prepare",
-              bundles.map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":")).join(" "),
-            ],
+            process.execPath,
+            [options.script, "prepare", Schema.encodeSync(Bundle.Downloads)(bundles)],
             "The bundles did not unpack",
           )
           const current = yield* fs

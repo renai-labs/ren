@@ -12,6 +12,6 @@ test("the dependencies bundle contains the dependency patch referenced by the ro
   const manifest = await BundleBuild.build(BundleBuild.root, out)
   const dependencies = manifest.bundles.find((bundle) => bundle.kind === "dependencies")
   if (!dependencies) throw new Error("no dependencies bundle")
-  const listed = await Bun.$`tar -tzf ${join(out, Bundle.fileOf(dependencies))}`.text()
+  const listed = await Bun.$`tar -tzf ${join(out, Bundle.keyOf(dependencies))}`.text()
   expect(listed.split("\n")).toContain("./patches/@modelcontextprotocol%2Fclient@2.3.1.patch")
 }, 300_000)

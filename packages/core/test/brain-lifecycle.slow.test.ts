@@ -4,9 +4,10 @@ import { Database } from "@ren/db/database"
 import { eq, inArray } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
+import { Bundle } from "@ren/schema/bundle"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { DateTime, Duration, Effect, Option, Schedule, type Schema, Tracer } from "effect"
+import { DateTime, Duration, Effect, Exit, Option, Schedule, type Schema, Scope, Tracer } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -15,6 +16,7 @@ import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { BrainRuns } from "./lib/brain-runs.js"
+import { TestBundles } from "./lib/bundles.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
@@ -601,7 +603,10 @@ describe("brain runs", () => {
   test("a brain made before Ren served bundles is replaced once at its wake, with no update it cannot take, and the new one runs the current bundles", async () => {
     const spans: Array<Tracer.NativeSpan> = []
     const brainId = await runs.newBrain()
+    const scope = await Effect.runPromise(Scope.make())
+    const bucket = await Effect.runPromise(TestBundles.bucket.pipe(Scope.provide(scope)))
     const current = await runs.ren({
+      config: bucket.config,
       tracer: Tracer.make({
         span: (options) => {
           const span = new Tracer.NativeSpan(options)
@@ -613,21 +618,8 @@ describe("brain runs", () => {
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
     expect(await runs.reaches(brainId, "ready")).toMatchObject({ generation: 1, bundles: null })
     const versions = { dependencies: "1111111111111111", brain: "2222222222222222", executor: "3333333333333333" }
-    const write = (values: ReadonlyArray<typeof Database.Schema.bundle.$inferInsert>) =>
-      runs.database.runPromise(
-        Effect.gen(function* () {
-          const db = yield* Database.Service
-          yield* db.db.delete(Database.Schema.bundle)
-          if (values.length > 0) yield* db.db.insert(Database.Schema.bundle).values([...values])
-        }),
-      )
-    await write(
-      (["dependencies", "brain", "executor"] as const).map((kind) => ({
-        kind,
-        version: versions[kind],
-        sha256: "a".repeat(64),
-        built_at: new Date(),
-      })),
+    await Effect.runPromise(
+      bucket.publish(Bundle.kinds.map((kind) => ({ kind, version: versions[kind], sha256: "a".repeat(64) }))),
     )
     await runs.update(brainId, { phase: "resuming" })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
@@ -636,8 +628,8 @@ describe("brain runs", () => {
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
     expect(await runs.reaches(brainId, "ready")).toMatchObject({ generation: 2 })
     expect(spans.filter((span) => span.attributes.get("url.path") === "/ren/update")).toHaveLength(0)
-    await write([])
     await current.dispose()
+    await Effect.runPromise(Scope.close(scope, Exit.void))
   })
 
   test("a brain run that ended runs again when the brain needs it", async () => {

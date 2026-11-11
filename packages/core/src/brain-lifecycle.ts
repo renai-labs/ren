@@ -5,7 +5,7 @@ import { Database } from "@ren/db/database"
 import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
-import type { Bundle } from "@ren/schema/bundle"
+import { Bundle } from "@ren/schema/bundle"
 import { Environment } from "@ren/schema/environment"
 import type { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Signature } from "@ren/schema/signature"
@@ -243,28 +243,9 @@ export const layer = Layer.effect(
       return true
     })
 
-    // oxlint-disable-next-line ren/no-comments -- The current bundles, the dependencies first, when this Ren serves bundles; none for a host whose image or folder holds Ren's code.
-    const currentBundles = Effect.map(
-      Effect.forEach(["dependencies", "brain", "executor"] as const, code.current),
-      (found) => Option.all(found),
-    )
-    const versionsOf = (bundles: ReadonlyArray<Bundle.Info>) => {
-      const version = (kind: Bundle.Kind) => bundles.find((bundle) => bundle.kind === kind)?.version ?? ""
-      return { dependencies: version("dependencies"), brain: version("brain"), executor: version("executor") }
-    }
-    const withTokens = (bundles: ReadonlyArray<Bundle.Info>) =>
-      Effect.forEach(bundles, (bundle) =>
-        Effect.map(code.token(bundle), (token) => ({
-          kind: bundle.kind,
-          version: bundle.version,
-          sha256: bundle.sha256,
-          token,
-        })),
-      )
-    const treeOf = (versions: Readonly<Record<Bundle.Kind, string>>) => `${versions.brain}-${versions.dependencies}`
     const isCurrent = (row: Row, bundles: ReadonlyArray<Bundle.Info>) => {
-      const versions = versionsOf(bundles)
-      return (["dependencies", "brain", "executor"] as const).every((kind) => row.bundles?.[kind] === versions[kind])
+      const versions = Bundle.versionsOf(bundles)
+      return Bundle.kinds.every((kind) => row.bundles?.[kind] === versions[kind])
     }
 
     // oxlint-disable-next-line ren/no-comments -- A new brain gets its space's brain provider, else the deployment's first (EN2); an existing one keeps its own. Ren does not start when a brain runs on one it does not register (EN24).
@@ -407,7 +388,7 @@ export const layer = Layer.effect(
       publish: (row) =>
         compute.publish(row.id, { machine: "running" }).pipe(Effect.map((plan) => plan._tag === "Apply")),
       startup: Effect.fnUntraced(function* (row) {
-        const bundles = yield* currentBundles
+        const bundles = yield* code.current
         // oxlint-disable-next-line ren/no-comments -- A new machine applies the space's hand before it starts, so its first pull already has it. A brain for a remote hand runs OpenCode's tool output, files and git on the hand for the life of its process (EN13).
         const plan = yield* compute.publish(row.id, { machine: "new" })
         const isRemote = plan._tag === "Apply" && plan.hand.placement === "remote"
@@ -425,16 +406,14 @@ export const layer = Layer.effect(
           ...(yield* environments.executorVariables(Environment.ofBrain(row.id), row.generation)),
           ...(isRemote && { REN_HAND_PLACEMENT: "remote" }),
           ...(Option.isSome(bundles) && {
-            REN_BUNDLES: (yield* withTokens(bundles.value))
-              .map((bundle) => [bundle.kind, bundle.version, bundle.sha256, bundle.token].join(":"))
-              .join(" "),
+            REN_BUNDLES: Schema.encodeSync(Bundle.Downloads)(yield* code.downloads(bundles.value)),
           }),
         }
         return {
           variables,
           created: update(row.id, {
             key_ids: client.publicKeys.map((key) => key.id),
-            bundles: Option.match(bundles, { onNone: () => null, onSome: versionsOf }),
+            bundles: Option.match(bundles, { onNone: () => null, onSome: Bundle.versionsOf }),
           }),
         }
       }),
@@ -493,24 +472,24 @@ export const layer = Layer.effect(
           yield* Effect.logInfo(`Brain ${row.id} is replaced at its wake: ${plan.reason}`)
           return "replace" as const
         }
-        const bundles = yield* currentBundles
+        const bundles = yield* code.current
         if (Option.isNone(bundles)) return "current" as const
         if (!row.bundles) return "replace" as const
         return isCurrent(row, bundles.value) ? ("current" as const) : ("update" as const)
       }),
       // oxlint-disable-next-line ren/no-comments -- One call: the brain runs its template's new steps (EN22), unpacks the bundles and restarts what changed. New code counts when the brain answers with its version within the boot time (EN27).
       updateInPlace: Effect.fnUntraced(function* (row, target, steps) {
-        const bundles = Option.getOrElse(yield* currentBundles, () => [])
+        const bundles = Option.getOrElse(yield* code.current, () => [])
         const api = yield* client.brain(target)
         const sent = yield* api.brain["brain.update"]({
-          payload: { bundles: yield* withTokens(bundles), steps },
+          payload: { bundles: yield* code.downloads(bundles), steps },
         }).pipe(
           Effect.timeoutOption(steps.length > 0 ? stepsWithin : bootWithin),
           Effect.map((answered) => (Option.isSome(answered) ? Option.none() : Option.some("the brain did not answer"))),
           Effect.catch((error) => Effect.succeedSome(error.message)),
         )
         if (Option.isSome(sent) || bundles.length === 0 || isCurrent(row, bundles)) return sent
-        const tree = treeOf(versionsOf(bundles))
+        const tree = Bundle.treeOf(bundles, "brain")
         const restarted = yield* api.brain["brain.state"]().pipe(
           Effect.retry({ schedule: Schedule.spaced(MachineLifecycle.timing.poll) }),
           Effect.repeat({
@@ -521,7 +500,7 @@ export const layer = Layer.effect(
         )
         if (Option.isNone(restarted))
           return Option.some(`the brain did not answer with version ${tree} within ${Duration.format(bootWithin)}`)
-        yield* update(row.id, { bundles: versionsOf(bundles) })
+        yield* update(row.id, { bundles: Bundle.versionsOf(bundles) })
         return Option.none()
       }),
       // oxlint-disable-next-line ren/no-comments -- EN17: a brain answers only while it also reaches Ren. One that answers Ren but has not pulled within pullWithin counts as silent, so it is replaced after `silent` like one that does not answer. An older brain leaves pulledAt out.

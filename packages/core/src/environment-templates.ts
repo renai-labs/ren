@@ -168,7 +168,7 @@ export const layer = Layer.effect(
           build_status: "ready",
           image: state.image,
           image_config: row.config,
-          image_system: Option.getOrNull(Option.map(system, MachineProvider.systemOf)),
+          image_system: Option.getOrNull(system),
           build_error: null,
         })
         return
@@ -199,7 +199,7 @@ export const layer = Layer.effect(
     yield* Effect.forEach(
       registry.providers.filter((provider) => Option.isSome(provider.build)),
       (provider) => {
-        const system = provider.systemImage && MachineProvider.systemOf(provider.systemImage)
+        const system = provider.systemImage
         return database.db
           .update(table)
           .set({ build_status: "queued", config_version: sql`${table.config_version} + 1` })

@@ -9,7 +9,7 @@ import type { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
-import type { Bundle } from "@ren/schema/bundle"
+import { Bundle } from "@ren/schema/bundle"
 import type { Machine } from "@ren/schema/machine"
 import type { Space } from "@ren/schema/space"
 import {
@@ -146,10 +146,6 @@ const HandRun = DurableRunner.make("HandRun", {
 const templates = Database.Schema.environment_template
 const environments = Database.Schema.environment
 
-const versionsOf = (bundles: ReadonlyArray<Bundle.Info>) => {
-  const version = (kind: Bundle.Kind) => bundles.find((bundle) => bundle.kind === kind)?.version ?? ""
-  return { dependencies: version("dependencies"), executor: version("executor") }
-}
 const sessions = Database.Schema.session_environment
 const spaces = Database.Schema.space
 
@@ -330,9 +326,14 @@ export const layer = Layer.effect(
     }
 
     // oxlint-disable-next-line ren/no-comments -- A hand runs the executor only: it gets the dependencies and the executor bundles, none when this Ren serves no bundles.
-    const currentBundles = Effect.map(Effect.forEach(["dependencies", "executor"] as const, code.current), (found) =>
-      Option.all(found),
+    const currentBundles = Effect.map(
+      code.current,
+      Option.map((bundles) => bundles.filter((bundle) => bundle.kind !== "brain")),
     )
+    const versionsOf = (bundles: ReadonlyArray<Bundle.Info>) => {
+      const versions = Bundle.versionsOf(bundles)
+      return { dependencies: versions.dependencies, executor: versions.executor }
+    }
 
     const find = (environmentId: Environment.ID) =>
       database.db
@@ -464,9 +465,7 @@ export const layer = Layer.effect(
           REN_HAND: "1",
           ...Option.match(renUrl, { onNone: () => ({}), onSome: (url) => ({ REN_URL: url }) }),
           ...(Option.isSome(bundles) && {
-            REN_BUNDLES: (yield* Effect.forEach(bundles.value, (bundle) =>
-              Effect.map(code.token(bundle), (token) => [bundle.kind, bundle.version, bundle.sha256, token].join(":")),
-            )).join(" "),
+            REN_BUNDLES: Schema.encodeSync(Bundle.Downloads)(yield* code.downloads(bundles.value)),
           }),
         }
         return {

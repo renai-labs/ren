@@ -1,23 +1,19 @@
 export * as BundleBuild from "./bundle.js"
 
 import { Bundle } from "@ren/schema/bundle"
-import { DateTime, Schema } from "effect"
+import { Schema } from "effect"
 import { createHash } from "node:crypto"
 import { mkdir, mkdtemp, readdir, readlink, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
+import { Entrypoints } from "./entrypoints.js"
 
 export const root = join(import.meta.dir, "../../..")
 
 // oxlint-disable-next-line ren/no-comments -- Follows imports at any depth. A file that no entry point imports never reaches the image, so its change never rebuilds the template.
-export const entrypoints = {
-  brain: "packages/cell/src/bun.ts",
-  executor: "packages/executor/src/main.ts",
-} as const
-
 export const sources = async (
   repository: string,
-  files: ReadonlyArray<string> = [entrypoints.brain, entrypoints.executor],
+  files: ReadonlyArray<string> = [Entrypoints.brain, Entrypoints.executor],
 ) => {
   const build = await Bun.build({
     entrypoints: files.map((file) => join(repository, file)),
@@ -64,7 +60,8 @@ const copy = (repository: string, tree: string, files: ReadonlyArray<string>) =>
   )
 
 const archive = async (tree: string, out: string, kind: Bundle.Kind, version: string) => {
-  const file = join(out, Bundle.fileOf({ kind, version }))
+  const file = join(out, Bundle.keyOf({ kind, version }))
+  await mkdir(dirname(file), { recursive: true })
   await Bun.$`tar -czf ${file} -C ${tree} .`.quiet()
   const sha256 = createHash("sha256")
     .update(await Bun.file(file).bytes())
@@ -91,7 +88,7 @@ const versionOf = async (tree: string) =>
     ),
   )
 
-// oxlint-disable-next-line ren/no-comments -- Builds the three bundles into out, with manifest.json. The dependencies are the install for the machines' platform, with the manifests that the brain and the executor read at run time only, so their version changes only when what the machines run changes, not with each lockfile change (bun.lock changed 92 times in 30 days). A machine copies the dependencies' tree and unpacks a source bundle into the copy.
+// oxlint-disable-next-line ren/no-comments -- Builds the three bundles into out as the deploy stores them under the bucket's bundles/ folder, with current.json. The dependencies are the install for the machines' platform, with the manifests that the brain and the executor read at run time only, so their version changes only when what the machines run changes, not with each lockfile change (bun.lock changed 92 times in 30 days). A machine copies the dependencies' tree and unpacks a source bundle into the copy.
 export const build = async (repository: string, out: string) => {
   await mkdir(out, { recursive: true })
   const work = await mkdtemp(join(tmpdir(), "ren-bundles-"))
@@ -112,8 +109,8 @@ export const build = async (repository: string, out: string) => {
     .cwd(dependencies)
     .quiet()
   const files = {
-    brain: await sources(repository, [entrypoints.brain]),
-    executor: await sources(repository, [entrypoints.executor]),
+    brain: await sources(repository, [Entrypoints.brain]),
+    executor: await sources(repository, [Entrypoints.executor]),
   }
   const used = new Set([...files.brain, ...files.executor].map((file) => file.split("/").slice(0, 2).join("/")))
   await Promise.all(
@@ -139,8 +136,8 @@ export const build = async (repository: string, out: string) => {
     await sourcesOf("executor"),
   ]
   await rm(work, { recursive: true, force: true })
-  const manifest = Schema.encodeSync(Bundle.Manifest)({ builtAt: DateTime.nowUnsafe(), bundles })
-  await Bun.write(join(out, "manifest.json"), JSON.stringify(manifest, null, 2))
+  const manifest = Schema.encodeSync(Bundle.Manifest)({ bundles })
+  await Bun.write(join(out, Bundle.manifestKey), JSON.stringify(manifest, null, 2))
   return manifest
 }
 
