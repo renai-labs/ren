@@ -14,6 +14,7 @@ import type { PromptInputBoot } from "./prompt-input.js"
 import { pickModel } from "../../components/model-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
+import { useModels } from "../../lib/use-models.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useComposerSuggestions } from "./use-composer-suggestions.js"
@@ -168,7 +169,8 @@ export function useChat(
   const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
   const models = ChatReact.useModels(root)
-  const modelList = AsyncResult.isSuccess(models) ? models.value : []
+  const catalog = useModels(root)
+  const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
   const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
@@ -257,7 +259,7 @@ export function useChat(
     files: { sessionId: root, spaceId, update: kept.update },
     suggest: suggestions.suggest,
     models: modelList,
-    modelsLoading: AsyncResult.isInitial(models),
+    modelsLoading: AsyncResult.isInitial(models) && catalog.loading,
     model,
     ...capabilitiesOf(info),
     chooseModel: (next: SessionModel.Ref) => {

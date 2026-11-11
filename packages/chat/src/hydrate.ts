@@ -130,6 +130,7 @@ export const messages = (state: ChatState.State, sessionID: string, page: Sessio
     partial: settled.partial.has(sessionID)
       ? new Set([...settled.partial].filter((id) => id !== sessionID))
       : settled.partial,
+    loaded: settled.loaded.has(sessionID) ? settled.loaded : new Set([...settled.loaded, sessionID]),
   }
 }
 

@@ -24,12 +24,43 @@ function MessageScroller({ className, ...props }: React.ComponentProps<typeof Me
   )
 }
 
+function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>) {
+  React.useEffect(() => {
+    const element = viewport.current
+    const content = element?.querySelector("[data-slot=message-scroller-content]")
+    if (!element || !content || typeof ResizeObserver === "undefined") return
+    const gap = () => element.scrollHeight - element.scrollTop - element.clientHeight
+    const state = { atEnd: gap() <= 1 }
+    const onScroll = () => {
+      state.atEnd = gap() <= 1
+    }
+    const observer = new ResizeObserver(() => {
+      const spacer = element.querySelector<HTMLElement>("[data-message-scroller-spacer]")
+      if (state.atEnd && (!spacer || spacer.hidden) && gap() > 1) element.scrollTop = element.scrollHeight
+    })
+    element.addEventListener("scroll", onScroll, { passive: true })
+    observer.observe(content)
+    return () => {
+      observer.disconnect()
+      element.removeEventListener("scroll", onScroll)
+    }
+  }, [viewport])
+}
+
 function MessageScrollerViewport({
   className,
+  ref,
   ...props
 }: React.ComponentProps<typeof MessageScrollerPrimitive.Viewport>) {
+  const viewport = React.useRef<HTMLDivElement | null>(null)
+  usePinnedEnd(viewport)
   return (
     <MessageScrollerPrimitive.Viewport
+      ref={(element: HTMLDivElement | null) => {
+        viewport.current = element
+        if (typeof ref === "function") ref(element)
+        else if (ref) ref.current = element
+      }}
       data-slot="message-scroller-viewport"
       className={cn(
         "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain contain-content data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent data-pending-scroll:invisible",
