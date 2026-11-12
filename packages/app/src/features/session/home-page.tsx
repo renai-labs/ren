@@ -1,7 +1,7 @@
 import { PromptInput } from "./prompt-input.js"
 import { Logomark } from "../../icons/logomark.js"
 import { ModelPicker, pickModel } from "../../components/model-picker.js"
-import { WorkingIn } from "./working-in.js"
+import { WorkingIn } from "../../components/working-in.js"
 import { RepositoriesPicker } from "./repositories-picker.js"
 import { useState } from "react"
 import { Composer } from "@ren/chat"

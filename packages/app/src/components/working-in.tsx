@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { IconChevronDown, IconCube } from "@tabler/icons-react"
+import { cn } from "cn"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -12,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { MenuSearch } from "../../components/menu-search.js"
+import { MenuSearch } from "./menu-search.js"
 
 const isPersonal = (space: SpaceInfo) => space.kind === "private"
 
@@ -20,6 +21,9 @@ export function WorkingIn(props: {
   spaces: ReadonlyArray<SpaceInfo>
   spaceId: string | undefined
   disabled?: boolean | undefined
+  side?: "top" | "bottom" | undefined
+  label?: string | null | undefined
+  className?: string | undefined
   onChange: (spaceId: string) => void
 }) {
   const [query, setQuery] = useState("")
@@ -47,17 +51,20 @@ export function WorkingIn(props: {
         render={
           <Button
             variant="ghost"
-            className="ml-1 self-start px-1 font-normal text-muted-foreground aria-expanded:bg-transparent"
+            className={cn(
+              "ml-1 self-start px-1 font-normal text-muted-foreground aria-expanded:bg-transparent",
+              props.className,
+            )}
             aria-label={`Destination: ${spaceName(props.spaceId)}`}
           />
         }
       >
-        Working in
+        {props.label === null ? null : (props.label ?? "Working in")}
         <IconCube />
         <span className="text-foreground">{spaceName(props.spaceId)}</span>
         <IconChevronDown />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-72">
+      <DropdownMenuContent side={props.side ?? "top"} align="start" className="w-72">
         <MenuSearch value={query} onChange={setQuery} placeholder="Search spaces…" />
         {groups.length === 0 ? (
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">No spaces match “{query.trim()}”</p>

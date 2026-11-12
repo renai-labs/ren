@@ -1,6 +1,6 @@
 export * as Automations from "./automations.js"
 
-import type { ScheduleInfo, ScheduleWhen, WebhookInfo } from "@ren/client"
+import type { ScheduleInfo, ScheduleRunStatus, ScheduleWhen, WebhookInfo, WebhookRequestOutcome } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { Cron, Option, Result, Schema } from "effect"
 import { cadenceOf, describe, whenOf, type Cadence, type Frequency } from "./schedules.js"
@@ -256,3 +256,29 @@ export const nextRuns = (cadence: Cadence, count: number, now: number): Readonly
   }
   return runs
 }
+
+export type Tone = "done" | "working" | "failed" | "waiting" | "quiet"
+
+const outcomeTones: Readonly<Record<WebhookRequestOutcome, Tone>> = {
+  queued: "waiting",
+  started: "done",
+  continued: "done",
+  answered: "done",
+  failed: "failed",
+  rejected: "failed",
+  recorded: "quiet",
+  throttled: "quiet",
+  ignored: "quiet",
+  duplicate: "quiet",
+}
+
+export const outcomeTone = (outcome: WebhookRequestOutcome) => outcomeTones[outcome]
+
+const runTones: Readonly<Record<ScheduleRunStatus, Tone>> = {
+  pending: "waiting",
+  started: "done",
+  skipped: "quiet",
+  failed: "failed",
+}
+
+export const runTone = (status: ScheduleRunStatus) => runTones[status]

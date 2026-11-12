@@ -235,6 +235,7 @@ export interface Run {
   readonly trigger: string
   readonly at: string
   readonly status: string
+  readonly tone: Automations.Tone
   readonly sessionId: string | null
 }
 
@@ -243,6 +244,7 @@ const scheduleRunOf = (run: ScheduleRunInfo): Run => ({
   trigger: run.trigger === "manual" ? "Test run" : "Schedule",
   at: run.startedAt ?? run.scheduledAt,
   status: run.reason ? `Skipped · ${run.reason.replaceAll("_", " ")}` : scheduleStatus[run.status],
+  tone: Automations.runTone(run.status),
   sessionId: run.sessionId,
 })
 
@@ -251,6 +253,7 @@ const requestRunOf = (request: WebhookRequestInfo): Run => ({
   trigger: "Webhook",
   at: request.receivedAt,
   status: Webhooks.outcomes[request.outcome].label,
+  tone: Automations.outcomeTone(request.outcome),
   sessionId: request.sessionId,
 })
 

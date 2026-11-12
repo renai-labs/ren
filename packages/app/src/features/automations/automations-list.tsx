@@ -24,6 +24,7 @@ import { sessionTitle } from "../../lib/sessions.js"
 import { useAutomationActions, useAutomations, useRuns } from "../../lib/use-automations.js"
 import { useNow } from "../../lib/use-now.js"
 import { useSpaces } from "../../lib/use-spaces.js"
+import { RunStatus } from "./run-status.js"
 
 const runsPageSize = 25
 
@@ -209,7 +210,11 @@ function RunRow(props: { run: SessionInfo; scoped: boolean; spaceName: string; n
       <TableCell className="text-muted-foreground">{run.origin === "webhook" ? "Webhook" : "Schedule"}</TableCell>
       {props.scoped ? null : <TableCell className="text-muted-foreground">{props.spaceName}</TableCell>}
       <TableCell className="text-muted-foreground">{formatRelative(run.createdAt, props.now)}</TableCell>
-      <TableCell className="text-muted-foreground">{run.status === "busy" ? "Working" : "Done"}</TableCell>
+      <TableCell>
+        <RunStatus tone={run.status === "busy" ? "working" : "done"}>
+          {run.status === "busy" ? "Working" : "Done"}
+        </RunStatus>
+      </TableCell>
     </TableRow>
   )
 }

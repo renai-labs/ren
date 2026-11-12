@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { IconAlertTriangle, IconCode, IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
-import { cn } from "cn"
+import { IconAlertTriangle, IconArrowUpRight, IconCode, IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import {
@@ -14,27 +13,24 @@ import {
 } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
-import { Separator } from "@ren/ui/separator"
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Loading } from "@ren/ui/loading"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
-import { Tabs, TabsContent } from "@ren/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { formatRelative, localTimeZone } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
-import { PageTabsList, PageTabsTrigger, Section, TableCard, TableSample, useShapeId } from "../../components/page.js"
+import { Section, TableCard, TableSample, useShapeId } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Automations, type Automation, type Draft } from "../../lib/automations.js"
 import { useAutomationActions, useAutomationRuns, useAutomations, type Run } from "../../lib/use-automations.js"
-import { useMe } from "../../lib/use-me.js"
-import { useMembers } from "../../lib/use-members.js"
 import { useNow } from "../../lib/use-now.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Webhooks } from "../../lib/webhooks.js"
 import { AgentSelect } from "../../components/agent-select.js"
+import { WorkingIn } from "../../components/working-in.js"
+import { RunStatus } from "./run-status.js"
 import { AddTrigger, ScheduleTrigger, TriggerList, TriggerWarning, WebhookTrigger } from "./triggers.js"
 
 export type EditorTab = "settings" | "runs"
@@ -52,27 +48,6 @@ function ListLink(props: { scope: Scope; children: React.ReactNode }) {
       </BreadcrumbLink>
     )
   return <BreadcrumbLink render={<Link to="/automations" />}>{props.children}</BreadcrumbLink>
-}
-
-function SpaceChoice(props: { value: string; onChange: (spaceId: string) => void }) {
-  const spaces = useSpaces().joined
-  const items = spaces.map((space) => ({ value: space.id, label: space.name }))
-  return (
-    <Select items={items} value={props.value} onValueChange={(value) => props.onChange(String(value))}>
-      <SelectTrigger size="sm" aria-label="Space" className="border-0 bg-transparent px-2 dark:bg-transparent">
-        <SelectValue placeholder="Choose a space" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  )
 }
 
 function RunHistory(props: { automation: Automation | undefined }) {
@@ -114,7 +89,9 @@ function RunRow(props: { run: Run; now: number }) {
     <TableRow>
       <TableCell>{run.trigger}</TableCell>
       <TableCell className="text-muted-foreground">{formatRelative(run.at, props.now)}</TableCell>
-      <TableCell className="text-muted-foreground">{run.status}</TableCell>
+      <TableCell>
+        <RunStatus tone={run.tone}>{run.status}</RunStatus>
+      </TableCell>
       <TableCell className="text-right">
         {run.sessionId ? (
           <Link to="/sessions/$sessionId" params={{ sessionId: run.sessionId }} className="text-sm">
@@ -207,6 +184,7 @@ function EditorHeader(props: {
   scope: Scope
   automation: Automation | undefined
   changed: boolean
+  runs: boolean
   onSave: () => void
   onCancel: () => void
   onOpen: (saved: { readonly spaceId: string; readonly slug: string }) => void
@@ -224,8 +202,22 @@ function EditorHeader(props: {
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage className="max-w-64 truncate">{props.name}</BreadcrumbPage>
+            {props.runs ? (
+              <BreadcrumbLink render={<Link to="." search={{}} />} className="max-w-64 truncate">
+                {props.name}
+              </BreadcrumbLink>
+            ) : (
+              <BreadcrumbPage className="max-w-64 truncate">{props.name}</BreadcrumbPage>
+            )}
           </BreadcrumbItem>
+          {props.runs ? (
+            <>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Runs</BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          ) : null}
         </BreadcrumbList>
       </Breadcrumb>
       {props.changed ? (
@@ -277,37 +269,25 @@ function EditorHeader(props: {
   )
 }
 
-function EditorMeta(props: {
+function SpaceRow(props: {
   draft: Draft
   automation: Automation | undefined
   onChange: (patch: Partial<Draft>) => void
 }) {
-  const members = useMembers()
   const spaces = useSpaces()
-  const me = useMe()
   const automation = props.automation
-  const owner = automation ? (members.member(automation.ownerId)?.name ?? "Someone") : me.user.name
   return (
-    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-      <label className="flex items-center gap-2">
-        <Switch
-          checked={props.draft.active}
-          onCheckedChange={(active) => props.onChange({ active })}
-          aria-label="Active"
-        />
-        <span className={cn(props.draft.active && "text-foreground")}>
-          {props.draft.active ? "Active" : "Inactive"}
-        </span>
-      </label>
-      <Separator orientation="vertical" className="h-4 self-center" />
-      <SpaceChoice
-        value={props.draft.spaceId}
+    <>
+      <WorkingIn
+        spaces={spaces.joined}
+        spaceId={props.draft.spaceId}
+        side="bottom"
+        label={null}
+        className="ml-0 px-0 hover:bg-transparent dark:hover:bg-transparent"
         onChange={(spaceId) => props.onChange({ spaceId, agent: Webhooks.defaultAgent })}
       />
-      <Separator orientation="vertical" className="h-4 self-center" />
-      <span>By {owner}</span>
       {automation && props.draft.spaceId !== automation.spaceId ? (
-        <Alert className="basis-full">
+        <Alert>
           <IconAlertTriangle />
           <AlertDescription>
             Saving moves it to {spaces.spaceName(props.draft.spaceId)}.
@@ -315,7 +295,7 @@ function EditorMeta(props: {
           </AlertDescription>
         </Alert>
       ) : null}
-    </div>
+    </>
   )
 }
 
@@ -363,34 +343,37 @@ function Editor(props: {
         scope={props.scope}
         automation={automation}
         changed={changed}
+        runs={props.tab === "runs"}
         onSave={save}
         onCancel={() => (automation ? setDraft(initial) : void toList())}
         onOpen={(saved) => void open(saved)}
         onDeleted={() => void toList()}
       />
       <div className="mx-auto flex w-full max-w-200 flex-1 flex-col gap-6 px-6 pt-16 pb-12">
-        <div className="flex flex-col gap-3">
-          <Input
-            aria-label="Name"
-            placeholder="Untitled"
-            value={draft.name}
-            onChange={(event) => change({ name: event.target.value })}
-            className="h-auto border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent"
-          />
-          <EditorMeta draft={draft} automation={automation} onChange={change} />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <Input
+              aria-label="Name"
+              placeholder="Untitled"
+              value={draft.name}
+              onChange={(event) => change({ name: event.target.value })}
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent"
+            />
+            {automation && props.tab !== "runs" ? (
+              <Button variant="ghost" className="text-muted-foreground" onClick={() => props.onTab("runs")}>
+                Runs
+                <IconArrowUpRight data-icon="inline-end" />
+              </Button>
+            ) : null}
+            <Switch checked={draft.active} onCheckedChange={(active) => change({ active })} aria-label="Active" />
+          </div>
+          <SpaceRow draft={draft} automation={automation} onChange={change} />
         </div>
-        <Tabs value={props.tab} onValueChange={(tab) => props.onTab(tab === "runs" ? "runs" : "settings")}>
-          <PageTabsList>
-            <PageTabsTrigger value="settings">Settings</PageTabsTrigger>
-            <PageTabsTrigger value="runs">Run history</PageTabsTrigger>
-          </PageTabsList>
-          <TabsContent value="settings" className="pt-6">
-            <Settings draft={draft} automation={automation} onChange={change} />
-          </TabsContent>
-          <TabsContent value="runs" className="pt-6">
-            <RunHistory automation={automation} />
-          </TabsContent>
-        </Tabs>
+        {props.tab === "runs" ? (
+          <RunHistory automation={automation} />
+        ) : (
+          <Settings draft={draft} automation={automation} onChange={change} />
+        )}
       </div>
     </div>
   )
