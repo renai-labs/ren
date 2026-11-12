@@ -158,16 +158,20 @@ const firstText = (blockquote: MarkdownNode) => {
   return paragraph && text?.type === "text" ? { paragraph, text } : null
 }
 
+const stripMarker = (blockquote: MarkdownNode, first: NonNullable<ReturnType<typeof firstText>>, length: number) => {
+  first.text.value = (first.text.value ?? "").slice(length)
+  if (first.text.value === "") first.paragraph.children?.shift()
+  if (first.paragraph.children?.length === 0 && blockquote.children)
+    blockquote.children = blockquote.children.filter((child) => child !== first.paragraph)
+}
+
 const calloutKind = (blockquote: MarkdownNode) => {
   const first = firstText(blockquote)
   const marker = calloutMarker.exec(first?.text.value ?? "")
   if (!first || !marker) return null
   const only = first.paragraph.children?.length === 1
   if (!marker[0].endsWith("\n") && !only) return null
-  first.text.value = (first.text.value ?? "").slice(marker[0].length)
-  if (first.text.value === "") first.paragraph.children?.shift()
-  if (first.paragraph.children?.length === 0 && blockquote.children)
-    blockquote.children = blockquote.children.filter((child) => child !== first.paragraph)
+  stripMarker(blockquote, first, marker[0].length)
   return marker[1]?.toLowerCase() ?? null
 }
 
