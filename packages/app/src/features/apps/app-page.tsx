@@ -3,17 +3,10 @@ import { IconArrowRight, IconMessagePlus, IconPlus } from "@tabler/icons-react"
 import { Composer, Mentions } from "@ren/chat"
 import { AppMention } from "@ren/ui/app-mention"
 import { Button } from "@ren/ui/button"
-import { cn } from "cn"
+import type { AppRegistryInfo } from "@ren/client"
+import { Loading } from "@ren/ui/loading"
 import { useQuery } from "@tanstack/react-query"
-import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@ren/ui/breadcrumb"
+import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,12 +15,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { AddToSpace, type Added } from "../../components/add-to-space.js"
-import { AppIcon } from "../../components/app-icon.js"
+import { AddToSpace } from "../../components/add-to-space.js"
+import { AppDetailFrame, AppDetailSample, AppDetailsSample, AppHeader } from "../../components/app-detail.js"
 import { AccountList, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { PageSkeleton, pageWidths } from "../../components/page.js"
+import { useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { useAddedProfile } from "./use-catalog.js"
 import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
@@ -35,6 +29,7 @@ import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { audience, connectLabel, fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Seed } from "../../lib/seed.js"
 
 const route = getRouteApi("/_authed/_shell/apps/$appId/")
 
@@ -198,100 +193,73 @@ function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => 
   )
 }
 
-function AppsBreadcrumb(props: { name: string }) {
-  return (
-    <div className="flex h-12 shrink-0 items-center px-3 pt-2 max-md:pl-11">
-      <Breadcrumb className="flex h-8 items-center rounded-lg border bg-sidebar px-3">
-        <BreadcrumbList className="gap-2">
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link to="/apps" />}>Apps</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator className="text-muted-foreground">/</BreadcrumbSeparator>
-          <BreadcrumbItem>
-            <BreadcrumbPage>{props.name}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-    </div>
-  )
-}
-
-function AppDetail(props: { app: CatalogApp }) {
+function AppDetail(props: { app: CatalogApp; loading: boolean }) {
   const app = props.app
-  const spaces = useSpaces()
   const connected = useConnectedSpaces(app)
   const start = useStartChat(app)
-  const [profile, setProfile] = useState<ProfileTarget>()
-  const added: Added = (added) =>
-    setProfile({
-      appId: added.app.id,
-      profileId: added.profileId,
-      from: {
-        spaceId: added.space.id,
-        name: added.space.name,
-        members: spaces.space(added.space.id)?.memberCount ?? 1,
-      },
-    })
+  const profile = useAddedProfile()
+  const [editing, setEditing] = useState<ProfileTarget>()
+  const headerShape = useShapeId("app-header")
+  const detailsShape = useShapeId("app-details")
   const first = connected.at(0)
   const body = app.listing?.body
   return (
-    <div className="flex flex-1 flex-col">
-      <AppsBreadcrumb name={app.name} />
-      <div className={cn("mx-auto flex w-full flex-1 flex-col gap-10 px-6 pt-8 pb-12", pageWidths.column)}>
-        <header className="flex items-center justify-between gap-6 max-sm:flex-col max-sm:items-start">
-          <div className="flex min-w-0 items-center gap-4">
-            <AppIcon
-              name={app.name}
-              description={app.description}
-              icon={app.icon}
-              className="size-16 rounded-2xl shadow-sm ring-1 ring-border"
-            />
-            <div className="flex min-w-0 flex-col gap-1">
-              <h1 className="text-2xl font-medium tracking-tight">{app.name}</h1>
-              <p className="text-sm/6 text-muted-foreground">{app.description}</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {connected.length > 0 ? (
+    <AppDetailFrame name={app.name}>
+      <Loading id={headerShape} loading={false} label="Loading app">
+        <AppHeader
+          name={app.name}
+          description={app.description}
+          icon={app.icon}
+          actions={
+            connected.length > 0 ? (
               <>
                 <StartChat spaces={connected} onStart={(spaceId) => start(spaceId)} />
-                <AddToSpace app={app} onAdded={added} />
+                <AddToSpace app={app} onAdded={profile.added} />
               </>
             ) : (
-              <AddToSpace app={app} primary onAdded={added} />
-            )}
+              <AddToSpace app={app} primary onAdded={profile.added} />
+            )
+          }
+        />
+      </Loading>
+      <Loading id={detailsShape} loading={props.loading} label="Loading app details">
+        {props.loading ? (
+          <AppDetailsSample />
+        ) : (
+          <div className="flex flex-col gap-10">
+            <ExamplePrompts app={app} onStart={first ? (prompt) => start(first.id, prompt) : undefined} />
+            {body && body !== app.description ? (
+              <p className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</p>
+            ) : null}
+            <AppAccounts appId={app.id} onProfile={setEditing} />
+            <AppSections app={app} />
           </div>
-        </header>
-        <ExamplePrompts app={app} onStart={first ? (prompt) => start(first.id, prompt) : undefined} />
-        {body && body !== app.description ? (
-          <p className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</p>
-        ) : null}
-        <AppAccounts appId={app.id} onProfile={setProfile} />
-        <AppSections app={app} />
-        {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
-      </div>
-    </div>
+        )}
+      </Loading>
+      {profile.dialog}
+      {editing ? <ProfileDialog {...editing} onClose={() => setEditing(undefined)} /> : null}
+    </AppDetailFrame>
   )
 }
 
 export function AppPage() {
   const appId = route.useParams().appId
-  const { api } = RouterContext.useRouterContext()
+  const { api, queryClient } = RouterContext.useRouterContext()
   const found = useApp(appId)
-  const registry = useQuery({ ...api["app-registry"].get.queryOptions({ idOrSlug: appId }), retry: false })
-  const listed = registry.data ? fromRegistry(registry.data) : undefined
-  const app =
-    found.app && listed && !found.app.listing ? { ...found.app, listing: listed.listing } : (found.app ?? listed)
-  if (!app && (found.pending || registry.isPending)) return <PageSkeleton title="Loading app" />
+  const registry = useQuery({
+    ...api["app-registry"].get.queryOptions({ idOrSlug: appId }),
+    ...Seed.fromList<AppRegistryInfo>(queryClient, [api["app-registry"].list.queryKey().slice(0, 1)], appId),
+    retry: false,
+  })
+  const listed = registry.data && fromRegistry(registry.data)
+  const app = found.app ? { ...found.app, listing: listed?.listing ?? found.app.listing } : listed
+  if (!app && (found.pending || registry.isPending)) return <AppDetailSample />
   if (!app)
     return (
-      <div className="flex flex-1 flex-col">
-        <AppsBreadcrumb name="Not found" />
-        <div className={cn("mx-auto flex w-full flex-1 flex-col gap-10 px-6 pt-8 pb-12", pageWidths.column)}>
-          <h1 className="text-2xl font-medium tracking-tight">App not found</h1>
-          <EmptyState>This app does not exist or was removed.</EmptyState>
-        </div>
-      </div>
+      <AppDetailFrame name="Not found">
+        <h1 className="text-2xl font-medium tracking-tight">App not found</h1>
+        <EmptyState>This app does not exist or was removed.</EmptyState>
+      </AppDetailFrame>
     )
-  return <AppDetail app={app} />
+  return <AppDetail app={app} loading={found.pending || (app.source === "registry" && registry.isPending)} />
 }
