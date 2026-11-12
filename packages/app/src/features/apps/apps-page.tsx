@@ -4,12 +4,11 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
 import { Loading } from "@ren/ui/loading"
 import { Tabs } from "@ren/ui/tabs"
-import type { Added } from "../../components/add-to-space.js"
 import { AppListingSample, AppSection } from "../../components/app-list.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
-import { fromApp, fromRegistry, isSpaceApp } from "../../lib/apps.js"
+import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -17,7 +16,7 @@ import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { AppCategories } from "./app-categories.js"
 import { CatalogAppRow, CatalogList } from "./catalog.js"
-import { useAddedProfile, useRegistryApps } from "./use-catalog.js"
+import { useAddSheet, useRegistryApps } from "./use-catalog.js"
 import { CategoryPage } from "./category-page.js"
 
 const route = getRouteApi("/_authed/_shell/apps/")
@@ -49,7 +48,13 @@ function useOwnApps(options: { connected: boolean }) {
   }
 }
 
-function OwnApps(props: { connected: boolean; title: string; empty: string; query: string; onAdded: Added }) {
+function OwnApps(props: {
+  connected: boolean
+  title: string
+  empty: string
+  query: string
+  onAdd: (app: CatalogApp) => void
+}) {
   const shapeId = useShapeId(props.title)
   const own = useOwnApps({ connected: props.connected })
   const shown = own.apps.filter((app) => Search.matches(props.query, app.name, app.description))
@@ -68,14 +73,14 @@ function OwnApps(props: { connected: boolean; title: string; empty: string; quer
           more={own.more}
           onMore={own.onMore}
           fetching={own.fetching}
-          onAdded={props.onAdded}
+          onAdd={props.onAdd}
         />
       )}
     </Loading>
   )
 }
 
-function AppResults(props: { title: string; query: string; needle: string; onAdded: Added }) {
+function AppResults(props: { title: string; query: string; needle: string; onAdd: (app: CatalogApp) => void }) {
   const { client } = RouterContext.useRouterContext()
   const shapeId = useShapeId("results")
   const registry = useInfiniteQuery({
@@ -104,14 +109,14 @@ function AppResults(props: { title: string; query: string; needle: string; onAdd
             if (!registry.isFetchingNextPage) void registry.fetchNextPage()
           }}
           fetching={registry.isFetchingNextPage}
-          onAdded={props.onAdded}
+          onAdd={props.onAdd}
         />
       )}
     </Loading>
   )
 }
 
-function FeaturedApps(props: { onAdded: Added }) {
+function FeaturedApps(props: { onAdd: (app: CatalogApp) => void }) {
   const shapeId = useShapeId("featured")
   const registry = useRegistryApps(AppCategories.featured)
   const sections = AppCategories.list
@@ -121,7 +126,7 @@ function FeaturedApps(props: { onAdded: Added }) {
     }))
     .filter((section) => section.apps.length > 0)
   if (!registry.pending && sections.length === 0)
-    return <AppResults title="All apps" query="" needle="" onAdded={props.onAdded} />
+    return <AppResults title="All apps" query="" needle="" onAdd={props.onAdd} />
   return (
     <Loading id={shapeId} loading={registry.pending} label="Loading apps">
       <div className="flex flex-col gap-10">
@@ -149,7 +154,7 @@ function FeaturedApps(props: { onAdded: Added }) {
                 }
               >
                 {section.apps.map((app) => (
-                  <CatalogAppRow key={app.id} app={app} onAdded={props.onAdded} />
+                  <CatalogAppRow key={app.id} app={app} onAdd={props.onAdd} />
                 ))}
               </AppSection>
             ))}
@@ -163,7 +168,7 @@ function AppsHome() {
   const navigate = route.useNavigate()
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
-  const profile = useAddedProfile()
+  const sheet = useAddSheet()
   return (
     <Page
       title="Apps"
@@ -186,23 +191,21 @@ function AppsHome() {
           <PageTabsTrigger value="installed">Installed</PageTabsTrigger>
         </PageTabsList>
       </Tabs>
-      {tab === "all" && needle ? (
-        <AppResults title="All apps" query={query} needle={needle} onAdded={profile.added} />
-      ) : null}
-      {tab === "all" && !needle ? <FeaturedApps onAdded={profile.added} /> : null}
+      {tab === "all" && needle ? <AppResults title="All apps" query={query} needle={needle} onAdd={sheet.add} /> : null}
+      {tab === "all" && !needle ? <FeaturedApps onAdd={sheet.add} /> : null}
       {tab === "organization" ? (
         <OwnApps
           connected={false}
           title="Made in your organization"
           empty="No apps made in your organization yet"
           query={query}
-          onAdded={profile.added}
+          onAdd={sheet.add}
         />
       ) : null}
       {tab === "installed" ? (
-        <OwnApps connected title="Installed" empty="No apps installed yet" query={query} onAdded={profile.added} />
+        <OwnApps connected title="Installed" empty="No apps installed yet" query={query} onAdd={sheet.add} />
       ) : null}
-      {profile.dialog}
+      {sheet.dialog}
     </Page>
   )
 }

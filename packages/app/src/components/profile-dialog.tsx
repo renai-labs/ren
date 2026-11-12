@@ -1,8 +1,9 @@
 import { SkeletonRows } from "./page.js"
 import { useState, type ReactNode } from "react"
-import type { AppProfileInfo, AppProfileItem } from "@ren/client"
+import type { AppProfileInfo, AppProfileItem, SpaceInfo } from "@ren/client"
 import { Credential } from "@ren/schema/credential"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import {
   IconAlertTriangle,
@@ -10,32 +11,65 @@ import {
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
+  IconCopy,
   IconCube,
+  IconDots,
   IconLock,
   IconSearch,
+  IconTrash,
 } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia } from "@ren/ui/empty"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+} from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
+import { RadioGroup, RadioGroupItem } from "@ren/ui/radio-group"
 import { Spinner } from "@ren/ui/spinner"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Switch } from "@ren/ui/switch"
 import { AccountAccess } from "./account-actions.js"
 import { AppIcon } from "./app-icon.js"
-import { SpacePills } from "./app-list.js"
+import { AccountList, SpacePills, StatusDot } from "./app-list.js"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { Row, Rows } from "./page.js"
+import { Platform } from "../platform/platform.js"
 import { useApp, useApps } from "../lib/use-app.js"
 import { useAppProfiles } from "../lib/use-app-profiles.js"
+import { useMembers } from "../lib/use-members.js"
 import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { useMe } from "../lib/use-me.js"
 import { errorMessage } from "../lib/errors.js"
-import { gaps, reachedSpaces, signsIn, slugOf, type CatalogApp } from "../lib/apps.js"
+import { plural } from "../lib/format.js"
+import {
+  gaps,
+  listsSpace,
+  reachedSpaces,
+  signsIn,
+  slugOf,
+  statusLabel,
+  statusOf,
+  type CatalogApp,
+  type Status,
+} from "../lib/apps.js"
 import { Search } from "../lib/search.js"
 import { cn } from "cn"
 import { useScrollEdges } from "../lib/use-scroll-edges.js"
@@ -44,6 +78,7 @@ import { RouterContext } from "../lib/router-context.js"
 type App = CatalogApp
 type AppProfile = AppProfileInfo
 type From = { spaceId: string; name: string; members: number; private?: boolean }
+type Mode = "resolve" | "reuse" | "fresh"
 
 export type ProfileTarget = {
   appId: string
@@ -51,6 +86,8 @@ export type ProfileTarget = {
   from?: From | undefined
   edit?: boolean | undefined
   existing?: boolean | undefined
+  newAccount?: boolean | undefined
+  chooseSpace?: boolean | undefined
 }
 
 const freeSlug = (name: string, taken: ReadonlySet<string>) => {
@@ -86,43 +123,87 @@ function defaultName(input: {
 const slideIn = "animate-in duration-250 ease-out fade-in-0 slide-in-from-right-4 motion-reduce:slide-in-from-right-0"
 const slideBack = "animate-in duration-250 ease-out fade-in-0 slide-in-from-left-4 motion-reduce:slide-in-from-left-0"
 
-function stepMotion(input: { fresh: boolean; creating: boolean; step: string; back: boolean }) {
-  return cn(
-    ((input.fresh && !input.creating) || input.step === "connection") && slideIn,
-    input.step === "edit" && input.back && slideBack,
-  )
-}
+const slides = { none: undefined, in: slideIn, back: slideBack }
 
-function stepOf(input: { creating: boolean; existing: boolean; edit: boolean; section: "edit" | "connection" }) {
+function stepOf(input: {
+  profileId: string | undefined
+  existing: boolean
+  edit: boolean
+  section: "edit" | "connection"
+  from: From | undefined
+  chooseSpace: boolean
+}) {
   if (input.existing) return "existing"
-  if (input.creating) return "create"
-  return input.edit ? input.section : "connect"
+  if (input.profileId) return input.edit ? input.section : "connect"
+  if (input.from) return "add"
+  return input.chooseSpace ? "spaces" : "create"
 }
 
 export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const found = useApp(props.appId)
   const [profileId, setProfileId] = useState(props.profileId)
+  const [edit, setEdit] = useState(() => Boolean(props.edit))
+  const [from, setFrom] = useState(props.from)
+  const [mode, setMode] = useState<Mode>(() => (props.newAccount ? "fresh" : "resolve"))
   const [waiting, setWaiting] = useState(false)
   const [replacing, setReplacing] = useState(false)
   const [section, setSection] = useState<"edit" | "connection">("edit")
-  const [back, setBack] = useState(false)
+  const [motion, setMotion] = useState<keyof typeof slides>("none")
+  const signIn = useSignIn(() => setWaiting(true))
   const profile = useQuery({
     ...api["app-profile"].get.queryOptions({ idOrSlug: profileId ?? "" }),
     enabled: Boolean(profileId),
     refetchOnWindowFocus: "always",
     refetchInterval: waiting ? 2000 : false,
   })
-  const app = found.app
-  if (!app && !found.pending) return null
-  const creating = !profileId
-  const fresh = !props.profileId
-  const step = stepOf({ creating, existing: Boolean(props.existing), edit: Boolean(props.edit), section })
-  const go = (next: "edit" | "connection") => {
-    setBack(next === "edit")
+  if (!found.app && !found.pending) return null
+  const step = stepOf({
+    profileId,
+    existing: Boolean(props.existing),
+    edit,
+    section,
+    from,
+    chooseSpace: Boolean(props.chooseSpace),
+  })
+  const adding = from !== undefined && !props.profileId && !props.existing
+  const move = (direction: "in" | "back", change: () => void) => {
+    setMotion(direction)
     setReplacing(false)
-    setSection(next)
+    change()
   }
+  const go = (next: "edit" | "connection") => move(next === "edit" ? "back" : "in", () => setSection(next))
+  const toMode = (next: Mode, direction: "in" | "back") =>
+    move(direction, () => {
+      setProfileId(undefined)
+      setEdit(false)
+      setSection("edit")
+      setWaiting(false)
+      setMode(next)
+    })
+  const begin = (next: AppProfile, tab?: Window | null) => {
+    const only = next.items.length === 1 ? next.items.at(0) : undefined
+    if (gaps(next).length === 0) {
+      tab?.close()
+      toMode("resolve", "in")
+      return
+    }
+    move("in", () => {
+      setProfileId(next.id)
+      setEdit(false)
+      setSection("edit")
+    })
+    if (only && signsIn(only) && only.status !== "ok" && next.oauthApps.every((gate) => gate.isConfigured))
+      signIn.start(next.id, only, tab)
+    else tab?.close()
+  }
+  const back = (() => {
+    if (step === "connection") return () => go("edit")
+    if ((step === "connect" || step === "edit") && adding) return () => toMode("resolve", "back")
+    if (step === "add" && mode !== "resolve" && !props.newAccount) return () => toMode("resolve", "back")
+    if (step === "add" && props.chooseSpace) return () => move("back", () => setFrom(props.from))
+    return null
+  })()
   return (
     <Dialog
       open
@@ -131,81 +212,125 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
       }}
     >
       <DialogContent // ast-grep-ignore: require-overlay-title -- each step renders its DialogTitle through Screen
-        className="flex h-[min(--spacing(148),calc(100dvh-(--spacing(8))))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        showCloseButton={false}
+        className="flex h-[calc(100dvh-(--spacing(8)))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
-        {fresh && step !== "existing" ? (
-          <span className="absolute top-4.5 left-5 text-xs text-muted-foreground tabular-nums">
-            Step {creating ? 1 : 2} of 2
-          </span>
-        ) : null}
-        {step === "connection" ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute top-3 left-3 z-10 text-muted-foreground"
-            onClick={() => go("edit")}
-          >
+        {back ? (
+          <Button variant="ghost" size="sm" className="absolute top-3 left-3 z-10 text-muted-foreground" onClick={back}>
             <IconChevronLeft data-icon="inline-start" />
             Back
           </Button>
         ) : null}
-        <div key={step} className={cn("flex min-h-0 flex-1 flex-col", stepMotion({ fresh, creating, step, back }))}>
-          {app ? (
-            <ProfileStep
-              app={app}
-              profile={profile.data}
-              step={step}
-              from={props.from}
-              replacing={replacing}
-              waiting={waiting}
-              onCreated={(created) => setProfileId(created.id)}
-              onConnection={() => go("connection")}
-              onClose={props.onClose}
-              onDone={props.edit ? () => go("edit") : props.onClose}
-              onReplace={() => setReplacing(true)}
-              onSaved={() => setReplacing(false)}
-              onWaiting={() => setWaiting(true)}
-            />
-          ) : (
-            <Screen app={{ name: "", icon: null }} title="Loading app" description="" action={null}>
-              <SkeletonRows count={2} label="Loading app" />
-            </Screen>
-          )}
+        <div key={[step, mode, from?.spaceId].join("-")} className={cn("flex min-h-0 flex-1 flex-col", slides[motion])}>
+          <ProfileStep
+            app={found.app}
+            profile={profile.data}
+            step={step}
+            from={from}
+            mode={mode}
+            replacing={replacing}
+            waiting={waiting}
+            onBegin={begin}
+            onMode={(next) => toMode(next, "in")}
+            onSpace={(space) => move("in", () => setFrom(space))}
+            onOpen={(id) =>
+              move("in", () => {
+                setProfileId(id)
+                setEdit(true)
+                setSection("edit")
+              })
+            }
+            onCreated={(created) => move("in", () => setProfileId(created.id))}
+            onConnection={() => go("connection")}
+            onClose={props.onClose}
+            onDone={edit ? () => go("edit") : props.onClose}
+            onSaved={adding ? () => toMode("resolve", "back") : props.onClose}
+            onReplace={() => setReplacing(true)}
+            onReplaced={() => setReplacing(false)}
+            onWaiting={() => setWaiting(true)}
+          />
         </div>
       </DialogContent>
     </Dialog>
   )
 }
 
-function ProfileStep(props: {
+type StepProps = {
   app: App
   profile: AppProfile | undefined
   step: ReturnType<typeof stepOf>
   from: From | undefined
+  mode: Mode
   replacing: boolean
   waiting: boolean
+  onBegin: (profile: AppProfile, tab?: Window | null) => void
+  onMode: (mode: Mode) => void
+  onSpace: (space: From) => void
+  onOpen: (profileId: string) => void
   onCreated: (profile: AppProfile) => void
   onConnection: () => void
   onClose: () => void
   onDone: () => void
-  onReplace: () => void
   onSaved: () => void
+  onReplace: () => void
+  onReplaced: () => void
   onWaiting: () => void
-}) {
+}
+
+function ProfileStep(props: Omit<StepProps, "app"> & { app: App | undefined }) {
+  const app = props.app
+  const from = props.from
+  if (!app)
+    return (
+      <Screen app={{ name: "", icon: null }} title="Loading app" description="" action={null}>
+        <SkeletonRows count={2} label="Loading app" />
+      </Screen>
+    )
+  if (props.step === "existing" && from) return <ExistingStep app={app} from={from} onDone={props.onClose} />
+  if (props.step === "spaces") return <SpacesStep app={app} onPick={props.onSpace} onClose={props.onClose} />
+  if (props.step === "create") return <CreateStep app={app} onCreated={props.onCreated} />
+  if (props.step === "add" && from)
+    return (
+      <AddStep
+        app={app}
+        from={from}
+        mode={props.mode}
+        known={undefined}
+        onBegin={props.onBegin}
+        onMode={props.onMode}
+        onOpen={props.onOpen}
+        onClose={props.onClose}
+      />
+    )
+  return <AccountStep {...props} app={app} />
+}
+
+function AccountStep(props: StepProps) {
   const app = props.app
   const profile = props.profile
-  if (props.step === "existing" && props.from)
-    return <ExistingStep app={app} from={props.from} onDone={props.onClose} />
-  if (props.step === "create") return <CreateStep app={app} from={props.from} onCreated={props.onCreated} />
   if (props.step === "edit" && profile)
-    return <EditStep app={app} profile={profile} onConnection={props.onConnection} onDone={props.onClose} />
+    return <EditStep app={app} profile={profile} onConnection={props.onConnection} onDone={props.onSaved} />
   if (!profile)
     return (
       <Screen app={app} title={app.name} description={app.description} action={null}>
         <SkeletonRows count={2} label="Loading account" />
       </Screen>
     )
-  if (profile.items.every((item) => item.optional || item.status === "ok") && !props.replacing)
+  const connected = profile.items.every((item) => item.optional || item.status === "ok") && !props.replacing
+  if (connected && props.from && props.step === "connect")
+    return (
+      <AddStep
+        app={app}
+        from={props.from}
+        mode="resolve"
+        known={profile}
+        onBegin={props.onBegin}
+        onMode={props.onMode}
+        onOpen={props.onOpen}
+        onClose={props.onClose}
+      />
+    )
+  if (connected)
     return (
       <Connected
         app={app}
@@ -220,30 +345,509 @@ function ProfileStep(props: {
       app={app}
       profile={profile}
       waiting={props.waiting}
-      onSaved={props.onSaved}
+      onSaved={props.onReplaced}
       onWaiting={props.onWaiting}
       onDone={props.onDone}
     />
   )
 }
 
+function StatusLine(props: { status: Status; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <StatusDot status={props.status} />
+      {props.children}
+    </span>
+  )
+}
+
+type Target = From & { slug: string; private: boolean }
+
+type StateProps = {
+  app: App
+  from: Target
+  title: string
+  status: Status
+  here: ReadonlyArray<AppProfile>
+  onBegin: (profile: AppProfile, tab?: Window | null) => void
+  onMode: (mode: Mode) => void
+  onOpen: (profileId: string) => void
+  onClose: () => void
+}
+
+const primary = "h-10 w-full"
+const secondary = "h-10 w-full text-muted-foreground"
+
+const targetOf = (from: From, space: SpaceInfo | undefined): Target => ({
+  ...from,
+  slug: space?.slug ?? from.spaceId,
+  members: space?.memberCount ?? from.members,
+  private: space?.kind === "private",
+})
+
+const hasManaged = (app: App) => Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed")
+
+function AddStep(props: {
+  app: App
+  from: From
+  mode: Mode
+  known: AppProfile | undefined
+  onBegin: (profile: AppProfile, tab?: Window | null) => void
+  onMode: (mode: Mode) => void
+  onOpen: (profileId: string) => void
+  onClose: () => void
+}) {
+  const me = useMe().user.id
+  const space = useSpaces().space(props.from.spaceId)
+  const listed = useAppProfiles([props.app.id])
+  const app = props.app
+  const known = props.known
+  const from = targetOf(props.from, space)
+  const others = listed.of(app.id).filter((each) => each.id !== known?.id)
+  const profiles = known ? [...others, known] : others
+  const reaches = (profile: AppProfile) =>
+    profile.kind === "private" ? from.private && profile.userId === me : listsSpace(profile, from.spaceId)
+  const usable = (profile: AppProfile) =>
+    profile.kind === "private"
+      ? profile.userId === me && !from.private
+      : profile.canAdd.includes(from.private ? "ownPrivate" : "joined")
+  const here = profiles.filter(reaches)
+  const elsewhere = profiles.filter((profile) => !reaches(profile) && gaps(profile).length === 0)
+  const options = elsewhere.filter(usable)
+  const locked = elsewhere.find((profile) => !usable(profile))
+  const credits = here.find((profile) => statusOf(app, [profile]) === "credits")
+  const state: StateProps = {
+    app,
+    from,
+    title: here.length > 0 ? `${app.name} in ${from.name}` : `Add ${app.name} to ${from.name}`,
+    status: statusOf(app, here),
+    here,
+    onBegin: props.onBegin,
+    onMode: props.onMode,
+    onOpen: props.onOpen,
+    onClose: props.onClose,
+  }
+  const spare = here.find((profile) => gaps(profile).length > 0)
+  if (listed.pending)
+    return (
+      <Screen app={app} title={state.title} description="Loading accounts" action={null}>
+        <SkeletonRows count={2} label="Loading accounts" />
+      </Screen>
+    )
+  if (props.mode === "fresh")
+    return (
+      <NewStep
+        {...state}
+        title={`Add ${app.name} to ${from.name}`}
+        others={profiles}
+        reuse={undefined}
+        start="connect"
+      />
+    )
+  if (props.mode === "reuse") return <NewStep {...state} others={profiles} reuse={spare} start="connect" />
+  if (here.some((profile) => gaps(profile).length === 0)) return <WorkingState {...state} />
+  if (options.length > 0) return <ExistingState {...state} options={options} />
+  if (credits) return <CreditsState {...state} credits={credits} />
+  if (locked) return <LockedState {...state} locked={locked} />
+  return (
+    <NewStep
+      {...state}
+      others={profiles}
+      reuse={spare}
+      start={here.length === 0 && hasManaged(app) ? "add" : "connect"}
+    />
+  )
+}
+
+function SpaceAccounts(props: StateProps) {
+  return (
+    <div className="w-full text-left">
+      <AccountList
+        title="Accounts"
+        app={props.app}
+        profiles={props.here}
+        onOpen={(profile) => props.onOpen(profile.id)}
+      />
+    </div>
+  )
+}
+
+function WorkingState(props: StateProps) {
+  const holder = props.here
+    .filter((profile) => gaps(profile).length === 0)
+    .flatMap((profile) => profile.items)
+    .find((item) => item.holder)?.holder
+  return (
+    <Screen
+      app={props.app}
+      title={props.title}
+      description={<StatusLine status="connected">{holder ? `Connected as ${holder.name}` : "Connected"}</StatusLine>}
+      onSubmit={props.onClose}
+      action={
+        <>
+          <Button type="submit" className={primary}>
+            Done
+          </Button>
+          <Button type="button" variant="ghost" className={secondary} onClick={() => props.onMode("fresh")}>
+            Add another account
+          </Button>
+        </>
+      }
+    >
+      <SpaceAccounts {...props} />
+    </Screen>
+  )
+}
+
+function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> }) {
+  const [picked, setPicked] = useState<string>()
+  const [confirming, setConfirming] = useState(false)
+  const { api } = RouterContext.useRouterContext()
+  const access = useMutation(api["app-profile"].access.mutationOptions())
+  const promote = useMutation(api["app-profile"].promote.mutationOptions())
+  const from = props.from
+  const pending = access.isPending || promote.isPending
+  const addHere = (profile: AppProfile) =>
+    void (
+      profile.kind === "private"
+        ? promote.mutateAsync({ id: profile.id, spaceId: from.spaceId })
+        : access.mutateAsync({ id: profile.id, add: [from.spaceId] })
+    ).then(
+      () => toast.success(`${profile.name} is now in ${from.name}`),
+      (error: unknown) =>
+        toast.error(`Couldn’t use ${profile.name} in ${from.name}`, { description: errorMessage(error) }),
+    )
+  const choice = props.options.find((profile) => profile.id === picked) ?? props.options.at(0)
+  if (!choice) return null
+  const button = (
+    <Button type="submit" className={primary} disabled={pending}>
+      {pending ? <Spinner data-icon="inline-start" /> : null}
+      Use in {from.name}
+    </Button>
+  )
+  if (confirming)
+    return (
+      <Screen
+        app={props.app}
+        title={`Use ${choice.name} in ${from.name}?`}
+        description={`Everyone in ${from.name} (${plural(from.members, "person", "people")}) can then use it. ${staysIn(choice)}`}
+        onSubmit={() => addHere(choice)}
+        action={
+          <>
+            {button}
+            <Button type="button" variant="ghost" className={secondary} onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </>
+        }
+      />
+    )
+  return (
+    <Screen
+      app={props.app}
+      title={props.title}
+      description={<StatusLine status={props.status}>{statusLabel[props.status]}</StatusLine>}
+      onSubmit={() => {
+        if (!from.private && from.members > 1) setConfirming(true)
+        else addHere(choice)
+      }}
+      action={
+        <>
+          {button}
+          <Button type="button" variant="ghost" className={secondary} onClick={() => props.onMode("reuse")}>
+            Connect new
+          </Button>
+        </>
+      }
+    >
+      <FieldSet className="w-full text-left">
+        <FieldLegend variant="label">You can use an existing {props.app.name} account</FieldLegend>
+        <RadioGroup
+          value={choice.id}
+          onValueChange={(value) => {
+            if (typeof value === "string") setPicked(value)
+          }}
+          className="gap-0 divide-y overflow-hidden rounded-lg border bg-card"
+        >
+          {props.options.map((profile) => (
+            <FieldLabel
+              key={profile.id}
+              htmlFor={`use-${profile.id}`}
+              className="flex min-h-14 items-center gap-3 px-3 py-2 font-normal"
+            >
+              <RadioGroupItem id={`use-${profile.id}`} value={profile.id} />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate text-sm">{profile.name}</span>
+                <span className="flex flex-wrap gap-1">
+                  <SpacePills profile={profile} />
+                </span>
+              </span>
+            </FieldLabel>
+          ))}
+        </RadioGroup>
+      </FieldSet>
+    </Screen>
+  )
+}
+
+function staysIn(profile: AppProfile) {
+  if (profile.kind === "private") return "It stops being only yours."
+  const spaces = reachedSpaces(profile)
+  return spaces.length > 0 ? `It stays in ${spaces.join(", ")}.` : ""
+}
+
+function CreditsState(props: StateProps & { credits: AppProfile }) {
+  return (
+    <Screen
+      app={props.app}
+      title={props.title}
+      description={<StatusLine status="credits">Works on Ren credits</StatusLine>}
+      onSubmit={props.onClose}
+      action={
+        <>
+          <Button type="submit" className={primary}>
+            Done
+          </Button>
+          <Button type="button" variant="ghost" className={secondary} onClick={() => props.onBegin(props.credits)}>
+            Connect my own
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-balance text-muted-foreground">
+        Connect your own {props.app.name} account to use your plan in place of Ren credits.
+      </p>
+      <SpaceAccounts {...props} />
+    </Screen>
+  )
+}
+
+function askWho(profile: AppProfile, owner: string | undefined) {
+  if (!owner) return "an admin"
+  return profile.kind === "private" ? owner : `${owner} or an admin`
+}
+
+function LockedState(props: StateProps & { locked: AppProfile }) {
+  const platform = Platform.usePlatform()
+  const locked = props.locked
+  const from = props.from
+  const owner = useMembers().member(locked.kind === "private" ? locked.userId : locked.createdBy)?.name
+  const who = askWho(locked, owner)
+  const write = platform.writeClipboardText
+  const where = locked.kind === "private" ? "private" : `in ${reachedSpaces(locked).join(", ") || "no space"}`
+  const link = `${platform.appUrl}/apps/${props.app.slug}?${new URLSearchParams({ account: locked.slug, space: from.slug }).toString()}`
+  return (
+    <Screen
+      app={props.app}
+      title={props.title}
+      description={<StatusLine status={props.status}>{statusLabel[props.status]}</StatusLine>}
+      onSubmit={() => props.onMode("reuse")}
+      action={
+        <Button type="submit" className={primary}>
+          Connect my own
+        </Button>
+      }
+    >
+      <div className="flex w-full flex-col gap-6">
+        <p className="text-sm text-balance">
+          {owner ? `${owner}’s` : "An"} account “{locked.name}” is {where}. Only {who} can add it to {from.name}.
+        </p>
+        {write ? (
+          <Button
+            type="button"
+            variant="outline"
+            className={primary}
+            onClick={() =>
+              void write(
+                `Can you add your ${props.app.name} account “${locked.name}” to ${from.name} in Ren?\n${link}`,
+              ).then(
+                () => toast.success("Share link copied", { description: `Send it to ${who}.` }),
+                (error: unknown) => toast.error("Couldn’t copy the link", { description: errorMessage(error) }),
+              )
+            }
+          >
+            <IconCopy data-icon="inline-start" />
+            Copy share link
+          </Button>
+        ) : null}
+        <FieldSeparator>or</FieldSeparator>
+      </div>
+    </Screen>
+  )
+}
+
+const signsInFirst = (app: App, reuse: AppProfile | undefined) => {
+  if (reuse) return reuse.items.length === 1 && reuse.items.some(signsIn)
+  return Object.values(app.mcps ?? {}).some(
+    (mcp) => mcp.transport.type !== "managed" && (mcp.auth.type === "oauth" || mcp.transport.type === "provider"),
+  )
+}
+
+function NewStep(
+  props: StateProps & {
+    reuse: AppProfile | undefined
+    others: ReadonlyArray<AppProfile>
+    start: "add" | "connect"
+  },
+) {
+  const { api } = RouterContext.useRouterContext()
+  const platform = Platform.usePlatform()
+  const user = useMe().user.name
+  const create = useMutation(api["app-profile"].create.mutationOptions())
+  const update = useMutation(api["app-profile"].update.mutationOptions())
+  const [name, setName] = useState<string>()
+  const app = props.app
+  const from = props.from
+  const reuse = props.reuse
+  const accountName =
+    name ??
+    reuse?.name ??
+    defaultName({ from, only: from.private, picked: new Set(), spaces: [], others: props.others, app, user })
+  const status = statusOf(
+    app,
+    props.here.filter((profile) => profile.id === reuse?.id),
+  )
+  const pending = create.isPending || update.isPending
+  const error = create.error ?? update.error
+  const opensSignIn = props.start === "connect" && signsInFirst(app, reuse)
+  const popup = () => platform.blankPopup?.() ?? platform.blankTab?.() ?? null
+  const submit = () => {
+    const trimmed = accountName.trim()
+    if (!trimmed || pending) return
+    if (reuse?.name === trimmed) return props.onBegin(reuse)
+    const tab = opensSignIn ? popup() : null
+    const after = {
+      onSuccess: (profile: AppProfile) => {
+        if (props.start === "connect") props.onBegin(profile, tab)
+      },
+      onError: () => tab?.close(),
+    }
+    if (reuse) return update.mutate({ id: reuse.id, name: trimmed }, after)
+    create.mutate(
+      {
+        appId: app.id,
+        name: trimmed,
+        slug: freeSlug(trimmed, new Set(props.others.map((each) => each.slug))),
+        kind: from.private ? "private" : "shared",
+        ...(!from.private && { spaceIds: [from.spaceId] }),
+      },
+      after,
+    )
+  }
+  return (
+    <Screen
+      app={app}
+      title={props.title}
+      description={<StatusLine status={status}>{statusLabel[status]}</StatusLine>}
+      onSubmit={submit}
+      action={
+        <>
+          {error ? <FieldError className="text-center">{errorMessage(error)}</FieldError> : null}
+          <Button type="submit" className={primary} disabled={pending || !accountName.trim()}>
+            {pending ? <Spinner data-icon="inline-start" /> : null}
+            {props.start === "add" ? `Add to ${from.name}` : "Connect"}
+          </Button>
+          <Button type="button" variant="ghost" className={secondary} onClick={props.onClose}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      <Field className="w-full text-left">
+        <FieldLabel htmlFor="profile-name">Account name</FieldLabel>
+        <Input id="profile-name" required value={accountName} onChange={(event) => setName(event.target.value)} />
+        <FieldDescription>
+          {from.private ? "Only you can use this account." : `Everyone in ${from.name} can use this account.`}
+        </FieldDescription>
+      </Field>
+    </Screen>
+  )
+}
+
+function SpacesStep(props: { app: App; onPick: (space: From) => void; onClose: () => void }) {
+  const navigate = useNavigate()
+  const me = useMe().user.id
+  const joined = useSpaces().joined
+  const profiles = useAppProfiles([props.app.id])
+  const app = props.app
+  const added = (space: (typeof joined)[number]) =>
+    profiles
+      .of(app.id)
+      .some((profile) =>
+        profile.kind === "private" ? space.kind === "private" && profile.userId === me : listsSpace(profile, space.id),
+      )
+  return (
+    <Screen
+      app={app}
+      title={`Add ${app.name} to a space`}
+      description={`Pick a space. Everyone in it can use ${app.name}.`}
+      action={null}
+    >
+      {profiles.pending ? (
+        <SkeletonRows count={3} label="Loading spaces" />
+      ) : (
+        <div className="flex w-full flex-col divide-y overflow-hidden rounded-lg border bg-card text-left">
+          {joined.map((space) => {
+            const isAdded = added(space)
+            return (
+              <Button
+                key={space.id}
+                type="button"
+                variant="ghost"
+                className="group/row h-12 shrink-0 justify-start gap-3 rounded-none px-3 font-normal active:not-aria-[haspopup]:scale-100"
+                onClick={() => {
+                  if (!isAdded)
+                    return props.onPick({
+                      spaceId: space.id,
+                      name: space.name,
+                      members: space.memberCount,
+                      private: space.kind === "private",
+                    })
+                  props.onClose()
+                  void navigate({ to: "/spaces/$spaceId/apps", params: { spaceId: space.id }, search: { app: app.id } })
+                }}
+              >
+                {space.kind === "private" ? (
+                  <IconLock className="text-muted-foreground" />
+                ) : (
+                  <IconCube className="text-muted-foreground" />
+                )}
+                <span className="min-w-0 flex-1 truncate text-left">{space.name}</span>
+                {isAdded ? (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <IconCheck className="text-chart-2" />
+                    Added
+                  </span>
+                ) : null}
+                <IconChevronRight className="text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
+              </Button>
+            )
+          })}
+        </div>
+      )}
+    </Screen>
+  )
+}
+
 function Screen(props: {
   app: Pick<App, "name" | "icon">
   title: string
-  description: string
+  description?: ReactNode
   children?: ReactNode
   action: ReactNode
+  menu?: ReactNode
   note?: ReactNode
   onSubmit?: () => void
 }) {
   return (
     <form
-      className="flex min-h-0 flex-1 flex-col"
+      className="relative flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
         props.onSubmit?.()
       }}
     >
+      {props.menu}
       <Empty className="min-h-0 justify-start gap-8 overflow-y-auto overscroll-contain px-10 pt-14 pb-6">
         <EmptyHeader className="max-w-xs gap-3">
           <EmptyMedia className="mb-3">
@@ -254,7 +858,9 @@ function Screen(props: {
             />
           </EmptyMedia>
           <DialogTitle className="text-2xl/8 font-semibold tracking-heading">{props.title}</DialogTitle>
-          <DialogDescription className="text-balance">{props.description}</DialogDescription>
+          {props.description ? (
+            <DialogDescription className="text-balance">{props.description}</DialogDescription>
+          ) : null}
         </EmptyHeader>
         {props.children ? <EmptyContent className="max-w-sm gap-4">{props.children}</EmptyContent> : null}
       </Empty>
@@ -412,7 +1018,6 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
     <Screen
       app={props.app}
       title={`Edit ${props.app.name} account`}
-      description={connectionLabel(profile)}
       onSubmit={edit.submit}
       action={
         <>
@@ -421,9 +1026,9 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
             {edit.pending ? <Spinner data-icon="inline-start" /> : null}
             Save
           </Button>
-          <DeleteAccount profile={profile} onDeleted={props.onDone} />
         </>
       }
+      menu={<AccountMenu profile={profile} onDeleted={props.onDone} />}
     >
       <FieldGroup className="w-full gap-6">
         {profile.items.length > 0 ? <ConnectionField profile={profile} onConnection={props.onConnection} /> : null}
@@ -446,7 +1051,7 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
   )
 }
 
-function DeleteAccount(props: { profile: AppProfile; onDeleted: () => void }) {
+function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const remove = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
   const [confirming, setConfirming] = useState(false)
@@ -454,14 +1059,29 @@ function DeleteAccount(props: { profile: AppProfile; onDeleted: () => void }) {
   const used = reachedSpaces(profile)
   return (
     <>
-      <Button
-        type="button"
-        variant="ghost"
-        className="h-10 w-full text-destructive hover:text-destructive"
-        onClick={() => setConfirming(true)}
-      >
-        Delete account
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`More for ${profile.name}`}
+              className="absolute top-3 right-3 z-10 text-muted-foreground"
+            />
+          }
+        >
+          <IconDots />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuGroup>
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
+              <IconTrash />
+              Delete account
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -658,31 +1278,22 @@ function ExistingStep(props: { app: App; from: From; onDone: () => void }) {
   )
 }
 
-function createDescription(from: From | undefined) {
-  if (!from) return "You’ll connect it next."
-  if (from.private) return "Only you can use it. You’ll connect it next."
-  return `For everyone in ${from.name}. You’ll connect it next.`
-}
-
-function CreateStep(props: { app: App; from: From | undefined; onCreated: (profile: AppProfile) => void }) {
+function CreateStep(props: { app: App; onCreated: (profile: AppProfile) => void }) {
   const { api } = RouterContext.useRouterContext()
   const others = useAppProfiles([props.app.id]).of(props.app.id)
   const user = useMe().user.name
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const create = useMutation({ ...api["app-profile"].create.mutationOptions() })
   const [name, setName] = useState<string>()
-  const [only, setOnly] = useState(props.from?.private === true)
-  const [picked, setPicked] = useState<ReadonlySet<string>>(
-    () => new Set(props.from ? [props.from.spaceId] : spaces.slice(0, 1).map((space) => space.id)),
-  )
-  const from = props.from
-  const blocked = !from && !only && picked.size === 0
-  const accountName = name ?? defaultName({ from, only, picked, spaces, others, app: props.app, user })
+  const [only, setOnly] = useState(false)
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(spaces.slice(0, 1).map((space) => space.id)))
+  const blocked = !only && picked.size === 0
+  const accountName = name ?? defaultName({ from: undefined, only, picked, spaces, others, app: props.app, user })
   return (
     <Screen
       app={props.app}
       title={`New ${props.app.name} account`}
-      description={createDescription(from)}
+      description="You’ll connect it next."
       onSubmit={() => {
         if (blocked || !accountName.trim()) return
         create.mutate(
@@ -711,18 +1322,16 @@ function CreateStep(props: { app: App; from: From | undefined; onCreated: (profi
           <FieldLabel htmlFor="profile-name">Name</FieldLabel>
           <Input id="profile-name" value={accountName} onChange={(event) => setName(event.target.value)} />
         </Field>
-        {from ? null : (
-          <SpacesField
-            spaces={spaces}
-            picked={picked}
-            only={only}
-            onPick={(next) => {
-              setOnly(false)
-              setPicked(next)
-            }}
-            onOnly={setOnly}
-          />
-        )}
+        <SpacesField
+          spaces={spaces}
+          picked={picked}
+          only={only}
+          onPick={(next) => {
+            setOnly(false)
+            setPicked(next)
+          }}
+          onOnly={setOnly}
+        />
       </FieldGroup>
     </Screen>
   )
@@ -743,14 +1352,26 @@ function ConnectStep(props: {
   const [key, setKey] = useState("")
   const oauthItem = profile.items.find(signsIn)
   const keyItem = profile.items.find((item) => !signsIn(item))
-  const screen = { app: props.app, title: props.app.name, description: props.app.description }
+  const status = statusOf(props.app, [profile])
+  const screen = {
+    app: props.app,
+    title: props.app.name,
+    description: <StatusLine status={status}>{statusLabel[status]}</StatusLine>,
+  }
+  const required = profile.items.filter((item) => !item.optional)
+  const done = required.filter((item) => item.status === "ok").length
   if (profile.items.length > 1)
     return (
       <Screen
         {...screen}
+        description={
+          <StatusLine status={status}>
+            {done} of {required.length} done
+          </StatusLine>
+        }
         onSubmit={props.onDone}
         action={
-          <Button type="submit" className="h-10 w-full">
+          <Button type="submit" className="h-10 w-full" disabled={done < required.length}>
             Done
           </Button>
         }
@@ -762,6 +1383,7 @@ function ConnectStep(props: {
     return (
       <Screen
         {...screen}
+        description={`Sign in in the ${props.app.name} window, then come back here.`}
         onSubmit={() => signIn.start(profile.id, oauthItem)}
         action={
           <Button type="submit" variant="ghost" className="h-10 w-full text-muted-foreground">
@@ -854,6 +1476,7 @@ function ItemRows(props: { app: App; profile: AppProfile; waiting: boolean; onWa
 }
 
 function Gates(props: { profile: AppProfile }) {
+  const write = Platform.usePlatform().writeClipboardText
   const missing = props.profile.oauthApps.filter((gate) => !gate.isConfigured)
   if (missing.length === 0) return null
   return (
@@ -861,7 +1484,25 @@ function Gates(props: { profile: AppProfile }) {
       {missing.map((gate) => (
         <Alert key={gate.name} className="text-left">
           <IconAlertTriangle className="text-chart-3" />
-          <AlertDescription>Set up the org OAuth app “{gate.name}” before you sign in.</AlertDescription>
+          <AlertDescription className="flex flex-col items-start gap-2">
+            “{gate.name}” sign-in is not set up for your organization. Ask an admin to set it up.
+            {write ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void write(`Can you set up the “${gate.name}” sign-in for our organization in Ren?`).then(
+                    () => toast.success("Message copied"),
+                    (error: unknown) => toast.error("Couldn’t copy the message", { description: errorMessage(error) }),
+                  )
+                }
+              >
+                <IconCopy data-icon="inline-start" />
+                Copy message
+              </Button>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ))}
     </>

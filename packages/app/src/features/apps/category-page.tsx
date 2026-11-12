@@ -11,7 +11,7 @@ import { Search } from "../../lib/search.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { AppCategories } from "./app-categories.js"
 import { AppGridSample, CatalogList } from "./catalog.js"
-import { useAddedProfile, useRegistryApps } from "./use-catalog.js"
+import { useAddSheet, useRegistryApps } from "./use-catalog.js"
 
 export function CategoryPage(props: { slug: string }) {
   const { client } = RouterContext.useRouterContext()
@@ -34,7 +34,7 @@ export function CategoryPage(props: { slug: string }) {
       .filter((app) => !pickedIds.has(app.id)),
   ]
   const pending = featured.pending || registry.isPending
-  const profile = useAddedProfile()
+  const sheet = useAddSheet()
   return (
     <div className="relative flex flex-1 flex-col">
       <div className="absolute top-0 left-0 z-30">
@@ -60,11 +60,11 @@ export function CategoryPage(props: { slug: string }) {
                 if (!registry.isFetchingNextPage) void registry.fetchNextPage()
               }}
               fetching={registry.isFetchingNextPage}
-              onAdded={profile.added}
+              onAdd={sheet.add}
             />
           )}
         </Loading>
-        {profile.dialog}
+        {sheet.dialog}
       </Page>
     </div>
   )
