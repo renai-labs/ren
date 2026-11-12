@@ -158,17 +158,39 @@ test("a member finds text in a chat and closes find with Escape", async ({ page 
 test("a member edits a sent message, which replaces it and what came after", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
+  const start = page.getByRole("main")
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await start.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
+  const staged = Promise.withResolvers<void>()
+  const committed = Promise.withResolvers<void>()
+  const stageHeld = Promise.withResolvers<void>()
+  const commitHeld = Promise.withResolvers<void>()
+  await page.route(/\/chat\/session\/[^/]+\/revert(\/commit)?$/, async (route) => {
+    if (route.request().url().endsWith("/revert")) {
+      staged.resolve()
+      await stageHeld.promise
+    } else {
+      committed.resolve()
+      await commitHeld.promise
+    }
+    await route.continue()
+  })
+  const undone = page.getByText("Later messages are undone")
+
   await page.getByText("Plan the launch").hover()
-  await page.getByRole("button", { name: "Edit message" }).click()
+  await page.getByRole("button", { name: "Edit", exact: true }).click()
   const editor = page.getByRole("textbox", { name: "Edit message" })
   await expect(editor).toHaveValue("Plan the launch")
   await editor.fill("Plan the party")
   await editor.press("Enter")
+  await staged.promise
+  await expect(undone).toHaveCount(0)
+  stageHeld.resolve()
+  await committed.promise
+  await expect(undone).toHaveCount(0)
+  commitHeld.resolve()
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })

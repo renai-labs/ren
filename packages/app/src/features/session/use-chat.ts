@@ -43,7 +43,7 @@ function useChatSuggestions(input: {
   root: Session.ID
   capabilities: SessionInfo["capabilities"] | undefined
   messages: ReadonlyArray<SessionMessage.Info>
-  reverted: boolean
+  undone: boolean
   model: SessionModel.Ref | undefined
   spaceId: string | undefined
   mentions: ReadonlyArray<Composer.MentionedApp>
@@ -66,7 +66,7 @@ function useChatSuggestions(input: {
       "model.choose": false,
       "session.compact": input.capabilities?.compact !== false && lastUser !== undefined,
       "session.undo": revertable && lastUser !== undefined,
-      "session.redo": revertable && input.reverted,
+      "session.redo": revertable && input.undone,
     },
     onClient: (id) => {
       if (id === "session.compact") void compact(input.model).catch(fail("Could not compact the chat"))
@@ -175,7 +175,7 @@ export function useChat(
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
   const setDraft = kept.set
-  const [reverting, setReverting] = useState(false)
+  const [sendingEdit, setSendingEdit] = useState(false)
   const boot = AsyncResult.getOrElse(view.session.boot, () => undefined)
   const connection = AsyncResult.getOrElse(view.session.status, () => undefined)
   const prompt = ChatReact.useAction(root, (opened, request: ChatSession.PromptInput) =>
@@ -198,7 +198,7 @@ export function useChat(
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
   const restart = useMutation(api.chat.retry.mutationOptions())
   const archive = useMutation(api.session.archive.mutationOptions())
-  const reverted = ChatState.revertMessageID(state, root) !== undefined
+  const undone = ChatState.revertMessageID(state, root) !== undefined
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
 
   const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
@@ -211,7 +211,7 @@ export function useChat(
     root,
     capabilities: info?.capabilities,
     messages: view.messages,
-    reverted,
+    undone,
     model,
     spaceId,
     mentions: Composer.mentions(draft),
@@ -249,11 +249,10 @@ export function useChat(
     },
     tasks: visibleTasks(tasks, { running, unfinished: SessionTasks.unfinished(tasks) }),
     running,
-    reverted,
-    reverting,
+    undone,
+    sendingEdit,
     failed: AsyncResult.isFailure(view.session.state),
     boot,
-    reconnecting: connection === "reconnecting",
     retrying: restart.isPending,
     draft,
     setDraft,
@@ -300,11 +299,11 @@ export function useChat(
         toast.error("Could not load earlier messages", { description: errorMessage(error) }),
       ),
     edit: (message: SessionMessage.User, text: string) => {
-      setReverting(true)
+      setSendingEdit(true)
       void revert(message.id)
         .then(() => prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }))
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
-        .finally(() => setReverting(false))
+        .finally(() => setSendingEdit(false))
     },
     prompted: ChatState.visibleUserMessages(state, root).length > 0,
     undo: () =>

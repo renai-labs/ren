@@ -55,7 +55,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         onLoadMore={chat.loadMore}
         find={find}
         onOpenChild={(id) => chat.openChild(id)}
-        onEdit={chat.canRevert && !chat.child && !chat.reverting ? chat.edit : undefined}
+        onEdit={chat.canRevert && !chat.child && !chat.sendingEdit ? chat.edit : undefined}
         expanded={chat.expanded}
         modelNames={chat.modelNames}
         admin={admin}
@@ -84,7 +84,7 @@ function ChatComposer(props: {
   return (
     <>
       {chat.tasks.length > 0 && !chat.child ? <Queue tasks={chat.tasks} running={chat.running} /> : null}
-      {chat.reverted && !chat.child ? (
+      {chat.undone && !chat.sendingEdit && !chat.child ? (
         <Alert>
           <IconRestore />
           <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
