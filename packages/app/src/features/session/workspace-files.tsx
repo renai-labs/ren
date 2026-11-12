@@ -15,6 +15,7 @@ import {
   CodeBlockTitle,
   useHighlightedCode,
 } from "@ren/ui/code-block"
+import { FileIcon } from "@ren/ui/file-icon"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { cn } from "cn"
 import { formatBytes } from "../../lib/format.js"
@@ -78,7 +79,7 @@ function Folder(props: {
                 {entry.type === "directory" ? (
                   <IconFolder data-icon="inline-start" />
                 ) : (
-                  <IconFile data-icon="inline-start" />
+                  <FileIcon name={entry.path} data-icon="inline-start" />
                 )}
                 <span className="min-w-0 truncate">{nameOf(entry.path)}</span>
               </Button>

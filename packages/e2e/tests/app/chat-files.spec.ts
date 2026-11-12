@@ -100,3 +100,23 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   await expect(message).toHaveValue("Read these")
   await expect(attached.getByText("plan.txt", { exact: true })).toBeVisible()
 })
+
+test("attachment cards show an icon for the type of file", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Plan the launch")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const attached = page.getByRole("main")
+  await attached.locator("input[type=file]").setInputFiles([
+    { name: "report.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") },
+    { name: "q3.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("rows") },
+  ])
+  await expect(attached.getByText(/^Uploading/)).toHaveCount(0)
+  const iconOf = (name: string) =>
+    attached.locator("[data-slot=attachment]", { hasText: name }).locator("[data-file-icon]")
+  await expect(iconOf("report.pdf")).toHaveAttribute("data-file-icon", "pdf")
+  await expect(iconOf("q3.xlsx")).toHaveAttribute("data-file-icon", "sheet")
+})

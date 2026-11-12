@@ -1,0 +1,98 @@
+:root {
+  --file-icon-red: light-dark(#d52c36, #ff6762);
+  --file-icon-vermilion: light-dark(#ff8c5b, #d5512f);
+  --file-icon-orange: light-dark(#d47628, #ffa359);
+  --file-icon-yellow: light-dark(#d5a910, #ffd452);
+  --file-icon-green: light-dark(#199f43, #5ecc71);
+  --file-icon-teal: light-dark(#17a5af, #64d1db);
+  --file-icon-cyan: light-dark(#1ca1c7, #68cdf2);
+  --file-icon-blue: light-dark(#1a85d4, #69b1ff);
+  --file-icon-indigo: light-dark(#693acf, #9d6afb);
+  --file-icon-purple: light-dark(#a631be, #d568ea);
+  --file-icon-pink: light-dark(#d32a61, #ff678d);
+  --file-icon-mauve: light-dark(#594c5b, #79697b);
+}
+
+[data-slot="file-icon"][data-file-icon="astro"],
+[data-slot="file-icon"][data-file-icon="database"],
+[data-slot="file-icon"][data-file-icon="vite"] {
+  color: var(--file-icon-purple);
+}
+
+[data-slot="file-icon"][data-file-icon="babel"],
+[data-slot="file-icon"][data-file-icon="browserslist"],
+[data-slot="file-icon"][data-file-icon="javascript"] {
+  color: var(--file-icon-yellow);
+}
+
+[data-slot="file-icon"][data-file-icon="bash"],
+[data-slot="file-icon"][data-file-icon="markdown"],
+[data-slot="file-icon"][data-file-icon="svgo"],
+[data-slot="file-icon"][data-file-icon="vue"] {
+  color: var(--file-icon-green);
+}
+
+[data-slot="file-icon"][data-file-icon="biome"],
+[data-slot="file-icon"][data-file-icon="c"],
+[data-slot="file-icon"][data-file-icon="cpp"],
+[data-slot="file-icon"][data-file-icon="docker"],
+[data-slot="file-icon"][data-file-icon="python"],
+[data-slot="file-icon"][data-file-icon="typescript"],
+[data-slot="file-icon"][data-file-icon="vscode"],
+[data-slot="file-icon"][data-file-icon="webpack"] {
+  color: var(--file-icon-blue);
+}
+
+[data-slot="file-icon"][data-file-icon="bootstrap"],
+[data-slot="file-icon"][data-file-icon="css"],
+[data-slot="file-icon"][data-file-icon="eslint"],
+[data-slot="file-icon"][data-file-icon="terraform"],
+[data-slot="file-icon"][data-file-icon="wasm"] {
+  color: var(--file-icon-indigo);
+}
+
+[data-slot="file-icon"][data-file-icon="bun"] {
+  color: var(--file-icon-mauve);
+}
+
+[data-slot="file-icon"][data-file-icon="claude"],
+[data-slot="file-icon"][data-file-icon="html"],
+[data-slot="file-icon"][data-file-icon="json"],
+[data-slot="file-icon"][data-file-icon="rust"],
+[data-slot="file-icon"][data-file-icon="svg"],
+[data-slot="file-icon"][data-file-icon="swift"],
+[data-slot="file-icon"][data-file-icon="zig"],
+[data-slot="file-icon"][data-file-icon="zip"] {
+  color: var(--file-icon-orange);
+}
+
+[data-slot="file-icon"][data-file-icon="go"],
+[data-slot="file-icon"][data-file-icon="react"],
+[data-slot="file-icon"][data-file-icon="tailwind"],
+[data-slot="file-icon"][data-file-icon="oxc"] {
+  color: var(--file-icon-cyan);
+}
+
+[data-slot="file-icon"][data-file-icon="graphql"],
+[data-slot="file-icon"][data-file-icon="image"],
+[data-slot="file-icon"][data-file-icon="sass"] {
+  color: var(--file-icon-pink);
+}
+
+[data-slot="file-icon"][data-file-icon="mcp"],
+[data-slot="file-icon"][data-file-icon="prettier"],
+[data-slot="file-icon"][data-file-icon="table"] {
+  color: var(--file-icon-teal);
+}
+
+[data-slot="file-icon"][data-file-icon="npm"],
+[data-slot="file-icon"][data-file-icon="postcss"],
+[data-slot="file-icon"][data-file-icon="ruby"],
+[data-slot="file-icon"][data-file-icon="svelte"],
+[data-slot="file-icon"][data-file-icon="yml"] {
+  color: var(--file-icon-red);
+}
+
+[data-slot="file-icon"][data-file-icon="git"] {
+  color: var(--file-icon-vermilion);
+}

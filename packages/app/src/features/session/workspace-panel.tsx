@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { lazy, Suspense, useState } from "react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import {
@@ -19,11 +19,12 @@ import { Button } from "@ren/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { ChangesTab } from "./workspace-changes.js"
 import { ProgressTab } from "./workspace-progress.js"
 import { FilesTab } from "./workspace-files.js"
 import { BrowserTab, ComputerTab } from "./workspace-streams.js"
 import { TerminalTab } from "./workspace-terminal.js"
+
+const ChangesTab = lazy(() => import("./workspace-changes.js").then((module) => ({ default: module.ChangesTab })))
 
 type Kind = "computer" | "browser" | "files" | "changes" | "progress" | "terminal"
 
@@ -202,7 +203,11 @@ export function WorkspacePanel(props: {
         {tabs.length === 0 ? <Launcher onPick={pick} /> : null}
         {tabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-col">
-            {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
+            {tab.kind === "changes" ? (
+              <Suspense>
+                <ChangesTab root={props.root} messages={props.messages} />
+              </Suspense>
+            ) : null}
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {tab.kind === "browser" ? <BrowserTab /> : null}
