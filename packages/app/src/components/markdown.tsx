@@ -166,7 +166,8 @@ const calloutKind = (blockquote: MarkdownNode) => {
   if (!marker[0].endsWith("\n") && !only) return null
   first.text.value = (first.text.value ?? "").slice(marker[0].length)
   if (first.text.value === "") first.paragraph.children?.shift()
-  if (first.paragraph.children?.length === 0) blockquote.children = blockquote.children?.filter((child) => child !== first.paragraph)
+  if (first.paragraph.children?.length === 0 && blockquote.children)
+    blockquote.children = blockquote.children.filter((child) => child !== first.paragraph)
   return marker[1]?.toLowerCase() ?? null
 }
 
