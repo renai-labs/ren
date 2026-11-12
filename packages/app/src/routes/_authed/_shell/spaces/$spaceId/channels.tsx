@@ -2,11 +2,9 @@ import { createFileRoute } from "@tanstack/react-router"
 import { SpaceChannelsTab } from "../../../../../features/spaces/space-channels.js"
 import { Channels } from "../../../../../lib/channels.js"
 import { Loader } from "../../../../../lib/loader.js"
-import { Routing } from "../../../../../lib/routing.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/channels")({
   head: () => ({ meta: [{ title: "Channels · Space · Ren" }] }),
-  validateSearch: Routing.PageSearch,
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(

@@ -9,11 +9,13 @@ import { AccountActions } from "../../components/account-actions.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
-import { PageFooter, TableSample, useShapeId } from "../../components/page.js"
-import { ListPagination } from "../../components/list-pagination.js"
-import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
+import { PageActions, TableSample, useShapeId } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
+import { useShown } from "../../lib/use-shown.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { Search } from "../../lib/search.js"
 import { useApp, useApps } from "../../lib/use-app.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -86,6 +88,7 @@ export function SpaceAppsTab() {
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
+  const [query, setQuery] = useState("")
   const reached = reach.data?.profiles ?? []
   const byApp = Map.groupBy(reached, (each) => each.appId)
   const catalog = useApps([...byApp.keys()])
@@ -101,7 +104,7 @@ export function SpaceAppsTab() {
       ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
       : []
   })
-  const page = Math.min(currentPage(search), pageCount(rows.length, pageSize))
+  const shown = useShown(rows.filter((row) => Search.matches(query, row.app.name, row.app.description, row.usedIn)))
   if (hiddenBy(reach.error))
     return (
       <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
@@ -110,28 +113,27 @@ export function SpaceAppsTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex justify-end">
+      <PageActions>
+        <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
         <AddAppDialog
           space={space}
           added={new Set(byApp.keys())}
           onAdded={(added) => setProfile({ appId: added.app.id, profileId: added.profileId, from })}
         />
-      </div>
+      </PageActions>
       <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
         {reach.isPending || catalog.pending ? (
           <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
         ) : (
           <AppsTable
-            rows={rows.slice((page - 1) * pageSize, page * pageSize)}
-            empty="No apps"
+            rows={shown.items}
+            empty={Search.empty(query, "No apps")}
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId, from })}
           />
         )}
       </Loading>
-      <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={rows.length} noun="app" />
-      </PageFooter>
+      <LoadMore more={shown.more} onMore={shown.next} />
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <SpaceAppAccounts

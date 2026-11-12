@@ -13,14 +13,15 @@ import { ChannelMark } from "../../components/channel-mark.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { Page, PageFooter, SkeletonRows, TableSample, useShapeId } from "../../components/page.js"
+import { Page, SkeletonRows, TableSample, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { errorMessage } from "../../lib/errors.js"
 import { Loader } from "../../lib/loader.js"
 import { Channels } from "../../lib/channels.js"
 import { FilterMenu, spaceOptions } from "../../components/filter-menu.js"
-import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
-import { ListPagination } from "../../components/list-pagination.js"
+import { Search } from "../../lib/search.js"
+import { useShown } from "../../lib/use-shown.js"
+import { LoadMore } from "../../components/load-more.js"
 import { MappingsTable } from "./mappings-table.js"
 import { MappingDialog } from "./mapping-dialog.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -159,9 +160,9 @@ function MappingList(props: {
   const visible = items.filter(
     (mapping) =>
       (!search.spaces?.length || search.spaces.includes(mapping.space.id)) &&
-      `${mapping.placeName} ${mapping.space.name}`.toLowerCase().includes((search.q ?? "").trim().toLowerCase()),
+      Search.matches(search.q ?? "", mapping.placeName, mapping.space.name),
   )
-  const page = Math.min(currentPage(search), pageCount(visible.length, pageSize))
+  const shown = useShown(visible)
   const editableSpaces = (spaces.data ?? []).filter((space) => space.membershipId !== null || space.canJoin)
   const close = () => {
     void navigate({
@@ -189,7 +190,7 @@ function MappingList(props: {
           {mappings.isPending ? <TableSample columns={["Channel", "Space", "Status", ""]} /> : null}
           {mappings.isSuccess ? (
             <MappingsTable
-              mappings={visible.slice((page - 1) * pageSize, page * pageSize)}
+              mappings={shown.items}
               filtered={Boolean(search.q || search.spaces)}
               editableSpaceIds={editableSpaces.map((space) => space.id)}
               busy={remove.isPending || restore.isPending}
@@ -225,9 +226,7 @@ function MappingList(props: {
             />
           ) : null}
         </Loading>
-        <PageFooter>
-          <ListPagination page={page} pageSize={pageSize} total={visible.length} noun="mapping" />
-        </PageFooter>
+        <LoadMore more={shown.more} onMore={shown.next} />
       </div>
       {search.add && mappings.isSuccess ? (
         <AddMappingDialog
@@ -264,7 +263,7 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
         value={search.q ?? ""}
         onChange={(q) =>
           void navigate({
-            search: (previous) => ({ ...previous, q: q || undefined, page: undefined }),
+            search: (previous) => ({ ...previous, q: q || undefined }),
             replace: true,
           })
         }
@@ -286,7 +285,6 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
             search: (previous) => ({
               ...previous,
               spaces: value.space?.length ? value.space : undefined,
-              page: undefined,
             }),
             replace: true,
           })
