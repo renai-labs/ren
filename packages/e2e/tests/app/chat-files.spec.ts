@@ -100,3 +100,27 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   await expect(message).toHaveValue("Read these")
   await expect(attached.getByText("plan.txt", { exact: true })).toBeVisible()
 })
+
+test("⌘U opens the file picker with the composer focused or not, and the chosen file uploads", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Plan the launch")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const attached = page.getByRole("main")
+  await message.focus()
+  const focused = page.waitForEvent("filechooser")
+  await page.keyboard.press("Meta+u")
+  await (await focused).setFiles({ name: "focused.txt", mimeType: "text/plain", buffer: Buffer.from("one") })
+
+  await message.blur()
+  const blurred = page.waitForEvent("filechooser")
+  await page.keyboard.press("Meta+u")
+  await (await blurred).setFiles({ name: "blurred.txt", mimeType: "text/plain", buffer: Buffer.from("two") })
+
+  await expect(attached.getByText(/^Uploading/)).toHaveCount(0)
+  await expect(attached.getByText("focused.txt", { exact: true })).toBeVisible()
+  await expect(attached.getByText("blurred.txt", { exact: true })).toBeVisible()
+})

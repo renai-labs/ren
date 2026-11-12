@@ -59,6 +59,7 @@ import { gaps, isSpaceApp } from "../../lib/apps.js"
 import { useStep } from "../../lib/use-step.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
+import { Keyboard } from "../../platform/keyboard.js"
 
 function AddMenu(props: {
   onInsert: (text: string) => void
@@ -84,6 +85,7 @@ function AddMenu(props: {
           <DropdownMenuItem onClick={props.onAttach}>
             <IconPaperclip />
             Upload attachment
+            <Kbd className="ml-auto">⌘U</Kbd>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -549,6 +551,15 @@ export function PromptInput(props: {
   const draft = props.value
   const uploads = useUploads(props.files, draft)
   const picker = useRef<HTMLInputElement>(null)
+  const { platform } = RouterContext.useRouterContext()
+  const canAttach = Boolean(props.files.spaceId && platform.upload && !props.sending)
+  Keyboard.useKeyDown((event) => {
+    if (event.key.toLowerCase() !== "u" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
+    if (event.repeat || event.isComposing || !canAttach) return
+    if (event.target instanceof Element && event.target.closest("[role=dialog]")) return
+    event.preventDefault()
+    picker.current?.click()
+  })
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const state = composerState(props, { blank })
