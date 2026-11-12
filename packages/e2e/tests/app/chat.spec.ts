@@ -148,6 +148,8 @@ test("a member queues a message while Ren works, steers with the other key, reca
   await message.press("Enter")
   expect((await queued).postData()).toContain('"delivery":"queue"')
   await expect(message).toHaveValue("")
+  const waiting = page.getByRole("list", { name: "Queued messages" })
+  await expect(waiting.getByText("Queue this")).toBeVisible()
 
   const steered = delivered("Steer this")
   await message.fill("Steer this")
@@ -162,6 +164,9 @@ test("a member queues a message while Ren works, steers with the other key, reca
   await message.press("ArrowDown")
   await expect(message).toHaveValue("")
 
+  await waiting.getByRole("button", { name: "Remove" }).click()
+  await expect(waiting).toHaveCount(0)
+
   const stopped = page.waitForRequest((request) => request.url().includes("interrupt"))
   await message.press("Escape")
   await stopped
@@ -171,9 +176,8 @@ test("a member queues a message while Ren works, steers with the other key, reca
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   await page.keyboard.press("ControlOrMeta+f")

@@ -31,7 +31,7 @@ export function HomePage() {
   const spaces = useSpaces().joined
   const search = route.useSearch()
   const [remembered, setRemembered] = useState(() => ChatPreferences.homeSpace.read(platform.storage))
-  const kept = Drafts.useDraft(search.spaceId ? `new.space.${search.spaceId}` : Drafts.fresh)
+  const kept = Drafts.useDraft(search.spaceId ? Drafts.space(search.spaceId) : Drafts.fresh)
   const draft = kept.draft
   const setDraft = kept.set
   const spaceId =

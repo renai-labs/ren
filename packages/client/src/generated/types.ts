@@ -103,6 +103,8 @@ export type CredentialID = string
 
 export type AppProfileOAuthAppGate = { name: string; isConfigured: boolean }
 
+export type AppListingTool = { name: string; description: string; readOnly: boolean }
+
 export type AgentMembershipID = string
 
 export type SessionID = string
@@ -485,6 +487,8 @@ export type WebhookPresetOf = {
 export type AppProfileLink = { appId: AppID; profileId: AppProfileID | null }
 
 export type CredentialProfileOwner = { kind: "profile"; profileId: AppProfileID }
+
+export type AppListingTools = { [x: PrimitiveSlug]: Array<AppListingTool> }
 
 export type AgentMembershipInfo = {
   id: AgentMembershipID
@@ -875,16 +879,6 @@ export type InsightsRow = {
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
-export type AppListingInfo = {
-  appId: AppID
-  body: string | null
-  categories: AppListingCategories
-  examplePrompts: Array<string>
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
-
 export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
 
 export type FactoryEntry = { agentId: string; maxRuns?: number; finish?: true; to?: Array<FactoryEdge> }
@@ -988,6 +982,17 @@ export type CredentialOwner =
   | { kind: "space"; spaceId: SpaceID }
   | { kind: "person"; userId: AuthUserID }
   | CredentialProfileOwner
+
+export type AppListingInfo = {
+  appId: AppID
+  body: string | null
+  categories: AppListingCategories
+  examplePrompts: Array<string>
+  tools: AppListingTools
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
 
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
 

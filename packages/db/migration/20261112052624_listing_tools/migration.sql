@@ -1,0 +1,1 @@
+ALTER TABLE "app_listing" ADD COLUMN "tools" jsonb DEFAULT '{}' NOT NULL;

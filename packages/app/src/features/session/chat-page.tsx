@@ -5,6 +5,7 @@ import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
 import { Queue } from "./queue.js"
+import { QueuedMessages } from "./queued-messages.js"
 import { WorkspacePanel } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ChatActions } from "./chat-actions.js"
@@ -15,6 +16,7 @@ import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { cn } from "cn"
 import { useChat } from "./use-chat.js"
+import { useFind } from "./use-find.js"
 import type { Session } from "@ren/schema/session"
 import { useAgents } from "../../lib/use-agents.js"
 import { useRunningAgent } from "./chat-view.js"
@@ -26,6 +28,13 @@ type Chat = ReturnType<typeof useChat>
 function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
   const admin = useCanAdminister()
+  const find = useFind({
+    messages: chat.messages,
+    rows: chat.rows,
+    more: chat.more,
+    loadingHistory: chat.loadingHistory,
+    onSearchEarlier: chat.loadAll,
+  })
   return (
     <>
       <Transcript
@@ -44,6 +53,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         loading={chat.rows.length === 0 && (chat.loading || chat.more || chat.loadingHistory)}
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
+        find={find}
         onOpenChild={(id) => chat.openChild(id)}
         onEdit={chat.canRevert && !chat.child && !chat.reverting ? chat.edit : undefined}
         expanded={chat.expanded}
@@ -69,6 +79,9 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
   return (
     <>
       {chat.tasks.length > 0 && !chat.child ? <Queue tasks={chat.tasks} running={chat.running} /> : null}
+      {chat.queued.length > 0 && !chat.child ? (
+        <QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />
+      ) : null}
       {chat.reverted && !chat.child ? (
         <Alert>
           <IconRestore />
