@@ -25,7 +25,7 @@ const maxQueued = 5
 
 const granted = new Set<string>()
 
-export type Ask =
+type Ask =
   | { readonly kind: "call"; readonly tool: string; readonly input: unknown }
   | { readonly kind: "post"; readonly text: string }
 
