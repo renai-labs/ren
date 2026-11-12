@@ -20,6 +20,7 @@
     "@bufbuild/cel": "catalog:",
     "@effect/atom-react": "catalog:",
     "@heroicons/react": "2.2.0",
+    "@paper-design/shaders-react": "0.0.80",
     "@ren/chat": "workspace:*",
     "@ren/client": "workspace:*",
     "@ren/schema": "workspace:*",

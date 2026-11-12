@@ -208,6 +208,8 @@ export function RouteSkeleton() {
     return (
       <PageSkeleton
         title="Apps"
+        width="wide"
+        search={<div className="h-8 w-56" />}
         description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       >
         <AppListingSample />
