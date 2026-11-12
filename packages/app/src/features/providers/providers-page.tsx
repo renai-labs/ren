@@ -3,16 +3,17 @@ import { EmptyState } from "../../components/empty-state.js"
 import { useState } from "react"
 import type { RenInferenceConnection } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconExternalLink, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react"
+import { Link } from "@tanstack/react-router"
+import { IconKey, IconPlus, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
-import { Button } from "@ren/ui/button"
-import { Link } from "@ren/ui/link"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { cn } from "cn"
 import { Card } from "@ren/ui/card"
 import { Progress } from "@ren/ui/progress"
 import { formatCountdown, formatDateTime } from "@ren/ui/time"
 import { Tabs } from "@ren/ui/tabs"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
+import { ChatGptGuide } from "./chatgpt-guide.js"
 import { EditableText } from "../../components/editable-text.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
@@ -131,12 +132,18 @@ export function ProvidersPage() {
       title="Providers"
       description="Subscriptions your agents run on."
       aside={
-        isAdmin && !unavailable ? (
-          <Button onClick={() => connect(tab)}>
-            <IconPlus />
-            Connect {product}
-          </Button>
-        ) : undefined
+        <>
+          <Link to="/settings/providers/keys" className={buttonVariants({ variant: "outline" })}>
+            <IconKey />
+            Inference keys
+          </Link>
+          {isAdmin && !unavailable ? (
+            <Button onClick={() => connect(tab)}>
+              <IconPlus />
+              Connect {product}
+            </Button>
+          ) : null}
+        </>
       }
       leading={
         <Tabs value={tab} onValueChange={setTab}>
@@ -197,27 +204,6 @@ export function ProvidersPage() {
         />
       ) : null}
     </Page>
-  )
-}
-
-function ChatGptGuide() {
-  return (
-    <p className="flex items-start gap-2 text-sm text-muted-foreground">
-      <IconInfoCircle className="mt-0.5 size-4 shrink-0" />
-      <span>
-        Before you connect, turn on <span className="text-foreground">Enable device code authorization for Codex</span>{" "}
-        in your{" "}
-        <Link
-          href="https://chatgpt.com/#settings/Security"
-          external
-          className="inline-flex items-center gap-1 font-normal text-foreground underline underline-offset-2"
-        >
-          ChatGPT security settings
-          <IconExternalLink className="size-3" />
-        </Link>
-        .
-      </span>
-    </p>
   )
 }
 
