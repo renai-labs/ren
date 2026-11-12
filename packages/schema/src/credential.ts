@@ -280,7 +280,7 @@ export const Inject = Schema.Union([
 ]).annotate({
   identifier: "Credential.Inject",
   description:
-    "Where the egress puts the value: `replace` swaps the placeholder where it is found, `setHeader` sets a header on every request to the hosts, `route` forwards to the value as the upstream URL.",
+    "Where the egress puts the value: `replace` swaps the placeholder where it is found, `setHeader` sets a header on a request to the hosts that holds the placeholder anywhere in its headers, `route` forwards to the value as the upstream URL.",
 })
 export type Inject = typeof Inject.Type
 

@@ -20,9 +20,10 @@ import { Route as AuthedShellRouteImport } from "./routes/_authed/_shell"
 import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
-import { Route as AuthedShellMarketplaceRouteImport } from "./routes/_authed/_shell/marketplace"
 import { Route as AuthedShellSchedulesRouteImport } from "./routes/_authed/_shell/schedules"
 import { Route as AuthedOrganizationsNewRouteImport } from "./routes/_authed/organizations/new"
+import { Route as AuthedShellAppsIndexRouteImport } from "./routes/_authed/_shell/apps/index"
+import { Route as AuthedShellMarketplaceIndexRouteImport } from "./routes/_authed/_shell/marketplace/index"
 import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_shell/settings/index"
 import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
 import { Route as AuthedShellSettingsCredentialsRouteImport } from "./routes/_authed/_shell/settings/credentials"
@@ -31,6 +32,8 @@ import { Route as AuthedShellSettingsProvidersRouteImport } from "./routes/_auth
 import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
 import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
 import { Route as AuthedShellTasksIndexRouteImport } from "./routes/_authed/_shell/tasks/index"
+import { Route as AuthedShellAppsAppIdIndexRouteImport } from "./routes/_authed/_shell/apps/$appId/index"
+import { Route as AuthedShellMarketplaceAppIdIndexRouteImport } from "./routes/_authed/_shell/marketplace/$appId/index"
 import { Route as AuthedShellSessionsSessionIdIndexRouteImport } from "./routes/_authed/_shell/sessions/$sessionId/index"
 import { Route as AuthedShellSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/settings/_admin/general"
 import { Route as AuthedShellSettingsAdminMachinesRouteImport } from "./routes/_authed/_shell/settings/_admin/machines"
@@ -105,11 +108,6 @@ const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
   path: "/$",
   getParentRoute: () => AuthedShellRoute,
 } as any)
-const AuthedShellMarketplaceRoute = AuthedShellMarketplaceRouteImport.update({
-  id: "/marketplace",
-  path: "/marketplace",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
 const AuthedShellSchedulesRoute = AuthedShellSchedulesRouteImport.update({
   id: "/schedules",
   path: "/schedules",
@@ -120,6 +118,17 @@ const AuthedOrganizationsNewRoute = AuthedOrganizationsNewRouteImport.update({
   path: "/organizations/new",
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedShellAppsIndexRoute = AuthedShellAppsIndexRouteImport.update({
+  id: "/apps/",
+  path: "/apps/",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellMarketplaceIndexRoute =
+  AuthedShellMarketplaceIndexRouteImport.update({
+    id: "/marketplace/",
+    path: "/marketplace/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSettingsIndexRoute =
   AuthedShellSettingsIndexRouteImport.update({
     id: "/settings/",
@@ -166,6 +175,18 @@ const AuthedShellTasksIndexRoute = AuthedShellTasksIndexRouteImport.update({
   path: "/tasks/",
   getParentRoute: () => AuthedShellRoute,
 } as any)
+const AuthedShellAppsAppIdIndexRoute =
+  AuthedShellAppsAppIdIndexRouteImport.update({
+    id: "/apps/$appId/",
+    path: "/apps/$appId/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellMarketplaceAppIdIndexRoute =
+  AuthedShellMarketplaceAppIdIndexRouteImport.update({
+    id: "/marketplace/$appId/",
+    path: "/marketplace/$appId/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSessionsSessionIdIndexRoute =
   AuthedShellSessionsSessionIdIndexRouteImport.update({
     id: "/sessions/$sessionId/",
@@ -301,7 +322,6 @@ export interface FileRoutesByFullPath {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
-  "/marketplace": typeof AuthedShellMarketplaceRoute
   "/schedules": typeof AuthedShellSchedulesRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -309,6 +329,8 @@ export interface FileRoutesByFullPath {
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/settings/providers": typeof AuthedShellSettingsProvidersRoute
+  "/apps/": typeof AuthedShellAppsIndexRoute
+  "/marketplace/": typeof AuthedShellMarketplaceIndexRoute
   "/settings/": typeof AuthedShellSettingsIndexRoute
   "/spaces/": typeof AuthedShellSpacesIndexRoute
   "/tasks/": typeof AuthedShellTasksIndexRoute
@@ -326,6 +348,8 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId/repositories": typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   "/spaces/$spaceId/schedules": typeof AuthedShellSpacesSpaceIdSchedulesRoute
   "/spaces/$spaceId/settings": typeof AuthedShellSpacesSpaceIdSettingsRoute
+  "/apps/$appId/": typeof AuthedShellAppsAppIdIndexRoute
+  "/marketplace/$appId/": typeof AuthedShellMarketplaceAppIdIndexRoute
   "/sessions/$sessionId/": typeof AuthedShellSessionsSessionIdIndexRoute
   "/settings/channels/": typeof AuthedShellSettingsChannelsIndexRoute
   "/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
@@ -343,13 +367,14 @@ export interface FileRoutesByTo {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
-  "/marketplace": typeof AuthedShellMarketplaceRoute
   "/schedules": typeof AuthedShellSchedulesRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/settings/providers": typeof AuthedShellSettingsProvidersRoute
+  "/apps": typeof AuthedShellAppsIndexRoute
+  "/marketplace": typeof AuthedShellMarketplaceIndexRoute
   "/spaces": typeof AuthedShellSpacesIndexRoute
   "/tasks": typeof AuthedShellTasksIndexRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
@@ -366,6 +391,8 @@ export interface FileRoutesByTo {
   "/spaces/$spaceId/repositories": typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   "/spaces/$spaceId/schedules": typeof AuthedShellSpacesSpaceIdSchedulesRoute
   "/spaces/$spaceId/settings": typeof AuthedShellSpacesSpaceIdSettingsRoute
+  "/apps/$appId": typeof AuthedShellAppsAppIdIndexRoute
+  "/marketplace/$appId": typeof AuthedShellMarketplaceAppIdIndexRoute
   "/sessions/$sessionId": typeof AuthedShellSessionsSessionIdIndexRoute
   "/settings/channels": typeof AuthedShellSettingsChannelsIndexRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdIndexRoute
@@ -385,7 +412,6 @@ export interface FileRoutesById {
   "/_authed/_shell": typeof AuthedShellRouteWithChildren
   "/invites/accept": typeof InvitesAcceptRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
-  "/_authed/_shell/marketplace": typeof AuthedShellMarketplaceRoute
   "/_authed/_shell/schedules": typeof AuthedShellSchedulesRoute
   "/_authed/organizations/new": typeof AuthedOrganizationsNewRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
@@ -394,6 +420,8 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/_authed/_shell/settings/providers": typeof AuthedShellSettingsProvidersRoute
+  "/_authed/_shell/apps/": typeof AuthedShellAppsIndexRoute
+  "/_authed/_shell/marketplace/": typeof AuthedShellMarketplaceIndexRoute
   "/_authed/_shell/settings/": typeof AuthedShellSettingsIndexRoute
   "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
   "/_authed/_shell/tasks/": typeof AuthedShellTasksIndexRoute
@@ -411,6 +439,8 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId/repositories": typeof AuthedShellSpacesSpaceIdRepositoriesRoute
   "/_authed/_shell/spaces/$spaceId/schedules": typeof AuthedShellSpacesSpaceIdSchedulesRoute
   "/_authed/_shell/spaces/$spaceId/settings": typeof AuthedShellSpacesSpaceIdSettingsRoute
+  "/_authed/_shell/apps/$appId/": typeof AuthedShellAppsAppIdIndexRoute
+  "/_authed/_shell/marketplace/$appId/": typeof AuthedShellMarketplaceAppIdIndexRoute
   "/_authed/_shell/sessions/$sessionId/": typeof AuthedShellSessionsSessionIdIndexRoute
   "/_authed/_shell/settings/channels/": typeof AuthedShellSettingsChannelsIndexRoute
   "/_authed/_shell/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
@@ -430,7 +460,6 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
-    | "/marketplace"
     | "/schedules"
     | "/organizations/new"
     | "/spaces/$spaceId"
@@ -438,6 +467,8 @@ export interface FileRouteTypes {
     | "/settings/credentials"
     | "/settings/preferences"
     | "/settings/providers"
+    | "/apps/"
+    | "/marketplace/"
     | "/settings/"
     | "/spaces/"
     | "/tasks/"
@@ -455,6 +486,8 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/repositories"
     | "/spaces/$spaceId/schedules"
     | "/spaces/$spaceId/settings"
+    | "/apps/$appId/"
+    | "/marketplace/$appId/"
     | "/sessions/$sessionId/"
     | "/settings/channels/"
     | "/spaces/$spaceId/"
@@ -472,13 +505,14 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
-    | "/marketplace"
     | "/schedules"
     | "/organizations/new"
     | "/settings"
     | "/settings/credentials"
     | "/settings/preferences"
     | "/settings/providers"
+    | "/apps"
+    | "/marketplace"
     | "/spaces"
     | "/tasks"
     | "/settings/general"
@@ -495,6 +529,8 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/repositories"
     | "/spaces/$spaceId/schedules"
     | "/spaces/$spaceId/settings"
+    | "/apps/$appId"
+    | "/marketplace/$appId"
     | "/sessions/$sessionId"
     | "/settings/channels"
     | "/spaces/$spaceId"
@@ -513,7 +549,6 @@ export interface FileRouteTypes {
     | "/_authed/_shell"
     | "/invites/accept"
     | "/_authed/_shell/$"
-    | "/_authed/_shell/marketplace"
     | "/_authed/_shell/schedules"
     | "/_authed/organizations/new"
     | "/_authed/_shell/"
@@ -522,6 +557,8 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/credentials"
     | "/_authed/_shell/settings/preferences"
     | "/_authed/_shell/settings/providers"
+    | "/_authed/_shell/apps/"
+    | "/_authed/_shell/marketplace/"
     | "/_authed/_shell/settings/"
     | "/_authed/_shell/spaces/"
     | "/_authed/_shell/tasks/"
@@ -539,6 +576,8 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId/repositories"
     | "/_authed/_shell/spaces/$spaceId/schedules"
     | "/_authed/_shell/spaces/$spaceId/settings"
+    | "/_authed/_shell/apps/$appId/"
+    | "/_authed/_shell/marketplace/$appId/"
     | "/_authed/_shell/sessions/$sessionId/"
     | "/_authed/_shell/settings/channels/"
     | "/_authed/_shell/spaces/$spaceId/"
@@ -637,13 +676,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSplatRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/marketplace": {
-      id: "/_authed/_shell/marketplace"
-      path: "/marketplace"
-      fullPath: "/marketplace"
-      preLoaderRoute: typeof AuthedShellMarketplaceRouteImport
-      parentRoute: typeof AuthedShellRoute
-    }
     "/_authed/_shell/schedules": {
       id: "/_authed/_shell/schedules"
       path: "/schedules"
@@ -657,6 +689,20 @@ declare module "@tanstack/react-router" {
       fullPath: "/organizations/new"
       preLoaderRoute: typeof AuthedOrganizationsNewRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    "/_authed/_shell/apps/": {
+      id: "/_authed/_shell/apps/"
+      path: "/apps"
+      fullPath: "/apps/"
+      preLoaderRoute: typeof AuthedShellAppsIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/marketplace/": {
+      id: "/_authed/_shell/marketplace/"
+      path: "/marketplace"
+      fullPath: "/marketplace/"
+      preLoaderRoute: typeof AuthedShellMarketplaceIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/settings/": {
       id: "/_authed/_shell/settings/"
@@ -712,6 +758,20 @@ declare module "@tanstack/react-router" {
       path: "/tasks"
       fullPath: "/tasks/"
       preLoaderRoute: typeof AuthedShellTasksIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/apps/$appId/": {
+      id: "/_authed/_shell/apps/$appId/"
+      path: "/apps/$appId"
+      fullPath: "/apps/$appId/"
+      preLoaderRoute: typeof AuthedShellAppsAppIdIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/marketplace/$appId/": {
+      id: "/_authed/_shell/marketplace/$appId/"
+      path: "/marketplace/$appId"
+      fullPath: "/marketplace/$appId/"
+      preLoaderRoute: typeof AuthedShellMarketplaceAppIdIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/sessions/$sessionId/": {
@@ -923,7 +983,6 @@ const AuthedShellSettingsAdminRouteWithChildren =
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
-  AuthedShellMarketplaceRoute: typeof AuthedShellMarketplaceRoute
   AuthedShellSchedulesRoute: typeof AuthedShellSchedulesRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -931,10 +990,14 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellSettingsProvidersRoute: typeof AuthedShellSettingsProvidersRoute
+  AuthedShellAppsIndexRoute: typeof AuthedShellAppsIndexRoute
+  AuthedShellMarketplaceIndexRoute: typeof AuthedShellMarketplaceIndexRoute
   AuthedShellSettingsIndexRoute: typeof AuthedShellSettingsIndexRoute
   AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
   AuthedShellTasksIndexRoute: typeof AuthedShellTasksIndexRoute
   AuthedShellSettingsChannelsProviderRoute: typeof AuthedShellSettingsChannelsProviderRoute
+  AuthedShellAppsAppIdIndexRoute: typeof AuthedShellAppsAppIdIndexRoute
+  AuthedShellMarketplaceAppIdIndexRoute: typeof AuthedShellMarketplaceAppIdIndexRoute
   AuthedShellSessionsSessionIdIndexRoute: typeof AuthedShellSessionsSessionIdIndexRoute
   AuthedShellSettingsChannelsIndexRoute: typeof AuthedShellSettingsChannelsIndexRoute
   AuthedShellTasksTaskIdIndexRoute: typeof AuthedShellTasksTaskIdIndexRoute
@@ -942,7 +1005,6 @@ interface AuthedShellRouteChildren {
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
-  AuthedShellMarketplaceRoute: AuthedShellMarketplaceRoute,
   AuthedShellSchedulesRoute: AuthedShellSchedulesRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSpacesSpaceIdRouteRoute:
@@ -951,11 +1013,15 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellSettingsProvidersRoute: AuthedShellSettingsProvidersRoute,
+  AuthedShellAppsIndexRoute: AuthedShellAppsIndexRoute,
+  AuthedShellMarketplaceIndexRoute: AuthedShellMarketplaceIndexRoute,
   AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
   AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
   AuthedShellTasksIndexRoute: AuthedShellTasksIndexRoute,
   AuthedShellSettingsChannelsProviderRoute:
     AuthedShellSettingsChannelsProviderRoute,
+  AuthedShellAppsAppIdIndexRoute: AuthedShellAppsAppIdIndexRoute,
+  AuthedShellMarketplaceAppIdIndexRoute: AuthedShellMarketplaceAppIdIndexRoute,
   AuthedShellSessionsSessionIdIndexRoute:
     AuthedShellSessionsSessionIdIndexRoute,
   AuthedShellSettingsChannelsIndexRoute: AuthedShellSettingsChannelsIndexRoute,

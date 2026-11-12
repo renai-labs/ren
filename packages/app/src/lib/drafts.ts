@@ -8,6 +8,18 @@ export const fresh = "new"
 
 export const session = (sessionId: string) => `session.${sessionId}`
 
+export const space = (spaceId: string) => `new.space.${spaceId}`
+
+export function useWrite() {
+  const platform = Platform.usePlatform()
+  const drafts = platform.drafts ?? platform.storage
+  return (key: string, draft: Composer.Draft) => {
+    const encoded = Composer.encode(draft)
+    if (encoded === undefined) drafts.remove(key)
+    else drafts.set(key, encoded)
+  }
+}
+
 export function useDraft(key: string) {
   const platform = Platform.usePlatform()
   const drafts = platform.drafts ?? platform.storage

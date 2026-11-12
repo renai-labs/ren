@@ -19,6 +19,19 @@ import { cn } from "cn"
 import { TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Routing } from "../lib/routing.js"
 
+export const pageWidths = {
+  column: "max-w-200",
+  wide: "max-w-236",
+} as const
+
+const pageFrames = {
+  column: cn("mx-auto flex w-full flex-1 flex-col gap-6 px-6 pt-22 pb-12", pageWidths.column),
+  wide: cn("mx-auto flex w-full flex-1 flex-col gap-6 px-6 pt-22 pb-12", pageWidths.wide),
+  full: "flex w-full flex-col gap-4 px-8 pt-8 pb-3",
+}
+
+export type PageWidth = keyof typeof pageFrames
+
 type PageProps = {
   title: string
   description?: string | undefined
@@ -28,7 +41,8 @@ type PageProps = {
   aside?: ReactNode | undefined
   leading?: ReactNode | undefined
   actions?: ReactNode | undefined
-  width?: "column" | "full" | undefined
+  search?: ReactNode | undefined
+  width?: PageWidth | undefined
   footer?: ReactNode | undefined
   loading?: boolean | undefined
   shape?: string | undefined
@@ -45,6 +59,15 @@ function PageHeading(props: Pick<PageProps, "title" | "description">) {
 }
 
 function PageHeader(props: PageProps) {
+  if (props.search)
+    return (
+      <header className="sticky top-0 z-20 -mx-6 -mt-3 flex items-end justify-between gap-4 bg-background px-6 py-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-linear-to-b after:from-background after:to-transparent">
+        <div className="flex min-w-0 flex-col gap-1">
+          <PageHeading title={props.title} description={props.description} />
+        </div>
+        {props.search}
+      </header>
+    )
   const heading = <PageHeading title={props.title} description={props.description} />
   if (props.media)
     return (
@@ -76,14 +99,9 @@ function PageHeader(props: PageProps) {
 export function Page(props: PageProps) {
   const shapeId = useShapeId(props.shape ?? "page")
   const full = props.width === "full"
+  const frame = pageFrames[props.width ?? "column"]
   return (
-    <div
-      className={
-        full
-          ? "flex w-full flex-col gap-4 px-8 pt-8 pb-3"
-          : "mx-auto flex w-full max-w-200 flex-1 flex-col gap-6 px-6 pt-22 pb-12"
-      }
-    >
+    <div className={frame}>
       {props.back ? <div className="flex">{props.back}</div> : null}
       <PageHeader {...props} />
       <Loading
@@ -126,7 +144,7 @@ export function TableCard(props: { children: ReactNode; className?: string | und
 }
 
 export function PageTabsList(props: ComponentProps<typeof TabsList>) {
-  return <TabsList {...props} className="h-8 gap-1 bg-transparent p-0" />
+  return <TabsList {...props} className={cn("h-8 gap-1 bg-transparent p-0", props.className)} />
 }
 
 export function PageTabsTrigger(props: { value: string; count?: number | undefined; children: ReactNode }) {
@@ -280,7 +298,8 @@ export function CardsSample(props: { count?: number | undefined; columns?: 2 | 3
 export function PageSkeleton(props: {
   title?: string | undefined
   description?: string | undefined
-  width?: "column" | "full" | undefined
+  width?: PageWidth | undefined
+  search?: ReactNode | undefined
   body?: "rows" | "cards" | undefined
   columns?: 2 | 3 | undefined
   shape?: string | undefined
@@ -292,7 +311,8 @@ export function PageSkeleton(props: {
       title={props.title ?? ""}
       description={props.description}
       width={props.width}
-      actions={<div className="min-h-8" />}
+      search={props.search}
+      actions={props.search ? undefined : <div className="min-h-8" />}
       loading
     >
       {props.children ?? (props.body === "cards" ? <CardsSample columns={props.columns} /> : <RowsSample />)}
