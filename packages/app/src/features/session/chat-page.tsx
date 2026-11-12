@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { IconArrowLeft, IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
+import { Badge } from "@ren/ui/badge"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
 import { Queue } from "./queue.js"
@@ -14,6 +15,7 @@ import { PromptInput } from "./prompt-input.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { cn } from "cn"
+import { EditableText } from "../../components/editable-text.js"
 import { useChat } from "./use-chat.js"
 import { useFind } from "./use-find.js"
 import type { Session } from "@ren/schema/session"
@@ -138,46 +140,48 @@ function ChatComposer(props: {
   )
 }
 
-function useRunningAgentName(root: Session.ID) {
+function useCustomAgentName(root: Session.ID) {
   const agents = useAgents()
   const agent = useRunningAgent(root)
   if (!agent || agent === "ren") return
-  return agents.agent(agent)?.name ?? agent
+  return agents.agent(agent)?.name
 }
 
-function ChatBreadcrumb(props: { chat: Chat }) {
+function ChatBreadcrumb(props: { chat: Chat; editing: boolean; onEditingChange: (editing: boolean) => void }) {
   const chat = props.chat
-  const agent = useRunningAgentName(chat.root)
   const space = (
     <>
-      {agent ? null : <IconCube className="size-4" />}
+      <IconCube className="size-4" />
       {chat.spaceId ? chat.spaceName : "Chat"}
     </>
   )
   return (
-    <Breadcrumb className="mr-auto flex h-8 items-center rounded-lg border bg-sidebar px-3">
-      <BreadcrumbList className="gap-2">
-        <BreadcrumbItem>
+    <Breadcrumb className="flex h-8 min-w-0 items-center rounded-lg border bg-sidebar px-3">
+      <BreadcrumbList className="flex-nowrap gap-2">
+        <BreadcrumbItem className="shrink-0">
           {chat.spaceId ? (
             <BreadcrumbLink
-              className={cn("flex items-center gap-1.5", agent ? "text-muted-foreground" : "text-foreground")}
+              className="flex items-center gap-1.5 text-muted-foreground"
               render={<Link to="/spaces/$spaceId" params={{ spaceId: chat.spaceId }} />}
             >
               {space}
             </BreadcrumbLink>
           ) : (
-            <span className="flex items-center gap-1.5 text-foreground">{space}</span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">{space}</span>
           )}
         </BreadcrumbItem>
-        {agent ? (
-          <>
-            <BreadcrumbSeparator className="text-muted-foreground">/</BreadcrumbSeparator>
-            <BreadcrumbItem className="flex items-center gap-1.5 font-medium text-foreground">
-              <IconGhostFilled className="size-4" />
-              {agent}
-            </BreadcrumbItem>
-          </>
-        ) : null}
+        <BreadcrumbSeparator className="text-muted-foreground">/</BreadcrumbSeparator>
+        <BreadcrumbItem className="min-w-0 font-medium text-foreground">
+          <EditableText
+            value={chat.title}
+            label="Chat title"
+            required
+            readOnly={!chat.canRename}
+            editing={props.editing}
+            onEditingChange={props.onEditingChange}
+            onCommit={chat.rename}
+          />
+        </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
   )
@@ -185,6 +189,8 @@ function ChatBreadcrumb(props: { chat: Chat }) {
 
 function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => void }) {
   const chat = props.chat
+  const [renaming, setRenaming] = useState(false)
+  const agent = useCustomAgentName(chat.root)
   return (
     <header className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2 max-md:pl-11">
       {chat.child ? (
@@ -193,11 +199,20 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
           {chat.childTitle ?? "Subagent"}
         </Button>
       ) : (
-        <ChatBreadcrumb chat={chat} />
+        <div className="mr-auto flex min-w-0 items-center gap-2">
+          <ChatBreadcrumb chat={chat} editing={renaming} onEditingChange={setRenaming} />
+          {agent ? (
+            <Badge variant="outline" className="shrink-0">
+              <IconGhostFilled />
+              {agent}
+            </Badge>
+          ) : null}
+        </div>
       )}
       <ChatActions
         sessionId={chat.child ?? chat.root}
         archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
+        onRename={chat.child || !chat.canRename ? undefined : () => setRenaming(true)}
       />
       <Button
         variant="ghost"
