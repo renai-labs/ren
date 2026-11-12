@@ -15,9 +15,15 @@ const usage = `Usage:
                             "ready <run dir>/run.env" when the app answers.
   bun serve-e2b.ts clean    Removes what stopped runs left: containers, E2B sandboxes, tunnels.
 
-Needs E2B_API_KEY, NGROK_AUTHTOKEN, QA_INFERENCE_GATEWAY_KEY, and docker, go and ngrok. Passes
+Needs E2B_API_KEY, NGROK_AUTHTOKEN, QA_INFERENCE_GATEWAY_KEY, and docker, go and ngrok; outside an E2B
+sandbox also cloudflared, for the server's and the drive store's HTTPS addresses. Passes
 SLACK_CLIENT_ID, SLACK_CLIENT_SECRET and SLACK_SIGNING_SECRET to the server when they are set.
-REN_E2E_HOME: state folder, ~/.local/state/ren-e2e by default. REN_E2E_RUNS: runs at the same time, 2.`
+REN_E2E_HOME: state folder, ~/.local/state/ren-e2e by default. REN_E2E_RUNS: runs at the same time, 2.
+REN_E2E_ISSUE: the issue the run checks, such as ren-337; it goes into the run's name and E2B tags.
+REN_E2E_GATEWAY_URL: the model gateway, https://llm.v2.useren.ai by default. REN_E2E_GATEWAY_BRAIN_URL: the
+gateway the brains call, when it is not the same.
+
+Each E2B sandbox of a run has the owner ren-e2e-<issue>-<id> and the tags source=ren-e2e, run and issue.`
 
 const { positionals } = parseArgs({ allowPositionals: true })
 const repository = path.resolve(import.meta.dir, "../../..")
@@ -25,7 +31,8 @@ const home = process.env.REN_E2E_HOME ?? path.join(os.homedir(), ".local/state/r
 const runs = path.join(home, "runs")
 const limit = Number(process.env.REN_E2E_RUNS ?? "2")
 const ngrokApi = "http://127.0.0.1:4040/api"
-const gateway = "https://llm.v2.useren.ai"
+const gateway = process.env.REN_E2E_GATEWAY_URL ?? "https://llm.v2.useren.ai"
+const issue = (process.env.REN_E2E_ISSUE ?? "").toLowerCase().replaceAll(/[^a-z0-9-]/g, "")
 const storage = { accessKeyId: "rendev", secretAccessKey: "ren-dev-secret" }
 
 const required = (name: string) => {
@@ -134,7 +141,7 @@ const gatewayKey = required("QA_INFERENCE_GATEWAY_KEY")
 mkdirSync(runs, { recursive: true })
 await clean(e2bKey)
 
-const name = `e2e-${crypto.randomUUID().slice(0, 6)}`
+const name = ["ren-e2e", issue, crypto.randomUUID().slice(0, 6)].filter(Boolean).join("-")
 const dir = path.join(runs, name)
 const lock = path.join(home, "start.lock")
 const claim = async (): Promise<void> => {
@@ -223,20 +230,32 @@ const ngrokAgent = async () => {
 }
 
 const Tunnel = Schema.Struct({ public_url: Schema.String })
-const tunnel = async (suffix: string, proto: "tcp" | "http", port: number) => {
+const tunnel = async (suffix: string, port: number) => {
   const response = await fetch(`${ngrokApi}/tunnels`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: `${name}${suffix}`, proto, addr: `127.0.0.1:${port}` }),
+    body: JSON.stringify({ name: `${name}${suffix}`, proto: "tcp", addr: `127.0.0.1:${port}` }),
   })
-  if (!response.ok) throw new Error(`ngrok ${proto} tunnel: ${response.status} ${await response.text()}`)
+  if (!response.ok) throw new Error(`ngrok TCP tunnel: ${response.status} ${await response.text()}`)
   return Schema.decodeUnknownSync(Tunnel)(await response.json()).public_url
 }
-const publicUrl = async (suffix: string, port: number, proto: "tcp" | "http") => {
-  if (sandboxId) return `https://${port}-${sandboxId}.e2b.app`
-  if (proto === "http") return tunnel(suffix, "http", port)
-  return (await tunnel(suffix, "tcp", port)).replace("tcp://", "http://")
+const quickTunnel = async (label: string, port: number) => {
+  const file = path.join(dir, "logs", `${label}-tunnel.log`)
+  start(`${label}-tunnel.log`, ["cloudflared", "tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${port}`], dir, {
+    PATH: process.env.PATH ?? "",
+    HOME: os.homedir(),
+  })
+  const urlIn = async () =>
+    /https:\/\/[a-z0-9-]+\.trycloudflare\.com/.exec(
+      await Bun.file(file)
+        .text()
+        .catch(() => ""),
+    )?.[0] ?? ""
+  await until(`the ${label} tunnel`, async () => (await urlIn()) !== "", 60)
+  return urlIn()
 }
+const publicUrl = (label: string, port: number) =>
+  sandboxId ? Promise.resolve(`https://${port}-${sandboxId}.e2b.app`) : quickTunnel(label, port)
 
 const trustSandboxEgress = async () => {
   const caFile = path.join(os.homedir(), ".ren/egress-ca.pem")
@@ -329,7 +348,7 @@ ren:
   )
   start("egress.log", [egress, "--config", egressConfig], dir, { PATH: process.env.PATH ?? "" })
   await until("the egress", listening(ports.tunnel), 30)
-  return { certs, egressPublic: (await tunnel("", "tcp", ports.tunnel)).replace("tcp://", "") }
+  return { certs, egressPublic: (await tunnel("", ports.tunnel)).replace("tcp://", "") }
 }
 
 const brainImage = async () => {
@@ -369,10 +388,7 @@ const main = async () => {
   const egress = await egressUp()
   const templateTag = await brainImage()
   await bundlesUp()
-  const [renUrl, driveUrl] = await Promise.all([
-    publicUrl("-server", ports.server, "http"),
-    publicUrl("-drive", ports.drive, "tcp"),
-  ])
+  const [renUrl, driveUrl] = await Promise.all([publicUrl("server", ports.server), publicUrl("drive", ports.drive)])
   const encode = (key: Signature.PrivateKey) =>
     JSON.stringify([{ id: key.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.key) }])
   const brain = await Effect.runPromise(Signature.generate("e2e-brain"))
@@ -413,10 +429,12 @@ const main = async () => {
     E2B_API_KEY: e2bKey,
     E2B_TEMPLATE: templateTag,
     E2B_OWNER: name,
+    E2B_LABELS: JSON.stringify({ source: "ren-e2e", run: name, ...(issue && { issue }) }),
     E2B_VCPU_SECOND_MICRO_USD: "14",
     E2B_GIB_SECOND_MICRO_USD: "4.5",
     REN_URL: renUrl,
     REN_INFERENCE_GATEWAY_URL: gateway,
+    ...(process.env.REN_E2E_GATEWAY_BRAIN_URL && { REN_INFERENCE_BRAIN_URL: process.env.REN_E2E_GATEWAY_BRAIN_URL }),
     REN_INFERENCE_GATEWAY_KEY: gatewayKey,
     EGRESS_PROXY_ADDRESS: egress.egressPublic,
     EGRESS_CA_FILE: `${egress.certs}/mitm-ca.pem`,
@@ -449,7 +467,8 @@ const main = async () => {
     { PATH: process.env.PATH ?? "", HOME: os.homedir(), VITE_REN_API_URL: `http://127.0.0.1:${ports.server}` },
   )
   await until("the server", answers(`http://127.0.0.1:${ports.server}/health`), 180)
-  await until("the server's public address", answers(`${renUrl}/health`), 60)
+  await until("the server's public address", answers(`${renUrl}/health`), 120)
+  await until("the drive store's public address", answers(driveUrl), 120)
   await until("the app", answers(`${appOrigin}/app/`), 180)
 
   const runEnv = {

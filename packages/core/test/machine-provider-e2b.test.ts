@@ -160,6 +160,7 @@ const it = testEffect(
           E2B_DOMAIN: "e2b.test",
           E2B_API_URL: `http://127.0.0.1:${e2b.port}`,
           E2B_OWNER: "ren-test-a",
+          E2B_LABELS: JSON.stringify({ source: "ren-e2e", run: "e2e-a1b2c3", owner: "someone-else", kind: "hand" }),
           E2B_VCPU_SECOND_MICRO_USD: "14",
           E2B_GIB_SECOND_MICRO_USD: "4.5",
         }),
@@ -209,30 +210,34 @@ describe("E2BSandbox with an egress", () => {
     }),
   )
 
-  it.live("this Ren sees only the sandboxes of its E2B_OWNER, so its cleanup never destroys another Ren's", () =>
-    Effect.gen(function* () {
-      const provider = yield* BrainProvider.first
-      seen.length = 0
-      expect((yield* provider.list).map((each) => each.binding)).toEqual([
-        { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
-      ])
-      yield* provider.create({
-        labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
-        config: {},
-        variables: {},
-        image: Option.none(),
-        network: MachineProvider.unrestricted,
-      })
-      const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
-      expect(JSON.parse(create?.body ?? "{}").metadata).toEqual({
-        owner: "ren-test-a",
-        brain: "brn_03",
-        generation: "1",
-        kind: "brain",
-        organization: "org_01",
-        space: "spc_01",
-      })
-    }),
+  it.live(
+    "this Ren sees only the sandboxes of its E2B_OWNER, so its cleanup never destroys another Ren's; E2B_LABELS tags each sandbox and cannot replace Ren's own tags",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* BrainProvider.first
+        seen.length = 0
+        expect((yield* provider.list).map((each) => each.binding)).toEqual([
+          { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
+        ])
+        yield* provider.create({
+          labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
+          config: {},
+          variables: {},
+          image: Option.none(),
+          network: MachineProvider.unrestricted,
+        })
+        const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
+        expect(JSON.parse(create?.body ?? "{}").metadata).toEqual({
+          source: "ren-e2e",
+          run: "e2e-a1b2c3",
+          owner: "ren-test-a",
+          brain: "brn_03",
+          generation: "1",
+          kind: "brain",
+          organization: "org_01",
+          space: "spc_01",
+        })
+      }),
   )
 
   it.live("a create that finds its sandbox paused resumes it before the network update, and makes no other", () =>
