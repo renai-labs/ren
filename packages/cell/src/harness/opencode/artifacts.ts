@@ -4,8 +4,8 @@ import { Plugin } from "@opencode/plugin/effect"
 import { Tool } from "@opencode/schema/tool"
 import { SessionID } from "@opencode/schema/session-id"
 import { SessionMessage } from "@opencode/schema/session-message"
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
+import type { HandConnections } from "@ren/brain/hand/connections"
+import type { HandClient } from "@ren/hand-api/hand-client"
 import type { RenHostApi } from "@ren/host-api/ren-host-api"
 import { Artifact } from "@ren/schema/artifact"
 import { Identifier } from "@ren/schema/identifier"
@@ -103,7 +103,7 @@ const failure = (error: unknown) => new Tool.Error({ message: messageOf(error), 
 
 export const make = (input: {
   readonly ren: OpenCodeMcp.RenAccess
-  readonly connections: Option.Option<EnvironmentConnections.Interface>
+  readonly connections: Option.Option<HandConnections.Interface>
   readonly directoryOf: (sessionId: string) => string
 }) =>
   Plugin.define({
@@ -133,7 +133,7 @@ export const make = (input: {
             Effect.timeout(answersWithin),
             Effect.provide(FetchHttpClient.layer),
           )
-        const onEnvironment = <A, E>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, E>) =>
+        const onEnvironment = <A, E>(use: (client: HandClient.Client) => Effect.Effect<A, E>) =>
           Effect.gen(function* () {
             const connections = Option.filter(input.connections, () => Boolean(workspaceID))
             if (Option.isNone(connections))

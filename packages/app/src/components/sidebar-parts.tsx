@@ -22,7 +22,6 @@ import {
   IconClock,
   IconCube,
   IconHelpCircle,
-  IconLayoutGridFilled,
   IconLock,
   IconLogout,
   IconMessageCircle,
@@ -66,12 +65,12 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
 } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { CreateOrganizationDialog } from "./create-organization-dialog.js"
 import { FilterMenu, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
-import { NewSpaceDialog } from "./new-space-dialog.js"
 import { RowMenu } from "./row-menu.js"
 import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
@@ -95,7 +94,30 @@ const iconButton =
 
 const shortcut = /Mac|iPhone|iPad/u.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"
 
-export function Header(props: { onSearch: () => void }) {
+function SearchButton(props: { onSearch: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-sidebar-foreground/55 hover:text-sidebar-foreground"
+            aria-label="Search"
+            onClick={props.onSearch}
+          />
+        }
+      >
+        <IconSearch data-weight="heavy" />
+      </TooltipTrigger>
+      <TooltipContent>
+        Search <Kbd>{shortcut}</Kbd>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function Header(props: { onSearch?: (() => void) | undefined }) {
   return (
     <div className="mt-1 mb-3.5 flex items-center px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0.5">
       <span
@@ -104,23 +126,19 @@ export function Header(props: { onSearch: () => void }) {
       >
         <Logomark className="size-4.5" />
       </span>
-      <span className="flex-1 group-data-[collapsible=icon]:hidden" />
+      <span className="flex-1 text-base font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+        Ren
+      </span>
+      {props.onSearch ? (
+        <span className="group-data-[collapsible=icon]:hidden">
+          <SearchButton onSearch={props.onSearch} />
+        </span>
+      ) : null}
       <Tooltip>
         <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              className={cn(iconButton, "group-data-[collapsible=icon]:hidden")}
-              aria-label="Search"
-              onClick={props.onSearch}
-            />
-          }
-        >
-          <IconSearch data-weight="heavy" />
-        </TooltipTrigger>
-        <TooltipContent>
-          Search <Kbd>{shortcut}</Kbd>
-        </TooltipContent>
+          render={<SidebarTrigger className={cn(iconButton, "hidden group-data-[collapsible=icon]:flex")} />}
+        />
+        <TooltipContent>Toggle sidebar</TooltipContent>
       </Tooltip>
     </div>
   )
@@ -150,6 +168,7 @@ export function NavRow(props: {
 
 export function Section(props: {
   label: string
+  to?: "/spaces"
   actions?: ReactNode | undefined
   open?: boolean | undefined
   onToggle?: (() => void) | undefined
@@ -159,7 +178,12 @@ export function Section(props: {
   return (
     <SidebarGroup className={cn("px-0.5 pt-5 pb-0 group-data-[collapsible=icon]:pt-3", props.className)}>
       <div className="group/section flex h-6 shrink-0 items-center pr-1 pb-1 pl-2.25 group-data-[collapsible=icon]:hidden">
-        {props.onToggle ? (
+        {props.to ? (
+          <Link to={props.to} className="text-sm font-medium text-sidebar-foreground/80 hover:text-sidebar-foreground">
+            {props.label}
+          </Link>
+        ) : null}
+        {!props.to && props.onToggle ? (
           <Button
             variant="ghost"
             size="sm"
@@ -176,9 +200,10 @@ export function Section(props: {
               )}
             />
           </Button>
-        ) : (
+        ) : null}
+        {!props.to && !props.onToggle ? (
           <span className="text-sm font-medium text-sidebar-foreground/80">{props.label}</span>
-        )}
+        ) : null}
         <span className="flex-1" />
         <span className="flex items-center">{props.actions}</span>
       </div>
@@ -318,53 +343,6 @@ export function SpaceEntry(props: {
       </div>
       <RenameSpaceDialog space={props.space} open={renaming} onOpenChange={setRenaming} />
     </SidebarMenuItem>
-  )
-}
-
-export function SpacesActions() {
-  const spaces = useSpaces().spaces
-  const [creating, setCreating] = useState(false)
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              to="/spaces"
-              aria-label="All spaces"
-              className={buttonVariants({
-                variant: "ghost",
-                size: "icon-sm",
-                className:
-                  "text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100",
-              })}
-            />
-          }
-        >
-          <IconLayoutGridFilled />
-        </TooltipTrigger>
-        <TooltipContent>All spaces</TooltipContent>
-      </Tooltip>
-      {spaces.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Add space"
-                className="text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100"
-                onClick={() => setCreating(true)}
-              />
-            }
-          >
-            <IconPlus data-weight="heavy" />
-          </TooltipTrigger>
-          <TooltipContent>Add space</TooltipContent>
-        </Tooltip>
-      ) : null}
-      <NewSpaceDialog open={creating} onOpenChange={setCreating} />
-    </>
   )
 }
 
