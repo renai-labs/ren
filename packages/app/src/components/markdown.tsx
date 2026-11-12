@@ -23,7 +23,13 @@ import {
 } from "@ren/ui/code-block"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
 import { Button } from "@ren/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@ren/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { IconCheck, IconCopy } from "@tabler/icons-react"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
@@ -145,8 +151,10 @@ function MarkdownTable({ node: _node, className, children, ...props }: Component
               {copied ? <IconCheck /> : <IconCopy />}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => copy("markdown")}>Copy as Markdown</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copy("csv")}>Copy as CSV</DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => copy("markdown")}>Copy as Markdown</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => copy("csv")}>Copy as CSV</DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
