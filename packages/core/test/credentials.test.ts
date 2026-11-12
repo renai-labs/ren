@@ -519,24 +519,22 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
     }),
   )
 
-  it.effect("two credentials that inject by host for one host, without a placeholder, are ambiguous", () =>
-    Effect.sync(() => {
-      const header: Credential.Inject = { op: "setHeader", name: "Authorization", format: "Bearer {value}" }
-      const candidates = [
-        candidate("GITHUB", "space", ["api.github.com"], header),
-        candidate("GITHUB_BOT", "org", ["api.github.com"], header),
-      ]
-      expect(Credentials.match(candidates, { host: "api.github.com", placeholders: [] })).toEqual({
-        ok: false,
-        reason: "ambiguous",
-      })
-      const one = Credentials.match(candidates.slice(0, 1), { host: "api.github.com", placeholders: [] })
-      expect(one.ok && one.matches.map((matched) => matched.candidate.label)).toEqual(["GITHUB"])
-      expect(Credentials.match(candidates, { host: "api.stripe.com", placeholders: [] })).toEqual({
-        ok: true,
-        matches: [],
-      })
-    }),
+  it.effect(
+    "a request without a placeholder gets no credential; one that sets a header goes in by its placeholder",
+    () =>
+      Effect.sync(() => {
+        const header: Credential.Inject = { op: "setHeader", name: "Authorization", format: "Bearer {value}" }
+        const candidates = [
+          candidate("GITHUB", "space", ["api.github.com"], header),
+          candidate("GITHUB_BOT", "org", ["api.github.com"], header),
+        ]
+        expect(Credentials.match(candidates, { host: "api.github.com", placeholders: [] })).toEqual({
+          ok: true,
+          matches: [],
+        })
+        const found = Credentials.match(candidates, { host: "api.github.com", placeholders: ["ren:GITHUB_BOT"] })
+        expect(found.ok && found.matches.map((matched) => matched.candidate.label)).toEqual(["GITHUB_BOT"])
+      }),
   )
 
   it.live(
