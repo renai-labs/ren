@@ -25,6 +25,7 @@ export type FindBarProps = {
 const hitName = "ren-find-hit"
 const activeName = "ren-find-active"
 const bodies = "[data-searchable]"
+const unsearchable = ".katex-mathml, [data-streamdown=\"mermaid-block\"]"
 const seekFrames = 12
 const steps: Readonly<Record<string, number>> = { Enter: 1, ShiftEnter: -1, ArrowDown: 1, ArrowUp: -1 }
 
@@ -39,7 +40,9 @@ const clear = () => {
 const special = /[.*+?^${}()|[\]\\]/g
 
 const bodyRanges = (body: Element, pattern: RegExp) => {
-  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, (node) =>
+    node.parentElement?.closest(unsearchable) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+  )
   const nodes: Array<{ node: Text; start: number }> = []
   const text = { value: "" }
   while (walker.nextNode())

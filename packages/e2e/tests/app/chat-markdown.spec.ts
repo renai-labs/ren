@@ -23,9 +23,9 @@ test("a chat message renders mermaid diagrams and math, and keeps prices as text
       "```",
     ].join("\n"),
   )
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill(`${marker} draw it`)
-  await start.getByRole("button", { name: "Send" }).click()
+  const composer = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await composer.fill(`${marker} draw it`)
+  await composer.press("Enter")
 
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
   const message = page.getByText("costs $5 and $10")
