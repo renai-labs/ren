@@ -245,6 +245,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const fileExists = Atom.family((view: PathView) =>
     Atom.make((get) => {
+      get(running(view.root))
       const slash = view.path.lastIndexOf("/")
       const listed = get
         .result(folder({ root: view.root, path: view.path.slice(0, slash + 1) }))
@@ -253,10 +254,12 @@ export const make = <R, ER>(options: Options<R, ER>) => {
       return Effect.flatMap(listed, (found) =>
         found
           ? Effect.succeed(view.path)
-          : Effect.map(get.result(files({ root: view.root, query: view.path, type: "file" })), (matches) => {
-              const named = matches.filter((entry) => entry.path.split("/").at(-1) === view.path)
-              return named.length === 1 ? named.at(0)?.path : undefined
-            }),
+          : Effect.flatMap(get.result(session(view.root)), (opened) => opened.searchFiles(view.path, "file")).pipe(
+              Effect.map((matches) => {
+                const named = matches.filter((entry) => entry.path.split("/").at(-1) === view.path)
+                return named.length === 1 ? named.at(0)?.path : undefined
+              }),
+            ),
       )
     }),
   )
