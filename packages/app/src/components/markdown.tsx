@@ -150,7 +150,7 @@ const isCode = (node: MarkdownNode | undefined, pattern: RegExp) =>
 
 const insightOpen = /^★ Insight ─+$/u
 const insightClose = /^─+$/u
-const calloutMarker = /^\[!(note|tip|important|warning|caution)\][ \t]*\r?\n/iu
+const calloutMarker = /^\[!(note|tip|important|warning|caution)\][ \t]*(?:\r?\n|$)/iu
 
 const firstText = (blockquote: MarkdownNode) => {
   const paragraph = blockquote.children?.find((child) => child.type === "element")
@@ -162,8 +162,11 @@ const calloutKind = (blockquote: MarkdownNode) => {
   const first = firstText(blockquote)
   const marker = calloutMarker.exec(first?.text.value ?? "")
   if (!first || !marker) return null
+  const only = first.paragraph.children?.length === 1
+  if (!marker[0].endsWith("\n") && !only) return null
   first.text.value = (first.text.value ?? "").slice(marker[0].length)
   if (first.text.value === "") first.paragraph.children?.shift()
+  if (first.paragraph.children?.length === 0) blockquote.children = blockquote.children?.filter((child) => child !== first.paragraph)
   return marker[1]?.toLowerCase() ?? null
 }
 

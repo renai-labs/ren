@@ -142,17 +142,20 @@ test("a member reads a GitHub callout as a note and an unknown marker as a block
   await createOrganization(page.request, { name: "Mary Jackson" })
   const marker = await scriptedReply(
     page.request,
-    "> [!TIP]\n> Use **bun**.\n\n> [!FOO]\n> Not a callout.\n\n`★ Insight ─────`\nKeep it small.\n`─────`",
+    "> [!TIP]\n> Use **bun**.\n\n> [!CAUTION]\n> - item one\n> - item two\n>\n> ```ts\n> const x = 1\n> ```\n\n> [!FOO]\n> Not a callout.\n\n`★ Insight ─────`\nKeep it small.\n`─────`",
   )
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill(`Explain ${marker}`)
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill(`Explain ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
 
   const tip = page.getByRole("note", { name: "Tip" })
   await expect(tip).toBeVisible({ timeout: brainStart })
   await expect(tip).toContainText("Use bun.")
   await expect(tip).not.toContainText("[!TIP]")
+  const caution = page.getByRole("note", { name: "Caution" })
+  await expect(caution).toContainText("item two")
+  await expect(caution).toContainText("const x = 1")
+  await expect(caution).not.toContainText("[!CAUTION]")
   const unknown = page.getByRole("blockquote").filter({ hasText: "Not a callout." })
   await expect(unknown).toContainText("[!FOO]")
   await expect(page.getByRole("note", { name: "Insight" })).toContainText("Keep it small.")
