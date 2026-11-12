@@ -56,6 +56,7 @@ import type {
   AppProfileReachAppRequestConnectInput,
   AppRegistryListInput,
   AppRegistryGetInput,
+  AppToolsGetInput,
   AgentMembershipListInput,
   AgentMembershipCreateInput,
   AgentMembershipArchiveInput,
@@ -692,6 +693,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["app-registry", "get", input] as const,
             queryFn: (context) => client["app-registry"]["get"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    "app-tools": {
+      get: {
+        queryKey: (input?: AppToolsGetInput) =>
+          input === undefined ? (["app-tools", "get"] as const) : (["app-tools", "get", input] as const),
+        queryOptions: (input: AppToolsGetInput) =>
+          queryOptions({
+            queryKey: ["app-tools", "get", input] as const,
+            queryFn: (context) => client["app-tools"]["get"](input, { signal: context.signal }),
           }),
       },
     },

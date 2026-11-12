@@ -60,7 +60,10 @@ it.live("members browse listed apps and install them, but app routes cannot publ
                 auth: { type: "none" },
               },
             },
-            listing: { body: "Library docs" },
+            listing: {
+              body: "Library docs",
+              tools: { context7: [{ name: "resolve", description: "Find a library", readOnly: true }] },
+            },
           },
           { slug: "unlisted", name: "Unlisted", description: "Not in the registry" },
         ],
@@ -82,11 +85,21 @@ it.live("members browse listed apps and install them, but app routes cannot publ
     expect(Schema.decodeUnknownSync(Page({ slug: Schema.String }))(browse.body).items.map((item) => item.slug)).toEqual(
       ["context7"],
     )
+    const bySlugs = (query: string) =>
+      Effect.map(request("GET", `/app-registry?${query}`, cookie), (response) =>
+        Schema.decodeUnknownSync(Page({ slug: Schema.String }))(response.body).items.map((item) => item.slug),
+      )
+    expect(yield* bySlugs("slugs=context7")).toEqual(["context7"])
+    expect(yield* bySlugs("slugs=unlisted&slugs=context7")).toEqual(["context7"])
     expect((yield* request("GET", "/app-registry/context7", cookie)).body).toMatchObject({
       id: listed?.appId,
-      listing: { body: "Library docs" },
+      listing: { body: "Library docs", toolCounts: { context7: 1 } },
       revision: 1,
     })
+    expect((yield* request("GET", "/app-registry/context7/tools", cookie)).body).toEqual({
+      context7: [{ name: "resolve", description: "Find a library", readOnly: true }],
+    })
+    expect((yield* request("GET", "/app-registry/unlisted/tools", cookie)).status).toBe(404)
     expect((yield* request("GET", "/app-registry/unlisted", cookie)).status).toBe(404)
     expect(
       (yield* request("PATCH", `/apps/${listed?.appId}`, cookie, { name: "Mine", expectedRevision: 1 })).status,

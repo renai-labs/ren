@@ -122,14 +122,9 @@ export type CatalogApp = {
   readonly brandColor: string | null
   readonly source: "registry" | "custom"
   readonly ownerSpaceId: string | null
-  readonly mcps: AppInfo["mcps"]
-  readonly skills: AppInfo["skills"] | AppRegistryInfo["skills"]
-  readonly listing: {
-    readonly body: string | null
-    readonly examplePrompts: ReadonlyArray<string>
-    readonly categories: AppRegistryInfo["listing"]["categories"]
-    readonly tools: AppRegistryInfo["listing"]["tools"]
-  } | null
+  readonly mcps: AppInfo["mcps"] | null
+  readonly skills: AppInfo["skills"] | null
+  readonly listing: AppRegistryInfo["listing"] | null
 }
 
 const brandColorOf = (app: object) =>
@@ -158,14 +153,9 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
   icon: app.icon,
   source: "registry",
   ownerSpaceId: null,
-  mcps: app.mcps,
-  skills: app.skills,
-  listing: {
-    body: app.listing.body,
-    examplePrompts: app.listing.examplePrompts,
-    categories: app.listing.categories,
-    tools: app.listing.tools,
-  },
+  mcps: null,
+  skills: null,
+  listing: app.listing,
 })
 
 export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"

@@ -240,6 +240,11 @@ export const AppRegistryList = {
     Flag.withDescription("Match the slug, name or description, ignoring case."),
   ),
   category: Flag.String("category").pipe(Flag.optional, Flag.withDescription("Match a category in any group.")),
+  slugs: Flag.String("slugs").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Only the apps with these slugs, in slug order. Separate values with commas."),
+  ),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
@@ -791,6 +796,10 @@ export const SessionPullRequests = {
 
 export const TaskPullRequests = { id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
 
+export const AppToolsGet = {
+  idOrSlug: Argument.String("app").pipe(Argument.withDescription("Registry app slug or ID")),
+}
+
 export const AppProfileDelete = { id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")) }
 
 export const ScheduleRunList = {
@@ -1174,6 +1183,12 @@ export const commands = [
             Command.withDescription("Show a registry app"),
             Command.withHandler((input) =>
               Effect.flatMap(Effect.promise(operations), (module) => module.AppRegistryGet(input)),
+            ),
+          ),
+          Command.make("tools", AppToolsGet).pipe(
+            Command.withDescription("List the tools of a registry app’s MCPs"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.AppToolsGet(input)),
             ),
           ),
         ]),

@@ -113,6 +113,8 @@ import type {
   AppRegistryListOutput,
   AppRegistryGetInput,
   AppRegistryGetOutput,
+  AppToolsGetInput,
+  AppToolsGetOutput,
   AgentMembershipListInput,
   AgentMembershipListOutput,
   AgentMembershipCreateInput,
@@ -1147,6 +1149,7 @@ export function make(options: ClientOptions) {
             query: {
               query: input["query"],
               category: input["category"],
+              slugs: input["slugs"],
               page: input["page"],
               pageSize: input["pageSize"],
             },
@@ -1161,6 +1164,19 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/app-registry/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "app-tools": {
+      get: (input: AppToolsGetInput, requestOptions?: RequestOptions) =>
+        request<AppToolsGetOutput>(
+          {
+            method: "GET",
+            path: `/app-registry/${encodeURIComponent(input.idOrSlug)}/tools`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,

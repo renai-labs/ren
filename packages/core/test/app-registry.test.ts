@@ -68,10 +68,10 @@ it.live("only execution changes raise the revision; every org that reaches the a
     const reader = yield* Seed.actor(yield* Seed.organization(), "member")
     expect(yield* registry.get(reader, "docs")).toMatchObject({
       name: "Docs",
-      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"], tools },
+      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"], toolCounts: { docs: 1 } },
       revision: 2,
-      skills: { guide: { upstream: { path: "b" } } },
     })
+    expect(yield* registry.tools(reader, "docs")).toEqual(tools)
   }),
 )
 
@@ -116,7 +116,7 @@ it.live("an admin reads a listed app but never edits, archives or moves it", () 
   }),
 )
 
-it.live("browsing lists active listings by text and category", () =>
+it.live("browsing lists active listings by text, category and slugs", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service
     const reader = yield* Seed.actor(yield* Seed.organization(), "member")
@@ -131,21 +131,15 @@ it.live("browsing lists active listings by text and category", () =>
         }),
       ],
     })
-    const slugs = (input: { readonly query?: string; readonly category?: string }) =>
-      Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
+    const slugs = (input: {
+      readonly query?: string
+      readonly category?: string
+      readonly slugs?: ReadonlyArray<string>
+    }) => Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
     expect(yield* slugs({})).toEqual(["linear", "notion"])
-    yield* publish(
-      publication("guide", {
-        skills: {
-          write: { type: "content", description: "Write guides", instructions: "Long", files: { "a.md": "A" } },
-        },
-      }),
-    )
-    expect((yield* registry.get(reader, "guide")).skills).toEqual({
-      write: { type: "content", description: "Write guides", requiredCredentials: [] },
-    })
     expect(yield* slugs({ query: "ISSUES" })).toEqual(["linear"])
     expect(yield* slugs({ category: "writer" })).toEqual(["notion"])
+    expect(yield* slugs({ slugs: ["notion", "unlisted", "linear"] })).toEqual(["linear", "notion"])
     expect((yield* Effect.flip(registry.get(reader, "unlisted")))._tag).toBe("Primitive.NotFound")
   }),
 )

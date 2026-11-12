@@ -879,6 +879,13 @@ export type InsightsRow = {
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
+export type AppListingSummary = {
+  body: string | null
+  categories: AppListingCategories
+  examplePrompts: Array<string>
+  toolCounts: { [x: PrimitiveSlug]: number }
+}
+
 export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
 
 export type FactoryEntry = { agentId: string; maxRuns?: number; finish?: true; to?: Array<FactoryEdge> }
@@ -982,17 +989,6 @@ export type CredentialOwner =
   | { kind: "space"; spaceId: SpaceID }
   | { kind: "person"; userId: AuthUserID }
   | CredentialProfileOwner
-
-export type AppListingInfo = {
-  appId: AppID
-  body: string | null
-  categories: AppListingCategories
-  examplePrompts: Array<string>
-  tools: AppListingTools
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
 
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
 
@@ -1155,6 +1151,16 @@ export type InfraApplied = { changes: Array<InfraChange>; lock: InfraLock }
 
 export type InsightsResult = { rows: Array<InsightsRow> }
 
+export type AppRegistryInfo = {
+  id: AppID
+  slug: PrimitiveSlug
+  name: string
+  description: string
+  icon: string | null
+  listing: AppListingSummary
+  revision: number
+}
+
 export type FactoryInfo = { maxHandoffs?: number; agents: Array<FactoryEntry> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
@@ -1182,14 +1188,6 @@ export type SkillContent = {
   instructions: string
   files?: { [x: string]: string }
 }
-
-export type SkillSummary =
-  | { type: "content"; description: string; requiredCredentials?: Array<CredentialSkillRequirement> }
-  | {
-      type: "upstream"
-      requiredCredentials?: Array<CredentialSkillRequirement>
-      upstream: { url: string; ref?: string; path: string }
-    }
 
 export type AppProfileInfo = {
   id: AppProfileID
@@ -1300,6 +1298,8 @@ export type ChannelPlaceInfo = {
 }
 
 export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
+
+export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceInfo = {
   id: SpaceID
@@ -1435,21 +1435,6 @@ export type AppInfo = {
   archivedAt: string | null
 }
 
-export type AppRegistryInfo = {
-  id: AppID
-  slug: PrimitiveSlug
-  name: string
-  description: string
-  icon: string | null
-  listing: AppListingInfo
-  requiredCredentials?: Array<CredentialRequirement>
-  environment?: AppEnvironment
-  mcps: { [x: PrimitiveSlug]: McpInfo }
-  skills: { [x: PrimitiveSlug]: SkillSummary }
-  dependsOn?: Array<PrimitiveSlug>
-  revision: number
-}
-
 export type InfraPulledApp = {
   name: string
   description: string
@@ -1467,8 +1452,6 @@ export type SessionMessageContent = SessionMessageText | SessionMessageReasoning
 export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
 
 export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
-
-export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
 
 export type InfraPulledSpace = {
   name: string
@@ -6551,24 +6534,35 @@ export type AppRegistryListInput = {
   readonly query?: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["query"]
   readonly category?: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["category"]
+  readonly slugs?: {
+    readonly query?: string | undefined
+    readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["slugs"]
   readonly page: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
   readonly pageSize: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["pageSize"]
@@ -6579,6 +6573,10 @@ export type AppRegistryListOutput = AppRegistryPage
 export type AppRegistryGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
 export type AppRegistryGetOutput = AppRegistryInfo
+
+export type AppToolsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type AppToolsGetOutput = AppListingTools
 
 export type AgentMembershipListInput = {
   readonly spaceId?: {

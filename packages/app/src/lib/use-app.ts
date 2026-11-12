@@ -1,5 +1,5 @@
 import type { AppInfo, AppRegistryInfo } from "@ren/client"
-import { useQueries } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { fromApp, fromRegistry, type CatalogApp } from "./apps.js"
 import { RouterContext } from "./router-context.js"
 import { Seed } from "./seed.js"
@@ -36,8 +36,23 @@ export function useApps(idsOrSlugs: ReadonlyArray<string>) {
 }
 
 export function useApp(idOrSlug: string | undefined) {
-  const apps = useApps(idOrSlug ? [idOrSlug] : [])
-  return { app: idOrSlug ? apps.of(idOrSlug) : undefined, pending: apps.pending }
+  const { api, queryClient } = RouterContext.useRouterContext()
+  const query = useQuery({
+    ...api.app.get.queryOptions({ idOrSlug: idOrSlug ?? "" }),
+    ...Seed.fromList<AppInfo>(queryClient, [api.app.list.queryKey()], idOrSlug ?? ""),
+    enabled: idOrSlug !== undefined,
+  })
+  const listed = idOrSlug
+    ? Seed.fromList<AppRegistryInfo>(
+        queryClient,
+        [api["app-registry"].list.queryKey().slice(0, 1)],
+        idOrSlug,
+      ).initialData()
+    : undefined
+  return {
+    app: query.data ? { ...fromApp(query.data), listing: listed?.listing ?? null } : undefined,
+    pending: idOrSlug !== undefined && query.isPending,
+  }
 }
 
 const mention = /(?:^|\s)@([a-z0-9][a-z0-9-]*)/giu

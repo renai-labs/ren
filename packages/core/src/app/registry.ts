@@ -21,6 +21,10 @@ export interface Interface extends Primitive.Interface<typeof AppRegistry.defini
   ) => Effect.Effect<AppRegistry.BatchResult, Primitive.NotFound | Primitive.Conflict>
   readonly withdraw: (slug: string) => Effect.Effect<AppListing.Info, Primitive.NotFound | Primitive.Conflict>
   readonly relist: (slug: string) => Effect.Effect<AppListing.Info, Primitive.NotFound | Primitive.Conflict>
+  readonly tools: (
+    actor: Actor.Info,
+    idOrSlug: string,
+  ) => Effect.Effect<(typeof AppListing.Tools)["Type"], Primitive.NotFound>
 }
 export class Service extends Context.Service<Service, Interface>()("@ren/core/AppRegistry") {}
 
@@ -71,44 +75,22 @@ const listedDependencies = Effect.fnUntraced(function* (
     })
 })
 
-const entries = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  rows: ReadonlyArray<{
-    readonly app: typeof Database.Schema.app.$inferSelect
-    readonly listing: typeof Database.Schema.app_listing.$inferSelect
-  }>,
-) {
-  const infos = yield* AppQueries.infos(
-    transaction,
-    rows.map((row) => row.app),
-  )
-  return rows.flatMap((row, index): ReadonlyArray<AppRegistry.Info> => {
-    const info = infos.at(index)
-    if (!info) return []
-    return [
-      {
-        id: info.id,
-        slug: info.slug,
-        name: info.name,
-        description: info.description,
-        icon: info.icon,
-        listing: listingInfo(row.listing),
-        requiredCredentials: info.requiredCredentials,
-        ...(info.environment && { environment: info.environment }),
-        mcps: info.mcps,
-        skills: Object.fromEntries(
-          Object.entries(info.skills).map(([slug, skill]) => [
-            slug,
-            skill.type === "content"
-              ? { type: skill.type, description: skill.description, requiredCredentials: skill.requiredCredentials }
-              : skill,
-          ]),
-        ),
-        dependsOn: info.dependsOn,
-        revision: info.revision,
-      },
-    ]
-  })
+const entry = (row: {
+  readonly app: typeof Database.Schema.app.$inferSelect
+  readonly listing: typeof Database.Schema.app_listing.$inferSelect
+}): AppRegistry.Info => ({
+  id: row.app.id,
+  slug: row.app.slug,
+  name: row.app.name,
+  description: row.app.description,
+  icon: row.app.icon,
+  listing: {
+    body: row.listing.body,
+    categories: row.listing.categories,
+    examplePrompts: row.listing.example_prompts,
+    toolCounts: Object.fromEntries(Object.entries(row.listing.tools).map(([mcp, tools]) => [mcp, tools.length])),
+  },
+  revision: row.app.revision,
 })
 
 const dependencyApps = Effect.fnUntraced(function* (transaction: Database.Transaction, batch: AppRegistry.Batch) {
@@ -353,6 +335,19 @@ export const layer = Layer.effect(
         }),
       }
     })
+    const find = Effect.fnUntraced(function* (actor: Actor.Info, idOrSlug: string) {
+      if (!isAllowed(actor, "get")) return yield* notFound
+      const row = (yield* database.transaction((transaction) =>
+        browse(
+          transaction,
+          idOrSlug.startsWith("app_")
+            ? eq(Database.Schema.app.id, App.ID.make(idOrSlug))
+            : eq(Database.Schema.app.slug, idOrSlug),
+        ),
+      )).at(0)
+      if (!row) return yield* notFound
+      return row
+    })
     return Service.of({
       list: Effect.fn("AppRegistry.list")(function* (actor, input) {
         if (!isAllowed(actor, "list")) return Pagination.page([], input)
@@ -373,29 +368,20 @@ export const layer = Layer.effect(
                   input.category
                     ? sql`exists (select 1 from jsonb_each(${Database.Schema.app_listing.categories}) as entry(key, value) where entry.value @> ${JSON.stringify([input.category])}::jsonb)`
                     : undefined,
+                  input.slugs ? inArray(Database.Schema.app.slug, [...input.slugs]) : undefined,
                 ),
               ),
               input,
             )
-            return { ...page, items: yield* entries(transaction, page.items) }
+            return { ...page, items: page.items.map(entry) }
           }),
         )
       }),
       get: Effect.fn("AppRegistry.get")(function* (actor, idOrSlug) {
-        if (!isAllowed(actor, "get")) return yield* notFound
-        return yield* database.transaction((transaction) =>
-          Effect.gen(function* () {
-            const rows = yield* browse(
-              transaction,
-              idOrSlug.startsWith("app_")
-                ? eq(Database.Schema.app.id, App.ID.make(idOrSlug))
-                : eq(Database.Schema.app.slug, idOrSlug),
-            )
-            const entry = (yield* entries(transaction, rows)).at(0)
-            if (!entry) return yield* notFound
-            return entry
-          }),
-        )
+        return entry(yield* find(actor, idOrSlug))
+      }),
+      tools: Effect.fn("AppRegistry.tools")(function* (actor, idOrSlug) {
+        return (yield* find(actor, idOrSlug)).listing.tools
       }),
       publish: Effect.fn("AppRegistry.publish")(function* (batch, options) {
         return yield* database

@@ -314,6 +314,14 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     ...resolved("task", "task.get"),
   },
   {
+    operation: "app-tools.get",
+    path: ["app", "registry", "tools"],
+    description: "List the tools of a registry app’s MCPs",
+    arguments: ["idOrSlug"],
+    names: { idOrSlug: "app" },
+    descriptions: { idOrSlug: "Registry app slug or ID" },
+  },
+  {
     operation: "app-profile.delete",
     path: ["app", "profile", "delete"],
     description: "Delete an app profile",
