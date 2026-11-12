@@ -25,19 +25,23 @@ import { RouterContext } from "../../lib/router-context.js"
 const route = getRouteApi("/_authed/_shell/")
 
 export function HomePage() {
+  const search = route.useSearch()
+  const key = search.spaceId ? Drafts.space(search.spaceId) : Drafts.fresh
+  return <HomeComposer key={key} draftKey={key} spaceId={search.spaceId} />
+}
+
+function HomeComposer(props: { draftKey: string; spaceId: string | undefined }) {
   const { api, platform } = RouterContext.useRouterContext()
   const me = useMe()
   const navigate = useNavigate()
   const spaces = useSpaces().joined
-  const search = route.useSearch()
   const [remembered, setRemembered] = useState(() => ChatPreferences.homeSpace.read(platform.storage))
-  const kept = Drafts.useDraft(search.spaceId ? Drafts.space(search.spaceId) : Drafts.fresh)
+  const kept = Drafts.useDraft(props.draftKey)
   const draft = kept.draft
   const setDraft = kept.set
   const spaceId =
-    draft.chat?.spaceId ?? spaces.find((space) => space.id === (search.spaceId ?? remembered))?.id ?? spaces.at(0)?.id
-  const [createdId, setCreatedId] = useState(() => Session.ID.create())
-  const sessionId = draft.chat?.sessionId ?? createdId
+    draft.chat?.spaceId ?? spaces.find((space) => space.id === (props.spaceId ?? remembered))?.id ?? spaces.at(0)?.id
+  const [sessionId, setSessionId] = useState(() => draft.chat?.sessionId ?? Session.ID.create())
   const [sent, setSent] = useState<Composer.Draft>()
   const models = useModels(sessionId)
   const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
@@ -49,6 +53,13 @@ export function HomePage() {
   const suggest = mentions.suggest
   const starting = create.isPending
   const modelsLoading = models.loading
+  const renew = () => {
+    const next = Session.ID.create()
+    setSessionId(next)
+    kept.update((current) =>
+      current.chat ? Composer.withChat(current, { spaceId: current.chat.spaceId, sessionId: next }) : current,
+    )
+  }
   const chooseSpace = (next: string) => {
     ChatPreferences.homeSpace.write(platform.storage, next)
     setRemembered(next)
@@ -90,11 +101,7 @@ export function HomePage() {
         },
         onError: (error) => {
           setSent(undefined)
-          const next = Session.ID.create()
-          setCreatedId(next)
-          kept.update((current) =>
-            current.chat ? Composer.withChat(current, { spaceId: current.chat.spaceId, sessionId: next }) : current,
-          )
+          renew()
           toast.error("Could not start the chat", { description: errorMessage(error) })
         },
       },
