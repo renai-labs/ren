@@ -33,7 +33,7 @@ export const published = Effect.fnUntraced(function* (
   owner: Artifacts.Owner,
   id: Artifact.ID,
 ) {
-  const link = yield* artifacts.archive(owner, id)
+  const link = yield* artifacts.download(owner, id)
   return yield* Effect.promise(async () =>
     Object.fromEntries(
       await Promise.all(

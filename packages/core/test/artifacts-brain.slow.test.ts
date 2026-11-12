@@ -11,6 +11,7 @@ import { FetchHttpClient, HttpClient } from "effect/http"
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Access } from "../src/access.js"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
 import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
 import { Artifacts } from "../src/artifacts.js"
@@ -64,9 +65,10 @@ const it = testEffect(
       Layer.provideMerge(Host.layerWith({ ENVIRONMENT_DIRECTORY: remote }, Configured.models, environments)),
       Layer.provideMerge(
         Artifacts.layer.pipe(
-          Layer.provide(
+          Layer.provide([
             process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer,
-          ),
+            Access.layer,
+          ]),
           Layer.provideMerge(
             process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? TestCloudflare.layer : FetchHttpClient.layer,
           ),
