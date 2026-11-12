@@ -432,6 +432,17 @@ const handlers = Layer.mergeAll(
             }),
           ),
         )
+        .handle("session.callAppTool", (request) =>
+          run((harness) =>
+            harness.chat
+              .callAppTool(request.params.sessionID, {
+                server: request.payload.server,
+                tool: request.payload.tool,
+                input: request.payload.input ?? {},
+              })
+              .pipe(notFound, rejected),
+          ),
+        )
         .handle("session.permission.reply", (request) =>
           run((harness) =>
             harness.chat

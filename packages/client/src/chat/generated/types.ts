@@ -831,6 +831,8 @@ export type SessionMessageToolError = {
   metadata?: { [x: string]: JsonValue }
 }
 
+export type ChatAppToolResult = { output?: JsonValue | undefined; content: Array<SessionMessageToolContent> }
+
 export type SessionEventSessionRevertStaged = {
   id: string
   created: number
@@ -1365,6 +1367,27 @@ export type SessionModelSwitchInput = {
 }
 
 export type SessionModelSwitchOutput = void
+
+export type SessionCallAppToolInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly server: {
+    readonly server: string
+    readonly tool: string
+    readonly input?: { readonly [x: string]: JsonValue } | undefined
+  }["server"]
+  readonly tool: {
+    readonly server: string
+    readonly tool: string
+    readonly input?: { readonly [x: string]: JsonValue } | undefined
+  }["tool"]
+  readonly input?: {
+    readonly server: string
+    readonly tool: string
+    readonly input?: { readonly [x: string]: JsonValue } | undefined
+  }["input"]
+}
+
+export type SessionCallAppToolOutput = ChatAppToolResult
 
 export type SessionPermissionReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]

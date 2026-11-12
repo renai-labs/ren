@@ -208,6 +208,19 @@ const EndpointSessionModelSwitch = (raw: RawClient["session"]) => (input: Sessio
     Effect.mapError(mapClientError),
   )
 
+type SessionCallAppToolRequest = Parameters<RawClient["session"]["session.callAppTool"]>[0]
+type SessionCallAppToolInput = {
+  readonly sessionID: SessionCallAppToolRequest["params"]["sessionID"]
+  readonly server: SessionCallAppToolRequest["payload"]["server"]
+  readonly tool: SessionCallAppToolRequest["payload"]["tool"]
+  readonly input?: SessionCallAppToolRequest["payload"]["input"]
+}
+const EndpointSessionCallAppTool = (raw: RawClient["session"]) => (input: SessionCallAppToolInput) =>
+  raw["session.callAppTool"]({
+    params: { sessionID: input["sessionID"] },
+    payload: { server: input["server"], tool: input["tool"], input: input["input"] },
+  }).pipe(Effect.mapError(mapClientError))
+
 type SessionPermissionReplyRequest = Parameters<RawClient["session"]["session.permission.reply"]>[0]
 type SessionPermissionReplyInput = {
   readonly sessionID: SessionPermissionReplyRequest["params"]["sessionID"]
@@ -274,6 +287,7 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
   },
   command: EndpointSessionCommand(raw),
   model: { switch: EndpointSessionModelSwitch(raw) },
+  callAppTool: EndpointSessionCallAppTool(raw),
   status: EndpointSessionStatus(raw),
 })
 

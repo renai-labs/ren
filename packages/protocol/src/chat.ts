@@ -145,6 +145,23 @@ export const ShellOutputQuery = Schema.Struct({
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThan(0))),
 }).annotate({ identifier: "Chat.ShellOutputQuery" })
 
+export interface AppToolInput extends Schema.Schema.Type<typeof AppToolInput> {}
+export const AppToolInput = Schema.Struct({
+  server: Schema.NonEmptyString.annotate({ description: "The MCP server of the view that makes the call." }),
+  tool: Schema.NonEmptyString.annotate({ description: "A tool of that server." }),
+  input: Schema.optional(Schema.Record(Schema.String, Schema.Json)).annotate({
+    description: "The tool’s arguments.",
+  }),
+}).annotate({ identifier: "Chat.AppToolInput" })
+
+export interface AppToolResult extends Schema.Schema.Type<typeof AppToolResult> {}
+export const AppToolResult = Schema.Struct({
+  output: Schema.optional(Schema.Json).annotate({
+    description: "The tool’s structured result, or its text when it has none.",
+  }),
+  content: Schema.Array(SessionMessage.ToolContent),
+}).annotate({ identifier: "Chat.AppToolResult" })
+
 export const EventGroup = HttpApiGroup.make("event")
   .add(
     HttpApiEndpoint.get("event.subscribe", "/chat/event", {
@@ -438,6 +455,21 @@ export const SessionGroup = HttpApiGroup.make("session")
         summary: "Switch the model",
         description:
           "Set the session’s model and variant from the next step on. It is the session’s own setting: it wins over the model its settings give and outlasts a restart. The model must be in `model.list`. A subagent session cannot switch.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.callAppTool", "/chat/session/:sessionID/app-tool", {
+      params,
+      payload: AppToolInput,
+      success: AppToolResult,
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.callAppTool",
+        summary: "Call a tool for an MCP App view",
+        description:
+          "Run a tool of the MCP server whose view a tool part shows, on behalf of that view, with the session’s permission rules. A server or tool the session does not have is not found; a call the rules refuse, or a tool that fails, is an invalid request with its message. The client asks the person before it calls a tool that writes.",
       }),
     ),
   )

@@ -23,6 +23,7 @@ import {
   PubSub,
   Ref,
   Schedule,
+  Schema,
   Semaphore,
   Stream,
   SubscriptionRef,
@@ -1079,6 +1080,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     listFiles: (path: string) =>
       Effect.flatMap(client, (api) => api.file.list({ sessionID: root, ...(path && { path }) })),
     readFile: (path: string) => Effect.flatMap(client, (api) => api.file.read({ sessionID: root, path })),
+    callAppTool: (call: {
+      readonly server: string
+      readonly tool: string
+      readonly input: { readonly [key: string]: typeof Schema.Json.Type }
+    }) =>
+      Effect.flatMap(client, (api) => api.session.callAppTool({ sessionID: root, ...call })),
     vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
     vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),

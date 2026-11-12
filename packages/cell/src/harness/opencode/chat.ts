@@ -12,7 +12,7 @@ import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Result, Schema, Stream } from "effect"
+import { Clock, Effect, Option, Predicate, Ref, Result, Schema, Stream } from "effect"
 import { Base64 } from "effect/encoding"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
@@ -360,6 +360,20 @@ export const make = (
               }
             })
           }),
+        ),
+      ),
+    callAppTool: (sessionId, call) =>
+      host.activate(sessionId).pipe(
+        Effect.andThen(
+          Option.match(host.chats, {
+            onNone: () => Effect.succeed(undefined),
+            onSome: (chats) => Effect.map(Ref.get(chats.instances), (all) => all.get(sessionId)),
+          }),
+        ),
+        Effect.flatMap((instance) =>
+          instance
+            ? instance.callAppTool(call)
+            : Effect.fail(new Harness.NotFound({ message: "This chat has no connected apps." })),
         ),
       ),
     vcs: (sessionId) =>

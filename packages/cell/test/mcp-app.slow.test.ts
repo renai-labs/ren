@@ -6,7 +6,6 @@ import { Effect, Layer, Option, Schedule } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { McpPeer } from "./lib/mcp.js"
 import { ReferenceChat } from "./lib/reference-chat.js"
-import { Shared } from "./lib/shared.js"
 
 setDefaultTimeout(300_000)
 
@@ -54,9 +53,9 @@ describe.skipIf(!DriveHand.hasDocker)("MCP App views", () => {
       })
       const path = (app as { app: { path: string } }).app.path
       expect(path).toStartWith(`chats/${chat.sessionId}/apps/`)
-      const uploaded = Effect.try(() =>
-        environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
-      ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
+      const uploaded = Effect.try(() => environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`)).pipe(
+        Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }),
+      )
       expect(yield* uploaded).toBe(html)
     }),
   )

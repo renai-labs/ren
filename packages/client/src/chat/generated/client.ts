@@ -39,6 +39,8 @@ import type {
   SessionCommandOutput,
   SessionModelSwitchInput,
   SessionModelSwitchOutput,
+  SessionCallAppToolInput,
+  SessionCallAppToolOutput,
   SessionPermissionReplyInput,
   SessionPermissionReplyOutput,
   SessionFormReplyInput,
@@ -510,6 +512,18 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+      callAppTool: (input: SessionCallAppToolInput, requestOptions?: RequestOptions) =>
+        request<SessionCallAppToolOutput>(
+          {
+            method: "POST",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/app-tool`,
+            body: { server: input["server"], tool: input["tool"], input: input["input"] },
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
       status: (requestOptions?: RequestOptions) =>
         request<SessionStatusOutput>(
           { method: "GET", path: `/chat/status`, successStatus: 200, declaredStatuses: [], empty: false },

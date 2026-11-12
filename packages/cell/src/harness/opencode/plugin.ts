@@ -5,6 +5,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { Agent, Model, Provider } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
+import { SessionMessage as OpenCodeMessage } from "@opencode/schema/session-message"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { HandConnections } from "@ren/brain/hand/connections"
@@ -110,6 +111,11 @@ interface Instance {
   readonly attach: (
     files: ReadonlyArray<Session.DriveFile>,
   ) => Effect.Effect<ReadonlyArray<DriveFiles.Attached>, Harness.Rejected>
+  readonly callAppTool: (call: {
+    readonly server: string
+    readonly tool: string
+    readonly input: Readonly<Record<string, unknown>>
+  }) => Effect.Effect<Harness.AppToolResult, Harness.NotFound | Harness.Rejected>
 }
 
 const attachedOf = Schema.decodeUnknownOption(Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }))
@@ -656,7 +662,9 @@ export const make = (
             }),
           )
           yield* context.session.hook("context", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
+              for (const hidden of yield* tool.list())
+                if (Predicate.hasProperty(hidden.options, "appOnly")) delete event.tools[hidden.id]
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
               event.system.push(...agent.instructions.map((text) => ({ type: "text" as const, text })))
@@ -724,6 +732,48 @@ export const make = (
           )
           turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
           const instance: Instance = {
+            callAppTool: (call) =>
+              Effect.gen(function* () {
+                const found = (yield* tool.list()).find(
+                  (each) => each.name === call.tool && each.options?.namespace === naming.normalize(call.server),
+                )
+                if (!found) return yield* new Harness.NotFound({ message: `${call.server} has no tool ${call.tool}` })
+                const agent = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.primary.name
+                if (!agent) return yield* new Harness.Rejected({ message: "This chat has no agent yet." })
+                const result = yield* found
+                  .execute(call.input, {
+                    sessionID: SessionID.make(sessionId),
+                    agent: Agent.ID.make(agent),
+                    messageID: OpenCodeMessage.ID.create(),
+                    id: Tool.CallID.make(`app_${crypto.randomUUID()}`),
+                    progress: () => Effect.void,
+                  })
+                  .pipe(
+                    Effect.mapError(
+                      (error) =>
+                        new Harness.Rejected({
+                          message: Predicate.hasProperty(error, "message") ? String(error.message) : "The tool failed",
+                        }),
+                    ),
+                  )
+                const output = Schema.decodeUnknownOption(Schema.Json)(result.output)
+                return {
+                  ...(Option.isSome(output) && output.value !== null && { output: output.value }),
+                  content:
+                    typeof result.content === "string"
+                      ? [{ type: "text" as const, text: result.content }]
+                      : (result.content ?? []).map((part) =>
+                          part.type === "text"
+                            ? part
+                            : {
+                                type: "file" as const,
+                                uri: part.uri,
+                                mime: part.mime,
+                                ...(part.name !== undefined && { name: part.name }),
+                              },
+                        ),
+                }
+              }),
             reload: Effect.all([context.agent.reload(), references.refresh, tool.reload()], { discard: true }),
             session: context.session,
             installed,

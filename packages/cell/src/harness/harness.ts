@@ -33,6 +33,11 @@ interface SessionState extends Reconcile.Snapshot {
 
 export type Refresh = (endpointId: string) => Effect.Effect<Option.Option<Models.ApiKey>>
 
+export interface AppToolResult {
+  readonly output?: typeof Schema.Json.Type
+  readonly content: ReadonlyArray<SessionMessage.ToolContent>
+}
+
 export class NotFound extends Schema.TaggedError<NotFound>()("Harness.NotFound", { message: Schema.String }) {}
 
 export class Rejected extends Schema.TaggedError<Rejected>()("Harness.Rejected", { message: Schema.String }) {}
@@ -120,6 +125,10 @@ export interface Chat {
     sessionId: Session.ID,
     path: string,
   ) => Effect.Effect<SessionCatalog.FileContent, NotFound | Rejected>
+  readonly callAppTool: (
+    sessionId: Session.ID,
+    call: { readonly server: string; readonly tool: string; readonly input: Readonly<Record<string, unknown>> },
+  ) => Effect.Effect<AppToolResult, NotFound | Rejected>
   readonly vcs: (sessionId: Session.ID) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
   readonly vcsDiff: (
     sessionId: Session.ID,
