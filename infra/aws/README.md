@@ -50,6 +50,41 @@ terraform plan -out=plan && terraform apply plan
 
 The mTLS certificates: one CA signs a server certificate for `server.<name>.internal` and an egress certificate for `egress.<name>.internal`, both with `serverAuth` and `clientAuth`. The sandbox CA is separate. `repos/iron-proxy/script/certificates.ts` shows the commands.
 
+## Artifacts on Cloudflare
+
+Register the account's `workers.dev` subdomain and create an account-owned token
+with Workers Admin permissions. Store it as `CLOUDFLARE_API_TOKEN` in the existing
+server secret, preserving its other keys. Terraform never reads the token value.
+
+Add this to the deployment's private `terraform.tfvars`:
+
+```hcl
+artifact_cloudflare = {
+  account_id = "<cloudflare-account-id>"
+}
+```
+
+This selects `ARTIFACT_PROVIDER=cloudflare`, sets `CLOUDFLARE_ACCOUNT_ID`, and
+appends the token's Secrets Manager reference to the ECS task. Other environment
+values and secret references are preserved. These two environment settings take
+precedence over the same keys in `server_environment`. Leaving this variable
+unset preserves the existing provider configuration.
+
+The drives bucket expires temporary `artifact-uploads/` objects after seven days.
+Retained source archives and provider recovery state are outside that prefix.
+The existing server bucket policy covers their access; environments must be able
+to reach the bucket endpoint for presigned uploads and downloads.
+
+Plan and apply the stack, then use the release workflow to deploy the server
+image and updated task configuration. Applying Terraform does not move the ECS
+service to the new task revision. Verify the complete chat-to-public-artifact
+flow after deployment; see `docs/artifact-cloudflare.md`.
+
+This setup uses ordinary Workers and stable `workers.dev` URLs. A dedicated
+domain (`*.<website_url>`) is an optional follow-up, followed by Workers for
+Platforms and its dispatch infrastructure. Neither is required here. Switching
+configuration does not migrate existing artifacts between providers/accounts.
+
 ## GitHub environment
 
 The deploy workflow runs in the environment that `github_environment` names:
