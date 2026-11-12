@@ -101,6 +101,15 @@ function bootStatusOf(
   return
 }
 
+const postOf = (
+  child: Session.ID | undefined,
+  update: (change: (current: Composer.Draft) => Composer.Draft) => void,
+) =>
+  child
+    ? undefined
+    : (text: string) =>
+        update((current) => Composer.withText(current, [current.text.trimEnd(), text].filter(Boolean).join("\n\n")))
+
 const childOf = (
   options: { readonly child?: string | undefined; readonly onChild?: unknown },
   local: Session.ID | undefined,
@@ -299,8 +308,7 @@ export function useChat(
       void loadAll().catch((error: unknown) =>
         toast.error("Could not load earlier messages", { description: errorMessage(error) }),
       ),
-    post: (text: string) =>
-      kept.update((current) => Composer.withText(current, [current.text.trimEnd(), text].filter(Boolean).join("\n\n"))),
+    post: postOf(child, kept.update),
     edit: (message: SessionMessage.User, text: string) => {
       setReverting(true)
       void revert(message.id)

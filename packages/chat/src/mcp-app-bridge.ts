@@ -36,7 +36,10 @@ export const toolCall = Schema.decodeUnknownOption(ToolCall)
 
 export const postText = (params: unknown) =>
   Option.map(Schema.decodeUnknownOption(Post)(params), (post) =>
-    (Array.isArray(post.content) ? post.content : [post.content]).map((part) => part.text).join("\n"),
+    [post.content]
+      .flat()
+      .map((part) => part.text)
+      .join("\n"),
   )
 
 export const link = (params: unknown) =>

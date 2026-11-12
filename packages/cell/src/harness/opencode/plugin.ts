@@ -5,7 +5,6 @@ import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { Agent, Model, Provider } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
-import { SessionMessage as OpenCodeMessage } from "@opencode/schema/session-message"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { HandConnections } from "@ren/brain/hand/connections"
@@ -52,6 +51,7 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
+import { OpenCodeMessageId } from "./message-id.js"
 import type { GitSources } from "../../git-sources.js"
 import { OpenCodeCopies } from "./copies.js"
 import { OpenCodeHandTools } from "./hand-tools.js"
@@ -571,9 +571,7 @@ export const make = (
               event.result = { ...event.result, metadata: stripped }
               if (typeof view.html !== "string" || typeof view.server !== "string") return
               const bytes = new TextEncoder().encode(view.html)
-              const hash = Array.from(
-                new Uint8Array(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes))),
-              )
+              const hash = [...new Uint8Array(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)))]
                 .map((byte) => byte.toString(16).padStart(2, "0"))
                 .join("")
                 .slice(0, 16)
@@ -742,9 +740,7 @@ export const make = (
                   Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.primary.name ??
                   (yield* context.agent.list().pipe(Effect.option)).pipe(
                     Option.flatMap((listed) =>
-                      Option.fromUndefinedOr(
-                        listed.data.find((each) => each.mode !== "subagent" && !each.hidden)?.id,
-                      ),
+                      Option.fromUndefinedOr(listed.data.find((each) => each.mode !== "subagent" && !each.hidden)?.id),
                     ),
                     Option.getOrUndefined,
                   )
@@ -753,7 +749,7 @@ export const make = (
                   .execute(call.input, {
                     sessionID: SessionID.make(sessionId),
                     agent: Agent.ID.make(agent),
-                    messageID: OpenCodeMessage.ID.create(),
+                    messageID: OpenCodeMessageId.create(),
                     id: Tool.CallID.make(`app_${crypto.randomUUID()}`),
                     progress: () => Effect.void,
                   })
@@ -761,26 +757,21 @@ export const make = (
                     Effect.mapError(
                       (error) =>
                         new Harness.Rejected({
-                          message: Predicate.hasProperty(error, "message") ? String(error.message) : "The tool failed",
+                          message: Predicate.hasProperty(error, "message") ? error.message : "The tool failed",
                         }),
                     ),
                   )
                 const output = Schema.decodeUnknownOption(Schema.Json)(result.output)
                 return {
-                  ...(Option.isSome(output) && output.value !== null && { output: output.value }),
+                  ...(Option.isSome(output) && Predicate.isNotNullish(output.value) && { output: output.value }),
                   content:
                     typeof result.content === "string"
                       ? [{ type: "text" as const, text: result.content }]
-                      : (result.content ?? []).map((part) =>
-                          part.type === "text"
-                            ? part
-                            : {
-                                type: "file" as const,
-                                uri: part.uri,
-                                mime: part.mime,
-                                ...(part.name !== undefined && { name: part.name }),
-                              },
-                        ),
+                      : (result.content ?? []).map((part) => {
+                          if (part.type === "text") return part
+                          const file = { type: "file" as const, uri: part.uri, mime: part.mime }
+                          return Predicate.isNotUndefined(part.name) ? Object.assign(file, { name: part.name }) : file
+                        }),
                 }
               }),
             reload: Effect.all([context.agent.reload(), references.refresh, tool.reload()], { discard: true }),

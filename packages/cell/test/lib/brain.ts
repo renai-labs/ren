@@ -162,7 +162,8 @@ export const make = Effect.fnUntraced(function* (
     Option.none(),
     {
       saved: options.chats ? Option.some(Effect.succeed(new Map())) : Option.none(),
-      directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps),
+      directoryOf: () => directory,
+      apps: Option.fromUndefinedOr(options.apps),
     },
   )
   const harness = yield* OpenCodeHarness.make(

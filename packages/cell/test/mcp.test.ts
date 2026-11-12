@@ -15,11 +15,11 @@ import { Shared } from "./lib/shared.js"
 
 const it = testEffect(Layer.empty)
 
-const observed = Effect.fnUntraced(function* (apps?: AppCatalog.Info, chats?: boolean) {
+const observed = Effect.fnUntraced(function* (apps?: AppCatalog.Info, options: { readonly chats?: boolean } = {}) {
   const tools = yield* Queue.unbounded<ReadonlyArray<{ readonly id: string; readonly description: string }>>()
   const brain = yield* BrainTest.make({
     ...(apps && { apps }),
-    ...(chats && { chats }),
+    ...(options.chats && { chats: options.chats }),
     plugin: Plugin.define({
       id: "tool-catalog",
       effect: (context) =>
@@ -440,7 +440,7 @@ it.live("a tool that declares a view leaves Code Mode, so its call is its own to
 it.live("a view calls a tool of its own server through the Chat API, and no other", () =>
   Effect.gen(function* () {
     const peer = yield* McpPeer.make({ view: "<p>view</p>" })
-    const test = yield* observed(undefined, true)
+    const test = yield* observed(undefined, { chats: true })
     yield* test.brain.configureApps(McpPeer.catalog("view", [{ slug: "docs", url: peer.url }]))
     const script = McpPeer.execute("docs.marker")
     yield* test.prompt(`${script.marker} read the marker`)

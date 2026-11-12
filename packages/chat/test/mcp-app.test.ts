@@ -13,6 +13,14 @@ const tool = (name: string, metadata: typeof SessionMessage.Json.Type): SessionM
   time,
 })
 
+const running = (name: string, metadata: typeof SessionMessage.Json.Type): SessionMessage.Tool => ({
+  type: "tool",
+  id: "call",
+  name,
+  state: { status: "running", input: {}, metadata },
+  time,
+})
+
 const app = {
   server: "linear",
   tool: "create_issue",
@@ -29,10 +37,7 @@ test("a completed MCP tool part is a view, by its metadata", () => {
 test.each([
   tool("linear_create_issue", {}),
   tool("linear_create_issue", { app: { server: "linear" } }),
-  {
-    ...tool("linear_create_issue", { app }),
-    state: { status: "running" as const, input: {}, metadata: { app } },
-  },
+  running("linear_create_issue", { app }),
 ])("anything else is not a view", (content) => {
   expect(Option.isNone(McpApp.of(content))).toBe(true)
 })

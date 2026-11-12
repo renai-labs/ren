@@ -1084,8 +1084,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       readonly server: string
       readonly tool: string
       readonly input: { readonly [key: string]: typeof Schema.Json.Type }
-    }) =>
-      Effect.flatMap(client, (api) => api.session.callAppTool({ sessionID: root, ...call })),
+    }) => Effect.flatMap(client, (api) => api.session.callAppTool({ sessionID: root, ...call })),
     vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
     vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
