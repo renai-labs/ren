@@ -29,6 +29,7 @@ import {
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
 import { ImageLightbox } from "../../components/image-lightbox.js"
+import { MediaUnavailable } from "../../components/media-unavailable.js"
 import { formatBytes } from "../../lib/format.js"
 import { useDriveFile } from "../../lib/use-drive-file.js"
 import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
@@ -48,28 +49,50 @@ function FileIcon(props: { name: string; mime: string }) {
   return <IconFile />
 }
 
+function DriveFileThumbnail(props: {
+  file: SessionMessage.DriveFile
+  thumbnail: string | undefined
+  onError: () => void
+}) {
+  if (!props.thumbnail)
+    return (
+      <AttachmentMedia>
+        <FileIcon name={props.file.name} mime={props.file.mime} />
+      </AttachmentMedia>
+    )
+  return (
+    <AttachmentMedia variant="image">
+      <ImageLightbox src={props.thumbnail} alt={props.file.name} className="size-full cursor-zoom-in">
+        <img src={props.thumbnail} alt={props.file.name} onError={props.onError} />
+      </ImageLightbox>
+    </AttachmentMedia>
+  )
+}
+
 function DriveFileCard(props: {
   spaceId: string | undefined
   file: SessionMessage.DriveFile
   disabled?: boolean | undefined
   onRemove?: (() => void) | undefined
 }) {
+  const drive = useDriveFile(props.spaceId, props.file)
+  if (drive.image && drive.deleted && !props.onRemove)
+    return <MediaUnavailable reason="Not in the drive" title={props.file.name} />
+  return <DriveFileChip file={props.file} drive={drive} disabled={props.disabled} onRemove={props.onRemove} />
+}
+
+function DriveFileChip(props: {
+  file: SessionMessage.DriveFile
+  drive: ReturnType<typeof useDriveFile>
+  disabled?: boolean | undefined
+  onRemove?: (() => void) | undefined
+}) {
   const file = props.file
-  const drive = useDriveFile(props.spaceId, file)
+  const drive = props.drive
   const thumbnail = drive.image && !drive.deleted ? drive.thumbnail : undefined
   return (
     <Attachment size="sm" state={drive.deleted ? "error" : "done"}>
-      {thumbnail ? (
-        <AttachmentMedia variant="image">
-          <ImageLightbox src={thumbnail} alt={file.name} className="size-full cursor-zoom-in">
-            <img src={thumbnail} alt={file.name} onError={drive.reload} />
-          </ImageLightbox>
-        </AttachmentMedia>
-      ) : (
-        <AttachmentMedia>
-          <FileIcon name={file.name} mime={file.mime} />
-        </AttachmentMedia>
-      )}
+      <DriveFileThumbnail file={file} thumbnail={thumbnail} onError={drive.reload} />
       <AttachmentContent>
         <AttachmentTitle>{file.name}</AttachmentTitle>
         <AttachmentDescription className="tabular-nums">

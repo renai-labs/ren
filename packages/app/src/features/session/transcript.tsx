@@ -91,6 +91,7 @@ import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSkeleton } from "../../components/chat-skeleton.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ImageLightbox } from "../../components/image-lightbox.js"
+import { MediaUnavailable } from "../../components/media-unavailable.js"
 import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { ChannelOrigin } from "./channel-origin.js"
@@ -653,6 +654,32 @@ function Expandable(props: { content: ReactNode; className?: string | undefined;
   )
 }
 
+function StepImage(props: { image: SessionMessage.ToolFileContent }) {
+  const [attempt, setAttempt] = useState(0)
+  const [failed, setFailed] = useState(false)
+  if (failed)
+    return (
+      <MediaUnavailable
+        reason="Couldn't load"
+        onRetry={() => {
+          setFailed(false)
+          setAttempt(attempt + 1)
+        }}
+      />
+    )
+  return (
+    <ImageLightbox src={props.image.uri} alt={props.image.name?.split("/").at(-1) ?? "Image"}>
+      <img
+        key={attempt}
+        src={props.image.uri}
+        alt={props.image.name ?? "Image"}
+        onError={() => setFailed(true)}
+        className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
+      />
+    </ImageLightbox>
+  )
+}
+
 function StepDetail(props: {
   output: string | undefined
   failed: boolean | undefined
@@ -662,13 +689,7 @@ function StepDetail(props: {
   return (
     <>
       {images.map((image) => (
-        <ImageLightbox key={image.uri} src={image.uri} alt={image.name?.split("/").at(-1) ?? "Image"}>
-          <img
-            src={image.uri}
-            alt={image.name ?? "Image"}
-            className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
-          />
-        </ImageLightbox>
+        <StepImage key={image.uri} image={image} />
       ))}
       {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
         <Output text={props.output} failed={props.failed} />

@@ -1,4 +1,4 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, useState, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -19,6 +19,8 @@ import {
 } from "@ren/ui/code-block"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
+import { MediaGallery, useMediaLayout } from "./media-gallery.js"
+import { MediaUnavailable } from "./media-unavailable.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
@@ -60,10 +62,25 @@ function MarkdownCode({ node: _node, className, children, ...props }: ComponentP
 }
 
 function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"> & ExtraProps) {
+  const layout = useMediaLayout()
+  const [attempt, setAttempt] = useState(0)
+  const [failed, setFailed] = useState(false)
   if (typeof src !== "string" || !src) return null
+  if (failed)
+    return (
+      <MediaUnavailable
+        reason="Couldn't load"
+        className={layout.box}
+        onRetry={() => {
+          setFailed(false)
+          setAttempt(attempt + 1)
+        }}
+      />
+    )
+  const name = alt || (src.startsWith("data:") ? "" : (src.split(/[?#]/u)[0]?.split("/").at(-1) ?? ""))
   return (
-    <ImageLightbox src={src} alt={alt ?? ""} className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md">
-      <img src={src} alt={alt ?? ""} {...props} className="max-h-96 max-w-full rounded-md border object-contain" />
+    <ImageLightbox src={src} alt={name} className={layout.trigger}>
+      <img key={attempt} src={src} alt={name} onError={() => setFailed(true)} {...props} className={layout.image} />
     </ImageLightbox>
   )
 }
@@ -78,7 +95,13 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+function MarkdownDiv({ node, children, ...props }: ComponentProps<"div"> & ExtraProps) {
+  const count = Number(node?.properties["data-media-gallery"])
+  if (count > 0) return <MediaGallery count={count}>{children}</MediaGallery>
+  return <div {...props}>{children}</div>
+}
+
+const components = { code: MarkdownCode, div: MarkdownDiv, img: MarkdownImage, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
@@ -104,6 +127,68 @@ const workspaceImages = () => (tree: MarkdownNode) => {
   visit(tree)
 }
 
+const isImage = (node: MarkdownNode) =>
+  node.tagName === "img" || (node.tagName === "span" && node.properties?.["data-workspace-image"] !== undefined)
+
+const isBlank = (node: MarkdownNode) => node.type === "text" && !node.value?.trim()
+
+const isGallery = (node: MarkdownNode | undefined) => node?.properties?.["data-media-gallery"] !== undefined
+
+const gallery = (images: ReadonlyArray<MarkdownNode>): MarkdownNode => ({
+  type: "element",
+  tagName: "div",
+  properties: { "data-media-gallery": String(images.length) },
+  children: [...images],
+})
+
+const splitParagraph = (paragraph: MarkdownNode): MarkdownNode[] => {
+  const children = paragraph.children ?? []
+  if (!children.some(isImage)) return [paragraph]
+  const parts: MarkdownNode[] = []
+  let text: MarkdownNode[] = []
+  let images: MarkdownNode[] = []
+  const flushText = () => {
+    if (text.some((node) => !isBlank(node))) parts.push({ ...paragraph, children: text })
+    text = []
+  }
+  const flushImages = () => {
+    if (images.length > 0) parts.push(gallery(images))
+    images = []
+  }
+  for (const child of children) {
+    if (isImage(child)) {
+      flushText()
+      images.push(child)
+    } else if (!(images.length > 0 && isBlank(child))) {
+      flushImages()
+      text.push(child)
+    }
+  }
+  flushImages()
+  flushText()
+  return parts
+}
+
+const mediaGallery = () => (tree: MarkdownNode) => {
+  const visit = (node: MarkdownNode) => {
+    if (node.children) {
+      const merged: MarkdownNode[] = []
+      for (const child of node.children.flatMap((each) => (each.tagName === "p" ? splitParagraph(each) : [each]))) {
+        const last = merged.findLast((each) => !isBlank(each))
+        if (isGallery(child) && isGallery(last) && last) {
+          last.children = [...(last.children ?? []), ...(child.children ?? [])]
+          last.properties = { "data-media-gallery": String(last.children.length) }
+        } else if (!(isBlank(child) && merged.length === 0)) {
+          merged.push(child)
+        }
+      }
+      node.children = merged
+    }
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(tree)
+}
+
 const appLink = "#ren-app:"
 
 const withDataImages = (schema: unknown) => {
@@ -116,11 +201,13 @@ const withDataImages = (schema: unknown) => {
 const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
   ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
 )
+rehypePlugins.push(mediaGallery)
 const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
   const safe: (typeof defaultRehypePlugins)[string] =
     name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
   return name === "harden" ? [workspaceImages, safe] : [safe]
 })
+workspaceRehypePlugins.push(mediaGallery)
 
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
