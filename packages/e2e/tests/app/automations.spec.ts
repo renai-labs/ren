@@ -32,7 +32,8 @@ test("a member creates a daily automation, tests it, and finds the run under Run
   await expect(page).toHaveURL(/\/automations\/spc_\w+\/daily-report$/u)
 
   await page.getByRole("button", { name: "Test" }).click()
-  await expect(page.getByRole("tab", { name: "Run history", selected: true })).toBeVisible()
+  await expect(page.getByText("Test run started")).toBeVisible()
+  await page.getByRole("button", { name: "Runs" }).click()
   await expect(page.getByRole("cell", { name: "Test run" })).toBeVisible({ timeout: brainStart })
   await page.getByRole("link", { name: "Open chat" }).click()
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/u)
@@ -46,7 +47,7 @@ test("a member creates a daily automation, tests it, and finds the run under Run
 
   await page.goto("/app/automations")
   await expect(page.getByRole("cell", { name: /every day/u })).toBeVisible()
-  await expect(page.getByRole("cell", { name: "Active" })).toBeVisible()
+  await expect(page.getByRole("cell", { name: /Active/u })).toBeVisible()
 })
 
 const signup = (email: string) => ({ event: { event: "user signed up", uuid: crypto.randomUUID() }, person: { email } })
@@ -76,12 +77,14 @@ test("a member creates a webhook automation that is off, sees its first request 
   const url = new URL(webhooks.items.at(0)?.url ?? "")
   const send = (body: unknown) => page.request.post(`${serverURL}${url.pathname}`, { data: body })
   expect((await send(signup("first@acme.com"))).status()).toBe(202)
-  await page.getByRole("tab", { name: "Run history" }).click()
+  await page.getByRole("button", { name: "Runs" }).click()
   await expect(page.getByRole("cell", { name: "Recorded" })).toBeVisible({ timeout: 10_000 })
 
+  await page.getByRole("link", { name: "Signups" }).click()
   await page.getByRole("switch", { name: "Active" }).click()
   await page.getByRole("button", { name: "Save" }).click()
   await expect(page.getByRole("switch", { name: "Active" })).toBeChecked()
+  await page.getByRole("button", { name: "Runs" }).click()
   expect((await send(signup("second@acme.com"))).status()).toBe(202)
   await expect(page.getByRole("cell", { name: "Started" })).toBeVisible({ timeout: brainStart })
   await page.getByRole("link", { name: "Open chat" }).click()
