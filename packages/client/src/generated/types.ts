@@ -6510,7 +6510,10 @@ export type AppProfileLinkInput = {
 
 export type AppProfileLinkOutput = AppProfileInfo
 
-export type AppProfilePromoteInput = { readonly id: { readonly id: string }["id"] }
+export type AppProfilePromoteInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId: { readonly spaceId: string }["spaceId"]
+}
 
 export type AppProfilePromoteOutput = AppProfileInfo
 

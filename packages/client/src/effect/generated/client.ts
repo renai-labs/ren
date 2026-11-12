@@ -668,9 +668,14 @@ const EndpointAppProfileLink = (raw: RawClient["app-profile"]) => (input: AppPro
   }).pipe(Effect.mapError(mapClientError))
 
 type AppProfilePromoteRequest = Parameters<RawClient["app-profile"]["app-profile.promote"]>[0]
-type AppProfilePromoteInput = { readonly id: AppProfilePromoteRequest["params"]["id"] }
+type AppProfilePromoteInput = {
+  readonly id: AppProfilePromoteRequest["params"]["id"]
+  readonly spaceId: AppProfilePromoteRequest["payload"]["spaceId"]
+}
 const EndpointAppProfilePromote = (raw: RawClient["app-profile"]) => (input: AppProfilePromoteInput) =>
-  raw["app-profile.promote"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+  raw["app-profile.promote"]({ params: { id: input["id"] }, payload: { spaceId: input["spaceId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 const adaptGroupAppProfile = (raw: RawClient["app-profile"]) => ({
   list: EndpointAppProfileList(raw),

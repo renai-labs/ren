@@ -231,6 +231,7 @@ export const AppProfileLink = {
 
 export const AppProfilePromote = {
   id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 

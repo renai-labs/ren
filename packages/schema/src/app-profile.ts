@@ -150,7 +150,9 @@ export const LinkInput = Schema.Struct({ appId: AppIdentity.ID, profileId: Schem
 })
 
 export interface PromoteInput extends Schema.Schema.Type<typeof PromoteInput> {}
-export const PromoteInput = Schema.Struct({}).annotate({ identifier: "AppProfile.PromoteInput" })
+export const PromoteInput = Schema.Struct({
+  spaceId: Space.ID.annotate({ description: "The one space that the shared profile lists." }),
+}).annotate({ identifier: "AppProfile.PromoteInput" })
 
 export interface Reach extends Schema.Schema.Type<typeof Reach> {}
 export const Reach = Schema.Struct({ profiles: Schema.Array(Info) }).annotate({
