@@ -457,7 +457,8 @@ export function AccountList(props: {
   actions?: ReactNode
   profiles: ReadonlyArray<AppProfile>
   empty?: string
-  caption: (profile: AppProfile) => ReactNode
+  caption?: (profile: AppProfile) => string
+  aside?: (profile: AppProfile) => ReactNode
   action: (profile: AppProfile) => ReactNode
   onOpen?: ((profile: AppProfile) => void) | undefined
 }) {
@@ -502,11 +503,17 @@ export function AccountList(props: {
                   ) : (
                     <span className="truncate text-sm">{profile.name}</span>
                   )}
-                  <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                    {missing ? <span>Not connected ·</span> : null}
-                    {props.caption(profile)}
-                  </span>
+                  {missing || props.caption ? (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {[missing ? "Not connected" : undefined, props.caption?.(profile)]
+                        .filter((part) => part !== undefined)
+                        .join(" · ")}
+                    </span>
+                  ) : null}
                 </div>
+                {props.aside ? (
+                  <div className="flex max-w-1/2 flex-wrap justify-end gap-1">{props.aside(profile)}</div>
+                ) : null}
                 <div
                   className={cn(
                     "relative flex shrink-0 items-center gap-1",
