@@ -13,6 +13,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "#components/tooltip"
 import { IconLayoutSidebar } from "@tabler/icons-react"
 
 const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH_MIN = 200
+const SIDEBAR_WIDTH_MAX = 420
+const SIDEBAR_DRAG_THRESHOLD = 3
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -24,6 +27,10 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  width: number | undefined
+  setWidth: (width: number | undefined) => void
+  resizing: boolean
+  setResizing: (resizing: boolean) => void
 }
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
@@ -41,6 +48,8 @@ function SidebarProvider({
   defaultOpen = true,
   open: openProp,
   onOpenChange: setOpenProp,
+  width: widthProp,
+  onWidthChange,
   className,
   style,
   children,
@@ -49,8 +58,22 @@ function SidebarProvider({
   defaultOpen?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  width?: number | undefined
+  onWidthChange?: (width: number | undefined) => void
 }) {
   const isMobile = useIsMobile()
+  const [uncontrolledWidth, setUncontrolledWidth] = React.useState<number | undefined>(undefined)
+  const [resizing, setResizing] = React.useState(false)
+  const width = widthProp ?? uncontrolledWidth
+  const setWidth = React.useCallback(
+    (value: number | undefined) => {
+      const next =
+        value === undefined ? undefined : Math.round(Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, value)))
+      if (onWidthChange) onWidthChange(next)
+      else setUncontrolledWidth(next)
+    },
+    [onWidthChange],
+  )
   const [openMobile, setOpenMobile] = React.useState(false)
 
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
@@ -92,10 +115,14 @@ function SidebarProvider({
       setOpen,
       isMobile,
       openMobile,
+      width,
+      setWidth,
+      resizing,
+      setResizing,
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, width, setWidth, resizing],
   )
 
   return (
@@ -104,12 +131,16 @@ function SidebarProvider({
         data-slot="sidebar-wrapper"
         style={
           {
-            "--sidebar-width": SIDEBAR_WIDTH,
+            "--sidebar-width": width === undefined ? SIDEBAR_WIDTH : `${width}px`,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
           } as React.CSSProperties
         }
-        className={cn("group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar", className)}
+        data-resizing={resizing ? "" : undefined}
+        className={cn(
+          "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar data-resizing:cursor-col-resize data-resizing:select-none data-resizing:*:**:transition-none",
+          className,
+        )}
         {...props}
       >
         {children}
@@ -232,20 +263,49 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- Drag the rail to resize the sidebar; a click without a drag collapses or expands it.
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { toggleSidebar, open, setWidth, setResizing } = useSidebar()
+  const drag = React.useRef<{ x: number; width: number; moved: boolean } | null>(null)
 
   return (
     <button
       type="button"
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label="Resize or toggle sidebar"
       tabIndex={-1}
-      onClick={toggleSidebar}
+      onPointerDown={(event) => {
+        if (!open || event.button !== 0) return
+        const sidebar = event.currentTarget.closest("[data-slot=sidebar-container]")
+        drag.current = { x: event.clientX, width: sidebar?.getBoundingClientRect().width ?? 0, moved: false }
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onPointerMove={(event) => {
+        const start = drag.current
+        if (!start) return
+        const delta = event.clientX - start.x
+        if (!start.moved && Math.abs(delta) < SIDEBAR_DRAG_THRESHOLD) return
+        if (!start.moved) setResizing(true)
+        start.moved = true
+        const side = event.currentTarget.closest("[data-side]")?.getAttribute("data-side")
+        setWidth(start.width + (side === "right" ? -delta : delta))
+      }}
+      onPointerUp={(event) => {
+        const start = drag.current
+        drag.current = null
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.releasePointerCapture(event.pointerId)
+        setResizing(false)
+        if (!start?.moved) toggleSidebar()
+      }}
+      onPointerCancel={() => {
+        drag.current = null
+        setResizing(false)
+      }}
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-6 after:inset-s-1/2 after:w-[2px] after:rounded-full hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
-        "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
+        "in-data-[side=left]:cursor-col-resize in-data-[side=right]:cursor-col-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",

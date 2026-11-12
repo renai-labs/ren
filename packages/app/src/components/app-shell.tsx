@@ -52,6 +52,7 @@ export function AppShell() {
   const [searching, setSearching] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() => SidebarPreferences.open.read(platform.storage))
+  const [sidebarWidth, setSidebarWidth] = useState(() => SidebarPreferences.width.read(platform.storage))
   useSearchShortcut(() => setSearching((current) => !current))
   useNewTaskShortcut(() => setCreatingTask(true))
   const path = Routing.useRenderedPath()
@@ -63,6 +64,11 @@ export function AppShell() {
           onOpenChange={(next) => {
             SidebarPreferences.open.write(platform.storage, next)
             setSidebarOpen(next)
+          }}
+          width={sidebarWidth ?? undefined}
+          onWidthChange={(next) => {
+            SidebarPreferences.width.write(platform.storage, next ?? null)
+            setSidebarWidth(next ?? null)
           }}
         >
           <ShellSidebar path={path} onSearch={() => setSearching(true)} />
