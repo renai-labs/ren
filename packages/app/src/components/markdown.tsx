@@ -150,7 +150,7 @@ const isCode = (node: MarkdownNode | undefined, pattern: RegExp) =>
 
 const insightOpen = /^★ Insight ─+$/u
 const insightClose = /^─+$/u
-const calloutMarker = /^\[!(note|tip|important|warning|caution)\](?:[ \t]*\r?\n|[ \t]*$)/iu
+const calloutMarker = /^\[!(note|tip|important|warning|caution)\][ \t]*\r?\n/iu
 
 const rehypeCallouts = () => (tree: MarkdownNode) => {
   const visit = (node: MarkdownNode) => {
@@ -181,24 +181,6 @@ const rehypeCallouts = () => (tree: MarkdownNode) => {
           children: [{ type: "element", tagName: "p", properties: {}, children: body }],
         }
         continue
-      }
-      if (child.tagName === "p" && inline.length === 1 && isCode(inline[0], insightOpen)) {
-        const end = children.findIndex(
-          (sibling, offset) =>
-            offset > index &&
-            sibling.tagName === "p" &&
-            sibling.children?.length === 1 &&
-            isCode(sibling.children[0], insightClose),
-        )
-        if (end !== -1) {
-          children.splice(index, end - index + 1, {
-            type: "element",
-            tagName: "blockquote",
-            properties: { "data-callout": "insight" },
-            children: children.slice(index + 1, end).filter((sibling) => sibling.type === "element"),
-          })
-          continue
-        }
       }
       visit(child)
     }
