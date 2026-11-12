@@ -33,3 +33,16 @@ export function formatBytes(bytes: number) {
   const value = bytes / 1000 ** exponent
   return `${exponent === 0 ? value : value.toFixed(value < 10 ? 1 : 0)} ${byteUnits[exponent]}`
 }
+
+export const formatCount = (value: number) => String(Math.round(value)).replaceAll(/\B(?=(\d{3})+(?!\d))/gu, ",")
+
+export function formatTokens(tokens: number) {
+  if (tokens < 1000) return String(tokens)
+  if (tokens < 999_500) return `${Number((tokens / 1000).toFixed(tokens < 10_000 ? 1 : 0))}k`
+  return `${Number((tokens / 1_000_000).toFixed(1))}M`
+}
+
+export function formatMicroUsd(micro: number) {
+  const dollars = micro / 1_000_000
+  return dollars < 0.01 ? "<$0.01" : `$${dollars.toFixed(2)}`
+}

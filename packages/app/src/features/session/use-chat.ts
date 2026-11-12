@@ -118,6 +118,7 @@ const capabilitiesOf = (info: { readonly capabilities: SessionInfo["capabilities
   canQueue: info?.capabilities.queue !== false,
   canRevert: info?.capabilities.revert !== false,
   canRename: info?.capabilities.rename !== false,
+  canCompact: info?.capabilities.compact !== false,
 })
 
 const bridgeOf = (
@@ -205,7 +206,7 @@ export function useChat(
   const redo = ChatReact.useAction(root, (opened) => opened.redo)
   const undo = ChatReact.useAction(root, (opened) => opened.undo)
   const rename = ChatReact.useAction(root, (opened, next: string) => opened.rename(next))
-  const compact = ChatReact.useAction(root, (opened) => opened.compact(info?.model))
+  const compact = ChatReact.useAction(root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
   const restart = useMutation(api.chat.retry.mutationOptions())
   const archive = useMutation(api.session.archive.mutationOptions())
@@ -242,6 +243,7 @@ export function useChat(
     blocked,
     view: { root, sessionID: view.viewed },
     messages: view.messages,
+    contextUsage: view.contextUsage,
     rows: view.rows,
     activeMessageID: view.projection?.activeMessageID,
     busy: view.running,
@@ -359,7 +361,7 @@ export function useChat(
         (error: unknown) => toast.error("Could not undo the last message", { description: errorMessage(error) }),
       ),
     compact: () =>
-      void compact().catch((error: unknown) =>
+      void compact(model).catch((error: unknown) =>
         toast.error("Could not compact the chat", { description: errorMessage(error) }),
       ),
     restore: () =>

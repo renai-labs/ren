@@ -318,6 +318,12 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     ...resolved("session", "session.get"),
   },
   {
+    operation: "session.usage",
+    path: ["session", "usage"],
+    description: "Show what a chat and its subagents cost",
+    ...resolved("session", "session.get"),
+  },
+  {
     operation: "session.pullRequests",
     path: ["session", "pull-requests"],
     description: "List a chat’s pull requests and their state",

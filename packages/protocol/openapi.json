@@ -7063,6 +7063,74 @@
         "summary": "List a chat’s links"
       }
     },
+    "/sessions/{id}/usage": {
+      "get": {
+        "tags": ["link"],
+        "operationId": "session.usage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What a chat cost, in millionths of a US dollar. It counts the chat and its subagents, and leaves out events that the organization paid with its own key or subscription.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionUsage.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return what the chat and its subagents cost, from Ren’s usage events, split into models and tools. Sandbox compute is not counted per chat. Events that the organization paid with its own key or subscription are left out. Events arrive a few seconds after each call. A subagent’s chat reads through its root chat.",
+        "summary": "Read a chat’s cost"
+      }
+    },
     "/sessions/{id}/pull-requests": {
       "get": {
         "tags": ["link"],
@@ -24018,6 +24086,41 @@
         },
         "required": ["id"],
         "additionalProperties": false
+      },
+      "SessionUsage.Info": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "models": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "tools": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "currency": {
+            "type": "string",
+            "enum": ["usd"]
+          },
+          "source": {
+            "$ref": "#/components/schemas/SessionUsage.Source"
+          }
+        },
+        "required": ["total", "models", "tools", "currency", "source"],
+        "additionalProperties": false,
+        "description": "What a chat cost, in millionths of a US dollar. It counts the chat and its subagents, and leaves out events that the organization paid with its own key or subscription."
+      },
+      "SessionUsage.Source": {
+        "type": "string",
+        "enum": ["provider", "billed"],
+        "description": "`provider` is what the provider charged Ren. `billed` is the price Ren charged the organization."
       },
       "Settings.Info": {
         "type": "object",

@@ -1727,6 +1727,19 @@ export const SessionLinks = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["link"]["session"]["links"]({ ...request.params }),
   )
 
+export const SessionUsage = (input: Command.Command.Config.Infer<typeof Commands.SessionUsage>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["session.usage"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<session>" },
+      lookups: {
+        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["session"]["usage"]({ ...request.params }),
+  )
+
 export const SessionPullRequests = (input: Command.Command.Config.Infer<typeof Commands.SessionPullRequests>) =>
   Operation.run(
     ClientApi.groups["link"].endpoints["session.pullRequests"],

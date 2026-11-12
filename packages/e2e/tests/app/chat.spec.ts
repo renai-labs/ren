@@ -230,3 +230,21 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
 })
+
+test("a member sees the context in the chat header after a reply and compacts the chat from its popover", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Summarise the plan")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const context = page.getByRole("button", { name: /^Context (\d+% used|[\d.]+k? tokens used)$/ })
+  await expect(context).toContainText(/^\d/)
+  await context.click()
+  await expect(page.getByText("Cost", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Compact chat" }).click()
+
+  await expect(page.getByText(/^Session compact/)).toBeVisible({ timeout: brainStart })
+})

@@ -235,6 +235,8 @@ export type SessionLinksLinkedPullRequest = { url: string; number: number }
 
 export type SessionLinksIssue = { kind: "github_issue" | "linear_issue"; url: string }
 
+export type SessionUsageSource = "provider" | "billed"
+
 export type PullRequestState = "open" | "draft" | "merged" | "closed"
 
 export type ScheduleID = string
@@ -733,6 +735,14 @@ export type TaskEventStatusChanged = {
 export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comment: string | null }
 
 export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from: string | null; to: string | null }
+
+export type SessionUsageInfo = {
+  total: number
+  models: number
+  tools: number
+  currency: "usd"
+  source: SessionUsageSource
+}
 
 export type PullRequestInfo = { url: string; number: number; title: string | null; state: PullRequestState | null }
 
@@ -7700,6 +7710,10 @@ export type TaskActivityListOutput = TaskActivityPage
 export type LinkSessionLinksInput = { readonly id: { readonly id: string }["id"] }
 
 export type LinkSessionLinksOutput = SessionLinksInfo
+
+export type LinkSessionUsageInput = { readonly id: { readonly id: string }["id"] }
+
+export type LinkSessionUsageOutput = SessionUsageInfo
 
 export type LinkSessionPullRequestsInput = { readonly id: { readonly id: string }["id"] }
 

@@ -9,6 +9,7 @@ import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
 import { WorkspacePanel } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
+import { ContextUsage } from "./context-usage.js"
 import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
 import { Transcript } from "./transcript.js"
@@ -198,6 +199,11 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
           ) : null}
         </div>
       )}
+      <ContextUsage
+        sessionId={chat.root}
+        usage={chat.contextUsage}
+        onCompact={chat.child || !chat.canCompact ? undefined : chat.compact}
+      />
       <ChatActions
         sessionId={chat.child ?? chat.root}
         archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
