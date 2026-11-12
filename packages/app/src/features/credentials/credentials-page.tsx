@@ -149,7 +149,7 @@ function OrgApps() {
               profiles: profiles.of(each.id),
               usedIn: usedIn(profiles.of(each.id)),
             }))}
-            empty="No apps. Add one to a space from the Marketplace."
+            empty="No apps. Add one to a space from Apps."
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId })}
           />
