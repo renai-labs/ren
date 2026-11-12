@@ -1,5 +1,6 @@
 export * as MachineStart from "./start.js"
 
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { Bundle } from "@ren/schema/bundle"
 import { Schema } from "effect"
 import { closeSync, openSync } from "node:fs"
@@ -295,14 +296,18 @@ const main = async (env: Readonly<Record<string, string | undefined>>) => {
   const tools = await toolsOf(home)
   const executor = async () => {
     const tree = await readText(join(ren, "executor.version"))
+    const own = {
+      ...tools.env,
+      PORT: env.EXECUTOR_PORT ?? "4100",
+      EXECUTOR_HOST: mode === "hand" ? "0.0.0.0" : "127.0.0.1",
+      EXECUTOR_WORKSPACE: join(home, "workspace"),
+    }
     const child = spawnLogged([...tools.prefix, "bun", join(ren, "code", "executor", tree, Entrypoints.executor)], {
       log: join(ren, "executor.log"),
       env: {
         ...base,
-        ...tools.env,
-        PORT: env.EXECUTOR_PORT ?? "4100",
-        EXECUTOR_HOST: mode === "hand" ? "0.0.0.0" : "127.0.0.1",
-        EXECUTOR_WORKSPACE: join(home, "workspace"),
+        ...own,
+        ...ExecutorVariables.hiding([...ExecutorVariables.hiddenIn(env), ...Object.keys(own)]),
       },
     })
     await Bun.write(join(ren, "executor.pid"), String(child.pid))
