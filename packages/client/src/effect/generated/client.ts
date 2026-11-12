@@ -1667,6 +1667,53 @@ const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   },
 })
 
+const EndpointBillingGet = (raw: RawClient["billing"]) => () =>
+  raw["billing.get"]({}).pipe(Effect.mapError(mapClientError))
+
+const EndpointBillingPlanList = (raw: RawClient["billing"]) => () =>
+  raw["billing.plan.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type BillingInvoiceListRequest = Parameters<RawClient["billing"]["billing.invoice.list"]>[0]
+type BillingInvoiceListInput = {
+  readonly page: BillingInvoiceListRequest["query"]["page"]
+  readonly perPage: BillingInvoiceListRequest["query"]["perPage"]
+}
+const EndpointBillingInvoiceList = (raw: RawClient["billing"]) => (input: BillingInvoiceListInput) =>
+  raw["billing.invoice.list"]({ query: { page: input["page"], perPage: input["perPage"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type BillingInvoiceUrlRequest = Parameters<RawClient["billing"]["billing.invoice.url"]>[0]
+type BillingInvoiceUrlInput = { readonly id: BillingInvoiceUrlRequest["params"]["id"] }
+const EndpointBillingInvoiceUrl = (raw: RawClient["billing"]) => (input: BillingInvoiceUrlInput) =>
+  raw["billing.invoice.url"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type BillingSubscribeRequest = Parameters<RawClient["billing"]["billing.subscribe"]>[0]
+type BillingSubscribeInput = { readonly plan: BillingSubscribeRequest["payload"]["plan"] }
+const EndpointBillingSubscribe = (raw: RawClient["billing"]) => (input: BillingSubscribeInput) =>
+  raw["billing.subscribe"]({ payload: { plan: input["plan"] } }).pipe(Effect.mapError(mapClientError))
+
+type BillingChangePlanRequest = Parameters<RawClient["billing"]["billing.change-plan"]>[0]
+type BillingChangePlanInput = { readonly plan: BillingChangePlanRequest["payload"]["plan"] }
+const EndpointBillingChangePlan = (raw: RawClient["billing"]) => (input: BillingChangePlanInput) =>
+  raw["billing.change-plan"]({ payload: { plan: input["plan"] } }).pipe(Effect.mapError(mapClientError))
+
+const EndpointBillingCancel = (raw: RawClient["billing"]) => () =>
+  raw["billing.cancel"]({}).pipe(Effect.mapError(mapClientError))
+
+const EndpointBillingPortal = (raw: RawClient["billing"]) => () =>
+  raw["billing.portal"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupBilling = (raw: RawClient["billing"]) => ({
+  get: EndpointBillingGet(raw),
+  plan: { list: EndpointBillingPlanList(raw) },
+  invoice: { list: EndpointBillingInvoiceList(raw), url: EndpointBillingInvoiceUrl(raw) },
+  subscribe: EndpointBillingSubscribe(raw),
+  "change-plan": EndpointBillingChangePlan(raw),
+  cancel: EndpointBillingCancel(raw),
+  portal: EndpointBillingPortal(raw),
+})
+
 type ChannelInstallListRequest = Parameters<RawClient["channel-install"]["channel-install.list"]>[0]
 type ChannelInstallListInput = {
   readonly page: ChannelInstallListRequest["query"]["page"]
@@ -1908,6 +1955,7 @@ const adaptClient = (raw: RawClient) => ({
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
+  billing: adaptGroupBilling(raw["billing"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),

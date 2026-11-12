@@ -309,6 +309,32 @@ export type RenInferenceTone = "ok" | "warn" | "error"
 
 export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
 
+export type BillingSummary = {
+  plan: string
+  planStatus: string | null
+  renewsAt: string | null
+  pendingPlan: string | null
+  availableMicroUsd: number
+  grantedMicroUsd: number
+}
+
+export type BillingPlan = {
+  key: string
+  name: string
+  priceCents: number
+  creditsMicroUsd: number
+  description: string | null
+  tagline: string | null
+  badge: string | null
+  sortOrder: number
+}
+
+export type BillingInvoiceStatus = "paid" | "pending" | "processing" | "failed" | "cancelled"
+
+export type BillingLink = { url: string }
+
+export type BillingCheckout = { checkoutUrl: string }
+
 export type ChannelInstallID = string
 
 export type ChannelMappingID = string
@@ -798,6 +824,15 @@ export type RenInferenceConnection = {
   meters: Array<RenInferenceMeter>
 }
 
+export type BillingInvoice = {
+  id: string
+  number: string
+  status: BillingInvoiceStatus
+  amountCents: number
+  currency: string
+  issuedAt: string
+}
+
 export type ChannelInstallInfo = {
   id: ChannelInstallID
   provider: ChannelProvider
@@ -1118,6 +1153,8 @@ export type WebhookRequestPage = { items: Array<WebhookRequestInfo>; page: numbe
 export type WebhookTestResult = { items: Array<WebhookTested> }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
+
+export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
 
@@ -8738,6 +8775,33 @@ export type RenInferenceConnectionRenameOutput = RenInferenceConnection
 export type RenInferenceConnectionRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type RenInferenceConnectionRemoveOutput = void
+
+export type BillingGetOutput = BillingSummary
+
+export type BillingPlanListOutput = Array<BillingPlan>
+
+export type BillingInvoiceListInput = {
+  readonly page: { readonly page: number; readonly perPage: number }["page"]
+  readonly perPage: { readonly page: number; readonly perPage: number }["perPage"]
+}
+
+export type BillingInvoiceListOutput = BillingInvoicePage
+
+export type BillingInvoiceUrlInput = { readonly id: { readonly id: string }["id"] }
+
+export type BillingInvoiceUrlOutput = BillingLink
+
+export type BillingSubscribeInput = { readonly plan: { readonly plan: string }["plan"] }
+
+export type BillingSubscribeOutput = BillingCheckout
+
+export type BillingChangePlanInput = { readonly plan: { readonly plan: string }["plan"] }
+
+export type BillingChangePlanOutput = void
+
+export type BillingCancelOutput = void
+
+export type BillingPortalOutput = BillingLink
 
 export type ChannelInstallListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]

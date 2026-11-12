@@ -259,6 +259,9 @@ const groups: ReadonlyArray<EmitCli.Group> = [
   { path: ["inference"], description: "Manage inference providers" },
   { path: ["inference", "connection"], description: "Manage provider connections" },
   { path: ["repository"], description: "Manage repositories", alias: "repositories" },
+  { path: ["billing"], description: "Manage the organization’s plan and billing" },
+  { path: ["billing", "plan"], description: "Manage plans" },
+  { path: ["billing", "invoice"], description: "Manage invoices" },
 ]
 
 const references: Readonly<
@@ -361,6 +364,19 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     descriptions: { id: "Connection ID" },
   },
   { operation: "repository.list", path: ["repository", "list"] },
+  { operation: "billing.get", path: ["billing", "get"] },
+  { operation: "billing.plan.list", path: ["billing", "plan", "list"] },
+  { operation: "billing.invoice.list", path: ["billing", "invoice", "list"] },
+  {
+    operation: "billing.invoice.url",
+    path: ["billing", "invoice", "url"],
+    names: { id: "invoice" },
+    descriptions: { id: "Invoice ID" },
+  },
+  { operation: "billing.subscribe", path: ["billing", "subscribe"] },
+  { operation: "billing.change-plan", path: ["billing", "change-plan"] },
+  { operation: "billing.cancel", path: ["billing", "cancel"] },
+  { operation: "billing.portal", path: ["billing", "portal"] },
 ]
 
 const elsewhere = new Map([

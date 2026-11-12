@@ -1,6 +1,6 @@
 export const APP_URL = `${import.meta.env.SITE}/app`
 
-export const BILLING_URL = `${APP_URL}/settings/admin/billing`
+export const BILLING_URL = `${APP_URL}/settings/billing`
 
 export const CALENDLY_URL = "https://calendly.com/shrey-renai/30min"
 

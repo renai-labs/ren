@@ -915,6 +915,31 @@ export const RenInferenceConnectionRemove = {
 
 export const RepositoryList = {}
 
+export const BillingGet = {}
+
+export const BillingPlanList = {}
+
+export const BillingInvoiceList = {
+  page: Flag.Finite("page").pipe(Flag.optional),
+  perPage: Flag.Finite("per-page").pipe(Flag.optional),
+}
+
+export const BillingInvoiceUrl = { id: Argument.String("invoice").pipe(Argument.withDescription("Invoice ID")) }
+
+export const BillingSubscribe = {
+  plan: Flag.String("plan").pipe(Flag.optional, Flag.withDescription("A `key` from the plan list, or `free`.")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const BillingChangePlan = {
+  plan: Flag.String("plan").pipe(Flag.optional, Flag.withDescription("A `key` from the plan list, or `free`.")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const BillingCancel = {}
+
+export const BillingPortal = {}
+
 export const commands = [
   Command.make("space").pipe(
     Command.withDescription("Manage spaces"),
@@ -1860,6 +1885,61 @@ export const commands = [
       Command.make("list", RepositoryList).pipe(
         Command.withDescription("List repositories to read"),
         Command.withHandler(() => Effect.flatMap(Effect.promise(operations), (module) => module.RepositoryList())),
+      ),
+    ]),
+  ),
+  Command.make("billing").pipe(
+    Command.withDescription("Manage the organization’s plan and billing"),
+    Command.withSubcommands([
+      Command.make("get", BillingGet).pipe(
+        Command.withDescription("Get the organization’s plan and credit"),
+        Command.withHandler(() => Effect.flatMap(Effect.promise(operations), (module) => module.BillingGet())),
+      ),
+      Command.make("plan").pipe(
+        Command.withDescription("Manage plans"),
+        Command.withSubcommands([
+          Command.make("list", BillingPlanList).pipe(
+            Command.withDescription("List the paid plans"),
+            Command.withHandler(() => Effect.flatMap(Effect.promise(operations), (module) => module.BillingPlanList())),
+          ),
+        ]),
+      ),
+      Command.make("invoice").pipe(
+        Command.withDescription("Manage invoices"),
+        Command.withSubcommands([
+          Command.make("list", BillingInvoiceList).pipe(
+            Command.withDescription("List the organization’s invoices"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.BillingInvoiceList(input)),
+            ),
+          ),
+          Command.make("url", BillingInvoiceUrl).pipe(
+            Command.withDescription("Get an invoice’s link"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.BillingInvoiceUrl(input)),
+            ),
+          ),
+        ]),
+      ),
+      Command.make("subscribe", BillingSubscribe).pipe(
+        Command.withDescription("Start a subscription"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.BillingSubscribe(input)),
+        ),
+      ),
+      Command.make("change-plan", BillingChangePlan).pipe(
+        Command.withDescription("Change the plan"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.BillingChangePlan(input)),
+        ),
+      ),
+      Command.make("cancel", BillingCancel).pipe(
+        Command.withDescription("Cancel the plan"),
+        Command.withHandler(() => Effect.flatMap(Effect.promise(operations), (module) => module.BillingCancel())),
+      ),
+      Command.make("portal", BillingPortal).pipe(
+        Command.withDescription("Open the billing portal"),
+        Command.withHandler(() => Effect.flatMap(Effect.promise(operations), (module) => module.BillingPortal())),
       ),
     ]),
   ),

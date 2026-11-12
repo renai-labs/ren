@@ -48,6 +48,10 @@ const exceptions = new Map([
     "Proxies the Ren Inference Service, which stores the provider connections: a sign-in redirect, and reads and writes of records Ren does not hold, which no primitive operation is.",
   ],
   [
+    "billing",
+    "Proxies the billing service, which holds the plan state and calls the payment provider: a checkout redirect, plan changes and reads of records Ren does not hold, which no primitive operation is.",
+  ],
+  [
     "insights",
     "Totals over usage events and task events for a range, grouped on request: a computed read, which no primitive operation is.",
   ],

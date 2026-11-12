@@ -41,7 +41,10 @@ const customers = Effect.runSync(Queue.unbounded<Billing.Customer>())
 
 const billing = Layer.succeed(
   Billing.Service,
-  Billing.Service.of({ ensureCustomer: (customer) => Queue.offer(customers, customer).pipe(Effect.asVoid) }),
+  Billing.Service.of({
+    ...Billing.none,
+    ensureCustomer: (customer) => Queue.offer(customers, customer).pipe(Effect.asVoid),
+  }),
 )
 
 const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>

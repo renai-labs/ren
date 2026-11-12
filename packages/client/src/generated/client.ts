@@ -258,6 +258,18 @@ import type {
   RenInferenceConnectionRenameOutput,
   RenInferenceConnectionRemoveInput,
   RenInferenceConnectionRemoveOutput,
+  BillingGetOutput,
+  BillingPlanListOutput,
+  BillingInvoiceListInput,
+  BillingInvoiceListOutput,
+  BillingInvoiceUrlInput,
+  BillingInvoiceUrlOutput,
+  BillingSubscribeInput,
+  BillingSubscribeOutput,
+  BillingChangePlanInput,
+  BillingChangePlanOutput,
+  BillingCancelOutput,
+  BillingPortalOutput,
   ChannelInstallListInput,
   ChannelInstallListOutput,
   ChannelInstallUpdateInput,
@@ -2198,6 +2210,103 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    billing: {
+      get: (requestOptions?: RequestOptions) =>
+        request<BillingGetOutput>(
+          {
+            method: "GET",
+            path: `/billing`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      plan: {
+        list: (requestOptions?: RequestOptions) =>
+          request<BillingPlanListOutput>(
+            {
+              method: "GET",
+              path: `/billing/plans`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      invoice: {
+        list: (input: BillingInvoiceListInput, requestOptions?: RequestOptions) =>
+          request<BillingInvoiceListOutput>(
+            {
+              method: "GET",
+              path: `/billing/invoices`,
+              query: { page: input["page"], perPage: input["perPage"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        url: (input: BillingInvoiceUrlInput, requestOptions?: RequestOptions) =>
+          request<BillingInvoiceUrlOutput>(
+            {
+              method: "GET",
+              path: `/billing/invoices/${encodeURIComponent(input.id)}/url`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      subscribe: (input: BillingSubscribeInput, requestOptions?: RequestOptions) =>
+        request<BillingSubscribeOutput>(
+          {
+            method: "POST",
+            path: `/billing/subscribe`,
+            body: { plan: input["plan"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      "change-plan": (input: BillingChangePlanInput, requestOptions?: RequestOptions) =>
+        request<BillingChangePlanOutput>(
+          {
+            method: "POST",
+            path: `/billing/change-plan`,
+            body: { plan: input["plan"] },
+            successStatus: 204,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      cancel: (requestOptions?: RequestOptions) =>
+        request<BillingCancelOutput>(
+          {
+            method: "POST",
+            path: `/billing/cancel`,
+            successStatus: 204,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      portal: (requestOptions?: RequestOptions) =>
+        request<BillingPortalOutput>(
+          {
+            method: "POST",
+            path: `/billing/portal`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     "channel-install": {
       list: (input: ChannelInstallListInput, requestOptions?: RequestOptions) =>

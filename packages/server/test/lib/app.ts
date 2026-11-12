@@ -132,7 +132,7 @@ export const services = Layer.mergeAll(
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
   RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
-  BillingEnrollment.layer.pipe(Layer.provide([Billing.layerNone, DurableRunner.layerMemory])),
+  BillingEnrollment.layer.pipe(Layer.provide(DurableRunner.layerMemory), Layer.provideMerge(Billing.layerNone)),
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
