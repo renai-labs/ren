@@ -24,20 +24,11 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   compute: { title: "Compute", description: (space) => `Machines for ${space}’s brain and tools.` },
   members: { title: "Members", description: (space) => `People who can use ${space}.` },
   apps: { title: "Apps", description: (space) => `Apps every chat in ${space} can use.` },
-  repositories: {
-    title: "Repositories",
-    description: (space) => `Repositories Ren can read in ${space}. To change code, ask Ren to clone one.`,
-  },
-  channels: {
-    title: "Channels",
-    description: (space) => `Channels where people can mention @Ren to work in ${space}.`,
-  },
+  repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
+  channels: { title: "Channels", description: (space) => `Where people mention @Ren to work in ${space}.` },
   credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
   schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
-  webhooks: {
-    title: "Webhooks",
-    description: (space) => `URLs that start sessions in ${space} when another app sends a request.`,
-  },
+  webhooks: { title: "Webhooks", description: (space) => `URLs other apps call to start sessions in ${space}.` },
   factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
 }
 
@@ -104,12 +95,7 @@ function SettingsSample() {
 }
 
 function SpaceSectionSample(props: { section: string }) {
-  const table = (columns: ReadonlyArray<string>) => (
-    <div className="flex flex-col gap-4">
-      <div className="min-h-8" />
-      <TableSample columns={columns} count={3} />
-    </div>
-  )
+  const table = (columns: ReadonlyArray<string>) => <TableSample columns={columns} count={3} />
   if (props.section === "members") return table(["Name", "Email", "Status", ""])
   if (props.section === "credentials") return table(["Key", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
@@ -193,7 +179,7 @@ export function RouteSkeleton() {
     )
   if (path === "/tasks")
     return (
-      <PageSkeleton title="Tasks" width="full" shape="tasks-first-load">
+      <PageSkeleton title="Tasks" width="full" shape="tasks-first-load" actions={<div className="min-h-8" />}>
         <TasksSample />
       </PageSkeleton>
     )
@@ -209,7 +195,7 @@ export function RouteSkeleton() {
       <PageSkeleton
         title="Apps"
         width="wide"
-        search={<div className="h-8 w-56" />}
+        actions={<div className="h-8 w-56" />}
         description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       >
         <AppListingSample />
@@ -377,7 +363,7 @@ function SettingsPageSkeleton() {
           channels: "Invoke Ren from where your team already works.",
         }[section]
       }
-      actions={["members", "credentials", "providers"].includes(section) ? <div className="min-h-8" /> : undefined}
+      leading={["members", "credentials"].includes(section) ? <div className="min-h-8" /> : undefined}
       loading
     >
       {body}

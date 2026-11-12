@@ -9,7 +9,7 @@ import { AccountActions } from "../../components/account-actions.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
-import { PageFooter, TableSample, useShapeId } from "../../components/page.js"
+import { PageActions, PageFooter, TableSample, useShapeId } from "../../components/page.js"
 import { ListPagination } from "../../components/list-pagination.js"
 import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
 import { Loading } from "@ren/ui/loading"
@@ -110,13 +110,13 @@ export function SpaceAppsTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex justify-end">
+      <PageActions>
         <AddAppDialog
           space={space}
           added={new Set(byApp.keys())}
           onAdded={(added) => setProfile({ appId: added.app.id, profileId: added.profileId, from })}
         />
-      </div>
+      </PageActions>
       <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
         {reach.isPending || catalog.pending ? (
           <TableSample columns={["App", "Used in", "Status", ""]} count={3} />

@@ -184,7 +184,7 @@ export function AppsPage() {
       title="Apps"
       width="wide"
       description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-      search={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
+      actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
     >
       <CategoryPills categories={categories} value={category} />
       <Loading id={shapeId} loading={loading} label="Loading apps">

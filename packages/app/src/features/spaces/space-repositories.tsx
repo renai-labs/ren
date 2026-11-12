@@ -22,7 +22,7 @@ import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { PageFooter, TableCard, TableEmpty } from "../../components/page.js"
+import { PageActions, PageFooter, TableCard, TableEmpty } from "../../components/page.js"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { GitHubMark } from "../../icons/brands.js"
@@ -118,7 +118,7 @@ export function SpaceRepositoriesTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-end gap-1">
+      <PageActions>
         <ToolbarSearch label="Search repositories" value={query} onChange={setQuery} />
         {canUpdate ? (
           <Button onClick={() => open("add")}>
@@ -126,7 +126,7 @@ export function SpaceRepositoriesTab() {
             Add repositories
           </Button>
         ) : null}
-      </div>
+      </PageActions>
       <TableCard>
         <Table className="table-fixed">
           <TableHeader>

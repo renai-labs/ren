@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ChannelMark } from "../../components/channel-mark.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { PageFooter, TableCard, TableEmpty } from "../../components/page.js"
+import { PageActions, PageFooter, TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pageSize, currentPage, pageCount } from "../../lib/pagination.js"
@@ -82,12 +82,12 @@ export function SpaceChannelsTab() {
   return (
     <div className="flex flex-1 flex-col gap-4">
       {canLink ? (
-        <div className="flex items-center justify-end gap-1">
+        <PageActions>
           <Button onClick={() => open(true)}>
             <IconPlus data-icon="inline-start" />
             Add channel
           </Button>
-        </div>
+        </PageActions>
       ) : null}
       <TableCard>
         <Table className="table-fixed">

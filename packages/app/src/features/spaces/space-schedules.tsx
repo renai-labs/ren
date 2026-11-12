@@ -1,6 +1,6 @@
 import { getRouteApi } from "@tanstack/react-router"
 import { ListPagination } from "../../components/list-pagination.js"
-import { PageFooter } from "../../components/page.js"
+import { PageActions, PageFooter } from "../../components/page.js"
 import { ScheduleGrid, ScheduleToolbar } from "../../components/schedule-grid.js"
 import { useSchedules } from "../../lib/use-schedules.js"
 import { pageSize } from "../../lib/pagination.js"
@@ -18,9 +18,9 @@ export function SpaceSchedulesTab() {
   })
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex items-center justify-end gap-1">
+      <PageActions>
         <ScheduleToolbar list={schedules} />
-      </div>
+      </PageActions>
       <ScheduleGrid list={schedules} />
       <PageFooter>
         <ListPagination page={schedules.page} pageSize={pageSize} total={schedules.total} noun="schedule" />

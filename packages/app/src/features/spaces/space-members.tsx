@@ -17,7 +17,7 @@ import {
 } from "@ren/ui/dialog"
 import { Spinner } from "@ren/ui/spinner"
 import { ListPagination } from "../../components/list-pagination.js"
-import { PageFooter, useShapeId } from "../../components/page.js"
+import { PageActions, PageFooter, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
@@ -203,7 +203,7 @@ export function SpaceMembersTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex justify-end gap-1">
+      <PageActions>
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
         {space.canAddMember ? (
           <AddSpaceMemberDialog
@@ -215,7 +215,7 @@ export function SpaceMembersTab() {
             onAdd={add}
           />
         ) : null}
-      </div>
+      </PageActions>
       <Loading id={shapeId} loading={members.isPending} label="Loading members">
         <MembersTable
           rows={(members.isPending ? sampleRows : rows).filter((row) =>
