@@ -975,7 +975,7 @@ function Steps(props: {
   )
   return (
     <Trace>
-      <TraceCollapsible defaultOpen={props.expanded === true}>
+      <TraceCollapsible key={String(props.expanded === true)} defaultOpen={props.expanded === true}>
         <TraceCollapsibleTrigger>
           <TraceLine status={props.running ? "running" : undefined}>
             <TraceIcon>

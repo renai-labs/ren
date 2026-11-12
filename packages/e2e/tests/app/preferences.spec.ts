@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
-import { createUser, password, signIn, uniqueEmail } from "../lib/servers.js"
+import { Session } from "@ren/schema/session"
+import { Schema } from "effect"
+import { appOrigin, createOrganization, createUser, password, serverURL, signIn, uniqueEmail } from "../lib/servers.js"
 
 test("renames the account and picks a theme", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("rename") })
@@ -38,4 +40,35 @@ test("changes the password", async ({ page, request }) => {
   await expect(dialog).toBeHidden()
   await expect(page.getByText("Password changed")).toBeVisible()
   expect((await signIn(request, { email, password: "second password" })).ok()).toBe(true)
+})
+
+test("a preference changed in one tab applies in the other open tabs without a reload", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const listed = await page.request.get(`${serverURL}/spaces?page=1&pageSize=25`)
+  const spaces = Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(Schema.Struct({ id: Schema.String })) }))(
+    await listed.json(),
+  )
+  const sessionId = Session.ID.create()
+  const created = await page.request.post(`${serverURL}/sessions`, {
+    headers: { origin: appOrigin },
+    data: { id: sessionId, spaceId: spaces.items[0]?.id },
+  })
+  expect(created.ok()).toBe(true)
+
+  const chat = await page.context().newPage()
+  await chat.goto(`/app/sessions/${sessionId}`)
+  await expect(chat.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
+  const other = await page.context().newPage()
+  await other.goto("/app/settings/preferences")
+  await page.goto("/app/settings/preferences")
+  await expect(other.getByRole("combobox", { name: "Detail" })).toHaveText("Compact")
+
+  await page.getByRole("combobox", { name: "Detail" }).click()
+  await page.getByRole("option", { name: "Detailed" }).click()
+  await expect(page.getByRole("combobox", { name: "Detail" })).toHaveText("Detailed")
+  await expect(other.getByRole("combobox", { name: "Detail" })).toHaveText("Detailed")
+
+  await page.getByRole("radio", { name: "Light" }).click()
+  await expect(chat.locator("html")).not.toHaveClass(/dark/)
+  await expect(other.getByRole("radio", { name: "Light" })).toBeChecked()
 })

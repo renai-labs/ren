@@ -10,6 +10,7 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { toast } from "@ren/ui/sonner"
+import { Preference } from "../../lib/preference.js"
 import type { PromptInputBoot } from "./prompt-input.js"
 import { pickModel } from "../../components/model-picker.js"
 import { useMe } from "../../lib/use-me.js"
@@ -171,7 +172,8 @@ export function useChat(
   const models = ChatReact.useModels(root)
   const catalog = useModels(root)
   const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
-  const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
+  const saved = Preference.usePreference(ChatPreferences.model)
+  const setPreference = Preference.useSetPreference()
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
   const setDraft = kept.set
@@ -201,7 +203,7 @@ export function useChat(
   const reverted = ChatState.revertMessageID(state, root) !== undefined
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
 
-  const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
+  const expanded = Preference.usePreference(ChatPreferences.detail) === "detailed"
   const blocked = Boolean(view.permission ?? view.form)
   useAttentionNotification({ running, asking: blocked, title })
   useChatCacheBridge(root, bridgeOf(info, { running }))
@@ -264,8 +266,7 @@ export function useChat(
     model,
     ...capabilitiesOf(info),
     chooseModel: (next: SessionModel.Ref) => {
-      ChatPreferences.model.write(platform.storage, next)
-      setSaved(next)
+      setPreference(ChatPreferences.model, next)
     },
     send: () => {
       const text = Composer.message(draft).trim()

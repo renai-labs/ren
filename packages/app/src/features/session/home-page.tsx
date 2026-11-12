@@ -1,3 +1,4 @@
+import { Preference } from "../../lib/preference.js"
 import { PromptInput } from "./prompt-input.js"
 import { Logomark } from "../../icons/logomark.js"
 import { ModelPicker, pickModel } from "../../components/model-picker.js"
@@ -30,7 +31,9 @@ export function HomePage() {
   const navigate = useNavigate()
   const spaces = useSpaces().joined
   const search = route.useSearch()
-  const [remembered, setRemembered] = useState(() => ChatPreferences.homeSpace.read(platform.storage))
+  const remembered = Preference.usePreference(ChatPreferences.homeSpace)
+  const saved = Preference.usePreference(ChatPreferences.model)
+  const setPreference = Preference.useSetPreference()
   const kept = Drafts.useDraft(search.spaceId ? Drafts.space(search.spaceId) : Drafts.fresh)
   const draft = kept.draft
   const setDraft = kept.set
@@ -40,7 +43,6 @@ export function HomePage() {
   const sessionId = draft.chat?.sessionId ?? createdId
   const [sent, setSent] = useState<Composer.Draft>()
   const models = useModels(sessionId)
-  const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
   const model = pickModel(models.models, [saved])
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
@@ -50,13 +52,11 @@ export function HomePage() {
   const starting = create.isPending
   const modelsLoading = models.loading
   const chooseSpace = (next: string) => {
-    ChatPreferences.homeSpace.write(platform.storage, next)
-    setRemembered(next)
+    setPreference(ChatPreferences.homeSpace, next)
     void navigate({ to: "/", search: { spaceId: next } })
   }
   const chooseModel = (next: SessionModel.Ref) => {
-    ChatPreferences.model.write(platform.storage, next)
-    setSaved(next)
+    setPreference(ChatPreferences.model, next)
   }
   const type = (next: Composer.Draft) => {
     setDraft(next)
