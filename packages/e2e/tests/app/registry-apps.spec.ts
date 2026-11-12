@@ -40,7 +40,7 @@ test("an app past the first 100 registry apps opens from Add apps, and its menti
   await expect.poll(async () => JSON.stringify(await ren.chat.messages({ id: sessionId }))).toContain("Ask @zz-notes")
 })
 
-test("Installed in Apps lists connected apps past the first 100 after See all", async ({ page }) => {
+test("Installed in Apps loads connected apps past the first 100 on scroll", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
   const ren = await client(page.request)
   const pages = await Promise.all(
@@ -50,9 +50,10 @@ test("Installed in Apps lists connected apps past the first 100 after See all", 
     await ren["app-profile"].create({ appId: app.id, name: "Mine", slug: "mine", kind: "private" })
 
   await page.goto("/app/apps")
+  await page.getByRole("tab", { name: "Installed" }).click()
   const installed = page.getByRole("list", { name: "Installed" })
   await expect(page.getByRole("heading", { name: /^Installed\s*101$/ })).toBeVisible()
-  await installed.getByRole("button", { name: "See all" }).click()
+  await installed.getByRole("listitem").last().scrollIntoViewIfNeeded()
   await expect(installed.getByRole("button", { name: "Filler 101", exact: true })).toBeVisible()
 })
 
