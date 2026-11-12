@@ -115,6 +115,7 @@ test("⌘U opens the file picker with the composer focused or not, and the chose
   await page.keyboard.press("Meta+u")
   await (await focused).setFiles({ name: "focused.txt", mimeType: "text/plain", buffer: Buffer.from("one") })
 
+  await expect(attached.getByText("focused.txt", { exact: true })).toBeVisible()
   await message.blur()
   const blurred = page.waitForEvent("filechooser")
   await page.keyboard.press("Meta+u")
