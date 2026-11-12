@@ -113,6 +113,7 @@ const capabilitiesOf = (info: { readonly capabilities: SessionInfo["capabilities
   capabilities: info?.capabilities,
   canChooseModel: info?.capabilities.model !== false,
   canRevert: info?.capabilities.revert !== false,
+  canRename: info?.capabilities.rename !== false,
 })
 
 const bridgeOf = (
@@ -194,6 +195,7 @@ export function useChat(
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
   const redo = ChatReact.useAction(root, (opened) => opened.redo)
   const undo = ChatReact.useAction(root, (opened) => opened.undo)
+  const rename = ChatReact.useAction(root, (opened, next: string) => opened.rename(next))
   const compact = ChatReact.useAction(root, (opened) => opened.compact(info?.model))
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
   const restart = useMutation(api.chat.retry.mutationOptions())
@@ -313,6 +315,10 @@ export function useChat(
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
         .finally(() => setReverting(false))
     },
+    rename: (next: string) =>
+      rename(next).catch((error: unknown) => {
+        toast.error("Couldn’t rename the chat", { description: errorMessage(error) })
+      }),
     prompted: ChatState.visibleUserMessages(state, root).length > 0,
     undo: () =>
       void undo().then(

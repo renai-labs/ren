@@ -3,7 +3,7 @@ import type { SessionLinksInfo, SessionLinksIssue } from "@ren/client"
 import type { Session } from "@ren/schema/session"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconArchive, IconChecklist, IconDots, IconLink } from "@tabler/icons-react"
+import { IconArchive, IconChecklist, IconDots, IconLink, IconPencil } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -125,6 +125,7 @@ function ChatLinks(props: { sessionId: Session.ID; open: boolean }) {
 export function ChatActions(props: {
   sessionId: Session.ID
   archive: { readonly title: string; readonly onArchive: () => Promise<unknown> } | undefined
+  onRename?: (() => void) | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -142,19 +143,27 @@ export function ChatActions(props: {
         >
           <IconDots />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuContent align="end" className="w-72" finalFocus={false}>
           <ChatLinks sessionId={props.sessionId} open={open} />
-          {write ? (
+          {write || props.onRename ? (
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={copyLink}>
-                <IconLink />
-                Copy link
-              </DropdownMenuItem>
+              {props.onRename ? (
+                <DropdownMenuItem onClick={props.onRename}>
+                  <IconPencil />
+                  Rename chat
+                </DropdownMenuItem>
+              ) : null}
+              {write ? (
+                <DropdownMenuItem onClick={copyLink}>
+                  <IconLink />
+                  Copy link
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           ) : null}
           {props.archive ? (
             <>
-              {write ? <DropdownMenuSeparator /> : null}
+              {write || props.onRename ? <DropdownMenuSeparator /> : null}
               <DropdownMenuGroup>
                 <DropdownMenuItem variant="destructive" onClick={() => setArchiving(true)}>
                   <IconArchive />

@@ -4,7 +4,43 @@ import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
 import { Textarea } from "@ren/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { cn } from "cn"
+
+function TextView(props: {
+  value: string
+  label: string
+  placeholder: string | undefined
+  multiline: boolean | undefined
+  className: string | undefined
+  saving: boolean
+  onEdit: () => void
+}) {
+  const text = props.multiline ? "line-clamp-3 break-words whitespace-pre-wrap" : "truncate"
+  return (
+    <span
+      className={cn("flex min-w-0 gap-1 text-sm", props.multiline ? "items-start" : "items-center", props.className)}
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={<span className={cn(text, props.multiline && "py-1", !props.value && "text-muted-foreground")} />}
+        >
+          {props.value || props.placeholder}
+        </TooltipTrigger>
+        {props.value ? <TooltipContent>{props.value}</TooltipContent> : null}
+      </Tooltip>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="shrink-0 text-muted-foreground"
+        aria-label={`Edit ${props.label}`}
+        onClick={props.onEdit}
+      >
+        {props.saving ? <Spinner /> : <IconPencil />}
+      </Button>
+    </span>
+  )
+}
 
 export function EditableText(props: {
   value: string
@@ -14,9 +50,18 @@ export function EditableText(props: {
   readOnly?: boolean | undefined
   multiline?: boolean | undefined
   className?: string | undefined
+  editing?: boolean | undefined
+  onEditingChange?: ((editing: boolean) => void) | undefined
   onCommit: (value: string) => Promise<unknown>
 }) {
   const [draft, setDraft] = useState<string>()
+  const [localEditing, setLocalEditing] = useState(false)
+  const editing = props.editing ?? localEditing
+  const setEditing = (next: boolean) => {
+    if (!next) setDraft(undefined)
+    setLocalEditing(next)
+    props.onEditingChange?.(next)
+  }
   const [saving, setSaving] = useState(false)
   const text = props.multiline ? "line-clamp-3 break-words whitespace-pre-wrap" : "truncate"
   if (props.readOnly)
@@ -25,28 +70,21 @@ export function EditableText(props: {
         {props.value || props.placeholder}
       </span>
     )
-  if (draft === undefined)
+  if (!editing)
     return (
-      <span
-        className={cn("flex min-w-0 gap-1 text-sm", props.multiline ? "items-start" : "items-center", props.className)}
-      >
-        <span className={cn(text, props.multiline && "py-1", !props.value && "text-muted-foreground")}>
-          {props.value || props.placeholder}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 text-muted-foreground"
-          aria-label={`Edit ${props.label}`}
-          onClick={() => setDraft(props.value)}
-        >
-          {saving ? <Spinner /> : <IconPencil />}
-        </Button>
-      </span>
+      <TextView
+        value={props.value}
+        label={props.label}
+        placeholder={props.placeholder}
+        multiline={props.multiline}
+        className={props.className}
+        saving={saving}
+        onEdit={() => setEditing(true)}
+      />
     )
   const commit = async () => {
-    const next = draft.trim()
-    setDraft(undefined)
+    const next = (draft ?? props.value).trim()
+    setEditing(false)
     if (next === props.value || (props.required && !next)) return
     setSaving(true)
     try {
@@ -62,7 +100,7 @@ export function EditableText(props: {
         autoFocus
         aria-label={props.label}
         placeholder={props.placeholder}
-        value={draft}
+        value={draft ?? props.value}
         className={cn("max-h-48 w-3xl max-w-full", props.className)}
         onChange={(event) => setDraft(event.currentTarget.value)}
         onBlur={() => void commit()}
@@ -71,7 +109,7 @@ export function EditableText(props: {
             event.preventDefault()
             event.currentTarget.blur()
           }
-          if (event.key === "Escape") setDraft(undefined)
+          if (event.key === "Escape") setEditing(false)
         }}
       />
     )
@@ -81,13 +119,14 @@ export function EditableText(props: {
       autoFocus
       aria-label={props.label}
       placeholder={props.placeholder}
-      value={draft}
+      value={draft ?? props.value}
       className={cn("h-8 w-72 max-w-full", props.className)}
+      onFocus={(event) => event.currentTarget.select()}
       onChange={(event) => setDraft(event.currentTarget.value)}
       onBlur={() => void commit()}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur()
-        if (event.key === "Escape") setDraft(undefined)
+        if (event.key === "Escape") setEditing(false)
       }}
     />
   )
