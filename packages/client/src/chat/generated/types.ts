@@ -153,8 +153,6 @@ export type SessionCatalogFileContent = {
 
 export type SessionVcsInfo = { provider?: string; branch: { current?: string; default?: string } }
 
-export type SessionCatalogWebSearchProvider = { id: string; name: string }
-
 export type SessionEventSessionAgentSelected = {
   id: string
   created: number
@@ -1493,7 +1491,3 @@ export type VcsDiffInput = {
 }
 
 export type VcsDiffOutput = Array<SessionInfoFileDiff>
-
-export type WebsearchProvidersInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type WebsearchProvidersOutput = Array<SessionCatalogWebSearchProvider>

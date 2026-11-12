@@ -35,7 +35,6 @@ const discovery: Readonly<Record<string, unknown>> = {
     baseUrl: "https://llm.ren.test/v1",
     models: [{ id: "opaque-chat", type: "chat", protocol: "openai-chat" }],
   },
-  "/v1/search/providers": [{ id: "ren/search", name: "Search" }],
 }
 const catalogReads: Array<string | null> = []
 
@@ -102,8 +101,7 @@ describe("RenInferenceProvider with the Ren Inference Service", () => {
         ])
         expect(granted.endpoints[0]?.models).toEqual([])
         expect(catalog.endpoints[0]?.models.map((model) => model.id)).toEqual(["opaque-chat"])
-        expect(catalog.endpoints[0]?.search).toEqual([{ id: "ren/search", name: "Search" }])
-        expect(catalogReads.slice(-2)).toEqual(["Bearer catalog-key", "Bearer catalog-key"])
+        expect(catalogReads.at(-1)).toBe("Bearer catalog-key")
         expect(granted.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))).toEqual(["key-brain"])
         expect(granted.endpoints[0]?.apiKey.expiresAt?.epochMilliseconds).toBe(Date.parse(expiresAt))
         expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([

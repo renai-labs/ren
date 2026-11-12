@@ -414,13 +414,6 @@ const EndpointVcsDiff = (raw: RawClient["vcs"]) => (input: VcsDiffInput) =>
 
 const adaptGroupVcs = (raw: RawClient["vcs"]) => ({ get: EndpointVcsGet(raw), diff: EndpointVcsDiff(raw) })
 
-type WebsearchProvidersRequest = Parameters<RawClient["websearch"]["websearch.providers"]>[0]
-type WebsearchProvidersInput = { readonly sessionID: WebsearchProvidersRequest["params"]["sessionID"] }
-const EndpointWebsearchProviders = (raw: RawClient["websearch"]) => (input: WebsearchProvidersInput) =>
-  raw["websearch.providers"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
-
-const adaptGroupWebsearch = (raw: RawClient["websearch"]) => ({ providers: EndpointWebsearchProviders(raw) })
-
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),
   model: adaptGroupModel(raw["model"]),
@@ -431,7 +424,6 @@ const adaptClient = (raw: RawClient) => ({
   command: adaptGroupCommand(raw["command"]),
   file: adaptGroupFile(raw["file"]),
   vcs: adaptGroupVcs(raw["vcs"]),
-  websearch: adaptGroupWebsearch(raw["websearch"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

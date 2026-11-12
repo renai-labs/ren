@@ -246,20 +246,6 @@ test("a prompt sent with resume false waits in the inbox of an idle session unti
     }),
   ))
 
-test("a client lists the web search providers where the session works", () =>
-  live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      const providers = yield* brain.chat.websearch["websearch.providers"]({ params: { sessionID: brain.id } })
-      expect(providers.map((provider) => provider.id)).toContain("exa")
-      const outside = yield* brain.chat.websearch["websearch.providers"]({
-        params: { sessionID: Session.ID.create() },
-      }).pipe(Effect.flip)
-      expect(outside._tag).toBe("NotFoundError")
-    }),
-  ))
-
 test("a member's queued message names its speaker to the model after the member withdraws the one before it", () =>
   live(
     Effect.gen(function* () {
@@ -757,7 +743,6 @@ test("a client token for one chat reads that chat and its child, and gets Forbid
         own.file["file.list"]({ params, query: {} }).pipe(Effect.flip),
         own.file["file.read"]({ params, query: { path: "a.txt" } }).pipe(Effect.flip),
         own.vcs["vcs.diff"]({ params, query: {} }).pipe(Effect.flip),
-        own.websearch["websearch.providers"]({ params }).pipe(Effect.flip),
       ])
       expect(refused.map((error) => error._tag)).toEqual(refused.map(() => "ForbiddenError"))
     }),

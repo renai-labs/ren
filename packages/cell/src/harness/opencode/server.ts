@@ -16,7 +16,6 @@ import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Skill } from "@opencode/core/skill"
 import { Vcs } from "@opencode/core/vcs"
-import { WebSearch } from "@opencode/core/websearch"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
@@ -313,8 +312,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     commands: (sessionId) => located(sessionId, Command.Service).pipe(Effect.flatMap((commands) => commands.list())),
     findFiles: (sessionId, input) =>
       located(sessionId, FileSystemSearch.Service).pipe(Effect.flatMap((search) => search.find(input))),
-    webSearchProviders: (sessionId) =>
-      located(sessionId, WebSearch.Service).pipe(Effect.flatMap((websearch) => websearch.providers())),
     credentials,
     sessions,
     transfer: Context.get(services, SessionTransfer.Service),
@@ -371,7 +368,6 @@ export interface Instance {
     sessionId: string,
     input: FileSystem.FindInput,
   ) => Effect.Effect<ReadonlyArray<FileSystem.Entry>, Harness.NotFound>
-  readonly webSearchProviders: (sessionId: string) => Effect.Effect<ReadonlyArray<WebSearch.Provider>, Harness.NotFound>
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
   readonly transfer: SessionTransfer.Interface

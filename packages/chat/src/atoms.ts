@@ -260,12 +260,6 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     ),
   )
 
-  const webSearchProviders = Atom.family((view: View) =>
-    Atom.make((get) =>
-      Effect.flatMap(get.result(session(view.root)), (opened) => opened.webSearchProviders(view.sessionID)),
-    ),
-  )
-
   const shellRunning = Atom.family((view: { readonly root: Session.ID; readonly shellID: Shell.ID }) =>
     Atom.make((get) =>
       Option.match(AsyncResult.value(get(state(view.root))), {
@@ -321,7 +315,6 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     file,
     vcs,
     vcsDiff,
-    webSearchProviders,
     shellRunning,
     runningShells,
     shell,

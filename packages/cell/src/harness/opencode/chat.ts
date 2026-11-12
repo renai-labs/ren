@@ -72,7 +72,6 @@ export const make = (
     | "commands"
     | "findFiles"
     | "environment"
-    | "webSearchProviders"
     | "activate"
     | "chats"
   >,
@@ -374,10 +373,6 @@ export const make = (
             Effect.catchTag("Vcs.DiffError", (error) => Effect.fail(new Harness.Rejected({ message: error.message }))),
           ),
       ),
-    webSearchProviders: (sessionId) =>
-      host
-        .webSearchProviders(sessionId)
-        .pipe(Effect.map((all) => all.map((provider) => ({ id: provider.id, name: provider.name })))),
     replyPermission: (sessionId, requestId, reply, message) =>
       api.permission
         .reply({
