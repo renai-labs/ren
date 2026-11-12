@@ -1,4 +1,12 @@
-import { createContext, use, useEffect, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react"
+import {
+  createContext,
+  use,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ComponentProps,
+  type ReactNode,
+} from "react"
 import {
   Streamdown,
   defaultComponents,
@@ -28,13 +36,13 @@ import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
 
-let mermaidLoad: Promise<DiagramPlugin | undefined> | undefined
+let mermaidLoad: Promise<DiagramPlugin | null> | undefined
 const loadMermaid = () =>
   (mermaidLoad ??= import("@streamdown/mermaid").then(
     (module) => module.mermaid,
     () => {
       mermaidLoad = undefined
-      return undefined
+      return null
     },
   ))
 
@@ -202,7 +210,7 @@ export function Markdown(props: {
           },
         }
   const text = TexMath.rewrite(props.children)
-  const [mermaid, setMermaid] = useState<DiagramPlugin | undefined>(undefined)
+  const [mermaid, setMermaid] = useState<DiagramPlugin | null>(null)
   const wantsMermaid = mermaidFence.test(text)
   useEffect(() => {
     if (wantsMermaid) void loadMermaid().then(setMermaid)
@@ -210,21 +218,21 @@ export function Markdown(props: {
   const dark = useSyncExternalStore(subscribeDark, isDark, () => false)
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <MermaidLoaded value={mermaid !== undefined}>
-      <Streamdown
-        controls={{ code: false, table: false, mermaid: true }}
-        plugins={{ math, ...(mermaid ? { mermaid } : {}) }}
-        mermaid={dark ? mermaidOptions.dark : mermaidOptions.light}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
-      >
-        {mentionLinks(text, apps)}
-      </Streamdown>
+      <MermaidLoaded value={mermaid !== null}>
+        <Streamdown
+          controls={{ code: false, table: false, mermaid: true }}
+          plugins={{ math, ...(mermaid ? { mermaid } : {}) }}
+          mermaid={dark ? mermaidOptions.dark : mermaidOptions.light}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={withApps}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(text, apps)}
+        </Streamdown>
       </MermaidLoaded>
     </WorkspaceImages>
   )
