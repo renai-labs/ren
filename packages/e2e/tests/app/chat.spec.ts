@@ -173,3 +173,29 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
 })
+
+test("a member hovers a link in a reply to see its URL and copies it from the right-click menu", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"])
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const url = "https://docs.example.com/v2/migrate#breaking"
+  await page
+    .getByRole("textbox", { name: "Message" })
+    .fill(`Reply with: See the [migration guide](${url}) for details.`)
+  await page.getByRole("button", { name: "Send" }).click()
+
+  const link = page.getByRole("link", { name: "migration guide" })
+  await expect(link).toBeVisible({ timeout: brainStart })
+  await expect(link).toHaveAttribute("href", url)
+  await link.hover()
+  await expect(page.getByText(url, { exact: true })).toBeVisible()
+
+  await link.click({ button: "right" })
+  await expect(page.getByRole("menuitem")).toHaveText(["Open link", "Copy link", "Copy link text"])
+  await page.getByRole("menuitem", { name: "Copy link", exact: true }).click()
+  await expect(page.getByText("Link copied")).toBeVisible()
+  expect(await page.evaluate("navigator.clipboard.readText()")).toBe(url)
+})

@@ -261,7 +261,19 @@ interface Endpoint {
 }
 
 const endpoints: Readonly<Record<string, Endpoint>> = {
-  "/v1/chat/completions": { decode: Schema.decodeUnknownOption(ChatRequest), stream: reply },
+  "/v1/chat/completions": {
+    decode: Schema.decodeUnknownOption(ChatRequest),
+    stream: (body, behaviour, gate) => {
+      const echoed = /^Reply with: ([\s\S]+)$/u.exec(
+        text(body.messages.findLast((message) => message.role === "user")?.content),
+      )?.[1]
+      return reply(
+        body,
+        echoed === undefined || behaviour.reply !== undefined ? behaviour : { ...behaviour, reply: echoed },
+        gate,
+      )
+    },
+  },
   "/v1/messages": {
     decode: (json) =>
       Option.map(Schema.decodeUnknownOption(MessagesRequest)(json), (body) => ({
