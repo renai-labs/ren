@@ -161,7 +161,7 @@ it.live(
         ProfilesFixture.profile(root, { appId: app.id, slug: "globex", kind: "shared", spaceIds: [sales, extra] }),
       )
       const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
-      yield* measure("promote", profiles.promote(ana, mine.id, {}), personal)
+      yield* measure("promote", profiles.promote(ana, mine.id, { spaceId: sales }), personal)
       yield* measure(
         "connect",
         credentials.create(root, {
@@ -175,7 +175,7 @@ it.live(
       yield* measure("credential delete", credentials.remove(root, credentialId, {}))
       yield* ProfilesFixture.connect(organizationId, acme.id, "MCP_GMAIL__ACME", { holder: cy.userId })
       yield* measure("holder leaves the org", provisioning.archiveMemberships(organizationId, cy.userId))
-      yield* measure("delete", profiles.delete(root, mine.id), personal)
+      yield* measure("delete", profiles.delete(root, mine.id))
       const current = yield* apps.get(root, app.id)
       yield* measure(
         "app edit",

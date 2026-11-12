@@ -507,11 +507,14 @@ export const AppProfilePromote = (input: Command.Command.Config.Infer<typeof Com
     ClientApi.groups["app-profile"].endpoints["app-profile.promote"],
     {
       params: { id: input["id"] },
+      payload: { spaceId: input["spaceId"] },
       input: input["input"],
-      labels: { id: "<profile>" },
+      labels: { id: "<profile>", spaceId: "--space" },
       lookups: {
         id: (client, value) =>
           client["app-profile"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["app-profile"]["promote"]({ ...request.params, ...request.payload }),

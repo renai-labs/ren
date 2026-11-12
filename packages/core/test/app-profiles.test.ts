@@ -93,30 +93,46 @@ it.live(
     }),
 )
 
-it.live("removing a shared profile from its last space deletes it; a space the caller cannot see still counts", () =>
-  Effect.gen(function* () {
-    const found = yield* org()
-    const profiles = yield* AppProfiles.Service
-    const both = yield* ProfilesFixture.profile(found.ana, {
-      appId: found.google.id,
-      slug: "both",
-      kind: "shared",
-      spaceIds: [found.sales],
-    })
-    yield* profiles.access(found.root, both.id, { add: [found.finance] })
-    yield* profiles.access(found.ana, both.id, { remove: [found.sales] })
-    expect((yield* profiles.get(found.root, both.id)).spaces.map((space) => space.id)).toEqual([found.finance])
-    yield* profiles.access(found.root, both.id, { remove: [found.finance] })
-    expect((yield* Effect.flip(profiles.get(found.root, both.id)))._tag).toBe("Primitive.NotFound")
-    const everywhere = yield* ProfilesFixture.profile(found.root, {
-      appId: found.google.id,
-      slug: "everywhere",
-      kind: "shared",
-      allSpaces: true,
-    })
-    yield* profiles.access(found.root, everywhere.id, { allSpaces: false })
-    expect((yield* Effect.flip(profiles.get(found.root, everywhere.id)))._tag).toBe("Primitive.NotFound")
-  }),
+it.live(
+  "removing a shared profile from its last space deletes it when it has no credentials and keeps it when it has; a space the caller cannot see still counts",
+  () =>
+    Effect.gen(function* () {
+      const found = yield* org()
+      const profiles = yield* AppProfiles.Service
+      const both = yield* ProfilesFixture.profile(found.ana, {
+        appId: found.google.id,
+        slug: "both",
+        kind: "shared",
+        spaceIds: [found.sales],
+      })
+      yield* profiles.access(found.root, both.id, { add: [found.finance] })
+      yield* profiles.access(found.ana, both.id, { remove: [found.sales] })
+      expect((yield* profiles.get(found.root, both.id)).spaces.map((space) => space.id)).toEqual([found.finance])
+      yield* profiles.access(found.root, both.id, { remove: [found.finance] })
+      expect((yield* Effect.flip(profiles.get(found.root, both.id)))._tag).toBe("Primitive.NotFound")
+      const everywhere = yield* ProfilesFixture.profile(found.root, {
+        appId: found.google.id,
+        slug: "everywhere",
+        kind: "shared",
+        allSpaces: true,
+      })
+      yield* profiles.access(found.root, everywhere.id, { allSpaces: false })
+      expect((yield* Effect.flip(profiles.get(found.root, everywhere.id)))._tag).toBe("Primitive.NotFound")
+      const signedIn = yield* ProfilesFixture.profile(found.ana, {
+        appId: found.google.id,
+        slug: "signed-in",
+        kind: "shared",
+        spaceIds: [found.sales],
+      })
+      const credentialId = yield* ProfilesFixture.connect(found.organizationId, signedIn.id, "MCP_GMAIL__SIGNED_IN")
+      const kept = yield* profiles.access(found.ana, signedIn.id, { remove: [found.sales] })
+      expect(kept).toMatchObject({ id: signedIn.id, spaces: [], hiddenSpaces: 0 })
+      expect((yield* profiles.get(found.ana, signedIn.id)).items.at(0)?.credentialId).toBe(credentialId)
+      expect(yield* ProfilesFixture.reach(found.organizationId, found.sales)).toEqual([
+        "google/acme",
+        "google/org-mail",
+      ])
+    }),
 )
 
 it.live(
@@ -163,7 +179,7 @@ it.live(
 )
 
 it.live(
-  "a member who sees a shared profile deletes it; promote keeps credentials and labels and lists the person's spaces",
+  "a member who sees a shared profile deletes it; promote keeps credentials and labels and lists only the space it is for",
   () =>
     Effect.gen(function* () {
       const found = yield* org()
@@ -176,12 +192,16 @@ it.live(
       )
       if (!mine) return yield* Effect.die(new Error("expected Ana's private profile"))
       const credentialId = yield* ProfilesFixture.connect(found.organizationId, mine.id, "MCP_GMAIL__ANA")
-      expect((yield* Effect.flip(profiles.promote(found.bob, mine.id, {})))._tag).toBe("Primitive.NotFound")
-      const promoted = yield* profiles.promote(found.ana, mine.id, {})
-      expect(promoted).toMatchObject({ id: mine.id, kind: "shared", userId: null })
-      expect(promoted.spaces.map((space) => space.id)).toEqual(
-        expect.arrayContaining([found.ana.personal, found.sales, found.design]),
+      expect((yield* Effect.flip(profiles.promote(found.bob, mine.id, { spaceId: found.sales })))._tag).toBe(
+        "Primitive.NotFound",
       )
+      expect((yield* Effect.flip(profiles.promote(found.ana, mine.id, { spaceId: found.finance })))._tag).toBe(
+        "Primitive.Forbidden",
+      )
+      expect((yield* profiles.get(found.ana, mine.id)).kind).toBe("private")
+      const promoted = yield* profiles.promote(found.ana, mine.id, { spaceId: found.sales })
+      expect(promoted).toMatchObject({ id: mine.id, kind: "shared", userId: null })
+      expect(promoted.spaces.map((space) => space.id)).toEqual([found.sales])
       const row = (yield* database.db
         .select()
         .from(Database.Schema.credential)
@@ -189,6 +209,57 @@ it.live(
       expect(row).toMatchObject({ profile_id: mine.id, label: "MCP_GMAIL__ANA" })
       expect(promoted.items.at(0)).toMatchObject({ credentialId, label: "MCP_GMAIL__ANA" })
     }),
+)
+
+it.live("two profiles of one app that reach the same space cannot have the same name", () =>
+  Effect.gen(function* () {
+    const found = yield* org()
+    const profiles = yield* AppProfiles.Service
+    const taken = <R>(effect: Effect.Effect<unknown, { readonly _tag: string; readonly message: string }, R>) =>
+      Effect.flip(effect).pipe(Effect.map((error) => ({ tag: error._tag, message: error.message })))
+    expect(
+      yield* taken(
+        ProfilesFixture.profile(found.root, {
+          appId: found.google.id,
+          slug: "acme-2",
+          name: " ACME ",
+          kind: "shared",
+          spaceIds: [found.sales],
+        }),
+      ),
+    ).toEqual({ tag: "Primitive.Conflict", message: "An account named “ACME” is already in Sales." })
+    const other = yield* ProfilesFixture.profile(found.root, {
+      appId: found.google.id,
+      slug: "acme-2",
+      name: "acme",
+      kind: "shared",
+      spaceIds: [found.finance],
+    })
+    expect((yield* taken(profiles.access(found.root, other.id, { add: [found.sales] }))).tag).toBe("Primitive.Conflict")
+    expect((yield* taken(profiles.update(found.root, other.id, { name: "org-mail" }))).tag).toBe("Primitive.Conflict")
+    expect(
+      (yield* taken(
+        ProfilesFixture.profile(found.ana, { appId: found.google.id, slug: "ana-2", name: "ana", kind: "private" }),
+      )).tag,
+    ).toBe("Primitive.Conflict")
+    yield* ProfilesFixture.profile(found.ana, {
+      appId: found.google.id,
+      slug: "sales-ana",
+      name: "ana",
+      kind: "shared",
+      spaceIds: [found.sales],
+    })
+    const mine = (yield* profiles.list(found.ana, { ...page, appId: found.google.id })).items.find(
+      (profile) => profile.slug === "ana",
+    )
+    if (!mine) return yield* Effect.die(new Error("expected Ana's private profile"))
+    expect((yield* taken(profiles.promote(found.ana, mine.id, { spaceId: found.sales }))).tag).toBe(
+      "Primitive.Conflict",
+    )
+    expect((yield* profiles.promote(found.ana, mine.id, { spaceId: found.design })).spaces).toEqual([
+      { id: found.design, name: "Design" },
+    ])
+  }),
 )
 
 it.live(

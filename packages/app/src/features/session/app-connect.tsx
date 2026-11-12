@@ -133,12 +133,13 @@ function useUseHere(space: { id: string; name: string; kind: string; memberCount
   const widens = (profile: AppProfile) =>
     space?.kind !== "private" && (profile.kind === "private" || profile.spaces.every((each) => privateSpace(each.id)))
   const apply = (profile: AppProfile, into: { id: string; name: string }) =>
-    (profile.kind === "private" ? promote.mutateAsync({ id: profile.id }) : Promise.resolve())
-      .then(() => access.mutateAsync({ id: profile.id, add: [into.id] }))
-      .then(
-        () => toast.success(`${profile.name} is now in ${into.name}`),
-        (error: unknown) => toast.error("Couldn’t use the account here", { description: errorMessage(error) }),
-      )
+    (profile.kind === "private"
+      ? promote.mutateAsync({ id: profile.id, spaceId: into.id })
+      : access.mutateAsync({ id: profile.id, add: [into.id] })
+    ).then(
+      () => toast.success(`${profile.name} is now in ${into.name}`),
+      (error: unknown) => toast.error("Couldn’t use the account here", { description: errorMessage(error) }),
+    )
   return {
     onUse: (profile: AppProfile) => {
       if (!space) return

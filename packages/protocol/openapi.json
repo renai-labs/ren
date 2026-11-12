@@ -4249,7 +4249,7 @@
             }
           }
         },
-        "description": "Turn your private profile into a shared one that lists your spaces. Its accounts and labels stay.",
+        "description": "Turn your private profile into a shared one that lists one space. Its accounts and labels stay.",
         "summary": "Share a private profile",
         "requestBody": {
           "content": {
@@ -13469,9 +13469,14 @@
         "additionalProperties": false
       },
       "AppProfile.PromoteInput": {
-        "not": {
-          "type": "null"
-        }
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID_4"
+          }
+        },
+        "required": ["spaceId"],
+        "additionalProperties": false
       },
       "AppProfile.Reach": {
         "type": "object",
@@ -21577,6 +21582,11 @@
         "type": "string",
         "pattern": "^spc_",
         "description": "Only the profiles that this space reaches."
+      },
+      "Space.ID_4": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "The one space that the shared profile lists."
       },
       "Space.Info": {
         "type": "object",

@@ -1078,7 +1078,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/app-profiles/${encodeURIComponent(input.id)}/promote`,
-            body: {},
+            body: { spaceId: input["spaceId"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

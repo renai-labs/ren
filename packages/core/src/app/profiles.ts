@@ -581,6 +581,58 @@ export const layer = Layer.effect(
         return yield* new Primitive.Forbidden({ message: "A shared profile cannot link a private profile." })
     })
 
+    const reachOf = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      profile: {
+        readonly kind: AppProfile.Kind
+        readonly userId: Auth.UserID | null
+        readonly allSpaces: boolean
+        readonly spaceIds: ReadonlyArray<Space.ID>
+      },
+    ) {
+      if (!profile.allSpaces && profile.kind === "shared") return profile.spaceIds
+      return (yield* transaction
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(
+          and(
+            eq(spaces.organization_id, actor.organizationId),
+            isNull(spaces.archived_at),
+            profile.allSpaces
+              ? undefined
+              : and(eq(spaces.kind, "private"), eq(spaces.owner_user_id, profile.userId ?? actor.userId)),
+          ),
+        )).map((row) => row.id)
+    })
+
+    const checkName = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      profile: { readonly id?: AppProfile.ID; readonly appId: App.ID; readonly name: string },
+      spaceIds: ReadonlyArray<Space.ID>,
+    ) {
+      const name = profile.name.trim().toLowerCase()
+      const clashes = yield* Effect.forEach(spaceIds, (spaceId) =>
+        reachable(transaction, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) }).pipe(
+          Effect.map((reached) =>
+            reached.some(
+              (other) =>
+                other.appId === profile.appId && other.id !== profile.id && other.name.trim().toLowerCase() === name,
+            )
+              ? [spaceId]
+              : [],
+          ),
+        ),
+      )
+      const clash = clashes.flat().at(0)
+      if (!clash) return
+      const space = (yield* transaction.select({ name: spaces.name }).from(spaces).where(eq(spaces.id, clash))).at(0)
+      return yield* new Primitive.Conflict({
+        message: `An account named “${profile.name.trim()}” is already in ${space?.name ?? "this space"}.`,
+      })
+    })
+
     const writeLink = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       profileId: AppProfile.ID,
@@ -619,6 +671,17 @@ export const layer = Layer.effect(
             ...add.map((space) => ({ id: space, action: AppProfilePolicy.actions.addSpace })),
             ...remove.map((space) => ({ id: space, action: AppProfilePolicy.actions.removeSpace })),
           ])
+          yield* checkName(
+            transaction,
+            actor,
+            { id: row.id, appId: row.app_id, name: row.name },
+            yield* reachOf(transaction, actor, {
+              kind: "shared",
+              userId: null,
+              allSpaces: input.allSpaces === true,
+              spaceIds: add,
+            }),
+          )
           if (add.length)
             yield* transaction
               .insert(listed)
@@ -647,11 +710,16 @@ export const layer = Layer.effect(
           }
         }),
       )
-      // oxlint-disable-next-line ren/no-comments -- A shared profile that no space uses any more is deleted, with its sign-ins, as a delete does.
-      if (changed.unused) {
-        yield* store.removeForProfile(changed.info.id)
-        yield* database.db.delete(profiles).where(eq(profiles.id, changed.info.id)).pipe(Effect.orDie)
-      }
+      if (changed.unused)
+        yield* database.db
+          .delete(profiles)
+          .where(
+            and(
+              eq(profiles.id, changed.info.id),
+              sql`not exists (select 1 from ${credentials} where ${credentials.profile_id} = ${profiles.id})`,
+            ),
+          )
+          .pipe(Effect.orDie)
       yield* invalidate(changed.labels)
       return changed.info
     })
@@ -724,6 +792,17 @@ export const layer = Layer.effect(
               return yield* new Primitive.Forbidden({ message: "You cannot create profiles." })
             const isPrivate = input.kind === "private"
             const spaceIds = yield* listOf(transaction, actor, input)
+            yield* checkName(
+              transaction,
+              actor,
+              input,
+              yield* reachOf(transaction, actor, {
+                kind: input.kind,
+                userId: isPrivate ? actor.userId : null,
+                allSpaces: input.allSpaces ?? false,
+                spaceIds,
+              }),
+            )
             const first = (yield* transaction
               .select({ id: profiles.id })
               .from(profiles)
@@ -780,11 +859,26 @@ export const layer = Layer.effect(
         const changed = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.update)
-            if (input.name)
+            if (input.name) {
+              yield* checkName(
+                transaction,
+                actor,
+                { id: row.id, appId: row.app_id, name: input.name },
+                yield* reachOf(transaction, actor, {
+                  kind: row.kind,
+                  userId: row.user_id,
+                  allSpaces: row.all_spaces,
+                  spaceIds: (yield* transaction
+                    .select({ id: listed.space_id })
+                    .from(listed)
+                    .where(eq(listed.profile_id, row.id))).map((each) => each.id),
+                }),
+              )
               yield* transaction
                 .update(profiles)
                 .set({ name: input.name, updated_at: sql`now()` })
                 .where(eq(profiles.id, row.id))
+            }
             return { info: yield* infoOf(transaction, actor, row.id), labels: yield* labelsOf(transaction, row.id) }
           }),
         )
@@ -831,21 +925,20 @@ export const layer = Layer.effect(
         return changed.info
       }),
 
-      promote: Effect.fn("AppProfiles.promote")(function* (actor, id) {
+      promote: Effect.fn("AppProfiles.promote")(function* (actor, id, input) {
         const changed = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.promote)
             if (row.kind !== "private") return yield* new Primitive.Conflict({ message: "The profile is shared." })
+            yield* checkSpaces(transaction, actor, holdsOf(actor, { ...row, kind: "shared", user_id: null }, []), [
+              { id: input.spaceId, action: AppProfilePolicy.actions.addSpace },
+            ])
+            yield* checkName(transaction, actor, { id: row.id, appId: row.app_id, name: row.name }, [input.spaceId])
             yield* transaction
               .update(profiles)
               .set({ kind: "shared", user_id: null, updated_at: sql`now()` })
               .where(eq(profiles.id, row.id))
-            const own = yield* spacesOf(transaction, actor)
-            if (own.length)
-              yield* transaction
-                .insert(listed)
-                .values(own.map((space_id) => ({ profile_id: row.id, space_id })))
-                .onConflictDoNothing()
+            yield* transaction.insert(listed).values({ profile_id: row.id, space_id: input.spaceId })
             return {
               info: yield* infoOf(transaction, actor, row.id),
               labels: yield* labelsOf(transaction, row.id),
