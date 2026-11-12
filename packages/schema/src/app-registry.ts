@@ -7,9 +7,14 @@ import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { Skill } from "./skill.js"
 
+export const descriptionMaxLength = 50
+
 export interface Publication extends Schema.Schema.Type<typeof Publication> {}
 export const Publication = Schema.Struct({
   ...App.Declaration.fields,
+  description: Schema.NonEmptyString.check(Schema.isMaxLength(descriptionMaxLength)).annotate({
+    description: `One line in the catalog: at most ${descriptionMaxLength} characters. The listing body holds the rest.`,
+  }),
   slug: Primitive.Slug,
   expectedRevision: Schema.optionalKey(
     Schema.Int.annotate({ description: "Publish only while the app’s definition is still at this revision." }),
