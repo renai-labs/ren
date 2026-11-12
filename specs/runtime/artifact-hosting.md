@@ -4,6 +4,62 @@ Ordinary Cloudflare Workers are implemented and configurable at the composition
 root. See [the setup and verification guide](../../docs/artifact-cloudflare.md).
 The remaining Phase 3 work below is specifically paid Workers for Platforms.
 
+## Tools, binary files and size
+
+OpenCode's artifact tools take file contents only as UTF-8 text
+([anomalyco/opencode#62122](https://github.com/anomalyco/opencode/issues/62122)),
+and keep each artifact's record in the brain's own OpenCode storage. Of the 116
+artifacts in v1, 66 have images or fonts, and 4 are over the old 5 MiB file or
+20 MiB total limit. So Ren does not use OpenCode's artifact plugin:
+
+- The cell removes `opencode.tool.artifact` and its `ren.artifact` plugin serves
+  OpenCode's tool names and inputs under the `opencode` namespace:
+  `artifact_create`, `artifact_update`, `artifact_read` and `artifact_delete`,
+  plus `artifact_status`. Create and update also take `directory`, a folder on
+  the environment, published with its binary files. Read returns the
+  artifact's title, entry and URL from Ren's database (`artifacts.get`), not
+  its files as OpenCode's does; with `directory`, a new folder on the
+  environment gets every file back. A chat without an environment cannot read
+  an artifact's files.
+- Bytes never pass through the Host API. `artifacts.upload` gives a presigned
+  PUT URL. The executor's `files.pack` uploads a folder as a `.tar.gz` with one
+  top-level folder; the cell writes one itself for inline `files`.
+  `artifacts.deploy` names the upload, and Ren checks it (at most 2000 files,
+  25 MiB each, 200 MiB in all; safe paths; the entry; `ren-artifact.json`),
+  copies the version it checked to an immutable key and queues the deployment.
+  Uploads sit under `artifact-uploads/`; a deploy deletes its own, and a
+  bucket lifecycle rule removes the rest after a day. `artifacts.archive`
+  gives a presigned GET URL that the executor's `files.unpack` reads.
+- An executor without `files.pack` cannot publish a folder; inline files still
+  work. The environment must reach the bucket's endpoint.
+
+When OpenCode takes bytes or file references, Ren removes its plugin, enables
+OpenCode's, and registers Ren as an OpenCode artifact provider. The tool names
+stay the same, so transcripts and clients do not change. OpenCode would also
+need an idea of a deployment that is still in progress, and records that are
+not per brain.
+
+### Next: artifacts in the app
+
+1. A public artifacts API in `@ren/protocol`, shaped like OpenCode's
+   `/api/experimental/artifacts` (`artifacts.list` by space and chat,
+   `artifacts.get`, `artifacts.delete`), served from Ren's database.
+2. A `session_id` column on `artifact`, set by the deploy that created it, so a
+   chat lists its own artifacts.
+3. A chat card for an `opencode_artifact_create` or `opencode_artifact_update`
+   tool call, beside `show_file`'s, that reads live status from that API.
+4. The space's Artifacts page and a chat's artifacts panel, as in v1.
+
+### Next: Wrangler's upload
+
+`ArtifactCloudflareUpload.stage` runs Wrangler against a local stand-in for
+Cloudflare's API: it answers Wrangler's lookups, lets it upload assets, captures
+its script PUT and refuses the rest, so Ren can publish with its own conditional
+PUT. That depends on the request sequence of the Wrangler version in the
+catalog. Use a supported packaging or upload interface if Wrangler gains one;
+until then, keep the adapter in its own module with a contract test that fails
+when an upgrade changes those requests.
+
 ## Phase 3 — Cloudflare for Platforms (deferred)
 
 `ArtifactCloudflare.layer`: upload each artifact as a user Worker to a shared
