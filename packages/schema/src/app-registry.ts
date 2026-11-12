@@ -17,7 +17,18 @@ export const Publication = Schema.Struct({
   listing: Schema.optionalKey(
     AppListing.Input.annotate({ description: "Omit to leave the app’s listing, or its absence, unchanged." }),
   ),
-}).annotate({ identifier: "AppRegistry.Publication" })
+})
+  .check(
+    Schema.makeFilter((app) =>
+      Object.keys(app.listing?.tools ?? {})
+        .filter((slug) => !(slug in app.mcps))
+        .map((slug) => ({
+          path: ["listing", "tools", slug],
+          issue: `The listing names tools of MCP "${slug}", which the app does not declare.`,
+        })),
+    ),
+  )
+  .annotate({ identifier: "AppRegistry.Publication" })
 
 export interface Batch extends Schema.Schema.Type<typeof Batch> {}
 export const Batch = Schema.Struct({

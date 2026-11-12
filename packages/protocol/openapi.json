@@ -12911,6 +12911,9 @@
               "type": "string"
             }
           },
+          "tools": {
+            "$ref": "#/components/schemas/AppListing.Tools"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -12928,8 +12931,41 @@
             ]
           }
         },
-        "required": ["appId", "body", "categories", "examplePrompts", "createdAt", "updatedAt", "archivedAt"],
+        "required": ["appId", "body", "categories", "examplePrompts", "tools", "createdAt", "updatedAt", "archivedAt"],
         "additionalProperties": false
+      },
+      "AppListing.Tool": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "description": "The tool only reads, as the MCP’s readOnlyHint says."
+          }
+        },
+        "required": ["name", "description", "readOnly"],
+        "additionalProperties": false
+      },
+      "AppListing.Tools": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AppListing.Tool"
+          }
+        },
+        "description": "The tools each MCP of the app offers, by MCP slug, as its tools/list returns them."
       },
       "AppProfile.AccessInput": {
         "type": "object",
