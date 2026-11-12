@@ -211,6 +211,18 @@ export const UnpackInput = Schema.Struct({
   ),
 }).annotate({ identifier: "Executor.UnpackInput" })
 
+export interface PackInput extends Schema.Schema.Type<typeof PackInput> {}
+export const PackInput = Schema.Struct({
+  path: Schema.String.annotate({ description: "The folder to pack" }),
+  url: Schema.String.annotate({
+    description:
+      "Where the executor PUTs the .tar.gz, such as a presigned upload URL. Every file is under one top-level folder, as unpack reads it",
+  }),
+  maxBytes: Schema.Int.check(Schema.isGreaterThan(0)).annotate({ description: "The most bytes of the folder" }),
+  maxFiles: Schema.Int.check(Schema.isGreaterThan(0)).annotate({ description: "The most files of the folder" }),
+  maxFileBytes: Schema.Int.check(Schema.isGreaterThan(0)).annotate({ description: "The most bytes of one file" }),
+}).annotate({ identifier: "Executor.PackInput" })
+
 export class MountError extends Schema.TaggedError<MountError>()("MountError", {
   path: Schema.String,
   message: Schema.String,
@@ -314,6 +326,10 @@ export const Rpcs = RpcGroup.make(
   }),
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
+  Rpc.make("files.pack", {
+    payload: PackInput,
+    error: Schema.Union([ArchiveError, FileNotFoundError, WrongKindError, FileSystemError]),
+  }),
   Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
   Rpc.make("drives.refresh", { payload: RefreshInput, error: MountError }),
   Rpc.make("drives.uploaded", { payload: UploadedInput, error: MountError }),

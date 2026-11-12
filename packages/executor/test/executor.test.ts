@@ -673,6 +673,80 @@ it.live("an unpack that skips links leaves the link out and sends the caller's h
   }),
 )
 
+const uploads = Effect.acquireRelease(
+  Effect.sync(() => {
+    const received = new Map<string, ArrayBuffer>()
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: async (request) => {
+        const name = new URL(request.url).pathname.slice(1)
+        if (request.method === "PUT") {
+          if (!request.headers.get("content-length")) return new Response("length required", { status: 411 })
+          received.set(name, await request.arrayBuffer())
+          return new Response(null, { status: 200 })
+        }
+        const bytes = received.get(name)
+        return bytes ? new Response(bytes) : new Response("missing", { status: 404 })
+      },
+    })
+    return { server, received, url: (name: string) => `http://127.0.0.1:${server.port}/${name}?signature=secret` }
+  }),
+  (served) => Effect.promise(() => served.server.stop(true)),
+)
+
+const limits = { maxBytes: 1024 * 1024, maxFiles: 10, maxFileBytes: 512 * 1024 }
+
+it.live("packs a folder with its binary files into an archive that unpack gives back whole", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* uploads
+    const image = crypto.getRandomValues(new Uint8Array(300 * 1024))
+    const source = join(workspace, "packed/site")
+    yield* Effect.promise(async () => {
+      await put(join(source, "index.html"), "<img src=assets/logo.png>")
+      await mkdir(join(source, "assets/fonts"), { recursive: true })
+      await writeFile(join(source, "assets/logo.png"), image)
+      await writeFile(join(source, "assets/fonts/inter.woff2"), new Uint8Array([0, 1, 2, 0]))
+    })
+    yield* executor.pack({ path: "packed/site", url: served.url("site.tar.gz"), ...limits })
+    yield* executor.unpack({ url: served.url("site.tar.gz"), folder: ".", path: "packed/back" })
+    const back = join(workspace, "packed/back")
+    expect(
+      (yield* Effect.promise(() => readdir(back, { recursive: true })))
+        .filter((path) => !["assets", "assets/fonts"].includes(path))
+        .toSorted(),
+    ).toEqual(["assets/fonts/inter.woff2", "assets/logo.png", "index.html"])
+    expect(yield* Effect.promise(() => Bun.file(join(back, "assets/logo.png")).bytes())).toEqual(image)
+    expect(yield* Effect.promise(() => Bun.file(join(back, "assets/fonts/inter.woff2")).bytes())).toEqual(
+      new Uint8Array([0, 1, 2, 0]),
+    )
+  }),
+)
+
+it.live("refuses to pack a folder with a link or over its limits, and uploads nothing", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* uploads
+    const linked = join(workspace, "refused-pack/linked")
+    const large = join(workspace, "refused-pack/large")
+    yield* Effect.promise(async () => {
+      await put(join(linked, "index.html"), "x")
+      await symlink("/etc/passwd", join(linked, "escape"))
+      await mkdir(large, { recursive: true })
+      await writeFile(join(large, "video.mp4"), new Uint8Array(limits.maxFileBytes + 1))
+    })
+    const refused = (path: string) =>
+      executor.pack({ path, url: served.url("refused.tar.gz"), ...limits }).pipe(Effect.flip)
+    expect((yield* refused("refused-pack/linked")).message).toBe(
+      "The folder has a link at escape, and the executor packs only files",
+    )
+    expect((yield* refused("refused-pack/large")).message).toBe(`video.mp4 is larger than ${limits.maxFileBytes} bytes`)
+    expect((yield* refused("refused-pack/missing"))._tag).toBe("FileNotFoundError")
+    expect(served.received.size).toBe(0)
+  }),
+)
+
 it.effect("kills the whole group of a process that nobody reads or names for 30 seconds", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service

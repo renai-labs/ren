@@ -96,6 +96,7 @@ const operations = HandApi.Rpcs.toLayer(
       "files.copy": (input) => executor.copy(input.from, input.to),
       "files.mkdir": (input) => executor.mkdir(input.path),
       "files.unpack": (input) => executor.unpack(input),
+      "files.pack": (input) => executor.pack(input),
       "drives.mount": (input) => executor.mount(input),
       "drives.refresh": (input) => executor.refresh(input),
       "drives.uploaded": (input) => executor.uploaded(input),
