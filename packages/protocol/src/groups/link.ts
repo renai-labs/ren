@@ -1,3 +1,4 @@
+import { LinkPreview } from "@ren/schema/link-preview"
 import { PullRequest } from "@ren/schema/pull-request"
 import { Session } from "@ren/schema/session"
 import { SessionLinks } from "@ren/schema/session/links"
@@ -49,6 +50,21 @@ export const LinkGroup = HttpApiGroup.make("link")
         summary: "List a task’s pull requests",
         description:
           "Return the pull requests the task links, in link order, with their title and state from GitHub. Ren reads GitHub on each call.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.linkPreviews", "/sessions/:id/link-previews", {
+      params: { id: Session.ID },
+      payload: LinkPreview.Input,
+      success: Schema.Array(LinkPreview.Info),
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.linkPreviews",
+        summary: "Preview the links of a chat’s message",
+        description:
+          "Return a preview for each GitHub pull request, GitHub issue, Linear issue and Notion page among up to 20 links of one finished message. Other links are left out. A preview shows only what the chat could read for the caller: GitHub through the organization’s GitHub App, for the space’s repositories; Linear and Notion through an app profile the space reaches that is shared or the caller’s own. A link Ren cannot read is `unavailable` with its reason. Ren stores no preview and caches each for 60 seconds.",
       }),
     ),
   )

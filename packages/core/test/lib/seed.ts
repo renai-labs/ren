@@ -101,12 +101,17 @@ export const owner = Effect.fnUntraced(function* () {
   return { organizationId, spaceId, createdBy: creator.id, memberId, origin: "chat" as const }
 })
 
-export const ren = Effect.fnUntraced(function* (input: { readonly instructions?: string } = {}) {
+export const ren = Effect.fnUntraced(function* (
+  input: {
+    readonly instructions?: string
+    readonly model?: { readonly endpointId: string; readonly modelId: string }
+  } = {},
+) {
   const database = yield* Database.Service
   const settings = { permissions: [], references: [] }
   yield* database.transaction((transaction) =>
     RenSettings.apply(transaction, {
-      settings: { ...settings, ...input, model: { endpointId: "stub", modelId: "stub-model" } },
+      settings: { ...settings, model: { endpointId: "stub", modelId: "stub-model" }, ...input },
       agents: [
         { name: "ren", description: "Ren", isSubagent: false, settings },
         { name: "general", description: "The general subagent", isSubagent: true, settings },

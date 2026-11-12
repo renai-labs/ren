@@ -85,6 +85,7 @@ import type {
   LinkSessionLinksInput,
   LinkSessionPullRequestsInput,
   LinkTaskPullRequestsInput,
+  LinkSessionLinkPreviewsInput,
   LabelListInput,
   LabelCreateInput,
   LabelUpdateInput,
@@ -951,6 +952,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryOptions({
               queryKey: ["link", "session", "pullRequests", input] as const,
               queryFn: (context) => client["link"]["session"]["pullRequests"](input, { signal: context.signal }),
+            }),
+        },
+        linkPreviews: {
+          mutationKey: () => ["link", "session", "linkPreviews"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["link", "session", "linkPreviews"] as const,
+              mutationFn: (input: LinkSessionLinkPreviewsInput) => client["link"]["session"]["linkPreviews"](input),
             }),
         },
       },

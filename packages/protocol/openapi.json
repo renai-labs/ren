@@ -7205,6 +7205,87 @@
         "summary": "List a task’s pull requests"
       }
     },
+    "/sessions/{id}/link-previews": {
+      "post": {
+        "tags": ["link"],
+        "operationId": "session.linkPreviews",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkPreview.Info"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return a preview for each GitHub pull request, GitHub issue, Linear issue and Notion page among up to 20 links of one finished message. Other links are left out. A preview shows only what the chat could read for the caller: GitHub through the organization’s GitHub App, for the space’s repositories; Linear and Notion through an app profile the space reaches that is shared or the caller’s own. A link Ren cannot read is `unavailable` with its reason. Ren stores no preview and caches each for 60 seconds.",
+        "summary": "Preview the links of a chat’s message",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkPreview.Input"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/labels": {
       "get": {
         "tags": ["label"],
@@ -17660,6 +17741,247 @@
       },
       "Label.UserNameEncoded": {
         "type": "string"
+      },
+      "LinkPreview.GitHubIssue": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["github_issue"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkPreview.Person"
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["open", "closed"]
+          }
+        },
+        "required": ["kind", "url", "ref", "title", "people", "updatedAt", "state"],
+        "additionalProperties": false
+      },
+      "LinkPreview.GitHubPullRequest": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["github_pr"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkPreview.Person"
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PullRequest.State"
+          }
+        },
+        "required": ["kind", "url", "ref", "title", "people", "updatedAt", "state"],
+        "additionalProperties": false
+      },
+      "LinkPreview.Info": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/LinkPreview.GitHubPullRequest"
+          },
+          {
+            "$ref": "#/components/schemas/LinkPreview.GitHubIssue"
+          },
+          {
+            "$ref": "#/components/schemas/LinkPreview.LinearIssue"
+          },
+          {
+            "$ref": "#/components/schemas/LinkPreview.NotionPage"
+          },
+          {
+            "$ref": "#/components/schemas/LinkPreview.Unavailable"
+          }
+        ],
+        "description": "What the chat’s reader may see of one link. `url` is the link as the message wrote it."
+      },
+      "LinkPreview.Input": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "maxItems": 20
+          }
+        },
+        "required": ["urls"],
+        "additionalProperties": false
+      },
+      "LinkPreview.LinearIssue": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["linear_issue"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkPreview.Person"
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/LinkPreview.LinearState"
+          }
+        },
+        "required": ["kind", "url", "ref", "title", "people", "updatedAt", "state"],
+        "additionalProperties": false
+      },
+      "LinkPreview.LinearState": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["triage", "backlog", "unstarted", "started", "completed", "canceled"]
+          },
+          "color": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "type", "color"],
+        "additionalProperties": false
+      },
+      "LinkPreview.NotionIcon": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["emoji", "image"]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "value"],
+        "additionalProperties": false
+      },
+      "LinkPreview.NotionPage": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["notion_page"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkPreview.Person"
+            }
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "icon": {
+            "$ref": "#/components/schemas/LinkPreview.NotionIcon"
+          }
+        },
+        "required": ["kind", "url", "ref", "title", "people", "updatedAt"],
+        "additionalProperties": false
+      },
+      "LinkPreview.Person": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "LinkPreview.Provider": {
+        "type": "string",
+        "enum": ["github", "linear", "notion"]
+      },
+      "LinkPreview.Reason": {
+        "type": "string",
+        "enum": ["not_connected", "no_access", "failed"],
+        "description": "`not_connected`: Ren has no connection to read it. `no_access`: the connection cannot read it. `failed`: the service did not answer."
+      },
+      "LinkPreview.Unavailable": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["unavailable"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/LinkPreview.Provider"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/LinkPreview.Reason"
+          },
+          "canConnect": {
+            "type": "boolean",
+            "description": "True when the reader can connect the app in the chat’s space, so the card may offer it."
+          }
+        },
+        "required": ["kind", "url", "provider", "reason", "canConnect"],
+        "additionalProperties": false
       },
       "Mcp.Auth": {
         "anyOf": [

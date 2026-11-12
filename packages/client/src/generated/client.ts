@@ -171,6 +171,8 @@ import type {
   LinkSessionPullRequestsOutput,
   LinkTaskPullRequestsInput,
   LinkTaskPullRequestsOutput,
+  LinkSessionLinkPreviewsInput,
+  LinkSessionLinkPreviewsOutput,
   LabelListInput,
   LabelListOutput,
   LabelCreateInput,
@@ -1571,6 +1573,18 @@ export function make(options: ClientOptions) {
             {
               method: "GET",
               path: `/sessions/${encodeURIComponent(input.id)}/pull-requests`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        linkPreviews: (input: LinkSessionLinkPreviewsInput, requestOptions?: RequestOptions) =>
+          request<LinkSessionLinkPreviewsOutput>(
+            {
+              method: "POST",
+              path: `/sessions/${encodeURIComponent(input.id)}/link-previews`,
+              body: { urls: input["urls"] },
               successStatus: 200,
               declaredStatuses: [401, 403, 404],
               empty: false,
