@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { AppProfileInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconCheck, IconChevronDown, IconCube, IconPlus } from "@tabler/icons-react"
+import { IconCheck, IconCube, IconPlus } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import {
@@ -22,7 +22,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { cn } from "cn"
 import { Row, Rows } from "./page.js"
 import { useAppProfiles } from "../lib/use-app-profiles.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -82,7 +81,7 @@ export function useAddition(app: App, onAdded: Added) {
   }
 }
 
-export function AddToSpace(props: { app: App; primary?: boolean; large?: boolean; onAdded: Added }) {
+export function AddToSpace(props: { app: App; onAdded: Added }) {
   const navigate = useNavigate()
   const addition = useAddition(props.app, props.onAdded)
   const profiles = useAppProfiles([props.app.id]).of(props.app.id)
@@ -93,24 +92,14 @@ export function AddToSpace(props: { app: App; primary?: boolean; large?: boolean
         <DropdownMenuTrigger
           render={
             <Button
-              variant={props.primary ? "default" : "ghost"}
-              size={props.primary ? "default" : "icon"}
-              className={cn(
-                !props.primary && "text-muted-foreground",
-                props.large && "size-10 [&_svg:not([class*='size-'])]:size-6",
-              )}
+              variant="ghost"
+              size="icon"
+              className="size-10 text-muted-foreground [&_svg:not([class*='size-'])]:size-6"
               aria-label={`Add ${props.app.name} to a space`}
             />
           }
         >
-          {props.primary ? (
-            <>
-              Add to space
-              <IconChevronDown />
-            </>
-          ) : (
-            <IconPlus />
-          )}
+          <IconPlus />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
