@@ -1,6 +1,6 @@
 # Egress split: only credential requests go through the egress
 
-Status: not built. The E2B facts that this plan uses are in [references/e2b-network.md](references/e2b-network.md).
+Status: phases 0 to 3 built on branch `egress-split`, not deployed. The E2B facts that this plan uses are in [references/e2b-network.md](references/e2b-network.md).
 
 Words:
 
@@ -44,20 +44,20 @@ Words:
 
 ### 3.1 Forwarder (in the sandbox)
 
-1. `cell/machine/start.ts` adds `iptables` rules. The rules send all outbound TCP, on all ports, to the forwarder. The rules also catch the traffic of Docker containers. Loopback traffic and the forwarder's own traffic are not redirected.
+1. When Ren sets `REN_EGRESS_FORWARD` (the identity entry's URL), `cell/machine/start.ts` makes the forwarder's CA once in `/etc/ren-forward`, starts `iron-proxy forward` as the user `ren-forward`, waits for its port 15001, and then adds `iptables` rules. The rules send all outbound TCP, on all ports, to the forwarder. A rule on `docker0` also catches the traffic of Docker containers. Loopback traffic and the traffic of `ren-forward` are not redirected.
 2. The forwarder reads the original target (`SO_ORIGINAL_DST`), then the TLS SNI or the HTTP `Host`.
-3. For TLS, it presents a certificate signed by a CA that only this sandbox trusts. The CA key is in the sandbox. It can only open the sandbox's own traffic.
-4. For each request, it looks for a placeholder in the headers, the path and the query. It does not search the body. This is the same rule as the egress (`iron-proxy/internal/ren/scan.go`, `findPlaceholders`).
-5. A plain request goes to its target, with a new TLS connection that checks the target's certificate against the system bundle.
-6. A credential request goes to the egress host over HTTPS. The forwarder adds `X-Ren-Target` with the full target URL and does not change the other headers. E2B decrypts this connection with its own CA, which it writes to `/etc/ssl/certs/ca-certificates.crt` and can change at a resume. The forwarder reads that file again when a handshake fails with an unknown authority, and tries once more.
+3. For TLS, it presents a certificate signed by a CA that only this sandbox trusts. The CA key is in the sandbox. It can only open the sandbox's own traffic. `start.ts` writes the CA where Ren puts the egress CA in proxy mode (`~/.ren/egress-ca.pem`), so the programs trust it as they trust the egress CA today. TLS without SNI is copied to its target unchanged.
+4. For each request, it looks for a placeholder in the headers, the path and the query. It does not search the body. This is the same rule as the egress (`iron-proxy/internal/ren/scan.go`, `HasPlaceholder`).
+5. A plain request goes to its target's original address, with a new TLS connection that checks the target's certificate against the system bundle. The forwarder removes each `x-ren-*` header that a program sent.
+6. A credential request goes to the egress host over HTTPS. The forwarder adds `X-Ren-Target` with the full target URL and does not change the other headers. E2B decrypts this connection with its own CA, which it writes to `/etc/ssl/certs/ca-certificates.crt` and can change at a resume. The forwarder reads that file again each time it changes.
 7. An `Upgrade` request (WebSocket) is decided in the same way. Then the forwarder copies bytes in both directions.
-8. A connection that is not HTTP or TLS goes to its target unchanged.
+8. A connection that is not HTTP or TLS goes to its target unchanged. A connection whose original target is the forwarder itself was not redirected (a program or an outside caller dialed port 15001), and the forwarder closes it.
 9. The forwarder offers HTTP/2 and HTTP/1.1 to clients (ALPN), as the egress tunnel does today (`iron-proxy/internal/proxy/tunnel.go`, `NextProtos`). E2B's interception gives HTTP/2 to the forwarder too (phase 0).
 10. The forwarder is a mode of the iron-proxy binary (`iron-proxy forward`). It uses the same placeholder scan, so the forwarder and the egress always agree.
 
 ### 3.2 E2B settings (core)
 
-`networkOf` in `core/src/machine-provider/e2b.ts` changes when the split is on:
+The deployment setting `EGRESS_MODE=split` and `EGRESS_IDENTITY_URL` turn the split on. `SandboxEgress.identityFor` gives the identity entry to a machine of a provider with `canIdentify` (E2B). Other providers keep the proxy. `networkOf` in `core/src/machine-provider/e2b.ts` then sends:
 
 | Setting                | Today                             | Split                                                                                     |
 | ---------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -80,7 +80,7 @@ Words:
 4. A request with more than one `X-Ren-Identity` value gets `403`. E2B replaces a header that the sandbox sends (phase 0), so only a bug or a change at E2B gives two values.
 5. It sends the sandbox id and the execution id to Ren in a new proof kind (3.4). It keeps the answer for each sandbox id, for at most the token's lifetime, as it keeps logins today (fork change 5). Each kept answer holds its workload, so an invalidate by workload (fork change 6) removes it when Ren retires the machine.
 6. It removes `X-Ren-Identity` and `X-Ren-Target` before any other step. The token never goes to an upstream, into a response, into the audit entry or into a log. Then it runs the same steps as a tunnelled request: `Handle`, the upstream address check, `Mask`, `Observe` and the audit entry.
-7. A request without a valid token gets `403` with `x-ren-egress: unknown_workload`. The egress does not forward it.
+7. A request without a valid token gets `403` with `x-ren-egress: unknown_workload`. A request with no placeholder gets `403` with `x-ren-egress: no_placeholder`: the forwarder sends plain requests to their targets, so such a request comes from a program that called the entry itself. The egress forwards neither.
 8. The SOCKS5 entry stays until phase 5, so both modes work at the same time.
 
 ### 3.4 Ren: the E2B identity proof
@@ -92,9 +92,9 @@ Words:
 ```
 
 1. Only Ren's own egress may send it, as with `Login`.
-2. Ren finds the brain or hand whose `binding.sandboxId` is the sandbox id and whose machine is not retired. The answer is that workload and its generation.
-3. When no binding has the sandbox id, Ren reads the sandbox at E2B (`GET /sandboxes/{id}`) and takes the workload from the metadata that Ren set at create (`brain`, `generation`, `kind`). The `owner` must be this Ren. This covers the time between the create and the write of the binding (`core/src/machine-lifecycle.ts`, after `provider.create`), when the brain can already send requests.
-4. A sandbox id with no current machine gives `generation_retired` or `unknown_workload`, as today.
+2. Before the create, Ren issues a `credential_caller` row of kind `E2BIdentity` for the workload and generation, as it issues a proxy login today. The E2B provider calls `onAddress(sandboxId)` after `POST /sandboxes` and before it uploads `brain.env`. Ren writes the sandbox id into `credential_caller.address`. The machine starts only after `brain.env` is there, so its first request finds its workload.
+3. Ren finds the row by `address` and checks that its generation is the newest. A replaced generation keeps its address and gets `generation_retired`. A retire clears the address, so the sandbox gets `unknown_workload`.
+4. A retire also invalidates the egress's answers by workload, because a machine in split mode has no login.
 5. The egress verifies the token, so Ren does not see it.
 
 ## 4. Phases

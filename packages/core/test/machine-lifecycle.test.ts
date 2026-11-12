@@ -27,7 +27,11 @@ const capacityFor = Duration.seconds(30)
 const templateId = MachineTemplate.ID.create()
 
 // oxlint-disable-next-line ren/no-comments -- A kind of machine that lives in memory: its rows in a map, its provider a counter, its ready check and its probe two switches.
-const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSample?: boolean }) =>
+const kindWith = (options: {
+  readonly canUpdateInPlace: boolean
+  readonly canSample?: boolean
+  readonly split?: boolean
+}) =>
   Effect.gen(function* () {
     const rows = new Map<Hand.ID, MachineLifecycle.Row<Hand.ID>>()
     const switches = {
@@ -49,6 +53,8 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
     const images: Array<Option.Option<string>> = []
     const networks: Array<Option.Option<ReadonlyArray<string>>> = []
     const variables: Array<Readonly<Record<string, string>>> = []
+    const identities: Array<Option.Option<MachineProvider.Identity>> = []
+    const bound: Array<string> = []
     const steps: Array<ReadonlyArray<string>> = []
     const updated: Array<string> = []
     const destroyed: Array<number> = []
@@ -57,7 +63,8 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       id: MachineProvider.ID.make("memory"),
       title: "Memory",
       description: "Machines in the test’s memory.",
-      canEgress: false,
+      canEgress: Boolean(options.split),
+      canIdentify: Boolean(options.split),
       canMount: false,
       systemImage: "system",
       config: Schema.Struct({
@@ -77,12 +84,16 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
         images.push(input.image)
         networks.push(input.network.hosts)
         variables.push(input.variables)
+        identities.push(input.network.identity)
         if (switches.capacity || switches.full) {
           switches.capacity = false
           return Effect.fail(new MachineProvider.Capacity({ message: "no room", retryAfter: capacityFor }))
         }
         made.count += 1
-        return Effect.succeed({ binding: { number: made.count }, url: `http://machine-${made.count}.test` })
+        const number = made.count
+        return (input.onAddress ? input.onAddress(`sbx-${number}`) : Effect.void).pipe(
+          Effect.as({ binding: { number }, url: `http://machine-${number}.test` }),
+        )
       },
       connect: (binding, network) =>
         switches.connects
@@ -114,7 +125,14 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
     const holder: { run?: (id: Hand.ID) => Effect.Effect<void, unknown> } = {}
     const machines = MachineLifecycle.make({
       kind: "hand",
-      egress: { enabled: false, proxyFor: () => Effect.succeedNone, retire: () => Effect.void },
+      egress: {
+        enabled: Boolean(options.split),
+        proxyFor: () => Effect.succeedNone,
+        identityFor: () => Effect.succeed(Option.some({ url: "https://egress.ren.test" })),
+        bind: (machine, address) =>
+          Effect.sync(() => void bound.push(`${machine.workload.id}:${machine.workload.generation} ${address}`)),
+        retire: () => Effect.void,
+      },
       workload: (row) => ({ kind: "hand", id: row.id, generation: row.generation }),
       providerOf: () => Effect.sync(() => ({ ...provider, systemImage: switches.system })),
       bootWithin: Duration.seconds(1),
@@ -209,7 +227,21 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       })
       return id
     }
-    return { machines, switches, destroyed, updated, read, update, add, images, networks, variables, steps }
+    return {
+      machines,
+      switches,
+      destroyed,
+      updated,
+      read,
+      update,
+      add,
+      images,
+      networks,
+      variables,
+      identities,
+      bound,
+      steps,
+    }
   })
 
 const kind = kindWith({ canUpdateInPlace: true })
@@ -228,6 +260,21 @@ describe("MachineLifecycle", () => {
         },
       ])
     }),
+  )
+
+  it.effect(
+    "in split mode a new machine gets the identity entry and the forwarder's URL, and its address is bound before it starts",
+    () =>
+      Effect.gen(function* () {
+        const memory = yield* kindWith({ canUpdateInPlace: true, split: true })
+        memory.switches.boots = true
+        const id = memory.add()
+        yield* memory.machines.access(id)
+        expect(memory.identities).toEqual([Option.some({ url: "https://egress.ren.test" })])
+        expect(memory.variables[0]).toMatchObject({ REN_EGRESS: "1", REN_EGRESS_FORWARD: "https://egress.ren.test" })
+        expect(memory.bound).toEqual([`${id}:1 sbx-1`])
+        expect(yield* memory.read(id)).toMatchObject({ egress: true })
+      }),
   )
 
   it.effect(

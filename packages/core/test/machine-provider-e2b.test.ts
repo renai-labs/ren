@@ -193,7 +193,7 @@ describe("E2BSandbox with an egress", () => {
         config: {},
         variables: { REN_BRAIN_ID: "brn_01" },
         image: Option.none(),
-        network: { proxy: Option.some(proxy), hosts: Option.none() },
+        network: { proxy: Option.some(proxy), identity: Option.none(), hosts: Option.none() },
       })
       const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
       expect(JSON.parse(create?.body ?? "{}")).toMatchObject({ network })
@@ -202,7 +202,11 @@ describe("E2BSandbox with an egress", () => {
       expect(seen.some((request) => request.body.includes("BEGIN CERTIFICATE"))).toBe(true)
 
       seen.length = 0
-      yield* provider.connect(created.binding, { proxy: Option.some(proxy), hosts: Option.none() })
+      yield* provider.connect(created.binding, {
+        proxy: Option.some(proxy),
+        identity: Option.none(),
+        hosts: Option.none(),
+      })
       const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
       expect(update?.method).toBe("PUT")
       expect(JSON.parse(update?.body ?? "{}")).toEqual(network)
@@ -244,7 +248,7 @@ describe("E2BSandbox with an egress", () => {
         config: {},
         variables: {},
         image: Option.none(),
-        network: { proxy: Option.some(proxy), hosts: Option.none() },
+        network: { proxy: Option.some(proxy), identity: Option.none(), hosts: Option.none() },
       })
       expect(
         seen
@@ -358,6 +362,53 @@ describe("E2BSandbox template builds", () => {
   )
 })
 
+describe("E2BSandbox with the egress split", () => {
+  it.live(
+    "create asks for an identity token and a header rule for the egress host, binds the sandbox id before any upload, and each update keeps the rule",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* BrainProvider.first
+        seen.length = 0
+        const bound: Array<string> = []
+        const identity = { url: "https://egress.ren.dev" }
+        const created = yield* provider.create({
+          labels: { kind: "brain", id: Brain.ID.make("brn_split"), generation: 1, ...owner },
+          config: {},
+          variables: { REN_BRAIN_ID: "brn_split" },
+          image: Option.none(),
+          network: { proxy: Option.none(), identity: Option.some(identity), hosts: Option.none() },
+          onAddress: (address) =>
+            Effect.sync(() => {
+              bound.push(`${address} after ${seen.filter((request) => request.path === "/files").length} uploads`)
+            }),
+        })
+        const create = JSON.parse(
+          seen.find((request) => request.path === "/sandboxes" && request.method === "POST")?.body ?? "{}",
+        )
+        const rules = {
+          "egress.ren.dev": [{ transform: { headers: { "X-Ren-Identity": "Bearer ${e2b.identity.tokens.ren}" } } }],
+        }
+        expect(create.iam).toEqual({ tokens: { ren: { audience: "https://egress.ren.dev", tokenType: "JWT-SVID" } } })
+        expect(create.network).toEqual({ rules })
+        expect(bound).toEqual(["sbx_1 after 0 uploads"])
+        expect(seen.some((request) => request.body.includes("BEGIN CERTIFICATE"))).toBe(false)
+
+        seen.length = 0
+        yield* provider.connect(created.binding, {
+          proxy: Option.none(),
+          identity: Option.some(identity),
+          hosts: Option.some(["api.example.com"]),
+        })
+        const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
+        expect(JSON.parse(update?.body ?? "{}")).toEqual({
+          allowOut: ["api.example.com", "egress.ren.dev"],
+          denyOut: ["0.0.0.0/0"],
+          rules,
+        })
+      }),
+  )
+})
+
 describe("E2BSandbox templates on a machine", () => {
   it.live("a machine of a template starts from its image and gets its host list, with the apex of each wildcard", () =>
     Effect.gen(function* () {
@@ -368,7 +419,11 @@ describe("E2BSandbox templates on a machine", () => {
         config: {},
         image: Option.some("ren-template-x:abc"),
         variables: {},
-        network: { proxy: Option.some(proxy), hosts: Option.some(["api.example.com", "*.example.org"]) },
+        network: {
+          proxy: Option.some(proxy),
+          identity: Option.none(),
+          hosts: Option.some(["api.example.com", "*.example.org"]),
+        },
       })
       const create = JSON.parse(
         seen.find((request) => request.path === "/sandboxes" && request.method === "POST")?.body ?? "{}",
@@ -376,7 +431,11 @@ describe("E2BSandbox templates on a machine", () => {
       const limited = { ...network, allowOut: ["api.example.com", "*.example.org", "example.org"] }
       expect(create).toMatchObject({ templateID: "ren-template-x:abc", network: limited })
       seen.length = 0
-      yield* provider.connect(created.binding, { proxy: Option.some(proxy), hosts: Option.some(["api.example.com"]) })
+      yield* provider.connect(created.binding, {
+        proxy: Option.some(proxy),
+        identity: Option.none(),
+        hosts: Option.some(["api.example.com"]),
+      })
       const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
       expect(JSON.parse(update?.body ?? "{}")).toEqual({ ...network, allowOut: ["api.example.com"] })
     }),

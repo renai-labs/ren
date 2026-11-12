@@ -217,6 +217,7 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.orDie)
         const row = rows.at(0)
+        if (row?.proof_kind === "E2BIdentity") return Option.some({ kind: "E2BIdentity" } satisfies Placement)
         if (!row?.username || !row.password_sealed) return Option.none()
         const password = yield* envelope.open(row.password_sealed, contextOf(caller)).pipe(Effect.orDie)
         return Option.some({ kind: "ProxyLogin", username: row.username, password } satisfies Placement)
