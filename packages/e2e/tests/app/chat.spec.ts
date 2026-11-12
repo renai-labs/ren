@@ -50,18 +50,17 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
-  await start.getByRole("button", { name: "Send" }).click()
+  const composer = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await composer.fill("Plan the launch")
+  await composer.press("Enter")
 
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
   const sessionURL = page.url()
   await expect(page.getByText("Plan the launch")).toBeVisible()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  const composer = page.getByRole("form", { name: "Message Ren" })
-  await composer.getByRole("textbox", { name: "Message" }).fill("Add the budget")
-  await composer.getByRole("textbox", { name: "Message" }).press("Enter")
+  await composer.fill("Add the budget")
+  await composer.press("Enter")
   await expect(page.getByText("Add the budget")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(2)
 
@@ -73,13 +72,12 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
   await command.press("Enter")
   await expect(panel.getByText("created", { exact: true })).toBeVisible()
 
-  const message = composer.getByRole("textbox", { name: "Message" })
-  await message.pressSequentially("Ask @budge")
+  await composer.pressSequentially("Ask @budge")
   const mentions = page.getByRole("listbox", { name: "Mentions" })
-  await expect(mentions.getByRole("group", { name: "Files" }).getByRole("option")).toHaveText([/src\/budget\.ts$/])
-  await message.press("Enter")
-  await message.pressSequentially("to check it")
-  await message.press("Enter")
+  await expect(mentions.getByRole("group", { name: /^Files/ }).getByRole("option")).toHaveText([/src\/budget\.ts$/])
+  await composer.press("Enter")
+  await composer.pressSequentially("to check it")
+  await composer.press("Enter")
   await expect(page.getByText("Ask @src/budget.ts to check it")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(3)
 
