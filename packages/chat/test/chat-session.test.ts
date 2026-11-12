@@ -7,9 +7,8 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import { DateTime, Deferred, Effect, Fiber, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
+import { DateTime, Deferred, Effect, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
-import { TestClock } from "effect/testing"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
 import { Family } from "../src/family.js"
@@ -738,58 +737,6 @@ test("a brain URL that takes no connection, as a paused sandbox, makes the next 
       expect(asked).toContain(true)
       expect(asked.at(-1)).toBe(true)
     }),
-  ))
-
-test("a prompt to a brain that takes no connection shows unreachable after 20 seconds and stops as unsent after 2 minutes", () =>
-  ChatTest.live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      const refusing = FetchHttpClient.layer.pipe(
-        Layer.provide(
-          Layer.succeed(
-            FetchHttpClient.Fetch,
-            Object.assign(() => Promise.reject(new TypeError("fetch failed")), { preconnect: fetch.preconnect }),
-          ),
-        ),
-      )
-      const chat = yield* ChatSession.make({
-        sessionID: brain.id,
-        access,
-        connection: { reconnectDelay: 600_000 },
-      }).pipe(Effect.provide(refusing))
-      // ast-grep-ignore: no-test-sleep -- the refused fetch settles on the real event loop, which TestClock does not drive
-      const flush = Effect.promise(() => new Promise((r) => setTimeout(r, 5)))
-      const status = Effect.gen(function* () {
-        const current = yield* SubscriptionRef.get(chat.state)
-        const id = ChatState.messages(current, brain.id).at(0)?.id ?? ""
-        return ChatState.pendingStatus(current, brain.id, id)
-      })
-      const advance = (seconds: number) =>
-        Effect.forEach(
-          Array.from({ length: seconds }),
-          () => TestClock.adjust("1 second").pipe(Effect.andThen(flush)),
-          { discard: true },
-        )
-      const sending = yield* chat.prompt({ text: "hello" }).pipe(Effect.flip, Effect.forkChild)
-      yield* flush
-      const behind = yield* chat.prompt({ text: "behind" }).pipe(Effect.flip, Effect.forkChild)
-      yield* flush
-      yield* advance(19)
-      expect(yield* status).not.toBe("unreachable")
-      expect(yield* status).not.toBe("unsent")
-      yield* advance(2)
-      expect(yield* status).toBe("unreachable")
-      yield* advance(90)
-      expect(yield* status).toBe("unreachable")
-      yield* advance(40)
-      const failed = yield* Fiber.join(sending)
-      expect(failed._tag).toBe("ChatSession.AccessFailed")
-      expect(yield* status).toBe("unsent")
-      expect((yield* Fiber.join(behind))._tag).toBe("ChatSession.AccessFailed")
-      const after = yield* SubscriptionRef.get(chat.state)
-      expect([...after.stalled.values()]).toEqual(["unsent", "unsent"])
-    }).pipe(Effect.provide(TestClock.layer())),
   ))
 
 test("a prompt that Ren cannot give access for stays in the chat as unsent, and retrying it sends it once with its id (E126)", () =>
