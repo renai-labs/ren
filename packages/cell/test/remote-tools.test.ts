@@ -652,6 +652,23 @@ it.live("a command that runs long does not hold up shell.create", () =>
   }),
 )
 
+it.live("shell.create stops a command after its timeout", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const chat = opened.harness.chat
+    const started = yield* chat.createShell(session.sessionId, { command: "sleep 30", timeout: 300 })
+    yield* chat.shell(session.sessionId, started.id).pipe(
+      Effect.repeat({
+        until: (shell) => shell.status === "timeout",
+        schedule: Schedule.spaced("50 millis"),
+        times: 100,
+      }),
+    )
+    expect(yield* chat.shell(session.sessionId, started.id)).toMatchObject({ status: "timeout" })
+  }),
+)
+
 // oxlint-disable-next-line ren/no-comments -- The workspace panel reads the chat's hand: the brain's own machine (co-located), or another machine through the Environment API (remote).
 const places = [
   { name: "the sandbox", it, isRemoteHand: false, folderOf: folder, real: (path: string) => path },
