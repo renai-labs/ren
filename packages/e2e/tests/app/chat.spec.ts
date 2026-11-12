@@ -122,7 +122,6 @@ test("a member opens the model picker with its shortcut", async ({ page }) => {
   await expect(message).toBeFocused()
 })
 
-// Undo does not restore the draft in the stub setup, on main too. Remove the fixme when it does.
 test.fixme("a member undoes the last message with a command", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
