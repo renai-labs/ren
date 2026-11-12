@@ -174,17 +174,17 @@ const headingTags = new Set(["h1", "h2", "h3", "h4", "h5", "h6"])
 
 const headingIds = (id: string) => () => (tree: MarkdownNode) => {
   const slugger = new GithubSlugger()
-  const visit = (node: MarkdownNode, footnotes: boolean) => {
-    const inside = footnotes || node.properties?.["dataFootnotes"] === true || node.properties?.["dataFootnotes"] === ""
-    if (node.tagName && headingTags.has(node.tagName) && !inside) {
+  const visit = (node: MarkdownNode) => {
+    if (node.properties?.["dataFootnotes"] === true || node.properties?.["dataFootnotes"] === "") return
+    if (node.tagName && headingTags.has(node.tagName)) {
       const text = (function flatten(each: MarkdownNode): string {
         return each.type === "text" ? (each.value ?? "") : (each.children ?? []).map(flatten).join("")
       })(node)
       node.properties = { ...node.properties, id: `${id}-${slugger.slug(text)}` }
     }
-    for (const child of node.children ?? []) visit(child, inside)
+    for (const child of node.children ?? []) visit(child)
   }
-  visit(tree, false)
+  visit(tree)
 }
 
 const urlTransform: UrlTransform = (url, key, node) =>

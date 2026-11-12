@@ -392,7 +392,9 @@ function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> 
             <li key={tool.name} className="flex flex-col gap-1 py-3">
               <span className="font-mono text-sm break-all">{tool.name}</span>
               {tool.description ? (
-                <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+                <Markdown id={`tool-${tool.name}`} className="text-sm/6 text-muted-foreground">
+                  {tool.description}
+                </Markdown>
               ) : null}
             </li>
           ))}

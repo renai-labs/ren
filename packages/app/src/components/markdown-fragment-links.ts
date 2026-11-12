@@ -1,4 +1,4 @@
-export function fragmentTarget(root: HTMLElement, id: string, fragment: string) {
+function fragmentTarget(root: HTMLElement, id: string, fragment: string) {
   const lower = fragment.toLowerCase()
   const found = [fragment, `${id}-${lower}`, `user-content-${fragment}`].map((candidate) =>
     root.querySelector<HTMLElement>(`[id="${CSS.escape(candidate)}"]`),
@@ -6,7 +6,7 @@ export function fragmentTarget(root: HTMLElement, id: string, fragment: string) 
   return found.find((element) => element !== null) ?? undefined
 }
 
-export function scrollParent(element: HTMLElement) {
+function scrollParent(element: HTMLElement) {
   let parent = element.parentElement
   while (parent) {
     if (/auto|scroll/.test(getComputedStyle(parent).overflowY)) return parent
@@ -15,7 +15,7 @@ export function scrollParent(element: HTMLElement) {
   return null
 }
 
-export function decodeFragment(value: string) {
+function decodeFragment(value: string) {
   try {
     return decodeURIComponent(value)
   } catch {
@@ -35,6 +35,7 @@ export function scrollToFragment(
   const scroller = scrollParent(root)
   if (!scroller) return
   release?.(scroller)
+  // ast-grep-ignore: no-manual-scroll -- a link jumps to its target in the transcript, which MessageScroller has no API for
   scroller.scrollTo({
     top: scroller.scrollTop + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top,
   })
