@@ -1,4 +1,5 @@
 import type { BillingInvoiceStatus, BillingPlan, BillingSummary } from "@ren/client"
+import type { Confirmation } from "../../components/confirm-dialog.js"
 
 export type PlanTransition = "subscribe" | "upgrade" | "downgrade" | "cancel"
 
@@ -135,32 +136,36 @@ export function confirmCopy(input: {
   readonly name: string
   readonly priceCents: number
   readonly endsOn: string | null
-}) {
-  const price = `$${(input.priceCents / 100).toFixed(2)}`
+}): Confirmation {
+  const price = formatMoney(input.priceCents, "USD")
   switch (input.transition) {
     case "subscribe":
       return {
         title: `Subscribe to ${input.name}`,
         description: `Checkout opens in a new tab. Credits arrive once the ${price} payment clears.`,
         action: "Continue to checkout",
+        tone: "default",
       }
     case "upgrade":
       return {
         title: `Upgrade to ${input.name}`,
         description: `${price} is charged to your saved card now. New credits arrive once it clears.`,
         action: "Upgrade",
+        tone: "default",
       }
     case "downgrade":
       return {
         title: `Downgrade to ${input.name}`,
         description: `Switches to ${price}/month on your next billing date. Nothing is charged today and current credits stay.`,
         action: "Downgrade",
+        tone: "default",
       }
     case "cancel":
       return {
         title: "Cancel plan",
         description: `You keep access until ${input.endsOn ?? "your next billing date"}, then move to Free. Resubscribe anytime.`,
         action: "Cancel plan",
+        tone: "destructive",
       }
   }
 }

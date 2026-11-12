@@ -17,6 +17,7 @@ export type Confirmation = {
   action: string
   cancel?: string | undefined
   working?: string | undefined
+  tone?: "destructive" | "default" | undefined
 }
 
 export function ConfirmDialog(props: {
@@ -47,8 +48,12 @@ export function ConfirmDialog(props: {
             {props.confirmation.cancel ?? "Cancel"}
           </DialogClose>
           <Button
-            variant="destructive"
-            className="bg-destructive text-primary-foreground hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90"
+            variant={props.confirmation.tone === "default" ? "default" : "destructive"}
+            className={
+              props.confirmation.tone === "default"
+                ? undefined
+                : "bg-destructive text-primary-foreground hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90"
+            }
             disabled={pending}
             onClick={() => void confirm()}
           >

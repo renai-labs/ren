@@ -6,6 +6,7 @@ import { IconInfoCircle } from "@tabler/icons-react"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@ren/ui/card"
+import { Loading } from "@ren/ui/loading"
 import { Progress } from "@ren/ui/progress"
 import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
@@ -15,7 +16,15 @@ import { formatDate, formatUtcDate } from "@ren/ui/time"
 import { cn } from "cn"
 import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
-import { Page, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "../../components/page.js"
+import {
+  Page,
+  PageTabsList,
+  PageTabsTrigger,
+  TableCard,
+  TableEmpty,
+  TableSample,
+  useShapeId,
+} from "../../components/page.js"
 import { StatusBadge } from "../../components/status-badge.js"
 import { errorMessage } from "../../lib/errors.js"
 import { Pages } from "../../lib/pages.js"
@@ -91,13 +100,13 @@ export function BillingPage() {
 
 function ProvidersNotice() {
   return (
-    <Alert>
+    <Alert className="p-3 has-data-[slot=alert-action]:pr-32">
       <IconInfoCircle />
       <AlertTitle>Already pay for Claude or ChatGPT?</AlertTitle>
       <AlertDescription>
         Connect those subscriptions under Providers. Plans here add Ren credits for everything else.
       </AlertDescription>
-      <AlertAction>
+      <AlertAction className="top-1/2 right-3 -translate-y-1/2">
         <Link to="/settings/providers" className={buttonVariants({ variant: "secondary", size: "sm" })}>
           Go to Providers
         </Link>
@@ -131,12 +140,13 @@ function PlanCard(props: {
         {detail ? <CardDescription>{detail}</CardDescription> : null}
       </CardHeader>
       <CardFooter className="mt-auto gap-2">
-        <Button variant={paid ? "secondary" : "default"} onClick={props.onChoosePlan}>
+        <Button variant={paid ? "secondary" : "default"} size="sm" onClick={props.onChoosePlan}>
           {paid ? "Change plan" : "Upgrade"}
         </Button>
         {paid ? (
           <Button
             variant="secondary"
+            size="sm"
             disabled={portal.isPending}
             onClick={() =>
               portal.mutate(undefined, {
@@ -176,7 +186,7 @@ function CreditsCard(props: { billing: Summary }) {
             value={remainingPercent(available, props.billing.grantedMicroUsd)}
             aria-label="Credits remaining"
             className={cn(
-              "w-full **:data-[slot=progress-track]:bg-secondary",
+              "w-full **:data-[slot=progress-indicator]:bg-chart-1 **:data-[slot=progress-track]:bg-secondary",
               depleted && "**:data-[slot=progress-indicator]:bg-destructive",
             )}
           />
@@ -187,7 +197,7 @@ function CreditsCard(props: { billing: Summary }) {
 }
 
 function invoicesNotice(status: "pending" | "error" | "success", count: number) {
-  if (status === "pending") return <Spinner />
+  if (status === "pending") return null
   if (status === "error") return "Couldn’t load invoices."
   if (count === 0) return "No invoices yet."
   return null
@@ -201,6 +211,7 @@ function Invoices() {
   const [opening, setOpening] = useState<string | null>(null)
   const rows = invoices.data?.pages.flatMap((page) => page.invoices) ?? []
   const notice = invoicesNotice(invoices.status, rows.length)
+  const shapeId = useShapeId("invoices")
   const open = (id: string) => {
     setOpening(id)
     void queryClient
@@ -216,37 +227,54 @@ function Invoices() {
   }
   return (
     <section aria-label="Invoices" className="flex flex-col gap-3">
-      <TableCard>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Invoice</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="w-20">
-                <span className="sr-only">Open</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {notice ? <TableEmpty columns={4}>{notice}</TableEmpty> : null}
-            {rows.map((invoice) => (
-              <InvoiceRow
-                key={invoice.id}
-                invoice={invoice}
-                opening={opening === invoice.id}
-                onOpen={() => open(invoice.id)}
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </TableCard>
+      <Loading id={shapeId} loading={invoices.isPending} label="Loading invoices">
+        {invoices.isPending ? (
+          <TableSample columns={["Invoice", "Status", "Amount", ""]} count={2} />
+        ) : (
+          <InvoiceTable rows={rows} notice={notice} opening={opening} onOpen={open} />
+        )}
+      </Loading>
       <LoadMore
         more={invoices.hasNextPage}
         loading={invoices.isFetchingNextPage}
         onMore={() => void invoices.fetchNextPage()}
       />
     </section>
+  )
+}
+
+function InvoiceTable(props: {
+  rows: ReadonlyArray<BillingInvoice>
+  notice: string | null
+  opening: string | null
+  onOpen: (id: string) => void
+}) {
+  return (
+    <TableCard>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Invoice</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="w-20">
+              <span className="sr-only">Open</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {props.notice ? <TableEmpty columns={4}>{props.notice}</TableEmpty> : null}
+          {props.rows.map((invoice) => (
+            <InvoiceRow
+              key={invoice.id}
+              invoice={invoice}
+              opening={props.opening === invoice.id}
+              onOpen={() => props.onOpen(invoice.id)}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </TableCard>
   )
 }
 

@@ -230,6 +230,7 @@ function PlanCardView(props: {
         {card.action ? (
           <Button
             variant="secondary"
+            size="sm"
             className="w-full"
             onClick={() => {
               if (card.action) props.onAction(card.action.transition)
@@ -239,7 +240,7 @@ function PlanCardView(props: {
           </Button>
         ) : null}
         {!card.action && card.current ? (
-          <Button variant="outline" className="w-full" disabled>
+          <Button variant="outline" size="sm" className="w-full" disabled>
             <IconCheck data-icon="inline-start" />
             Current plan
           </Button>
