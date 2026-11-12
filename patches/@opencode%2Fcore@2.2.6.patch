@@ -1,0 +1,28 @@
+diff --git a/dist/chunks/persistent-pty-psrqx85q.js b/dist/chunks/persistent-pty-psrqx85q.js
+index 518118d8b14e483a6c5bc7c6dd1e3b8613ab224f..ec5cb1ee263c1d925ba3d093ef2fe62fa79c42f6 100644
+--- a/dist/chunks/persistent-pty-psrqx85q.js
++++ b/dist/chunks/persistent-pty-psrqx85q.js
+@@ -70,7 +70,7 @@ var layer14 = Layer.effect(Service32, Effect.gen(function* () {
+       for (const tool of discovered) {
+         editor.add({
+           name: tool.name,
+-          options: { namespace: namespace2(tool.server), codemode: tool.codemode !== false },
++          options: { namespace: namespace2(tool.server), codemode: tool.codemode !== false && !tool._meta?.ui?.resourceUri },
+           description: tool.description ?? "",
+           input: tool.inputSchema,
+           output: tool.outputSchema ?? {},
+@@ -108,9 +108,13 @@ var layer14 = Layer.effect(Service32, Effect.gen(function* () {
+                 return Option.getOrElse(decodeJson(text), () => text);
+               return text;
+             };
++            const resourceUri = tool._meta?.ui?.resourceUri;
++            const view = typeof resourceUri === "string" && resourceUri.startsWith("ui://") ? yield* mcp.readResource({ server: tool.server, uri: resourceUri }).pipe(Effect.catch(() => Effect.succeed(undefined))) : undefined;
++            const page = view?.contents.find((part) => part.type === "text");
+             return {
+               output: output(),
+-              ...content.length === 0 ? {} : { content }
++              ...content.length === 0 ? {} : { content },
++              ...page === undefined ? {} : { metadata: { app: { server: tool.server, tool: tool.name, resourceUri, html: page.text, ui: tool._meta.ui, readOnly: tool.annotations?.readOnlyHint === true } } }
+             };
+           }).pipe(Effect.mapError((error) => {
+             if (error instanceof ToolFailure)

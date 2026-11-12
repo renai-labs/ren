@@ -22,6 +22,7 @@ import type { ModelTypes } from "@ren/schema/model-types"
 import { Channel } from "@ren/schema/channel"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { WebhookOrigin } from "@ren/schema/webhook-origin"
+import { Drive } from "@ren/schema/drive"
 import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -556,6 +557,45 @@ export const make = (
                 Effect.scoped,
               )
             })
+          yield* tool.hook("execute.after", (event) =>
+            Effect.gen(function* () {
+              if (event.status !== "completed" || !Predicate.isObject(event.result.metadata?.app)) return
+              const view = event.result.metadata.app
+              const stripped = Struct.omit(event.result.metadata, ["app"])
+              event.result = { ...event.result, metadata: stripped }
+              if (typeof view.html !== "string" || typeof view.server !== "string") return
+              const bytes = new TextEncoder().encode(view.html)
+              const hash = Array.from(
+                new Uint8Array(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes))),
+              )
+                .map((byte) => byte.toString(16).padStart(2, "0"))
+                .join("")
+                .slice(0, 16)
+              const path = `${Drive.appsOf(sessionId)}/${hash}.html`
+              const stored = yield* onSpaceDrive((client) => DriveFiles.store(client, spaceDrive, path, bytes)).pipe(
+                Effect.as(true),
+                Effect.catchTag("DriveFiles.Refused", () => Effect.succeed(false)),
+              )
+              if (!stored) return
+              const csp = Predicate.isObject(view.ui) && Predicate.isObject(view.ui.csp) ? view.ui.csp : {}
+              const domains = (key: string) =>
+                Array.isArray(csp[key]) ? csp[key].filter((each): each is string => typeof each === "string") : []
+              event.result = {
+                ...event.result,
+                metadata: {
+                  ...stripped,
+                  app: {
+                    server: view.server,
+                    tool: view.tool,
+                    resourceUri: view.resourceUri,
+                    path,
+                    domains: { connect: domains("connectDomains"), resource: domains("resourceDomains") },
+                    readOnly: view.readOnly === true,
+                  },
+                },
+              }
+            }),
+          )
           yield* tool.transform((editor) => {
             if (!hasWorkspace || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
               return

@@ -69,6 +69,25 @@ export const ShownFile = Schema.Struct({ file: DriveFile }).annotate({
   description: `The \`metadata\` of a completed \`${showFileTool}\` tool part: the file the agent showed, in the space’s drive.`,
 })
 
+export interface McpAppView extends Schema.Schema.Type<typeof McpAppView> {}
+export const McpAppView = Schema.Struct({
+  app: Schema.Struct({
+    server: Schema.String,
+    tool: Schema.String,
+    resourceUri: Schema.String,
+    path: Schema.String.annotate({ description: "The view’s HTML, in the drive of the chat’s space." }),
+    domains: Schema.Struct({
+      connect: Schema.Array(Schema.String),
+      resource: Schema.Array(Schema.String),
+    }),
+    readOnly: Schema.Boolean,
+  }),
+}).annotate({
+  identifier: "SessionMessage.McpAppView",
+  description:
+    "The `metadata` of a completed MCP tool part whose tool declares a view (`_meta.ui.resourceUri`): the view the app shows in place of the tool call.",
+})
+
 export interface AgentAttachment extends Schema.Schema.Type<typeof AgentAttachment> {}
 export const AgentAttachment = Schema.Struct({
   name: Schema.String,

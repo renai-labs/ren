@@ -72,6 +72,7 @@ export const make = Effect.fnUntraced(function* (
     readonly holdInitialization?: boolean
     readonly tools?: ReadonlyArray<string>
     readonly malformed?: boolean
+    readonly view?: string
   } = {},
 ) {
   const requests = yield* Queue.unbounded<typeof RequestBody.Type>()
@@ -105,7 +106,7 @@ export const make = Effect.fnUntraced(function* (
       await initialized
       return reply({
         protocolVersion: "2025-03-26",
-        capabilities: { tools: { listChanged: true } },
+        capabilities: { tools: { listChanged: true }, ...(options.view && { resources: {} }) },
         serverInfo: { name: "ren-test", version: "1" },
         instructions: "Use the test tools to read the marker.",
       })
@@ -117,6 +118,7 @@ export const make = Effect.fnUntraced(function* (
           description: state.label,
           inputSchema: { type: "object", properties: {} },
           annotations: { readOnlyHint: true },
+          ...(options.view && name === "marker" && { _meta: { ui: { resourceUri: "ui://test/view" } } }),
           outputSchema: options.malformed && name === "second" ? { type: "string" } : undefined,
         })),
         ...(body.params?.cursor ? {} : { nextCursor: "page-two" }),
@@ -126,6 +128,10 @@ export const make = Effect.fnUntraced(function* (
       await called
       return reply({ content: [{ type: "text", text: state.label }] })
     }
+    if (body.method === "resources/read")
+      return reply({
+        contents: [{ uri: "ui://test/view", mimeType: "text/html;profile=mcp-app", text: options.view ?? "" }],
+      })
     return body.method === "ping"
       ? reply({})
       : Response.json({ jsonrpc: "2.0", id: body.id, error: { code: -32601, message: "Not supported" } })

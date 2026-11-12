@@ -422,3 +422,16 @@ it.live(
       expect(McpPeer.result(gone)).toContain("Unknown tool 'stuck.marker'")
     }),
 )
+
+it.live("a tool that declares a view leaves Code Mode, so its call is its own tool part", () =>
+  Effect.gen(function* () {
+    const peer = yield* McpPeer.make({ view: "<p>view</p>" })
+    const test = yield* observed()
+    yield* test.brain.configureApps(McpPeer.catalog("view", [{ slug: "docs", url: peer.url }]))
+    const script = McpPeer.execute("docs.marker")
+    yield* test.prompt(`${script.marker} read the marker`)
+    yield* test.brain.opencode.experimental.session.wait({ sessionID: test.sessionID })
+    expect(script.calls.at(0)?.system ?? "").not.toContain("tools.docs.marker()")
+    expect((yield* test.tools((tools) => tools.some((tool) => tool.id.endsWith("marker")))).length).toBeGreaterThan(0)
+  }),
+)
