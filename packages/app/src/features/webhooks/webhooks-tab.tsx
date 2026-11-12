@@ -18,8 +18,10 @@ import { formatRelative } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
 import { PageActions, TableCard, TableSample, useShapeId } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
+import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useNow } from "../../lib/use-now.js"
@@ -169,16 +171,18 @@ function PresetRow(props: { app: AppInfo; preset: string; turnedOn: WebhookInfo 
   )
 }
 
-function FromApps(props: { spaceId: string; webhooks: ReadonlyArray<WebhookInfo> }) {
+function FromApps(props: { spaceId: string; webhooks: ReadonlyArray<WebhookInfo>; query: string }) {
   const { api } = RouterContext.useRouterContext()
   const profiles = useQuery(
     api["app-profile"].list.queryOptions({ spaceId: props.spaceId, page: 1, pageSize: pickerPageSize }),
   )
   const appIds = [...new Set((profiles.data?.items ?? []).map((profile) => profile.appId))]
   const apps = useQueries({ queries: appIds.map((id) => api.app.get.queryOptions({ idOrSlug: id })) })
-  const presets = apps.flatMap((result) =>
-    result.data ? Object.keys(result.data.webhooks ?? {}).map((preset) => ({ app: result.data, preset })) : [],
-  )
+  const presets = apps
+    .flatMap((result) =>
+      result.data ? Object.keys(result.data.webhooks ?? {}).map((preset) => ({ app: result.data, preset })) : [],
+    )
+    .filter((entry) => Search.matches(props.query, entry.app.name, entry.app.webhooks?.[entry.preset]?.name))
   const turnedOn = new Map(
     props.webhooks.flatMap((webhook) =>
       webhook.preset ? [[`${webhook.preset.appId}/${webhook.preset.preset}`, webhook] as const] : [],
@@ -245,12 +249,15 @@ export function WebhooksTab(props: { spaceId: string }) {
     refetchInterval: Webhooks.refreshEvery,
   })
   const [creating, setCreating] = useState(0)
+  const [query, setQuery] = useState("")
   const shapeId = useShapeId("webhooks")
   const items = webhooks.data?.items
+  const shown = (items ?? []).filter((webhook) => Search.matches(query, nameOf(webhook)))
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div className="flex flex-col gap-4">
         <PageActions>
+          <ToolbarSearch label="Search webhooks" value={query} onChange={setQuery} />
           <Button onClick={() => setCreating((previous) => previous + 1)}>
             <IconPlus data-icon="inline-start" />
             Create webhook
@@ -258,13 +265,13 @@ export function WebhooksTab(props: { spaceId: string }) {
         </PageActions>
         <Loading id={shapeId} loading={!items} label="Loading webhooks">
           {items ? null : <TableSample columns={["Name", "Last request", "Runs as", "Live", ""]} />}
-          {items?.length === 0 ? (
-            <EmptyState title="No webhooks yet">Create one, or ask Ren to connect an app.</EmptyState>
+          {items && shown.length === 0 ? (
+            <EmptyState>{Search.empty(query, "No webhooks yet. Create one, or ask Ren to connect an app.")}</EmptyState>
           ) : null}
-          {items && items.length > 0 ? <WebhookTable webhooks={items} spaceId={props.spaceId} /> : null}
+          {shown.length > 0 ? <WebhookTable webhooks={shown} spaceId={props.spaceId} /> : null}
         </Loading>
       </div>
-      {items ? <FromApps spaceId={props.spaceId} webhooks={items} /> : null}
+      {items ? <FromApps spaceId={props.spaceId} webhooks={items} query={query} /> : null}
       <CreateSheet key={creating} open={creating > 0} spaceId={props.spaceId} onClose={() => setCreating(0)} />
     </div>
   )

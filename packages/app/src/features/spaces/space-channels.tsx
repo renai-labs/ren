@@ -24,7 +24,9 @@ import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
 import { PageActions, TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { errorMessage } from "../../lib/errors.js"
+import { Search } from "../../lib/search.js"
 import { useShown } from "../../lib/use-shown.js"
 import { Channels } from "../../lib/channels.js"
 import { useSpace } from "./use-space.js"
@@ -54,7 +56,12 @@ export function SpaceChannelsTab() {
   const create = useMutation({ ...api["channel-mapping"].create.mutationOptions() })
   const remove = useMutation({ ...api["channel-mapping"].remove.mutationOptions() })
   const [adding, setAdding] = useState(false)
-  const shown = useShown(mappings)
+  const [query, setQuery] = useState("")
+  const shown = useShown(
+    mappings.filter((mapping) =>
+      Search.matches(query, Channels.label(mapping.provider, mapping.placeName), Channels.byId[mapping.provider].title),
+    ),
+  )
   const canLink = space.membershipId !== null || space.canUpdate
   const open = (next: boolean) => {
     create.reset()
@@ -77,14 +84,15 @@ export function SpaceChannelsTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      {canLink ? (
-        <PageActions>
+      <PageActions>
+        <ToolbarSearch label="Search channels" value={query} onChange={setQuery} />
+        {canLink ? (
           <Button onClick={() => open(true)}>
             <IconPlus data-icon="inline-start" />
             Add channel
           </Button>
-        </PageActions>
-      ) : null}
+        ) : null}
+      </PageActions>
       <TableCard>
         <Table className="table-fixed">
           <TableHeader>
@@ -96,7 +104,9 @@ export function SpaceChannelsTab() {
           </TableHeader>
           <TableBody>
             {shown.items.length === 0 ? (
-              <TableEmpty columns={3}>No channels yet. Link one so people can mention @Ren there.</TableEmpty>
+              <TableEmpty columns={3}>
+                {Search.empty(query, "No channels yet. Link one so people can mention @Ren there.")}
+              </TableEmpty>
             ) : null}
             {shown.items.map((mapping) => {
               const name = Channels.label(mapping.provider, mapping.placeName)

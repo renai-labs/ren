@@ -13,15 +13,13 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
 import { categoryLabel, fromApp, fromRegistry, isSpaceApp, needsAttention, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
+import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 
 const route = getRouteApi("/_authed/_shell/apps/")
-
-const matches = (app: { name: string; description: string }, query: string) =>
-  `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
 
 function useConnectedApps() {
   const { client } = RouterContext.useRouterContext()
@@ -111,7 +109,7 @@ function AppListing(props: {
   row: (app: CatalogApp) => ReactNode
 }) {
   if (props.inUse.length === 0 && props.rest.length === 0 && !props.more)
-    return <EmptyState>{props.query ? `Nothing matches “${props.query.trim()}”` : "No apps yet"}</EmptyState>
+    return <EmptyState>{Search.empty(props.query, "No apps yet")}</EmptyState>
   return (
     <div className="flex flex-col gap-10">
       {props.inUse.length > 0 ? (
@@ -192,7 +190,7 @@ export function AppsPage() {
           <AppListingSample />
         ) : (
           <AppListing
-            inUse={usedApps.filter((each) => matches(each, query))}
+            inUse={usedApps.filter((each) => Search.matches(query, each.name, each.description))}
             installed={connected.total}
             onAll={connected.loadAll}
             rest={browse.filter((each) => !used.has(each.id))}

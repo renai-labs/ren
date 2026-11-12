@@ -28,6 +28,7 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useCanAdminister, useOrganization } from "../../lib/use-organization.js"
+import { Search } from "../../lib/search.js"
 import { useShown } from "../../lib/use-shown.js"
 import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -133,10 +134,9 @@ export function MembersSettingsPage() {
   const tab = search.tab ?? "members"
   const [filters, setFilters] = useState<Filters>({})
   const [query, setQuery] = useState("")
-  const needle = query.trim().toLowerCase()
   const rows = members
     .filter((member) => passes(filters, { role: [member.role] }))
-    .filter((member) => !needle || `${member.name} ${member.email}`.toLowerCase().includes(needle))
+    .filter((member) => Search.matches(query, member.name, member.email))
     .map((member) => ({
       id: member.id,
       memberId: member.memberId,

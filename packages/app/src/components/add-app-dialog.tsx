@@ -9,6 +9,7 @@ import { AppRow } from "./app-list.js"
 import { LoadMore } from "./load-more.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
+import { Search } from "../lib/search.js"
 import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../lib/apps.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -43,14 +44,6 @@ function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }
   )
 }
 
-const matches = (app: { name: string; description: string }, query: string) =>
-  `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
-
-function emptyText(query: string, space: string) {
-  if (query) return `Nothing matches “${query.trim()}”`
-  return `${space} has every app`
-}
-
 function AppRowsSample(props: { count: number }) {
   return (
     <Loading label="Loading apps">
@@ -75,7 +68,7 @@ function AppResults(props: {
   const registry = (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromRegistry)
   const own = (apps.data?.items ?? [])
     .map(fromApp)
-    .filter((app) => !isSpaceApp(app, spaces) && matches(app, props.query))
+    .filter((app) => !isSpaceApp(app, spaces) && Search.matches(props.query, app.name, app.description))
   const found = [...own, ...registry].filter((app) => !props.added.has(app.id))
   const loading = pages.isPending || apps.isPending
   return (
@@ -87,7 +80,9 @@ function AppResults(props: {
     >
       {loading ? <AppRowsSample count={8} /> : null}
       {!loading && found.length === 0 && !pages.hasNextPage ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">{emptyText(props.query, props.space.name)}</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">
+          {Search.empty(props.query, `${props.space.name} has every app`)}
+        </p>
       ) : null}
       {found.map((app) => (
         <AddAppRow key={app.id} app={app} space={props.space} onAdded={props.onAdded} />
