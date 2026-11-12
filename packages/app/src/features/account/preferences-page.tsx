@@ -22,6 +22,7 @@ export function PreferencesPage() {
   const me = useMe()
   const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
+  const [foldMessages, setFoldMessages] = useState(() => ChatPreferences.foldMessages.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
   const rename = useMutation({
@@ -70,6 +71,10 @@ export function PreferencesPage() {
     if (enabled) void platform.requestNotifications?.()
     ChatPreferences.notify.write(platform.storage, enabled)
     setNotify(enabled)
+  }
+  const chooseFoldMessages = (enabled: boolean) => {
+    ChatPreferences.foldMessages.write(platform.storage, enabled)
+    setFoldMessages(enabled)
   }
   return (
     <Page title="Preferences">
@@ -142,6 +147,13 @@ export function PreferencesPage() {
                 onCheckedChange={chooseNotify}
                 aria-label="Notify me when Ren finishes or needs input"
               />
+            </Row>,
+            <Row
+              key="fold"
+              title="Fold long messages"
+              description="Show the first 12 lines of a message over 20 lines."
+            >
+              <Switch checked={foldMessages} onCheckedChange={chooseFoldMessages} aria-label="Fold long messages" />
             </Row>,
           ]}
         </Rows>

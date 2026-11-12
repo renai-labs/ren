@@ -34,6 +34,7 @@ import type { Shell } from "@ren/schema/shell"
 import {
   IconBrain,
   IconChevronDown,
+  IconChevronUp,
   IconChevronRight,
   IconClipboardText,
   IconClock,
@@ -122,6 +123,7 @@ export interface TranscriptProps {
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
   readonly expanded?: boolean | undefined
+  readonly foldMessages?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
@@ -275,6 +277,9 @@ function splitPasted(text: string) {
   if (isPasteBlock(text)) return { typed: "", pasted: text }
   return { typed: text, pasted: undefined }
 }
+
+const foldAbove = 20
+const foldShown = 12
 
 function PastedChip(props: { text: string }) {
   const [open, setOpen] = useState(false)
@@ -502,21 +507,38 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   )
 }
 
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
+function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; fold: boolean }) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
   const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
   if (at >= 0)
     return (
       <>
-        <UserText message={props.message} text={props.message.text.slice(0, at)} spaceId={props.spaceId} />
+        <UserText
+          message={props.message}
+          text={props.message.text.slice(0, at)}
+          spaceId={props.spaceId}
+          fold={props.fold}
+        />
         <WebhookRequest request={props.message.text.slice(at + 2)} />
       </>
     )
-  return <UserText message={props.message} spaceId={props.spaceId} />
+  return <UserText message={props.message} spaceId={props.spaceId} fold={props.fold} />
 }
 
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined }) {
+function UserText(props: {
+  message: SessionMessage.User
+  text?: string
+  spaceId: string | undefined
+  fold: boolean
+}) {
+  const [open, setOpen] = useState(false)
   const parts = splitPasted(props.text ?? props.message.text)
+  const message = props.message
+  const lines = parts.typed.split("\n")
+  const typed = !message.schedule && !message.webhook && !message.channel
+  const foldable = props.fold && typed && lines.length > foldAbove
+  const folded = foldable && !open
+  const shown = folded ? lines.slice(0, foldShown).join("\n") : parts.typed
   const apps = useMentionedApps(parts.typed)
   const files = props.message.files ?? []
   const uploads = props.message.uploads ?? []
@@ -529,10 +551,27 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
       {parts.typed ? (
         <Bubble variant="muted" align="end">
-          <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
-            {withAppMentions(parts.typed, apps)}
+          <BubbleContent
+            className={cn(
+              "rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap",
+              folded && "[mask-image:linear-gradient(to_bottom,black_50%,rgb(0_0_0/0.15))]",
+            )}
+          >
+            {withAppMentions(shown, apps)}
           </BubbleContent>
         </Bubble>
+      ) : null}
+      {foldable ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-end text-muted-foreground"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Show less" : "Read more"}
+          {open ? <IconChevronUp data-icon="inline-end" /> : <IconChevronDown data-icon="inline-end" />}
+        </Button>
       ) : null}
     </>
   )
@@ -561,6 +600,7 @@ function UserFooter(props: { text: string; pending: boolean; onEdit?: (() => voi
 function UserMessage(props: {
   message: SessionMessage.User
   spaceId: string | undefined
+  fold: boolean
   person: Person
   pending: boolean
   editing: boolean
@@ -589,7 +629,7 @@ function UserMessage(props: {
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (
           <>
-            <UserBody message={props.message} spaceId={props.spaceId} />
+            <UserBody message={props.message} spaceId={props.spaceId} fold={props.fold} />
             <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
           </>
         )}
@@ -1128,6 +1168,7 @@ function UserBlock(props: {
     <UserMessage
       message={message}
       spaceId={transcript.spaceId}
+      fold={transcript.foldMessages === true}
       person={person}
       pending={pending}
       editing={props.editing}
