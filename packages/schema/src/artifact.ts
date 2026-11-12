@@ -31,12 +31,18 @@ export type DeploymentID = typeof DeploymentID.Type
 
 export const workerPath = "_worker.js"
 
-const maxTotalBytes = 20 * 1024 * 1024
+export const manifestPath = "ren-artifact.json"
 
-export const Files = Schema.Record(Drive.Path, Schema.Uint8ArrayFromBase64.check(Schema.isMaxLength(5 * 1024 * 1024)))
+export const maxFileBytes = 25 * 1024 * 1024
+
+export const maxTotalBytes = 200 * 1024 * 1024
+
+export const maxFiles = 2000
+
+export const Files = Schema.Record(Drive.Path, Schema.Uint8ArrayFromBase64.check(Schema.isMaxLength(maxFileBytes)))
   .check(
     Schema.isMinProperties(1),
-    Schema.isMaxProperties(500),
+    Schema.isMaxProperties(maxFiles),
     Schema.makeFilter(
       (files) =>
         Object.values(files).reduce((total, bytes) => total + bytes.byteLength, 0) <= maxTotalBytes ||
@@ -59,6 +65,7 @@ export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   title: Primitive.Name,
+  entry: Drive.Path.annotate({ description: "The file a person opens first, such as index.html." }),
   url: Schema.NullOr(Schema.String),
   activeDeploymentId: Schema.NullOr(DeploymentID),
   createdAt: Schema.DateTimeUtc,
@@ -96,20 +103,40 @@ export const Deployment = Schema.Struct({
   error: Schema.NullOr(Schema.String),
 }).annotate({ identifier: "Artifact.Deployment" })
 
+export const UploadID = Schema.String.check(Schema.isUUID()).pipe(
+  Schema.brand("Artifact.UploadID"),
+  Schema.annotate({ identifier: "Artifact.UploadID" }),
+)
+export type UploadID = typeof UploadID.Type
+
+export interface Upload extends Schema.Schema.Type<typeof Upload> {}
+export const Upload = Schema.Struct({
+  uploadId: UploadID,
+  url: Schema.String.annotate({
+    description: `PUT the source archive here: a .tar.gz with every file under one top-level folder, at most ${maxFiles} files of ${maxFileBytes} bytes each and ${maxTotalBytes} bytes in all.`,
+  }),
+  expiresAt: Schema.DateTimeUtc,
+}).annotate({ identifier: "Artifact.Upload" })
+
+export interface Archive extends Schema.Schema.Type<typeof Archive> {}
+export const Archive = Schema.Struct({
+  url: Schema.String.annotate({
+    description: "GET the last published source archive here, in the same form as an upload.",
+  }),
+  expiresAt: Schema.DateTimeUtc,
+}).annotate({ identifier: "Artifact.Archive" })
+
 export interface DeployInput extends Schema.Schema.Type<typeof DeployInput> {}
 export const DeployInput = Schema.Struct({
   deploymentId: DeploymentID,
-  title: Primitive.Name,
-  config: Config,
-  files: Files,
-})
-  .check(
-    Schema.makeFilter(
-      (input) =>
-        Object.hasOwn(input.files, input.config.entry) || {
-          path: ["config", "entry"],
-          issue: "Name one of the files.",
-        },
-    ),
-  )
-  .annotate({ identifier: "Artifact.DeployInput" })
+  uploadId: UploadID.annotate({
+    description: `The upload that holds the source archive. Ren checks it on deploy and reads the Durable Objects from its ${manifestPath}.`,
+  }),
+  title: Schema.optional(Primitive.Name).annotate({
+    description: "Omit to keep the artifact’s title. A new artifact needs one.",
+  }),
+  entry: Schema.optional(Drive.Path).annotate({
+    description:
+      "The file a person opens first. Omit to keep the current entry while it is one of the files, or to use index.html, index.md or the only file.",
+  }),
+}).annotate({ identifier: "Artifact.DeployInput" })

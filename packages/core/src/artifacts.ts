@@ -1,12 +1,19 @@
 export * as Artifacts from "./artifacts.js"
 
-import { PutObjectCommand } from "@aws-sdk/client-s3"
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3ServiceException,
+} from "@aws-sdk/client-s3"
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { and, eq, sql } from "drizzle-orm"
-import { Cause, Context, Duration, Effect, Exit, Layer, Option, Schedule, Schema } from "effect"
+import { Cause, Context, DateTime, Duration, Effect, Exit, Layer, Option, Predicate, Schedule, Schema } from "effect"
 import { ClusterSchema, EntityAddress, EntityId, EntityType, MessageStorage, Sharding } from "effect/cluster"
 import { Workflow, WorkflowEngine } from "effect/workflow"
 import { ArtifactProvider } from "./artifact-provider.js"
@@ -23,17 +30,19 @@ export interface Owner {
 }
 
 export interface Interface {
+  readonly upload: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Upload, Primitive.Conflict | Failed>
   readonly deploy: (
     owner: Owner,
     id: Artifact.ID,
     input: Artifact.DeployInput,
-  ) => Effect.Effect<Artifact.Deployment, Primitive.Conflict | Failed>
+  ) => Effect.Effect<Artifact.Deployment, Primitive.Conflict | Primitive.Invalid | Failed>
   readonly status: (
     owner: Owner,
     id: Artifact.ID,
     deploymentId: Artifact.DeploymentID,
   ) => Effect.Effect<Artifact.Deployment, Primitive.NotFound>
-  readonly files: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Files, Primitive.NotFound | Failed>
+  readonly get: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Info, Primitive.NotFound>
+  readonly archive: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Archive, Primitive.NotFound | Failed>
   readonly stop: (owner: Owner, id: Artifact.ID) => Effect.Effect<void, Failed>
 }
 
@@ -72,7 +81,50 @@ export const SettleRun = DurableRunner.make("ArtifactSettle", {
   idempotencyKey: (payload) => `${payload.id}:${payload.claimId}`,
 })
 
+const Manifest = Schema.fromJsonString(Schema.Struct({ durableObjects: Schema.optional(Artifact.DurableObjects) }))
+
+const configOf = Effect.fnUntraced(function* (
+  files: Artifact.Files,
+  entry: string | undefined,
+  current: string | undefined,
+) {
+  const paths = Object.keys(files)
+  const chosen =
+    entry ??
+    [current, "index.html", "index.md"].find((path) => Predicate.isNotUndefined(path) && Object.hasOwn(files, path)) ??
+    (paths.length === 1 ? paths.at(0) : undefined)
+  if (!chosen)
+    return yield* new Primitive.Invalid({
+      message: "Include index.html or index.md, or name the entry when you publish several files.",
+      field: "entry",
+    })
+  if (!Object.hasOwn(files, chosen))
+    return yield* new Primitive.Invalid({ message: `The entry ${chosen} is not one of the files.`, field: "entry" })
+  const manifest = files[Artifact.manifestPath]
+  const durableObjects = manifest
+    ? (yield* Schema.decodeUnknownEffect(Manifest)(new TextDecoder().decode(manifest)).pipe(
+        Effect.mapError(
+          (error) =>
+            new Primitive.Invalid({
+              message: `${Artifact.manifestPath} is not valid: ${error.message}`,
+              field: "uploadId",
+            }),
+        ),
+      )).durableObjects
+    : undefined
+  if (Object.keys(durableObjects ?? {}).length && !Object.hasOwn(files, Artifact.workerPath))
+    return yield* new Primitive.Invalid({
+      message: `Durable Objects need ${Artifact.workerPath} with their exported classes.`,
+      field: "uploadId",
+    })
+  return { entry: chosen, ...(durableObjects && { durableObjects }) } satisfies Artifact.Config
+})
+
 export const deployWithin = Duration.minutes(2)
+
+export const linkLifetime = Duration.minutes(15)
+
+const uploadsPrefix = "artifact-uploads/"
 const artifacts = Database.Schema.artifact
 
 const ownedBy = (row: typeof artifacts.$inferSelect, owner: Owner) =>
@@ -292,37 +344,99 @@ export const layer = Layer.effect(
       return { artifactId: id, deploymentId, status: "deploying" as const, url: row.url, error: null }
     })
 
+    const uploadKey = (owner: Owner, id: Artifact.ID, uploadId: Artifact.UploadID) =>
+      `${uploadsPrefix}${owner.organizationId}/${id}/${uploadId}.tar.gz`
+
+    const link = Effect.fnUntraced(function* (command: PutObjectCommand | GetObjectCommand) {
+      const expiresAt = DateTime.addDuration(yield* DateTime.now, linkLifetime)
+      const url = yield* store(() => getSignedUrl(storage.s3, command, { expiresIn: Duration.toSeconds(linkLifetime) }))
+      return { url, expiresAt }
+    })
+
     return Service.of({
+      upload: Effect.fn("Artifacts.upload")(function* (owner, id) {
+        const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
+        if (found && !ownedBy(found, owner))
+          return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+        const uploadId = Artifact.UploadID.make(crypto.randomUUID())
+        const signed = yield* link(
+          new PutObjectCommand({ Bucket: storage.bucket, Key: uploadKey(owner, id, uploadId) }),
+        )
+        return { uploadId, ...signed }
+      }),
+      archive: Effect.fn("Artifacts.archive")(function* (owner, id) {
+        const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
+        if (!row || !ownedBy(row, owner) || !row.code_archive)
+          return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
+        return yield* link(new GetObjectCommand({ Bucket: storage.bucket, Key: row.code_archive }))
+      }),
       deploy: Effect.fn("Artifacts.deploy")(function* (owner, id, input) {
-        const codeArchive = `${owner.organizationId}/artifacts/${id}/${input.deploymentId}/${crypto.randomUUID()}.tar.gz`
+        const codeArchive = `${owner.organizationId}/artifacts/${id}/deployments/${input.deploymentId}/${input.uploadId}.tar.gz`
+        const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
+        if (found && !ownedBy(found, owner))
+          return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+        const title = input.title ?? found?.title
+        if (!title) return yield* new Primitive.Invalid({ message: "A new artifact needs a title.", field: "title" })
+        if (
+          found &&
+          (yield* requested(
+            DeployRun,
+            yield* DeployRun.executionId({
+              id,
+              deploymentId: input.deploymentId,
+              organizationId: owner.organizationId,
+              title: found.title,
+              config: found.config,
+              codeArchive,
+            }),
+          ))
+        )
+          return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
+        if (found?.active_deployment_id === input.deploymentId)
+          return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
+        const uploaded = uploadKey(owner, id, input.uploadId)
+        const source = yield* ArtifactArchive.read(storage, uploaded).pipe(
+          Effect.catchTags({
+            "ArtifactArchive.Invalid": (error) =>
+              Effect.fail(new Primitive.Invalid({ message: error.message, field: "uploadId" })),
+            "ArtifactArchive.Failed": (error) => Effect.fail(new Failed({ message: error.message })),
+          }),
+        )
+        const config = yield* configOf(source.files, input.entry, found?.config.entry)
+        yield* Effect.tryPromise({
+          try: (signal) =>
+            storage.s3.send(
+              new CopyObjectCommand({
+                Bucket: storage.bucket,
+                Key: codeArchive,
+                CopySource: `${storage.bucket}/${uploaded.split("/").map(encodeURIComponent).join("/")}`,
+                CopySourceIfMatch: source.version,
+              }),
+              { abortSignal: signal },
+            ),
+          catch: (cause) => cause,
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.gen(function* () {
+              if (cause instanceof S3ServiceException && ["NoSuchKey", "PreconditionFailed"].includes(cause.name))
+                return yield* new Primitive.Invalid({
+                  message: "The upload changed while Ren checked it. Upload the archive again.",
+                  field: "uploadId",
+                })
+              yield* Effect.logWarning("Ren could not copy an artifact upload", cause)
+              return yield* new Failed({ message: "Ren could not copy the upload" })
+            }),
+          ),
+        )
         const payload = {
           id,
           deploymentId: input.deploymentId,
           organizationId: owner.organizationId,
-          title: input.title,
-          config: input.config,
+          title,
+          config,
           codeArchive,
         }
         const executionId = yield* DeployRun.executionId(payload)
-        const archive = yield* Effect.promise(() => new Bun.Archive(input.files, { compress: "gzip" }).bytes())
-        const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        if (found && !ownedBy(found, owner))
-          return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
-        if (found && (yield* requested(DeployRun, executionId)))
-          return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
-        if (found?.active_deployment_id === input.deploymentId)
-          return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
-        yield* store((signal) =>
-          storage.s3.send(
-            new PutObjectCommand({
-              Bucket: storage.bucket,
-              Key: codeArchive,
-              Body: archive,
-              ContentType: "application/gzip",
-            }),
-            { abortSignal: signal },
-          ),
-        )
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* transaction
@@ -331,8 +445,8 @@ export const layer = Layer.effect(
                 id,
                 organization_id: owner.organizationId,
                 space_id: owner.spaceId,
-                title: input.title,
-                config: input.config,
+                title,
+                config,
                 provider: provider.id,
                 code_archive: codeArchive,
               })
@@ -359,16 +473,26 @@ export const layer = Layer.effect(
             ).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
           }),
         )
+        yield* store((signal) =>
+          storage.s3.send(new DeleteObjectCommand({ Bucket: storage.bucket, Key: uploaded }), { abortSignal: signal }),
+        ).pipe(Effect.ignore)
         return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
       }),
       status,
-      files: Effect.fn("Artifacts.files")(function* (owner, id) {
+      get: Effect.fn("Artifacts.get")(function* (owner, id) {
         const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        if (!row || !ownedBy(row, owner) || !row.code_archive)
+        if (!row || !ownedBy(row, owner))
           return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
-        return yield* ArtifactArchive.read(storage, row.code_archive).pipe(
-          Effect.mapError((error) => new Failed({ message: error.message })),
-        )
+        return {
+          id: row.id,
+          spaceId: row.space_id,
+          title: row.title,
+          entry: row.config.entry,
+          url: row.url,
+          activeDeploymentId: row.active_deployment_id,
+          createdAt: DateTime.fromDateUnsafe(row.created_at),
+          updatedAt: DateTime.fromDateUnsafe(row.updated_at),
+        }
       }),
       stop: Effect.fn("Artifacts.stop")(function* (owner, id) {
         const pending = yield* database.transaction((transaction) =>

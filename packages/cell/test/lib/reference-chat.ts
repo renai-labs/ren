@@ -19,6 +19,7 @@ import { ChatSettings } from "../../src/chat-settings.js"
 import { GitSources } from "../../src/git-sources.js"
 import type { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
+import type { OpenCodeMcp } from "../../src/harness/opencode/mcp.js"
 import { OpenCodeServer } from "../../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../../src/harness/opencode/workspace-driver.js"
 import { ModelsTest } from "./models.js"
@@ -41,6 +42,7 @@ export const open = Effect.fnUntraced(function* (
     readonly hasWorkspace?: boolean
     readonly database?: string
     readonly restore?: Parameters<Harness.Instance["transcript"]["restore"]>[0]
+    readonly ren?: OpenCodeMcp.RenAccess
   } = {},
 ) {
   const stub = Shared.stub()
@@ -80,6 +82,7 @@ export const open = Effect.fnUntraced(function* (
       saved: Option.some(settings.saved),
       directoryOf: place.directoryOf,
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
+      ren: Option.fromUndefinedOr(options.ren),
       sources: yield* GitSources.make({ github: Effect.succeed(github.hosts), references: { refresh: 0, retry: 0 } }),
     },
   )

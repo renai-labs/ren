@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Artifact } from "@ren/schema/artifact"
-import { ManagedRuntime } from "effect"
+import { ManagedRuntime, Schema } from "effect"
 import { Shared } from "./lib/shared.js"
 import { TestCell } from "./lib/test-cell.js"
 
@@ -17,7 +17,7 @@ const stub = Shared.stub()
 const run = (code: string) => ({ name: "execute", input: { code } })
 
 describe("artifacts", () => {
-  test("a chat publishes, reads, updates and deletes an artifact through Ren, and cannot pick OpenCode's local provider", async () => {
+  test("a chat publishes, reads, updates and deletes an artifact through Ren with OpenCode's artifact tools", async () => {
     const opened = await TestCell.make(celld)
     await opened.models()
     await opened.start()
@@ -39,7 +39,6 @@ describe("artifacts", () => {
     const accepted = await created.called(2)
     expect(JSON.stringify(accepted.body)).toContain("Deployment accepted")
     expect(JSON.stringify(accepted.body)).toContain(first.info.activeDeploymentId ?? "missing deployment")
-    expect(JSON.stringify(accepted.body)).not.toContain(`/api/experimental/artifacts/${id}/view/`)
     celld.ren.artifactDeploying(false)
     const notification = await stub.waitFor(
       (call) => call.text.includes("Artifact deployment result:") && call.text.includes(id),
@@ -55,12 +54,14 @@ describe("artifacts", () => {
         run(
           `return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
         ),
-        run(
-          'return await tools.opencode.artifact_create({ title: "Elsewhere", files: { "index.html": "x" }, provider: "local" })',
-        ),
       ],
     })
     await opened.prompt(updated.marker)
+    const read = Schema.decodeUnknownSync(Schema.String)(
+      (await updated.called(2)).body.messages.findLast((message) => message.role === "tool")?.content,
+    )
+    expect(JSON.parse(read)).toMatchObject({ info: { id, title: "Report", entry: "index.html", url: first.info.url } })
+    expect(read).not.toContain("<h1>v1</h1>")
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     const second = celld.ren.artifacts.get(id)
     if (!second) throw new Error("Updated artifact was not stored")
@@ -69,8 +70,6 @@ describe("artifacts", () => {
     expect(second.info.url).toBe(first.info.url)
     expect(celld.ren.artifacts.size).toBe(1)
     const outputs = JSON.stringify(await opened.messages())
-    expect(outputs).toContain("<h1>v1</h1>")
-    expect(outputs).toContain("Publish artifacts with Ren")
     expect(outputs).toContain("Deployment accepted")
     expect(outputs).toContain("deploymentId")
     expect(outputs).toContain("does not mean the app is live")
@@ -81,6 +80,26 @@ describe("artifacts", () => {
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     expect(celld.ren.artifacts.get(id)?.deployed).toBe(false)
     expect(celld.ren.artifacts.get(id)?.files).toEqual(second.files)
+  })
+
+  test("a deploy whose answer is lost is sent again as the same deployment, and its completion still reaches the chat", async () => {
+    const opened = await TestCell.make(celld)
+    await opened.models()
+    await opened.start()
+    celld.ren.loseDeployAnswer()
+    const created = stub.script({
+      tool: run('return await tools.opencode.artifact_create({ title: "Retried", files: { "index.html": "again" } })'),
+    })
+    await opened.prompt(created.marker)
+    await created.called(2)
+    const published = [...celld.ren.artifacts.values()].find((artifact) => artifact.info.title === "Retried")
+    const deployments = [...(published?.deployments.keys() ?? [])]
+    expect(deployments).toHaveLength(1)
+    const notification = await stub.waitFor(
+      (call) => call.text.includes("Artifact deployment result:") && call.text.includes(deployments.at(0) ?? "none"),
+    )
+    expect(notification.text).toContain('"status":"ready"')
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
   })
 
   test("an accepted deployment reports its background failure in the chat", async () => {

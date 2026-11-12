@@ -153,7 +153,7 @@ export const layer = Layer.effect(
         const directory = yield* fs.makeTempDirectoryScoped({ directory: config.root, prefix: `${state.script}-` })
         const archiveSource = Option.orElse(source, () => Option.fromNullishOr(state.active ?? state.pending))
         const files = Option.isSome(archiveSource)
-          ? yield* ArtifactArchive.read(storage, archiveSource.value.archive)
+          ? (yield* ArtifactArchive.read(storage, archiveSource.value.archive)).files
           : {}
         const objects = Option.isSome(source) ? (source.value.config.durableObjects ?? {}) : {}
         if (Object.keys(objects).length && !files[Artifact.workerPath])

@@ -65,7 +65,12 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
         const publish = (files: Artifact.Files) =>
           Effect.gen(function* () {
             const deploymentId = Artifact.DeploymentID.make(crypto.randomUUID())
-            yield* artifacts.deploy(owner, id, { deploymentId, title: "SQL migration smoke", config, files })
+            yield* ArtifactSamples.deploy(artifacts, owner, id, {
+              deploymentId,
+              title: "SQL migration smoke",
+              config,
+              files,
+            })
             yield* ArtifactSamples.idle(id)
             return yield* artifacts.status(owner, id, deploymentId)
           })
@@ -184,7 +189,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           const owner = yield* Seed.owner()
           const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
           const deploymentId = Artifact.DeploymentID.make(crypto.randomUUID())
-          yield* artifacts.deploy(owner, id, {
+          yield* ArtifactSamples.deploy(artifacts, owner, id, {
             deploymentId,
             title: "Bounded upload",
             config: { entry: "index.html" },
@@ -195,7 +200,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           expect(status.status).toBe("failed")
           expect(status.error).toContain("Recovery remains pending")
           expect(yield* fs.readDirectory(failureRoot)).toEqual([])
-          expect(new TextDecoder().decode((yield* artifacts.files(owner, id))["index.html"])).toBe(
+          expect(new TextDecoder().decode((yield* ArtifactSamples.published(artifacts, owner, id))["index.html"])).toBe(
             "source retained after timeout",
           )
           const row = (yield* database.db
@@ -239,8 +244,12 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
         const publish = Effect.fnUntraced(function* (files: Artifact.Files, config: Artifact.Config) {
           const deploymentId = Artifact.DeploymentID.make(crypto.randomUUID())
           expect(
-            (yield* artifacts.deploy(owner, id, { deploymentId, title: "Cloudflare live sample", config, files }))
-              .status,
+            (yield* ArtifactSamples.deploy(artifacts, owner, id, {
+              deploymentId,
+              title: "Cloudflare live sample",
+              config,
+              files,
+            })).status,
           ).toBe("deploying")
           yield* idle
           return yield* artifacts.status(owner, id, deploymentId)
@@ -339,7 +348,7 @@ export class RecoveryState extends DurableObject {
 }`
         const extraConfig = { entry: "index.html", durableObjects: { STATE: "SampleState", EXTRA: "RecoveryState" } }
         const failedReadiness = Artifact.DeploymentID.make(crypto.randomUUID())
-        yield* artifacts.deploy(owner, id, {
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
           deploymentId: failedReadiness,
           title: "Failed class addition",
           config: extraConfig,

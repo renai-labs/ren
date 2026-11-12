@@ -1,15 +1,17 @@
 import { describe, expect } from "bun:test"
+import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Artifact } from "@ren/schema/artifact"
 import { eq } from "drizzle-orm"
-import { Effect, Fiber, Layer, Schema } from "effect"
+import { ConfigProvider, Effect, Fiber, Layer, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { join } from "node:path"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
 import { Artifacts } from "../src/artifacts.js"
 import { DurableRunner } from "../src/durable-runner.js"
+import { ObjectStorage } from "../src/object-storage.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -55,6 +57,27 @@ const stop = (artifacts: Artifacts.Interface, owner: Artifacts.Owner, id: Artifa
   })
 
 describe("Artifacts with durable workflows and workerd", () => {
+  it.live("a refused archive leaves no copy among the artifact's archives", () =>
+    Effect.gen(function* () {
+      const artifacts = yield* Artifacts.Service
+      const storage = yield* ObjectStorage.Service
+      const owner = yield* Seed.owner()
+      const id = artifactId()
+      const refused = yield* ArtifactSamples.deploy(artifacts, owner, id, {
+        deploymentId: deployment(),
+        title: "Escaping",
+        config: { entry: "index.html" },
+        files: { "index.html": text("x"), "../escape.txt": text("y") },
+      }).pipe(Effect.flip)
+      const kept = yield* Effect.promise(() =>
+        storage.s3.send(
+          new ListObjectsV2Command({ Bucket: storage.bucket, Prefix: `${owner.organizationId}/artifacts/${id}/` }),
+        ),
+      )
+      expect([refused._tag, kept.KeyCount ?? 0]).toEqual(["Primitive.Invalid", 0])
+    }).pipe(Effect.provide(ObjectStorage.layer.pipe(Layer.provide(TestDrives.layer)))),
+  )
+
   it.live(
     "applies per-object SQL migrations atomically and rejects incompatible old code",
     () =>
@@ -67,7 +90,12 @@ describe("Artifacts with durable workflows and workerd", () => {
         const publish = (files: Artifact.Files) =>
           Effect.gen(function* () {
             const attempt = deployment()
-            yield* artifacts.deploy(owner, id, { title: "SQL migrations", deploymentId: attempt, config, files })
+            yield* ArtifactSamples.deploy(artifacts, owner, id, {
+              title: "SQL migrations",
+              deploymentId: attempt,
+              config,
+              files,
+            })
             return yield* settle(artifacts, owner, id, attempt)
           })
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
@@ -88,7 +116,7 @@ describe("Artifacts with durable workflows and workerd", () => {
     180_000,
   )
   it.live(
-    "publishes the report and server-code dashboard through Ren",
+    "publishes the report with its binary assets and the server-code dashboard through Ren",
     () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
@@ -96,18 +124,26 @@ describe("Artifacts with durable workflows and workerd", () => {
         const id = artifactId()
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
         const samples = yield* Effect.promise(() => ArtifactSamples.files("dashboard"))
+        const chart = crypto.getRandomValues(new Uint8Array(6 * 1024 * 1024))
         const report = deployment()
-        yield* artifacts.deploy(owner, id, {
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
           title: "Report",
           deploymentId: report,
           config: { entry: "report.html" },
-          files: Object.fromEntries(Object.entries(samples).filter(([path]) => path !== "_worker.js")),
+          files: {
+            ...Object.fromEntries(Object.entries(samples).filter(([path]) => path !== "_worker.js")),
+            "assets/chart.png": chart,
+          },
         })
         const reportReady = yield* settle(artifacts, owner, id, report)
         expect(reportReady.status).toBe("ready")
         expect((yield* read(reportReady.url ?? "")).body).toContain("Quarterly operating report")
+        const served = yield* Effect.promise(() =>
+          fetch(`${new URL(reportReady.url ?? "").origin}/assets/chart.png`).then((response) => response.bytes()),
+        )
+        expect(served).toEqual(chart)
         const attempt = deployment()
-        yield* artifacts.deploy(owner, id, {
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
           title: "Dashboard",
           deploymentId: attempt,
           config: { entry: "index.html" },
@@ -140,7 +176,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         const publish = (files = input.files) =>
           Effect.gen(function* () {
             const attempt = deployment()
-            yield* artifacts.deploy(owner, id, { ...input, files, deploymentId: attempt })
+            yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, files, deploymentId: attempt })
             return yield* settle(artifacts, owner, id, attempt)
           })
         const first = yield* publish()
@@ -160,7 +196,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect((yield* read(`${origin}/api/entries`)).body).toContain("Persistent")
         yield* stop(artifacts, owner, id)
         const renamed = deployment()
-        yield* artifacts.deploy(owner, id, {
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
           ...input,
           deploymentId: renamed,
           config: { entry: "index.html", durableObjects: { STATE: "RenamedState" } },
@@ -172,7 +208,11 @@ describe("Artifacts with durable workflows and workerd", () => {
         const resumedOrigin = new URL(resumed.url ?? "").origin
         yield* ArtifactSamples.edit(resumedOrigin)
         const removed = deployment()
-        yield* artifacts.deploy(owner, id, { ...input, config: { entry: "index.html" }, deploymentId: removed })
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          ...input,
+          config: { entry: "index.html" },
+          deploymentId: removed,
+        })
         expect((yield* settle(artifacts, owner, id, removed)).error).toContain("removal and renaming")
         expect((yield* read(`${new URL(resumed.url ?? "").origin}/api/entries`)).status).toBe(200)
       }),
@@ -196,7 +236,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         yield* database
           .transaction(() =>
             Effect.gen(function* () {
-              yield* artifacts.deploy(owner, id, {
+              yield* ArtifactSamples.deploy(artifacts, owner, id, {
                 deploymentId,
                 title: "Rollback",
                 config: { entry: "index.html" },
@@ -250,11 +290,13 @@ describe("Artifacts with durable workflows and workerd", () => {
           config: { entry: "_worker.js" },
           files: { "_worker.js": text(`export default { fetch: () => fetch("http://127.0.0.1:${server.port}/") }`) },
         }
-        expect((yield* artifacts.deploy(owner, id, input)).status).toBe("deploying")
+        expect((yield* ArtifactSamples.deploy(artifacts, owner, id, input)).status).toBe("deploying")
         yield* Effect.promise(() => entered.promise)
-        expect((yield* artifacts.deploy(owner, id, input)).deploymentId).toBe(deploymentId)
+        expect((yield* ArtifactSamples.deploy(artifacts, owner, id, input)).deploymentId).toBe(deploymentId)
         expect(
-          (yield* artifacts.deploy(owner, id, { ...input, deploymentId: deployment() }).pipe(Effect.flip))._tag,
+          (yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: deployment() }).pipe(
+            Effect.flip,
+          ))._tag,
         ).toBe("Primitive.Conflict")
         const sql = yield* SqlClient.SqlClient
         const connection = yield* sql.reserve
@@ -269,14 +311,16 @@ describe("Artifacts with durable workflows and workerd", () => {
           .pipe(Effect.repeat({ until: (rows) => rows.at(0)?.active !== deploymentId }))
         expect((yield* artifacts.status(owner, id, deploymentId)).status).toBe("deploying")
         expect(
-          (yield* artifacts.deploy(owner, id, { ...input, deploymentId: deployment() }).pipe(Effect.flip))._tag,
+          (yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: deployment() }).pipe(
+            Effect.flip,
+          ))._tag,
         ).toBe("Primitive.Conflict")
         yield* connection.execute("COMMIT", [], undefined)
         yield* Fiber.join(stopping)
         released.resolve()
         expect((yield* artifacts.status(owner, id, deploymentId)).status).toBe("stopped")
-        expect(yield* artifacts.files(owner, id)).toEqual(input.files)
-        expect((yield* artifacts.deploy(owner, id, input)).status).toBe("stopped")
+        expect(yield* ArtifactSamples.published(artifacts, owner, id)).toEqual(input.files)
+        expect((yield* ArtifactSamples.deploy(artifacts, owner, id, input)).status).toBe("stopped")
         const row = (yield* database.db
           .select()
           .from(Database.Schema.artifact)
@@ -303,7 +347,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         }
         let latest = first.deploymentId
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
-        yield* artifacts.deploy(owner, id, first)
+        yield* ArtifactSamples.deploy(artifacts, owner, id, first)
         const ready = yield* settle(artifacts, owner, id, first.deploymentId)
         expect(ready.status).toBe("ready")
         const url = yield* Schema.decodeUnknownEffect(Schema.String)(ready.url)
@@ -312,8 +356,11 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect((yield* artifacts.status(elsewhere, id, first.deploymentId).pipe(Effect.flip))._tag).toBe(
           "Primitive.NotFound",
         )
-        expect((yield* artifacts.files(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-        expect((yield* artifacts.deploy(elsewhere, id, first).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
+        expect((yield* artifacts.get(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect((yield* artifacts.archive(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect((yield* ArtifactSamples.deploy(artifacts, elsewhere, id, first).pipe(Effect.flip))._tag).toBe(
+          "Primitive.Conflict",
+        )
         expect((yield* artifacts.status(owner, id, deployment()).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
         const before = (yield* database.db
           .select()
@@ -322,7 +369,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         const binding = yield* Schema.decodeUnknownEffect(Schema.Struct({ directory: Schema.String }))(before?.binding)
         yield* Effect.promise(() => Bun.write(join(binding.directory, "state", "keep.txt"), "application data"))
         latest = deployment()
-        yield* artifacts.deploy(owner, id, {
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
           deploymentId: latest,
           title: "Broken",
           config: { entry: "other.html" },
@@ -332,16 +379,16 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect(failed.status).toBe("failed")
         expect(failed.error).toContain("did not serve")
         expect((yield* read(url)).body).toBe("<h1>v1</h1>")
-        expect(yield* artifacts.files(owner, id)).toEqual(first.files)
+        expect(yield* ArtifactSamples.published(artifacts, owner, id)).toEqual(first.files)
         const after = (yield* database.db
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
         expect(after?.code_archive).toBe(before?.code_archive)
         expect(after?.config).toEqual(first.config)
-        expect(after?.title).toBe(first.title)
+        expect(yield* artifacts.get(owner, id)).toMatchObject({ title: first.title, entry: "index.html", url })
         yield* stop(artifacts, owner, id)
-        expect(yield* artifacts.files(owner, id)).toEqual(first.files)
+        expect(yield* ArtifactSamples.published(artifacts, owner, id)).toEqual(first.files)
         expect(yield* Effect.promise(() => Bun.file(join(binding.directory, "state", "keep.txt")).text())).toBe(
           "application data",
         )
@@ -354,14 +401,36 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect(stopped?.url).toBeNull()
         expect(yield* read(url).pipe(Effect.isFailure)).toBe(true)
         latest = deployment()
-        yield* artifacts.deploy(owner, id, { ...first, deploymentId: latest })
+        yield* ArtifactSamples.deploy(artifacts, owner, id, { ...first, deploymentId: latest })
         const resumed = yield* settle(artifacts, owner, id, latest)
-        expect(resumed.status).toBe("ready")
+        expect([resumed.status, resumed.url]).toEqual(["ready", url])
         expect((yield* read(resumed.url ?? "")).body).toBe("<h1>v1</h1>")
         yield* stop(artifacts, owner, id)
         expect(yield* read(resumed.url ?? "").pipe(Effect.isFailure)).toBe(true)
       }),
     120_000,
+  )
+
+  recovery.live("a deployment whose runtime cannot start fails, and Ren keeps running", () =>
+    Effect.gen(function* () {
+      const owner = yield* Seed.owner()
+      const id = artifactId()
+      const deploymentId = deployment()
+      const missing = ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ ARTIFACT_NODE: "/nonexistent/node" }), {
+        asPrimary: true,
+      })
+      const failed = yield* Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          deploymentId,
+          title: "No runtime",
+          config: { entry: "index.html" },
+          files: { "index.html": text("unserved") },
+        })
+        return yield* settle(artifacts, owner, id, deploymentId)
+      }).pipe(Effect.scoped, Effect.provide(Layer.fresh(runtime.pipe(Layer.provide(missing)))))
+      expect([failed.status, failed.error]).toEqual(["failed", expect.stringContaining("wrangler did not start")])
+    }),
   )
 
   recovery.live(
@@ -394,7 +463,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         )
         yield* Effect.gen(function* () {
           const artifacts = yield* Artifacts.Service
-          yield* artifacts.deploy(owner, id, {
+          yield* ArtifactSamples.deploy(artifacts, owner, id, {
             deploymentId,
             title: "Recovery",
             config: { entry: "_worker.js" },

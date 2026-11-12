@@ -106,6 +106,14 @@ export class ArtifactConflictError extends Schema.TaggedError<ArtifactConflictEr
   override readonly [ErrorReporter.ignore] = true
 }
 
+export class ArtifactInvalidError extends Schema.TaggedError<ArtifactInvalidError>()(
+  "ArtifactInvalidError",
+  { message: Schema.String },
+  { httpApiStatus: 400 },
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
+
 export class ArtifactFailedError extends Schema.TaggedError<ArtifactFailedError>()(
   "ArtifactFailedError",
   { message: Schema.String },

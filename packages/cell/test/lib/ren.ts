@@ -2,6 +2,7 @@ export * as FakeRen from "./ren.js"
 
 import { BrainToken } from "@ren/host-api/brain-token"
 import {
+  ArtifactInvalidError,
   ArtifactNotFoundError,
   EnvironmentNotFoundError,
   EnvironmentStartingError,
@@ -31,7 +32,7 @@ import type { Signature } from "@ren/schema/signature"
 import { Space } from "@ren/schema/space"
 import type { Sync } from "@ren/schema/sync"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { DateTime, Effect, Layer, Option, Redacted } from "effect"
+import { DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { TestSettings } from "./settings.js"
@@ -75,21 +76,41 @@ export const hostToken = (
     }),
   )
 
+const Manifest = Schema.fromJsonString(Schema.Struct({ durableObjects: Artifact.DurableObjects }))
+
+const unpacked = async (archive: Uint8Array): Promise<Record<string, Uint8Array>> =>
+  Object.fromEntries(
+    await Promise.all(
+      [...(await new Bun.Archive(archive).files()).values()].map(
+        async (file) => [file.name.slice(file.name.indexOf("/") + 1), await file.bytes()] as const,
+      ),
+    ),
+  )
+
+const configOf = (files: Readonly<Record<string, Uint8Array>>, entry = "index.html"): Artifact.Config => {
+  const manifest = files[Artifact.manifestPath]
+  return { entry, ...(manifest && Schema.decodeUnknownSync(Manifest)(new TextDecoder().decode(manifest))) }
+}
+
 export interface Published {
   readonly info: Artifact.Info
   readonly config: Artifact.Config
   readonly files: Artifact.Files
+  readonly archive: Uint8Array
   readonly deployments: ReadonlyMap<Artifact.DeploymentID, Artifact.Deployment>
   readonly deployed: boolean
 }
 
 export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
   const artifacts = new Map<Artifact.ID, Published>()
+  const uploads = new Map<string, Uint8Array>()
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
   const pulls: Array<PullRequest> = []
   const held: Array<() => void> = []
   const state = {
+    origin: "",
+    loseDeployAnswer: false,
     artifactError: null as string | null,
     artifactDeploying: false,
     refuseHosts: false,
@@ -122,21 +143,35 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     HttpApiBuilder.group(RenHostApi, "artifacts", (group) =>
       Effect.succeed(
         group
+          .handle("artifacts.upload", () =>
+            Effect.gen(function* () {
+              const uploadId = Artifact.UploadID.make(crypto.randomUUID())
+              const expiresAt = DateTime.add(yield* DateTime.now, { minutes: 15 })
+              return { uploadId, url: `${state.origin}/fake-uploads/${uploadId}`, expiresAt }
+            }),
+          )
           .handle("artifacts.deploy", (request) =>
             Effect.gen(function* () {
               const found = artifacts.get(request.params.id)
               const payload = request.payload
               const previous = found?.deployments.get(payload.deploymentId)
               if (previous) return previous
+              const archive = uploads.get(payload.uploadId)
+              if (!archive) return yield* new ArtifactInvalidError({ message: "The upload has no archive" })
+              const files = yield* Effect.promise(() => unpacked(archive))
               const now = yield* DateTime.now
+              const config = configOf(files, payload.entry ?? found?.config.entry)
               const info = {
                 id: request.params.id,
-                spaceId: found?.info.spaceId ?? Space.ID.create(),
-                title: payload.title,
+                spaceId: Space.ID.create(),
+                title: payload.title ?? "",
+                entry: config.entry,
                 activeDeploymentId: payload.deploymentId,
                 url: `https://${request.params.id}.fake.ren/`,
-                createdAt: found?.info.createdAt ?? now,
+                createdAt: now,
                 updatedAt: now,
+                ...(found && Struct.pick(found.info, ["spaceId", "title", "createdAt"])),
+                ...(payload.title && { title: payload.title }),
               }
               const deployment = {
                 artifactId: request.params.id,
@@ -147,8 +182,9 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               }
               artifacts.set(request.params.id, {
                 info,
-                files: payload.files,
-                config: payload.config,
+                files,
+                archive,
+                config,
                 deployments: new Map([...(found?.deployments ?? []), [payload.deploymentId, deployment]]),
                 deployed: true,
               })
@@ -171,12 +207,20 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
                 )
               : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
           })
-          .handle("artifacts.files", (request) => {
+          .handle("artifacts.get", (request) => {
             const found = artifacts.get(request.params.id)
             return found
-              ? Effect.succeed(found.files)
+              ? Effect.succeed(found.info)
               : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
           })
+          .handle("artifacts.archive", (request) =>
+            Effect.gen(function* () {
+              if (!artifacts.has(request.params.id))
+                return yield* new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` })
+              const expiresAt = DateTime.add(yield* DateTime.now, { minutes: 15 })
+              return { url: `${state.origin}/fake-archives/${request.params.id}`, expiresAt }
+            }),
+          )
           .handle("artifacts.stop", (request) =>
             Effect.sync(() => {
               const found = artifacts.get(request.params.id)
@@ -390,7 +434,25 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     hostname: options.hostname ?? "127.0.0.1",
     port: options.port ?? 0,
     idleTimeout: 0,
-    fetch: (request) => api.handler(request),
+    fetch: async (request) => {
+      const url = new URL(request.url)
+      state.origin = url.origin
+      const name = url.pathname.split("/").at(-1) ?? ""
+      if (url.pathname.startsWith("/fake-uploads/") && request.method === "PUT") {
+        uploads.set(name, new Uint8Array(await request.arrayBuffer()))
+        return new Response(null)
+      }
+      if (state.loseDeployAnswer && request.method === "PUT" && /^\/host\/artifacts\/[^/]+$/u.test(url.pathname)) {
+        state.loseDeployAnswer = false
+        await api.handler(request)
+        return new Response(null, { status: 503 })
+      }
+      if (url.pathname.startsWith("/fake-archives/")) {
+        const found = artifacts.get(Artifact.ID.make(name))
+        return found ? new Response(new Uint8Array(found.archive)) : new Response("missing", { status: 404 })
+      }
+      return api.handler(request)
+    },
   })
   return {
     url: `http://127.0.0.1:${server.port ?? 0}`,
@@ -400,6 +462,9 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     },
     artifactDeploying: (deploying: boolean) => {
       state.artifactDeploying = deploying
+    },
+    loseDeployAnswer: () => {
+      state.loseDeployAnswer = true
     },
     calls,
     pulls,

@@ -1,6 +1,6 @@
 export * as Routes from "./routes.js"
 
-import { hostBodyBytes, RenHostApi } from "@ren/host-api/ren-host-api"
+import { RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
@@ -248,6 +248,17 @@ export const layer = Layer.mergeAll(
         CredentialRequirements.layer,
       ]),
     ),
+    HttpApiBuilder.layer(RenHostApi).pipe(
+      Layer.provide([
+        HostPullHandler,
+        HostModelsHandler,
+        HostHandsHandler,
+        HostArtifactsHandler,
+        HostTokenHandler,
+      ]),
+      Layer.provide(Brains.hostAuthentication),
+      Layer.provide(Artifacts.layer),
+    ),
     HttpApiBuilder.layer(UsageIngestApi).pipe(
       Layer.provide(UsageHandler),
       Layer.provide(UsageAuthenticationLayer),
@@ -264,20 +275,6 @@ export const layer = Layer.mergeAll(
       Layer.provide(BrainRegistry.layer),
     ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
-  HttpApiBuilder.layer(RenHostApi).pipe(
-    Layer.provide([
-      HostPullHandler,
-      HostModelsHandler,
-      HostHandsHandler,
-      HostArtifactsHandler,
-      HostTokenHandler,
-    ]),
-    Layer.provide([
-      Brains.hostAuthentication,
-      bodyLimit((url) => (url.startsWith("/host/artifacts/") ? hostBodyBytes : 1024 * 1024)),
-    ]),
-    Layer.provide(Artifacts.layer),
-  ),
   WebhookRoutes.layer.pipe(Layer.provide(intake)),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),

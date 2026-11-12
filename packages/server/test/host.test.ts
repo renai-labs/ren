@@ -91,28 +91,57 @@ describe("Ren Host API: host token checks", () => {
   )
 
   it.live(
-    "an artifact publish takes a body over the 1 MiB host limit, and an entry that is not one of the files is a 400",
+    "an artifact's archive goes to its upload URL rather than through the host API, and a deploy before the PUT or with an entry that is not one of the files is a 400",
     () =>
       Effect.gen(function* () {
         const owner = yield* Seed.owner()
         const sessionId = yield* Seed.session(owner)
         const http = yield* HttpClient.HttpClient
-        const files = {
-          "a.html": Buffer.from("a").toString("base64"),
-          "b.bin": Buffer.alloc(2 * 1024 * 1024).toString("base64"),
-        }
-        const response = yield* http.execute(
-          HttpClientRequest.put("/host/artifacts/art_1").pipe(
-            HttpClientRequest.bearerToken(yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)),
-            HttpClientRequest.bodyJsonUnsafe({
-              deploymentId: crypto.randomUUID(),
-              title: "Report",
-              config: { entry: "index.html" },
-              files,
-            }),
-          ),
+        const token = yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)
+        const id = `art_${crypto.randomUUID().replaceAll("-", "")}`
+        const started = yield* http
+          .execute(HttpClientRequest.post(`/host/artifacts/${id}/uploads`).pipe(HttpClientRequest.bearerToken(token)))
+          .pipe(
+            Effect.flatMap(
+              HttpClientResponse.schemaBodyJson(Schema.Struct({ uploadId: Schema.String, url: Schema.String })),
+            ),
+          )
+        const deploy = http
+          .execute(
+            HttpClientRequest.put(`/host/artifacts/${id}`).pipe(
+              HttpClientRequest.bearerToken(token),
+              HttpClientRequest.bodyJsonUnsafe({
+                deploymentId: crypto.randomUUID(),
+                title: "Report",
+                entry: "index.html",
+                uploadId: started.uploadId,
+              }),
+            ),
+          )
+          .pipe(
+            Effect.flatMap((response) =>
+              Effect.map(response.json, (body) => ({
+                status: response.status,
+                tag: Schema.decodeUnknownOption(Schema.Struct({ _tag: Schema.String }))(body),
+              })),
+            ),
+          )
+        const before = yield* deploy
+        const image = new Uint8Array(2 * 1024 * 1024).fill(7)
+        const archive = yield* Effect.promise(() =>
+          new Bun.Archive(
+            { "site/report.html": "<h1>Report</h1>", "site/chart.png": image },
+            { compress: "gzip" },
+          ).bytes(),
         )
-        expect(response.status).toBe(400)
+        const put = yield* Effect.promise(() => fetch(started.url, { method: "PUT", body: archive }))
+        expect([before.status, Option.getOrUndefined(before.tag)?._tag, put.status]).toEqual([
+          400,
+          "ArtifactInvalidError",
+          200,
+        ])
+        const after = yield* deploy
+        expect([after.status, Option.getOrUndefined(after.tag)?._tag]).toEqual([400, "ArtifactInvalidError"])
       }),
   )
 

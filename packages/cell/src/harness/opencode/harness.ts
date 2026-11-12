@@ -54,7 +54,6 @@ import { OpenCodeChat } from "./chat.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import type { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
-import { OpenCodeArtifacts } from "./artifacts.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
@@ -533,9 +532,7 @@ const layerWith = (opener: Opener) =>
                 endpoints,
                 refreshKey,
                 connections,
-                Option.isSome(ren)
-                  ? OpenCodeArtifacts.withArtifacts(cell.vars.OPENCODE_CONFIG)
-                  : cell.vars.OPENCODE_CONFIG,
+                cell.vars.OPENCODE_CONFIG,
                 settings,
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
                 Option.isSome(channels) ? yield* channels.value.current : [],
