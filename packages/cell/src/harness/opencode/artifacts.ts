@@ -280,7 +280,8 @@ export const make = (input: {
           })
           editor.add({
             name: "artifact_update",
-            description: "Replace an existing artifact’s files at the same ID and URL, from files or a directory.",
+            description:
+              "Replace an existing artifact’s files at the same ID and URL, from files or a directory. Find the space’s artifacts and their ids with Ren’s artifact_list tool.",
             input: UpdateToolInput,
             output: Published,
             options,
@@ -289,18 +290,20 @@ export const make = (input: {
           editor.add({
             name: "artifact_read",
             description:
-              "Read an artifact’s title, entry and URL. Pass directory to get its last published files, binary files included, as a folder to change and publish again.",
+              "Read an artifact’s title, entry and URL. Pass directory to get its last published files, binary files included, as a folder to change and publish again. Find the space’s artifacts and their ids with Ren’s artifact_list tool.",
             input: ReadToolInput,
             output: Content,
             options,
             execute: (args) =>
               Effect.gen(function* () {
-                const info = yield* call(args.id, (client, id) => client.artifacts["artifacts.get"]({ params: { id } }))
+                const info = yield* call(args.id, (client, id) =>
+                  client.artifacts["artifacts.read"]({ params: { id } }),
+                )
                 const directory = args.directory
                 if (Predicate.isUndefined(directory)) return { output: { info } }
                 const path = resolve(folder, directory)
                 const archive = yield* call(args.id, (client, id) =>
-                  client.artifacts["artifacts.archive"]({ params: { id } }),
+                  client.artifacts["artifacts.download"]({ params: { id } }),
                 )
                 yield* onEnvironment((client) =>
                   Effect.gen(function* () {
@@ -338,7 +341,7 @@ export const make = (input: {
               "Read an artifact’s asynchronous deployment status. Publishing is accepted, not live. Ready includes its URL; failed includes its error. Check after other work rather than polling in a loop.",
             input: Schema.Struct({ id: Artifact.ID, deploymentId: Artifact.DeploymentID }),
             output: Artifact.Deployment,
-            options: { codemode: true },
+            options,
             execute: (args) =>
               call(args.id, (client, id) =>
                 client.artifacts["artifacts.status"]({ params: { id, deploymentId: args.deploymentId } }),

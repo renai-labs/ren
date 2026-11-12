@@ -170,6 +170,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
                 url: `https://${request.params.id}.fake.ren/`,
                 createdAt: now,
                 updatedAt: now,
+                archivedAt: null,
                 ...(found && Struct.pick(found.info, ["spaceId", "title", "createdAt"])),
                 ...(payload.title && { title: payload.title }),
               }
@@ -207,13 +208,13 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
                 )
               : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
           })
-          .handle("artifacts.get", (request) => {
+          .handle("artifacts.read", (request) => {
             const found = artifacts.get(request.params.id)
             return found
               ? Effect.succeed(found.info)
               : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
           })
-          .handle("artifacts.archive", (request) =>
+          .handle("artifacts.download", (request) =>
             Effect.gen(function* () {
               if (!artifacts.has(request.params.id))
                 return yield* new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` })

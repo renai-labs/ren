@@ -50,7 +50,9 @@ describe("artifacts", () => {
     const updated = stub.script({
       tools: [
         run(`return await tools.opencode.artifact_read({ id: "${id}" })`),
-        run(`return await tools.artifact_status({ id: "${id}", deploymentId: "${first.info.activeDeploymentId}" })`),
+        run(
+          `return await tools.opencode.artifact_status({ id: "${id}", deploymentId: "${first.info.activeDeploymentId}" })`,
+        ),
         run(
           `return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
         ),
@@ -62,6 +64,14 @@ describe("artifacts", () => {
     )
     expect(JSON.parse(read)).toMatchObject({ info: { id, title: "Report", entry: "index.html", url: first.info.url } })
     expect(read).not.toContain("<h1>v1</h1>")
+    const status = Schema.decodeUnknownSync(Schema.String)(
+      (await updated.called(3)).body.messages.findLast((message) => message.role === "tool")?.content,
+    )
+    expect(JSON.parse(status)).toMatchObject({
+      artifactId: id,
+      deploymentId: first.info.activeDeploymentId,
+      status: "ready",
+    })
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     const second = celld.ren.artifacts.get(id)
     if (!second) throw new Error("Updated artifact was not stored")
