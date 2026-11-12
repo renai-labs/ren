@@ -2,11 +2,10 @@ import { describe, expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
 import { DriveHand, testEffect } from "@ren/executor/testing"
 import type { Drive } from "@ren/schema/drive"
-import { Effect, Layer, Option, Schedule } from "effect"
+import { Effect, Layer, Option, Predicate, Schedule } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { McpPeer } from "./lib/mcp.js"
 import { ReferenceChat } from "./lib/reference-chat.js"
-import { Shared } from "./lib/shared.js"
 
 setDefaultTimeout(300_000)
 
@@ -52,11 +51,12 @@ describe.skipIf(!DriveHand.hasDocker)("MCP App views", () => {
       expect(app).toMatchObject({
         app: { server: "linear", tool: "marker", resourceUri: "ui://test/view", readOnly: true },
       })
-      const path = (app as { app: { path: string } }).app.path
+      const path = Predicate.isObject(app) && Predicate.isObject(app.app) ? app.app.path : undefined
+      if (typeof path !== "string") throw new Error("The part names no view")
       expect(path).toStartWith(`chats/${chat.sessionId}/apps/`)
-      const uploaded = Effect.try(() =>
-        environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`),
-      ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
+      const uploaded = Effect.try(() => environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${path}`)).pipe(
+        Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }),
+      )
       expect(yield* uploaded).toBe(html)
     }),
   )

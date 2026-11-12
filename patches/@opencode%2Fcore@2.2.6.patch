@@ -1,5 +1,18 @@
+diff --git a/dist/chunks/persistent-pty-8yst3fhc.js b/dist/chunks/persistent-pty-8yst3fhc.js
+index 59d1258..d383936 100644
+--- a/dist/chunks/persistent-pty-8yst3fhc.js
++++ b/dist/chunks/persistent-pty-8yst3fhc.js
+@@ -632,7 +632,7 @@ var layer15 = (options) => Layer.effect(Service33, Effect.gen(function* () {
+       return ResourceContent2.make({
+         server: name,
+         uri: input.uri,
+-        contents: result.contents.map((part) => ("text" in part) ? { type: "text", uri: part.uri, text: part.text, mimeType: part.mimeType } : { type: "blob", uri: part.uri, blob: part.blob, mimeType: part.mimeType })
++        contents: result.contents.map((part) => ("text" in part) ? { type: "text", uri: part.uri, text: part.text, mimeType: part.mimeType, _meta: part._meta } : { type: "blob", uri: part.uri, blob: part.blob, mimeType: part.mimeType, _meta: part._meta })
+       });
+     })
+   });
 diff --git a/dist/chunks/persistent-pty-psrqx85q.js b/dist/chunks/persistent-pty-psrqx85q.js
-index 518118d8b14e483a6c5bc7c6dd1e3b8613ab224f..ec5cb1ee263c1d925ba3d093ef2fe62fa79c42f6 100644
+index 518118d..3d81ae7 100644
 --- a/dist/chunks/persistent-pty-psrqx85q.js
 +++ b/dist/chunks/persistent-pty-psrqx85q.js
 @@ -70,7 +70,7 @@ var layer14 = Layer.effect(Service32, Effect.gen(function* () {
@@ -7,7 +20,7 @@ index 518118d8b14e483a6c5bc7c6dd1e3b8613ab224f..ec5cb1ee263c1d925ba3d093ef2fe62f
          editor.add({
            name: tool.name,
 -          options: { namespace: namespace2(tool.server), codemode: tool.codemode !== false },
-+          options: { namespace: namespace2(tool.server), codemode: tool.codemode !== false && !tool._meta?.ui?.resourceUri },
++          options: { namespace: namespace2(tool.server), codemode: tool.codemode !== false && !tool._meta?.ui, ...Array.isArray(tool._meta?.ui?.visibility) && !tool._meta.ui.visibility.includes("model") ? { appOnly: true } : {} },
            description: tool.description ?? "",
            input: tool.inputSchema,
            output: tool.outputSchema ?? {},
@@ -22,7 +35,7 @@ index 518118d8b14e483a6c5bc7c6dd1e3b8613ab224f..ec5cb1ee263c1d925ba3d093ef2fe62f
                output: output(),
 -              ...content.length === 0 ? {} : { content }
 +              ...content.length === 0 ? {} : { content },
-+              ...page === undefined ? {} : { metadata: { app: { server: tool.server, tool: tool.name, resourceUri, html: page.text, ui: tool._meta.ui, readOnly: tool.annotations?.readOnlyHint === true } } }
++              ...page === undefined ? {} : { metadata: { app: { server: tool.server, tool: tool.name, resourceUri, html: page.text, ui: { ...tool._meta.ui, ...page._meta?.ui }, readOnly: tool.annotations?.readOnlyHint === true } } }
              };
            }).pipe(Effect.mapError((error) => {
              if (error instanceof ToolFailure)

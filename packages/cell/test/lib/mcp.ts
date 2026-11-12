@@ -101,37 +101,35 @@ export const make = Effect.fnUntraced(function* (
       }),
       { headers: { "content-type": "text/event-stream" } },
     )
+  const viewContent = { uri: "ui://test/view", mimeType: "text/html;profile=mcp-app", text: options.view ?? "" }
+  const listTools = (cursor: string | undefined) => ({
+    tools: (cursor ? ["second", ...(options.tools ?? [])] : ["marker"]).map((name) => ({
+      name,
+      description: state.label,
+      inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: true },
+      _meta: options.view && name === "marker" ? { ui: { resourceUri: "ui://test/view" } } : undefined,
+      outputSchema: options.malformed && name === "second" ? { type: "string" } : undefined,
+    })),
+    ...(cursor ? {} : { nextCursor: "page-two" }),
+  })
   const answer = async (body: typeof RequestBody.Type, reply: (result: unknown) => Response) => {
     if (body.method === "initialize") {
       await initialized
       return reply({
         protocolVersion: "2025-03-26",
-        capabilities: { tools: { listChanged: true }, ...(options.view && { resources: {} }) },
+        capabilities: { tools: { listChanged: true }, resources: options.view ? {} : undefined },
         serverInfo: { name: "ren-test", version: "1" },
         instructions: "Use the test tools to read the marker.",
       })
     }
-    if (body.method === "tools/list")
-      return reply({
-        tools: (body.params?.cursor ? ["second", ...(options.tools ?? [])] : ["marker"]).map((name) => ({
-          name,
-          description: state.label,
-          inputSchema: { type: "object", properties: {} },
-          annotations: { readOnlyHint: true },
-          ...(options.view && name === "marker" && { _meta: { ui: { resourceUri: "ui://test/view" } } }),
-          outputSchema: options.malformed && name === "second" ? { type: "string" } : undefined,
-        })),
-        ...(body.params?.cursor ? {} : { nextCursor: "page-two" }),
-      })
+    if (body.method === "tools/list") return reply(listTools(body.params?.cursor))
     if (body.method === "tools/call") {
       calls.push(body.params?.name ?? "")
       await called
       return reply({ content: [{ type: "text", text: state.label }] })
     }
-    if (body.method === "resources/read")
-      return reply({
-        contents: [{ uri: "ui://test/view", mimeType: "text/html;profile=mcp-app", text: options.view ?? "" }],
-      })
+    if (body.method === "resources/read") return reply({ contents: [viewContent] })
     return body.method === "ping"
       ? reply({})
       : Response.json({ jsonrpc: "2.0", id: body.id, error: { code: -32601, message: "Not supported" } })

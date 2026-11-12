@@ -565,9 +565,7 @@ export const make = (
               event.result = { ...event.result, metadata: stripped }
               if (typeof view.html !== "string" || typeof view.server !== "string") return
               const bytes = new TextEncoder().encode(view.html)
-              const hash = Array.from(
-                new Uint8Array(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes))),
-              )
+              const hash = [...new Uint8Array(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)))]
                 .map((byte) => byte.toString(16).padStart(2, "0"))
                 .join("")
                 .slice(0, 16)
