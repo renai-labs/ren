@@ -2,51 +2,12 @@ import type { ReactNode } from "react"
 import { FileLabel } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
-import { AsyncResult } from "effect/reactivity"
 import { FileChip } from "@ren/ui/file-chip"
 import { dirsOf, isPath } from "./file-paths.js"
 
-type FileEntries = ReadonlyMap<string, "file" | "directory">
-
 export type RenderFile = (input: string, fallback: ReactNode) => ReactNode
 
-const stripSlash = (path: string) => path.replace(/\/$/u, "")
-
-function ResolveFiles(props: {
-  root: Session.ID
-  inputs: ReadonlyArray<string>
-  found: FileEntries
-  children: (found: FileEntries) => ReactNode
-}) {
-  const [input, ...rest] = props.inputs
-  if (input === undefined) return <>{props.children(props.found)}</>
-  return <ResolveFile {...props} input={input} rest={rest} />
-}
-
-function ResolveFile(props: {
-  root: Session.ID
-  input: string
-  rest: ReadonlyArray<string>
-  found: FileEntries
-  children: (found: FileEntries) => ReactNode
-}) {
-  const parsed = FileLabel.parse(props.input)
-  const listed = ChatReact.useFolder({
-    root: props.root,
-    path: parsed.path.includes("/") ? `${parsed.path.slice(0, parsed.path.lastIndexOf("/"))}/` : "",
-  })
-  const entry = AsyncResult.isSuccess(listed.result)
-    ? listed.result.value.find((each) => stripSlash(each.path) === parsed.path)
-    : undefined
-  const found = entry
-    ? new Map(props.found).set(parsed.path, entry.type === "directory" ? "directory" : "file")
-    : props.found
-  return (
-    <ResolveFiles root={props.root} inputs={props.rest} found={found}>
-      {props.children}
-    </ResolveFiles>
-  )
-}
+const parentOf = (path: string) => (path.includes("/") ? `${path.slice(0, path.lastIndexOf("/"))}/` : "")
 
 export function WorkspaceFiles(props: {
   root: Session.ID
@@ -54,28 +15,26 @@ export function WorkspaceFiles(props: {
   children: (chip: RenderFile) => ReactNode
 }) {
   const inputs = props.inputs.filter(isPath)
-  return (
-    <ResolveFiles root={props.root} inputs={inputs} found={new Map()}>
-      {(found) => {
-        const existing = inputs.filter((input) => found.has(FileLabel.parse(input).path))
-        const dirs = dirsOf(existing)
-        return props.children((input, fallback) => {
-          const parsed = FileLabel.parse(input)
-          const kind = found.get(parsed.path)
-          if (!kind) return fallback
-          return (
-            <FileChip
-              path={parsed.path}
-              name={parsed.name}
-              line={kind === "directory" ? undefined : parsed.line}
-              dir={dirs.get(parsed.path)}
-              folder={kind === "directory"}
-            />
-          )
-        })
-      }}
-    </ResolveFiles>
-  )
+  const listed = ChatReact.useEntries({
+    root: props.root,
+    dirs: [...new Set(inputs.map((input) => parentOf(FileLabel.parse(input).path)))].toSorted(),
+  })
+  const existing = inputs.filter((input) => listed.has(FileLabel.parse(input).path))
+  const dirs = dirsOf(existing)
+  return props.children((input, fallback) => {
+    const parsed = FileLabel.parse(input)
+    const kind = listed.get(parsed.path)
+    if (!kind) return fallback
+    return (
+      <FileChip
+        path={parsed.path}
+        name={parsed.name}
+        line={kind === "directory" ? undefined : parsed.line}
+        dir={dirs.get(parsed.path)}
+        folder={kind === "directory"}
+      />
+    )
+  })
 }
 
 const mention = /(^|\s)@(\S+)/gu

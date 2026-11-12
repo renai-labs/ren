@@ -34,6 +34,11 @@ export interface PathView {
   readonly path: string
 }
 
+export interface EntriesView {
+  readonly root: Session.ID
+  readonly dirs: ReadonlyArray<string>
+}
+
 export interface ShellView extends View {
   readonly shellID: Shell.ID
   readonly running: boolean
@@ -243,6 +248,20 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const folder = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.listFiles(view.path)))
 
+  const entries = Atom.family((view: EntriesView) =>
+    Atom.make(
+      (get) =>
+        new Map(
+          view.dirs.flatMap((dir) => {
+            const listed = get(folder({ root: view.root, path: dir }))
+            return AsyncResult.isSuccess(listed)
+              ? listed.value.map((each) => [each.path.replace(/\/$/u, ""), each.type] as const)
+              : []
+          }),
+        ),
+    ),
+  )
+
   const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
 
   const vcs = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcs))
@@ -318,6 +337,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     commands,
     files,
     folder,
+    entries,
     file,
     vcs,
     vcsDiff,
