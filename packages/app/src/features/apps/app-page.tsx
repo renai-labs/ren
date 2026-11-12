@@ -3,7 +3,7 @@ import { IconArrowRight, IconChevronDown, IconCube, IconLock, IconPlus } from "@
 import { Composer, Mentions } from "@ren/chat"
 import { AppMention } from "@ren/ui/app-mention"
 import { Button } from "@ren/ui/button"
-import type { AppProfileInfo, AppRegistryInfo } from "@ren/client"
+import type { AppRegistryInfo } from "@ren/client"
 import { Loading } from "@ren/ui/loading"
 import { useQuery } from "@tanstack/react-query"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
@@ -25,10 +25,11 @@ import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
+import { fromRegistry, listsSpace, statusOf, type CatalogApp, type Status } from "../../lib/apps.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Seed } from "../../lib/seed.js"
+import { ShareRequest } from "./share-request.js"
 
 const route = getRouteApi("/_authed/_shell/apps/$appId/")
 
@@ -55,33 +56,26 @@ function AppAccounts(props: { app: CatalogApp; onProfile: (target: ProfileTarget
         </Button>
       }
       profiles={profiles}
+      empty={`No accounts yet. One account holds every sign-in and key ${props.app.name} needs.`}
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
     />
   )
 }
 
-type SpaceUse = { space: Space; profile: AppProfileInfo | undefined; status: "ready" | "unconnected" | "absent" }
+type SpaceUse = { space: Space; status: Status | undefined }
 
-const statusOf = (profile: AppProfileInfo | undefined): SpaceUse["status"] => {
-  if (!profile) return "absent"
-  return gaps(profile).length === 0 ? "ready" : "unconnected"
-}
+const works = (use: SpaceUse) => use.status === "connected" || use.status === "credits"
 
 function useSpaceUses(app: CatalogApp): ReadonlyArray<SpaceUse> {
   const joined = useSpaces().joined
-  const bySpace = new Map(
-    useAppProfiles([app.id])
-      .of(app.id)
-      .toSorted((one, other) => gaps(other).length - gaps(one).length)
-      .flatMap((profile) =>
-        joined
-          .filter((space) => (profile.kind === "private" ? space.kind === "private" : listsSpace(profile, space.id)))
-          .map((space) => [space.id, profile] as const),
-      ),
-  )
+  const profiles = useAppProfiles([app.id]).of(app.id)
   return joined.map((space) => {
-    const profile = bySpace.get(space.id)
-    return { space, profile, status: statusOf(profile) }
+    const here = profiles.filter((profile) =>
+      profile.kind === "private"
+        ? space.kind === "private" && space.ownerUserId === profile.userId
+        : listsSpace(profile, space.id),
+    )
+    return { space, status: here.length > 0 ? statusOf(app, here) : undefined }
   })
 }
 
@@ -109,9 +103,9 @@ function OpenInChat(props: {
   onStart: (spaceId: string) => void
   onProfile: (target: ProfileTarget) => void
 }) {
-  const isUsed = props.uses.some((use) => use.profile)
+  const isUsed = props.uses.some((use) => use.status)
   const open = (use: SpaceUse) => {
-    if (use.status === "ready") return props.onStart(use.space.id)
+    if (works(use)) return props.onStart(use.space.id)
     props.onProfile({
       appId: props.app.id,
       from: {
@@ -130,8 +124,8 @@ function OpenInChat(props: {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-64">
         {[
-          { label: "Chat in", uses: props.uses.filter((use) => use.profile) },
-          { label: "Add to", uses: props.uses.filter((use) => !use.profile) },
+          { label: "Chat in", uses: props.uses.filter((use) => use.status) },
+          { label: "Add to", uses: props.uses.filter((use) => !use.status) },
         ]
           .filter((group) => group.uses.length > 0)
           .map((group, index) => (
@@ -143,7 +137,7 @@ function OpenInChat(props: {
                   <DropdownMenuItem key={use.space.id} onClick={() => open(use)}>
                     {use.space.kind === "private" ? <IconLock /> : <IconCube />}
                     <span className="min-w-0 flex-1 truncate">{use.space.name}</span>
-                    <span className="text-xs text-muted-foreground">{actions[use.status]}</span>
+                    <span className="text-xs text-muted-foreground">{actionOf(use)}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuGroup>
@@ -154,7 +148,11 @@ function OpenInChat(props: {
   )
 }
 
-const actions = { ready: "Chat", unconnected: "Connect", absent: "Add" } as const
+const actionOf = (use: SpaceUse) => {
+  if (!use.status) return "Add"
+  if (works(use)) return "Chat"
+  return use.status === "expired" ? "Reconnect" : "Connect"
+}
 
 function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => void) | undefined }) {
   const isReduced = ReducedMotion.use()
@@ -222,10 +220,12 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
   const app = props.app
   const uses = useSpaceUses(app)
   const start = useStartChat(app)
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
   const [editing, setEditing] = useState<ProfileTarget>()
   const headerShape = useShapeId("app-header")
   const detailsShape = useShapeId("app-details")
-  const first = uses.find((use) => use.status === "ready")?.space
+  const first = uses.find(works)?.space
   const body = app.listing?.body
   return (
     <AppDetailFrame name={app.name}>
@@ -252,6 +252,15 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
         )}
       </Loading>
       {editing ? <ProfileDialog {...editing} onClose={() => setEditing(undefined)} /> : null}
+      {search.account && search.space && !props.loading ? (
+        <ShareRequest
+          app={app}
+          account={search.account}
+          space={search.space}
+          onChat={(spaceId) => start(spaceId)}
+          onClose={() => void navigate({ search: {}, replace: true })}
+        />
+      ) : null}
     </AppDetailFrame>
   )
 }

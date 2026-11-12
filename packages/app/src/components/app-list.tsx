@@ -198,7 +198,9 @@ function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm">{slug}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {tools > 0 ? plural(tools, "tool") : transportLabel(mcp.transport)}
+                  {[tools > 0 ? plural(tools, "tool") : undefined, usageOf(props.mcps, mcp)]
+                    .filter(Boolean)
+                    .join(" · ") || transportLabel(mcp.transport)}
                 </span>
               </span>
             </Button>
@@ -301,6 +303,13 @@ const transportLabel = (transport: Mcp["transport"]) => {
   if (transport.type === "local") return "stdio"
   if (transport.type === "managed") return "managed by Ren"
   return transport.provider
+}
+
+const usageOf = (mcps: NonNullable<App["mcps"]>, mcp: Mcp) => {
+  if (!Object.values(mcps).some((each) => each.transport.type === "managed")) return null
+  if (mcp.transport.type === "managed") return "Uses Ren credits"
+  if (mcp.auth.type === "none" && mcp.transport.type !== "provider") return null
+  return "Uses your account"
 }
 
 function Entry(props: {

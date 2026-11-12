@@ -227,12 +227,6 @@ The app page (`features/apps/app-page.tsx`):
  [■] Kernel                                [Start chat ▾]  [Add to space ▾]
      Browser automation
 
- How Ren connects to Kernel                                  only for apps with a managed version
- ┌──────────────────────────────────────────────────────────────────┐
- │ ◐ Ren credits   Works now in any space. No sign-in.              │
- │ ● Your account  Use your own Kernel plan. Replaces Ren credits.  │
- └──────────────────────────────────────────────────────────────────┘
-
  Accounts (2)                                          [+ New account]   primary button
   ● Acme · Kernel           Acme, Ops   ◐ Ren credits      [⋯]
   ● Kernel (Only me)        Personal    ⚠ Sign in again    [Reconnect]
@@ -244,7 +238,12 @@ The app page (`features/apps/app-page.tsx`):
  Information …
 ```
 
-Today "New account" is a muted ghost button, and the MCP list does not say which MCP uses an account.
+This is built (`features/apps/app-page.tsx`), except:
+
+- The header keeps one menu: "Open in chat" when a space has the app, else "Add to space". It lists "Chat in" (spaces with the app) and "Add to" (the others). A space where the app works starts a chat; the rest open S2 for that space, marked Reconnect, Connect or Add from §2.
+- Account rows follow rule 7: no [⋯] or [Reconnect] on a row. The row's status line shows Needs sign-in.
+- "One account holds every sign-in and key Kernel needs." shows only while the app has no accounts.
+- The tools list keeps the heading "MCPs". When the app has a managed version, each MCP card says "Uses Ren credits" or "Uses your account" after its tool count.
 
 ### S6. Space → Apps tab
 
@@ -312,6 +311,13 @@ An account with no spaces shows "—" and stays until someone deletes it. Admins
 ```
 
 `account` and `space` are search params on the app route, validated with Effect Schema. [Add to Acme] is `access add` (or `promote` for a private account, rule 10).
+
+This is built (`features/apps/share-request.tsx`), except:
+
+- The dialog does not say who asked ("Shrey asked to use it."): the link does not carry the asker, and the message that carries the link does.
+- A private account says "It stops being only yours." in place of "It stays in …". Only its owner can add it, so another person sees "Only Priya can add this account." [Copy link for Priya].
+- An account already in the space shows "“Ops Linear” is already in Acme". A link to an account or space that is gone, or that the person cannot see, shows "Couldn’t open this share link".
+- Closing the dialog removes `account` and `space` from the URL.
 
 ### S9. Remove
 
