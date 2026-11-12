@@ -322,7 +322,8 @@ Ren stores each event as the producer sent it and checks the claims later. `usag
 1. Each Ren server runs `Usage.layerReconcile`. It takes up to 500 pending events (`FOR UPDATE SKIP LOCKED`), checks them, inserts their `usage_attribution` rows and removes them from `usage_pending` in one transaction. After a full batch it runs again at once; else it waits 30 s.
 2. The checks: the brain is in the event's organization (else `organization_mismatch`, and no claim is kept); the space is the brain's (a different space from the key is `space_mismatch`); the root session is on the brain and has no parent; the session is the root, one of its children, or a child that has not synced yet; the member acts in the space; the agent name is an agent that the space can use; the kind is a `Usage.Kind`.
 3. A brain that Ren does not know (deleted) keeps the space from the key and gets `unknown_brain`. A `time` more than 30 days before or 5 minutes after `received_at` gets `time_out_of_range`. Ren logs each problem as an error.
-4. Readers that need the checked claims (pages, PostHog) join `usage_attribution`. Billing needs only `usage_event`.
+4. An event with the workload `inference-key:<id>` comes from a member's inference key: it names the key's owner in `member`, and no brain and no space. The only check is that `member` is a member of `organization`. It gets no `unknown_brain`.
+5. Readers that need the checked claims (pages, PostHog) join `usage_attribution`. Billing needs only `usage_event`.
 
 ### 4.9 Not built
 
