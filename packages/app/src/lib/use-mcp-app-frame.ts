@@ -76,12 +76,6 @@ const initialize = (host: Host, id: string | number) => {
       hostCapabilities: {
         openLinks: {},
         serverTools: {},
-        sandbox: {
-          csp: {
-            connectDomains: McpAppBridge.domains(app.domains.connect),
-            resourceDomains: McpAppBridge.domains(app.domains.resource),
-          },
-        },
       },
       hostContext: {
         ...themeContext(),
@@ -106,7 +100,7 @@ const initialized = (host: Host) => {
 
 const openLink = (host: Host, id: string | number, params: unknown) => {
   const url = McpAppBridge.link(params)
-  if (Option.isNone(url) || !navigator.userActivation.isActive) {
+  if (Option.isNone(url) || ("userActivation" in navigator && !navigator.userActivation.isActive)) {
     host.post(McpAppBridge.fail(id, "Only https links that you opened are allowed."))
     return
   }

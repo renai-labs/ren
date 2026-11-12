@@ -65,27 +65,18 @@ export const admit = (calls: ReadonlyArray<number>, now: number) => {
   return recent.length < maxCallsPerMinute ? [...recent, now] : undefined
 }
 
-const host = /^https:\/\/(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*(?::\d{1,5})?$/iu
-
-export const domains = (declared: ReadonlyArray<string>) => declared.filter((domain) => host.test(domain))
-
-export const policy = (declared: SessionMessage.McpAppView["app"]["domains"]) => {
-  const connect = domains(declared.connect)
-  const resource = domains(declared.resource)
-  const list = (...sources: ReadonlyArray<string>) => sources.join(" ")
-  return [
-    "default-src 'none'",
-    `script-src 'unsafe-inline'`,
-    `style-src ${list("'unsafe-inline'", ...resource)}`,
-    `font-src ${list("data:", ...resource)}`,
-    `img-src ${list("data:", "blob:", ...resource)}`,
-    `media-src ${list("data:", "blob:", ...resource)}`,
-    `connect-src ${list(...(connect.length > 0 ? connect : ["'none'"]))}`,
-    "form-action 'none'",
-    "frame-src 'none'",
-    "base-uri 'none'",
-  ].join("; ")
-}
+export const policy = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline'",
+  "font-src data:",
+  "img-src data: blob:",
+  "media-src data: blob:",
+  "connect-src 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+  "base-uri 'none'",
+].join("; ")
 
 const parseObject = (text: string) => {
   const parsed = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))(text)

@@ -91,6 +91,8 @@ export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("Mana
 
 const never = Number.MAX_SAFE_INTEGER
 
+const maxViewBytes = 2 * 1024 * 1024
+
 const memoryText = (tag: string, root: Memory.Root | null, attributes = "") =>
   [`<${tag}${attributes}${root?.truncated ? ' truncated="true"' : ""}>`, root?.content ?? "", `</${tag}>`].join("\n")
 
@@ -571,6 +573,7 @@ export const make = (
               event.result = { ...event.result, metadata: stripped }
               if (typeof view.html !== "string" || typeof view.server !== "string") return
               const bytes = new TextEncoder().encode(view.html)
+              if (bytes.length > maxViewBytes) return
               const hash = [...new Uint8Array(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)))]
                 .map((byte) => byte.toString(16).padStart(2, "0"))
                 .join("")

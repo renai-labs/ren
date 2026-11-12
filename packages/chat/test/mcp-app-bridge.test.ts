@@ -3,27 +3,10 @@ import { Option } from "effect"
 import { McpAppBridge } from "../src/mcp-app-bridge.js"
 
 describe("McpAppBridge.policy", () => {
-  const directive = (policy: string, name: string) =>
-    policy
-      .split("; ")
-      .find((each) => each.startsWith(`${name} `))
-      ?.split(" ")
-      .slice(1)
-
-  test("a view without domains reaches no network", () => {
-    const policy = McpAppBridge.policy({ connect: [], resource: [] })
-    expect(directive(policy, "connect-src")).toEqual(["'none'"])
-    expect(directive(policy, "img-src")).toEqual(["data:", "blob:"])
-  })
-
-  test("declared https domains widen connect-src and img-src; others are dropped", () => {
-    const policy = McpAppBridge.policy({
-      connect: ["https://api.linear.app", "wss://live.linear.app", "http://plain.example", "https://x.example/path"],
-      resource: ["https://*.cdn.example", "https://evil.example; script-src *"],
-    })
-    expect(directive(policy, "connect-src")).toEqual(["https://api.linear.app"])
-    expect(directive(policy, "img-src")).toEqual(["data:", "blob:", "https://*.cdn.example"])
-    expect(directive(policy, "script-src")).toEqual(["'unsafe-inline'"])
+  test("a view reaches no network and loads nothing from a host", () => {
+    expect(McpAppBridge.policy).toContain("connect-src 'none'")
+    expect(McpAppBridge.policy).toContain("img-src data: blob:;")
+    expect(McpAppBridge.policy).not.toContain("https:")
   })
 })
 

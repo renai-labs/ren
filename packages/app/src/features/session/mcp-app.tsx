@@ -51,11 +51,11 @@ function useView(spaceId: string | undefined, path: string) {
   })
 }
 
-function srcdocOf(html: string, app: SessionMessage.McpAppView["app"]) {
+function srcdocOf(html: string) {
   const doc = new DOMParser().parseFromString(html, "text/html")
   const meta = doc.createElement("meta")
   meta.httpEquiv = "Content-Security-Policy"
-  meta.content = McpAppBridge.policy(app.domains)
+  meta.content = McpAppBridge.policy
   doc.head.prepend(meta)
   return `<!doctype html>${doc.documentElement.outerHTML}`
 }
@@ -136,7 +136,7 @@ export function McpAppView(props: {
     onPost: props.onPost,
     loaded: view.isSuccess,
   })
-  const srcdoc = view.data === undefined ? "" : srcdocOf(view.data, props.app)
+  const srcdoc = view.data === undefined ? "" : srcdocOf(view.data)
   const failed = view.isError || frame.phase === "failed"
   const ready = frame.phase === "ready"
   const title = `${name} · ${titleOf(props.app.tool)}`
