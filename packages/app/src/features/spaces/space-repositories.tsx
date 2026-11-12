@@ -21,14 +21,14 @@ import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { ListPagination } from "../../components/list-pagination.js"
-import { PageActions, PageFooter, TableCard, TableEmpty } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
+import { PageActions, TableCard, TableEmpty } from "../../components/page.js"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { GitHubMark } from "../../icons/brands.js"
 import { Platform } from "../../platform/platform.js"
 import { errorMessage } from "../../lib/errors.js"
-import { pageSize, currentPage, pageCount } from "../../lib/pagination.js"
+import { useShown } from "../../lib/use-shown.js"
 import { formText } from "../../lib/format.js"
 import { Repositories } from "../../lib/repositories.js"
 import { useSpace } from "./use-space.js"
@@ -80,7 +80,6 @@ export function SpaceRepositoriesTab() {
   const space = useSpace()
   const platform = Platform.usePlatform()
   const params = route.useParams()
-  const search = route.useSearch()
   const settings = useSuspenseQuery(api["space-settings"].get.queryOptions({ idOrSlug: params.spaceId })).data
   const update = useMutation(api["space-settings"].update.mutationOptions())
   const [query, setQuery] = useState("")
@@ -92,12 +91,10 @@ export function SpaceRepositoriesTab() {
       text.toLowerCase().includes(needle),
     ),
   )
-  const page = Math.min(currentPage(search), pageCount(matching.length, pageSize))
+  const shown = useShown(matching)
   const save = (next: ReadonlyArray<ReferenceInfo>) =>
     update.mutateAsync({ id: space.id, settings: { ...settings.settings, references: [...next] } })
   const canUpdate = settings.canUpdate
-  const total = matching.length
-  const visible = matching.slice((page - 1) * pageSize, page * pageSize)
   const open = (next?: "add" | ReferenceInfo) => {
     update.reset()
     setDialog(next)
@@ -137,14 +134,14 @@ export function SpaceRepositoriesTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.length === 0 ? (
+            {shown.items.length === 0 ? (
               <TableEmpty columns={3}>
                 {query.trim()
                   ? `Nothing matches “${query.trim()}”`
                   : "No repositories yet. Add one so Ren can read it."}
               </TableEmpty>
             ) : null}
-            {visible.map((reference) => (
+            {shown.items.map((reference) => (
               <TableRow
                 key={reference.alias}
                 className={canUpdate ? "cursor-pointer" : undefined}
@@ -188,9 +185,7 @@ export function SpaceRepositoriesTab() {
           </TableBody>
         </Table>
       </TableCard>
-      <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={total} noun="repository" />
-      </PageFooter>
+      <LoadMore more={shown.more} onMore={shown.next} />
       {dialog === "add" ? (
         <AddRepositoriesDialog existing={references} saving={saving} error={error} onAdd={add} onClose={() => open()} />
       ) : null}

@@ -9,9 +9,9 @@ import { AccountActions } from "../../components/account-actions.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
-import { PageActions, PageFooter, TableSample, useShapeId } from "../../components/page.js"
-import { ListPagination } from "../../components/list-pagination.js"
-import { currentPage, pageCount, pageSize } from "../../lib/pagination.js"
+import { PageActions, TableSample, useShapeId } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
+import { useShown } from "../../lib/use-shown.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { useApp, useApps } from "../../lib/use-app.js"
@@ -101,7 +101,7 @@ export function SpaceAppsTab() {
       ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
       : []
   })
-  const page = Math.min(currentPage(search), pageCount(rows.length, pageSize))
+  const shown = useShown(rows)
   if (hiddenBy(reach.error))
     return (
       <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
@@ -122,16 +122,14 @@ export function SpaceAppsTab() {
           <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
         ) : (
           <AppsTable
-            rows={rows.slice((page - 1) * pageSize, page * pageSize)}
+            rows={shown.items}
             empty="No apps"
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId, from })}
           />
         )}
       </Loading>
-      <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={rows.length} noun="app" />
-      </PageFooter>
+      <LoadMore more={shown.more} onMore={shown.next} />
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <SpaceAppAccounts

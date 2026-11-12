@@ -1,4 +1,12 @@
-export function LoadMore(props: { more: boolean; onMore: () => void }) {
+import { Spinner } from "@ren/ui/spinner"
+
+export function LoadMore(props: { more: boolean; loading?: boolean | undefined; onMore: () => void }) {
+  if (props.loading)
+    return (
+      <div className="flex justify-center py-2 text-muted-foreground">
+        <Spinner />
+      </div>
+    )
   if (!props.more) return null
   return (
     <div

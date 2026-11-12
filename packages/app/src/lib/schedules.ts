@@ -3,7 +3,6 @@ import { Cron, DateTime, Option, Result, Schema } from "effect"
 import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
 
 const ScheduleSearchSchema = Schema.Struct({
-  page: Schema.optional(Schema.Number),
   filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
   schedule: Schema.optional(Schema.String),
 })
@@ -14,21 +13,14 @@ export const ScheduleSearch = Schema.toStandardSchemaV1(ScheduleSearchSchema)
 
 export function scheduleListInput(
   search: ScheduleSearch,
-  paging: {
-    readonly page: number
-    readonly pageSize: number
-    readonly text?: string | undefined
-    readonly spaceId?: string | undefined
-  },
-): ScheduleListInput {
+  scope: { readonly text?: string | undefined; readonly spaceId?: string | undefined },
+): Omit<ScheduleListInput, "page" | "pageSize"> {
   const status = search.filters?.state?.at(0)
-  const spaceId = paging.spaceId ?? search.filters?.space?.at(0)
+  const spaceId = scope.spaceId ?? search.filters?.space?.at(0)
   return {
-    page: paging.page,
-    pageSize: paging.pageSize,
     ...((status === "active" || status === "paused") && { status }),
     ...(spaceId && { spaceId }),
-    ...(paging.text && { search: paging.text }),
+    ...(scope.text && { search: scope.text }),
   }
 }
 

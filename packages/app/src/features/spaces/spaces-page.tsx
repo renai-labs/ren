@@ -21,40 +21,35 @@ import {
 import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { CardsSample, Page, useShapeId } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
 import { Loading } from "@ren/ui/loading"
-import { ListPagination } from "../../components/list-pagination.js"
 import { Spinner } from "@ren/ui/spinner"
-import { pageSize, pickerPageSize, currentPage } from "../../lib/pagination.js"
-import { cn } from "cn"
+import { pageSize, pickerPageSize } from "../../lib/pagination.js"
+import { Pages } from "../../lib/pages.js"
 import { NewSpaceDialog } from "../../components/new-space-dialog.js"
 import { SpaceCard } from "./space-card.js"
 import { useState } from "react"
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
-import { getRouteApi, useNavigate } from "@tanstack/react-router"
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
-const route = getRouteApi("/_authed/_shell/spaces/")
-
 const isPrivate = (space: SpaceInfo) => space.kind === "private"
 
 export function SpacesPage() {
-  const { api, queryClient } = RouterContext.useRouterContext()
-  const search = route.useSearch()
+  const { api, client, queryClient } = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const me = useMe()
-  const page = currentPage(search)
   const pickerKey = api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }).queryKey
-  const list = useQuery({
-    ...api.space.list.queryOptions({ page, pageSize }),
-    placeholderData: keepPreviousData,
+  const list = useInfiniteQuery({
+    ...Pages.spaces(client),
     initialData: () => {
       const picked = queryClient.getQueryData(pickerKey)
-      return page === 1 && picked && picked.total <= picked.items.length
-        ? { ...picked, items: picked.items.slice(0, pageSize) }
+      return picked && picked.total <= picked.items.length
+        ? { pages: [{ ...picked, pageSize, items: picked.items.slice(0, pageSize) }], pageParams: [1] }
         : undefined
     },
     initialDataUpdatedAt: () => queryClient.getQueryState(pickerKey)?.dataUpdatedAt,
@@ -68,9 +63,7 @@ export function SpacesPage() {
     select: (data) => data.items.filter((space) => space.membershipId === null),
   })
   const join = useMutation(api["space-member"].create.mutationOptions())
-  const spaces = list.data?.items
-  const total = list.data?.total ?? 0
-  const stale = list.isPlaceholderData
+  const spaces = list.data?.pages.flatMap((page) => page.items)
   const joinableLoading = joinable.isPending
   const joining = join.isPending
   const joinSpace = (spaceId: string, name: string) =>
@@ -142,17 +135,10 @@ export function SpacesPage() {
           />
         </>
       }
-      footer={<ListPagination page={page} pageSize={pageSize} total={total} noun="space" />}
     >
       <Loading id={shapeId} loading={!spaces} label="Loading spaces">
         {spaces ? null : <CardsSample />}
-        <div
-          className={cn(
-            "mt-4 grid gap-5 transition-opacity sm:grid-cols-2",
-            stale && "opacity-60",
-            !spaces && "hidden",
-          )}
-        >
+        <div className={spaces ? "mt-4 grid gap-5 sm:grid-cols-2" : "hidden"}>
           {(spaces ?? [])
             .filter((space) => !needle || `${space.name} ${space.description ?? ""}`.toLowerCase().includes(needle))
             .filter((space) =>
@@ -165,6 +151,7 @@ export function SpacesPage() {
             ))}
         </div>
       </Loading>
+      <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
     </Page>
   )
 }

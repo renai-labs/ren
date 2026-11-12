@@ -11,11 +11,7 @@ export const InvitationId = Schema.optional(Schema.String)
 
 export const AuthSearch = Schema.toStandardSchemaV1(Schema.Struct({ invitationId: InvitationId, redirect: Redirect }))
 
-export const PageSearch = Schema.toStandardSchemaV1(Schema.Struct({ page: Schema.optional(Schema.Number) }))
-
-export const AppSearch = Schema.toStandardSchemaV1(
-  Schema.Struct({ page: Schema.optional(Schema.Number), app: Schema.optional(Schema.String) }),
-)
+export const AppSearch = Schema.toStandardSchemaV1(Schema.Struct({ app: Schema.optional(Schema.String) }))
 
 export const useRenderedPath = () =>
   useMatches({ select: (matches) => matches.at(-1)?.pathname.replace(/(.)\/$/u, "$1") ?? "/" })

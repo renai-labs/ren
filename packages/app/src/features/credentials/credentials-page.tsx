@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { errorMessage } from "../../lib/errors.js"
 import { getRouteApi } from "@tanstack/react-router"
@@ -11,8 +11,8 @@ import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
 import { CredentialSheet, ownerOptions } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
-import { ListPagination } from "../../components/list-pagination.js"
-import { Page, PageFooter, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
+import { Page, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
@@ -21,7 +21,7 @@ import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { pageSize, currentPage, lastPageAfterRemoval } from "../../lib/pagination.js"
+import { Pages } from "../../lib/pages.js"
 import { fromApp, isSpaceApp, reach, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
@@ -56,27 +56,23 @@ export function CredentialsSettingsPage() {
 }
 
 function CredentialKeys() {
-  const { api } = RouterContext.useRouterContext()
-  const search = route.useSearch()
-  const navigate = route.useNavigate()
+  const { client } = RouterContext.useRouterContext()
   const me = useMe()
   const spaces = useSpaces().spaces
-  const page = currentPage(search)
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
   const [adding, setAdding] = useState(false)
   const keysShapeId = useShapeId("keys")
-  const list = useQuery({
-    ...api.credential.list.queryOptions({ page, pageSize, ...(needle && { search: needle }) }),
+  const list = useInfiniteQuery({
+    ...Pages.credentials(client, needle ? { search: needle } : {}),
     placeholderData: keepPreviousData,
-    select: (data) => ({ ...data, items: data.items.filter((credential) => credential.owner.kind !== "profile") }),
+    select: (data) => ({
+      total: data.pages.at(0)?.total ?? 0,
+      items: data.pages.flatMap((page) => page.items).filter((credential) => credential.owner.kind !== "profile"),
+    }),
     ...Loader.required,
   })
   const total = list.data?.total ?? 0
-  const removed = () => {
-    const next = lastPageAfterRemoval(page, total, pageSize)
-    if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
-  }
   return (
     <Page
       title="Credentials"
@@ -91,20 +87,19 @@ function CredentialKeys() {
           </Button>
         </>
       }
-      footer={<ListPagination page={page} pageSize={pageSize} total={total} noun="key" />}
     >
       <Loading id={keysShapeId} loading={!list.data} label="Loading keys">
         {list.data ? (
           <CredentialsTable
             credentials={list.data.items}
             stale={list.isPlaceholderData}
-            onRemoved={removed}
             empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
           />
         ) : (
           <TableSample columns={["Key", "Hosts", "Owner", ""]} />
         )}
       </Loading>
+      <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
       <CredentialSheet
         open={adding}
         onOpenChange={setAdding}
@@ -124,15 +119,14 @@ function OrgApps() {
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
-  const { api } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const deleteProfile = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
   const spaces = useSpaces().spaces
-  const page = currentPage(search)
-  const list = useQuery({
-    ...api.app.list.queryOptions({ connected: true, page, pageSize }),
-    placeholderData: keepPreviousData,
-  })
-  const used = (list.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces))
+  const list = useInfiniteQuery(Pages.connectedApps(client))
+  const used = (list.data?.pages ?? [])
+    .flatMap((page) => page.items)
+    .map(fromApp)
+    .filter((app) => !isSpaceApp(app, spaces))
   const app = useApp(opened).app
   const profiles = useAppProfiles(used.map((each) => each.id))
   const accounts = useAppProfiles(app ? [app.id] : [])
@@ -155,9 +149,7 @@ function OrgApps() {
           />
         )}
       </Loading>
-      <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={list.data?.total ?? 0} noun="app" />
-      </PageFooter>
+      <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <AccountList

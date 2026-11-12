@@ -1,6 +1,5 @@
 import { useState } from "react"
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
-import { getRouteApi } from "@tanstack/react-router"
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { IconPlus } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
@@ -16,8 +15,8 @@ import {
   DialogTrigger,
 } from "@ren/ui/dialog"
 import { Spinner } from "@ren/ui/spinner"
-import { ListPagination } from "../../components/list-pagination.js"
-import { PageActions, PageFooter, useShapeId } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
+import { PageActions, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
@@ -26,12 +25,11 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
 import { useOrganization } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
-import { pageSize, pickerPageSize, currentPage, lastPageAfterRemoval } from "../../lib/pagination.js"
+import { pageSize, pickerPageSize } from "../../lib/pagination.js"
+import { Pages } from "../../lib/pages.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
-
-const route = getRouteApi("/_authed/_shell/spaces/$spaceId/members")
 
 interface Candidate {
   readonly value: string
@@ -113,19 +111,12 @@ function AddSpaceMemberDialog(props: {
 }
 
 export function SpaceMembersTab() {
-  const { api } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const space = useSpace()
   const me = useMe()
-  const search = route.useSearch()
-  const navigate = route.useNavigate()
-  const page = currentPage(search)
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
-  const members = useQuery({
-    ...api["space-member"].list.queryOptions({ spaceId: space.id, page, pageSize }),
-    placeholderData: keepPreviousData,
-    ...Loader.required,
-  })
+  const members = useInfiniteQuery({ ...Pages.spaceMembers(client, space.id), ...Loader.required })
   const everyone = useQuery({
     ...api["space-member"].list.queryOptions({ spaceId: space.id, page: 1, pageSize: pickerPageSize }),
     enabled: adding,
@@ -158,32 +149,29 @@ export function SpaceMembersTab() {
         target: { email: invitation.email },
       })),
   ]
-  const rows = (members.data?.items ?? []).map((member) =>
-    member.status === "active"
-      ? {
-          id: member.id,
-          name: member.name,
-          email: member.email,
-          image: member.image ?? undefined,
-          you: member.userId === me.user.id,
-          pending: false,
-        }
-      : { id: member.id, name: member.email, email: member.email, you: false, pending: true },
-  )
-  const sampleRows = Array.from(
-    { length: Math.max(0, Math.min(space.memberCount - (page - 1) * pageSize, pageSize)) },
-    (_, index) => ({
-      id: `sample-${index}`,
-      name: "Team member",
-      email: "member@company.com",
-      you: false,
-      pending: false,
-    }),
-  )
+  const rows = (members.data?.pages ?? [])
+    .flatMap((page) => page.items)
+    .map((member) =>
+      member.status === "active"
+        ? {
+            id: member.id,
+            name: member.name,
+            email: member.email,
+            image: member.image ?? undefined,
+            you: member.userId === me.user.id,
+            pending: false,
+          }
+        : { id: member.id, name: member.email, email: member.email, you: false, pending: true },
+    )
+  const sampleRows = Array.from({ length: Math.min(space.memberCount, pageSize) }, (_, index) => ({
+    id: `sample-${index}`,
+    name: "Team member",
+    email: "member@company.com",
+    you: false,
+    pending: false,
+  }))
   const shapeId = useShapeId("members")
   const needle = query.trim().toLowerCase()
-  const total = members.data?.total ?? 0
-  const stale = members.isPlaceholderData
   const candidatesLoading = everyone.isPending
   const creating = create.isPending
   const add = (candidate: Candidate) =>
@@ -221,7 +209,6 @@ export function SpaceMembersTab() {
           rows={(members.isPending ? sampleRows : rows).filter((row) =>
             `${row.name} ${row.email}`.toLowerCase().includes(needle),
           )}
-          stale={stale}
           column={{
             heading: "Status",
             cell: (row) =>
@@ -244,11 +231,7 @@ export function SpaceMembersTab() {
             remove.mutateAsync(
               { id: row.id },
               {
-                onSuccess: () => {
-                  toast.success(`${row.name} removed`)
-                  const next = lastPageAfterRemoval(page, total, pageSize)
-                  if (next !== page) void navigate({ search: (previous) => ({ ...previous, page: next }) })
-                },
+                onSuccess: () => toast.success(`${row.name} removed`),
                 onError: (error) => toast.error("Could not remove the member", { description: errorMessage(error) }),
               },
             )
@@ -256,9 +239,11 @@ export function SpaceMembersTab() {
           empty={query ? `Nothing matches “${query.trim()}”` : "No members"}
         />
       </Loading>
-      <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={total} noun="member" />
-      </PageFooter>
+      <LoadMore
+        more={members.hasNextPage}
+        loading={members.isFetchingNextPage}
+        onMore={() => void members.fetchNextPage()}
+      />
     </div>
   )
 }

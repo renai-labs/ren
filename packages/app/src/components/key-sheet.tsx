@@ -69,7 +69,7 @@ function useSave(key: Key, onDone: () => void) {
   }
 }
 
-function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() => void) | undefined }) {
+function KeyForm(props: { credential: Key; onClose: () => void }) {
   const key = props.credential
   const { api } = RouterContext.useRouterContext()
   const me = useMe()
@@ -202,7 +202,6 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
             {
               onSuccess: () => {
                 toast.success(`${key.label} deleted`)
-                props.onRemoved?.()
                 props.onClose()
               },
               onError: (failure) => toast.error("Couldn’t delete the key", { description: errorMessage(failure) }),
@@ -214,22 +213,13 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
   )
 }
 
-export function KeySheet(props: {
-  credential: Key | undefined
-  onClose: () => void
-  onRemoved?: (() => void) | undefined
-}) {
+export function KeySheet(props: { credential: Key | undefined; onClose: () => void }) {
   return (
     <Sheet open={props.credential !== undefined} onOpenChange={(open) => (open ? undefined : props.onClose())}>
       <SheetContent // ast-grep-ignore: require-overlay-title -- KeyForm renders the SheetTitle
       >
         {props.credential ? (
-          <KeyForm
-            key={props.credential.id}
-            credential={props.credential}
-            onClose={props.onClose}
-            onRemoved={props.onRemoved}
-          />
+          <KeyForm key={props.credential.id} credential={props.credential} onClose={props.onClose} />
         ) : null}
       </SheetContent>
     </Sheet>
