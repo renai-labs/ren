@@ -122,10 +122,18 @@ describe("streaming", () => {
       step("evt_text_2_1", 14, "session.text.delta", { ordinal: 1, delta: "Two" }),
       step("evt_text_late", 15, "session.text.delta", { ordinal: 0, delta: "late" }),
     ])
-    const assistant = ChatState.messages(next.state, sessionID)[0]
-    expect(assistant?.type === "assistant" && assistant.content).toEqual([
-      { type: "text", text: "One.", time: { created: 11, completed: 12 } },
-      { type: "text", text: "Two", time: { created: 14 } },
+    expect(ChatState.messages(next.state, sessionID)).toEqual([
+      Fixture.message({
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: Fixture.model,
+        content: [
+          { type: "text", text: "One.", time: { created: 11, completed: 12 } },
+          { type: "text", text: "Two", time: { created: 14 } },
+        ],
+        time: { created: 10 },
+      }),
     ])
   })
 

@@ -105,7 +105,7 @@ export type WebhookOriginInfo = { webhookId: string; name: string; requestId: st
 
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
-export type SessionMessageText = { type: "text"; text: string }
+export type SessionMessageText = { type: "text"; text: string; time?: { created: number; completed?: number } }
 
 export type SessionMessageReasoning = {
   type: "reasoning"

@@ -162,7 +162,7 @@ export type SessionMessageSyntheticMetadata = { source?: string; childID?: strin
 
 export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
 
-export type SessionMessageText = { type: "text"; text: string }
+export type SessionMessageText = { type: "text"; text: string; time?: { created: number; completed?: number } }
 
 export type SessionMessageReasoning = {
   type: "reasoning"

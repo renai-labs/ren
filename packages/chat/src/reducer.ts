@@ -126,10 +126,9 @@ const editText = (
   edit: (text: SessionMessage.Text) => SessionMessage.Text,
 ) =>
   editAssistant(state, data.sessionID, data.assistantMessageID, (assistant) => {
-    const position = assistant.content.flatMap((item, index) => (item.type === "text" ? [index] : []))[data.ordinal]
-    const found = position === undefined ? undefined : assistant.content[position]
+    const found = assistant.content.filter((item) => item.type === "text")[data.ordinal]
     if (found?.type !== "text" || found.time?.completed) return assistant
-    return { ...assistant, content: assistant.content.map((item, index) => (index === position ? edit(found) : item)) }
+    return { ...assistant, content: assistant.content.map((item) => (item === found ? edit(found) : item)) }
   })
 
 const isOpenReasoning = (content: Content): content is SessionMessage.Reasoning =>
