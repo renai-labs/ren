@@ -119,6 +119,7 @@ function ChatComposer(props: {
           running={chat.running}
           onStop={chat.stop}
           suggest={chat.suggest}
+          history={chat.shellHistory}
           model={
             chat.canChooseModel ? (
               <ModelPicker

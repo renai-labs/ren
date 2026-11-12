@@ -26,6 +26,7 @@ import { useAttentionNotification } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { useShellHistory } from "../../lib/use-shell-history.js"
 
 const statusesOf = (state: ChatState.State, sessionID: Session.ID): ReadonlyMap<string, ChatState.PendingStatus> =>
   new Map(
@@ -188,6 +189,8 @@ export function useChat(
       ),
     ),
   )
+  const runShell = ChatReact.useAction(root, (opened, command: string) => opened.runShell(command))
+  const shellHistory = useShellHistory()
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
   const loadAll = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed, true))
@@ -267,7 +270,20 @@ export function useChat(
       ChatPreferences.model.write(platform.storage, next)
       setSaved(next)
     },
+    shellHistory,
     send: () => {
+      if (Composer.isShell(draft)) {
+        const command = Composer.message(draft).trim()
+        if (!command) return
+        const sent = draft
+        shellHistory.add(command)
+        setDraft(Composer.emptyShell)
+        void runShell(command).catch((error: unknown) => {
+          kept.update((current) => (Composer.isBlank(current) ? sent : current))
+          toast.error("Couldn’t run the command", { description: errorMessage(error) })
+        })
+        return
+      }
       const text = Composer.message(draft).trim()
       if (!text) return
       const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
