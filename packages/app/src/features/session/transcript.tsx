@@ -89,7 +89,7 @@ import { useSubagentCard } from "./chat-view.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSkeleton } from "../../components/chat-skeleton.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { ImageLightbox } from "../../components/image-lightbox.js"
+import { ImageSet, ImageTrigger } from "../../components/image-set.js"
 import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { ChannelOrigin } from "./channel-origin.js"
@@ -314,13 +314,13 @@ function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> 
           <Attachment key={`${file.name ?? file.mime}-${index}`} size="sm">
             {image ? (
               <AttachmentMedia variant="image">
-                <ImageLightbox
+                <ImageTrigger
                   src={`data:${file.mime};base64,${file.data}`}
-                  alt={file.name ?? "Image"}
+                  name={file.name ?? "Image"}
                   className="size-full cursor-zoom-in"
                 >
                   <img src={`data:${file.mime};base64,${file.data}`} alt={file.name ?? "Image"} />
-                </ImageLightbox>
+                </ImageTrigger>
               </AttachmentMedia>
             ) : (
               <AttachmentMedia>
@@ -657,13 +657,13 @@ function StepDetail(props: {
   return (
     <>
       {images.map((image) => (
-        <ImageLightbox key={image.uri} src={image.uri} alt={image.name?.split("/").at(-1) ?? "Image"}>
+        <ImageTrigger key={image.uri} src={image.uri} name={image.name?.split("/").at(-1) ?? "Image"}>
           <img
             src={image.uri}
             alt={image.name ?? "Image"}
             className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
           />
-        </ImageLightbox>
+        </ImageTrigger>
       ))}
       {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
         <Output text={props.output} failed={props.failed} />
@@ -1385,9 +1385,11 @@ export function Transcript(props: TranscriptProps) {
       </div>
     )
   return (
-    <MessageScrollerProvider autoScroll={follow.following}>
-      <TranscriptScroller transcript={props} follow={follow} />
-    </MessageScrollerProvider>
+    <ImageSet>
+      <MessageScrollerProvider autoScroll={follow.following}>
+        <TranscriptScroller transcript={props} follow={follow} />
+      </MessageScrollerProvider>
+    </ImageSet>
   )
 }
 

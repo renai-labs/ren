@@ -18,7 +18,7 @@ import {
   useHighlightedCode,
 } from "@ren/ui/code-block"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
-import { ImageLightbox } from "./image-lightbox.js"
+import { ImageTrigger } from "./image-set.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
@@ -62,9 +62,9 @@ function MarkdownCode({ node: _node, className, children, ...props }: ComponentP
 function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"> & ExtraProps) {
   if (typeof src !== "string" || !src) return null
   return (
-    <ImageLightbox src={src} alt={alt ?? ""} className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md">
+    <ImageTrigger src={src} name={alt || "Image"} className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md">
       <img src={src} alt={alt ?? ""} {...props} className="max-h-96 max-w-full rounded-md border object-contain" />
-    </ImageLightbox>
+    </ImageTrigger>
   )
 }
 

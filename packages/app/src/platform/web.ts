@@ -109,6 +109,13 @@ export function createWebPlatform(stores: {
       return (await Notification.requestPermission().catch(() => "denied")) === "granted"
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
+    copyImage: (png) => navigator.clipboard.write([new ClipboardItem({ "image/png": png })]),
+    saveFile: (url, name) => {
+      const link = document.createElement("a")
+      link.href = url
+      link.download = name
+      link.click()
+    },
     onLifecycle: (listener) => {
       const visibility = () => {
         if (document.visibilityState === "visible") listener("foreground")

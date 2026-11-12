@@ -28,7 +28,7 @@ import {
 } from "@ren/ui/attachment"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
-import { ImageLightbox } from "../../components/image-lightbox.js"
+import { ImageSet, ImageTrigger } from "../../components/image-set.js"
 import { formatBytes } from "../../lib/format.js"
 import { useDriveFile } from "../../lib/use-drive-file.js"
 import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
@@ -61,9 +61,9 @@ function DriveFileCard(props: {
     <Attachment size="sm" state={drive.deleted ? "error" : "done"}>
       {thumbnail ? (
         <AttachmentMedia variant="image">
-          <ImageLightbox src={thumbnail} alt={file.name} className="size-full cursor-zoom-in">
+          <ImageTrigger src={thumbnail} name={file.name} download={drive.download} className="size-full cursor-zoom-in">
             <img src={thumbnail} alt={file.name} onError={drive.reload} />
-          </ImageLightbox>
+          </ImageTrigger>
         </AttachmentMedia>
       ) : (
         <AttachmentMedia>
@@ -149,26 +149,28 @@ export function UploadChips(props: {
 }) {
   if (props.files.length === 0 && props.uploads.length === 0) return null
   return (
-    <AttachmentGroup>
-      {props.files.map((file) => (
-        <DriveFileCard
-          key={file.path}
-          spaceId={props.spaceId}
-          file={file}
-          disabled={props.disabled}
-          onRemove={() => props.onRemove(file.path)}
-        />
-      ))}
-      {props.uploads.map((upload) => (
-        <UploadChip
-          key={upload.id}
-          upload={upload}
-          disabled={props.disabled}
-          onRetry={() => props.onRetry(upload)}
-          onCancel={() => props.onCancel(upload)}
-        />
-      ))}
-    </AttachmentGroup>
+    <ImageSet>
+      <AttachmentGroup>
+        {props.files.map((file) => (
+          <DriveFileCard
+            key={file.path}
+            spaceId={props.spaceId}
+            file={file}
+            disabled={props.disabled}
+            onRemove={() => props.onRemove(file.path)}
+          />
+        ))}
+        {props.uploads.map((upload) => (
+          <UploadChip
+            key={upload.id}
+            upload={upload}
+            disabled={props.disabled}
+            onRetry={() => props.onRetry(upload)}
+            onCancel={() => props.onCancel(upload)}
+          />
+        ))}
+      </AttachmentGroup>
+    </ImageSet>
   )
 }
 

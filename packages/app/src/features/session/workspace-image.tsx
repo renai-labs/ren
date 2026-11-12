@@ -3,7 +3,7 @@ import type { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
-import { ImageLightbox } from "../../components/image-lightbox.js"
+import { ImageTrigger } from "../../components/image-set.js"
 
 export function WorkspaceImage(props: { root: Session.ID; path: string; alt: string; src?: string | undefined }) {
   if (props.src) return <ImagePreview src={props.src} alt={props.alt} />
@@ -38,8 +38,12 @@ function FileImage(props: { root: Session.ID; path: string; alt: string }) {
 
 function ImagePreview(props: { src: string; alt: string }) {
   return (
-    <ImageLightbox src={props.src} alt={props.alt} className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md">
+    <ImageTrigger
+      src={props.src}
+      name={props.alt || "Image"}
+      className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md"
+    >
       <img src={props.src} alt={props.alt} className="max-h-96 max-w-full rounded-md border object-contain" />
-    </ImageLightbox>
+    </ImageTrigger>
   )
 }
