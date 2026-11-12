@@ -2,15 +2,15 @@
 
 Status: phase 1A is implemented on `media-model-providers`, rebased onto `origin/main` (OpenCode 2.2.6). Its review gate is still open (§3.5). No later phase has started. Remove the completed phase when the gate closes.
 
-Current contract: inference PR #24 exposes `GET /v1/catalog` as `{ baseUrl, models }`, `GET /v1/search/providers` and `POST /v1/search`. Ren uses the returned callable IDs and explicit protocols without upstream mode or vendor mappings. The review gate includes deploying this contract, the gateway-host routing below and the catalog key before Ren adoption.
+Current contract: inference PR #24 exposes `GET /v1/catalog` as `{ baseUrl, models }`. It also exposes `GET /v1/search/providers` and `POST /v1/search`; Ren calls neither (D9). Ren uses the returned callable IDs and explicit protocols without upstream mode or vendor mappings. The review gate includes deploying this contract, the gateway-host routing below and the catalog key before Ren adoption.
 
 Provider boundary:
 
 - Ren is one registered model provider (`core/src/ren-inference/provider.ts`, id `ren`). `Models.layer` takes the deployment's providers. Each supplies a registration, its picker catalog and a key per brain. `Models.Service` aggregates them. Nothing downstream branches on a provider ID.
 - Core reads catalogs with `REN_INFERENCE_GATEWAY_KEY` for its model picker. Registration and key grants do not depend on catalog availability. Keys come from `/v1/keys` (managed) or are the gateway key itself.
-- A registration names the provider's reachable base URL and catalog protocol. For Ren, `REN_INFERENCE_BRAIN_URL` overrides `REN_INFERENCE_GATEWAY_URL`, with `REN_INFERENCE_URL` as the default. Model execution, `{baseUrl}/search`, `{baseUrl}/catalog` and `{baseUrl}/search/providers` answer on that host. The inference deployment routes catalog and search paths to its API; execution reaches LiteLLM unchanged.
-- The pull reply carries `providers`, without keys. Brain/cell stores these registrations and fetches each remote catalog directly with that provider's key. A provider may instead supply a static catalog. Discovery runs during periodic pulls, independently of OpenCode. Failed model and search reads keep their respective last successful values. Removing or changing a registration invalidates its cached catalog and rejects stale responses.
-- Search is an endpoint capability (`Endpoint.search`). A search default `{ providerId, modelId }` names the endpoint and one of its search providers. OpenCode registers one web search provider per endpoint that an agent selects.
+- A registration names the provider's reachable base URL and catalog protocol. For Ren, `REN_INFERENCE_BRAIN_URL` overrides `REN_INFERENCE_GATEWAY_URL`, with `REN_INFERENCE_URL` as the default. Model execution and `{baseUrl}/catalog` answer on that host. The inference deployment routes catalog paths to its API; execution reaches LiteLLM unchanged.
+- The pull reply carries `providers`, without keys. Brain/cell stores these registrations and fetches each remote catalog directly with that provider's key. A provider may instead supply a static catalog. Discovery runs during periodic pulls, independently of OpenCode. A failed catalog read keeps its last successful value. Removing or changing a registration invalidates its cached catalog and rejects stale responses.
+- Ren registers no web search provider (D9). The `websearch` tool uses OpenCode's built-in providers. Ren only sets the selection to `random` when nothing else sets it, so no consent form stops an agent; OpenCode's `websearch` config still overrides it. Vendor search goes through registry apps: an official MCP on the organization's account, or a managed MCP paid with Ren credits (`specs/integrations/README.md`).
 - Model references are exact. Selections saved before the managed provider became `ren` are not converted: they fall back to the next layer's model, as any unavailable model does.
 
 | Word          | Meaning                                                                                                                       |
@@ -38,13 +38,13 @@ One catalog holds every model. `Models.Info.type` uses native names. Existing `d
 | `realtime`      | `realtime`                              | not registered        | none: the app's voice call             | 2     |
 | `video`         | `video_generation`                      | `video`               | `video_generate` (Ren)                 | 3     |
 
-`search` is a capability of an endpoint, registered on OpenCode's web search registry (`cell/src/harness/opencode/search-provider.ts`). Other modes, such as `embedding`, stay out.
+Search is not a model type or an endpoint capability (D9). Other modes, such as `embedding`, stay out.
 
 ### 1.2 Catalog and keys
 
 - The Ren provider wraps the flat inference catalog in its one endpoint, `ren`. The catalog ID is the callable model ID; OpenCode's `id` and `modelID` use that value. The execution URL and protocol come from the catalog. Ren does not interpret vendor namespaces or construct wire aliases.
 - The cell registers each implemented type on its endpoint's OpenCode provider (`ModelProviders.apply`). Speech, realtime and video remain unregistered until their phases. OpenCode keeps non-chat models out of chat model resolution. Ren also filters its public chat picker.
-- A media tool gets its key from its provider connection, as a chat model does: `keyFor(endpoint.id)`. The managed connection uses `keyFor("ren")`. Keep the OAuth renewal method. Search uses the connection and key of its endpoint.
+- A media tool gets its key from its provider connection, as a chat model does: `keyFor(endpoint.id)`. The managed connection uses `keyFor("ren")`. Keep the OAuth renewal method.
 
 ### 1.3 The media tool shape
 
@@ -57,7 +57,7 @@ Every media tool follows the built-in tool. A Ren tool copies its rules:
 5. It reads input files and checks paths before the paid call.
 6. A call that can take more than a few seconds runs as an OpenCode background job: `Job.Service` `start`, `background`, `wait`; then `Session.Service` `synthetic` with a `<{type} id state>` notice, then `completeBackground`. The tool returns at once with the job ID and the "do not poll" text.
 7. It saves the output on the environment, with the extension of the real format.
-8. Chat and Ren's search, transcription and decision clients attach usage claims (`UsageClaims.headers`). Native image generation uses OpenCode's provider transport directly.
+8. Chat and Ren's transcription and decision clients attach usage claims (`UsageClaims.headers`). Native image generation uses OpenCode's provider transport directly.
 
 Image keeps OpenCode's tool, job services and provider transport. Brain/cell registers the provider URL, image models and credentials. OpenCode resolves and refreshes expiring credentials through the existing integration. There is no image-specific request executor or 401 retry override. Its generation path does not run session request hooks, so it does not receive Ren's per-turn usage claims.
 
@@ -78,12 +78,12 @@ Use stable IDs, metadata without secrets, a separate connection, and a typed exe
 | Domain       | Registry and contract                                                   | Managed adapter                                   |
 | ------------ | ----------------------------------------------------------------------- | ------------------------------------------------- |
 | Models       | OpenCode's provider/model registry                                      | Inference catalog plus per-model runtime packages |
-| Search       | OpenCode's web-search registry; `SearchProvider` owns provider metadata | `cell/src/search/inference.ts`                    |
+| Search       | OpenCode's web-search registry and its built-in providers               | None (D9); vendor search is a registry app        |
 | Environments | Existing `EnvironmentProvider.Registry`; provision, connect and destroy | Existing Docker/E2B implementations               |
 
-An additional search provider registers its own search implementation. It need not implement a model API or alter environment providers. `ProviderHttp` shares HTTP credentials, headers and retry handling where those transports match; it is not a generic provider framework.
+`ProviderHttp` shares HTTP credentials, headers and retry handling where those transports match; it is not a generic provider framework.
 
-Search provider selection stays in OpenCode's registry. Per-agent search engine defaults configure the managed adapter; they do not create a cross-provider dispatcher.
+Search provider selection stays in OpenCode's registry. Ren adds no search provider and no per-agent engine default.
 
 ## 2. Decisions
 
@@ -97,6 +97,7 @@ Search provider selection stays in OpenCode's registry. Per-agent search engine 
 | D6  | Transcription and decisions run in the call and return their result; the model needs it at once. Speech, image and video run as background jobs.                                                                                                             | Proposed             |
 | D7  | Voice scope: the app controls sessions across Ren, as OpenCode desktop does, or talks to one chat.                                                                                                                                                           | Open, before phase 2 |
 | D8  | Voice billing for WebRTC calls that LiteLLM does not bill: Ren meters through a sideband connection, a WebSocket relay through Ren, or no metering at first.                                                                                                 | Open, before phase 2 |
+| D9  | Ren registers no web search provider, search catalog or engine default. `websearch` uses OpenCode's built-in providers, `random` unless configured. Paid vendor search is a registry app (official or managed MCP), not a Ren route through inference.       | Implemented          |
 
 ## 3. Phase 1A: refactor (no new feature)
 
@@ -109,9 +110,9 @@ The goal: the code has the structure of §1. Keep the existing model capabilitie
 - [x] R3. `model-types.ts`:
   - Keep public default keys stable. Map them to native model types; add speech and realtime keys without enabling their tools.
   - Remove `Catalogs`, `fromInference` and `renTypes` (`:43-46`, `:61`, `:68-90`).
-  - Move search metadata and discovery into `search-provider.ts`, with a provider ID and engine inventory. Search is not an LLM model type.
-  - `ModelRef`: keep the public wire shape. Resolve through `Models.lookup` (D2). Search references do not change.
-- [x] R4. Tests: `core/test/models.test.ts` covers the inference catalog decoding, the provider registry and the Ren endpoint. `schema/test/models.test.ts` covers exact lookup. Search adapter tests verify the provider ID, key, usage headers and normalized result array.
+  - Search is not an LLM model type. Its metadata and discovery are gone (D9).
+  - `ModelRef`: keep the public wire shape. Resolve through `Models.lookup` (D2).
+- [x] R4. Tests: `core/test/models.test.ts` covers the inference catalog decoding, the provider registry and the Ren endpoint. `schema/test/models.test.ts` covers exact lookup.
 
 ### 3.2 `core`, `protocol`
 
@@ -121,16 +122,16 @@ The goal: the code has the structure of §1. Keep the existing model capabilitie
 
 ### 3.3 `brain`
 
-- [x] R8. `BrainSettings.resolve`: replace the `catalogs` argument with the typed catalog (`Models.Catalog`) and the search catalog. A default matches when its endpoint has the model with the same type. The chat model lookup accepts only `chat` models.
+- [x] R8. `BrainSettings.resolve`: replace the `catalogs` argument with the typed catalog (`Models.Catalog`). A default matches when its endpoint has the model with the same type. The chat model lookup accepts only `chat` models.
 - [x] R9. `brain/test/settings.test.ts` uses the typed catalog and covers a default whose model has another type.
 
 ### 3.4 `cell`
 
 - [x] R10. Superseded by the provider boundary: the pull carries registrations; `model-discovery.ts` fetches each provider's catalog in brain/cell. `inference.ts` and selection conversion are gone. Original items:
-  - `model-discovery.ts`: remove `providers()` (`:30-44`). Media models come with the endpoints. Keep the search fetch.
+  - `model-discovery.ts`: remove `providers()` (`:30-44`). Media models come with the endpoints. The search fetch is gone (D9).
   - `inference.ts`: restore only current catalog shapes, including an empty inventory and its execution URL. Discovery replaces obsolete cache formats. There is no legacy routing-alias conversion.
   - Before restart recovery, install the initial model credentials and convert known current selections for all saved native sessions, including children, through OpenCode's session API. Apply the same conversion after transcript import, before queued input can run. Do not rewrite historical message rows.
-  - `harness/config.ts:13-14,27-28`, `server.ts:165-166`, `harness.ts:551-652`, `chat-settings.ts:33`: replace `modelCatalogs` and `modelProviders` with `search: { catalog, provider } | undefined`.
+  - `harness/config.ts:13-14,27-28`, `server.ts:165-166`, `harness.ts:551-652`, `chat-settings.ts:33`: remove `modelCatalogs` and `modelProviders`.
 - [x] R11. `model-providers.ts` `apply`: register each implemented model type with its OpenCode type (§1.1) and the package of its type. Do not register speech, realtime or video yet.
   - `image` → `@opencode/ai/providers/openai-compatible/images`
   - `transcription`, `decision` → no package override. Ren's tools call the gateway; OpenCode has no `openai-compatible` entrypoint for them yet (U2, §7).
