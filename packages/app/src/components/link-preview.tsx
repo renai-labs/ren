@@ -153,7 +153,7 @@ export function PreviewedLink({ href, children, ...rest }: ComponentProps<"a">) 
       {shown}
     </Link>
   )
-  if (!preview || !href) return link
+  if (!preview || !href || (preview.kind === "unavailable" && !preview.canConnect)) return link
   return (
     <HoverCard>
       <HoverCardTrigger render={link} />

@@ -55,6 +55,7 @@ const LinearAnswer = Schema.Struct({
       issue: Schema.NullOr(
         Schema.Struct({
           identifier: Schema.String,
+          url: Schema.String,
           title: Schema.String,
           updatedAt: Schema.DateTimeUtcFromString,
           assignee: LinearPerson,
@@ -66,7 +67,7 @@ const LinearAnswer = Schema.Struct({
   ),
 })
 
-const linearQuery = `query Issue($id: String!) { issue(id: $id) { identifier title updatedAt assignee { name avatarUrl } creator { name avatarUrl } state { name type color } } }`
+const linearQuery = `query Issue($id: String!) { issue(id: $id) { identifier url title updatedAt assignee { name avatarUrl } creator { name avatarUrl } state { name type color } } }`
 
 const NotionPageAnswer = Schema.Struct({
   last_edited_time: Schema.DateTimeUtcFromString,
@@ -173,7 +174,10 @@ export const layer = Layer.effect(
             .pipe(Effect.orDie)
         : []
       const ownerOf = new Map(owners.map((owner) => [owner.id, owner.userId]))
-      const usable = reached.filter((profile) => profile.kind === "shared" || ownerOf.get(profile.id) === key.userId)
+      const own = (profile: (typeof reached)[number]) => ownerOf.get(profile.id) === key.userId
+      const usable = reached
+        .filter((profile) => profile.kind === "shared" || own(profile))
+        .toSorted((left, right) => Number(own(right)) - Number(own(left)))
       const rows = usable.length
         ? yield* database.db
             .select({
@@ -286,6 +290,8 @@ export const layer = Layer.effect(
       )
       const issue = (yield* send(LinearAnswer, request)).data?.issue
       if (!issue) return yield* refused("no_access")
+      const workspace = (url: string) => URL.parse(url)?.pathname.split("/").at(1)?.toLowerCase()
+      if (workspace(issue.url) !== ref.key.split("/").at(0)?.toLowerCase()) return yield* refused("no_access")
       return {
         kind: "linear_issue",
         url: key.url,

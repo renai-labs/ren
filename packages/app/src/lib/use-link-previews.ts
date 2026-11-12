@@ -23,7 +23,7 @@ export function useLinkPreviews(input: {
   const [inView, setInView] = useState(false)
   const urls = urlsOf(input.text).slice(0, LinkPreview.maximumUrls)
   const watch = (node: HTMLElement | null) => {
-    if (!node) return
+    if (!node || inView) return
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return
       setInView(true)

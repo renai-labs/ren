@@ -72,6 +72,7 @@ const linearIssue = (identifier: string) => ({
   data: {
     issue: {
       identifier,
+      url: `https://linear.app/acme/issue/${identifier}/ship-link-previews`,
       title: "Ship link previews",
       updatedAt: "2026-11-12T01:00:00.000Z",
       assignee: { name: "Shrey", avatarUrl: null },
@@ -129,6 +130,25 @@ describe("LinkPreview", () => {
         state: { name: "In review", type: "started", color: "#f2c94c" },
       })
       expect(seen.findLast((request) => request.path === "/graphql")?.authorization).toBe("linear_sales-token")
+    }),
+  )
+
+  it.live("a Linear link of another workspace than the connection's is no_access", () =>
+    Effect.gen(function* () {
+      const previews = yield* LinkPreview.Service
+      const found = yield* setup()
+      const linear = yield* ProfilesFixture.app(found.root, found.root.personal, "linear")
+      const profile = (yield* ProfilesFixture.profile(found.root, {
+        appId: linear.id,
+        slug: "sales",
+        kind: "shared",
+        spaceIds: [found.space],
+      })).id
+      yield* ProfilesFixture.connect(found.organizationId, profile, "LINEAR_SALES", { hosts: ["api.linear.app"] })
+      const identifier = `RENAI-${suffix()}`
+      issues.set(identifier, linearIssue(identifier))
+      const [preview] = yield* previews.read(found.bob, found.chat, [`https://linear.app/beta/issue/${identifier}`])
+      expect(preview).toMatchObject({ kind: "unavailable", reason: "no_access" })
     }),
   )
 
