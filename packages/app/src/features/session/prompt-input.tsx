@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react"
 import { Composer, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
@@ -531,6 +531,26 @@ function ComposerToolbar(props: {
   )
 }
 
+const isAttachKey = (event: globalThis.KeyboardEvent) =>
+  event.key.toLowerCase() === "u" &&
+  (event.metaKey || event.ctrlKey) &&
+  !event.altKey &&
+  !event.shiftKey &&
+  !event.repeat &&
+  !(event.target instanceof Element && event.target.closest("[role=dialog]"))
+
+function useAttachKey(
+  picker: RefObject<HTMLInputElement | null>,
+  props: { files: Target; sending?: boolean | undefined },
+) {
+  const { platform } = RouterContext.useRouterContext()
+  Keyboard.useKeyDown((event) => {
+    if (!isAttachKey(event) || !props.files.spaceId || !platform.upload || props.sending) return
+    event.preventDefault()
+    picker.current?.click()
+  })
+}
+
 export function PromptInput(props: {
   value: Composer.Draft
   onChange: (draft: Composer.Draft) => void
@@ -551,15 +571,7 @@ export function PromptInput(props: {
   const draft = props.value
   const uploads = useUploads(props.files, draft)
   const picker = useRef<HTMLInputElement>(null)
-  const { platform } = RouterContext.useRouterContext()
-  const canAttach = Boolean(props.files.spaceId && platform.upload && !props.sending)
-  Keyboard.useKeyDown((event) => {
-    if (event.key.toLowerCase() !== "u" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
-    if (event.repeat || event.isComposing || !canAttach) return
-    if (event.target instanceof Element && event.target.closest("[role=dialog]")) return
-    event.preventDefault()
-    picker.current?.click()
-  })
+  useAttachKey(picker, props)
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const state = composerState(props, { blank })
