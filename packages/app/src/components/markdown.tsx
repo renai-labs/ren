@@ -1,8 +1,12 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
+  StreamdownContext,
   defaultRehypePlugins,
   defaultUrlTransform,
+  extractTableDataFromElement,
+  tableDataToCSV,
+  tableDataToMarkdown,
   useIsCodeFenceIncomplete,
   type ExtraProps,
   type UrlTransform,
@@ -18,6 +22,9 @@ import {
   useHighlightedCode,
 } from "@ren/ui/code-block"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
+import { Button } from "@ren/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@ren/ui/dropdown-menu"
+import { IconCheck, IconCopy } from "@tabler/icons-react"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
@@ -78,7 +85,77 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+function MarkdownTable({ node: _node, className, children, ...props }: ComponentProps<"table"> & ExtraProps) {
+  const streaming = use(StreamdownContext).isAnimating
+  const table = useRef<HTMLTableElement>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!copied) return
+    const timeout = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(timeout)
+  }, [copied])
+
+  const copy = (format: "markdown" | "csv") => {
+    if (!table.current) return
+    const data = extractTableDataFromElement(table.current)
+    navigator.clipboard
+      .writeText(format === "csv" ? tableDataToCSV(data) : tableDataToMarkdown(data))
+      .then(() => setCopied(true))
+      .catch(() => {})
+  }
+
+  return (
+    <div
+      data-slot="markdown-table"
+      className="group/table relative my-3 min-w-0 overflow-hidden rounded-lg border text-sm"
+    >
+      <section
+        data-slot="markdown-table-scroll"
+        aria-label="Table"
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the table can overflow, so keyboard users need to reach it to scroll
+        tabIndex={0}
+        className="scroll-fade-x scrollbar-thin overflow-x-auto overscroll-x-contain outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+      >
+        {/* oxlint-disable-next-line react/forbid-elements -- the scroll area above must own the fade and the focus, and Table from @ren/ui wraps its own scroll container */}
+        <table
+          ref={table}
+          className={cn(
+            "w-full border-collapse tabular-nums [&_td]:px-3 [&_td]:py-2 [&_td]:text-start [&_td]:align-top [&_th]:px-3 [&_th]:py-2 [&_th]:text-start [&_th]:align-top [&_th]:font-medium [&_th]:text-muted-foreground [&_thead]:bg-transparent [&_tr]:border-border [&_tr+tr]:border-t",
+            className,
+          )}
+          {...props}
+        >
+          {children}
+        </table>
+      </section>
+      {streaming ? null : (
+        <div className="absolute inset-e-2 top-2 z-10 opacity-0 transition-opacity group-focus-within/table:opacity-100 group-hover/table:opacity-100 has-[[data-popup-open]]:opacity-100 pointer-coarse:opacity-100">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={copied ? "Copied" : "Copy table"}
+                  className="bg-background ring-1 ring-foreground/10"
+                />
+              }
+            >
+              {copied ? <IconCheck /> : <IconCopy />}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => copy("markdown")}>Copy as Markdown</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => copy("csv")}>Copy as CSV</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan, table: MarkdownTable }
 
 interface MarkdownNode {
   type: string
@@ -156,7 +233,6 @@ export function Markdown(props: {
     <WorkspaceImages value={props.workspaceImage}>
       <Streamdown
         controls={false}
-        tableMaxHeight={0}
         urlTransform={urlTransform}
         rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
         components={withApps}

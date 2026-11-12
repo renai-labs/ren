@@ -38,6 +38,12 @@ export async function emailedLink(request: APIRequestContext, to: string, includ
   return new URL(link)
 }
 
+export async function stubReply(request: APIRequestContext, reply: string) {
+  const response = await request.post(`${mailboxURL}/script`, { data: { reply } })
+  expect(response.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+}
+
 export async function createUser(request: APIRequestContext, input: { name: string; email: string; verify?: boolean }) {
   const headers = { origin: appOrigin }
   const signUp = await request.post(`${serverURL}/auth/sign-up/email`, { headers, data: { ...input, password } })

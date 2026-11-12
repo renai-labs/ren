@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, serverURL, stubReply } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -172,4 +172,21 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("a member copies a table in a reply as CSV", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"])
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const marker = await stubReply(page.request, "| a | b |\n| - | - |\n| 1 | 2 |\n")
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill(`Show the table ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
+
+  const table = page.getByRole("region", { name: "Table", exact: true })
+  await expect(table.getByRole("cell", { name: "2" })).toBeVisible({ timeout: brainStart })
+  await table.hover()
+  await page.getByRole("button", { name: "Copy table" }).click()
+  await page.getByRole("menuitem", { name: "Copy as CSV" }).click()
+  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible()
+  expect(await page.evaluate<string>("navigator.clipboard.readText()")).toBe("a,b\n1,2")
 })
