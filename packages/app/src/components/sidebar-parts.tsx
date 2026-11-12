@@ -85,7 +85,7 @@ import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
 export const sidebarRow =
-  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-9 gap-1 rounded-md p-1.5 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.75 [&_svg]:size-4.5"
+  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-9 gap-1 rounded-md p-1.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.75 [&_svg]:size-4.5"
 
 const iconButton =
   "size-8 text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
