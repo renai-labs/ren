@@ -46,7 +46,9 @@ Before using a new account:
    under `artifact-uploads/*` (presigned uploads, which a deploy copies and
    deletes) and `PutObject` and `GetObject` under `<organization>/artifacts/*`
    (the kept copies and presigned downloads). Environments PUT uploads straight
-   to the bucket, so its endpoint must be reachable from them.
+   to the bucket, so its endpoint must be reachable from them. Ren's egress
+   passes presigned URLs through unchanged and needs no setting for them; an
+   egress that gains a host allowlist must list the bucket's host.
 5. Add a lifecycle rule that expires objects under `artifact-uploads/` after
    one day. An upload that no deploy claims, or that a deploy refused, stays
    there until then. Its link takes any size for 15 minutes; a deploy refuses
