@@ -15,10 +15,16 @@ const inline = (mime: string) =>
   mime === "application/json" ||
   (mime.startsWith("text/") && mime !== "text/html")
 
+const previewable = (file: SessionMessage.DriveFile) =>
+  file.mime === "application/pdf" ||
+  file.mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+  /\.xlsx$/iu.test(file.name)
+
 export function useDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
   const { api, platform, queryClient } = RouterContext.useRouterContext()
   const [gone, setGone] = useState(false)
   const [reloaded, setReloaded] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const image = file.mime.startsWith("image/")
   const link = (disposition: "inline" | "attachment") => ({
     ...api.drive.download.queryOptions({ ...(spaceId && { spaceId }), path: file.path, disposition }),
@@ -35,8 +41,18 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
       if (platform.redirect) platform.redirect(found.url)
       else platform.openExternal(found.url)
     }, fail)
+  const bytes = async (signal: AbortSignal) => {
+    const found = await queryClient.query(link("inline")).catch((error: unknown) => {
+      throw errorStatus(error) === 404 ? new Error("gone") : error
+    })
+    // oxlint-disable-next-line no-restricted-globals -- the signed drive link is not a Ren API call and carries no Ren token
+    const response = await fetch(found.url, { credentials: "omit", signal })
+    if (!response.ok) throw new Error(response.status === 404 ? "gone" : `Download failed with ${response.status}`)
+    return response.arrayBuffer()
+  }
   return {
     image,
+    preview: { available: previewable(file), open: previewing, setOpen: setPreviewing, bytes },
     thumbnail: thumbnail.data?.url,
     deleted: gone || errorStatus(thumbnail.error) === 404,
     reload: () => {
@@ -45,6 +61,10 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
       void thumbnail.refetch()
     },
     open: () => {
+      if (previewable(file)) {
+        setPreviewing(true)
+        return
+      }
       if (!inline(file.mime)) {
         download()
         return
