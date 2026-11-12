@@ -1,15 +1,19 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { IconChevronRight, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
 import { Avatar, AvatarGroup } from "@ren/ui/avatar"
 import { AppAvatarFallback, AppAvatarImage, AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
+import { Markdown } from "./markdown.js"
+import { ToolbarSearch } from "./toolbar-search.js"
 import { categoryLabel, gaps } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { cn } from "cn"
-import type { AppProfileInfo } from "@ren/client"
+import type { AppListingTool, AppProfileInfo } from "@ren/client"
 import { useSpaces } from "../lib/use-spaces.js"
 import type { CatalogApp } from "../lib/apps.js"
 
@@ -214,40 +218,52 @@ export function AppSections(props: { app: App }) {
   const skills = Object.entries(app.skills)
   const tile = appTile(app)
   const categories = [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel)
-  const capabilities = [skills.length ? "Skills" : undefined, mcps.length ? "MCP servers" : undefined]
-    .filter(Boolean)
-    .join(", ")
+  const [opened, setOpened] = useState<string>()
+  const openedMcp = opened === undefined ? undefined : app.mcps[opened]
+  const mcpIcon = (slug: string) =>
+    tile ? (
+      <DefaultIcon kind="mcp" name={slug} tile={tile} />
+    ) : (
+      <AppIcon name={app.name} description={app.description} icon={app.icon} size="lg" />
+    )
   const facts = [
     ...(categories.length > 0 ? [["Category", categories.join(", ")] as const] : []),
     ["Source", app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`],
-    [
-      "Slug",
-      <span key="slug" className="font-mono">
-        {app.slug}
-      </span>,
-    ],
-    ...(capabilities ? [["Capabilities", capabilities] as const] : []),
   ] as const
   return (
     <>
       {mcps.length > 0 ? (
         <SheetSection title="MCPs">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-            {mcps.map(([slug, mcp]) => (
-              <Entry
-                key={slug}
-                media={
-                  tile ? (
-                    <DefaultIcon kind="mcp" name={slug} tile={tile} />
-                  ) : (
-                    <AppIcon name={app.name} description={app.description} icon={app.icon} size="lg" />
-                  )
-                }
-                title={slug}
-                description={transportLabel(mcp.transport)}
-              />
-            ))}
+          <div className="-mx-2 grid grid-cols-2 gap-x-4 gap-y-1">
+            {mcps.map(([slug, mcp]) => {
+              const tools = app.listing?.tools[slug]
+              return (
+                <Button
+                  key={slug}
+                  variant="ghost"
+                  aria-haspopup="dialog"
+                  onClick={() => setOpened(slug)}
+                  className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
+                >
+                  {mcpIcon(slug)}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm">{slug}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {tools?.length ? plural(tools.length, "tool") : transportLabel(mcp.transport)}
+                    </span>
+                  </span>
+                </Button>
+              )
+            })}
           </div>
+          {opened && openedMcp ? (
+            <McpDialog
+              mcp={openedMcp}
+              tools={app.listing?.tools[opened]}
+              icon={mcpIcon(opened)}
+              onClose={() => setOpened(undefined)}
+            />
+          ) : null}
         </SheetSection>
       ) : null}
       {skills.length > 0 ? (
@@ -350,6 +366,87 @@ function SheetSection(props: { title: string; actions?: ReactNode; children: Rea
       </div>
       {props.children}
     </section>
+  )
+}
+
+function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> }) {
+  return (
+    <Collapsible defaultOpen render={<section aria-label={`${props.title} tools`} />}>
+      <div className="sticky top-0 z-10 bg-background pt-3">
+        <CollapsibleTrigger
+          render={<Button variant="ghost" className="group/group w-full justify-between px-2 font-medium" />}
+        >
+          <span className="flex items-baseline gap-1.5">
+            {props.title}
+            <span className="font-normal text-muted-foreground tabular-nums">{props.tools.length}</span>
+          </span>
+          <IconChevronRight
+            data-icon="inline-end"
+            className="text-muted-foreground transition-transform duration-150 ease-out group-aria-expanded/group:rotate-90"
+          />
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        <ul className="divide-y px-2 pb-2">
+          {props.tools.map((tool) => (
+            <li key={tool.name} className="flex flex-col gap-1 py-3">
+              <span className="font-mono text-sm break-all">{tool.name}</span>
+              {tool.description ? (
+                <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function McpDialog(props: {
+  mcp: App["mcps"][string]
+  tools: ReadonlyArray<AppListingTool> | undefined
+  icon: ReactNode
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState("")
+  const tools = props.tools ?? []
+  const needle = query.trim().toLowerCase()
+  const shown = tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(needle))
+  const groups = [
+    { title: "Read", tools: shown.filter((tool) => tool.readOnly) },
+    { title: "Write", tools: shown.filter((tool) => !tool.readOnly) },
+  ].filter((group) => group.tools.length > 0)
+  const empty =
+    tools.length === 0 ? "The registry doesn’t list this MCP’s tools yet." : `No tools match “${query.trim()}”`
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+    >
+      <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="flex-row items-center justify-between gap-4 border-b py-4 pr-14 pl-6">
+          <div className="flex min-w-0 items-center gap-3">
+            {props.icon}
+            <DialogTitle className="flex min-w-0 items-baseline gap-2">
+              <span className="truncate">{props.mcp.name}</span>
+              <span className="text-sm font-normal text-muted-foreground">MCP</span>
+            </DialogTitle>
+          </div>
+          {tools.length > 0 ? (
+            <ToolbarSearch label={`Search ${plural(tools.length, "tool")}`} value={query} onChange={setQuery} />
+          ) : null}
+        </DialogHeader>
+        <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-3">
+          {groups.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">{empty}</p>
+          ) : (
+            groups.map((group) => <ToolGroup key={group.title} title={group.title} tools={group.tools} />)
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

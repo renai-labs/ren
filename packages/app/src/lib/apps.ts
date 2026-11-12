@@ -128,6 +128,7 @@ export type CatalogApp = {
     readonly body: string | null
     readonly examplePrompts: ReadonlyArray<string>
     readonly categories: AppRegistryInfo["listing"]["categories"]
+    readonly tools: AppRegistryInfo["listing"]["tools"]
   } | null
 }
 
@@ -163,6 +164,7 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
     body: app.listing.body,
     examplePrompts: app.listing.examplePrompts,
     categories: app.listing.categories,
+    tools: app.listing.tools,
   },
 })
 

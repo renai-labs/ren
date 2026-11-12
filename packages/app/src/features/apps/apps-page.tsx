@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
-import { IconChevronRight } from "@tabler/icons-react"
 import { Loading } from "@ren/ui/loading"
 import { Tabs } from "@ren/ui/tabs"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
@@ -86,7 +85,7 @@ function CategoryPills(props: { categories: ReadonlyArray<string>; value: string
         void navigate({ search: value === "all" ? {} : { category: value }, replace: true })
       }
     >
-      <PageTabsList>
+      <PageTabsList className="w-full flex-wrap justify-start gap-y-1.5 group-data-horizontal/tabs:h-auto">
         <PageTabsTrigger value="all">All</PageTabsTrigger>
         {props.categories.map((category) => (
           <PageTabsTrigger key={category} value={category}>
@@ -176,24 +175,15 @@ export function AppsPage() {
       caption={each.description}
       attention={needsAttention(profiles.of(each.id))}
       onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: each.id } })}
-      action={
-        <>
-          <span className="transition-opacity duration-150 ease-out group-focus-within/item:opacity-100 group-hover/item:opacity-100 has-aria-expanded:opacity-100 pointer-fine:opacity-0">
-            <AddToSpace app={each} onAdded={added} />
-          </span>
-          <IconChevronRight
-            aria-hidden
-            className="size-4 text-muted-foreground transition-transform duration-150 ease-out group-hover/item:translate-x-0.5"
-          />
-        </>
-      }
+      action={<AddToSpace app={each} onAdded={added} />}
     />
   )
   return (
     <Page
       title="Apps"
+      width="wide"
       description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-      actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
+      search={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
     >
       <CategoryPills categories={categories} value={category} />
       <Loading id={shapeId} loading={loading} label="Loading apps">
