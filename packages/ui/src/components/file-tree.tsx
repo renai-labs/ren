@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { FileTree as FileTreePrimitive, useFileTree } from "@pierre/trees/react"
 import { cn } from "cn"
+import { icons } from "../lib/file-icons.js"
 
 type FileStatus = "added" | "deleted" | "modified"
 
@@ -18,6 +19,7 @@ function FileTree({
   const paths = files.map((file) => file.path)
   const tree = useFileTree({
     paths,
+    icons,
     initialExpansion: "open",
     initialSelectedPaths: selected ? [selected] : [],
     gitStatus: files.map((file) => ({ path: file.path, status: file.status })),
@@ -35,7 +37,7 @@ function FileTree({
       data-slot="file-tree"
       model={tree.model}
       className={cn(
-        "h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)] [--trees-file-icon-color:var(--muted-foreground)]",
+        "h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)]",
         className,
       )}
     />

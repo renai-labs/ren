@@ -1,20 +1,6 @@
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import {
-  IconDownload,
-  IconFile,
-  IconFileCode,
-  IconFileSpreadsheet,
-  IconFileText,
-  IconFileTypePdf,
-  IconFileZip,
-  IconMusic,
-  IconPhoto,
-  IconRefresh,
-  IconUpload,
-  IconVideo,
-  IconX,
-} from "@tabler/icons-react"
+import { IconDownload, IconRefresh, IconUpload, IconX } from "@tabler/icons-react"
 import {
   Attachment,
   AttachmentAction,
@@ -26,6 +12,7 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
+import { FileIcon } from "@ren/ui/file-icon"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
 import { ImageLightbox } from "../../components/image-lightbox.js"
@@ -33,20 +20,6 @@ import { formatBytes } from "../../lib/format.js"
 import { useDriveFile } from "../../lib/use-drive-file.js"
 import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
 import { FileDrop } from "../../platform/file-drop.js"
-
-const code = /\.(ts|tsx|js|jsx|py|go|rs|rb|java|c|cpp|h|sh|sql|yaml|yml|toml)$/iu
-
-function FileIcon(props: { name: string; mime: string }) {
-  if (props.mime.startsWith("image/")) return <IconPhoto />
-  if (props.mime === "application/pdf") return <IconFileTypePdf />
-  if (props.mime.startsWith("audio/")) return <IconMusic />
-  if (props.mime.startsWith("video/")) return <IconVideo />
-  if (/zip|compressed|tar|gzip/u.test(props.mime)) return <IconFileZip />
-  if (/csv|spreadsheet|excel/u.test(props.mime)) return <IconFileSpreadsheet />
-  if (code.test(props.name) || props.mime === "application/json") return <IconFileCode />
-  if (props.mime.startsWith("text/")) return <IconFileText />
-  return <IconFile />
-}
 
 function DriveFileCard(props: {
   spaceId: string | undefined
@@ -67,7 +40,7 @@ function DriveFileCard(props: {
         </AttachmentMedia>
       ) : (
         <AttachmentMedia>
-          <FileIcon name={file.name} mime={file.mime} />
+          <FileIcon name={file.name} mime={file.mime} className="size-5" />
         </AttachmentMedia>
       )}
       <AttachmentContent>
@@ -117,7 +90,9 @@ function UploadChip(props: {
   const failed = Boolean(upload.error)
   return (
     <Attachment size="sm" state={failed ? "error" : "uploading"}>
-      <AttachmentMedia>{failed ? <FileIcon name={upload.name} mime={upload.mime} /> : <Spinner />}</AttachmentMedia>
+      <AttachmentMedia>
+        {failed ? <FileIcon name={upload.name} mime={upload.mime} className="size-5" /> : <Spinner />}
+      </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle>{upload.name}</AttachmentTitle>
         <AttachmentDescription className={cn(!failed && "tabular-nums")}>

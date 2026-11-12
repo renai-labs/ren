@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
+import { FileIcon } from "@ren/ui/file-icon"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/sonner"
@@ -98,7 +99,7 @@ function Folder(props: {
                 {entry.type === "directory" ? (
                   <IconFolder data-icon="inline-start" />
                 ) : (
-                  <IconFile data-icon="inline-start" />
+                  <FileIcon name={entry.path} data-icon="inline-start" />
                 )}
                 <span className="min-w-0 truncate">{nameOf(entry.path)}</span>
               </Button>
