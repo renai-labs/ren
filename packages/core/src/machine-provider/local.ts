@@ -14,7 +14,7 @@ const supervisor = `loop() { while true; do bun "$1" >>"$2.log" 2>&1 || echo "$?
 (export PORT="$1"; loop "$2" "$3") & loop "$4" "$5"`
 
 // oxlint-disable-next-line ren/no-comments -- Ends the brain's process group once the owner (a test run) is gone. SIGKILL also ends a paused (stopped) brain.
-const ownerWatcher = `while kill -0 "$1" 2>/dev/null && kill -0 -- "-$2" 2>/dev/null; do sleep 1; done; kill -KILL -- "-$2" 2>/dev/null`
+const ownerWatcher = `while kill -0 "$1" 2>/dev/null && kill -0 "-$2" 2>/dev/null; do sleep 1; done; kill -KILL "-$2" 2>/dev/null`
 
 const Binding = Schema.Struct({
   pid: Schema.Int,

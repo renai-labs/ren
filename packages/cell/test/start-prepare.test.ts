@@ -98,7 +98,8 @@ const started = async (home: string, env: Readonly<Record<string, string>>, fake
   const bin = join(home, "bin")
   await mkdir(join(home, ".ren"), { recursive: true })
   await Bun.write(join(bin, "bun"), fakeBun)
-  await Bun.$`chmod +x ${join(bin, "bun")}`
+  await Bun.write(join(bin, "sudo"), "#!/bin/sh\nexit 1\n")
+  await Bun.$`chmod +x ${join(bin, "bun")} ${join(bin, "sudo")}`
   return Bun.spawn(["perl", "-e", "setpgrp; exec @ARGV", process.execPath, start], {
     env: {
       ...env,
