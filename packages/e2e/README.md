@@ -30,7 +30,7 @@ Playwright's `testDir` is `./tests`, and `bunfig.toml` sets the Bun test root to
 
 - The server on `E2E_PORT` (default 4010). API and CLI specs call it directly through `serverURL`.
 - The app on `E2E_APP_PORT` (default 4011), served under `/app/` and calling the server cross-origin with credentials. Playwright's `baseURL` is the app origin, so specs navigate to `/app/...`; `appURL` in `tests/lib/servers.ts` includes the `/app` base.
-- A mailbox on `E2E_MAILBOX_PORT` (default 4012). `GET /?to=<email>` returns the last email the server logged for that address, so specs read codes and links from real emails.
+- A mailbox on `E2E_MAILBOX_PORT` (default 4012). `GET /?to=<email>` returns the last email the server logged for that address, so specs read codes and links from real emails. `POST /script` with `{ tools }` returns a marker; a chat message that contains it makes the stub model call those tools (`scriptTools` in `tests/lib/servers.ts`).
 
 ## Chaos harness
 

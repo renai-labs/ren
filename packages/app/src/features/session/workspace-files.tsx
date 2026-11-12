@@ -24,6 +24,8 @@ const highlightLimit = 256 * 1024
 
 const nameOf = (path: string) => path.replace(/\/$/u, "").split("/").at(-1) ?? path
 
+const dirOf = (path: string) => path.replace(/[^/]*$/u, "")
+
 const parentOf = (folder: string) => folder.replace(/[^/]+\/$/u, "")
 
 function Folder(props: {
@@ -100,7 +102,7 @@ function Folder(props: {
   )
 }
 
-function TextFile(props: { file: SessionCatalog.FileContent }) {
+function TextFile(props: { file: SessionCatalog.FileContent; line: number | undefined }) {
   const lines = useHighlightedCode(
     props.file.content,
     props.file.size > highlightLimit ? "" : (props.file.path.split(".").at(-1) ?? ""),
@@ -108,15 +110,21 @@ function TextFile(props: { file: SessionCatalog.FileContent }) {
   return (
     <CodeBlockContent lineNumbers className="min-h-0 flex-1 rounded-none">
       {lines.map((line, index) => (
-        // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity in highlighted code
-        <CodeBlockLine key={index}>{line}</CodeBlockLine>
+        <CodeBlockLine
+          // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity in highlighted code
+          key={index}
+          variant={index + 1 === props.line ? "highlighted" : "default"}
+          ref={index + 1 === props.line ? (node) => node?.scrollIntoView({ block: "center" }) : undefined}
+        >
+          {line}
+        </CodeBlockLine>
       ))}
     </CodeBlockContent>
   )
 }
 
-function Preview(props: { file: SessionCatalog.FileContent }) {
-  if (props.file.encoding === "utf8") return <TextFile file={props.file} />
+function Preview(props: { file: SessionCatalog.FileContent; line: number | undefined }) {
+  if (props.file.encoding === "utf8") return <TextFile file={props.file} line={props.line} />
   if (props.file.mime.startsWith("image/") && !props.file.truncated)
     return (
       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto overscroll-contain p-4">
@@ -140,7 +148,7 @@ function Preview(props: { file: SessionCatalog.FileContent }) {
   )
 }
 
-function OpenFile(props: { root: Session.ID; path: string }) {
+function OpenFile(props: { root: Session.ID; path: string; line: number | undefined }) {
   const read = ChatReact.useFile({ root: props.root, path: props.path })
   if (!AsyncResult.isSuccess(read.result))
     return (
@@ -174,22 +182,32 @@ function OpenFile(props: { root: Session.ID; path: string }) {
           </Button>
         </CodeBlockActions>
       </CodeBlockHeader>
-      <Preview file={file} />
+      <Preview file={file} line={props.line} />
     </CodeBlock>
   )
 }
 
-export function FilesTab(props: { root: Session.ID }) {
-  const [folder, setFolder] = useState("")
-  const [opened, setOpened] = useState<string>()
+export function FilesTab(props: {
+  root: Session.ID
+  file: string | undefined
+  line: number | undefined
+  onFile: (path: string) => void
+}) {
+  const [folder, setFolder] = useState(() => dirOf(props.file ?? ""))
+  const [seen, setSeen] = useState(props.file)
+  if (seen !== props.file) {
+    setSeen(props.file)
+    if (props.file) setFolder(dirOf(props.file))
+  }
+  const opened = props.file && !props.file.endsWith("/") ? props.file : undefined
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-56 shrink-0 flex-col border-r">
-        <Folder root={props.root} folder={folder} selected={opened} onFolder={setFolder} onFile={setOpened} />
+        <Folder root={props.root} folder={folder} selected={opened} onFolder={setFolder} onFile={props.onFile} />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {opened ? (
-          <OpenFile root={props.root} path={opened} />
+          <OpenFile root={props.root} path={opened} line={props.line} />
         ) : (
           <Empty className="flex-1">
             <EmptyHeader>

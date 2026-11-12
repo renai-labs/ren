@@ -57,7 +57,8 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from "@ren/ui/code-block"
+import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine } from "@ren/ui/code-block"
+import { WorkspaceFileChip } from "./workspace-file-chip.js"
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
@@ -706,14 +707,12 @@ const lineVariant = (type: string) => {
   return type === "deletion" ? "removed" : "default"
 }
 
-function FileDiff(props: { file: PatchFiles.File; titled: boolean }) {
+function FileDiff(props: { file: PatchFiles.File }) {
   return (
     <CodeBlock size="sm">
-      {props.titled ? (
-        <CodeBlockHeader>
-          <CodeBlockTitle>{props.file.path}</CodeBlockTitle>
-        </CodeBlockHeader>
-      ) : null}
+      <CodeBlockHeader>
+        <WorkspaceFileChip path={props.file.path.replace(/^\.\//u, "")} />
+      </CodeBlockHeader>
       <CodeBlockContent wrap className="max-h-64">
         {props.file.view.diff.hunks
           .flatMap((hunk) => hunk.lines)
@@ -748,7 +747,7 @@ function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: Re
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-2">
           {props.files.map((file) => (
-            <FileDiff key={file.path} file={file} titled={props.files.length > 1} />
+            <FileDiff key={file.path} file={file} />
           ))}
         </TraceCollapsibleContent>
       </TraceCollapsible>

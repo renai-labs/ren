@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { getRouteApi } from "@tanstack/react-router"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import {
@@ -44,11 +45,18 @@ const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; ico
 
 const byKind = new Map(kinds.map((each) => [each.kind, each]))
 
-interface OpenTab {
-  readonly id: string
-  readonly kind: Kind
-  readonly label: string
-}
+const names = new Map<string, Kind>(kinds.map((each) => [each.kind, each.kind]))
+
+const route = getRouteApi("/_authed/_shell/sessions/$sessionId/")
+
+const parseKinds = (panel: string | undefined) => (panel?.split(",") ?? []).flatMap((part) => names.get(part) ?? [])
+
+const tabsOf = (open: ReadonlyArray<Kind>) =>
+  open.map((kind, index) => {
+    const count = open.slice(0, index).filter((other) => other === kind).length
+    const label = byKind.get(kind)?.label ?? kind
+    return { id: count > 0 ? `${kind}-${count + 1}` : kind, kind, label: count > 0 ? `${label} ${count + 1}` : label }
+  })
 
 function AddMenu(props: { onPick: (kind: Kind) => void }) {
   const [open, setOpen] = useState(false)
@@ -121,36 +129,43 @@ export function WorkspacePanel(props: {
   onMaximize: (maximized: boolean) => void
   onClose: () => void
 }) {
-  const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
-  const [active, setActive] = useState<string>()
-  const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const tabs = tabsOf(parseKinds(search.panel))
+  const current =
+    tabs.find((tab) => tab.id === search.tab) ??
+    (search.file === undefined ? undefined : tabs.find((tab) => tab.kind === "files")) ??
+    tabs.at(-1)
+  const show = (next: ReadonlyArray<{ readonly id: string; readonly kind: Kind }>, active: string | undefined) =>
+    void navigate({
+      replace: true,
+      search: (previous) => ({
+        ...previous,
+        panel: next.length > 0 ? next.map((tab) => tab.kind).join(",") : undefined,
+        tab: active,
+        ...(next.some((tab) => tab.kind === "files") ? {} : { file: undefined, line: undefined }),
+      }),
+    })
   const pick = (kind: Kind) => {
-    const meta = byKind.get(kind)
-    const existing = meta?.many ? undefined : tabs.find((tab) => tab.kind === kind)
+    const existing = byKind.get(kind)?.many ? undefined : tabs.find((tab) => tab.kind === kind)
     if (existing) {
-      setActive(existing.id)
+      show(tabs, existing.id)
       return
     }
-    const count = tabs.filter((tab) => tab.kind === kind).length
-    const tab = {
-      id: crypto.randomUUID(),
-      kind,
-      label: count > 0 ? `${meta?.label} ${count + 1}` : (meta?.label ?? kind),
-    }
-    setTabs([...tabs, tab])
-    setActive(tab.id)
+    const next = tabsOf([...tabs.map((tab) => tab.kind), kind])
+    show(next, next.at(-1)?.id)
   }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
-    const next = tabs.filter((tab) => tab.id !== id)
-    setTabs(next)
-    if (current?.id === id) setActive(next[Math.min(index, next.length - 1)]?.id)
+    const next = tabsOf(tabs.filter((tab) => tab.id !== id).map((tab) => tab.kind))
+    show(next, current?.id === id ? next[Math.min(index, next.length - 1)]?.id : current?.id)
   }
+  const line = search.line !== undefined && Number.isInteger(search.line) && search.line > 0 ? search.line : undefined
   return (
     <aside aria-label="Workspace" className="flex size-full min-w-0 flex-col border-l">
       <Tabs
         value={current?.id ?? ""}
-        onValueChange={(value: string) => setActive(value)}
+        onValueChange={(value: string) => show(tabs, value)}
         className="min-h-0 flex-1 gap-0"
       >
         <div className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2">
@@ -206,7 +221,16 @@ export function WorkspacePanel(props: {
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {tab.kind === "browser" ? <BrowserTab /> : null}
-            {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
+            {tab.kind === "files" ? (
+              <FilesTab
+                root={props.root}
+                file={search.file}
+                line={line}
+                onFile={(file) =>
+                  void navigate({ replace: true, search: (previous) => ({ ...previous, file, line: undefined }) })
+                }
+              />
+            ) : null}
             {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
           </TabsContent>
         ))}
