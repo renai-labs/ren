@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@ren/ui/textarea"
 import { formatRelative } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
-import { TableCard, TableSample, useShapeId } from "../../components/page.js"
+import { PageActions, TableCard, TableSample, useShapeId } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
@@ -250,12 +250,12 @@ export function WebhooksTab(props: { spaceId: string }) {
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-end gap-1">
+        <PageActions>
           <Button onClick={() => setCreating((previous) => previous + 1)}>
             <IconPlus data-icon="inline-start" />
             Create webhook
           </Button>
-        </div>
+        </PageActions>
         <Loading id={shapeId} loading={!items} label="Loading webhooks">
           {items ? null : <TableSample columns={["Name", "Last request", "Runs as", "Live", ""]} />}
           {items?.length === 0 ? (

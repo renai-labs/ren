@@ -23,7 +23,7 @@ import {
 import { CredentialSheet } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
 import { ListPagination } from "../../components/list-pagination.js"
-import { PageFooter, Row, Rows, TableSample, useShapeId } from "../../components/page.js"
+import { PageActions, PageFooter, Row, Rows, TableSample, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
@@ -82,7 +82,7 @@ export function SpaceCredentialsTab() {
   }
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <div className="flex justify-end gap-1">
+      <PageActions>
         <ToolbarSearch label="Search keys" value={query} onChange={setQuery} />
         {elsewhere.length > 0 ? (
           <DropdownMenu>
@@ -110,7 +110,7 @@ export function SpaceCredentialsTab() {
             Add key
           </Button>
         )}
-      </div>
+      </PageActions>
       <Loading id={shapeId} loading={loading} label="Loading keys">
         {loading ? (
           <TableSample columns={["Key", "Hosts", "Owner", ""]} count={3} />
