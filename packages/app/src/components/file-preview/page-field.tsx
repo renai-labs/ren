@@ -1,4 +1,5 @@
-import { useState } from "react"
+import type { RefObject } from "react"
+import { useEffect, useEffectEvent, useState } from "react"
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
@@ -43,4 +44,27 @@ export function PageField(props: { label?: string; current: number; total: numbe
       </Button>
     </div>
   )
+}
+
+export function usePageKeys(props: {
+  anchor: RefObject<HTMLElement | null>
+  ready: boolean
+  move: (delta: number) => void
+}) {
+  const step = useEffectEvent(props.move)
+  useEffect(() => {
+    // oxlint-disable-next-line ren/no-comments -- the dialog stops arrow keys from reaching the window, so the listener sits on the dialog
+    const target = props.anchor.current?.closest('[role="dialog"]')
+    if (!target) return
+    const keys = (event: Event) => {
+      if (!(event instanceof KeyboardEvent) || event.target instanceof HTMLInputElement) return
+      if (event.metaKey || event.ctrlKey) return
+      if (event.key === "ArrowRight" || event.key === "PageDown") step(1)
+      else if (event.key === "ArrowLeft" || event.key === "PageUp") step(-1)
+      else return
+      event.preventDefault()
+    }
+    target.addEventListener("keydown", keys)
+    return () => target.removeEventListener("keydown", keys)
+  }, [props.anchor, props.ready])
 }

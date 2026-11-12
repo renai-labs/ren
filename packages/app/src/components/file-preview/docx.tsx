@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
 import { Platform } from "../../platform/platform.js"
-import { PageField } from "./page-field.js"
+import { PageField, usePageKeys } from "./page-field.js"
 import type { PreviewProps } from "./preview.js"
 import { workerCalls } from "./worker-call.js"
 import { BookmarkTarget, WordSpan } from "./office/word-protocol.js"
@@ -237,18 +237,8 @@ export function DocxView(props: PreviewProps) {
     return target
   }
   const goto = (number: number, offset = 0) => setCurrent(scrollToPage(number, offset))
-  const move = useEffectEvent((delta: number) => goto(current + delta))
-  useEffect(() => {
-    const keys = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.metaKey || event.ctrlKey) return
-      if (event.key === "ArrowRight" || event.key === "PageDown") move(1)
-      else if (event.key === "ArrowLeft" || event.key === "PageUp") move(-1)
-      else return
-      event.preventDefault()
-    }
-    window.addEventListener("keydown", keys)
-    return () => window.removeEventListener("keydown", keys)
-  }, [])
+  const move = (delta: number) => goto(current + delta)
+  usePageKeys({ anchor: scroller, ready: Boolean(pages), move })
   const shown = needle ? hits : []
   const hit = shown[props.active]
   const jump = useEffectEvent(scrollToPage)

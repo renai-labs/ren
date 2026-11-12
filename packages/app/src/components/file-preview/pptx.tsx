@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
-import { PageField } from "./page-field.js"
+import { PageField, usePageKeys } from "./page-field.js"
 import type { PreviewProps } from "./preview.js"
 import { workerCalls } from "./worker-call.js"
 
@@ -161,18 +161,8 @@ export function PptxView(props: PreviewProps) {
   const goto = (number: number) => {
     if (slides) setCurrent(Math.min(Math.max(0, Math.round(number) - 1), slides.length - 1))
   }
-  const move = useEffectEvent((delta: number) => goto(current + 1 + delta))
-  useEffect(() => {
-    const keys = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.metaKey || event.ctrlKey) return
-      if (event.key === "ArrowRight" || event.key === "PageDown") move(1)
-      else if (event.key === "ArrowLeft" || event.key === "PageUp") move(-1)
-      else return
-      event.preventDefault()
-    }
-    window.addEventListener("keydown", keys)
-    return () => window.removeEventListener("keydown", keys)
-  }, [])
+  const move = (delta: number) => goto(current + 1 + delta)
+  usePageKeys({ anchor: stage, ready: Boolean(slides), move })
   const slide = slides?.[current]
   if (!slides || !slide) {
     return (
