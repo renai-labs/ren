@@ -180,6 +180,10 @@ test("a long link breaks inside the column and a short ref stays whole in a narr
   const reply = `Opened ${url}\n\n| Ref | Note |\n| --- | --- |\n| [#337](https://github.com/renai-labs/ren/pull/337) | fixed |`
   await page.setViewportSize({ width: 360, height: 740 })
   await createOrganization(page.request, { name: "Katherine Johnson" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Link me")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
   await page.route(
     (target) => /\/(?:chat\/session\/[^/]+\/message|sessions\/[^/]+\/messages)$/u.test(target.pathname),
     async (route) => {
@@ -188,16 +192,11 @@ test("a long link breaks inside the column and a short ref stays whole in a narr
       await route.fulfill({ response, body })
     },
   )
-  await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Link me")
-  await start.getByRole("button", { name: "Send" }).click()
-  await expect(page.getByText("Link me")).toBeVisible({ timeout: brainStart })
   await page.reload()
 
   const long = page.getByRole("link", { name: url })
   await expect(long).toBeVisible({ timeout: brainStart })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")).toBe(true)
   expect(await long.evaluate((link) => link.getClientRects().length)).toBeGreaterThan(1)
 
   const short = page.getByRole("cell").getByRole("link", { name: "#337" })

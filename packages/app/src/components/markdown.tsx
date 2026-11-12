@@ -145,7 +145,11 @@ export function Markdown(props: {
               ? apps.find((each) => each.slug === href.slice(appLink.length))
               : undefined
             if (app) return <AppMention app={app} />
-            return <MarkdownLink href={href} {...rest}>{children}</MarkdownLink>
+            return (
+              <MarkdownLink href={href} {...rest}>
+                {children}
+              </MarkdownLink>
+            )
           },
         }
   return (
