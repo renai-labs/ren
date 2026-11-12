@@ -411,6 +411,7 @@
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "auth": "catalog:",
+        "e2b": "2.19.4",
         "jose": "catalog:",
         "oxfmt": "catalog:",
       },

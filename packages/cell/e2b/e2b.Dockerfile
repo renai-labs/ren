@@ -1,7 +1,7 @@
 # stage.ts puts FROM oven/bun:<the Bun version of package.json> before this file.
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo iptables \
+  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo nftables \
   && rm -rf /var/lib/apt/lists/*
 
 # A template's packages reach a running machine in place, as root through sudo.
@@ -24,7 +24,7 @@ RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=75%' >>/etc/systemd/system/ren-tools.slice
 
-# The forwarder of split mode runs as its own user, whose traffic the iptables rules let through (egress-split.md §3.1).
+# The forwarder of split mode runs as its own user, whose traffic the nf_tables rules let through (egress-split.md §3.1).
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin ren-forward
 
 COPY start.sh /opt/ren/

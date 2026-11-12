@@ -33,7 +33,7 @@ Words:
   │  sandbox                               │   credential        │  E2B host                  │  + X-Ren-Identity:     │  egress                      │
   │                                        │   request           │  per-host rule for the     │    Bearer <token>      │  1. verify the token         │
   │  program ──▶ forwarder                 │ ──────────────────▶ │  egress host: add the      │ ─────────────────────▶ │  2. sandbox id ─▶ workload   │
-  │   (iptables      reads headers,        │  HTTPS to the       │  identity token header     │                        │  3. replace placeholders     │
+  │   (nftables      reads headers,        │  HTTPS to the       │  identity token header     │                        │  3. replace placeholders     │
   │    redirect)     finds ren:X           │  egress host        │                            │                        │  4. send to the target       │
   │                                        │                     └────────────────────────────┘                        └──────────────────────────────┘
   │                                        │
@@ -44,7 +44,7 @@ Words:
 
 ### 3.1 Forwarder (in the sandbox)
 
-1. When Ren sets `REN_EGRESS_FORWARD` (the identity entry's URL), `cell/machine/start.ts` makes the forwarder's CA once in `/etc/ren-forward`, starts `iron-proxy forward` as the user `ren-forward`, waits for its port 15001, and then adds `iptables` rules. The rules send all outbound TCP, on all ports, to the forwarder. A rule on `docker0` also catches the traffic of Docker containers. Loopback traffic and the traffic of `ren-forward` are not redirected.
+1. When Ren sets `REN_EGRESS_FORWARD` (the identity entry's URL), `cell/machine/start.ts` makes the forwarder's CA once in `/etc/ren-forward`, starts `iron-proxy forward` as the user `ren-forward`, waits for its port 15001, and then loads one nf_tables table with `nft -f`. The table sends all outbound TCP, on all ports, to the forwarder. A rule on `docker0` also catches the traffic of Docker containers. Loopback traffic and the traffic of `ren-forward` are not redirected. The load is atomic, so the redirect is never in without its exceptions. E2B's kernel has no `xt_owner` module, so the rule matches the user natively (`meta skuid`), not with `iptables -m owner`.
 2. The forwarder reads the original target (`SO_ORIGINAL_DST`), then the TLS SNI or the HTTP `Host`.
 3. For TLS, it presents a certificate signed by a CA that only this sandbox trusts. The CA key is in the sandbox. It can only open the sandbox's own traffic. `start.ts` writes the CA where Ren puts the egress CA in proxy mode (`~/.ren/egress-ca.pem`), so the programs trust it as they trust the egress CA today. TLS without SNI is copied to its target unchanged.
 4. For each request, it looks for a placeholder in the headers, the path and the query. It does not search the body. This is the same rule as the egress (`iron-proxy/internal/ren/scan.go`, `HasPlaceholder`).
@@ -116,7 +116,7 @@ The deployment setting `EGRESS_MODE=split` and `EGRESS_IDENTITY_URL` turn the sp
 | Egress network: `pps_allowance_exceeded`, `bw_out_allowance_exceeded` | No increase in a burst of 80 sandboxes                                   |
 | Plain request time (for example an npm install)                       | Not slower than today                                                    |
 | Credential requests answered `403 unknown_workload`                   | 0 for running sandboxes                                                  |
-| Placeholders seen by an upstream with no injection                    | Only from an agent that removed the iptables rules                       |
+| Placeholders seen by an upstream with no injection                    | Only from an agent that removed the nf_tables rules                      |
 
 ## 6. Open questions
 
@@ -132,12 +132,12 @@ The other phase 0 questions have measured answers in [references/e2b-network.md]
 | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Per-host transforms are a public beta at E2B            | Keep `proxy` mode and the SOCKS5 entry until phase 5. The switch is a deployment setting                                                                                                                                                                                   |
 | E2B decrypts the credential requests to the egress host | E2B runs the sandbox's machine, so it can already read this data. The real values are added later, at the egress                                                                                                                                                           |
-| An agent removes the iptables rules                     | Its credential requests go out with placeholders and fail. No value leaks                                                                                                                                                                                                  |
+| An agent removes the nf_tables rules                    | Its credential requests go out with placeholders and fail. No value leaks                                                                                                                                                                                                  |
 | A program pins certificates                             | It fails, as it does with the egress today                                                                                                                                                                                                                                 |
 | The forwarder uses CPU in each sandbox                  | It counts against the sandbox's tools memory and CPU group. Measure it in phase 2                                                                                                                                                                                          |
 | A token stays valid after a pause                       | A token lives 15 min, and a token from before a pause passes the check until it expires (phase 0). The sandbox never sees a token, so this matters only if a token leaks                                                                                                   |
 | `EGRESS_MODE` changes while sandboxes run               | Each connect sends the network setting of the current mode. A running `proxy` sandbox that gets the `split` setting has no forwarder, and its credential requests fail until Ren replaces it. Change the mode only when no sandbox of the other mode runs, or replace them |
-| The split opens the ports other than 80 and 443         | Decided (3.2 item 5). Credentials on these ports also go through the forwarder, because the iptables rules catch all TCP                                                                                                                                                   |
+| The split opens the ports other than 80 and 443         | Decided (3.2 item 5). Credentials on these ports also go through the forwarder, because the nf_tables rules catch all TCP                                                                                                                                                  |
 
 ## 8. Not in scope
 

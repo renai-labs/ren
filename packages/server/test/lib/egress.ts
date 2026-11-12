@@ -49,6 +49,7 @@ export const build = async () => {
 export interface Instance {
   readonly tunnel: number
   readonly control: number
+  readonly identity?: number
   readonly logs: () => string
   readonly stop: () => Promise<void>
 }
@@ -78,6 +79,8 @@ export const start = async (input: {
   readonly drain?: string
   readonly tunnelPort?: number
   readonly upstreamResolver?: string
+  // oxlint-disable-next-line ren/no-comments -- The identity entry for E2B workload identity tokens (fork change 14), with the server certificate for localhost.
+  readonly identity?: { readonly port: number; readonly audience: string; readonly project: string }
 }): Promise<Instance> => {
   const ports = {
     tunnel: input.tunnelPort ?? freePort(),
@@ -114,6 +117,16 @@ export const start = async (input: {
       `  key: "${input.certificates.clientKey}"`,
       `  control_listen: "127.0.0.1:${ports.control}"`,
       `  drain: "${input.drain ?? "2s"}"`,
+      ...(input.identity
+        ? [
+            "  identity:",
+            `    listen: "127.0.0.1:${input.identity.port}"`,
+            `    cert: "${input.certificates.serverCert}"`,
+            `    key: "${input.certificates.serverKey}"`,
+            `    audience: "${input.identity.audience}"`,
+            `    project: "${input.identity.project}"`,
+          ]
+        : []),
       "",
     ].join("\n"),
   )
@@ -127,9 +140,11 @@ export const start = async (input: {
   const logs = () => output.join("")
   await waitForPort(ports.tunnel, process, logs)
   await waitForPort(ports.control, process, logs)
+  if (input.identity) await waitForPort(input.identity.port, process, logs)
   return {
     tunnel: ports.tunnel,
     control: ports.control,
+    ...(input.identity && { identity: input.identity.port }),
     logs,
     stop: async () => {
       process.kill("SIGKILL")

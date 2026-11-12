@@ -43,6 +43,9 @@ import { FetchHttpClient } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { BrainProvider } from "@ren/core/brain-provider"
+import { E2BSandbox } from "@ren/core/machine-provider/e2b"
+import { Sandbox } from "e2b"
 import { EgressRoutes } from "../src/egress.js"
 import { EgressHarness } from "./lib/egress.js"
 
@@ -235,7 +238,13 @@ const setup = Effect.fnUntraced(function* () {
     "ProxyLogin",
   )
   if (placement.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
-  return { brainId, organizationId, login: placement.username, password: Redacted.value(placement.password) }
+  return {
+    brainId,
+    organizationId,
+    spaceId,
+    login: placement.username,
+    password: Redacted.value(placement.password),
+  }
 })
 
 const socks = (login: string, password: string) =>
@@ -720,5 +729,153 @@ describe("GitHub through the egress", () => {
       const sent = (yield* github.authorizations).flatMap((request) => (request[1] ? [request[1]] : []))
       expect(sent.filter((authorization) => authorization.includes("ren:GITHUB"))).toEqual([])
     }),
+  )
+})
+
+// oxlint-disable-next-line ren/no-comments -- egress-split.md phase 3: one sandbox at E2B in split mode, made by the E2B provider from the template of this branch. It runs only with E2B_API_KEY, E2B_PROJECT_ID, E2B_SPLIT_TEMPLATE and E2B_OWNER, and kills its sandbox at the end.
+const split = {
+  key: process.env.E2B_API_KEY ?? "",
+  project: process.env.E2B_PROJECT_ID ?? "",
+  template: process.env.E2B_SPLIT_TEMPLATE ?? "",
+  owner: process.env.E2B_OWNER ?? "",
+}
+
+// oxlint-disable-next-line ren/no-comments -- E2B reaches the identity entry at a public HTTPS name on port 443: a Cloudflare quick tunnel. The probe resolves through DNS over HTTPS, so a lookup before Cloudflare publishes the name leaves no negative entry in this machine's cache.
+const quickTunnel = async (port: number) => {
+  const child = Bun.spawn(
+    ["cloudflared", "tunnel", "--no-autoupdate", "--url", `https://localhost:${port}`, "--no-tls-verify"],
+    { stdout: "ignore", stderr: "pipe" },
+  )
+  const found = { log: "" }
+  const read = async () => {
+    for await (const chunk of child.stderr) found.log += new TextDecoder().decode(chunk)
+  }
+  void read()
+  const url = async (deadline: number): Promise<string> => {
+    const match = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/u.exec(found.log)?.[0]
+    if (match) return match
+    if (Date.now() > deadline) throw new Error(`cloudflared gave no URL: ${found.log}`)
+    // ast-grep-ignore: no-test-sleep -- cloudflared, an outside process, prints its URL when Cloudflare gives one
+    await Bun.sleep(500)
+    return url(deadline)
+  }
+  const tunnel = await url(Date.now() + 60_000)
+  const answers = async (deadline: number): Promise<void> => {
+    const status = (
+      await Bun.$`curl -s -o /dev/null -w %{http_code} -m 5 --doh-url https://1.1.1.1/dns-query ${tunnel}`
+        .nothrow()
+        .quiet()
+    ).stdout.toString()
+    if (status !== "000") return
+    if (Date.now() > deadline) throw new Error(`${tunnel} did not answer`)
+    // ast-grep-ignore: no-test-sleep -- Cloudflare publishes the tunnel's name after some seconds; no event says when
+    await Bun.sleep(1000)
+    return answers(deadline)
+  }
+  await answers(Date.now() + 90_000)
+  return { url: tunnel, stop: () => child.kill() }
+}
+
+const e2bProvider = BrainProvider.layer([E2BSandbox.provider]).pipe(
+  Layer.provide(FetchHttpClient.layer),
+  Layer.provide(
+    ConfigProvider.layer(
+      ConfigProvider.fromUnknown({
+        E2B_API_KEY: split.key,
+        E2B_TEMPLATE: split.template,
+        E2B_OWNER: split.owner,
+        E2B_VCPU_SECOND_MICRO_USD: "14",
+        E2B_GIB_SECOND_MICRO_USD: "4.5",
+      }),
+    ),
+  ),
+)
+
+describe.skipIf(Object.values(split).some((value) => !value))("egress split on E2B (egress-split.md phase 3)", () => {
+  it.live(
+    "in a sandbox, a credential request gets its value through the identity entry, and a plain request does not reach the egress",
+    () =>
+      Effect.gen(function* () {
+        const found = yield* setup()
+        const callers = yield* CredentialCallers.Service
+        const caller = {
+          workload: { kind: "brain" as const, id: found.brainId, generation: 1 },
+          organizationId: found.organizationId,
+        }
+        yield* callers.issue(caller, "E2BIdentity")
+        const port = EgressHarness.freePort()
+        const tunnel = yield* Effect.acquireRelease(
+          Effect.promise(() => quickTunnel(port)),
+          (opened) => Effect.sync(opened.stop),
+        )
+        const binary = state.binary
+        if (!binary) return yield* Effect.die(new Error("the egress was not built"))
+        const entry = yield* Effect.acquireRelease(
+          Effect.promise(() =>
+            EgressHarness.start({
+              binary,
+              certificates: certificates(),
+              hook: `https://localhost:${state.renPort}`,
+              identity: { port, audience: tunnel.url, project: split.project },
+            }),
+          ),
+          (started) => Effect.promise(started.stop),
+        )
+        const live = Effect.provideService(FetchHttpClient.Fetch, globalThis.fetch)
+        const provider = yield* BrainProvider.first.pipe(Effect.provide(e2bProvider), live)
+        const created = yield* Effect.acquireRelease(
+          provider
+            .create({
+              labels: { kind: "brain", id: found.brainId, generation: 1, ...found },
+              config: {},
+              image: Option.none(),
+              variables: { REN_EGRESS_FORWARD: tunnel.url, REN_BUNDLES: "[]", REN_HAND: "1" },
+              network: { proxy: Option.none(), identity: Option.some({ url: tunnel.url }), hosts: Option.none() },
+              onAddress: (address) => callers.bind(caller, address),
+            })
+            .pipe(live, Effect.orDie),
+          (made) => provider.destroy(made.binding).pipe(live, Effect.ignore),
+        )
+        const sandboxId = Schema.decodeUnknownSync(Schema.Struct({ sandboxId: Schema.String }))(
+          created.binding,
+        ).sandboxId
+        const sandbox = yield* Effect.promise(() => Sandbox.connect(sandboxId, { apiKey: split.key }))
+        const run = (command: string) =>
+          Effect.promise(() =>
+            sandbox.commands.run(command, { timeoutMs: 60_000 }).then(
+              (result) => result.stdout.trim(),
+              (error: {
+                readonly message?: string
+                readonly result?: { readonly stdout: string; readonly stderr: string }
+              }) => `failed: ${error.result?.stdout ?? ""} ${error.result?.stderr ?? error.message ?? ""}`,
+            ),
+          )
+        const ready = (deadline: number): Effect.Effect<string> =>
+          run("sudo -n nft list table ip ren_forward | grep -c redirect; test -s ~/.ren/egress-ca.pem && echo ca").pipe(
+            Effect.flatMap((said) =>
+              said.includes("ca") || Date.now() > deadline
+                ? Effect.succeed(said)
+                : Effect.sleep("2 seconds").pipe(Effect.andThen(ready(deadline))),
+            ),
+          )
+        expect(yield* ready(Date.now() + 120_000)).toContain("ca")
+
+        const credential = yield* run(
+          `curl -s -o /dev/null -w '%{http_code}' -m 30 -H 'Authorization: Bearer ren:STRIPE_API_KEY' --resolve api.stripe.test:${upstream.port}:1.1.1.1 http://api.stripe.test:${upstream.port}/v1/charges`,
+        )
+        // oxlint-disable-next-line ren/no-comments -- A failure at E2B leaves no sandbox to look at, so the test shows the forwarder's side and the egress's side first.
+        if (credential !== "200")
+          process.stderr.write(
+            `${yield* run(`tail -20 ~/.ren/forwarder.log; sudo -n nft list table ip ren_forward; curl -sv -m 20 -H 'Authorization: Bearer ren:STRIPE_API_KEY' --resolve api.stripe.test:${upstream.port}:1.1.1.1 http://api.stripe.test:${upstream.port}/v1/charges 2>&1 | tail -25`)}\n${entry.logs().slice(-4000)}\n`,
+          )
+        expect(credential).toBe("200")
+        expect(seen.at(-1)).toMatchObject({ path: "/v1/charges", authorization: "Bearer sk_live_real" })
+
+        const plain = yield* run("curl -s -o /dev/null -w '%{http_code}' -m 30 https://example.com/")
+        expect(plain).toBe("200")
+        expect(entry.logs()).toContain("api.stripe.test")
+        expect(entry.logs()).not.toContain("example.com")
+      }),
+    600_000,
   )
 })

@@ -211,13 +211,22 @@ const trustEgress = async (home: string): Promise<Readonly<Record<string, string
 // oxlint-disable-next-line ren/no-comments -- In split mode (REN_EGRESS_FORWARD) the machine's forwarder takes all its outbound TCP and sends only credential requests to the egress (egress-split.md §3.1). It runs as ren-forward, whose own traffic the rules let through. Its CA is made once and goes where Ren puts the egress CA in proxy mode, so trustEgress trusts it. Without sudo the machine goes on without it, and its credential requests fail with their placeholders.
 const forward = { port: "15001", user: "ren-forward", dir: "/etc/ren-forward" }
 
+// oxlint-disable-next-line ren/no-comments -- One nf_tables table, loaded at once by `nft -f`: the redirect is in only with its exceptions. E2B's kernel has no xt_owner, so the forwarder's user is matched natively (meta skuid). Declaring and deleting the table first makes a second start replace it.
 const forwardRules = `
-iptables -t nat -N REN_FORWARD 2>/dev/null || iptables -t nat -F REN_FORWARD
-iptables -t nat -A REN_FORWARD -d 127.0.0.0/8 -j RETURN
-iptables -t nat -A REN_FORWARD -m owner --uid-owner ${forward.user} -j RETURN
-iptables -t nat -A REN_FORWARD -p tcp -j REDIRECT --to-ports ${forward.port}
-iptables -t nat -C OUTPUT -p tcp -j REN_FORWARD 2>/dev/null || iptables -t nat -A OUTPUT -p tcp -j REN_FORWARD
-iptables -t nat -C PREROUTING -i docker0 -p tcp -j REDIRECT --to-ports ${forward.port} 2>/dev/null || iptables -t nat -A PREROUTING -i docker0 -p tcp -j REDIRECT --to-ports ${forward.port}
+table ip ren_forward
+delete table ip ren_forward
+table ip ren_forward {
+  chain output {
+    type nat hook output priority -100; policy accept;
+    ip daddr 127.0.0.0/8 return
+    meta skuid "${forward.user}" return
+    meta l4proto tcp redirect to :${forward.port}
+  }
+  chain prerouting {
+    type nat hook prerouting priority -100; policy accept;
+    iifname "docker0" meta l4proto tcp redirect to :${forward.port}
+  }
+}
 `
 
 const forwardCA = `
@@ -281,7 +290,10 @@ const startForwarder = async (home: string, egress: string) => {
     process.stderr.write("The forwarder did not listen within 10 s; the machine goes on without it\n")
     return
   }
-  await attempt("Sending outbound TCP to the forwarder", Bun.$`sudo -n sh -c ${forwardRules}`.nothrow().quiet())
+  await attempt(
+    "Sending outbound TCP to the forwarder",
+    Bun.$`sudo -n nft -f - < ${new Response(forwardRules)}`.nothrow().quiet(),
+  )
 }
 
 // oxlint-disable-next-line ren/no-comments -- The executor runs in the ren-tools slice when the machine has systemd, so the tools' memory has its own limit (75%) and the brain survives a tool that fills memory. OOMPolicy=continue: an out-of-memory kill stops one process, not the whole scope. setpriv gives the user's groups (docker); systemd-run --uid gives root's.
