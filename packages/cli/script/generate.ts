@@ -185,6 +185,14 @@ const resources: ReadonlyArray<Resource> = [
     descriptions: { get: "Show one request with its headers and body" },
   },
   {
+    group: "artifact",
+    about: "Manage artifacts",
+    path: ["artifact"],
+    name: "artifact",
+    one: "an artifact",
+    many: "artifacts",
+  },
+  {
     group: "credential",
     about: "Manage credentials",
     path: ["credential"],

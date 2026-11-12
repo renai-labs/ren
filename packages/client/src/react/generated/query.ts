@@ -110,6 +110,9 @@ import type {
   WebhookReplayInput,
   WebhookRequestListInput,
   WebhookRequestGetInput,
+  ArtifactListInput,
+  ArtifactGetInput,
+  ArtifactArchiveInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -1191,6 +1194,34 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["webhook-request", "get"] as const,
             mutationFn: (input: WebhookRequestGetInput) => client["webhook-request"]["get"](input),
+          }),
+      },
+    },
+    artifact: {
+      list: {
+        queryKey: (input?: ArtifactListInput) =>
+          input === undefined ? (["artifact", "list"] as const) : (["artifact", "list", input] as const),
+        queryOptions: (input: ArtifactListInput) =>
+          queryOptions({
+            queryKey: ["artifact", "list", input] as const,
+            queryFn: (context) => client["artifact"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: ArtifactGetInput) =>
+          input === undefined ? (["artifact", "get"] as const) : (["artifact", "get", input] as const),
+        queryOptions: (input: ArtifactGetInput) =>
+          queryOptions({
+            queryKey: ["artifact", "get", input] as const,
+            queryFn: (context) => client["artifact"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["artifact", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["artifact", "archive"] as const,
+            mutationFn: (input: ArtifactArchiveInput) => client["artifact"]["archive"](input),
           }),
       },
     },

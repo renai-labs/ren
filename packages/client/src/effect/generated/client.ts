@@ -1425,6 +1425,33 @@ const adaptGroupWebhookRequest = (raw: RawClient["webhook-request"]) => ({
   get: EndpointWebhookRequestGet(raw),
 })
 
+type ArtifactListRequest = Parameters<RawClient["artifact"]["artifact.list"]>[0]
+type ArtifactListInput = {
+  readonly spaceId?: ArtifactListRequest["query"]["spaceId"]
+  readonly page: ArtifactListRequest["query"]["page"]
+  readonly pageSize: ArtifactListRequest["query"]["pageSize"]
+}
+const EndpointArtifactList = (raw: RawClient["artifact"]) => (input: ArtifactListInput) =>
+  raw["artifact.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ArtifactGetRequest = Parameters<RawClient["artifact"]["artifact.get"]>[0]
+type ArtifactGetInput = { readonly idOrSlug: ArtifactGetRequest["params"]["idOrSlug"] }
+const EndpointArtifactGet = (raw: RawClient["artifact"]) => (input: ArtifactGetInput) =>
+  raw["artifact.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type ArtifactArchiveRequest = Parameters<RawClient["artifact"]["artifact.archive"]>[0]
+type ArtifactArchiveInput = { readonly id: ArtifactArchiveRequest["params"]["id"] }
+const EndpointArtifactArchive = (raw: RawClient["artifact"]) => (input: ArtifactArchiveInput) =>
+  raw["artifact.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupArtifact = (raw: RawClient["artifact"]) => ({
+  list: EndpointArtifactList(raw),
+  get: EndpointArtifactGet(raw),
+  archive: EndpointArtifactArchive(raw),
+})
+
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
 type CredentialListInput = {
   readonly owner?: CredentialListRequest["query"]["owner"]
@@ -2005,6 +2032,7 @@ const adaptClient = (raw: RawClient) => ({
   "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
   webhook: adaptGroupWebhook(raw["webhook"]),
   "webhook-request": adaptGroupWebhookRequest(raw["webhook-request"]),
+  artifact: adaptGroupArtifact(raw["artifact"]),
   credential: adaptGroupCredential(raw["credential"]),
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
