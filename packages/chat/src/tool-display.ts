@@ -208,7 +208,7 @@ type Subject = (
   metadata: Readonly<Record<string, unknown>>,
 ) => string | undefined
 
-const command: Subject = (input, metadata) => text(input.command) ?? text(metadata.command)
+const shellCommand: Subject = (input, metadata) => text(input.command) ?? text(metadata.command)
 const file: Subject = (input) => basename(input.filePath) ?? basename(input.path)
 const directory: Subject = (input) => text(input.path)
 const workspace = /^.*\/workspace\/[^/]+\/?/u
@@ -222,8 +222,8 @@ const delegated: Subject = (input, metadata) => text(input.description) ?? text(
 
 const subjects: Readonly<Record<string, Subject>> = {
   experimental_image_generate: (input) => text(input.prompt),
-  shell: command,
-  bash: command,
+  shell: shellCommand,
+  bash: shellCommand,
   execute: (input) => text(input.code)?.split("\n").at(0),
   read: file,
   write: file,
@@ -248,6 +248,11 @@ const generic: Subject = (input) =>
 
 export const subtitle = (tool: SessionMessage.Tool) =>
   (lookup(subjects, tool.name) ?? generic)(ToolState.input(tool), ToolState.metadata(tool))
+
+export const command = (tool: SessionMessage.Tool) =>
+  tool.name === "bash" || tool.name === "shell"
+    ? shellCommand(ToolState.input(tool), ToolState.metadata(tool))
+    : undefined
 
 export const output = (tool: SessionMessage.Tool) => {
   const value = ToolState.output(tool)

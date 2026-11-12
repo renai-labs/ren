@@ -84,6 +84,17 @@ test("a member starts a chat, follows the reply, sends again, mentions an agent 
   await expect(page.getByText("stub reply")).toHaveCount(3)
 })
 
+test("a finished turn with no answer says that Ren sent an empty response", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Say nothing [stub:empty-reply]")
+  await message.press("Enter")
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
+  await expect(page.getByText("Ren sent an empty response.")).toBeVisible({ timeout: brainStart })
+  await page.screenshot({ path: test.info().outputPath("empty-response.png") })
+})
+
 test("a member renames a chat, reverts a message into the composer and restores it", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
   await page.goto("/app/")
