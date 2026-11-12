@@ -99,8 +99,8 @@ import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 import { WorkspaceImage } from "./workspace-image.js"
-import { FileMentions, WorkspaceFileChip } from "./file-mention.js"
-import { dirsOf, isPath } from "./file-paths.js"
+import { FileMentions, WorkspaceFiles, type RenderFile } from "./file-mention.js"
+import { isPath } from "./file-paths.js"
 
 interface Person {
   readonly name: string
@@ -1170,10 +1170,10 @@ function SmoothMarkdown(props: {
 }) {
   const text = useSmoothText(props.text, { streaming: props.streaming })
   const root = props.root
-  const dirs = dirsOf(
-    [...text.matchAll(/`([^`\n]+)`/gu)].flatMap((match) => (isPath(match[1] ?? "") ? [match[1] ?? ""] : [])),
+  const inputs = [...text.replaceAll(/```[\s\S]*?(?:```|$)/gu, "").matchAll(/`([^`\n]+)`/gu)].map(
+    (match) => match[1] ?? "",
   )
-  return (
+  const markdown = (chip: RenderFile | undefined) => (
     <Markdown
       streaming={props.streaming || text.length < props.text.length}
       apps={props.apps}
@@ -1183,15 +1183,17 @@ function SmoothMarkdown(props: {
           ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
           : undefined
       }
-      workspaceFile={
-        root
-          ? (code, fallback) =>
-              isPath(code) ? <WorkspaceFileChip root={root} input={code} dirs={dirs} fallback={fallback} /> : undefined
-          : undefined
-      }
+      workspaceFile={chip ? (code, fallback) => (isPath(code) ? chip(code, fallback) : undefined) : undefined}
     >
       {text}
     </Markdown>
+  )
+  return root ? (
+    <WorkspaceFiles root={root} inputs={inputs}>
+      {markdown}
+    </WorkspaceFiles>
+  ) : (
+    markdown(undefined)
   )
 }
 

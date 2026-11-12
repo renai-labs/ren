@@ -19,16 +19,10 @@ describe("FileLabel", () => {
   test("reads a line suffix and keeps it in the text", () => {
     const labels = FileLabel.labels(["src/app.tsx:42"])
     expect(labels).toMatchObject([{ path: "src/app.tsx", name: "app.tsx", line: 42 }])
-    expect(labels.map(FileLabel.text)).toEqual(["app.tsx:42"])
     expect(FileLabel.parse("src/app.tsx:42:7").line).toBe(42)
   })
 
   test("a trailing slash makes a folder chip", () => {
     expect(FileLabel.labels(["src/lib/"])[0]).toMatchObject({ path: "src/lib", name: "lib", folder: true })
-  })
-
-  test("splits the extension off the stem for truncation", () => {
-    expect(FileLabel.split("very-long-name.test.tsx")).toEqual({ stem: "very-long-name.test", extension: ".tsx" })
-    expect(FileLabel.split(".env")).toEqual({ stem: ".env", extension: "" })
   })
 })

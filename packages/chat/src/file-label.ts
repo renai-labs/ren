@@ -8,11 +8,6 @@ export interface Label {
   readonly dir: string | undefined
 }
 
-export interface Split {
-  readonly stem: string
-  readonly extension: string
-}
-
 const lineSuffix = /^(?<path>.+?):(?<line>\d+)(?::\d+)?$/
 
 export const parse = (input: string) => {
@@ -44,11 +39,4 @@ export const labels = (inputs: ReadonlyArray<string>): ReadonlyArray<Label> => {
     // ast-grep-ignore: no-conditional-property, -- the Label type has a required dir that may be undefined
     dir: (paths.get(item.name)?.size ?? 0) > 1 ? item.parent : undefined,
   }))
-}
-
-export const text = (label: Label) => (typeof label.line === "number" ? `${label.name}:${label.line}` : label.name)
-
-export const split = (name: string): Split => {
-  const dot = name.lastIndexOf(".")
-  return dot <= 0 ? { stem: name, extension: "" } : { stem: name.slice(0, dot), extension: name.slice(dot) }
 }
