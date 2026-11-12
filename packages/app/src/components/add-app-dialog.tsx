@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { IconChevronRight, IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
@@ -8,15 +8,13 @@ import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
 import { AppRow } from "./app-list.js"
 import { LoadMore } from "./load-more.js"
-import { defaultName, freeSlug } from "./profile-dialog.js"
+import { useAddManaged } from "./profile-dialog.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
 import { Search } from "../lib/search.js"
-import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../lib/apps.js"
+import { fromApp, fromRegistry, hasManaged, isSpaceApp, type CatalogApp } from "../lib/apps.js"
 import { errorMessage } from "../lib/errors.js"
 import { pickerPageSize } from "../lib/pagination.js"
-import { useAppProfiles } from "../lib/use-app-profiles.js"
-import { useMe } from "../lib/use-me.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { RouterContext } from "../lib/router-context.js"
@@ -82,9 +80,7 @@ function AppResults(props: {
   const { api, client } = RouterContext.useRouterContext()
   const needle = useDebouncedValue(props.query.trim(), 200)
   const spaces = useSpaces()
-  const user = useMe().user.name
-  const profiles = useAppProfiles([])
-  const create = useMutation(api["app-profile"].create.mutationOptions())
+  const addManaged = useAddManaged()
   const [adding, setAdding] = useState<string>()
   const pages = useInfiniteQuery(AppRegistryPages.options(client, needle))
   const apps = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
@@ -94,41 +90,19 @@ function AppResults(props: {
     .filter((app) => !isSpaceApp(app, spaces.spaces) && Search.matches(props.query, app.name, app.description))
   const managed = new Set([
     ...listed.filter((app) => app.managed).map((app) => app.id),
-    ...own
-      .filter((app) => Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed"))
-      .map((app) => app.id),
+    ...own.filter(hasManaged).map((app) => app.id),
   ])
   const found = [...own, ...listed.map(fromRegistry)].filter((app) => !props.added.has(app.id))
   const loading = pages.isPending || apps.isPending
   const space = spaces.space(props.space.id)
   const add = (app: CatalogApp) => {
-    const isPrivate = space?.kind === "private"
     setAdding(app.id)
-    void profiles
-      .load(app.id)
-      .then((others) => {
-        const name = defaultName({
-          from: {
-            spaceId: props.space.id,
-            name: props.space.name,
-            members: space?.memberCount ?? 1,
-            private: isPrivate,
-          },
-          only: isPrivate,
-          picked: new Set(),
-          spaces: [],
-          others,
-          app,
-          user,
-        })
-        return create.mutateAsync({
-          appId: app.id,
-          name,
-          slug: freeSlug(name, new Set(others.map((other) => other.slug))),
-          kind: isPrivate ? "private" : "shared",
-          ...(!isPrivate && { spaceIds: [props.space.id] }),
-        })
-      })
+    void addManaged(app, {
+      spaceId: props.space.id,
+      name: props.space.name,
+      members: space?.memberCount ?? 1,
+      private: space?.kind === "private",
+    })
       .then(
         () => toast.success(`${app.name} added to ${props.space.name}`, { description: "Uses Ren credits." }),
         (error: unknown) =>

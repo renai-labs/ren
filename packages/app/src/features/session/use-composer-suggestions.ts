@@ -3,13 +3,14 @@ import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
-import { fromApp, fromRegistry, isSpaceApp, mentionColor } from "../../lib/apps.js"
+import { fromApp, fromRegistry, hasManaged, isSpaceApp, mentionColor, type Status } from "../../lib/apps.js"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { useSpaceApps } from "./use-space-apps.js"
 
 interface SuggestionItem {
   readonly value: string
@@ -17,6 +18,7 @@ interface SuggestionItem {
   readonly label: string
   readonly description?: string | undefined
   readonly icon?: string | null | undefined
+  readonly status?: Status | undefined
 }
 
 export interface Suggest {
@@ -34,6 +36,7 @@ export interface Suggest {
   ) => { text: string; cursor: number; mention?: Composer.MentionedApp | undefined } | undefined
   readonly onClose: () => void
   readonly marks: (text: string) => ReadonlyArray<MentionMark>
+  readonly mentioned: (text: string) => ReadonlyArray<Composer.MentionedApp>
   readonly unmention: (
     text: string,
     press: { key: string; selectionStart: number; selectionEnd: number },
@@ -89,6 +92,13 @@ function useAppMentions(query: string | undefined, mentions: ReadonlyArray<Compo
     enabled: query !== undefined,
     placeholderData: keepPreviousData,
   })
+  const managed = new Set([
+    ...(own.data?.items ?? [])
+      .map(fromApp)
+      .filter(hasManaged)
+      .map((app) => app.id),
+    ...(found.data?.items ?? []).filter((app) => app.managed).map((app) => app.id),
+  ])
   const byId = new Map<string, Composer.MentionedApp>(
     [
       ...(own.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces)),
@@ -100,6 +110,7 @@ function useAppMentions(query: string | undefined, mentions: ReadonlyArray<Compo
     byId,
     items: [...byId.values()].map(Mentions.fromApp),
     searching: query !== undefined && found.isFetching,
+    managed: (appId: string) => managed.has(appId),
     mentionOf: (appId: string): Composer.MentionedApp | undefined => {
       const app = byId.get(appId)
       return (
@@ -131,6 +142,7 @@ function useSuggestions(input: {
   const [active, setActive] = useState<string>()
   const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
   const apps = useAppMentions(query, input.mentions)
+  const space = useSpaceApps(input.spaceId)
   const appById = apps.byId
   const repositories = useRepositoryMentions(input.spaceId)
   const connectors = [...apps.items, ...repositories]
@@ -153,6 +165,10 @@ function useSuggestions(input: {
           label: item.label,
           description: item.description,
           icon: appById.get(item.id)?.icon,
+          status:
+            item.kind === "app" && input.spaceId
+              ? space.status(item.id, { managed: apps.managed(item.id) })
+              : undefined,
         }))
   const ids = items.map((item) => item.value)
   const current = Composer.activeSuggestion(ids, active)
@@ -208,6 +224,14 @@ function useSuggestions(input: {
           color: mentionColor(app),
         }
       }),
+    mentioned: (text) => [
+      ...new Map(
+        tokens(text).flatMap((token) => {
+          const app = token.item.kind === "app" ? apps.mentionOf(token.item.id) : undefined
+          return app ? [[app.id, app] as const] : []
+        }),
+      ).values(),
+    ],
     unmention: (text, press) => Mentions.remove(text, tokens(text), press),
   }
   return {

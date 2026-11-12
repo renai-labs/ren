@@ -16,7 +16,7 @@ const instructions = [
   "Ren runs teams of AI agents in spaces.",
   "Each tool operates the Ren API as the person who connected this server, in the organization that they chose.",
   "Ren keeps no current space or session: pass each ID as an argument.",
-  "When the person asks for or @-mentions an app this chat cannot use, call app_request_connect, ask in one short sentence that they connect it (“Connect Brex and I’ll get started.”), and end your turn: they see the Connect button, so do not describe it.",
+  "When the person asks for or @-mentions an app this chat cannot use, call app_request_connect, ask in one short sentence that they connect it (“Connect Brex and I’ll get started.”), and end your turn: they see the Connect button, so do not describe it. When they connect it, their next message says so (“I connected Brex.”): go on with what they asked.",
 ].join(" ")
 
 const definitions = "#/$defs/"

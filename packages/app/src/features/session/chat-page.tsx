@@ -61,6 +61,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         admin={admin}
         onTryAgain={chat.child ? undefined : chat.resend}
         onContinue={chat.child ? undefined : () => chat.resend("Continue.")}
+        onConnected={chat.connected}
         onChangeModel={chat.child || !chat.canChooseModel ? undefined : () => setPicking(true)}
         onStop={chat.stop}
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}

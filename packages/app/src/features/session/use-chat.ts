@@ -283,6 +283,13 @@ export function useChat(
         })
       })
     },
+    connected: (app: string) =>
+      void prompt({
+        id: SessionMessage.ID.create(),
+        text: `I connected ${app}.`,
+        delivery: running ? ChatPreferences.followUp.read(platform.storage) : "steer",
+        ...(model && { model }),
+      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
     resend: (text: string) =>
       void prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }).catch(
         (error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }),

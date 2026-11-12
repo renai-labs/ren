@@ -110,17 +110,19 @@ export function HomePage() {
       </div>
       <div className="relative flex w-full max-w-3xl flex-col gap-2">
         <div className="relative flex flex-col gap-2">
-          <div className="flex items-center gap-1">
-            <WorkingIn
-              spaces={spaces}
-              spaceId={spaceId}
-              disabled={starting || Boolean(draft.chat)}
-              onChange={chooseSpace}
-            />
-            <RepositoriesPicker spaceId={spaceId} disabled={starting || Boolean(draft.chat)} />
-          </div>
           <PromptInput
             placement="home"
+            header={
+              <>
+                <WorkingIn
+                  spaces={spaces}
+                  spaceId={spaceId}
+                  disabled={starting || Boolean(draft.chat)}
+                  onChange={chooseSpace}
+                />
+                <RepositoriesPicker spaceId={spaceId} disabled={starting || Boolean(draft.chat)} />
+              </>
+            }
             spaceId={spaceId}
             value={sent ?? draft}
             onChange={type}
