@@ -46,6 +46,7 @@ import { Spinner } from "@ren/ui/spinner"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Switch } from "@ren/ui/switch"
 import { AccountAccess } from "./account-actions.js"
+import { toastRemoved } from "./space-removal.js"
 import { AppIcon } from "./app-icon.js"
 import { AccountList, SpacePills, StatusDot } from "./app-list.js"
 import { ConfirmDialog } from "./confirm-dialog.js"
@@ -61,6 +62,7 @@ import { errorMessage } from "../lib/errors.js"
 import { plural } from "../lib/format.js"
 import {
   gaps,
+  lastSpaceWarning,
   listsSpace,
   reachedSpaces,
   signsIn,
@@ -90,7 +92,7 @@ export type ProfileTarget = {
   chooseSpace?: boolean | undefined
 }
 
-const freeSlug = (name: string, taken: ReadonlySet<string>) => {
+export const freeSlug = (name: string, taken: ReadonlySet<string>) => {
   const base = slugOf(name) || "account"
   if (!taken.has(base)) return base
   const number = Array.from({ length: taken.size + 1 }, (_, index) => index + 2).find(
@@ -99,7 +101,7 @@ const freeSlug = (name: string, taken: ReadonlySet<string>) => {
   return `${base}-${number}`
 }
 
-function defaultName(input: {
+export function defaultName(input: {
   from: From | undefined
   only: boolean
   picked: ReadonlySet<string>
@@ -309,7 +311,15 @@ function AccountStep(props: StepProps) {
   const app = props.app
   const profile = props.profile
   if (props.step === "edit" && profile)
-    return <EditStep app={app} profile={profile} onConnection={props.onConnection} onDone={props.onSaved} />
+    return (
+      <EditStep
+        app={app}
+        profile={profile}
+        from={props.from}
+        onConnection={props.onConnection}
+        onDone={props.onSaved}
+      />
+    )
   if (!profile)
     return (
       <Screen app={app} title={app.name} description={app.description} action={null}>
@@ -1010,7 +1020,13 @@ function useEditProfile(profile: AppProfile, onDone: () => void) {
   }
 }
 
-function EditStep(props: { app: App; profile: AppProfile; onConnection: () => void; onDone: () => void }) {
+function EditStep(props: {
+  app: App
+  profile: AppProfile
+  from: From | undefined
+  onConnection: () => void
+  onDone: () => void
+}) {
   const profile = props.profile
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const edit = useEditProfile(profile, props.onDone)
@@ -1028,7 +1044,13 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
           </Button>
         </>
       }
-      menu={<AccountMenu profile={profile} onDeleted={props.onDone} />}
+      menu={
+        props.from ? (
+          <RemoveFromSpace profile={profile} from={props.from} onRemoved={props.onDone} />
+        ) : (
+          <AccountMenu profile={profile} onDeleted={props.onDone} />
+        )
+      }
     >
       <FieldGroup className="w-full gap-6">
         {profile.items.length > 0 ? <ConnectionField profile={profile} onConnection={props.onConnection} /> : null}
@@ -1051,6 +1073,79 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
   )
 }
 
+function MenuTrigger(props: { profile: AppProfile }) {
+  return (
+    <DropdownMenuTrigger
+      render={
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`More for ${props.profile.name}`}
+          className="absolute top-3 right-3 z-10 text-muted-foreground"
+        />
+      }
+    >
+      <IconDots />
+    </DropdownMenuTrigger>
+  )
+}
+
+function RemoveFromSpace(props: { profile: AppProfile; from: From; onRemoved: () => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const access = useMutation(api["app-profile"].access.mutationOptions())
+  const [confirming, setConfirming] = useState(false)
+  const profile = props.profile
+  const from = props.from
+  const others = reachedSpaces(profile).filter((name) => name !== from.name)
+  if (
+    profile.kind === "private" ||
+    profile.allSpaces ||
+    !profile.spaces.some((space) => space.id === from.spaceId) ||
+    !profile.canRemove.some((shape) => shape === "joined" || shape === "shared")
+  )
+    return null
+  return (
+    <>
+      <DropdownMenu>
+        <MenuTrigger profile={profile} />
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuGroup>
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
+              <IconTrash />
+              Remove from {from.name}
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        confirmation={{
+          title: `Remove ${profile.name} from ${from.name}?`,
+          description: `${from.name} stops using it. ${others.length > 0 ? `It stays in ${others.join(", ")}.` : lastSpaceWarning(profile)}`,
+          action: "Remove",
+        }}
+        onConfirm={() =>
+          access.mutateAsync(
+            { id: profile.id, remove: [from.spaceId] },
+            {
+              onSuccess: (info) => {
+                toastRemoved(info, from.name, {
+                  onUndo: () => access.mutateAsync({ id: profile.id, add: [from.spaceId] }),
+                })
+                props.onRemoved()
+              },
+              onError: (error) =>
+                toast.error(`Couldn’t remove ${profile.name} from ${from.name}`, { description: errorMessage(error) }),
+            },
+          )
+        }
+      />
+    </>
+  )
+}
+
 function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const remove = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
@@ -1060,19 +1155,7 @@ function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`More for ${profile.name}`}
-              className="absolute top-3 right-3 z-10 text-muted-foreground"
-            />
-          }
-        >
-          <IconDots />
-        </DropdownMenuTrigger>
+        <MenuTrigger profile={profile} />
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuGroup>
             <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>

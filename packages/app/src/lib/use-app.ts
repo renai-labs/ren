@@ -15,17 +15,16 @@ export function useApps(idsOrSlugs: ReadonlyArray<string>) {
     ).initialData(),
   )
   const queries = useQueries({
-    queries: unique.map((idOrSlug, index) => ({
+    queries: unique.map((idOrSlug) => ({
       ...api.app.get.queryOptions({ idOrSlug }),
       ...Seed.fromList<AppInfo>(queryClient, [api.app.list.queryKey()], idOrSlug),
-      enabled: listed[index] === undefined,
     })),
   })
   const found = new Map(
     unique.flatMap((idOrSlug, index): ReadonlyArray<readonly [string, CatalogApp]> => {
       const own = queries[index]?.data
       const registry = listed[index]
-      if (own) return [[idOrSlug, fromApp(own)]]
+      if (own) return [[idOrSlug, { ...fromApp(own), listing: registry?.listing ?? null }]]
       return registry ? [[idOrSlug, fromRegistry(registry)]] : []
     }),
   )

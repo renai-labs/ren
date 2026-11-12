@@ -90,6 +90,7 @@ const entry = (row: {
     examplePrompts: row.listing.example_prompts,
     toolCounts: Object.fromEntries(Object.entries(row.listing.tools).map(([mcp, tools]) => [mcp, tools.length])),
   },
+  managed: Object.values(row.app.mcps).some((mcp) => mcp.transport.type === "managed"),
   revision: row.app.revision,
 })
 

@@ -1158,6 +1158,7 @@ export type AppRegistryInfo = {
   description: string
   icon: string | null
   listing: AppListingSummary
+  managed: boolean
   revision: number
 }
 

@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { ConfirmDialog } from "./confirm-dialog.js"
+import { toastRemoved } from "./space-removal.js"
 import { lastSpaceWarning } from "../lib/apps.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
@@ -35,7 +36,12 @@ export function AccountAccess(props: { profile: AppProfile }) {
       { id: props.profile.id, ...input },
       { onError: (error) => toast.error("Couldn’t change the spaces", { description: errorMessage(error) }) },
     )
-  const remove = (spaceId: string) => change({ remove: [spaceId] })
+  const remove = (spaceId: string) =>
+    change({ remove: [spaceId] }).then((info) =>
+      toastRemoved(info, spaces.find((space) => space.id === spaceId)?.name ?? "the space", {
+        onUndo: () => change({ add: [spaceId] }),
+      }),
+    )
   const setAllSpaces = (checked: boolean) => void change({ allSpaces: checked })
   const last = !allSpaces && listed.size === 1
   return (

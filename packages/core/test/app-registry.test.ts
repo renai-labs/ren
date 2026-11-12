@@ -123,7 +123,18 @@ it.live("browsing lists active listings by text, category and slugs", () =>
     yield* registry.publish({
       apps: [
         publication("linear", { description: "Track issues", listing: { categories: { roles: ["engineer"] } } }),
-        publication("notion", { description: "Write pages", listing: { categories: { roles: ["writer"] } } }),
+        publication("notion", {
+          description: "Write pages",
+          mcps: {
+            notion: Schema.decodeUnknownSync(Mcp.Declaration)({
+              name: "Notion",
+              description: "Notion on Ren credits",
+              transport: { type: "managed", server: "notion" },
+              auth: { type: "none" },
+            }),
+          },
+          listing: { categories: { roles: ["writer"] } },
+        }),
         Schema.decodeUnknownSync(AppRegistry.Publication)({
           slug: "unlisted",
           name: "Unlisted",
@@ -137,6 +148,10 @@ it.live("browsing lists active listings by text, category and slugs", () =>
       readonly slugs?: ReadonlyArray<string>
     }) => Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
     expect(yield* slugs({})).toEqual(["linear", "notion"])
+    expect((yield* registry.list(reader, page)).items.map((item) => [item.slug, item.managed] as const)).toEqual([
+      ["linear", false],
+      ["notion", true],
+    ])
     expect(yield* slugs({ query: "ISSUES" })).toEqual(["linear"])
     expect(yield* slugs({ category: "writer" })).toEqual(["notion"])
     expect(yield* slugs({ slugs: ["notion", "unlisted", "linear"] })).toEqual(["linear", "notion"])

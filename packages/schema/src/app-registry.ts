@@ -64,6 +64,9 @@ export const Info = Schema.Struct({
   description: Schema.NonEmptyString,
   icon: Schema.NullOr(Schema.String),
   listing: AppListing.Summary,
+  managed: Schema.Boolean.annotate({
+    description: "True when the app has an MCP that Ren runs and Ren credits pay for, so it works with no sign-in.",
+  }),
   revision: Schema.Int,
 }).annotate({
   identifier: "AppRegistry.Info",

@@ -4,7 +4,7 @@ import { Button } from "@ren/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { AppIcon } from "./app-icon.js"
 import { TableCard, TableEmpty } from "./page.js"
-import { RowMenu } from "./row-menu.js"
+import { RowMenu, type RowMenuItem } from "./row-menu.js"
 import { StatusBadge } from "./status-badge.js"
 import type { StatusTone } from "./status-badge.js"
 import { statusLabel, statusOf } from "../lib/apps.js"
@@ -39,11 +39,14 @@ function AppName(props: { app: App; accounts: number; onOpen: () => void }) {
   )
 }
 
+type AppRow = { app: App; profiles: ReadonlyArray<AppProfile>; usedIn: string }
+
 export function AppsTable(props: {
-  rows: { app: App; profiles: ReadonlyArray<AppProfile>; usedIn: string }[]
+  rows: AppRow[]
   empty: ReactNode
   onOpen: (appId: string) => void
   onNew: (appId: string) => void
+  remove?: (row: AppRow) => RowMenuItem | undefined
 }) {
   return (
     <TableCard>
@@ -85,6 +88,7 @@ export function AppsTable(props: {
                     items={[
                       { label: "Open", icon: IconArrowUpRight, onSelect: () => props.onOpen(app.id) },
                       { label: "New account", icon: IconUserPlus, onSelect: () => props.onNew(app.id) },
+                      ...[props.remove?.(row)].filter((item) => item !== undefined),
                     ]}
                   />
                 </TableCell>
