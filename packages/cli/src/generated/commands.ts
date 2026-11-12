@@ -595,6 +595,18 @@ export const WebhookRequestGet = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
+export const ArtifactList = {
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  page: Flag.Finite("page").pipe(Flag.optional),
+  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
+}
+
+export const ArtifactGet = {
+  idOrSlug: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
+}
+
+export const ArtifactArchive = { id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")) }
+
 export const CredentialList = {
   owner: Flag.Literals("owner", ["org", "space", "person", "profile"]).pipe(Flag.optional),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
@@ -1546,6 +1558,30 @@ export const commands = [
         Command.withDescription("Show one request with its headers and body"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.WebhookRequestGet(input)),
+        ),
+      ),
+    ]),
+  ),
+  Command.make("artifact").pipe(
+    Command.withDescription("Manage artifacts"),
+    Command.withAlias("artifacts"),
+    Command.withSubcommands([
+      Command.make("list", ArtifactList).pipe(
+        Command.withDescription("List artifacts"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ArtifactList(input)),
+        ),
+      ),
+      Command.make("get", ArtifactGet).pipe(
+        Command.withDescription("Show an artifact"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ArtifactGet(input)),
+        ),
+      ),
+      Command.make("archive", ArtifactArchive).pipe(
+        Command.withDescription("Archive an artifact"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ArtifactArchive(input)),
         ),
       ),
     ]),

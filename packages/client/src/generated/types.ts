@@ -283,6 +283,10 @@ export type WebhookTestOutcome = "answered" | "passed" | "ignored" | "duplicate"
 
 export type WebhookReplayed = { replayed: number; remaining: number }
 
+export type ArtifactID = string
+
+export type ArtifactDeploymentID = string
+
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -796,6 +800,18 @@ export type WebhookTested = {
   title: string | null
 }
 
+export type ArtifactInfo = {
+  id: ArtifactID
+  spaceId: SpaceID
+  title: string
+  entry: string
+  url: string | null
+  activeDeploymentId: ArtifactDeploymentID | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
@@ -1259,6 +1275,8 @@ export type ScheduleRunPage = { items: Array<ScheduleRunInfo>; page: number; pag
 export type WebhookRequestPage = { items: Array<WebhookRequestInfo>; page: number; pageSize: number; total: number }
 
 export type WebhookTestResult = { items: Array<WebhookTested> }
+
+export type ArtifactPage = { items: Array<ArtifactInfo>; page: number; pageSize: number; total: number }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
@@ -8433,6 +8451,30 @@ export type WebhookRequestListOutput = WebhookRequestPage
 export type WebhookRequestGetInput = { readonly id: { readonly id: string }["id"] }
 
 export type WebhookRequestGetOutput = WebhookRequestDetail
+
+export type ArtifactListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ArtifactListOutput = ArtifactPage
+
+export type ArtifactGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type ArtifactGetOutput = ArtifactInfo
+
+export type ArtifactArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ArtifactArchiveOutput = ArtifactInfo
 
 export type CredentialListInput = {
   readonly owner?: {

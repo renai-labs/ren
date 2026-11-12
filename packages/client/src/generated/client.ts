@@ -221,6 +221,12 @@ import type {
   WebhookRequestListOutput,
   WebhookRequestGetInput,
   WebhookRequestGetOutput,
+  ArtifactListInput,
+  ArtifactListOutput,
+  ArtifactGetInput,
+  ArtifactGetOutput,
+  ArtifactArchiveInput,
+  ArtifactArchiveOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -1950,6 +1956,42 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/webhook-requests/${encodeURIComponent(input.id)}/get`,
             body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    artifact: {
+      list: (input: ArtifactListInput, requestOptions?: RequestOptions) =>
+        request<ArtifactListOutput>(
+          {
+            method: "GET",
+            path: `/artifacts`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ArtifactGetInput, requestOptions?: RequestOptions) =>
+        request<ArtifactGetOutput>(
+          {
+            method: "GET",
+            path: `/artifacts/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: ArtifactArchiveInput, requestOptions?: RequestOptions) =>
+        request<ArtifactArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/artifacts/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

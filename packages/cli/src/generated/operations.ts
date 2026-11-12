@@ -1221,6 +1221,40 @@ export const WebhookRequestGet = (input: Command.Command.Config.Infer<typeof Com
     (client, request) => client["webhook-request"]["get"]({ ...request.params, ...request.payload }),
   )
 
+export const ArtifactList = (input: Command.Command.Config.Infer<typeof Commands.ArtifactList>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.list"],
+    {
+      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["artifact"]["list"]({ ...request.query }),
+  )
+
+export const ArtifactGet = (input: Command.Command.Config.Infer<typeof Commands.ArtifactGet>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<artifact>" } },
+    (client, request) => client["artifact"]["get"]({ ...request.params }),
+  )
+
+export const ArtifactArchive = (input: Command.Command.Config.Infer<typeof Commands.ArtifactArchive>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.archive"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<artifact>" },
+      lookups: {
+        id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["artifact"]["archive"]({ ...request.params }),
+  )
+
 export const CredentialList = (input: Command.Command.Config.Infer<typeof Commands.CredentialList>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.list"],
