@@ -203,10 +203,13 @@ export function RouteSkeleton() {
         <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
       </PageSkeleton>
     )
-  if (path === "/marketplace")
+  if (path.startsWith("/apps/")) return <PageSkeleton title="Loading app" />
+  if (path === "/apps")
     return (
       <PageSkeleton
-        title="Marketplace"
+        title="Apps"
+        width="wide"
+        search={<div className="h-8 w-56" />}
         description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       >
         <AppListingSample />

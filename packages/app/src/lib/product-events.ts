@@ -3,7 +3,7 @@ export * as ProductEvents from "./product-events.js"
 import type { Platform } from "../platform/platform.js"
 
 export const autocaptureUrls: ReadonlyArray<RegExp> = [
-  /\/app\/marketplace(?:[/?#]|$)/u,
+  /\/app\/apps(?:[/?#]|$)/u,
   /\/app\/settings\/(?:channels|credentials|providers)(?:[/?#]|$)/u,
   /\/app\/spaces\/[^/]+\/(?:apps|channels|credentials)(?:[/?#]|$)/u,
 ]

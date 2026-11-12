@@ -1,6 +1,7 @@
 import { DateTime, Option } from "effect"
 import { flushSync } from "react-dom"
 import {
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -49,6 +50,7 @@ import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
+import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
 import {
   Attachment,
   AttachmentContent,
@@ -120,6 +122,7 @@ export interface TranscriptProps {
   readonly loading?: boolean | undefined
   readonly loadingHistory: boolean
   readonly onLoadMore: () => void
+  readonly find?: FindBarProps | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
   readonly expanded?: boolean | undefined
@@ -273,13 +276,27 @@ function splitPasted(text: string) {
   const separator = text.indexOf("\n\n")
   const head = separator === -1 ? text : text.slice(0, separator)
   const tail = separator === -1 ? "" : text.slice(separator + 2)
-  if (tail && isPasteBlock(tail) && !isPasteBlock(head)) return { typed: head, pasted: tail }
+  if (tail && isPasteBlock(tail)) return { typed: head, pasted: tail }
   if (isPasteBlock(text)) return { typed: "", pasted: text }
   return { typed: text, pasted: undefined }
 }
 
-const foldAbove = 12
-const foldShown = 8
+const foldAbove = 20
+const foldShown = 12
+
+function foundBelowFold(text: string, find: FindBarProps | undefined, rowKey: string) {
+  const query = find?.value.trim().toLowerCase()
+  if (!find?.match || find.match.row !== rowKey || !query) return false
+  const lower = text.toLowerCase()
+  const at = Array.from({ length: find.match.occurrence + 1 }).reduce<{ from: number; at: number }>(
+    (found) => {
+      const next = lower.indexOf(query, found.from)
+      return { from: next + query.length, at: next }
+    },
+    { from: 0, at: -1 },
+  ).at
+  return at >= 0 && text.slice(0, at).split("\n").length > foldShown
+}
 
 function PastedChip(props: { text: string }) {
   const [open, setOpen] = useState(false)
@@ -507,7 +524,7 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   )
 }
 
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; fold: boolean }) {
+function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; fold: boolean; reveal: boolean }) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
   const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
   if (at >= 0)
@@ -518,15 +535,19 @@ function UserBody(props: { message: SessionMessage.User; spaceId: string | undef
           text={props.message.text.slice(0, at)}
           spaceId={props.spaceId}
           fold={props.fold}
+          reveal={props.reveal}
         />
         <WebhookRequest request={props.message.text.slice(at + 2)} />
       </>
     )
-  return <UserText message={props.message} spaceId={props.spaceId} fold={props.fold} />
+  return <UserText message={props.message} spaceId={props.spaceId} fold={props.fold} reveal={props.reveal} />
 }
 
-function TypedBubble(props: { text: string; foldable: boolean }) {
+function TypedBubble(props: { text: string; foldable: boolean; reveal: boolean }) {
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (props.reveal) setOpen(true)
+  }, [props.reveal])
   const apps = useMentionedApps(props.text)
   const folded = props.foldable && !open
   const shown = folded ? props.text.split("\n").slice(0, foldShown).join("\n") : props.text
@@ -534,6 +555,7 @@ function TypedBubble(props: { text: string; foldable: boolean }) {
     <>
       <Bubble variant="muted" align="end">
         <BubbleContent
+          data-searchable=""
           className={cn(
             "rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap",
             folded && "mask-b-from-50%",
@@ -558,7 +580,7 @@ function TypedBubble(props: { text: string; foldable: boolean }) {
   )
 }
 
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined; fold: boolean }) {
+function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined; fold: boolean; reveal: boolean }) {
   const parts = splitPasted(props.text ?? props.message.text)
   const message = props.message
   const typed = !message.schedule && !message.webhook && !message.channel
@@ -572,7 +594,7 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
       ) : null}
       {files.length > 0 ? <FileChips files={files} /> : null}
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
-      {parts.typed ? <TypedBubble text={parts.typed} foldable={foldable} /> : null}
+      {parts.typed ? <TypedBubble text={parts.typed} foldable={foldable} reveal={props.reveal} /> : null}
     </>
   )
 }
@@ -601,6 +623,7 @@ function UserMessage(props: {
   message: SessionMessage.User
   spaceId: string | undefined
   fold: boolean
+  reveal: boolean
   person: Person
   pending: boolean
   editing: boolean
@@ -629,7 +652,7 @@ function UserMessage(props: {
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (
           <>
-            <UserBody message={props.message} spaceId={props.spaceId} fold={props.fold} />
+            <UserBody message={props.message} spaceId={props.spaceId} fold={props.fold} reveal={props.reveal} />
             <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
           </>
         )}
@@ -1150,6 +1173,7 @@ interface Context {
 
 function UserBlock(props: {
   message: SessionMessage.User
+  rowKey: string
   transcript: TranscriptProps
   editing: boolean
   onEditing: (id: string | undefined) => void
@@ -1169,6 +1193,7 @@ function UserBlock(props: {
       message={message}
       spaceId={transcript.spaceId}
       fold={transcript.foldMessages === true}
+      reveal={foundBelowFold(message.text, transcript.find, props.rowKey)}
       person={person}
       pending={pending}
       editing={props.editing}
@@ -1237,7 +1262,7 @@ function AnswerBlock(props: {
     <Message>
       <MessageContent>
         <Bubble variant="ghost">
-          <BubbleContent className="text-base leading-[1.7]">
+          <BubbleContent data-searchable="" className="text-base leading-[1.7]">
             <SmoothMarkdown
               text={props.text}
               root={props.root}
@@ -1273,6 +1298,7 @@ function BlockView(props: {
     return (
       <UserBlock
         message={block.message}
+        rowKey={block.key}
         transcript={props.transcript}
         editing={props.editing === block.message.id}
         onEditing={props.onEditing}
@@ -1426,9 +1452,22 @@ export function Transcript(props: TranscriptProps) {
       </div>
     )
   return (
-    <MessageScrollerProvider autoScroll={follow.following}>
+    <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
       <TranscriptScroller transcript={props} follow={follow} />
     </MessageScrollerProvider>
+  )
+}
+
+function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Block> }) {
+  const match = props.find.match
+  const row = props.blocks.find(
+    (block) =>
+      block.key === match?.row || (block.kind === "steps" && block.steps.some((step) => step.key === match?.row)),
+  )?.key
+  return (
+    <div className="absolute top-2 right-4 z-10">
+      <FindBar {...props.find} match={row && match ? { row, occurrence: match.occurrence } : undefined} />
+    </div>
   )
 }
 
@@ -1470,7 +1509,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     <MessageScroller className="@container flex-1">
       <MessageScrollerViewport
         preserveScrollOnPrepend
-        pinEnd={follow.following}
+        pinEnd={follow.following && props.find === undefined}
         data-easing={easing}
         className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
         onWheel={(event: WheelEvent<HTMLDivElement>) => {
@@ -1504,6 +1543,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
             <MessageScrollerItem
               key={block.key}
               messageId={block.key}
+              data-row-key={block.key}
               scrollAnchor={block.kind === "user"}
               className={cn(
                 block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
@@ -1530,6 +1570,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
           <WorkingMarker busy={props.busy || watched.live(props.activeMessageID)} working={props.working} />
         </MessageScrollerContent>
       </MessageScrollerViewport>
+      {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
       <MessageScrollerButton />
     </MessageScroller>
   )

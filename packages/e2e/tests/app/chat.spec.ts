@@ -141,9 +141,8 @@ test("a member opens the model picker with its shortcut and undoes the last mess
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   await page.keyboard.press("ControlOrMeta+f")

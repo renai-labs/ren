@@ -46,21 +46,17 @@ export const plan = (
       {
         op: "route",
         upstream: value.upstream,
-        ...Option.match(placeholder, { onNone: () => ({}), onSome: (found) => ({ placeholder: found.text }) }),
+        placeholder: placeholder.text,
       },
       ...value.headers.map((header): Op => ({ op: "setHeader", name: header.name, value: header.value })),
     ])
   }
-  const secret = secretOf(
-    value,
-    Option.flatMap(placeholder, (found) => found.field),
-  )
+  const secret = secretOf(value, placeholder.field)
   if (Option.isNone(secret)) return Result.fail("invalid_value")
   if (inject.op === "replace") {
-    if (Option.isNone(placeholder)) return Result.succeed([])
     if (inject.in.includes("header") && breaksHeader(secret.value)) return Result.fail("invalid_value")
     return Result.succeed([
-      { op: "replace", placeholder: placeholder.value.text, value: Redacted.make(secret.value), in: inject.in },
+      { op: "replace", placeholder: placeholder.text, value: Redacted.make(secret.value), in: inject.in },
     ])
   }
   if (breaksHeader(secret.value)) return Result.fail("invalid_value")
@@ -70,11 +66,6 @@ export const plan = (
       : inject.format.replace("{value}", secret.value)
   return Result.succeed([
     { op: "setHeader", name: inject.name, value: Redacted.make(header) },
-    ...Option.match(placeholder, {
-      onNone: () => [],
-      onSome: (found): ReadonlyArray<Op> => [
-        { op: "replace", placeholder: found.text, value: Redacted.make(secret.value), in: ["header"] },
-      ],
-    }),
+    { op: "replace", placeholder: placeholder.text, value: Redacted.make(secret.value), in: ["header"] },
   ])
 }
