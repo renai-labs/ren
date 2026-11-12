@@ -40,6 +40,7 @@
   --border: rgba(0, 0, 0, 0.08);
   --input: rgba(0, 0, 0, 0.08);
   --ring: #0065cc;
+  --link: #005fc2;
 
   --avatar-from: #b5b5b5;
   --avatar-to: #555555;
@@ -89,6 +90,7 @@
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.08);
   --ring: #268bff;
+  --link: #4da3ff;
 
   --chart-1: #268bff;
   --chart-2: #53c878;
@@ -157,6 +159,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
   --color-avatar-from: var(--avatar-from);
   --color-avatar-to: var(--avatar-to);
   --color-avatar-foreground: var(--avatar-foreground);

@@ -17,11 +17,11 @@ import {
   CodeBlockTitle,
   useHighlightedCode,
 } from "@ren/ui/code-block"
-import { AppMention, mentionLinks } from "@ren/ui/app-mention"
+import { mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
+import { MarkdownApps, MarkdownLink } from "./markdown-link.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
-import { Link } from "@ren/ui/link"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -78,7 +78,7 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+const components = { a: MarkdownLink, code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
@@ -103,8 +103,6 @@ const workspaceImages = () => (tree: MarkdownNode) => {
   }
   visit(tree)
 }
-
-const appLink = "#ren-app:"
 
 const withDataImages = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
@@ -135,37 +133,23 @@ export function Markdown(props: {
   workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
   const apps = props.apps ?? []
-  const withApps =
-    apps.length === 0
-      ? components
-      : {
-          ...components,
-          a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
-            const app = href?.startsWith(appLink)
-              ? apps.find((each) => each.slug === href.slice(appLink.length))
-              : undefined
-            if (app) return <AppMention app={app} />
-            return (
-              <Link href={href} external className="font-medium underline" {...rest}>
-                {children}
-              </Link>
-            )
-          },
-        }
   return (
-    <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
-      >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
-    </WorkspaceImages>
+    <MarkdownApps value={apps}>
+      <WorkspaceImages value={props.workspaceImage}>
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={components}
+          linkSafety={{ enabled: false }}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </WorkspaceImages>
+    </MarkdownApps>
   )
 }

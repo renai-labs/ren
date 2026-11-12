@@ -8,6 +8,8 @@ const linkVariants = cva("transition-colors", {
     appearance: {
       inline: "font-medium text-foreground underline underline-offset-2",
       quiet: "text-muted-foreground underline-offset-2 hover:text-foreground hover:underline",
+      content:
+        "rounded-xs text-link underline-offset-2 outline-none hover:underline hover:decoration-dotted focus-visible:underline focus-visible:decoration-dotted focus-visible:ring-3 focus-visible:ring-ring/50",
       plain: "",
     },
   },
