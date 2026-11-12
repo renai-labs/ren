@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { ChannelInstallInfo, ChannelMappingCreateInput, ChannelMappingInfo } from "@ren/client"
 import { useMutation, useQueries, useSuspenseQuery, type UseQueryResult } from "@tanstack/react-query"
-import { getRouteApi, Link } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { IconAt, IconLinkOff, IconPlus } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Button, buttonVariants } from "@ren/ui/button"
@@ -21,16 +21,14 @@ import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { ListPagination } from "../../components/list-pagination.js"
-import { PageActions, PageFooter, TableCard, TableEmpty } from "../../components/page.js"
+import { LoadMore } from "../../components/load-more.js"
+import { PageActions, TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { errorMessage } from "../../lib/errors.js"
-import { pageSize, currentPage, pageCount } from "../../lib/pagination.js"
+import { useShown } from "../../lib/use-shown.js"
 import { Channels } from "../../lib/channels.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
-
-const route = getRouteApi("/_authed/_shell/spaces/$spaceId/channels")
 
 function ChannelName(props: { provider: Channels.Provider; name: string }) {
   return (
@@ -50,16 +48,14 @@ function emptyText(places: ReadonlyArray<Pick<UseQueryResult, "isPending">>, fai
 export function SpaceChannelsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
-  const search = route.useSearch()
   const mappings = useSuspenseQuery(api["channel-mapping"].list.queryOptions({ ...Channels.all, spaceId: space.id }))
     .data.items
   const installs = useSuspenseQuery(Channels.installsOptions(api)).data.items
   const create = useMutation({ ...api["channel-mapping"].create.mutationOptions() })
   const remove = useMutation({ ...api["channel-mapping"].remove.mutationOptions() })
   const [adding, setAdding] = useState(false)
-  const page = Math.min(currentPage(search), pageCount(mappings.length, pageSize))
+  const shown = useShown(mappings)
   const canLink = space.membershipId !== null || space.canUpdate
-  const visible = mappings.slice((page - 1) * pageSize, page * pageSize)
   const open = (next: boolean) => {
     create.reset()
     setAdding(next)
@@ -99,10 +95,10 @@ export function SpaceChannelsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.length === 0 ? (
+            {shown.items.length === 0 ? (
               <TableEmpty columns={3}>No channels yet. Link one so people can mention @Ren there.</TableEmpty>
             ) : null}
-            {visible.map((mapping) => {
+            {shown.items.map((mapping) => {
               const name = Channels.label(mapping.provider, mapping.placeName)
               return (
                 <TableRow key={mapping.id}>
@@ -135,9 +131,7 @@ export function SpaceChannelsTab() {
           </TableBody>
         </Table>
       </TableCard>
-      <PageFooter>
-        <ListPagination page={page} pageSize={pageSize} total={mappings.length} noun="channel" />
-      </PageFooter>
+      <LoadMore more={shown.more} onMore={shown.next} />
       {adding ? (
         <AddChannelsDialog
           spaceId={space.id}

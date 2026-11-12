@@ -142,7 +142,7 @@ export function Page(props: PageProps) {
   )
 }
 
-export function PageFooter(props: { children: ReactNode }) {
+function PageFooter(props: { children: ReactNode }) {
   return <div className="mt-auto flex items-center justify-between gap-4 empty:hidden">{props.children}</div>
 }
 

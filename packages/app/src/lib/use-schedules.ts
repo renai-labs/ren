@@ -1,13 +1,13 @@
 import { useState } from "react"
 import type { ScheduleInfo } from "@ren/client"
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import type { Filters } from "../components/filter-menu.js"
 import { useDebouncedValue } from "./use-debounced-value.js"
 import { useNow } from "./use-now.js"
 import { useSpaces } from "./use-spaces.js"
 import { errorMessage } from "./errors.js"
-import { pageSize, currentPage, lastPageAfterRemoval } from "./pagination.js"
+import { Pages } from "./pages.js"
 import { localTimeZone, scheduleListInput, type ScheduleSearch } from "./schedules.js"
 import { RouterContext } from "./router-context.js"
 import { Loader } from "./loader.js"
@@ -22,18 +22,18 @@ export function useSchedules(options: {
   spaceId?: string
   setSearch: (update: Partial<ScheduleSearch>, navigation?: { readonly replace?: boolean }) => void
 }) {
-  const { api } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const search = options.search
   const spaces = useSpaces()
   const now = useNow()
-  const page = currentPage(search)
   const [query, setQuery] = useState("")
   const text = useDebouncedValue(query.trim(), 250)
-  const schedules = useQuery({
-    ...api.schedule.list.queryOptions(scheduleListInput(search, { page, pageSize, text, spaceId: options.spaceId })),
+  const pages = useInfiniteQuery({
+    ...Pages.schedules(client, scheduleListInput(search, { text, spaceId: options.spaceId })),
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
+  const items = pages.data?.pages.flatMap((page) => page.items)
   const [sheet, setSheet] = useState<{
     open: boolean
     id: string | undefined
@@ -43,7 +43,7 @@ export function useSchedules(options: {
     id: search.schedule,
     key: 0,
   }))
-  const listed = schedules.data?.items.find((schedule) => schedule.id === sheet.id)
+  const listed = items?.find((schedule) => schedule.id === sheet.id)
   const fetched = useQuery({
     ...api.schedule.get.queryOptions({ idOrSlug: sheet.id ?? "" }),
     enabled: sheet.id !== undefined && !listed,
@@ -56,12 +56,12 @@ export function useSchedules(options: {
   const filters = filtersOf(search)
   const toggling = (schedule: ScheduleInfo) =>
     (pause.isPending && pause.variables.id === schedule.id) || (resume.isPending && resume.variables.id === schedule.id)
-  const total = schedules.data?.total ?? 0
   return {
-    page,
-    total,
-    schedules: schedules.data?.items,
-    stale: schedules.isPlaceholderData,
+    schedules: items,
+    stale: pages.isPlaceholderData,
+    more: pages.hasNextPage,
+    loadingMore: pages.isFetchingNextPage,
+    loadMore: () => void pages.fetchNextPage(),
     filtered: text !== "" || Object.values(filters).some((values) => values.length > 0),
     spaceId: options.spaceId,
     spaces: spaces.joined,
@@ -69,14 +69,10 @@ export function useSchedules(options: {
     now,
     zone: localTimeZone(),
     query,
-    setQuery: (value: string) => {
-      setQuery(value)
-      if (search.page) options.setSearch({ page: undefined }, { replace: true })
-    },
+    setQuery,
     filters,
     setFilters: (next: Filters) =>
       options.setSearch({
-        page: undefined,
         filters: Object.values(next).some((values) => values.length > 0) ? next : undefined,
       }),
     sheet: {
@@ -105,11 +101,7 @@ export function useSchedules(options: {
     setDeleting,
     remove: (schedule: ScheduleInfo) =>
       archive.mutateAsync({ id: schedule.id }).then(
-        () => {
-          toast.success("Schedule deleted")
-          const last = lastPageAfterRemoval(page, total, pageSize)
-          if (last !== page) options.setSearch({ page: last })
-        },
+        () => toast.success("Schedule deleted"),
         (error: unknown) => toast.error("Could not delete the schedule", { description: errorMessage(error) }),
       ),
   }

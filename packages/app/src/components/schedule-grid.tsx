@@ -16,6 +16,7 @@ import { ConfirmDialog } from "./confirm-dialog.js"
 import { EmptyState } from "./empty-state.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { FilterMenu, spaceOptions, type FilterProperty } from "./filter-menu.js"
+import { LoadMore } from "./load-more.js"
 import { TableCard, TableSample, useShapeId } from "./page.js"
 import { Loading } from "@ren/ui/loading"
 import { RowMenu } from "./row-menu.js"
@@ -162,6 +163,7 @@ export function ScheduleGrid(props: { list: Schedules }) {
           </TableCard>
         ) : null}
       </Loading>
+      <LoadMore more={list.more} loading={list.loadingMore} onMore={list.loadMore} />
       <ScheduleSheet
         open={list.sheet.open}
         version={list.sheet.key}

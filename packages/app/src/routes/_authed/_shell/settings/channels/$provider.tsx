@@ -23,7 +23,6 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
       add: Schema.optional(Schema.Boolean),
       place: Schema.optional(Schema.String),
       q: Schema.optional(Schema.String),
-      page: Schema.optional(Schema.Number),
       spaces: Schema.optional(Schema.Array(Schema.String)),
     }),
   ),
