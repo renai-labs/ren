@@ -13,7 +13,7 @@ test("a chat message renders mermaid diagrams and math, and keeps prices as text
     [
       "```mermaid",
       "graph TD",
-      "  A --> B",
+      "  A[Gizmo] --> B",
       "```",
       "",
       "Inline $$x^2$$ and \\(y^3\\) with costs $5 and $10.",
@@ -34,5 +34,14 @@ test("a chat message renders mermaid diagrams and math, and keeps prices as text
   await expect(page.locator(".katex")).toHaveCount(2)
   await expect(message.locator(".katex")).toHaveCount(2)
   await expect(page.getByText("Diagram error:")).toBeVisible()
+
+  await page.keyboard.press("ControlOrMeta+f")
+  const find = page.getByRole("searchbox", { name: "Find in chat" })
+  const status = page.getByRole("search", { name: "Find in chat" }).getByRole("status")
+  await find.fill("x2")
+  await expect(status).toHaveText("1/1")
+  await expect.poll(() => page.evaluate<number>('CSS.highlights.get("ren-find-active")?.size ?? 0')).toBe(1)
+  await find.fill("Gizmo")
+  await expect(status).toHaveText("No results")
   await page.screenshot({ path: test.info().outputPath("chat-markdown.png") })
 })
