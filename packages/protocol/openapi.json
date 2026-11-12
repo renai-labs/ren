@@ -14680,7 +14680,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "Where the egress puts the value: `replace` swaps the placeholder where it is found, `setHeader` sets a header on every request to the hosts, `route` forwards to the value as the upstream URL."
+        "description": "Where the egress puts the value: `replace` swaps the placeholder where it is found, `setHeader` sets a header on a request to the hosts that holds the placeholder anywhere in its headers, `route` forwards to the value as the upstream URL."
       },
       "Credential.Item": {
         "anyOf": [
