@@ -36,7 +36,7 @@ export function maxScale(fitRatio: number) {
   return Math.max(1, maxNaturalZoom / fitRatio)
 }
 
-export function clampView(view: View, bounds: Bounds): View {
+function clampView(view: View, bounds: Bounds): View {
   return {
     scale: view.scale,
     x: clampAxis(view.x, bounds.width * view.scale, bounds.viewportWidth),
