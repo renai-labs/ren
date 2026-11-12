@@ -55,6 +55,9 @@ export interface Interface {
   ) => Effect.Effect<void, HandApi.FileNotFoundError | HandApi.WrongKindError | HandApi.FileSystemError>
   readonly mkdir: (path: string) => Effect.Effect<void, HandApi.FileSystemError>
   readonly unpack: (input: HandApi.UnpackInput) => Effect.Effect<void, HandApi.ArchiveError | HandApi.FileSystemError>
+  readonly pack: (
+    input: HandApi.PackInput,
+  ) => Effect.Effect<void, HandApi.ArchiveError | HandApi.FileNotFoundError | HandApi.WrongKindError | HandApi.FileSystemError>
   readonly mount: (input: HandApi.MountInput) => Effect.Effect<void, HandApi.MountError>
   readonly refresh: (input: HandApi.RefreshInput) => Effect.Effect<void, HandApi.MountError>
   readonly uploaded: (input: HandApi.UploadedInput) => Effect.Effect<void, HandApi.MountError>

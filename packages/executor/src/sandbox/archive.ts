@@ -2,8 +2,8 @@ export * as SandboxArchive from "./archive.js"
 
 import { HandApi } from "@ren/hand-api/hand-api"
 import { Deferred, Duration, Effect, Exit, Stream } from "effect"
-import { type FileHandle, lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises"
-import { basename, dirname, join, resolve, sep } from "node:path"
+import { type FileHandle, lstat, mkdir, open, readdir, rename, rm, stat } from "node:fs/promises"
+import { basename, dirname, join, relative, resolve, sep } from "node:path"
 
 const decoder = new TextDecoder()
 
@@ -106,6 +106,75 @@ const isSafe = (path: string) =>
 export const stallAfter = Duration.seconds(60)
 
 const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
+
+export const pack = (workspace: string) =>
+  Effect.fn("Executor.pack")(function* (input: EnvironmentApi.PackInput) {
+    const root = resolve(workspace, input.path)
+    const target = new URL(input.url)
+    const failed = (message: string) =>
+      new EnvironmentApi.ArchiveError({ url: `${target.origin}${target.pathname}`, message })
+    const fileSystem = (path: string) => (cause: unknown) =>
+      new EnvironmentApi.FileSystemError({ path, message: messageOf(cause) })
+    const found = yield* Effect.tryPromise({
+      try: () => stat(root),
+      catch: (cause) =>
+        cause instanceof Error && "code" in cause && cause.code === "ENOENT"
+          ? new EnvironmentApi.FileNotFoundError({ path: input.path })
+          : fileSystem(input.path)(cause),
+    })
+    if (!found.isDirectory())
+      return yield* new EnvironmentApi.WrongKindError({
+        path: input.path,
+        actual: found.isFile() ? "file" : "other",
+      })
+    const entries = yield* Effect.tryPromise({
+      try: () => readdir(root, { recursive: true, withFileTypes: true }),
+      catch: fileSystem(input.path),
+    })
+    const named = entries.map((entry) => ({ entry, path: relative(root, join(entry.parentPath, entry.name)) }))
+    const odd = named.find((each) => !each.entry.isFile() && !each.entry.isDirectory())
+    if (odd)
+      return yield* failed(
+        odd.entry.isSymbolicLink()
+          ? `The folder has a link at ${odd.path}, and the executor packs only files`
+          : `The folder has a special file at ${odd.path}, and the executor packs only files`,
+      )
+    const files = named.filter((each) => each.entry.isFile())
+    if (files.length === 0) return yield* failed("The folder has no files")
+    if (files.length > input.maxFiles) return yield* failed(`The folder has more than ${input.maxFiles} files`)
+    const sized = yield* Effect.forEach(
+      files,
+      (each) =>
+        Effect.tryPromise({ try: () => lstat(join(root, each.path)), catch: fileSystem(each.path) }).pipe(
+          Effect.map((stats) => ({ path: each.path, size: stats.size })),
+        ),
+      { concurrency: 16 },
+    )
+    const large = sized.find((each) => each.size > input.maxFileBytes)
+    if (large) return yield* failed(`${large.path} is larger than ${input.maxFileBytes} bytes`)
+    if (sized.reduce((total, each) => total + each.size, 0) > input.maxBytes)
+      return yield* failed(`The folder is larger than ${input.maxBytes} bytes`)
+    const folder = basename(root) || "folder"
+    const archive = yield* Effect.tryPromise({
+      try: async () =>
+        new Bun.Archive(
+          Object.fromEntries(
+            await Promise.all(
+              sized.map(
+                async (each) => [`${folder}/${each.path}`, await Bun.file(join(root, each.path)).bytes()] as const,
+              ),
+            ),
+          ),
+          { compress: "gzip" },
+        ).bytes(),
+      catch: fileSystem(input.path),
+    })
+    const response = yield* Effect.tryPromise({
+      try: (signal) => fetch(input.url, { method: "PUT", body: archive, signal }),
+      catch: (cause) => failed(`Could not upload the archive: ${messageOf(cause)}`),
+    })
+    if (!response.ok) return yield* failed(`The upload answered ${response.status}`)
+  })
 
 // oxlint-disable-next-line ren/no-comments -- Downloads into a staging folder beside the path and renames it at the end, so the path exists only with every file in it. R41: one download runs for each path; a second unpack waits for it, and downloads itself when the first was interrupted.
 export const unpack = (workspace: string) => {

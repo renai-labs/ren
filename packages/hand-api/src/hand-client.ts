@@ -17,6 +17,7 @@ const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "process.kill": Duration.seconds(5),
   // oxlint-disable-next-line ren/no-comments -- R39: a reference archive can have 1 GiB; the executor stops a stalled download after 60 s itself.
   "files.unpack": Duration.minutes(10),
+  "files.pack": Duration.minutes(10),
   "drives.mount": Duration.minutes(1),
   "drives.refresh": Duration.minutes(1),
   "drives.uploaded": Duration.minutes(3),
