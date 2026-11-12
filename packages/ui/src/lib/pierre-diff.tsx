@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useMemo } from "react"
+import { type ReactNode, useCallback, useMemo, useSyncExternalStore } from "react"
 // ast-grep-ignore: no-import-alias -- the React Virtualizer component below has the same name
 import { Virtualizer as WindowVirtualizer } from "@pierre/diffs"
 import { MultiFileDiff, PatchDiff, Virtualizer, VirtualizerContext, WorkerPoolContext } from "@pierre/diffs/react"
@@ -38,20 +38,42 @@ const shared = {
 } as const
 
 let pool: WorkerPoolManager | undefined
+let holders = 0
+const listeners = new Set<() => void>()
+
+const setPool = (next: WorkerPoolManager | undefined) => {
+  pool = next
+  for (const listener of listeners) listener()
+}
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener)
+  return () => void listeners.delete(listener)
+}
+
+const currentPool = () => pool
 
 export function retainWorkers() {
   if (typeof Worker === "undefined") return () => undefined
-  pool = getOrCreateWorkerPoolSingleton({
-    poolOptions: { workerFactory: () => new Worker(workerUrl, { type: "module" }), poolSize: 2 },
-    highlighterOptions: {
-      theme,
-      lineDiffType: "word-line",
-      maxLineDiffLength: longLine,
-      tokenizeMaxLineLength: longLine,
-    },
-  })
+  holders += 1
+  setPool(
+    getOrCreateWorkerPoolSingleton({
+      poolOptions: { workerFactory: () => new Worker(workerUrl, { type: "module" }), poolSize: 2 },
+      highlighterOptions: {
+        theme,
+        lineDiffType: "word-line",
+        maxLineDiffLength: longLine,
+        tokenizeMaxLineLength: longLine,
+      },
+    }),
+  )
+  let released = false
   return () => {
-    pool = undefined
+    if (released) return
+    released = true
+    holders -= 1
+    if (holders > 0) return
+    setPool(undefined)
     terminateWorkerPoolSingleton()
   }
 }
@@ -102,6 +124,7 @@ export function PierreDiff(props: {
   windowed: boolean
 }) {
   const source = props.source
+  const workers = useSyncExternalStore(subscribe, currentPool, () => undefined)
   const className = "bg-transparent!"
   const options = { ...shared, themeType: props.theme }
   const diff =
@@ -115,7 +138,7 @@ export function PierreDiff(props: {
       />
     )
   return (
-    <WorkerPoolContext.Provider value={pool}>
+    <WorkerPoolContext.Provider value={workers}>
       <Windowed capped={props.capped} windowed={props.windowed}>
         {diff}
       </Windowed>
