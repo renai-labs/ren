@@ -7,6 +7,10 @@ const exceptions = new Map([
     "infra",
     "Plans, applies and pulls an org spec: a diff and a reconcile across many records, which no primitive operation is.",
   ],
+  [
+    "app-tools",
+    "Reads the tools of a registry app’s MCPs, a part of its listing that the catalog leaves out: no primitive operation addresses a part of a record.",
+  ],
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
   [

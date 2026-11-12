@@ -1,7 +1,7 @@
 import { HttpApi, OpenApi } from "effect/http-api"
 import { AgentGroup } from "./groups/agent.js"
 import { AppGroup } from "./groups/app.js"
-import { AppRegistryGroup } from "./groups/app-registry.js"
+import { AppRegistryGroup, AppToolsGroup } from "./groups/app-registry.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
 import { ChannelConnectGroup, ChannelInstallGroup, ChannelMappingGroup } from "./groups/channel-install.js"
@@ -52,6 +52,7 @@ export const Api = HttpApi.make("server")
   .add(AppProfileGroup)
   .add(AppProfileReachGroup)
   .add(AppRegistryGroup)
+  .add(AppToolsGroup)
   .add(AgentMembershipGroup)
   .add(SessionGroup)
   .add(ChatGroup)

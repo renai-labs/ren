@@ -717,12 +717,19 @@ type AppRegistryListRequest = Parameters<RawClient["app-registry"]["app-registry
 type AppRegistryListInput = {
   readonly query?: AppRegistryListRequest["query"]["query"]
   readonly category?: AppRegistryListRequest["query"]["category"]
+  readonly slugs?: AppRegistryListRequest["query"]["slugs"]
   readonly page: AppRegistryListRequest["query"]["page"]
   readonly pageSize: AppRegistryListRequest["query"]["pageSize"]
 }
 const EndpointAppRegistryList = (raw: RawClient["app-registry"]) => (input: AppRegistryListInput) =>
   raw["app-registry.list"]({
-    query: { query: input["query"], category: input["category"], page: input["page"], pageSize: input["pageSize"] },
+    query: {
+      query: input["query"],
+      category: input["category"],
+      slugs: input["slugs"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 type AppRegistryGetRequest = Parameters<RawClient["app-registry"]["app-registry.get"]>[0]
@@ -734,6 +741,13 @@ const adaptGroupAppRegistry = (raw: RawClient["app-registry"]) => ({
   list: EndpointAppRegistryList(raw),
   get: EndpointAppRegistryGet(raw),
 })
+
+type AppToolsGetRequest = Parameters<RawClient["app-tools"]["app-tools.get"]>[0]
+type AppToolsGetInput = { readonly idOrSlug: AppToolsGetRequest["params"]["idOrSlug"] }
+const EndpointAppToolsGet = (raw: RawClient["app-tools"]) => (input: AppToolsGetInput) =>
+  raw["app-tools.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAppTools = (raw: RawClient["app-tools"]) => ({ get: EndpointAppToolsGet(raw) })
 
 type AgentMembershipListRequest = Parameters<RawClient["agent-membership"]["agent-membership.list"]>[0]
 type AgentMembershipListInput = {
@@ -1871,6 +1885,7 @@ const adaptClient = (raw: RawClient) => ({
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),
   "app-profile-reach": adaptGroupAppProfileReach(raw["app-profile-reach"]),
   "app-registry": adaptGroupAppRegistry(raw["app-registry"]),
+  "app-tools": adaptGroupAppTools(raw["app-tools"]),
   "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
   session: adaptGroupSession(raw["session"]),
   chat: adaptGroupChat(raw["chat"]),

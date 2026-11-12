@@ -521,8 +521,14 @@ export const AppRegistryList = (input: Command.Command.Config.Infer<typeof Comma
   Operation.run(
     ClientApi.groups["app-registry"].endpoints["app-registry.list"],
     {
-      query: { query: input["query"], category: input["category"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { query: "--query", category: "--category", page: "--page", pageSize: "--page-size" },
+      query: {
+        query: input["query"],
+        category: input["category"],
+        slugs: input["slugs"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { query: "--query", category: "--category", slugs: "--slugs", page: "--page", pageSize: "--page-size" },
     },
     (client, request) => client["app-registry"]["list"]({ ...request.query }),
   )
@@ -1708,6 +1714,13 @@ export const TaskPullRequests = (input: Command.Command.Config.Infer<typeof Comm
       },
     },
     (client, request) => client["link"]["task"]["pullRequests"]({ ...request.params }),
+  )
+
+export const AppToolsGet = (input: Command.Command.Config.Infer<typeof Commands.AppToolsGet>) =>
+  Operation.run(
+    ClientApi.groups["app-tools"].endpoints["app-tools.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<app>" } },
+    (client, request) => client["app-tools"]["get"]({ ...request.params }),
   )
 
 export const AppProfileDelete = (input: Command.Command.Config.Infer<typeof Commands.AppProfileDelete>) =>

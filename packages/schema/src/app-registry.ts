@@ -5,7 +5,6 @@ import { App } from "./app.js"
 import { AppListing } from "./app-listing.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
-import { Skill } from "./skill.js"
 
 export const descriptionMaxLength = 50
 
@@ -64,14 +63,12 @@ export const Info = Schema.Struct({
   name: Primitive.Name,
   description: Schema.NonEmptyString,
   icon: Schema.NullOr(Schema.String),
-  listing: AppListing.Info,
-  requiredCredentials: App.Info.fields.requiredCredentials,
-  environment: App.Info.fields.environment,
-  mcps: App.Info.fields.mcps,
-  skills: Schema.Record(Primitive.Slug, Skill.Summary),
-  dependsOn: App.Info.fields.dependsOn,
+  listing: AppListing.Summary,
   revision: Schema.Int,
-}).annotate({ identifier: "AppRegistry.Info" })
+}).annotate({
+  identifier: "AppRegistry.Info",
+  description: "A registry app as the catalog shows it. app.get returns its MCPs, skills and keys.",
+})
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
@@ -79,6 +76,9 @@ export const ListInput = Schema.Struct({
     Schema.String.annotate({ description: "Match the slug, name or description, ignoring case." }),
   ),
   category: Schema.optional(Primitive.Slug.annotate({ description: "Match a category in any group." })),
+  slugs: Schema.optional(
+    Schema.Array(Primitive.Slug).annotate({ description: "Only the apps with these slugs, in slug order." }),
+  ),
   ...Pagination.fields(50),
 }).annotate({ identifier: "AppRegistry.ListInput" })
 

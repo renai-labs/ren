@@ -42,6 +42,16 @@ export const Input = Schema.Struct({
   ).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "AppListing.Input" })
 
+export interface Summary extends Schema.Schema.Type<typeof Summary> {}
+export const Summary = Schema.Struct({
+  body: Schema.NullOr(Schema.String),
+  categories: Categories,
+  examplePrompts: Schema.Array(Schema.String),
+  toolCounts: Schema.Record(Primitive.Slug, Schema.Int).annotate({
+    description: "How many tools each MCP of the app offers, by MCP slug. app-tools.get returns the tools.",
+  }),
+}).annotate({ identifier: "AppListing.Summary" })
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   appId: AppIdentity.ID,

@@ -50,7 +50,7 @@ import { Api } from "./api.js"
 import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AppHandler } from "./handlers/api/app.js"
-import { AppRegistryHandler } from "./handlers/api/app-registry.js"
+import { AppRegistryHandler, AppToolsHandler } from "./handlers/api/app-registry.js"
 import { AppProfileHandler, AppProfileReachHandler } from "./handlers/api/app-profile.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
 import { ChatHandler } from "./handlers/api/chat.js"
@@ -179,6 +179,7 @@ export const layer = Layer.mergeAll(
         AppProfileHandler,
         AppProfileReachHandler,
         AppRegistryHandler,
+        AppToolsHandler,
         AgentMembershipHandler,
         SessionHandler,
         ChatHandler,

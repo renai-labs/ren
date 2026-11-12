@@ -814,7 +814,7 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; onSignIn: ()
 }
 
 function keyTarget(item: AppProfileItem, app: App) {
-  const mcp = "mcp" in item.item ? app.mcps[item.item.mcp] : undefined
+  const mcp = "mcp" in item.item ? app.mcps?.[item.item.mcp] : undefined
   const auth = mcp?.auth
   const transport = mcp?.transport
   return {
