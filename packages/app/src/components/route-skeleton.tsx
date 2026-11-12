@@ -1,3 +1,4 @@
+import { AppDetailSample } from "./app-detail.js"
 import { AppListingSample } from "./app-list.js"
 import { Loading } from "@ren/ui/loading"
 import { Button } from "@ren/ui/button"
@@ -189,7 +190,7 @@ export function RouteSkeleton() {
         <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
       </PageSkeleton>
     )
-  if (path.startsWith("/apps/")) return <PageSkeleton title="Loading app" />
+  if (path.startsWith("/apps/")) return <AppDetailSample />
   if (path === "/apps")
     return (
       <PageSkeleton
