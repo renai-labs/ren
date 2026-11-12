@@ -232,7 +232,12 @@ function WebhookSettingsLink(props: { spaceId: string; webhook: WebhookInfo }) {
             to="/spaces/$spaceId/webhooks/$webhookId"
             params={{ spaceId: props.spaceId, webhookId: props.webhook.id }}
             aria-label="Requests and parser"
-            className={buttonVariants({ variant: "ghost", size: "icon-sm", className: "text-muted-foreground" })}
+            className={buttonVariants({
+              variant: "ghost",
+              size: "icon-sm",
+              className:
+                "text-muted-foreground opacity-0 group-focus-within/item:opacity-100 group-hover/item:opacity-100",
+            })}
           >
             <IconSettings />
           </Link>
@@ -253,7 +258,14 @@ export function WebhookTrigger(props: {
   const webhook = props.webhook
   const signed = webhook?.parser?.signature?.kind === "header" && webhook.hasSigningSecret
   return (
-    <TriggerRow actions={<RemoveButton label="Remove webhook" onRemove={props.onRemove} />}>
+    <TriggerRow
+      actions={
+        <>
+          {webhook ? <WebhookSettingsLink spaceId={props.spaceId} webhook={webhook} /> : null}
+          <RemoveButton label="Remove webhook" onRemove={props.onRemove} />
+        </>
+      }
+    >
       <span>{webhook?.preset ? `${webhook.preset.appName} · ${webhook.name}` : "Webhook"}</span>
       {webhook ? (
         <>
@@ -273,7 +285,6 @@ export function WebhookTrigger(props: {
               {signed ? "Copy auth header" : "Generate auth header"}
             </Button>
           )}
-          <WebhookSettingsLink spaceId={props.spaceId} webhook={webhook} />
         </>
       ) : (
         <span className="text-muted-foreground">Save to get its URL</span>

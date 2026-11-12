@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { IconCode, IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
+import { IconAlertTriangle, IconCode, IconCopy, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { cn } from "cn"
 import { toast } from "@ren/ui/sonner"
+import { Alert, AlertDescription } from "@ren/ui/alert"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -208,7 +209,6 @@ function EditorHeader(props: {
   changed: boolean
   onSave: () => void
   onCancel: () => void
-  onTested: () => void
   onOpen: (saved: { readonly spaceId: string; readonly slug: string }) => void
   onDeleted: () => void
 }) {
@@ -244,7 +244,7 @@ function EditorHeader(props: {
               <Button
                 variant="outline"
                 disabled={blocked !== null || actions.testing}
-                onClick={() => automation && void actions.test(automation).then(props.onTested)}
+                onClick={() => automation && void actions.test(automation)}
               >
                 <IconPlayerPlay data-icon="inline-start" />
                 Test
@@ -300,16 +300,21 @@ function EditorMeta(props: {
         </span>
       </label>
       <Separator orientation="vertical" className="h-4 self-center" />
-      {automation ? (
-        <span>{spaces.spaceName(automation.spaceId)}</span>
-      ) : (
-        <SpaceChoice
-          value={props.draft.spaceId}
-          onChange={(spaceId) => props.onChange({ spaceId, agent: Webhooks.defaultAgent })}
-        />
-      )}
+      <SpaceChoice
+        value={props.draft.spaceId}
+        onChange={(spaceId) => props.onChange({ spaceId, agent: Webhooks.defaultAgent })}
+      />
       <Separator orientation="vertical" className="h-4 self-center" />
       <span>By {owner}</span>
+      {automation && props.draft.spaceId !== automation.spaceId ? (
+        <Alert className="basis-full">
+          <IconAlertTriangle />
+          <AlertDescription>
+            Saving moves it to {spaces.spaceName(props.draft.spaceId)}.
+            {automation.webhook ? " Its webhook gets a new URL and auth header." : ""}
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   )
 }
@@ -347,7 +352,7 @@ function Editor(props: {
     void actions.save(draft, automation).then((saved) => {
       toast.success(automation ? "Automation saved" : "Automation created")
       setInitial(draft)
-      if (!automation || saved.slug !== automation.slug) void open(saved)
+      if (!automation || saved.slug !== automation.slug || saved.spaceId !== automation.spaceId) void open(saved)
     })
   }
   const name = Automations.nameOrDefault(draft.name)
@@ -360,7 +365,6 @@ function Editor(props: {
         changed={changed}
         onSave={save}
         onCancel={() => (automation ? setDraft(initial) : void toList())}
-        onTested={() => props.onTab("runs")}
         onOpen={(saved) => void open(saved)}
         onDeleted={() => void toList()}
       />

@@ -58,6 +58,11 @@ const failed = (what: string) => (error: unknown) => {
 }
 
 // oxlint-disable-next-line ren/no-comments -- Writes a draft to the schedule and the webhook of an automation: it adds, changes or archives each trigger, keeps the name, the instructions and the agent the same on both, and turns them on or off together.
+interface Saved {
+  readonly spaceId: string
+  readonly slug: string
+}
+
 export function useAutomationActions() {
   const { api } = RouterContext.useRouterContext()
   const createSchedule = useMutation(api.schedule.create.mutationOptions())
@@ -131,18 +136,24 @@ export function useAutomationActions() {
     if (!active && webhook.mode === "live") await updateWebhook.mutateAsync({ id: webhook.id, mode: "listening" })
   }
 
-  const save = async (draft: Draft, automation: Automation | undefined) => {
+  const archiveAll = async (automation: Automation) => {
+    if (automation.schedule) await archiveSchedule.mutateAsync({ id: automation.schedule.id })
+    if (automation.webhook) await archiveWebhook.mutateAsync({ id: automation.webhook.id })
+  }
+
+  const save = async (draft: Draft, automation: Automation | undefined): Promise<Saved> => {
+    // oxlint-disable-next-line ren/no-comments -- A schedule or a webhook stays in its space, so a move makes them again in the new space and archives the old ones.
+    if (automation && draft.spaceId !== automation.spaceId) {
+      const moved = await save(draft, undefined)
+      await archiveAll(automation)
+      return moved
+    }
     const slug = automation?.slug
     const schedule = await writeSchedule(draft, automation?.schedule, slug)
     const webhook = await writeWebhook(draft, automation?.webhook, slug ?? schedule?.slug)
     await switchSchedule(schedule, { active: draft.active })
     await switchWebhook(webhook, { active: draft.active })
     return { spaceId: draft.spaceId, slug: [schedule?.slug, webhook?.slug, slug].find(Boolean) ?? "" }
-  }
-
-  const remove = async (automation: Automation) => {
-    if (automation.schedule) await archiveSchedule.mutateAsync({ id: automation.schedule.id })
-    if (automation.webhook) await archiveWebhook.mutateAsync({ id: automation.webhook.id })
   }
 
   return {
@@ -156,7 +167,7 @@ export function useAutomationActions() {
     save: (draft: Draft, automation: Automation | undefined) =>
       save(draft, automation).catch(failed("Couldn’t save the automation")),
     remove: (automation: Automation) =>
-      remove(automation).then(
+      archiveAll(automation).then(
         () => toast.success(`${automation.name} deleted`),
         failed("Couldn’t delete the automation"),
       ),
@@ -174,7 +185,7 @@ export function useAutomationActions() {
       return runNow
         .mutateAsync({ id: schedule.id })
         .then(
-          () => toast.success("Test run started", { description: "It shows under Runs in a moment." }),
+          () => toast.success("Test run started", { description: "It shows in Run history in a moment." }),
           failed("Couldn’t start a test run"),
         )
     },
