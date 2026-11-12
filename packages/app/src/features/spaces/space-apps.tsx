@@ -1,8 +1,8 @@
 import { getRouteApi } from "@tanstack/react-router"
 import { useState } from "react"
 import type { AppProfileInfo } from "@ren/client"
-import { useQuery } from "@tanstack/react-query"
-import { IconPlus, IconUserPlus } from "@tabler/icons-react"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { IconPlus, IconTrash, IconUserPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -11,18 +11,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
+import { toast } from "@ren/ui/sonner"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
 import { PageActions, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
+import { afterRemoval } from "../../components/space-removal.js"
+import type { RowMenuItem } from "../../components/row-menu.js"
 import { useShown } from "../../lib/use-shown.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Search } from "../../lib/search.js"
+import { errorMessage } from "../../lib/errors.js"
 import { useApp, useApps } from "../../lib/use-app.js"
-import { source } from "../../lib/apps.js"
+import { source, type CatalogApp } from "../../lib/apps.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -53,6 +57,77 @@ function AddAccount(props: { onNew: () => void; onExisting: () => void }) {
   )
 }
 
+function NoApps(props: { query: string; space: string; onAdd: () => void }) {
+  if (props.query.trim()) return Search.empty(props.query, "No apps")
+  return (
+    <span className="flex flex-col items-center gap-3">
+      No apps in {props.space} yet.
+      <Button variant="outline" size="sm" onClick={props.onAdd}>
+        <IconPlus data-icon="inline-start" />
+        Add app
+      </Button>
+    </span>
+  )
+}
+
+const names = (profiles: ReadonlyArray<AppProfileInfo>) => profiles.map((profile) => `“${profile.name}”`).join(", ")
+
+function useRemoveApp(space: { id: string; name: string; kind: string; membershipId: string | null }) {
+  const { api } = RouterContext.useRouterContext()
+  const access = useMutation(api["app-profile"].access.mutationOptions())
+  const shape = (() => {
+    if (space.kind === "private") return "ownPrivate"
+    return space.membershipId ? "joined" : "shared"
+  })()
+  return (row: { app: CatalogApp; profiles: ReadonlyArray<AppProfileInfo> }): RowMenuItem | undefined => {
+    const app = row.app
+    const listed = row.profiles.filter(
+      (profile) =>
+        profile.kind === "shared" && !profile.allSpaces && profile.spaces.some((each) => each.id === space.id),
+    )
+    const removable = listed.filter((profile) => profile.canRemove.includes(shape))
+    if (removable.length === 0) return undefined
+    const locked = listed.filter((profile) => !profile.canRemove.includes(shape))
+    const everywhere = row.profiles.filter((profile) => profile.allSpaces)
+    const notes = [
+      everywhere.length > 0
+        ? `${names(everywhere)} ${everywhere.length === 1 ? "stays because it is" : "stay because they are"} in every space.`
+        : "",
+      locked.length > 0 ? `Only an admin can remove ${names(locked)} from ${space.name}.` : "",
+    ].filter(Boolean)
+    const kept = everywhere.length > 0 || locked.length > 0
+    return {
+      label: `Remove from ${space.name}`,
+      icon: IconTrash,
+      confirm: {
+        title: `Remove ${app.name} from ${space.name}?`,
+        description: [
+          kept ? `${space.name} stops using ${names(removable)}.` : `The agent in ${space.name} loses ${app.name}.`,
+          "Accounts with a sign-in are kept.",
+          ...notes,
+        ].join(" "),
+        action: `Remove ${app.name}`,
+      },
+      onSelect: () =>
+        Promise.all(removable.map((profile) => access.mutateAsync({ id: profile.id, remove: [space.id] }))).then(
+          (infos) => {
+            const settings = infos.filter((info) => afterRemoval(info) === "kept")
+            const description = [
+              settings.length > 0 ? `Find ${names(settings)} in Settings → Credentials.` : "",
+              ...notes,
+            ].filter(Boolean)
+            toast.success(
+              `${app.name} removed from ${space.name}`,
+              description.length > 0 ? { description: description.join(" ") } : {},
+            )
+          },
+          (error: unknown) =>
+            toast.error(`Couldn’t remove ${app.name} from ${space.name}`, { description: errorMessage(error) }),
+        ),
+    }
+  }
+}
+
 export function SpaceAppsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
@@ -66,6 +141,8 @@ export function SpaceAppsTab() {
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
+  const [adding, setAdding] = useState(false)
+  const remove = useRemoveApp(space)
   const [query, setQuery] = useState("")
   const reached = reach.data?.profiles ?? []
   const byApp = Map.groupBy(reached, (each) => each.appId)
@@ -90,21 +167,28 @@ export function SpaceAppsTab() {
     <div className="flex flex-1 flex-col gap-4">
       <PageActions>
         <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
-        <AddAppDialog
-          space={space}
-          added={new Set(byApp.keys())}
-          onPick={(picked) => setProfile({ appId: picked.id, from })}
-        />
+        <Button onClick={() => setAdding(true)}>
+          <IconPlus />
+          Add app
+        </Button>
       </PageActions>
+      <AddAppDialog
+        space={space}
+        added={new Set(byApp.keys())}
+        open={adding}
+        onOpenChange={setAdding}
+        onPick={(picked) => setProfile({ appId: picked.id, from })}
+      />
       <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
         {reach.isPending || catalog.pending ? (
           <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
         ) : (
           <AppsTable
             rows={shown.items}
-            empty={Search.empty(query, "No apps")}
+            empty={<NoApps query={query} space={space.name} onAdd={() => setAdding(true)} />}
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId, from, newAccount: true })}
+            remove={remove}
           />
         )}
       </Loading>

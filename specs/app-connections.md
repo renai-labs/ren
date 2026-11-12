@@ -17,7 +17,7 @@ Words:
 4. A connected official MCP replaces the managed version in that space. "Use Ren credits instead" removes the account's sign-ins and keys (`credential.remove`), and the managed version comes back.
 5. The managed version is always on when no account has the official sign-in. It is not a setting.
 6. A shared account that leaves its last space is deleted when it has no credentials, and kept when it has a sign-in or key. A kept account shows in Settings → Credentials. This is built (`AppProfiles.access`); infra's `unlist` still refuses the last space.
-7. Every account list is the same component (`AccountList`): a status dot, the name, a status line only when the account does not work, space pills and a chevron. Lists have no buttons or menus on rows; a row opens the account dialog, the same one everywhere. The dialog has no close button; Delete is in its ⋯ menu at the top right. This is built.
+7. Every account list is the same component (`AccountList`): a status dot, the name, a status line only when the account does not work, space pills and a chevron. Lists have no buttons or menus on rows; a row opens the account dialog, the same one everywhere. The dialog has no close button. Its ⋯ menu at the top right says Remove from {space} when the dialog opens from a space, and Delete account everywhere else. This is built.
 8. Removing an app from a space removes each of its shared accounts from that space. An account set to every space stays, and the page says so. A remove never deletes a private account: it stays in its owner's private space, and the page offers no Remove for it. Only Delete in Settings removes it.
 9. Two accounts that reach the same space cannot have the same name. Names compare trimmed and without case. This is built: create, rename, adding a space and promote fail with "An account named “{name}” is already in {space}."
 10. "Use here" on a private account makes it shared in the target space only. This is built: `promote` takes a `spaceId`.
@@ -62,6 +62,8 @@ Opened by the composer's "Add apps" and the space's "Add app". Replaces the row 
 ```
 
 Apps already in the space stay hidden, as today. Empty states stay: "Nothing matches “q”" and "{space} has every app".
+
+This is built (`components/add-app-dialog.tsx`). The registry list says which apps have a managed version (`AppRegistry.Info.managed`). [Add] names the empty account with `defaultName` and keeps the list open, so more apps can be added. Clicking a managed app's row, not its [Add], opens S2 as for other apps.
 
 ### S2. Add app sheet
 
@@ -252,26 +254,28 @@ Today: `features/spaces/space-apps.tsx`.
 ```
  Apps in Acme                                                  [Add app]
  ┌───────────────────────────────────────────────────────────────────┐
- │ Linear   ✓ 2 accounts                                              │
- │ Kernel   ◐ Ren credits                       [Connect my own]      │
- │ GitHub   ⚠ 1 of 2 needs sign-in              [Reconnect]           │
- │ Notion   ○ Not connected                     [Connect]             │
+ │ Linear   ✓ 2 accounts                                         [⋯]  │
+ │ Kernel   ◐ Ren credits                                        [⋯]  │
+ │ GitHub   ⚠ 1 of 2 needs sign-in                               [⋯]  │
+ │ Notion   ○ Not connected                                      [⋯]  │
  └───────────────────────────────────────────────────────────────────┘
+ Row ──► sheet, where every action is.  ⋯ = Open | New account | Remove from Acme ──► warning ──► toast
 
 ┌─ Linear in Acme ─────────────────────────── ✕ ┐
 │ Accounts 2                    [+ Add account ▾]│   New account | Use existing account
 │ ● Acme · Linear                 (Acme)       › │
 │ ● Acme · Linear · Priya         (Acme)       › │
-│                                                │
-│ [Remove Linear from Acme]                      │
 └────────────────────────────────────────────────┘
- Row ──► account dialog: Connection, Name, Spaces (searchable), Dependencies, Save; ⋯ menu: Delete account
+ Row ──► account dialog: Connection, Name, Spaces (searchable), Dependencies, Save; ⋯ menu: Remove from Acme
  Use existing account ──► the dialog lists this app's other accounts, each with [Add], then [Done]
 ```
 
-The sheet lists only the accounts in this space. This is built, except Remove Linear from Acme and the table's actions.
-
 Empty state: "No apps in Acme yet." with [Add app]. Non-members keep "Only members of this space see its apps."
+
+This is built (`features/spaces/space-apps.tsx`, `components/apps-table.tsx`). The sheet lists only the accounts in this space. Differences:
+
+- The table keeps its columns (App with the account count, Used in, Status). The status badge says "1 of 2 need sign-in" for ⚠ with more than one account.
+- Rows have no connect buttons: the row opens the sheet, and every action is there. The ⋯ menu keeps Open and New account and adds "Remove from Acme", which asks first (S9).
 
 ### S7. Settings → Credentials → Apps
 
@@ -328,6 +332,12 @@ This is built (`features/apps/share-request.tsx`), except:
  Remove Linear from Acme     ──► confirm "The agent in Acme loses Linear. Accounts with a sign-in are kept."
                              ──► an every-space account stays: "Linear (all spaces) stays because it is in every space."
 ```
+
+The space side is built. `components/space-removal.ts` tells the three outcomes apart from the account that `access` returns (`afterRemoval`), and `toastRemoved` shows the toasts for the account dialog's Spaces field and the Spaces menu (`components/account-actions.tsx`). Differences:
+
+- The toast title names the account: "Ops Linear removed from Acme", with "Still in Ops." or "Find it in Settings → Credentials." as its description. The toast with [Undo] stays until dismissed.
+- Remove Linear from Acme takes every shared account listed in the space out of it with `access remove`. It is offered only when there is such an account: an every-space account and a private account (in a private space) are never removed, and the warning says why for an every-space one. An account the person cannot remove from the space stays, with "Only an admin can remove “…” from Acme." The toast lists kept accounts: "Find “…” in Settings → Credentials." It has no [Undo].
+- When an account stays, the confirmation says "Acme stops using “…”." in place of "The agent in Acme loses Linear."
 
 ## 4. Seed data for review
 

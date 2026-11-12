@@ -13585,13 +13585,17 @@
           "listing": {
             "$ref": "#/components/schemas/AppListing.Summary"
           },
+          "managed": {
+            "type": "boolean",
+            "description": "True when the app has an MCP that Ren runs and Ren credits pay for, so it works with no sign-in."
+          },
           "revision": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           }
         },
-        "required": ["id", "slug", "name", "description", "icon", "listing", "revision"],
+        "required": ["id", "slug", "name", "description", "icon", "listing", "managed", "revision"],
         "additionalProperties": false,
         "description": "A registry app as the catalog shows it. app.get returns its MCPs, skills and keys."
       },

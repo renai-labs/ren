@@ -1,22 +1,35 @@
 import { useState } from "react"
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { IconPlus, IconSearch } from "@tabler/icons-react"
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
+import { IconChevronRight, IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
+import { toast } from "@ren/ui/sonner"
+import { Spinner } from "@ren/ui/spinner"
 import { AppRow } from "./app-list.js"
 import { LoadMore } from "./load-more.js"
+import { defaultName, freeSlug } from "./profile-dialog.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
 import { Search } from "../lib/search.js"
 import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../lib/apps.js"
+import { errorMessage } from "../lib/errors.js"
 import { pickerPageSize } from "../lib/pagination.js"
+import { useAppProfiles } from "../lib/use-app-profiles.js"
+import { useMe } from "../lib/use-me.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { RouterContext } from "../lib/router-context.js"
 import { cn } from "cn"
 
-function AddAppRow(props: { app: CatalogApp; onPick: (app: CatalogApp) => void }) {
+function AddAppRow(props: {
+  app: CatalogApp
+  space: string
+  managed: boolean
+  adding: boolean
+  onPick: (app: CatalogApp) => void
+  onAdd: (app: CatalogApp) => void
+}) {
   return (
     <AppRow
       compact
@@ -25,15 +38,26 @@ function AddAppRow(props: { app: CatalogApp; onPick: (app: CatalogApp) => void }
       caption={props.app.description}
       onOpen={() => props.onPick(props.app)}
       action={
-        <span
-          aria-hidden
-          className={cn(
-            buttonVariants({ variant: "ghost", size: "icon" }),
-            "pointer-events-none text-muted-foreground",
-          )}
-        >
-          <IconPlus />
-        </span>
+        props.managed ? (
+          <span className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">Ren credits</span>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={`Add ${props.app.name} to ${props.space}`}
+              disabled={props.adding}
+              onClick={() => props.onAdd(props.app)}
+            >
+              {props.adding ? <Spinner data-icon="inline-start" /> : null}
+              Add
+            </Button>
+          </span>
+        ) : (
+          <span aria-hidden className={cn(buttonVariants({ variant: "outline", size: "sm" }), "pointer-events-none")}>
+            Add
+            <IconChevronRight data-icon="inline-end" />
+          </span>
+        )
       }
     />
   )
@@ -57,15 +81,61 @@ function AppResults(props: {
 }) {
   const { api, client } = RouterContext.useRouterContext()
   const needle = useDebouncedValue(props.query.trim(), 200)
-  const spaces = useSpaces().spaces
+  const spaces = useSpaces()
+  const user = useMe().user.name
+  const profiles = useAppProfiles([])
+  const create = useMutation(api["app-profile"].create.mutationOptions())
+  const [adding, setAdding] = useState<string>()
   const pages = useInfiniteQuery(AppRegistryPages.options(client, needle))
   const apps = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
-  const registry = (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromRegistry)
+  const listed = (pages.data?.pages ?? []).flatMap((page) => page.items)
   const own = (apps.data?.items ?? [])
     .map(fromApp)
-    .filter((app) => !isSpaceApp(app, spaces) && Search.matches(props.query, app.name, app.description))
-  const found = [...own, ...registry].filter((app) => !props.added.has(app.id))
+    .filter((app) => !isSpaceApp(app, spaces.spaces) && Search.matches(props.query, app.name, app.description))
+  const managed = new Set([
+    ...listed.filter((app) => app.managed).map((app) => app.id),
+    ...own
+      .filter((app) => Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed"))
+      .map((app) => app.id),
+  ])
+  const found = [...own, ...listed.map(fromRegistry)].filter((app) => !props.added.has(app.id))
   const loading = pages.isPending || apps.isPending
+  const space = spaces.space(props.space.id)
+  const add = (app: CatalogApp) => {
+    const isPrivate = space?.kind === "private"
+    setAdding(app.id)
+    void profiles
+      .load(app.id)
+      .then((others) => {
+        const name = defaultName({
+          from: {
+            spaceId: props.space.id,
+            name: props.space.name,
+            members: space?.memberCount ?? 1,
+            private: isPrivate,
+          },
+          only: isPrivate,
+          picked: new Set(),
+          spaces: [],
+          others,
+          app,
+          user,
+        })
+        return create.mutateAsync({
+          appId: app.id,
+          name,
+          slug: freeSlug(name, new Set(others.map((other) => other.slug))),
+          kind: isPrivate ? "private" : "shared",
+          ...(!isPrivate && { spaceIds: [props.space.id] }),
+        })
+      })
+      .then(
+        () => toast.success(`${app.name} added to ${props.space.name}`, { description: "Uses Ren credits." }),
+        (error: unknown) =>
+          toast.error(`Couldn’t add ${app.name} to ${props.space.name}`, { description: errorMessage(error) }),
+      )
+      .finally(() => setAdding(undefined))
+  }
   return (
     <div
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a list of Item rows; Item renders a div
@@ -80,7 +150,15 @@ function AppResults(props: {
         </p>
       ) : null}
       {found.map((app) => (
-        <AddAppRow key={app.id} app={app} onPick={props.onPick} />
+        <AddAppRow
+          key={app.id}
+          app={app}
+          space={props.space.name}
+          managed={managed.has(app.id)}
+          adding={adding === app.id}
+          onPick={props.onPick}
+          onAdd={add}
+        />
       ))}
       <LoadMore
         more={pages.hasNextPage}
