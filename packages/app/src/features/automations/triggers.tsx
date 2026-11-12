@@ -198,11 +198,11 @@ function TriggerRow(props: { actions: React.ReactNode; children: React.ReactNode
 }
 
 // oxlint-disable-next-line ren/no-comments -- The triggers of an automation in one card, and the button that adds one under a line.
-export function TriggerList(props: { children: React.ReactNode; add: React.ReactNode }) {
+export function TriggerList(props: { children: ReadonlyArray<React.ReactNode>; add: React.ReactNode }) {
   return (
     <ItemGroup className="gap-0 rounded-xl border bg-card p-1 has-data-[size=sm]:gap-0">
       {props.children}
-      <ItemSeparator className="my-1" />
+      {props.children.length > 0 ? <ItemSeparator className="my-1" /> : null}
       {props.add}
     </ItemGroup>
   )
