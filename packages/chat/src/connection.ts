@@ -36,7 +36,7 @@ export class Lost extends Data.TaggedError("Connection.Lost")<{
 export interface Options {
   readonly subscribe: Effect.Effect<Stream.Stream<SessionEvent.Frame, unknown>, unknown>
   readonly onFrames: (frames: ReadonlyArray<SessionEvent.Frame>) => Effect.Effect<void>
-  readonly onStatus: (state: State) => Effect.Effect<void>
+  readonly onStatus: (state: State, previous: State) => Effect.Effect<void>
   readonly canReconnect?: Effect.Effect<boolean>
   // oxlint-disable-next-line ren/no-comments -- The brain's URL took no connection, for example a paused sandbox: the next access asks Ren to check the sandbox, which wakes it (#196).
   readonly onUnreachable?: Effect.Effect<void>
@@ -88,7 +88,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     const previous = yield* SubscriptionRef.get(status)
     // oxlint-disable-next-line ren/no-comments -- Each retry reports reconnecting again; publishing it again would make every reader of the status ask Ren for access again (#196).
     if (previous.status === next.status && previous.retryAt === next.retryAt) return
-    yield* options.onStatus(next)
+    yield* options.onStatus(next, previous)
     yield* SubscriptionRef.set(status, next)
   })
 

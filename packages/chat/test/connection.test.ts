@@ -187,6 +187,20 @@ effect(
     }),
 )
 
+effect("foreground ends a wait at once", () =>
+  Effect.gen(function* () {
+    const fake = yield* setup()
+    const first = yield* Queue.take(fake.subscriptions)
+    yield* Queue.offer(first.queue, connected)
+    yield* fake.until("connected")
+    yield* Queue.end(first.queue)
+    yield* fake.until("waiting")
+    yield* fake.connection.foreground
+    yield* fake.until("reconnecting")
+    yield* Queue.take(fake.subscriptions)
+  }),
+)
+
 effect("a stream that does not start with server.connected is replaced", () =>
   Effect.gen(function* () {
     const fake = yield* setup()

@@ -576,9 +576,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     ),
     onFrames,
     onUnreachable: lost,
-    onStatus: (next) =>
-      Effect.gen(function* () {
-        const previous = (yield* SubscriptionRef.get(connection.status)).status
+    onStatus: (next, before) =>
+      Effect.sync(() => {
+        const previous = before.status
         const retrying = (status: Connection.Status) => status === "waiting" || status === "reconnecting"
         // oxlint-disable-next-line ren/no-comments -- Each retry alternates waiting and reconnecting; reacting to each would make every reader of the status ask Ren for access again (#196).
         if (retrying(previous) && retrying(next.status)) return

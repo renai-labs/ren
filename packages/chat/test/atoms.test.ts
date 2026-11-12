@@ -6,7 +6,7 @@ import { Shell } from "@ren/schema/shell"
 import { DateTime, Effect, Layer, Option, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
-import { ChatAtoms } from "../src/atoms.js"
+import { ChatAtoms, type Lifecycle } from "../src/atoms.js"
 import { ChatState } from "../src/chat-state.js"
 import { TimelineRow } from "../src/timeline-row.js"
 
@@ -16,7 +16,10 @@ const stub = Shared.stub()
 
 type Fetch = (path: string, request: Request | RequestInit) => Promise<Response>
 
-const setupWith = (intercept?: (path: string, next: () => Promise<Response>) => Promise<Response>) =>
+const setupWith = (
+  intercept?: (path: string, next: () => Promise<Response>) => Promise<Response>,
+  lifecycle?: (listener: (event: Lifecycle) => void) => () => void,
+) =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.make()
     yield* brain.start()
@@ -39,6 +42,7 @@ const setupWith = (intercept?: (path: string, next: () => Promise<Response>) => 
     )
     const atoms = ChatAtoms.make({
       runtime: Atom.runtime(http),
+      ...(lifecycle ? { lifecycle } : {}),
       access: () =>
         Effect.sync(() => ({
           status: "ready" as const,
@@ -249,4 +253,52 @@ test("the models atom loads again once the connection is back when its first rea
     )
     const models = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)
     expect(AsyncResult.isSuccess(models) && models.value.length).toBeGreaterThan(0)
+  }).pipe(Effect.scoped, Effect.runPromise))
+
+test("the online event ends a reconnect wait at once", () =>
+  Effect.gen(function* () {
+    const streams: Array<ReadableStreamDefaultController<Uint8Array>> = []
+    const listeners: Array<(event: Lifecycle) => void> = []
+    const made = yield* setupWith(
+      async (path, next) => {
+        const response = await next()
+        const body = response.body
+        if (!path.startsWith("/chat/event") || !body) return response
+        const reader = body.getReader()
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              streams.push(controller)
+            },
+            pull: (controller) =>
+              reader.read().then((chunk) => (chunk.done ? controller.close() : controller.enqueue(chunk.value))),
+            cancel: () => reader.cancel(),
+          }),
+          { status: response.status, headers: response.headers },
+        )
+      },
+      (listener) => {
+        listeners.push(listener)
+        return () => {}
+      },
+    )
+    const id = made.brain.id
+    const unmount = made.registry.mount(made.atoms.status(id))
+    yield* Effect.addFinalizer(() => Effect.sync(unmount))
+    yield* made.until(
+      made.atoms.status(id),
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "connected",
+    )
+    streams.at(-1)?.error(new Error("The network dropped"))
+    const waiting = yield* made.until(
+      made.atoms.status(id),
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "waiting",
+    )
+    const retryAt = AsyncResult.isSuccess(waiting) ? (waiting.value.retryAt ?? 0) : 0
+    for (const listener of listeners) listener("online")
+    yield* made.until(
+      made.atoms.status(id),
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "reconnecting",
+    )
+    expect(Date.now()).toBeLessThan(retryAt)
   }).pipe(Effect.scoped, Effect.runPromise))
