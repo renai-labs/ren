@@ -13,10 +13,11 @@ export const Proof = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal("Login"), username: Schema.String }),
   Schema.Struct({ kind: Schema.Literal("Token"), token: Schema.String }),
+  Schema.Struct({ kind: Schema.Literal("E2BIdentity"), sandboxId: Schema.String, executionId: Schema.String }),
 ]).annotate({
   identifier: "Egress.Proof",
   description:
-    "Which workload sent a connection. `Login` names a proxy login that the egress checked with `ProxyLogin` when the connection opened.",
+    "Which workload sent a connection. `Login` names a proxy login that the egress checked with `ProxyLogin` when the connection opened. `E2BIdentity` names an E2B sandbox execution whose workload identity token the egress verified.",
 })
 
 export interface AuthenticateRequest extends Schema.Schema.Type<typeof AuthenticateRequest> {}
@@ -92,7 +93,12 @@ export const ResolveReply = Schema.Union([
 
 export interface UnauthorizedRequest extends Schema.Schema.Type<typeof UnauthorizedRequest> {}
 export const UnauthorizedRequest = Schema.Struct({
-  login: Schema.String.annotate({ description: "The proxy login of the connection that sent the request." }),
+  login: Schema.optionalKey(Schema.String).annotate({
+    description: "The proxy login of the connection that sent the request. Sent when `proof` is not.",
+  }),
+  proof: Schema.optionalKey(Proof).annotate({
+    description: "The caller that sent the request, for a caller without a login.",
+  }),
   host: Schema.String,
   status: Schema.Literals([401, 403]),
   scope: Schema.optionalKey(Schema.String).annotate({

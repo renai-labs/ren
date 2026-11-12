@@ -6,9 +6,9 @@ package proxy
 
 import (
 	"bytes"
-	"encoding/base64"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -24,9 +24,9 @@ import (
 	"github.com/ironsh/iron-proxy/internal/certcache"
 	"github.com/ironsh/iron-proxy/internal/config"
 	"github.com/ironsh/iron-proxy/internal/dnsguard"
-	"github.com/ironsh/iron-proxy/internal/ren"
 	"github.com/ironsh/iron-proxy/internal/mcp"
 	"github.com/ironsh/iron-proxy/internal/mcpgateway"
+	"github.com/ironsh/iron-proxy/internal/ren"
 	"github.com/ironsh/iron-proxy/internal/responseretry"
 	"github.com/ironsh/iron-proxy/internal/transform"
 	"golang.org/x/net/http2"
@@ -58,6 +58,9 @@ type Proxy struct {
 	ren                  *ren.Client
 	// Ren: fork change 12.
 	passthroughHosts map[string]struct{}
+	// Ren: fork change 14.
+	identityServer *http.Server
+	verifier       *ren.Verifier
 
 	// shutdownCtx is canceled by Shutdown to unblock in-flight TCP-passthrough
 	// connections that would otherwise sit on blocking Reads.
@@ -108,6 +111,11 @@ type Options struct {
 	Ren *ren.Client
 	// Ren: fork change 12.
 	PassthroughHosts []string
+	// Ren: fork change 14. IdentityAddr, when set, serves the identity entry
+	// with IdentityCert, and Verifier checks its tokens.
+	IdentityAddr string
+	IdentityCert tls.Certificate
+	Verifier     *ren.Verifier
 }
 
 // New creates a new Proxy. In TLSModeMITM, certCache must be non-nil. In
@@ -162,17 +170,25 @@ func New(opts Options) *Proxy {
 	// negotiated conns through the existing handler); zero config never errors.
 	_ = http2.ConfigureServer(p.httpsServer, &http2.Server{})
 
+	if opts.IdentityAddr != "" {
+		p.verifier = opts.Verifier
+		p.identityServer = &http.Server{
+			Addr:              opts.IdentityAddr,
+			Handler:           http.HandlerFunc(p.handleIdentity),
+			ReadHeaderTimeout: 10 * time.Second,
+			TLSConfig:         &tls.Config{Certificates: []tls.Certificate{opts.IdentityCert}, MinVersion: tls.VersionTLS12},
+		}
+		_ = http2.ConfigureServer(p.identityServer, &http2.Server{}) // zero config never errors
+	}
+
 	return p
 }
 
-// ListenAndServe starts the HTTP, HTTPS, and (optionally) tunnel listeners.
+// ListenAndServe starts the HTTP, HTTPS, and (optionally) tunnel and Ren
+// identity listeners.
 // It blocks until any server has stopped.
 func (p *Proxy) ListenAndServe() error {
-	n := 2
-	if p.tunnelAddr != "" {
-		n = 3
-	}
-	errc := make(chan error, n)
+	errc := make(chan error, 4)
 
 	go func() {
 		ln, err := net.Listen("tcp", p.httpServer.Addr)
@@ -195,6 +211,13 @@ func (p *Proxy) ListenAndServe() error {
 	if p.tunnelAddr != "" {
 		go func() {
 			errc <- fmt.Errorf("tunnel: %w", p.listenTunnel())
+		}()
+	}
+
+	if p.identityServer != nil {
+		go func() {
+			p.logger.Info("ren identity entry starting", slog.String("addr", p.identityServer.Addr))
+			errc <- fmt.Errorf("identity: %w", p.identityServer.ListenAndServeTLS("", ""))
 		}()
 	}
 
@@ -255,6 +278,10 @@ func (p *Proxy) Shutdown(ctx context.Context) error {
 	}
 
 	p.CloseTunnelListener()
+
+	if p.identityServer != nil {
+		_ = p.identityServer.Shutdown(ctx) // the HTTP and HTTPS errors are the ones reported
+	}
 
 	if errHTTP != nil {
 		return errHTTP
@@ -355,8 +382,10 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 
 	// Ren: a request inside a tunnel must go to the host the tunnel was opened
 	// for, so the CONNECT target, SNI and Host name one host (fork change 3).
+	// A request from the identity entry has its target as the tunnel target
+	// (fork change 14).
 	if p.ren != nil {
-		if tunnelInfo == nil || tunnelInfo.ProxyLogin == "" {
+		if tunnelInfo == nil || (tunnelInfo.ProxyLogin == "" && tunnelInfo.SandboxID == "") {
 			p.writeResponse(w, ren.Deny("unknown_workload", ""))
 			return
 		}
@@ -439,7 +468,8 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 	// or a placeholder left after the ops, is never forwarded.
 	var renApplied *ren.Applied
 	if p.ren != nil {
-		denied, applied := p.ren.Handle(r.Context(), r, tctx.Tunnel.ProxyLogin)
+		caller := ren.Caller{Login: tctx.Tunnel.ProxyLogin, Identity: ren.Identity{SandboxID: tctx.Tunnel.SandboxID, ExecutionID: tctx.Tunnel.ExecutionID}}
+		denied, applied := p.ren.Handle(r.Context(), r, caller)
 		if denied != nil {
 			result.Action = transform.ActionReject
 			result.StatusCode = denied.StatusCode

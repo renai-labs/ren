@@ -44,16 +44,16 @@ func Deny(reason, label string) *http.Response {
 type Applied struct {
 	Upstream    *url.URL
 	masks       []mask
-	login       string
+	caller      Caller
 	host        string
 	refreshable []Refreshable
 }
 
-// Handle runs Ren's step for one request of an authenticated login. It
+// Handle runs Ren's step for one request of an authenticated caller. It
 // returns a response to send instead of forwarding, or what it applied. A
 // request that still holds a placeholder after the ops is never forwarded
 // (README C42).
-func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*http.Response, *Applied) {
+func (c *Client) Handle(ctx context.Context, req *http.Request, caller Caller) (*http.Response, *Applied) {
 	stripRenHeaders(req)
 	host, portText, err := net.SplitHostPort(req.Host)
 	if err != nil {
@@ -71,7 +71,7 @@ func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*
 		return nil, nil
 	}
 	reply, err := c.Resolve(ctx, Request{
-		Login:        login,
+		Caller:       caller,
 		Host:         host,
 		Port:         port,
 		Method:       req.Method,
@@ -99,7 +99,7 @@ func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*
 		}
 		return Deny("credential_missing", label), nil
 	}
-	applied := &Applied{masks: masksOf(reply.Inject), login: login, host: host, refreshable: reply.Refreshable}
+	applied := &Applied{masks: masksOf(reply.Inject), caller: caller, host: host, refreshable: reply.Refreshable}
 	// An upstream answers in plain text when the request asks for no
 	// encoding, so the egress can find an injected value that comes back.
 	if len(applied.masks) > 0 {

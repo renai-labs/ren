@@ -43,6 +43,8 @@ type Config struct {
 	Stale Duration `yaml:"stale"`
 	// Drain is how long a stopping egress keeps open connections (default 15m).
 	Drain Duration `yaml:"drain"`
+	// Identity is the HTTPS entry for requests that E2B names (fork change 14).
+	Identity IdentityConfig `yaml:"identity"`
 }
 
 // Duration decodes Go duration strings ("30s", "15m").
@@ -75,7 +77,7 @@ func (c Config) Validate() error {
 			return fmt.Errorf("ren: %w", err)
 		}
 	}
-	return nil
+	return c.Identity.Validate()
 }
 
 func (c Config) fresh() time.Duration { return orDefault(c.Fresh, 30*time.Second) }
@@ -111,7 +113,7 @@ type Reply struct {
 
 type entry struct {
 	reply    Reply
-	login    string
+	caller   string
 	storedAt time.Time
 }
 
@@ -320,12 +322,12 @@ func (c *Client) Authenticate(ctx context.Context, login, password, remoteAddr s
 func answerKey(r Request) string {
 	sorted := slices.Clone(r.Placeholders)
 	slices.Sort(sorted)
-	return r.Login + "\x00" + r.Host + "\x00" + strings.Join(sorted, ",")
+	return r.Caller.key() + "\x00" + r.Host + "\x00" + strings.Join(sorted, ",")
 }
 
 // Request is what the egress asks Ren about one request.
 type Request struct {
-	Login        string
+	Caller       Caller
 	Host         string
 	Port         int
 	Method       string
@@ -376,7 +378,7 @@ func (c *Client) Resolve(ctx context.Context, r Request) (Reply, error) {
 func (c *Client) resolve(ctx context.Context, r Request, key string, epoch uint64) (Reply, error) {
 	var reply Reply
 	err := c.post(ctx, "/egress/v1/resolve", map[string]any{
-		"proof":        map[string]string{"kind": "Login", "username": r.Login},
+		"proof":        r.Caller.proof(),
 		"host":         r.Host,
 		"port":         r.Port,
 		"method":       r.Method,
@@ -400,7 +402,7 @@ func (c *Client) resolve(ctx context.Context, r Request, key string, epoch uint6
 		delete(c.answers, key)
 	case c.epoch == epoch:
 		c.sweep()
-		c.answers[key] = entry{reply: reply, login: r.Login, storedAt: c.now()}
+		c.answers[key] = entry{reply: reply, caller: r.Caller.key(), storedAt: c.now()}
 	}
 	return reply, nil
 }
@@ -432,7 +434,7 @@ func (c *Client) Invalidate(s Selector) int {
 	for key, kept := range c.answers {
 		if (s.Workload != "" && strings.HasPrefix(kept.reply.Workload, s.Workload)) ||
 			(s.Label != "" && (slices.Contains(kept.reply.Labels, s.Label) || strings.Contains(key, "ren:"+s.Label))) ||
-			(s.Login != "" && kept.login == s.Login) {
+			(s.Login != "" && kept.caller == s.Login) {
 			delete(c.answers, key)
 			dropped++
 		}

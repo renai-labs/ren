@@ -165,7 +165,7 @@ func newClient(t *testing.T) (*Client, *hook, *clock) {
 }
 
 func stripe(login string) Request {
-	return Request{Login: login, Host: "api.stripe.com", Port: 443, Method: "POST", Path: "/v1/charges", Placeholders: []string{"ren:STRIPE_API_KEY"}}
+	return Request{Caller: Caller{Login: login}, Host: "api.stripe.com", Port: 443, Method: "POST", Path: "/v1/charges", Placeholders: []string{"ren:STRIPE_API_KEY"}}
 }
 
 func TestResolveKeepsAnswers(t *testing.T) {
@@ -330,7 +330,7 @@ func TestHandleSendsARequestWithoutAPlaceholderWithoutAskingRen(t *testing.T) {
 	req := newRequest(t, "GET", "https://registry.npmjs.org/effect/-/effect-4.1.0.tgz", nil, "")
 	req.Host = "registry.npmjs.org"
 	req.Header.Set("Authorization", "Bearer npm_own_token")
-	resp, applied := client.Handle(t.Context(), req, "ren-a")
+	resp, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.Nil(t, resp)
 	require.Nil(t, applied)
 	require.Equal(t, "Bearer npm_own_token", req.Header.Get("Authorization"))
@@ -373,7 +373,7 @@ func TestHandleDeniesWithTheLabel(t *testing.T) {
 	req := newRequest(t, "GET", "https://api.example.com/v1", nil, "")
 	req.Host = "api.example.com"
 	req.Header.Set("Authorization", "Bearer ren:MISSING")
-	resp, _ := client.Handle(t.Context(), req, "ren-a")
+	resp, _ := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.NotNil(t, resp)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 	require.Equal(t, "credential_missing", resp.Header.Get("X-Ren-Egress"))
@@ -388,7 +388,7 @@ func TestHandleNeverForwardsAnUnresolvedPlaceholder(t *testing.T) {
 	req := newRequest(t, "GET", "https://api.example.com/v1", nil, "")
 	req.Host = "api.example.com"
 	req.Header.Set("X-Api-Key", "ren:OTHER")
-	resp, _ := client.Handle(t.Context(), req, "ren-a")
+	resp, _ := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.NotNil(t, resp)
 	require.Equal(t, "credential_missing", resp.Header.Get("X-Ren-Egress"))
 }
@@ -402,7 +402,7 @@ func TestHandleRoutes(t *testing.T) {
 	req := newRequest(t, "POST", "https://ren.internal/host/pull", nil, "")
 	req.Host = "ren.internal"
 	req.Header.Set("Authorization", "Bearer ren:REN")
-	resp, applied := client.Handle(t.Context(), req, "ren-a")
+	resp, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.Nil(t, resp)
 	require.Equal(t, "http://ren-server:4000/host/pull", applied.Upstream.String())
 	require.Equal(t, "Bearer host-token", req.Header.Get("Authorization"))
@@ -424,7 +424,7 @@ func TestHandleTreatsAPlaceholderInABodyAsText(t *testing.T) {
 	req := newRequest(t, "POST", "https://llm.example.com/v1/messages", []byte(body), "application/json")
 	req.Host = "llm.example.com"
 	req.Header.Set("X-Api-Key", "ren:MODELS")
-	denied, _ := client.Handle(t.Context(), req, "ren-a")
+	denied, _ := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.Nil(t, denied, "a model call whose prompt mentions a placeholder is not refused")
 	require.Contains(t, h.lastBody.Load(), `"placeholders":["ren:MODELS"]`)
 	sent, err := io.ReadAll(req.Body)
@@ -440,7 +440,7 @@ func TestHandleSaysWhenAPlaceholderSitsWhereItsCredentialDoesNotGo(t *testing.T)
 	req := newRequest(t, "GET", "https://api.stripe.com/v1/customers/ren:STRIPE_API_KEY", nil, "")
 	req.Host = "api.stripe.com"
 	req.Header.Set("Authorization", "Bearer ren:STRIPE_API_KEY")
-	denied, _ := client.Handle(t.Context(), req, "ren-a")
+	denied, _ := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.NotNil(t, denied)
 	require.Equal(t, "location_not_allowed", denied.Header.Get("X-Ren-Egress"))
 	body, err := io.ReadAll(denied.Body)
@@ -453,7 +453,7 @@ func linear(t *testing.T, client *Client) *Applied {
 	req := newRequest(t, "POST", "https://mcp.linear.app/mcp", nil, "")
 	req.Host = "mcp.linear.app"
 	req.Header.Set("Authorization", "Bearer ren:MCP_LINEAR")
-	denied, applied := client.Handle(t.Context(), req, "ren-a")
+	denied, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.Nil(t, denied)
 	return applied
 }
@@ -489,6 +489,30 @@ func TestObserveReportsOneUpstream401AndDropsTheKeptAnswer(t *testing.T) {
 	calls := h.calls.Load()
 	linear(t, client)
 	require.Equal(t, calls+1, h.calls.Load(), "the kept answer was dropped, so Ren is asked again")
+}
+
+// An E2B caller sends its sandbox and execution as the proof, keeps its
+// answers per sandbox, and reports a 401 with the same proof (fork change 14).
+func TestHandleNamesAnE2BCallerBySandbox(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 30, Labels: []string{"MCP_LINEAR"},
+		Refreshable: []Refreshable{{Label: "MCP_LINEAR", Revision: 3}},
+		Inject:      []Op{{Op: "replace", Placeholder: "ren:MCP_LINEAR", Value: "tok", In: []string{"header"}}}})
+	call := func(execution string) *Applied {
+		req := newRequest(t, "POST", "https://mcp.linear.app/mcp", nil, "")
+		req.Host = "mcp.linear.app"
+		req.Header.Set("Authorization", "Bearer ren:MCP_LINEAR")
+		denied, applied := client.Handle(t.Context(), req, Caller{Identity: Identity{SandboxID: "sbx1", ExecutionID: execution}})
+		require.Nil(t, denied)
+		return applied
+	}
+	applied := call("exec1")
+	require.Contains(t, h.lastBody.Load(), `"proof":{"executionId":"exec1","kind":"E2BIdentity","sandboxId":"sbx1"}`)
+	call("exec2")
+	require.Equal(t, int32(1), h.calls.Load(), "a resumed sandbox keeps its answers")
+	client.Observe(applied, upstreamAnswer(http.StatusUnauthorized, `Bearer error="invalid_token"`))
+	client.reporting.Wait()
+	require.JSONEq(t, `{"proof":{"kind":"E2BIdentity","sandboxId":"sbx1","executionId":"exec1"},"host":"mcp.linear.app","status":401,"labels":[{"label":"MCP_LINEAR","revision":3}]}`, <-h.reports)
 }
 
 func TestObserveReportsAScopeChallengeAndKeepsTheAnswer(t *testing.T) {
@@ -569,7 +593,7 @@ func TestHandleSignsAgainWithRensAWSKeys(t *testing.T) {
 			signS3(t, req, aws.Credentials{AccessKeyID: "ren:DRIVE", SecretAccessKey: "ren:DRIVE"}, tc.payloadHash, time.Now().Add(-time.Minute))
 			require.Equal(t, []string{"ren:DRIVE"}, findPlaceholders(req))
 
-			resp, _ := client.Handle(t.Context(), req, "ren-a")
+			resp, _ := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 			require.Nil(t, resp)
 			require.Empty(t, findPlaceholders(req))
 			require.Equal(t, "real-session-token", req.Header.Get("X-Amz-Security-Token"))
@@ -616,7 +640,7 @@ func TestHandleRefusesAWSSignItCannotDo(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			req := tc.build(t)
-			resp, _ := awsSignClient(t).Handle(t.Context(), req, "ren-a")
+			resp, _ := awsSignClient(t).Handle(t.Context(), req, Caller{Login: "ren-a"})
 			require.NotNil(t, resp)
 			require.Equal(t, "credential_missing", resp.Header.Get("X-Ren-Egress"))
 		})

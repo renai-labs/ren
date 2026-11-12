@@ -3,12 +3,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -242,9 +244,27 @@ func main() {
 		logger.Info("ren enabled", slog.String("hook", cfg.Ren.Hook), slog.String("control_listen", cfg.Ren.ControlListen))
 	}
 
+	// Ren: the identity entry for requests that E2B names (fork change 14).
+	var identityAddr string
+	var identityCert tls.Certificate
+	var verifier *ren.Verifier
+	if renClient != nil && cfg.Ren.Identity.Listen != "" {
+		identityCert, err = tls.LoadX509KeyPair(cfg.Ren.Identity.Cert, cfg.Ren.Identity.Key)
+		if err != nil {
+			logger.Error("ren identity certificate", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		identityAddr = cfg.Ren.Identity.Listen
+		verifier = ren.NewVerifier(cfg.Ren.Identity, &http.Client{Timeout: 5 * time.Second})
+		logger.Info("ren identity entry enabled", slog.String("listen", cfg.Ren.Identity.Listen), slog.String("audience", cfg.Ren.Identity.Audience))
+	}
+
 	// Initialize proxy.
 	p := proxy.New(proxy.Options{
 		Ren:                           renClient,
+		IdentityAddr:                  identityAddr,
+		IdentityCert:                  identityCert,
+		Verifier:                      verifier,
 		HTTPAddr:                      cfg.Proxy.HTTPListen,
 		HTTPSAddr:                     cfg.Proxy.HTTPSListen,
 		TunnelAddr:                    cfg.Proxy.TunnelListen,

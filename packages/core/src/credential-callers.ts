@@ -10,22 +10,25 @@ import { Random } from "@ren/util/random"
 import { Envelope } from "./envelope.js"
 import { Signer } from "./signer.js"
 
-export type ProofKind = "ProxyLogin" | "Token"
+export type ProofKind = "ProxyLogin" | "Token" | "E2BIdentity"
 
 export interface Caller {
   readonly workload: Workload.Info
   readonly organizationId: Auth.OrganizationID
 }
 
+// oxlint-disable-next-line ren/no-comments -- An E2B sandbox gets nothing: E2B names it to the egress with a workload identity token, and Ren binds its sandbox id with `bind` (egress-split.md §3.4).
 export type Placement =
   | { readonly kind: "ProxyLogin"; readonly username: string; readonly password: Redacted.Redacted }
   | { readonly kind: "Token"; readonly token: Redacted.Redacted; readonly exp: number }
+  | { readonly kind: "E2BIdentity" }
 
-// oxlint-disable-next-line ren/no-comments -- `Login` is a proxy login that the egress already checked with `ProxyLogin` when the connection opened; the password is not sent again (iron-proxy fork change 2). Only Ren's own egress may send it.
+// oxlint-disable-next-line ren/no-comments -- `Login` is a proxy login that the egress already checked with `ProxyLogin` when the connection opened; the password is not sent again (iron-proxy fork change 2). `E2BIdentity` is a sandbox execution whose E2B token the egress verified (fork change 14). Only Ren's own egress may send either.
 export type Proof =
   | { readonly kind: "ProxyLogin"; readonly username: string; readonly password: Redacted.Redacted }
   | { readonly kind: "Login"; readonly username: string }
   | { readonly kind: "Token"; readonly token: string }
+  | { readonly kind: "E2BIdentity"; readonly sandboxId: string; readonly executionId: string }
 
 export type Verified =
   | { readonly ok: true; readonly caller: Caller }
@@ -33,6 +36,7 @@ export type Verified =
 
 export interface Interface {
   readonly issue: (caller: Caller, kind: ProofKind) => Effect.Effect<Placement>
+  readonly bind: (caller: Caller, address: string) => Effect.Effect<void>
   readonly verify: (proof: Proof) => Effect.Effect<Verified>
   readonly placement: (caller: Caller) => Effect.Effect<Option.Option<Placement>>
   readonly revoke: (workload: {
@@ -135,6 +139,7 @@ export const layer = Layer.effect(
           }),
         )
         if (login) return { kind: "ProxyLogin", username: login.username, password: Redacted.make(login.password) }
+        if (kind === "E2BIdentity") return { kind: "E2BIdentity" }
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + tokenLifetimeSeconds
         const token = yield* signer
           .sign("brain", {
@@ -147,6 +152,22 @@ export const layer = Layer.effect(
           })
           .pipe(Effect.orDie)
         return { kind: "Token", token: Redacted.make(token), exp }
+      }),
+
+      // oxlint-disable-next-line ren/no-comments -- The provider binds the sandbox id after its create and before the machine starts, so the sandbox's first request finds it (egress-split.md §3.4).
+      bind: Effect.fn("CredentialCallers.bind")(function* (caller: Caller, address: string) {
+        yield* database.db
+          .update(table)
+          .set({ address })
+          .where(
+            and(
+              eq(table.workload_kind, caller.workload.kind),
+              eq(table.workload_id, caller.workload.id),
+              eq(table.generation, caller.workload.generation),
+              isNull(table.revoked_at),
+            ),
+          )
+          .pipe(Effect.orDie)
       }),
 
       verify: Effect.fn("CredentialCallers.verify")(function* (proof: Proof) {
@@ -164,10 +185,13 @@ export const layer = Layer.effect(
           if (yield* retired(workload.value)) return { ok: false, reason: "generation_retired" } as const
           return { ok: true, caller: { workload: workload.value, organizationId: claims.value.org } } as const
         }
+        // oxlint-disable-next-line ren/no-comments -- A replace revokes the old generation and keeps its address, so its sandbox gets generation_retired; a retire clears the address.
         const rows = yield* database.db
           .select()
           .from(table)
-          .where(eq(table.username, proof.username))
+          .where(proof.kind === "E2BIdentity" ? eq(table.address, proof.sandboxId) : eq(table.username, proof.username))
+          .orderBy(desc(table.generation))
+          .limit(1)
           .pipe(Effect.orDie)
         const row = rows.at(0)
         if (!row) return unknown

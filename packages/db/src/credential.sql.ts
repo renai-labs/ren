@@ -222,7 +222,7 @@ export const credential_caller = pgTable(
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    proof_kind: text().$type<"ProxyLogin" | "Address" | "HostStamp" | "Token">().notNull(),
+    proof_kind: text().$type<"ProxyLogin" | "Address" | "HostStamp" | "Token" | "E2BIdentity">().notNull(),
     username: text(),
     password_hash: text(),
     password_sealed: jsonb().$type<Envelope.Sealed>(),
