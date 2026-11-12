@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { formatRelative, localTimeZone } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
+import { RouteNotFound } from "../../components/route-error.js"
 import { Section, TableCard, TableSample, useShapeId } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Automations, type Automation, type Draft } from "../../lib/automations.js"
@@ -409,12 +410,7 @@ export function AutomationEditor(props: {
         <Spinner aria-label="Loading automation" />
       </div>
     )
-  if (!automation)
-    return (
-      <div className="mx-auto w-full max-w-200 px-6 pt-22">
-        <EmptyState title="This automation is gone">It was deleted, or its link changed.</EmptyState>
-      </div>
-    )
+  if (!automation) return <RouteNotFound />
   return (
     <Editor
       key={automation.key}

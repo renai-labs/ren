@@ -131,7 +131,8 @@ function ErrorState(props: {
   footer?: ReactNode | undefined
 }) {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+    // oxlint-disable-next-line ren/no-comments -- An error replaces the page wherever its route sits, so it covers the page's scroll area (or the window, outside the shell) and centers there.
+    <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto overscroll-contain bg-background p-6">
       <div className="flex max-w-sm animate-in flex-col items-center text-center duration-300 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0">
         <div className="mb-8 flex h-36 items-center justify-center">{props.art}</div>
         {props.code ? <p className="mb-1.5 text-xs text-muted-foreground tabular-nums">{props.code}</p> : null}
