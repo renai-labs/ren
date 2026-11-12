@@ -61,7 +61,7 @@ test("a prompt sent while the brain's URL fails stays pending and is sent once w
         sender: { userId: "user_1" },
       }).pipe(Effect.provide(fetching))
       yield* chat.open(brain.id)
-      yield* ChatTest.until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status.status === "connected")
       const failing = (mode: "network" | "gone" | "unauthorized") =>
         Effect.gen(function* () {
           fault.mode = mode

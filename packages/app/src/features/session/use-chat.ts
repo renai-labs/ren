@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, Composer, SessionTasks, type ChatSession } from "@ren/chat"
+import { ChatState, Composer, SessionTasks, type ChatSession, type Connection } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -92,12 +92,17 @@ function useChatSuggestions(input: {
   }
 }
 
+const isReconnecting = (connection: Connection.State | undefined) =>
+  connection?.status === "waiting" || connection?.status === "reconnecting"
+
 function bootStatusOf(
-  connection: string | undefined,
+  connection: Connection.State | undefined,
   boot: PromptInputBoot | { readonly _tag: "Ready" } | undefined,
 ): PromptInputBoot | undefined {
   if (boot && boot._tag !== "Ready") return boot
-  if (connection === "reconnecting") return { _tag: "Reconnecting" }
+  if (connection?.status === "waiting" && connection.retryAt !== undefined && connection.retryAt - Date.now() >= 2000)
+    return { _tag: "Waiting", retryAt: connection.retryAt }
+  if (isReconnecting(connection)) return { _tag: "Reconnecting" }
   return
 }
 
@@ -189,6 +194,7 @@ export function useChat(
     ),
   )
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
+  const retryNow = ChatReact.useAction(root, (opened) => opened.retryNow)
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
   const redo = ChatReact.useAction(root, (opened) => opened.redo)
@@ -252,7 +258,7 @@ export function useChat(
     reverting,
     failed: AsyncResult.isFailure(view.session.state),
     boot,
-    reconnecting: connection === "reconnecting",
+    reconnecting: isReconnecting(connection),
     retrying: restart.isPending,
     draft,
     setDraft,
@@ -318,6 +324,7 @@ export function useChat(
       void redo().catch((error: unknown) =>
         toast.error("Could not restore messages", { description: errorMessage(error) }),
       ),
+    retryNow: () => void retryNow(),
     retry: () =>
       restart.mutate(
         { id: root },

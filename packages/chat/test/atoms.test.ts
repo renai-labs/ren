@@ -72,7 +72,7 @@ test("the timeline atom of a session shows a prompt and its reply as rows", () =
     yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(timeline)))
     yield* made.until(
       made.atoms.status(brain.id),
-      (value) => AsyncResult.isSuccess(value) && value.value === "connected",
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "connected",
     )
     yield* made.atoms.run(made.registry, brain.id, (opened) =>
       opened.prompt({ text: stub.script({ reply: "rows for the UI" }).marker }),
@@ -147,7 +147,7 @@ test("the child atom of a subagent session reads its transcript through the root
     yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.timeline(brain.id))))
     yield* made.until(
       made.atoms.status(brain.id),
-      (value) => AsyncResult.isSuccess(value) && value.value === "connected",
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "connected",
     )
     const child = stub.script({ reply: "child rows" })
     yield* made.atoms.run(made.registry, brain.id, (opened) =>
@@ -182,7 +182,7 @@ test("the shell output atom reads a shell's output through the root session", ()
     yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.state(brain.id))))
     yield* made.until(
       made.atoms.status(brain.id),
-      (value) => AsyncResult.isSuccess(value) && value.value === "connected",
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "connected",
     )
     yield* brain.driver.shell(brain.id, "printf 'hello world'")
     const state = yield* made.until(
@@ -236,11 +236,17 @@ test("the models atom loads again once the connection is back when its first rea
     yield* Effect.addFinalizer(() => Effect.sync(unmount))
     const unmountModels = made.registry.mount(made.atoms.models(id))
     yield* Effect.addFinalizer(() => Effect.sync(unmountModels))
-    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "connected")
+    yield* made.until(
+      made.atoms.status(id),
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "connected",
+    )
     yield* made.until(made.atoms.models(id), AsyncResult.isFailure)
     network.isDown = false
     streams.at(-1)?.error(new Error("The network dropped"))
-    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "reconnecting")
+    yield* made.until(
+      made.atoms.status(id),
+      (value) => AsyncResult.isSuccess(value) && value.value.status === "waiting",
+    )
     const models = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)
     expect(AsyncResult.isSuccess(models) && models.value.length).toBeGreaterThan(0)
   }).pipe(Effect.scoped, Effect.runPromise))

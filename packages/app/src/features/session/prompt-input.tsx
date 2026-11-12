@@ -56,6 +56,7 @@ import { RepositoriesDialog } from "./repositories-picker.js"
 import { useApps } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { gaps, isSpaceApp } from "../../lib/apps.js"
+import { useCountdown } from "../../lib/use-countdown.js"
 import { useStep } from "../../lib/use-step.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
@@ -289,9 +290,20 @@ function AppProfileItem(props: {
   )
 }
 
-export type PromptInputBoot = Exclude<ChatSession.Boot, { readonly _tag: "Ready" }> | { readonly _tag: "Reconnecting" }
+export type PromptInputBoot =
+  | Exclude<ChatSession.Boot, { readonly _tag: "Ready" }>
+  | { readonly _tag: "Reconnecting" }
+  | { readonly _tag: "Waiting"; readonly retryAt: number }
 
-function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void) | undefined }) {
+function RetryCountdown(props: { retryAt: number }) {
+  return <span>Reconnecting in {useCountdown(props.retryAt)}s…</span>
+}
+
+function PromptInputStatus(props: {
+  boot: PromptInputBoot
+  onRetry?: (() => void) | undefined
+  onRetryNow?: (() => void) | undefined
+}) {
   if (props.boot._tag === "Failed")
     return (
       <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
@@ -318,6 +330,16 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
         </span>
         <Button variant="outline" size="sm" className="pointer-events-auto" onClick={props.onRetry}>
           Retry
+        </Button>
+      </div>
+    )
+  if (props.boot._tag === "Waiting")
+    return (
+      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <IconLoader2 className="size-3.5 animate-spin" />
+        <RetryCountdown retryAt={props.boot.retryAt} />
+        <Button variant="outline" size="sm" onClick={props.onRetryNow}>
+          Try now
         </Button>
       </div>
     )
@@ -538,6 +560,7 @@ export function PromptInput(props: {
   model: ReactNode
   boot?: PromptInputBoot | undefined
   onRetry?: (() => void) | undefined
+  onRetryNow?: (() => void) | undefined
   running?: boolean | undefined
   onStop?: (() => void) | undefined
   sending?: boolean | undefined
@@ -642,7 +665,7 @@ export function PromptInput(props: {
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
       <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
-        {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
+        {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
           value={text}

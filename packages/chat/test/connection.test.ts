@@ -13,7 +13,7 @@ const ended: SessionEvent.Frame = { id: "evt_ended", created: 1, type: "stream.e
 
 effect("a terminal startup failure parks without reconnecting until explicitly woken", () =>
   Effect.gen(function* () {
-    const statuses = yield* Queue.unbounded<Connection.Status>()
+    const statuses = yield* Queue.unbounded<Connection.State>()
     const attempts = { count: 0 }
     const connection = yield* Connection.make({
       subscribe: Effect.suspend(() => {
@@ -22,16 +22,16 @@ effect("a terminal startup failure parks without reconnecting until explicitly w
       }),
       canReconnect: Effect.succeed(false),
       onFrames: () => Effect.void,
-      onStatus: (status) => Queue.offer(statuses, status).pipe(Effect.asVoid),
+      onStatus: (state) => Queue.offer(statuses, state).pipe(Effect.asVoid),
     })
-    expect(yield* Queue.take(statuses)).toBe("connecting")
-    expect(yield* Queue.take(statuses)).toBe("parked")
+    expect((yield* Queue.take(statuses)).status).toBe("connecting")
+    expect((yield* Queue.take(statuses)).status).toBe("parked")
     yield* TestClock.adjust("1 minute")
     expect(attempts.count).toBe(1)
-    expect(yield* connection.status).toBe("parked")
+    expect((yield* connection.status).status).toBe("parked")
     yield* connection.wake
-    expect(yield* Queue.take(statuses)).toBe("connecting")
-    expect(yield* Queue.take(statuses)).toBe("parked")
+    expect((yield* Queue.take(statuses)).status).toBe("connecting")
+    expect((yield* Queue.take(statuses)).status).toBe("parked")
     expect(attempts.count).toBe(2)
   }),
 )
@@ -44,7 +44,7 @@ interface Subscription {
 const setup = (options: Partial<Pick<Connection.Options, "idleTimeout" | "connectTimeout">> = {}) =>
   Effect.gen(function* () {
     const subscriptions = yield* Queue.unbounded<Subscription>()
-    const statuses = yield* Queue.unbounded<Connection.Status>()
+    const statuses = yield* Queue.unbounded<Connection.State>()
     const frames = yield* Queue.unbounded<SessionEvent.Frame>()
     const connection = yield* Connection.make({
       ...options,
@@ -60,10 +60,10 @@ const setup = (options: Partial<Pick<Connection.Options, "idleTimeout" | "connec
         )
       }),
       onFrames: (batch) => Queue.offerAll(frames, batch).pipe(Effect.asVoid),
-      onStatus: (status) => Queue.offer(statuses, status).pipe(Effect.asVoid),
+      onStatus: (state) => Queue.offer(statuses, state).pipe(Effect.asVoid),
     })
     const until = (status: Connection.Status): Effect.Effect<void> =>
-      Queue.take(statuses).pipe(Effect.flatMap((next) => (next === status ? Effect.void : until(status))))
+      Queue.take(statuses).pipe(Effect.flatMap((next) => (next.status === status ? Effect.void : until(status))))
     return { connection, subscriptions, statuses, frames, until }
   })
 
@@ -76,14 +76,14 @@ effect("a stream that goes silent past the idle timeout is replaced", () =>
     expect(yield* Queue.take(fake.frames)).toEqual(connected)
 
     yield* TestClock.adjust("45 seconds")
-    yield* fake.until("reconnecting")
+    yield* fake.until("waiting")
     yield* Deferred.await(first.closed)
     yield* TestClock.adjust("1 second")
     const second = yield* Queue.take(fake.subscriptions)
     yield* Queue.offer(second.queue, { ...connected, id: "evt_connected_2" })
     yield* fake.until("connected")
     expect(yield* Queue.take(fake.frames)).toEqual({ ...connected, id: "evt_connected_2" })
-    expect(yield* fake.connection.status).toBe("connected")
+    expect((yield* fake.connection.status).status).toBe("connected")
   }),
 )
 
@@ -102,7 +102,7 @@ effect("keepalive comments hold a quiet stream open", () =>
 
     expect(yield* Queue.size(fake.subscriptions)).toBe(0)
     expect(yield* Deferred.isDone(first.closed)).toBe(false)
-    expect(yield* fake.connection.status).toBe("connected")
+    expect((yield* fake.connection.status).status).toBe("connected")
     expect((yield* Queue.takeAll(fake.frames)).filter((frame) => frame.type !== "server.heartbeat")).toEqual([
       connected,
     ])
@@ -157,7 +157,7 @@ test.each([
     yield* fake.until("connected")
 
     yield* end(first.queue)
-    yield* fake.until("reconnecting")
+    yield* fake.until("waiting")
     yield* TestClock.adjust("1 second")
     const second = yield* Queue.take(fake.subscriptions)
     yield* Queue.offer(second.queue, connected)
@@ -165,16 +165,40 @@ test.each([
   }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise),
 )
 
+effect(
+  "after a failed attempt the status is waiting with its retryAt, then reconnecting when the next attempt starts; retryNow ends the wait",
+  () =>
+    Effect.gen(function* () {
+      const fake = yield* setup()
+      const first = yield* Queue.take(fake.subscriptions)
+      yield* Queue.offer(first.queue, connected)
+      yield* fake.until("connected")
+
+      yield* Queue.end(first.queue)
+      const waiting = yield* Queue.take(fake.statuses)
+      expect(waiting).toEqual({ status: "waiting", retryAt: 1_000 })
+      yield* TestClock.adjust("1 second")
+      expect((yield* Queue.take(fake.statuses)).status).toBe("reconnecting")
+      const second = yield* Queue.take(fake.subscriptions)
+
+      yield* Queue.end(second.queue)
+      expect(yield* Queue.take(fake.statuses)).toEqual({ status: "waiting", retryAt: 3_000 })
+      yield* fake.connection.retryNow
+      expect((yield* Queue.take(fake.statuses)).status).toBe("reconnecting")
+      yield* Queue.take(fake.subscriptions)
+    }),
+)
+
 effect("a stream that does not start with server.connected is replaced", () =>
   Effect.gen(function* () {
     const fake = yield* setup()
     const first = yield* Queue.take(fake.subscriptions)
     yield* Queue.offer(first.queue, heartbeat)
-    yield* fake.until("reconnecting")
+    yield* fake.until("waiting")
     yield* TestClock.adjust("1 second")
     const second = yield* Queue.take(fake.subscriptions)
     yield* TestClock.adjust("2 seconds")
-    yield* fake.until("reconnecting")
+    yield* fake.until("waiting")
     yield* Deferred.await(second.closed)
     expect(yield* Queue.size(fake.frames)).toBe(0)
   }),
@@ -253,7 +277,7 @@ effect("connect timeouts back off the reconnect delay, and a stream that connect
     yield* Queue.offer(third.queue, connected)
     yield* fake.until("connected")
     yield* Queue.end(third.queue)
-    yield* fake.until("reconnecting")
+    yield* fake.until("waiting")
     yield* TestClock.adjust("1 second")
     yield* Queue.take(fake.subscriptions)
   }),

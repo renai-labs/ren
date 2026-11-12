@@ -107,6 +107,7 @@ function ChatComposer(props: {
           onSubmit={chat.send}
           boot={chat.bootStatus}
           onRetry={chat.retry}
+          onRetryNow={chat.retryNow}
           running={chat.running}
           onStop={chat.stop}
           suggest={chat.suggest}

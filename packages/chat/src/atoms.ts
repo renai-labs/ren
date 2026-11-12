@@ -128,7 +128,10 @@ export const make = <R, ER>(options: Options<R, ER>) => {
             ).pipe(
               Stream.runForEach((event) =>
                 event === "online"
-                  ? opened.wake.pipe(Effect.andThen(opened.resync("The network connection is back")))
+                  ? opened.wake.pipe(
+                      Effect.andThen(opened.retryNow),
+                      Effect.andThen(opened.resync("The network connection is back")),
+                    )
                   : opened.foreground,
               ),
               Effect.forkScoped,
@@ -200,7 +203,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
         get.self<AsyncResult.AsyncResult<Effect.Success<ChatSession.ChatSession["models"]>, unknown>>(),
         AsyncResult.value,
       )
-      if (Option.isSome(previous) && !(AsyncResult.isSuccess(connection) && connection.value === "connected"))
+      if (Option.isSome(previous) && !(AsyncResult.isSuccess(connection) && connection.value.status === "connected"))
         return Effect.succeed(previous.value)
       return Effect.flatMap(get.result(session(sessionID)), (opened) => opened.models)
     }),

@@ -201,7 +201,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         )
       : ChatState.empty,
   )
-  const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
+  const status = yield* SubscriptionRef.make<Connection.State>({ status: "connecting" })
   const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Ready" })
   if (options.cache) {
     const cache = options.cache
@@ -473,14 +473,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     effect.pipe(
       Effect.catch((error) =>
         Effect.flatMap(SubscriptionRef.get(status), (current) =>
-          current === "connected" ? report(error) : Effect.void,
+          current.status === "connected" ? report(error) : Effect.void,
         ),
       ),
     )
 
   const refresh = (read: Reducer.Read) =>
     Effect.gen(function* () {
-      if ((yield* SubscriptionRef.get(status)) !== "connected") return
+      if ((yield* SubscriptionRef.get(status)).status !== "connected") return
       yield* reads.run(Reducer.key(read), load(read)).pipe(quietly, Effect.forkIn(scope))
     })
 
@@ -505,7 +505,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         return reads.invalidate(key)
       }
       if (command._tag === "Rename") {
-        if ((yield* SubscriptionRef.get(status)) !== "connected") return
+        if ((yield* SubscriptionRef.get(status)).status !== "connected") return
         return yield* reads
           .run(key, load(command.read))
           .pipe(
@@ -579,11 +579,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     onUnreachable: lost,
     onStatus: (next) =>
       Effect.gen(function* () {
-        if (next !== "connected") reads.invalidate()
+        if (next.status !== "connected") reads.invalidate()
         // oxlint-disable-next-line ren/no-comments -- A parked brain may be asleep or gone: the next read or send asks Ren first, which wakes it (E128).
-        if (next === "reconnecting" || next === "parked") cached.current = Option.none()
+        if (next.status === "waiting" || next.status === "reconnecting" || next.status === "parked")
+          cached.current = Option.none()
         // oxlint-disable-next-line ren/no-comments -- Each retry reports reconnecting again; publishing it again would make every reader of the status ask Ren for access again (#196).
-        if ((yield* SubscriptionRef.get(status)) !== next) yield* SubscriptionRef.set(status, next)
+        const previous = yield* SubscriptionRef.get(status)
+        if (previous.status !== next.status || previous.retryAt !== next.retryAt)
+          yield* SubscriptionRef.set(status, next)
       }),
   })
 
@@ -1037,7 +1040,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   // oxlint-disable-next-line ren/no-comments -- Typing in a parked chat asks Ren for access, which wakes its brain before the send; at most once per 5 minutes (E130).
   const prepared = { at: Number.NEGATIVE_INFINITY }
   const typing = Effect.gen(function* () {
-    if ((yield* SubscriptionRef.get(status)) !== "parked") return
+    if ((yield* SubscriptionRef.get(status)).status !== "parked") return
     const now = yield* Clock.currentTimeMillis
     if (now - prepared.at < prepareEveryMs) return
     prepared.at = now
@@ -1070,6 +1073,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     queueInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "queue"),
     reorderInput,
     wake: connection.wake,
+    retryNow: connection.retryNow,
     typing,
     resync: connection.resync,
     foreground: connection.foreground,
@@ -1102,7 +1106,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             events,
             lost: SubscriptionRef.changes(status).pipe(
               Stream.drop(1),
-              Stream.filter((next) => next === "reconnecting" || next === "parked"),
+              Stream.filter(
+                (next) => next.status === "waiting" || next.status === "reconnecting" || next.status === "parked",
+              ),
               Stream.runHead,
               Effect.asVoid,
             ),
