@@ -11,7 +11,7 @@ export interface Match {
   readonly occurrence: number
 }
 
-const fence = /^ {0,3}(`{3,}|~{3,})[ \t]*(\S*)/u
+const fence = /^ {0,3}(?<ticks>`{3,}|~{3,})[ \t]*(?<info>\S*)/u
 const math = /(`+)[\s\S]*?\1|\$\$([\s\S]+?)\$\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/gu
 
 const withoutMath = (prose: string) =>
@@ -34,15 +34,20 @@ export const visibleText = (text: string) => {
   }
   for (const line of text.split("\n")) {
     const current = open.at(0)
-    const marker = fence.exec(line)
+    const marker = fence.exec(line)?.groups
     if (current) {
       current.lines.push(line)
       const closes = closesFence(line, current)
       if (closes && !current.mermaid) out.push(current.lines.join("\n"))
       if (closes) open.length = 0
-    } else if (marker?.[1]) {
+    } else if (marker?.ticks) {
       flush()
-      open.push({ char: marker[1].charAt(0), size: marker[1].length, lines: [line], mermaid: marker[2] === "mermaid" })
+      open.push({
+        char: marker.ticks.charAt(0),
+        size: marker.ticks.length,
+        lines: [line],
+        mermaid: marker.info === "mermaid",
+      })
     } else prose.push(line)
   }
   flush()
