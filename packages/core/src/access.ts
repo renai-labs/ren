@@ -7,6 +7,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import type { Actor } from "./actor.js"
 import { AgentPolicy } from "./agent/policy.js"
 import { BillingPolicy } from "./billing/policy.js"
+import { ArtifactPolicy } from "./artifact/policy.js"
 import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelMappingPolicy } from "./channel-mapping/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
@@ -110,6 +111,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...ChannelMappingPolicy.documents,
   ...SchedulePolicy.documents,
   ...WebhookPolicy.documents,
+  ...ArtifactPolicy.documents,
   ...InfraPolicy.documents,
   ...BillingPolicy.documents,
 ])
