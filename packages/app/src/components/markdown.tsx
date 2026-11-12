@@ -1,4 +1,4 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { Children, createContext, use, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -22,6 +22,15 @@ import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
+import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconBulb,
+  IconInfoCircle,
+  IconMessageReport,
+  IconSparkles,
+} from "@tabler/icons-react"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -78,7 +87,36 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+const callouts = {
+  note: { label: "Note", Icon: IconInfoCircle, tone: "text-chart-1" },
+  tip: { label: "Tip", Icon: IconBulb, tone: "text-chart-2" },
+  important: { label: "Important", Icon: IconMessageReport, tone: "text-chart-6" },
+  warning: { label: "Warning", Icon: IconAlertTriangle, tone: "text-chart-3" },
+  caution: { label: "Caution", Icon: IconAlertOctagon, tone: "text-destructive" },
+  insight: { label: "Insight", Icon: IconSparkles, tone: "text-primary" },
+}
+
+function MarkdownBlockquote({ node: _node, children, ...props }: ComponentProps<"blockquote"> & ExtraProps) {
+  const kind = "data-callout" in props ? props["data-callout"] : undefined
+  const callout = Object.entries(callouts).find(([key]) => key === kind)?.[1]
+  if (!callout)
+    return (
+      <blockquote className="my-4 border-l-4 border-muted-foreground/30 pl-4 text-muted-foreground italic" {...props}>
+        {children}
+      </blockquote>
+    )
+  return (
+    <Alert role="note" aria-label={callout.label} data-callout={kind} className="my-4">
+      <callout.Icon className={callout.tone} aria-hidden />
+      <AlertTitle className={callout.tone}>{callout.label}</AlertTitle>
+      {Children.toArray(children).some((child) => typeof child !== "string" || child.trim() !== "") && (
+        <AlertDescription className="text-foreground">{children}</AlertDescription>
+      )}
+    </Alert>
+  )
+}
+
+const components = { blockquote: MarkdownBlockquote, code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
@@ -104,6 +142,70 @@ const workspaceImages = () => (tree: MarkdownNode) => {
   visit(tree)
 }
 
+const textOf = (node: MarkdownNode): string =>
+  node.type === "text" ? (node.value ?? "") : (node.children ?? []).map(textOf).join("")
+
+const isCode = (node: MarkdownNode | undefined, pattern: RegExp) =>
+  node?.tagName === "code" && pattern.test(textOf(node))
+
+const insightOpen = /^★ Insight ─+$/u
+const insightClose = /^─+$/u
+const calloutMarker = /^\[!(note|tip|important|warning|caution)\](?:[ \t]*\r?\n|[ \t]*$)/iu
+
+const rehypeCallouts = () => (tree: MarkdownNode) => {
+  const visit = (node: MarkdownNode) => {
+    const children = node.children ?? []
+    if (node.tagName === "blockquote") {
+      const paragraph = children.find((child) => child.type === "element")
+      const first = paragraph?.tagName === "p" ? paragraph.children?.[0] : undefined
+      const marker = first?.type === "text" ? calloutMarker.exec(first.value ?? "") : null
+      if (first && marker?.[1]) {
+        first.value = (first.value ?? "").slice(marker[0].length)
+        if (first.value === "") paragraph?.children?.shift()
+        if (paragraph?.children?.length === 0) children.splice(children.indexOf(paragraph), 1)
+        node.properties = { ...node.properties, "data-callout": marker[1].toLowerCase() }
+      }
+    }
+    for (let index = 0; index < children.length; index++) {
+      const child = children[index]
+      if (!child) break
+      const inline = child.tagName === "p" ? (child.children ?? []) : []
+      const last = inline.at(-1)
+      if (inline.length > 2 && isCode(inline[0], insightOpen) && isCode(last, insightClose)) {
+        const body = inline.slice(1, -1)
+        if (body[0]?.type === "text") body[0].value = body[0].value?.replace(/^\r?\n/u, "")
+        children[index] = {
+          type: "element",
+          tagName: "blockquote",
+          properties: { "data-callout": "insight" },
+          children: [{ type: "element", tagName: "p", properties: {}, children: body }],
+        }
+        continue
+      }
+      if (child.tagName === "p" && inline.length === 1 && isCode(inline[0], insightOpen)) {
+        const end = children.findIndex(
+          (sibling, offset) =>
+            offset > index &&
+            sibling.tagName === "p" &&
+            sibling.children?.length === 1 &&
+            isCode(sibling.children[0], insightClose),
+        )
+        if (end !== -1) {
+          children.splice(index, end - index + 1, {
+            type: "element",
+            tagName: "blockquote",
+            properties: { "data-callout": "insight" },
+            children: children.slice(index + 1, end).filter((sibling) => sibling.type === "element"),
+          })
+          continue
+        }
+      }
+      visit(child)
+    }
+  }
+  visit(tree)
+}
+
 const appLink = "#ren-app:"
 
 const withDataImages = (schema: unknown) => {
@@ -113,14 +215,20 @@ const withDataImages = (schema: unknown) => {
   const src: ReadonlyArray<unknown> = "src" in protocols && Array.isArray(protocols.src) ? protocols.src : []
   return { ...schema, protocols: { ...protocols, src: [...src, "data"] } }
 }
-const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
-  ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
-)
-const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
-  const safe: (typeof defaultRehypePlugins)[string] =
-    name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
-  return name === "harden" ? [workspaceImages, safe] : [safe]
-})
+const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = [
+  ...Object.entries(defaultRehypePlugins).map(([name, plugin]) =>
+    name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin,
+  ),
+  rehypeCallouts,
+]
+const workspaceRehypePlugins = [
+  ...Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
+    const safe: (typeof defaultRehypePlugins)[string] =
+      name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
+    return name === "harden" ? [workspaceImages, safe] : [safe]
+  }),
+  rehypeCallouts,
+]
 
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)

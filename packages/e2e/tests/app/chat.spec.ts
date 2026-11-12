@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, scriptedReply, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -136,6 +136,22 @@ test("a member opens the model picker with its shortcut and undoes the last mess
     .click()
   await expect(message).toHaveValue("Draft the memo")
   await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
+})
+
+test("a member reads a GitHub callout as a note and an unknown marker as a blockquote", async ({ page }) => {
+  await createOrganization(page.request, { name: "Mary Jackson" })
+  const marker = await scriptedReply(page.request, "> [!TIP]\n> Use **bun**.\n\n> [!FOO]\n> Not a callout.")
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill(`Explain ${marker}`)
+  await start.getByRole("button", { name: "Send" }).click()
+
+  const tip = page.getByRole("note", { name: "Tip" })
+  await expect(tip).toBeVisible({ timeout: brainStart })
+  await expect(tip).toContainText("Use bun.")
+  await expect(tip).not.toContainText("[!TIP]")
+  const unknown = page.getByRole("blockquote").filter({ hasText: "Not a callout." })
+  await expect(unknown).toContainText("[!FOO]")
 })
 
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
