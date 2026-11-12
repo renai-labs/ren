@@ -90,7 +90,6 @@ export type ProfileTarget = {
   edit?: boolean | undefined
   existing?: boolean | undefined
   newAccount?: boolean | undefined
-  chooseSpace?: boolean | undefined
 }
 
 const freeSlug = (name: string, taken: ReadonlySet<string>) => {
@@ -152,12 +151,10 @@ function stepOf(input: {
   edit: boolean
   section: "edit" | "connection"
   from: From | undefined
-  chooseSpace: boolean
 }) {
   if (input.existing) return "existing"
   if (input.profileId) return input.edit ? input.section : "connect"
-  if (input.from) return "add"
-  return input.chooseSpace ? "spaces" : "create"
+  return input.from ? "add" : "spaces"
 }
 
 export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
@@ -185,7 +182,6 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
     edit,
     section,
     from,
-    chooseSpace: Boolean(props.chooseSpace),
   })
   const adding = from !== undefined && !props.profileId && !props.existing
   const move = (direction: "in" | "back", change: () => void) => {
@@ -222,7 +218,7 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
     if (step === "connection") return () => go("edit")
     if ((step === "connect" || step === "edit") && adding) return () => toMode("resolve", "back")
     if (step === "add" && mode !== "resolve" && !props.newAccount) return () => toMode("resolve", "back")
-    if (step === "add" && props.chooseSpace) return () => move("back", () => setFrom(props.from))
+    if (step === "add" && !props.from) return () => move("back", () => setFrom(undefined))
     return null
   })()
   return (
@@ -261,7 +257,6 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
                 setSection("edit")
               })
             }
-            onCreated={(created) => move("in", () => setProfileId(created.id))}
             onConnection={() => go("connection")}
             onClose={props.onClose}
             onDone={edit ? () => go("edit") : props.onClose}
@@ -288,7 +283,6 @@ type StepProps = {
   onMode: (mode: Mode) => void
   onSpace: (space: From) => void
   onOpen: (profileId: string) => void
-  onCreated: (profile: AppProfile) => void
   onConnection: () => void
   onClose: () => void
   onDone: () => void
@@ -308,8 +302,8 @@ function ProfileStep(props: Omit<StepProps, "app"> & { app: App | undefined }) {
       </Screen>
     )
   if (props.step === "existing" && from) return <ExistingStep app={app} from={from} onDone={props.onClose} />
-  if (props.step === "spaces") return <SpacesStep app={app} onPick={props.onSpace} onClose={props.onClose} />
-  if (props.step === "create") return <CreateStep app={app} onCreated={props.onCreated} />
+  if (props.step === "spaces")
+    return <SpacesStep app={app} newAccount={props.mode === "fresh"} onPick={props.onSpace} onClose={props.onClose} />
   if (props.step === "add" && from)
     return (
       <AddStep
@@ -792,7 +786,7 @@ function NewStep(
   )
 }
 
-function SpacesStep(props: { app: App; onPick: (space: From) => void; onClose: () => void }) {
+function SpacesStep(props: { app: App; newAccount: boolean; onPick: (space: From) => void; onClose: () => void }) {
   const navigate = useNavigate()
   const me = useMe().user.id
   const joined = useSpaces().joined
@@ -807,8 +801,10 @@ function SpacesStep(props: { app: App; onPick: (space: From) => void; onClose: (
   return (
     <Screen
       app={app}
-      title={`Add ${app.name} to a space`}
-      description={`Pick a space. Everyone in it can use ${app.name}.`}
+      title={props.newAccount ? `New ${app.name} account` : `Add ${app.name} to a space`}
+      description={
+        props.newAccount ? "Pick the space that uses it." : `Pick a space. Everyone in it can use ${app.name}.`
+      }
       action={null}
     >
       {profiles.pending ? (
@@ -824,7 +820,7 @@ function SpacesStep(props: { app: App; onPick: (space: From) => void; onClose: (
                 variant="ghost"
                 className="group/row h-12 shrink-0 justify-start gap-3 rounded-none px-3 font-normal active:not-aria-[haspopup]:scale-100"
                 onClick={() => {
-                  if (!isAdded)
+                  if (!isAdded || props.newAccount)
                     return props.onPick({
                       spaceId: space.id,
                       name: space.name,
@@ -905,16 +901,13 @@ function Screen(props: {
 function SpacesField(props: {
   spaces: ReadonlyArray<{ id: string; name: string }>
   picked: ReadonlySet<string>
-  only: boolean
   onPick: (picked: ReadonlySet<string>) => void
-  onOnly?: ((only: boolean) => void) | undefined
   every?: { checked: boolean; onChange: (checked: boolean) => void } | undefined
 }) {
   const row = "flex h-11 shrink-0 items-center justify-between gap-3 px-3"
   const [listRef, edges] = useScrollEdges({ axis: "y" })
   const [query, setQuery] = useState("")
   const every = props.every
-  const onOnly = props.onOnly
   const shown = props.spaces.filter((space) => Search.matches(query, space.name))
   return (
     <Field className="text-left">
@@ -961,9 +954,9 @@ function SpacesField(props: {
               <Switch
                 id={`profile-space-${space.id}`}
                 disabled={every?.checked}
-                checked={Boolean(every?.checked) || (!props.only && props.picked.has(space.id))}
+                checked={Boolean(every?.checked) || props.picked.has(space.id)}
                 onCheckedChange={(checked) => {
-                  const next = new Set(props.only ? [] : props.picked)
+                  const next = new Set(props.picked)
                   if (checked) next.add(space.id)
                   else next.delete(space.id)
                   props.onPick(next)
@@ -972,15 +965,6 @@ function SpacesField(props: {
             </div>
           ))}
         </div>
-        {onOnly ? (
-          <div className={row}>
-            <FieldLabel htmlFor="profile-only" className="flex-1 font-normal">
-              <IconLock className="size-4 shrink-0 text-muted-foreground" />
-              Only me
-            </FieldLabel>
-            <Switch id="profile-only" checked={props.only} onCheckedChange={(checked) => onOnly(checked)} />
-          </div>
-        ) : null}
       </div>
     </Field>
   )
@@ -1006,6 +990,11 @@ function useEditProfile(profile: AppProfile, onDone: () => void) {
   const renamed = name.trim() !== profile.name && name.trim().length > 0
   const moved = shared && (add.length > 0 || remove.length > 0 || every !== profile.allSpaces)
   const pending = update.isPending || access.isPending
+  const leftEvery = profile.allSpaces && !every
+  const dropped = [
+    ...(leftEvery ? ["every space"] : []),
+    ...profile.spaces.filter((space) => remove.includes(space.id)).map((space) => space.name),
+  ]
   const submit = () => {
     if (!renamed && !moved) return onDone()
     const saveSpaces = () =>
@@ -1017,7 +1006,20 @@ function useEditProfile(profile: AppProfile, onDone: () => void) {
               ...(remove.length > 0 && { remove }),
               ...(every !== profile.allSpaces && { allSpaces: every }),
             },
-            { onSuccess: onDone },
+            {
+              onSuccess: (info) => {
+                if (dropped.length > 0)
+                  toastRemoved(info, dropped.join(", "), {
+                    onUndo: () =>
+                      access.mutateAsync({
+                        id: profile.id,
+                        ...(remove.length > 0 && { add: remove }),
+                        ...(leftEvery && { allSpaces: true }),
+                      }),
+                  })
+                onDone()
+              },
+            },
           )
         : onDone()
     if (renamed) update.mutate({ id: profile.id, name: name.trim() }, { onSuccess: saveSpaces })
@@ -1032,7 +1034,6 @@ function useEditProfile(profile: AppProfile, onDone: () => void) {
     setEvery,
     shared,
     pending,
-    blocked: pending || (shared && !every && picked.size === 0),
     error: update.error ?? access.error,
     submit,
   }
@@ -1056,7 +1057,7 @@ function EditStep(props: {
       action={
         <>
           {edit.error ? <FieldError className="text-center">{errorMessage(edit.error)}</FieldError> : null}
-          <Button type="submit" className="h-10 w-full" disabled={edit.blocked}>
+          <Button type="submit" className="h-10 w-full" disabled={edit.pending}>
             {edit.pending ? <Spinner data-icon="inline-start" /> : null}
             Save
           </Button>
@@ -1080,7 +1081,6 @@ function EditStep(props: {
           <SpacesField
             spaces={spaces}
             picked={edit.picked}
-            only={false}
             onPick={edit.setPicked}
             {...(profile.canShareEverySpace && { every: { checked: edit.every, onChange: edit.setEvery } })}
           />
@@ -1169,7 +1169,7 @@ function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
   const remove = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
   const [confirming, setConfirming] = useState(false)
   const profile = props.profile
-  const used = reachedSpaces(profile)
+  const used = profile.kind === "private" ? [] : reachedSpaces(profile)
   return (
     <>
       <DropdownMenu>
@@ -1188,7 +1188,10 @@ function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
         onOpenChange={setConfirming}
         confirmation={{
           title: `Delete ${profile.name}?`,
-          description: `${used.length > 0 ? `${used.join(", ")} ${used.length === 1 ? "uses" : "use"} it. ` : ""}Ren deletes the account and its sign-ins. Those spaces use Ren credits or show Not connected.`,
+          description:
+            used.length > 0
+              ? `${used.join(", ")} ${used.length === 1 ? "uses" : "use"} it. Ren deletes the account and its sign-ins. Those spaces use Ren credits or show Not connected.`
+              : "Ren deletes the account and its sign-ins.",
           action: "Delete account",
         }}
         onConfirm={() =>
@@ -1375,65 +1378,6 @@ function ExistingStep(props: { app: App; from: From; onDone: () => void }) {
           ))}
         </div>
       ) : null}
-    </Screen>
-  )
-}
-
-function CreateStep(props: { app: App; onCreated: (profile: AppProfile) => void }) {
-  const { api } = RouterContext.useRouterContext()
-  const others = useAppProfiles([props.app.id]).of(props.app.id)
-  const user = useMe().user.name
-  const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
-  const create = useMutation({ ...api["app-profile"].create.mutationOptions() })
-  const [name, setName] = useState<string>()
-  const [only, setOnly] = useState(false)
-  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(spaces.slice(0, 1).map((space) => space.id)))
-  const blocked = !only && picked.size === 0
-  const accountName = name ?? defaultName({ from: undefined, only, picked, spaces, others, app: props.app, user })
-  return (
-    <Screen
-      app={props.app}
-      title={`New ${props.app.name} account`}
-      description="You’ll connect it next."
-      onSubmit={() => {
-        if (blocked || !accountName.trim()) return
-        create.mutate(
-          {
-            appId: props.app.id,
-            name: accountName.trim(),
-            slug: freeSlug(accountName, new Set(others.map((each) => each.slug))),
-            kind: only ? "private" : "shared",
-            ...(!only && { spaceIds: [...picked] }),
-          },
-          { onSuccess: props.onCreated },
-        )
-      }}
-      action={
-        <>
-          {create.error ? <FieldError className="text-center">{errorMessage(create.error)}</FieldError> : null}
-          <Button type="submit" className="h-10 w-full" disabled={create.isPending || blocked || !accountName.trim()}>
-            {create.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Create account
-          </Button>
-        </>
-      }
-    >
-      <FieldGroup className="w-full gap-6">
-        <Field className="text-left">
-          <FieldLabel htmlFor="profile-name">Name</FieldLabel>
-          <Input id="profile-name" value={accountName} onChange={(event) => setName(event.target.value)} />
-        </Field>
-        <SpacesField
-          spaces={spaces}
-          picked={picked}
-          only={only}
-          onPick={(next) => {
-            setOnly(false)
-            setPicked(next)
-          }}
-          onOnly={setOnly}
-        />
-      </FieldGroup>
     </Screen>
   )
 }

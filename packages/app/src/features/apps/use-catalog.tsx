@@ -19,6 +19,6 @@ export function useAddSheet() {
   const [appId, setAppId] = useState<string>()
   return {
     add: (app: CatalogApp) => setAppId(app.id),
-    dialog: appId ? <ProfileDialog appId={appId} chooseSpace onClose={() => setAppId(undefined)} /> : null,
+    dialog: appId ? <ProfileDialog appId={appId} onClose={() => setAppId(undefined)} /> : null,
   }
 }

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { AppProfileInfo } from "@ren/client"
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { IconPlus } from "@tabler/icons-react"
@@ -17,6 +18,7 @@ import { useApp } from "../../lib/use-app.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useMe } from "../../lib/use-me.js"
+import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Pages } from "../../lib/pages.js"
 import { Search } from "../../lib/search.js"
@@ -127,8 +129,17 @@ function OrgApps() {
   const app = useApp(opened).app
   const profiles = useAppProfiles(used.map((each) => each.id))
   const accounts = useAppProfiles(app ? [app.id] : [])
+  const me = useMe().user.id
+  const member = useMembers().member
   const loading = list.isPending || profiles.pending
   const [query, setQuery] = useState("")
+  const ownerNote = (profile: AppProfileInfo) => {
+    const owner = profile.kind === "private" ? profile.userId : profile.createdBy
+    if (owner === null || owner === me) return null
+    const name = member(owner)?.name
+    if (!name) return "Owner left the organization"
+    return profile.kind === "private" ? `Only ${name} can use it` : null
+  }
   return (
     <>
       <PageActions>
@@ -144,7 +155,7 @@ function OrgApps() {
               .filter((row) => Search.matches(query, row.app.name, row.app.description, row.usedIn))}
             empty={Search.empty(query, "No apps. Add one to a space from Apps.")}
             onOpen={setOpened}
-            onNew={(appId) => setProfile({ appId })}
+            onNew={(appId) => setProfile({ appId, newAccount: true })}
           />
         )}
       </Loading>
@@ -155,12 +166,13 @@ function OrgApps() {
             title="Accounts"
             app={app}
             actions={
-              <Button size="sm" onClick={() => setProfile({ appId: app.id })}>
+              <Button size="sm" onClick={() => setProfile({ appId: app.id, newAccount: true })}>
                 <IconPlus data-icon="inline-start" />
                 New account
               </Button>
             }
             profiles={accounts.of(app.id)}
+            note={ownerNote}
             onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
           />
         ) : null}
