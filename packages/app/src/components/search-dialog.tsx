@@ -84,7 +84,21 @@ function ChatResults(props: {
   )
 }
 
-export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export type SearchScope = "everything" | "chats"
+
+export function SearchDialog(props: {
+  open: boolean
+  scope?: SearchScope | undefined
+  onOpenChange: (open: boolean) => void
+}) {
+  const chatsOnly = props.scope === "chats"
+  const copy = chatsOnly
+    ? { description: "Search your chats.", placeholder: "Search chats…", limit: 30 }
+    : {
+        description: "Search chats, spaces, actions and settings.",
+        placeholder: "Search chats, spaces and settings…",
+        limit: 8,
+      }
   const { api, auth } = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
   const open = props.open
@@ -92,6 +106,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
   const navigate = useNavigate()
   const [query, setQuery] = useState("")
   const typed = query.trim() !== ""
+  const everything = typed && !chatsOnly
   const spaces = useQuery({ ...api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }), enabled: open })
   const spaceName = (spaceId: string) => spaces.data?.items.find((space) => space.id === spaceId)?.name ?? "Space"
   const go = (run: () => unknown) => {
@@ -122,12 +137,12 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
         className="top-[18%] translate-y-0 gap-0 overflow-hidden rounded-xl p-0 sm:max-w-xl"
       >
         <DialogTitle className="sr-only">Search</DialogTitle>
-        <DialogDescription className="sr-only">Search chats, spaces, actions and settings.</DialogDescription>
+        <DialogDescription className="sr-only">{copy.description}</DialogDescription>
         <Command className="rounded-none bg-transparent **:data-[slot=command-input]:ml-0.5 **:data-[slot=command-input-wrapper]:pl-2.5 **:data-[slot=input-group]:h-12 **:[[cmdk-group-heading]]:text-xs">
-          <CommandInput value={query} onValueChange={setQuery} placeholder="Search chats, spaces and settings…" />
+          <CommandInput value={query} onValueChange={setQuery} placeholder={copy.placeholder} />
           <CommandList className="max-h-96 scroll-py-2 p-1.5">
             <CommandEmpty>Nothing matches “{query.trim()}”.</CommandEmpty>
-            {typed ? null : (
+            {typed || chatsOnly ? null : (
               <CommandGroup heading="Actions">
                 {actions.slice(0, 2).map((action) => (
                   <CommandItem key={action.label} value={`action ${action.label}`} onSelect={() => go(action.run)}>
@@ -139,11 +154,11 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
             )}
             <ChatResults
               query={query}
-              limit={8}
+              limit={copy.limit}
               spaceName={spaceName}
               onOpen={(sessionId) => go(() => navigate({ to: "/sessions/$sessionId", params: { sessionId } }))}
             />
-            {typed && spaces.data ? (
+            {everything && spaces.data ? (
               <CommandGroup heading="Spaces">
                 {spaces.data.items.map((space) => (
                   <CommandItem
@@ -157,7 +172,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
                 ))}
               </CommandGroup>
             ) : null}
-            {typed ? (
+            {everything ? (
               <CommandGroup heading="Actions">
                 {actions.map((action) => (
                   <CommandItem key={action.label} value={`action ${action.label}`} onSelect={() => go(action.run)}>
@@ -167,7 +182,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
                 ))}
               </CommandGroup>
             ) : null}
-            {typed ? (
+            {everything ? (
               <CommandGroup heading="Settings">
                 {settingsSections.flatMap((section) =>
                   section.items

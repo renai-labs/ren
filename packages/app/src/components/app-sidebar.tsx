@@ -2,7 +2,16 @@ import { useState } from "react"
 import { useLocation } from "@tanstack/react-router"
 import { IconClockBolt, IconChecklist, IconCube, IconEdit, IconLayoutGrid } from "@tabler/icons-react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
-import { ChatsList, Footer, Header, NavRow, Section, SpacesActions, useChatFilters } from "./sidebar-parts.js"
+import {
+  ChatSearchButton,
+  ChatsList,
+  Footer,
+  Header,
+  NavRow,
+  Section,
+  SpacesActions,
+  useChatFilters,
+} from "./sidebar-parts.js"
 import { SpacesList } from "./sidebar-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
@@ -38,7 +47,7 @@ function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
   )
 }
 
-function CollapsibleLayout(props: { path: string }) {
+function CollapsibleLayout(props: { path: string; onSearchChats: () => void }) {
   const { platform } = RouterContext.useRouterContext()
   const chats = useChatFilters()
   const [sections, setSections] = useState(() => SidebarPreferences.sections.read(platform.storage))
@@ -62,7 +71,12 @@ function CollapsibleLayout(props: { path: string }) {
         </Section>
         <Section
           label="Chats"
-          actions={chats.actions}
+          actions={
+            <>
+              <ChatSearchButton onClick={props.onSearchChats} />
+              {chats.actions}
+            </>
+          }
           open={sections.chats}
           onToggle={() => toggle("chats")}
           className="min-h-0 flex-1 group-data-[collapsible=icon]:hidden"
@@ -77,14 +91,14 @@ function CollapsibleLayout(props: { path: string }) {
   )
 }
 
-export function AppSidebar(props: { onSearch: () => void }) {
+export function AppSidebar(props: { onSearch: () => void; onSearchChats: () => void }) {
   const path = useLocation({ select: (location) => location.pathname })
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="p-0">
         <Header onSearch={props.onSearch} />
       </SidebarHeader>
-      <CollapsibleLayout path={path} />
+      <CollapsibleLayout path={path} onSearchChats={props.onSearchChats} />
       <SidebarRail />
     </Sidebar>
   )

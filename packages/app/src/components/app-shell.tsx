@@ -7,7 +7,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@ren/
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppSidebar } from "./app-sidebar.js"
 import { NewTaskDialog, useNewTaskShortcut } from "./new-task-dialog.js"
-import { SearchDialog } from "./search-dialog.js"
+import { SearchDialog, type SearchScope } from "./search-dialog.js"
 import { SettingsSidebar } from "./settings-sidebar.js"
 import { SpaceSidebar } from "./space-sidebar.js"
 import { useMe } from "../lib/use-me.js"
@@ -38,22 +38,23 @@ function SidebarOpen() {
   )
 }
 
-function ShellSidebar(props: { path: string; onSearch: () => void }) {
+function ShellSidebar(props: { path: string; onSearch: (scope: SearchScope) => void }) {
   const spaceId = /^\/spaces\/([^/]+)/u.exec(props.path)?.[1]
-  if (spaceId !== undefined) return <SpaceSidebar spaceId={spaceId} onSearch={props.onSearch} />
-  if (/^\/settings(?:\/|$)/u.test(props.path)) return <SettingsSidebar onSearch={props.onSearch} />
-  return <AppSidebar onSearch={props.onSearch} />
+  const everything = () => props.onSearch("everything")
+  if (spaceId !== undefined) return <SpaceSidebar spaceId={spaceId} onSearch={everything} />
+  if (/^\/settings(?:\/|$)/u.test(props.path)) return <SettingsSidebar onSearch={everything} />
+  return <AppSidebar onSearch={everything} onSearchChats={() => props.onSearch("chats")} />
 }
 
 export function AppShell() {
   const platform = Platform.usePlatform()
   const me = useMe()
   const chat = chatFor(platform, me.user.id)
-  const [searching, setSearching] = useState(false)
+  const [searching, setSearching] = useState<SearchScope | false>(false)
   const [creatingTask, setCreatingTask] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() => SidebarPreferences.open.read(platform.storage))
   const [sidebarWidth, setSidebarWidth] = useState(() => SidebarPreferences.width.read(platform.storage))
-  useSearchShortcut(() => setSearching((current) => !current))
+  useSearchShortcut(() => setSearching((current) => (current ? false : "everything")))
   useNewTaskShortcut(() => setCreatingTask(true))
   const path = Routing.useRenderedPath()
   return (
@@ -71,7 +72,7 @@ export function AppShell() {
             setSidebarWidth(next ?? null)
           }}
         >
-          <ShellSidebar path={path} onSearch={() => setSearching(true)} />
+          <ShellSidebar path={path} onSearch={setSearching} />
           <SidebarInset className={insetClass}>
             <SidebarOpen />
             <div
@@ -83,7 +84,11 @@ export function AppShell() {
               </Suspense>
             </div>
           </SidebarInset>
-          <SearchDialog open={searching} onOpenChange={setSearching} />
+          <SearchDialog
+            open={searching !== false}
+            scope={searching || undefined}
+            onOpenChange={(open) => setSearching(open ? searching || "everything" : false)}
+          />
           <NewTaskDialog open={creatingTask} onOpenChange={setCreatingTask} />
         </SidebarProvider>
       </ChatReact.Provider>

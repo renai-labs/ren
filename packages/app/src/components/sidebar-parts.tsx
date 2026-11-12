@@ -318,6 +318,27 @@ export function SpaceEntry(props: {
   )
 }
 
+export function ChatSearchButton(props: { onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Search chats"
+            className="text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100"
+            onClick={props.onClick}
+          />
+        }
+      >
+        <IconSearch data-weight="heavy" />
+      </TooltipTrigger>
+      <TooltipContent>Search chats</TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function SpacesActions() {
   const spaces = useSpaces().spaces
   const [creating, setCreating] = useState(false)
