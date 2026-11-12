@@ -83,7 +83,7 @@ const initialize = (host: Host, id: string | number) => {
         availableDisplayModes: ["inline"],
         containerDimensions: { maxHeight: Math.round(window.innerHeight * 0.7) },
         locale: navigator.language,
-        timeZone: localTimeZone,
+        timeZone: localTimeZone(),
         platform: "web",
         toolInfo: { tool: { name: app.tool, inputSchema: { type: "object" } } },
       },
