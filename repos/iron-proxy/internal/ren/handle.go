@@ -65,6 +65,11 @@ func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*
 	}
 	port, _ := strconv.Atoi(portText) // a host:port from net/http has a numeric port
 	placeholders := findPlaceholders(req)
+	// Only a request with a placeholder gets a credential, so any other
+	// request goes on without asking Ren.
+	if len(placeholders) == 0 {
+		return nil, nil
+	}
 	reply, err := c.Resolve(ctx, Request{
 		Login:        login,
 		Host:         host,

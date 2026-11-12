@@ -5,7 +5,7 @@ import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { useAddition, type Added } from "./add-to-space.js"
-import { AppRow } from "./app-list.js"
+import { AppRow, MoreApps } from "./app-list.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
 import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../lib/apps.js"
@@ -48,26 +48,6 @@ const matches = (app: { name: string; description: string }, query: string) =>
 function emptyText(query: string, space: string) {
   if (query) return `Nothing matches “${query.trim()}”`
   return `${space} has every app`
-}
-
-function MoreApps(props: { onVisible: () => void }) {
-  return (
-    <div
-      aria-hidden
-      className="h-px shrink-0"
-      ref={(node) => {
-        if (!node) return
-        const observer = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) props.onVisible()
-          },
-          { rootMargin: "320px 0px" },
-        )
-        observer.observe(node)
-        return () => observer.disconnect()
-      }}
-    />
-  )
 }
 
 function AppRowsSample(props: { count: number }) {
