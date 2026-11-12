@@ -17,6 +17,7 @@ import {
   DateTime,
   Deferred,
   Effect,
+  Duration,
   Fiber,
   Option,
   Predicate,
@@ -47,6 +48,14 @@ const autoApproveRetries = 2
 const refreshBefore = 60_000
 
 const startingPollMs = 2_000
+const unreachableAfter = "20 seconds"
+const retryCap = "30 seconds"
+const retryLimit = "2 minutes"
+
+export const sendRetry = Schedule.exponential(startingPollMs).pipe(
+  Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.fromInputUnsafe(retryCap)))),
+  Schedule.upTo({ duration: retryLimit }),
+)
 
 // oxlint-disable-next-line ren/no-comments -- Ren refuses a page of saved history over its size limit with 413 (E111); the runtime asks again for fewer messages.
 export const savedPageSizes = [messagePageLimit, 5, 1]
@@ -229,7 +238,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const wanted = new Map<string, Reducer.Read>()
   const settling = new Map<string, Fiber.Fiber<void>>()
   const histories = new Map<string, Deferred.Deferred<void, unknown>>()
-  const sends = { tail: Deferred.makeUnsafe<void>() }
+  const sends = { tail: Deferred.makeUnsafe<void>(), stops: 0 }
   Deferred.doneUnsafe(sends.tail, Effect.void)
   const cached: { current: Option.Option<{ readonly access: Session.ReadyAccess; readonly client: Client }> } = {
     current: Option.none(),
@@ -690,8 +699,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
     }
     yield* connection.wake
+    const stopsAtEnqueue = sends.stops
+    const unreachableTimer: { current: Option.Option<Fiber.Fiber<void>> } = { current: Option.none() }
     yield* send(
       Effect.gen(function* () {
+        if (sends.stops !== stopsAtEnqueue)
+          return yield* new AccessFailed({ cause: new Error("An earlier send could not reach Ren") })
         const api = yield* applySelection(input.model, delivery)
         return yield* api.session.prompt({
           sessionID: root,
@@ -705,13 +718,32 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         })
       }).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() => {
-            if (!isUnauthorized(error)) return
-            reach.unreachable = true
-            cached.current = Option.none()
+          Effect.gen(function* () {
+            if (!isUnreachable(error)) return
+            if (isUnauthorized(error)) {
+              reach.unreachable = true
+              cached.current = Option.none()
+            }
+            if (Option.isSome(unreachableTimer.current)) return
+            unreachableTimer.current = Option.some(
+              yield* Effect.sleep(unreachableAfter).pipe(
+                Effect.andThen(update((current) => Outbox.stall(current, id, "unreachable"))),
+                Effect.forkIn(scope),
+              ),
+            )
           }),
         ),
-        Effect.retry({ while: isUnreachable, schedule: Schedule.spaced(startingPollMs) }),
+        Effect.retry({ while: isUnreachable, schedule: sendRetry }),
+        Effect.catchIf(isUnreachable, (cause) =>
+          Effect.sync(() => {
+            sends.stops += 1
+          }).pipe(Effect.andThen(Effect.fail(new AccessFailed({ cause })))),
+        ),
+        Effect.ensuring(
+          Effect.suspend(() =>
+            Option.isSome(unreachableTimer.current) ? Fiber.interrupt(unreachableTimer.current.value) : Effect.void,
+          ),
+        ),
       ),
     ).pipe(
       Effect.tapError((error) =>
@@ -733,7 +765,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const retryMessage = Effect.fnUntraced(function* (id: SessionMessage.ID) {
     const stalled = (yield* SubscriptionRef.get(state)).stalled
-    const unsent = (yield* Ref.get(kept)).filter((item) => stalled.has(item.id))
+    const unsent = (yield* Ref.get(kept)).filter((item) => stalled.get(item.id) === "unsent")
     yield* Effect.forEach(
       unsent.slice(0, unsent.findIndex((item) => item.id === id) + 1),
       (item) => update((current) => Outbox.resume(current, item.id)).pipe(Effect.andThen(prompt(item))),
@@ -741,8 +773,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     ).pipe(Effect.catchTag("ChatSession.AccessFailed", () => Effect.void))
   })
 
+  const retryUnsent = Effect.gen(function* () {
+    const stalled = (yield* SubscriptionRef.get(state)).stalled
+    const oldest = (yield* Ref.get(kept)).find((item) => stalled.get(item.id) === "unsent")
+    if (oldest) yield* retryMessage(oldest.id)
+  })
+
   const removeMessage = Effect.fnUntraced(function* (id: SessionMessage.ID) {
-    if (!(yield* SubscriptionRef.get(state)).stalled.has(id)) return null
+    if ((yield* SubscriptionRef.get(state)).stalled.get(id) !== "unsent") return null
     const item = (yield* Ref.get(kept)).find((entry) => entry.id === id) ?? null
     yield* unkeep(id)
     yield* update((current) => Outbox.rollback(current, root, id))
@@ -1080,6 +1118,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     reveal,
     prompt,
     retryMessage,
+    retryUnsent,
     removeMessage,
     compact,
     revert,

@@ -81,8 +81,11 @@ export const rollback = (state: ChatState.State, sessionID: string, id: string):
 export const acknowledge = (state: ChatState.State, id: string): ChatState.State =>
   state.outbox.has(id) ? settled(state, id) : state
 
-export const stall = (state: ChatState.State, id: string): ChatState.State =>
-  state.outbox.has(id) ? { ...state, stalled: new Map(state.stalled).set(id, "unsent") } : state
+export const stall = (
+  state: ChatState.State,
+  id: string,
+  status: "unsent" | "unreachable" = "unsent",
+): ChatState.State => (state.outbox.has(id) ? { ...state, stalled: new Map(state.stalled).set(id, status) } : state)
 
 export const resume = (state: ChatState.State, id: string): ChatState.State =>
   state.stalled.has(id) ? { ...state, stalled: new Map([...state.stalled].filter(([item]) => item !== id)) } : state

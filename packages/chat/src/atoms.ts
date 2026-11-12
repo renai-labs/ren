@@ -127,9 +127,10 @@ export const make = <R, ER>(options: Options<R, ER>) => {
               ),
             ).pipe(
               Stream.runForEach((event) =>
-                event === "online"
+                (event === "online"
                   ? opened.wake.pipe(Effect.andThen(opened.resync("The network connection is back")))
-                  : opened.foreground,
+                  : opened.foreground
+                ).pipe(Effect.andThen(opened.retryUnsent)),
               ),
               Effect.forkScoped,
             )

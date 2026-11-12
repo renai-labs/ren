@@ -543,6 +543,7 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
 function UserFooter(props: {
   text: string
   pending: boolean
+  unreachable: boolean
   unsent: boolean
   onEdit?: (() => void) | undefined
   onRetry?: (() => void) | undefined
@@ -551,6 +552,9 @@ function UserFooter(props: {
   return (
     <MessageFooter className="justify-end gap-1">
       {props.pending ? <span className="px-1 text-xs text-muted-foreground">Pending</span> : null}
+      {props.unreachable ? (
+        <span className="px-1 text-xs text-muted-foreground">Can’t reach Ren. Trying again…</span>
+      ) : null}
       {props.unsent ? <span className="px-1 text-xs text-destructive">Not sent</span> : null}
       {props.unsent && props.onRetry ? (
         <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRetry}>
@@ -583,6 +587,7 @@ function UserMessage(props: {
   spaceId: string | undefined
   person: Person
   pending: boolean
+  unreachable: boolean
   unsent: boolean
   editing: boolean
   onEdit?: (() => void) | undefined
@@ -616,6 +621,7 @@ function UserMessage(props: {
             <UserFooter
               text={props.message.text}
               pending={props.pending}
+              unreachable={props.unreachable}
               unsent={props.unsent}
               onEdit={props.onEdit}
               onRetry={props.onRetry}
@@ -1148,6 +1154,7 @@ function UserBlock(props: {
   const message = props.message
   const status = transcript.statuses.get(message.id)
   const pending = status === "starting" || status === "steering" || status === "stranded"
+  const unreachable = status === "unreachable"
   const unsent = status === "unsent"
   const senderId = message.sender?.userId
   const person =
@@ -1161,9 +1168,10 @@ function UserBlock(props: {
       spaceId={transcript.spaceId}
       person={person}
       pending={pending}
+      unreachable={unreachable}
       unsent={unsent}
       editing={props.editing}
-      onEdit={edit && !pending && !unsent ? () => props.onEditing(message.id) : undefined}
+      onEdit={edit && (status === undefined || status === "queued") ? () => props.onEditing(message.id) : undefined}
       onRetry={transcript.onRetry && (() => transcript.onRetry?.(message.id))}
       onRemove={transcript.onRemove && (() => transcript.onRemove?.(message.id))}
       onCancel={() => props.onEditing(undefined)}
