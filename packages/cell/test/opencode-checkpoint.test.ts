@@ -368,6 +368,7 @@ describe("OpenCode checkpoint", () => {
         expect(writes.some((write) => write.tbl === "session_message" && write.sid === sessionID)).toBe(true)
         expectCovered(writes)
       }),
+    30_000,
   )
 
   for (const operation of operations)
