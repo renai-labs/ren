@@ -15,6 +15,7 @@ import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { cn } from "cn"
 import { useChat } from "./use-chat.js"
+import { useFind } from "./use-find.js"
 import type { Session } from "@ren/schema/session"
 import { useAgents } from "../../lib/use-agents.js"
 import { useRunningAgent } from "./chat-view.js"
@@ -27,6 +28,13 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
   const admin = useCanAdminister()
   const [picking, setPicking] = useState(false)
+  const find = useFind({
+    messages: chat.messages,
+    rows: chat.rows,
+    more: chat.more,
+    loadingHistory: chat.loadingHistory,
+    onSearchEarlier: chat.loadAll,
+  })
   return (
     <>
       <Transcript
@@ -45,6 +53,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         loading={chat.rows.length === 0 && (chat.loading || chat.more || chat.loadingHistory)}
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
+        find={find}
         onOpenChild={(id) => chat.openChild(id)}
         onRetry={chat.retryUnsent}
         onRemove={chat.removeUnsent}

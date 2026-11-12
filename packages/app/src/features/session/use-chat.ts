@@ -192,6 +192,7 @@ export function useChat(
   const removeMessage = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.removeMessage(id))
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
+  const loadAll = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed, true))
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
   const redo = ChatReact.useAction(root, (opened) => opened.redo)
   const undo = ChatReact.useAction(root, (opened) => opened.undo)
@@ -311,6 +312,10 @@ export function useChat(
       ),
     loadMore: () =>
       void loadMore().catch((error: unknown) =>
+        toast.error("Could not load earlier messages", { description: errorMessage(error) }),
+      ),
+    loadAll: () =>
+      void loadAll().catch((error: unknown) =>
         toast.error("Could not load earlier messages", { description: errorMessage(error) }),
       ),
     edit: (message: SessionMessage.User, text: string) => {
