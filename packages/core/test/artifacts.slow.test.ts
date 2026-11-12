@@ -57,6 +57,15 @@ const stop = (artifacts: Artifacts.Interface, owner: Artifacts.Owner, id: Artifa
   })
 
 describe("Artifacts with durable workflows and workerd", () => {
+  it.live("an upload link names no checksum, which S3 and R2 would hold the archive to", () =>
+    Effect.gen(function* () {
+      const artifacts = yield* Artifacts.Service
+      const owner = yield* Seed.owner()
+      const upload = yield* artifacts.upload(owner, artifactId())
+      expect([...new URL(upload.url).searchParams.keys()].filter((key) => key.includes("checksum"))).toEqual([])
+    }),
+  )
+
   it.live("a refused archive leaves no copy among the artifact's archives", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service

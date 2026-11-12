@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
+  S3Client,
   S3ServiceException,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
@@ -136,6 +137,17 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const provider = yield* ArtifactProvider.Service
     const storage = yield* ObjectStorage.Service
+    const signer = yield* Effect.acquireRelease(
+      Effect.sync(
+        () =>
+          new S3Client({
+            ...storage.client,
+            forcePathStyle: Option.isSome(storage.endpoint),
+            requestChecksumCalculation: "WHEN_REQUIRED",
+          }),
+      ),
+      (client) => Effect.sync(() => client.destroy()),
+    )
     const engine = yield* WorkflowEngine.WorkflowEngine
     const messages = yield* MessageStorage.MessageStorage
     const sharding = yield* Sharding.Sharding
@@ -349,7 +361,7 @@ export const layer = Layer.effect(
 
     const link = Effect.fnUntraced(function* (command: PutObjectCommand | GetObjectCommand) {
       const expiresAt = DateTime.addDuration(yield* DateTime.now, linkLifetime)
-      const url = yield* store(() => getSignedUrl(storage.s3, command, { expiresIn: Duration.toSeconds(linkLifetime) }))
+      const url = yield* store(() => getSignedUrl(signer, command, { expiresIn: Duration.toSeconds(linkLifetime) }))
       return { url, expiresAt }
     })
 
