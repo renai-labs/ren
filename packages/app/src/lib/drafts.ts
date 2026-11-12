@@ -3,6 +3,7 @@ export * as Drafts from "./drafts.js"
 import { Composer, ComposerHistory } from "@ren/chat"
 import { useRef, useState } from "react"
 import { Platform } from "../platform/platform.js"
+import { useMe } from "./use-me.js"
 
 export const fresh = "new"
 
@@ -42,10 +43,9 @@ export function useDraft(key: string, initial?: Composer.Draft) {
   return { draft, set, update }
 }
 
-const history = "history"
-
 export function useHistory() {
   const platform = Platform.usePlatform()
+  const history = `history.${useMe().user.id}`
   const drafts = platform.drafts ?? platform.storage
   const read = () => ComposerHistory.decode(drafts.get(history))
   const write = (entries: ReadonlyArray<ComposerHistory.Entry>) => drafts.set(history, ComposerHistory.encode(entries))
