@@ -69,6 +69,16 @@ export const ShownFile = Schema.Struct({ file: DriveFile }).annotate({
   description: `The \`metadata\` of a completed \`${showFileTool}\` tool part: the file the agent showed, in the space’s drive.`,
 })
 
+export const htmlRenderTool = "html_render"
+
+export interface RenderedPage extends Schema.Schema.Type<typeof RenderedPage> {}
+export const RenderedPage = Schema.Struct({
+  page: Schema.Struct({ path: Schema.String, title: Schema.String, bytes: Schema.Int }),
+}).annotate({
+  identifier: "SessionMessage.RenderedPage",
+  description: `The \`metadata\` of a completed \`${htmlRenderTool}\` tool part: the page the agent published, in the space’s drive.`,
+})
+
 export interface AgentAttachment extends Schema.Schema.Type<typeof AgentAttachment> {}
 export const AgentAttachment = Schema.Struct({
   name: Schema.String,

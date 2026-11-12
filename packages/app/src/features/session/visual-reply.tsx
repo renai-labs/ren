@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
+import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconAlertTriangle,
   IconArrowsMaximize,
@@ -14,6 +15,8 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
+import { Effect, Layer } from "effect"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Card } from "@ren/ui/card"
@@ -31,6 +34,7 @@ import { Link } from "@ren/ui/link"
 import { Skeleton } from "@ren/ui/skeleton"
 import { cn } from "cn"
 import { errorStatus } from "../../lib/errors.js"
+import { RouterContext } from "../../lib/router-context.js"
 import { usePageFrame } from "../../lib/use-page-frame.js"
 import { VisualReplyBridge } from "./visual-reply-bridge.js"
 
@@ -44,33 +48,63 @@ const imagePath = (src: string) => {
   return path && !path.split("/").includes("..") ? path : undefined
 }
 
-function usePage(root: Session.ID, path: string, version: string) {
+type PageSource =
+  | { readonly kind: "workspace"; readonly path: string }
+  | { readonly kind: "drive"; readonly page: SessionMessage.RenderedPage["page"] }
+
+function usePage(root: Session.ID, spaceId: string | undefined, source: PageSource, version: string) {
+  const { api, platform, queryClient } = RouterContext.useRouterContext()
+  const driveFetch = platform.fetch
+    ? FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, platform.fetch)))
+    : FetchHttpClient.layer
   const read = ChatReact.useAction(root, (opened, file: string) => opened.readFile(file))
+  const path = source.kind === "drive" ? source.page.path : source.path
+  const fallback = source.kind === "drive" ? source.page.title : (path.split("/").at(-1) ?? path)
   return useQuery({
     // ast-grep-ignore: no-query-key-literal -- reads the workspace through the chat session, not the API
-    queryKey: ["visual-reply", root, path, version],
+    queryKey: ["visual-reply", root, source.kind, path, version],
     staleTime: Infinity,
     gcTime: 0,
     retry: false,
     queryFn: async () => {
-      const file = await read(path)
-      if (file.encoding !== "utf8" || file.truncated) throw new Error("Page is too large")
-      const doc = new DOMParser().parseFromString(file.content, "text/html")
+      const loaded =
+        source.kind === "drive"
+          ? await queryClient
+              .query({
+                ...api.drive.download.queryOptions({ ...(spaceId && { spaceId }), path, disposition: "inline" }),
+              })
+              .then((found) =>
+                Effect.runPromise(
+                  HttpClient.get(found.url).pipe(
+                    Effect.flatMap((response) =>
+                      response.status >= 400
+                        ? Effect.fail(new Error(`UnexpectedStatus: ${response.status}`))
+                        : response.text,
+                    ),
+                    Effect.provide(driveFetch),
+                  ),
+                ),
+              )
+          : await read(path).then((file) => {
+              if (file.encoding !== "utf8" || file.truncated) throw new Error("Page is too large")
+              return file.content
+            })
+      const doc = new DOMParser().parseFromString(loaded, "text/html")
       const images = [...doc.querySelectorAll("img[src]")].flatMap((image) => {
-        const source = imagePath(image.getAttribute("src") ?? "")
-        return source ? [{ image, source }] : []
+        const found = source.kind === "workspace" ? imagePath(image.getAttribute("src") ?? "") : undefined
+        return found ? [{ image, source: found }] : []
       })
-      const loaded = new Map(
+      const inlined = new Map(
         await Promise.all(
-          [...new Set(images.map((item) => item.source))].map(async (source) => {
-            const found = await read(source).catch(() => undefined)
+          [...new Set(images.map((item) => item.source))].map(async (image) => {
+            const found = await read(image).catch(() => undefined)
             const ok = found?.encoding === "base64" && !found.truncated && found.mime.startsWith("image/")
-            return [source, ok ? `data:${found.mime};base64,${found.content}` : undefined] as const
+            return [image, ok ? `data:${found.mime};base64,${found.content}` : undefined] as const
           }),
         ),
       )
       for (const item of images) {
-        const url = loaded.get(item.source)
+        const url = inlined.get(item.source)
         if (url) item.image.setAttribute("src", url)
       }
       const meta = doc.createElement("meta")
@@ -80,9 +114,9 @@ function usePage(root: Session.ID, path: string, version: string) {
       script.textContent = VisualReplyBridge.script
       doc.head.prepend(meta, script)
       return {
-        html: file.content,
+        html: loaded,
         srcdoc: `<!doctype html>${doc.documentElement.outerHTML}`,
-        title: doc.title.trim() || (path.split("/").at(-1) ?? path),
+        title: (source.kind === "drive" && source.page.title) || doc.title.trim() || fallback,
       }
     },
   })
@@ -183,7 +217,7 @@ function PageMenu(props: { name: string; html: string; source: boolean; onSource
   )
 }
 
-function PageFailure(props: { path: string; error: unknown; onRetry: () => void }) {
+function PageFailure(props: { path: string; drive: boolean; error: unknown; onRetry: () => void }) {
   if (errorStatus(props.error) === 404)
     return (
       <Empty className="border bg-muted/30 py-6">
@@ -191,7 +225,7 @@ function PageFailure(props: { path: string; error: unknown; onRetry: () => void 
           <EmptyMedia variant="icon">
             <IconFileOff />
           </EmptyMedia>
-          <EmptyTitle>Page not in the workspace</EmptyTitle>
+          <EmptyTitle>{props.drive ? "Page not in the drive" : "Page not in the workspace"}</EmptyTitle>
           <EmptyDescription>{props.path}</EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -225,14 +259,28 @@ function ImageDialog(props: { image: { src: string; alt: string } | undefined; o
   )
 }
 
-export function VisualReply(props: { root: Session.ID; path: string; version: string }) {
-  const page = usePage(props.root, props.path, props.version)
+export function VisualReply(props: {
+  root: Session.ID
+  spaceId: string | undefined
+  source: PageSource
+  version: string
+}) {
+  const path = props.source.kind === "drive" ? props.source.page.path : props.source.path
+  const page = usePage(props.root, props.spaceId, props.source, props.version)
   const [zoom, setZoom] = useState(100)
   const [full, setFull] = useState(false)
   const [source, setSource] = useState(false)
   const [image, setImage] = useState<{ src: string; alt: string }>()
-  const name = props.path.split("/").at(-1) ?? props.path
-  if (page.isError) return <PageFailure path={props.path} error={page.error} onRetry={() => void page.refetch()} />
+  const name = path.split("/").at(-1) ?? path
+  if (page.isError)
+    return (
+      <PageFailure
+        path={path}
+        drive={props.source.kind === "drive"}
+        error={page.error}
+        onRetry={() => void page.refetch()}
+      />
+    )
   const data = page.data
   const title = data?.title ?? name
   return (

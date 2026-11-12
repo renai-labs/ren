@@ -168,4 +168,29 @@ describe.skipIf(!DriveHand.hasDocker)("drive files", () => {
         expect(yield* uploaded).toBe(png)
       }),
   )
+
+  it.live("html_render inlines a local image, writes the page to the drive and the transcript gives it as a page", () =>
+    Effect.gen(function* () {
+      const opened = yield* open
+      const chat = opened.chat
+      const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+      const folder = `/tmp/chats/${chat.sessionId}/report`
+      opened.environment.exec(
+        `mkdir -p ${folder} && echo ${png} | base64 -d > ${folder}/dot.png && echo '<html><head><title>Q3</title></head><body><img src="dot.png"></body></html>' > ${folder}/index.html`,
+      )
+      yield* chat.tool("html_render", { path: `${folder}/index.html` })
+      const rendered = (yield* chat.transcript).items
+        .flatMap((message) => (message.type === "assistant" ? message.content : []))
+        .find((part) => part.type === "tool" && part.name === SessionMessage.htmlRenderTool)
+      const page = Schema.decodeUnknownSync(SessionMessage.RenderedPage)(
+        rendered?.type === "tool" && rendered.state.status === "completed" ? rendered.state.metadata : {},
+      ).page
+      expect(page).toMatchObject({ title: "Q3" })
+      expect(page.path).toStartWith(`chats/${chat.sessionId}/pages/`)
+      const uploaded = Effect.try(() =>
+        opened.environment.exec(`cat /tmp/s3/drives/org_1/drives/spaces/spc_1/${page.path}`),
+      ).pipe(Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }))
+      expect(yield* uploaded).toContain(`src="data:image/png;base64,${png}"`)
+    }),
+  )
 })
