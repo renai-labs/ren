@@ -148,11 +148,7 @@ export function PreferencesPage() {
                 aria-label="Notify me when Ren finishes or needs input"
               />
             </Row>,
-            <Row
-              key="fold"
-              title="Fold long messages"
-              description="Show the first 12 lines of a message over 20 lines."
-            >
+            <Row key="fold" title="Fold long messages" description="Show the first 8 lines of a message over 12 lines.">
               <Switch checked={foldMessages} onCheckedChange={chooseFoldMessages} aria-label="Fold long messages" />
             </Row>,
           ]}

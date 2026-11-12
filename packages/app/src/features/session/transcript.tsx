@@ -278,8 +278,8 @@ function splitPasted(text: string) {
   return { typed: text, pasted: undefined }
 }
 
-const foldAbove = 20
-const foldShown = 12
+const foldAbove = 12
+const foldShown = 8
 
 function PastedChip(props: { text: string }) {
   const [open, setOpen] = useState(false)
@@ -525,43 +525,24 @@ function UserBody(props: { message: SessionMessage.User; spaceId: string | undef
   return <UserText message={props.message} spaceId={props.spaceId} fold={props.fold} />
 }
 
-function UserText(props: {
-  message: SessionMessage.User
-  text?: string
-  spaceId: string | undefined
-  fold: boolean
-}) {
+function TypedBubble(props: { text: string; foldable: boolean }) {
   const [open, setOpen] = useState(false)
-  const parts = splitPasted(props.text ?? props.message.text)
-  const message = props.message
-  const lines = parts.typed.split("\n")
-  const typed = !message.schedule && !message.webhook && !message.channel
-  const foldable = props.fold && typed && lines.length > foldAbove
-  const folded = foldable && !open
-  const shown = folded ? lines.slice(0, foldShown).join("\n") : parts.typed
-  const apps = useMentionedApps(parts.typed)
-  const files = props.message.files ?? []
-  const uploads = props.message.uploads ?? []
+  const apps = useMentionedApps(props.text)
+  const folded = props.foldable && !open
+  const shown = folded ? props.text.split("\n").slice(0, foldShown).join("\n") : props.text
   return (
     <>
-      {uploads.length > 0 ? (
-        <DriveFileCards spaceId={props.spaceId} files={uploads} className="max-w-full justify-end-safe" />
-      ) : null}
-      {files.length > 0 ? <FileChips files={files} /> : null}
-      {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
-      {parts.typed ? (
-        <Bubble variant="muted" align="end">
-          <BubbleContent
-            className={cn(
-              "rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap",
-              folded && "[mask-image:linear-gradient(to_bottom,black_50%,rgb(0_0_0/0.15))]",
-            )}
-          >
-            {withAppMentions(shown, apps)}
-          </BubbleContent>
-        </Bubble>
-      ) : null}
-      {foldable ? (
+      <Bubble variant="muted" align="end">
+        <BubbleContent
+          className={cn(
+            "rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap",
+            folded && "mask-b-from-50%",
+          )}
+        >
+          {withAppMentions(shown, apps)}
+        </BubbleContent>
+      </Bubble>
+      {props.foldable ? (
         <Button
           variant="ghost"
           size="sm"
@@ -573,6 +554,25 @@ function UserText(props: {
           {open ? <IconChevronUp data-icon="inline-end" /> : <IconChevronDown data-icon="inline-end" />}
         </Button>
       ) : null}
+    </>
+  )
+}
+
+function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined; fold: boolean }) {
+  const parts = splitPasted(props.text ?? props.message.text)
+  const message = props.message
+  const typed = !message.schedule && !message.webhook && !message.channel
+  const foldable = props.fold && typed && parts.typed.split("\n").length > foldAbove
+  const files = props.message.files ?? []
+  const uploads = props.message.uploads ?? []
+  return (
+    <>
+      {uploads.length > 0 ? (
+        <DriveFileCards spaceId={props.spaceId} files={uploads} className="max-w-full justify-end-safe" />
+      ) : null}
+      {files.length > 0 ? <FileChips files={files} /> : null}
+      {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
+      {parts.typed ? <TypedBubble text={parts.typed} foldable={foldable} /> : null}
     </>
   )
 }
