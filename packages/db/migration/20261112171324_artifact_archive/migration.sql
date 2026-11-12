@@ -1,0 +1,1 @@
+ALTER TABLE "artifact" ADD COLUMN "archived_at" timestamp;
