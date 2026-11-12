@@ -140,7 +140,10 @@ test("a member opens the model picker with its shortcut and undoes the last mess
 
 test("a member reads a GitHub callout as a note and an unknown marker as a blockquote", async ({ page }) => {
   await createOrganization(page.request, { name: "Mary Jackson" })
-  const marker = await scriptedReply(page.request, "> [!TIP]\n> Use **bun**.\n\n> [!FOO]\n> Not a callout.\n\n`★ Insight ─────`\nKeep it small.\n`─────`")
+  const marker = await scriptedReply(
+    page.request,
+    "> [!TIP]\n> Use **bun**.\n\n> [!FOO]\n> Not a callout.\n\n`★ Insight ─────`\nKeep it small.\n`─────`",
+  )
   await page.goto("/app/")
   const start = page.getByRole("form", { name: "Start a chat" })
   await start.getByRole("textbox", { name: "Message" }).fill(`Explain ${marker}`)

@@ -1,4 +1,4 @@
-import { Children, createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -96,7 +96,7 @@ const callouts = {
   insight: { label: "Insight", Icon: IconSparkles, tone: "text-primary" },
 }
 
-function MarkdownBlockquote({ node: _node, children, ...props }: ComponentProps<"blockquote"> & ExtraProps) {
+function MarkdownBlockquote({ node, children, ...props }: ComponentProps<"blockquote"> & ExtraProps) {
   const kind = "data-callout" in props ? props["data-callout"] : undefined
   const callout = Object.entries(callouts).find(([key]) => key === kind)?.[1]
   if (!callout)
@@ -109,7 +109,7 @@ function MarkdownBlockquote({ node: _node, children, ...props }: ComponentProps<
     <Alert role="note" aria-label={callout.label} data-callout={kind} className="my-4">
       <callout.Icon className={callout.tone} aria-hidden />
       <AlertTitle className={callout.tone}>{callout.label}</AlertTitle>
-      {Children.toArray(children).some((child) => typeof child !== "string" || child.trim() !== "") && (
+      {node?.children.some((child) => child.type === "element") && (
         <AlertDescription className="text-foreground">{children}</AlertDescription>
       )}
     </Alert>
@@ -152,38 +152,42 @@ const insightOpen = /^★ Insight ─+$/u
 const insightClose = /^─+$/u
 const calloutMarker = /^\[!(note|tip|important|warning|caution)\][ \t]*\r?\n/iu
 
+const firstText = (blockquote: MarkdownNode) => {
+  const paragraph = blockquote.children?.find((child) => child.type === "element")
+  const text = paragraph?.tagName === "p" ? paragraph.children?.[0] : undefined
+  return paragraph && text?.type === "text" ? { paragraph, text } : null
+}
+
+const calloutKind = (blockquote: MarkdownNode) => {
+  const first = firstText(blockquote)
+  const marker = calloutMarker.exec(first?.text.value ?? "")
+  if (!first || !marker) return null
+  first.text.value = (first.text.value ?? "").slice(marker[0].length)
+  if (first.text.value === "") first.paragraph.children?.shift()
+  return marker[1]?.toLowerCase() ?? null
+}
+
+const insightBlock = (paragraph: MarkdownNode): MarkdownNode | null => {
+  const inline = paragraph.children ?? []
+  if (paragraph.tagName !== "p" || inline.length < 3) return null
+  if (!isCode(inline[0], insightOpen) || !isCode(inline.at(-1), insightClose)) return null
+  const body = inline.slice(1, -1)
+  const first = body[0]
+  if (first?.type === "text") first.value = (first.value ?? "").replace(/^\r?\n/u, "")
+  return {
+    type: "element",
+    tagName: "blockquote",
+    properties: { "data-callout": "insight" },
+    children: [{ type: "element", tagName: "p", properties: {}, children: body }],
+  }
+}
+
 const rehypeCallouts = () => (tree: MarkdownNode) => {
   const visit = (node: MarkdownNode) => {
+    const kind = node.tagName === "blockquote" ? calloutKind(node) : null
+    if (kind) node.properties = { ...node.properties, "data-callout": kind }
     const children = node.children ?? []
-    if (node.tagName === "blockquote") {
-      const paragraph = children.find((child) => child.type === "element")
-      const first = paragraph?.tagName === "p" ? paragraph.children?.[0] : undefined
-      const marker = first?.type === "text" ? calloutMarker.exec(first.value ?? "") : null
-      if (first && marker?.[1]) {
-        first.value = (first.value ?? "").slice(marker[0].length)
-        if (first.value === "") paragraph?.children?.shift()
-        if (paragraph?.children?.length === 0) children.splice(children.indexOf(paragraph), 1)
-        node.properties = { ...node.properties, "data-callout": marker[1].toLowerCase() }
-      }
-    }
-    for (let index = 0; index < children.length; index++) {
-      const child = children[index]
-      if (!child) break
-      const inline = child.tagName === "p" ? (child.children ?? []) : []
-      const last = inline.at(-1)
-      if (inline.length > 2 && isCode(inline[0], insightOpen) && isCode(last, insightClose)) {
-        const body = inline.slice(1, -1)
-        if (body[0]?.type === "text") body[0].value = body[0].value?.replace(/^\r?\n/u, "")
-        children[index] = {
-          type: "element",
-          tagName: "blockquote",
-          properties: { "data-callout": "insight" },
-          children: [{ type: "element", tagName: "p", properties: {}, children: body }],
-        }
-        continue
-      }
-      visit(child)
-    }
+    for (const [index, child] of children.entries()) children[index] = insightBlock(child) ?? (visit(child), child)
   }
   visit(tree)
 }
@@ -197,12 +201,10 @@ const withDataImages = (schema: unknown) => {
   const src: ReadonlyArray<unknown> = "src" in protocols && Array.isArray(protocols.src) ? protocols.src : []
   return { ...schema, protocols: { ...protocols, src: [...src, "data"] } }
 }
-const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = [
-  ...Object.entries(defaultRehypePlugins).map(([name, plugin]) =>
-    name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin,
-  ),
-  rehypeCallouts,
-]
+const sanitized: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
+  ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
+)
+const rehypePlugins = [...sanitized, rehypeCallouts]
 const workspaceRehypePlugins = [
   ...Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
     const safe: (typeof defaultRehypePlugins)[string] =
