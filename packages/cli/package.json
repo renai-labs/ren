@@ -24,7 +24,9 @@
     "@effect/platform-bun": "catalog:",
     "@ren/schema": "workspace:*",
     "@renai-labs/sdk": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "jsonc-parser": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@ren/httpapi-codegen": "workspace:*",

@@ -57,7 +57,7 @@ const common = (before: ReadonlyArray<string>, after: ReadonlyArray<string>): Ar
   ]
 }
 
-const edits = (before: ReadonlyArray<string>, after: ReadonlyArray<string>): Array<Edit> => {
+export const edits = (before: ReadonlyArray<string>, after: ReadonlyArray<string>): Array<Edit> => {
   const shortest = Math.min(before.length, after.length)
   const indexes = Array.from({ length: shortest }, (_, index) => index)
   const head = indexes.find((index) => before.at(index) !== after.at(index)) ?? shortest

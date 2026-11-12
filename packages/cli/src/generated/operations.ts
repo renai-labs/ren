@@ -1961,6 +1961,36 @@ export const RenInferenceConnectionRemove = (
     (client, request) => client["ren-inference"]["connection"]["remove"]({ ...request.params }),
   )
 
+export const RenInferenceKeyList = () =>
+  Operation.run(ClientApi.groups["ren-inference"].endpoints["ren-inference.key.list"], { labels: {} }, (client) =>
+    client["ren-inference"]["key"]["list"](),
+  )
+
+export const RenInferenceKeyUsage = (input: Command.Command.Config.Infer<typeof Commands.RenInferenceKeyUsage>) =>
+  Operation.run(
+    ClientApi.groups["ren-inference"].endpoints["ren-inference.key.usage"],
+    { query: { period: input["period"] }, labels: { period: "--period" } },
+    (client, request) => client["ren-inference"]["key"]["usage"]({ ...request.query }),
+  )
+
+export const RenInferenceKeyCreate = (input: Command.Command.Config.Infer<typeof Commands.RenInferenceKeyCreate>) =>
+  Operation.run(
+    ClientApi.groups["ren-inference"].endpoints["ren-inference.key.create"],
+    {
+      payload: { name: input["name"], expiresIn: input["expiresIn"] },
+      input: input["input"],
+      labels: { name: "--name", expiresIn: "--expires-in" },
+    },
+    (client, request) => client["ren-inference"]["key"]["create"]({ ...request.payload }),
+  )
+
+export const RenInferenceKeyRevoke = (input: Command.Command.Config.Infer<typeof Commands.RenInferenceKeyRevoke>) =>
+  Operation.run(
+    ClientApi.groups["ren-inference"].endpoints["ren-inference.key.revoke"],
+    { params: { id: input["id"] }, labels: { id: "<key>" } },
+    (client, request) => client["ren-inference"]["key"]["revoke"]({ ...request.params }),
+  )
+
 export const RepositoryList = () =>
   Operation.run(ClientApi.groups["repository"].endpoints["repository.list"], { labels: {} }, (client) =>
     client["repository"]["list"](),
