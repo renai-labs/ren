@@ -20,6 +20,9 @@ test("a member runs a command from the composer's shell mode and recalls it with
   await expect(page.getByRole("button", { name: "Run command", exact: true })).toBeVisible()
   await command.fill("echo hi")
   await command.press("Enter")
+  await page.getByRole("button", { name: "Worked 1 step" }).click({ timeout: brainStart })
+  await page.getByRole("button", { name: "Ran echo hi", exact: true }).click({ timeout: brainStart })
+  await expect(page.getByRole("region", { name: "Messages" }).getByText("hi", { exact: true })).toBeVisible()
   await expect(page.getByText("Couldn’t run the command")).toHaveCount(0)
   await expect(command).toHaveValue("")
 
