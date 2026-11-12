@@ -248,7 +248,7 @@ function AppDetail(props: { app: CatalogApp }) {
             />
             <div className="flex min-w-0 flex-col gap-1">
               <h1 className="text-2xl font-medium tracking-tight">{app.name}</h1>
-              <p className="text-muted-foreground">{app.description}</p>
+              <p className="text-sm/6 text-muted-foreground">{app.description}</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
