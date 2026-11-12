@@ -60,7 +60,10 @@ const fields = {
   source: Schema.NonEmptyString,
   id: Schema.NonEmptyString,
   time: Schema.DateTimeUtc,
-  workload: Schema.String.annotate({ description: "`brain:<id>` or `hand:<id>`, then `:<generation>` when known." }),
+  workload: Schema.String.annotate({
+    description:
+      "`brain:<id>` or `hand:<id>`, then `:<generation>` when known; or `inference-key:<id>` for a call with a member’s inference key.",
+  }),
   organization: Auth.OrganizationID.annotate({ description: "From the workload’s key. Ren stores it as sent." }),
   brain: Schema.optionalKey(Brain.ID).annotate({ description: "From the workload’s key. Ren stores it as sent." }),
   space: Schema.optionalKey(Space.ID).annotate({ description: "From the workload’s key. Ren stores it as sent." }),

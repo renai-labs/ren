@@ -10680,6 +10680,16 @@
               }
             }
           },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
           "503": {
             "description": "UnavailableError",
             "content": {
@@ -10772,6 +10782,16 @@
               }
             }
           },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
           "503": {
             "description": "UnavailableError",
             "content": {
@@ -10856,6 +10876,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
                 }
               }
             }
@@ -10949,6 +10979,16 @@
               }
             }
           },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
           "503": {
             "description": "UnavailableError",
             "content": {
@@ -10962,6 +11002,581 @@
         },
         "description": "Remove one connection. New requests stop using it at once. Only the member who connected it, admins and owners remove (`canManage`).",
         "summary": "Remove a provider connection"
+      }
+    },
+    "/ren-inference/keys": {
+      "get": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.key.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RenInference.KeyList",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.KeyList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the inference keys that the caller may see, newest first: owners and admins see every key of the organization, members see their own.",
+        "summary": "List inference keys"
+      },
+      "post": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.key.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RenInference.CreatedKey",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.CreatedKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a key for the caller and return its secret and the base URL. Any member creates keys.",
+        "summary": "Create an inference key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenInference.CreateKeyInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ren-inference/keys/usage": {
+      "get": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.key.usage",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/RenInference.Period"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RenInference.KeyUsage"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the calls, tokens and charges of each key that the caller may see and that has calls in the period.",
+        "summary": "Read inference key usage"
+      }
+    },
+    "/ren-inference/keys/{id}": {
+      "delete": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.key.revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Revoke one key. Calls with it stop at once. Members revoke their own keys; owners and admins revoke any key. Revoking a revoked or expired key succeeds.",
+        "summary": "Revoke an inference key"
+      }
+    },
+    "/ren-inference/keys/{id}/secret": {
+      "get": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.key.secret",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RenInference.KeySecret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.KeySecret"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the secret of one of the caller’s own active keys and the base URL. Only the owner reads a secret.",
+        "summary": "Read an inference key"
+      }
+    },
+    "/ren-inference/harness-plans": {
+      "post": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.harness-plan",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The edits that point a harness at Ren’s models, built from the organization’s live model list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.HarnessPlan"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the config edits that point a harness at Ren’s models, from the organization’s live model list. The plan holds `${REN_INFERENCE_KEY}` where the key goes.",
+        "summary": "Plan a harness setup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenInference.HarnessPlanInput"
+              }
+            }
+          },
+          "required": true
+        }
       }
     },
     "/billing": {
@@ -14395,6 +15010,10 @@
         },
         "required": ["user", "organization"],
         "additionalProperties": false
+      },
+      "Auth.MemberID": {
+        "type": "string",
+        "pattern": "^mem_"
       },
       "Auth.Organization": {
         "type": "object",
@@ -20000,6 +20619,724 @@
         "additionalProperties": false,
         "description": "A model provider the organization connected, with display data from the Ren Inference Service."
       },
+      "RenInference.CreateKeyInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "$ref": "#/components/schemas/RenInference.Expiry"
+          }
+        },
+        "required": ["name", "expiresIn"],
+        "additionalProperties": false
+      },
+      "RenInference.CreatedKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "The first 12 characters of the secret."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RenInference.KeyStatus"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/RenInference.KeyOwner"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest call with the key, over all time."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "canRevoke": {
+            "type": "boolean",
+            "description": "True when the viewer may revoke the key and the key is `active` or `revoke_pending`."
+          },
+          "secret": {
+            "type": "string",
+            "description": "The key. Ren shows it only once."
+          },
+          "baseUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "status",
+          "owner",
+          "expiresAt",
+          "lastUsedAt",
+          "createdAt",
+          "canRevoke",
+          "secret",
+          "baseUrl"
+        ],
+        "additionalProperties": false
+      },
+      "RenInference.Expiry": {
+        "type": "string",
+        "enum": ["7d", "30d", "1y", "never"],
+        "description": "When a new key expires: in 7 days, in 30 days, in 1 year, or never."
+      },
+      "RenInference.HarnessId": {
+        "type": "string",
+        "enum": ["claude-code", "opencode", "codex", "pi", "hermes"]
+      },
+      "RenInference.HarnessOperation": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["set-object-path"]
+              },
+              "keyPath": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "value": {}
+            },
+            "required": ["target", "description", "containsSecret", "kind", "keyPath", "value"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["remove-object-path"]
+              },
+              "keyPath": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind", "keyPath"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["upsert-toml-table"]
+              },
+              "tableName": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entries": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["Infinity", "-Infinity", "NaN"]
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind", "tableName", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["upsert-yaml-mapping"]
+              },
+              "keyPath": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "value": {
+                "type": "object"
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind", "keyPath", "value"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["append-unique-list-item"]
+              },
+              "listKey": {
+                "type": "string"
+              },
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": ["key", "value"],
+                "additionalProperties": false
+              },
+              "item": {
+                "type": "object"
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind", "listKey", "identity", "item"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["replace-ren-owned-file"]
+              },
+              "format": {
+                "type": "string",
+                "enum": ["json", "jsonc", "toml", "yaml"]
+              },
+              "value": {
+                "type": "object"
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind", "format", "value"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["remove-ren-owned-file"]
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              },
+              "description": {
+                "type": "string"
+              },
+              "containsSecret": {
+                "type": "boolean"
+              },
+              "optional": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["set-environment-variables"]
+              },
+              "entries": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["target", "description", "containsSecret", "kind", "entries"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "One edit of a harness config file. The secret is `${REN_INFERENCE_KEY}`; `ren2` puts the key there."
+      },
+      "RenInference.HarnessPlan": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "setupPlan": {
+            "type": "object",
+            "properties": {
+              "operations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RenInference.HarnessOperation"
+                }
+              },
+              "verificationSteps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RenInference.HarnessVerificationStep"
+                }
+              }
+            },
+            "required": ["operations", "verificationSteps"],
+            "additionalProperties": false
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["schemaVersion", "setupPlan", "warnings"],
+        "additionalProperties": false,
+        "description": "The edits that point a harness at Ren’s models, built from the organization’s live model list."
+      },
+      "RenInference.HarnessPlanInput": {
+        "type": "object",
+        "properties": {
+          "harnessId": {
+            "$ref": "#/components/schemas/RenInference.HarnessId"
+          },
+          "keyEnvVar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "withOptional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schemaVersions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "supportedMutationKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["harnessId", "schemaVersions", "supportedMutationKinds"],
+        "additionalProperties": false
+      },
+      "RenInference.HarnessTarget": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["claude-user-settings"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["codex-provider-configuration"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["codex-profile"]
+              },
+              "profileName": {
+                "type": "string"
+              }
+            },
+            "required": ["kind", "profileName"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["codex-model-catalog"]
+              },
+              "profileName": {
+                "type": "string"
+              }
+            },
+            "required": ["kind", "profileName"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["opencode-user-configuration"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["pi-model-catalog"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["hermes-provider-configuration"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["hermes-environment"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "A config file of a harness."
+      },
+      "RenInference.HarnessVerificationStep": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["file-exists"]
+              },
+              "target": {
+                "$ref": "#/components/schemas/RenInference.HarnessTarget"
+              }
+            },
+            "required": ["kind", "target"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["models-reachable"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "RenInference.Key": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "The first 12 characters of the secret."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RenInference.KeyStatus"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/RenInference.KeyOwner"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest call with the key, over all time."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "canRevoke": {
+            "type": "boolean",
+            "description": "True when the viewer may revoke the key and the key is `active` or `revoke_pending`."
+          }
+        },
+        "required": ["id", "name", "prefix", "status", "owner", "expiresAt", "lastUsedAt", "createdAt", "canRevoke"],
+        "additionalProperties": false,
+        "description": "An inference key: a member’s key to call Ren’s models from outside Ren."
+      },
+      "RenInference.KeyList": {
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "description": "The base URL that a harness or script calls with a key."
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenInference.Key"
+            }
+          }
+        },
+        "required": ["baseUrl", "keys"],
+        "additionalProperties": false
+      },
+      "RenInference.KeyOwner": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "$ref": "#/components/schemas/Auth.MemberID"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the member has left the organization."
+          }
+        },
+        "required": ["memberId", "name"],
+        "additionalProperties": false
+      },
+      "RenInference.KeySecret": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          }
+        },
+        "required": ["secret", "baseUrl"],
+        "additionalProperties": false
+      },
+      "RenInference.KeyStatus": {
+        "type": "string",
+        "enum": ["active", "revoke_pending", "revoked", "expired"],
+        "description": "`expired` as soon as `expiresAt` has passed."
+      },
+      "RenInference.KeyUsage": {
+        "type": "object",
+        "properties": {
+          "keyId": {
+            "type": "string"
+          },
+          "charged": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Micro-dollars of the calls that Ren paid for."
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Every call, failed ones too."
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenInference.ModelUsage"
+            }
+          }
+        },
+        "required": ["keyId", "charged", "calls", "failed", "models"],
+        "additionalProperties": false,
+        "description": "The usage of one key in a period."
+      },
       "RenInference.Meter": {
         "type": "object",
         "properties": {
@@ -20036,6 +21373,79 @@
         },
         "required": ["key", "title", "percent"],
         "additionalProperties": false
+      },
+      "RenInference.ModelUsage": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The model that the harness asked for."
+          },
+          "payer": {
+            "$ref": "#/components/schemas/Usage.Payer"
+          },
+          "calls": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Without cache reads and writes."
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cacheReadTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cacheWriteTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "5-minute and 1-hour cache writes added."
+          },
+          "cost": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Micro-dollars charged on Ren."
+          }
+        },
+        "required": [
+          "model",
+          "payer",
+          "calls",
+          "failed",
+          "inputTokens",
+          "outputTokens",
+          "reasoningTokens",
+          "cacheReadTokens",
+          "cacheWriteTokens",
+          "cost"
+        ],
+        "additionalProperties": false
+      },
+      "RenInference.Period": {
+        "type": "string",
+        "enum": ["7d", "30d", "90d", "all"],
+        "description": "The usage period: the last 7, 30 or 90 days, or all time."
       },
       "RenInference.RenameInput": {
         "type": "object",

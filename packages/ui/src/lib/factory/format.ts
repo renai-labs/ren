@@ -1,7 +1,6 @@
+import { formatUsd } from "../../components/format.js"
 import { DAY, HOUR, MINUTE } from "./time.js"
 
-const usdFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const countFormat = new Intl.NumberFormat("en-US")
 const weekdayFormat = new Intl.DateTimeFormat("en-US", { weekday: "short" })
 const longDayFormat = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" })
 const longWeekdayFormat = new Intl.DateTimeFormat("en-US", { weekday: "long" })
@@ -27,24 +26,6 @@ export function formatShortDuration(ms: number): string {
   if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
   return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`
-}
-
-export function formatUsd(value: number): string {
-  if (value >= 10_000) return `$${Math.round(value / 1000)}k`
-  return `$${usdFormat.format(value)}`
-}
-
-export function formatTokens(value: number): string {
-  if (value >= 1_000_000) {
-    const millions = value / 1_000_000
-    return `${millions >= 10 ? Math.round(millions) : Math.round(millions * 10) / 10}M`
-  }
-  if (value >= 1000) return `${Math.round(value / 1000)}k`
-  return String(Math.round(value))
-}
-
-export function formatCount(value: number): string {
-  return countFormat.format(Math.round(value))
 }
 
 export function formatClock24(t: number): string {

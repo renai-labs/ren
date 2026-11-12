@@ -1658,6 +1658,53 @@ const EndpointRenInferenceConnectionRemove =
   (raw: RawClient["ren-inference"]) => (input: RenInferenceConnectionRemoveInput) =>
     raw["ren-inference.connection.remove"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+const EndpointRenInferenceKeyList = (raw: RawClient["ren-inference"]) => () =>
+  raw["ren-inference.key.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceKeyUsageRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.usage"]>[0]
+type RenInferenceKeyUsageInput = { readonly period: RenInferenceKeyUsageRequest["query"]["period"] }
+const EndpointRenInferenceKeyUsage = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeyUsageInput) =>
+  raw["ren-inference.key.usage"]({ query: { period: input["period"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceKeyCreateRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.create"]>[0]
+type RenInferenceKeyCreateInput = {
+  readonly name: RenInferenceKeyCreateRequest["payload"]["name"]
+  readonly expiresIn: RenInferenceKeyCreateRequest["payload"]["expiresIn"]
+}
+const EndpointRenInferenceKeyCreate = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeyCreateInput) =>
+  raw["ren-inference.key.create"]({ payload: { name: input["name"], expiresIn: input["expiresIn"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type RenInferenceKeyRevokeRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.revoke"]>[0]
+type RenInferenceKeyRevokeInput = { readonly id: RenInferenceKeyRevokeRequest["params"]["id"] }
+const EndpointRenInferenceKeyRevoke = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeyRevokeInput) =>
+  raw["ren-inference.key.revoke"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceKeySecretRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.secret"]>[0]
+type RenInferenceKeySecretInput = { readonly id: RenInferenceKeySecretRequest["params"]["id"] }
+const EndpointRenInferenceKeySecret = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeySecretInput) =>
+  raw["ren-inference.key.secret"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceHarnessPlanRequest = Parameters<RawClient["ren-inference"]["ren-inference.harness-plan"]>[0]
+type RenInferenceHarnessPlanInput = {
+  readonly harnessId: RenInferenceHarnessPlanRequest["payload"]["harnessId"]
+  readonly keyEnvVar?: RenInferenceHarnessPlanRequest["payload"]["keyEnvVar"]
+  readonly withOptional?: RenInferenceHarnessPlanRequest["payload"]["withOptional"]
+  readonly schemaVersions: RenInferenceHarnessPlanRequest["payload"]["schemaVersions"]
+  readonly supportedMutationKinds: RenInferenceHarnessPlanRequest["payload"]["supportedMutationKinds"]
+}
+const EndpointRenInferenceHarnessPlan = (raw: RawClient["ren-inference"]) => (input: RenInferenceHarnessPlanInput) =>
+  raw["ren-inference.harness-plan"]({
+    payload: {
+      harnessId: input["harnessId"],
+      keyEnvVar: input["keyEnvVar"],
+      withOptional: input["withOptional"],
+      schemaVersions: input["schemaVersions"],
+      supportedMutationKinds: input["supportedMutationKinds"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   connect: EndpointRenInferenceConnect(raw),
   connection: {
@@ -1665,6 +1712,14 @@ const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
     rename: EndpointRenInferenceConnectionRename(raw),
     remove: EndpointRenInferenceConnectionRemove(raw),
   },
+  key: {
+    list: EndpointRenInferenceKeyList(raw),
+    usage: EndpointRenInferenceKeyUsage(raw),
+    create: EndpointRenInferenceKeyCreate(raw),
+    revoke: EndpointRenInferenceKeyRevoke(raw),
+    secret: EndpointRenInferenceKeySecret(raw),
+  },
+  "harness-plan": EndpointRenInferenceHarnessPlan(raw),
 })
 
 const EndpointBillingGet = (raw: RawClient["billing"]) => () =>

@@ -258,6 +258,17 @@ import type {
   RenInferenceConnectionRenameOutput,
   RenInferenceConnectionRemoveInput,
   RenInferenceConnectionRemoveOutput,
+  RenInferenceKeyListOutput,
+  RenInferenceKeyUsageInput,
+  RenInferenceKeyUsageOutput,
+  RenInferenceKeyCreateInput,
+  RenInferenceKeyCreateOutput,
+  RenInferenceKeyRevokeInput,
+  RenInferenceKeyRevokeOutput,
+  RenInferenceKeySecretInput,
+  RenInferenceKeySecretOutput,
+  RenInferenceHarnessPlanInput,
+  RenInferenceHarnessPlanOutput,
   BillingGetOutput,
   BillingPlanListOutput,
   BillingInvoiceListInput,
@@ -2169,7 +2180,7 @@ export function make(options: ClientOptions) {
             path: `/ren-inference/connect`,
             body: { returnUrl: input["returnUrl"], connectionId: input["connectionId"] },
             successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 503],
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
             empty: false,
           },
           requestOptions,
@@ -2181,7 +2192,7 @@ export function make(options: ClientOptions) {
               method: "GET",
               path: `/ren-inference/connections`,
               successStatus: 200,
-              declaredStatuses: [400, 401, 403, 404, 503],
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
               empty: false,
             },
             requestOptions,
@@ -2193,7 +2204,7 @@ export function make(options: ClientOptions) {
               path: `/ren-inference/connections/${encodeURIComponent(input.id)}`,
               body: { label: input["label"] },
               successStatus: 200,
-              declaredStatuses: [400, 401, 403, 404, 503],
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
               empty: false,
             },
             requestOptions,
@@ -2204,12 +2215,89 @@ export function make(options: ClientOptions) {
               method: "DELETE",
               path: `/ren-inference/connections/${encodeURIComponent(input.id)}`,
               successStatus: 204,
-              declaredStatuses: [400, 401, 403, 404, 503],
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
               empty: true,
             },
             requestOptions,
           ),
       },
+      key: {
+        list: (requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyListOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/keys`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        usage: (input: RenInferenceKeyUsageInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyUsageOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/keys/usage`,
+              query: { period: input["period"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        create: (input: RenInferenceKeyCreateInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyCreateOutput>(
+            {
+              method: "POST",
+              path: `/ren-inference/keys`,
+              body: { name: input["name"], expiresIn: input["expiresIn"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        revoke: (input: RenInferenceKeyRevokeInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyRevokeOutput>(
+            {
+              method: "DELETE",
+              path: `/ren-inference/keys/${encodeURIComponent(input.id)}`,
+              successStatus: 204,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        secret: (input: RenInferenceKeySecretInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeySecretOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/keys/${encodeURIComponent(input.id)}/secret`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      "harness-plan": (input: RenInferenceHarnessPlanInput, requestOptions?: RequestOptions) =>
+        request<RenInferenceHarnessPlanOutput>(
+          {
+            method: "POST",
+            path: `/ren-inference/harness-plans`,
+            body: {
+              harnessId: input["harnessId"],
+              keyEnvVar: input["keyEnvVar"],
+              withOptional: input["withOptional"],
+              schemaVersions: input["schemaVersions"],
+              supportedMutationKinds: input["supportedMutationKinds"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     billing: {
       get: (requestOptions?: RequestOptions) =>
