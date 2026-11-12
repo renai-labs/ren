@@ -33,6 +33,7 @@ export const usage_event = pgTable(
     index("usage_event_organization_time_idx").on(table.organization, table.time),
     index("usage_event_space_time_idx").on(table.space, table.time),
     index("usage_event_source_time_idx").on(table.source, table.time),
+    index("usage_event_workload_time_idx").on(table.workload, table.time),
     uniqueIndex("usage_event_position_idx").on(table.position),
   ],
 )

@@ -128,6 +128,11 @@ import type {
   RenInferenceConnectInput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
+  RenInferenceKeyUsageInput,
+  RenInferenceKeyCreateInput,
+  RenInferenceKeyRevokeInput,
+  RenInferenceKeySecretInput,
+  RenInferenceHarnessPlanInput,
   BillingInvoiceListInput,
   BillingInvoiceUrlInput,
   BillingSubscribeInput,
@@ -1361,6 +1366,62 @@ export function make(client: ReturnType<typeof Ren.make>) {
                 client["ren-inference"]["connection"]["remove"](input),
             }),
         },
+      },
+      key: {
+        list: {
+          queryKey: () => ["ren-inference", "key", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["ren-inference", "key", "list"] as const,
+              queryFn: (context) => client["ren-inference"]["key"]["list"]({ signal: context.signal }),
+            }),
+        },
+        usage: {
+          queryKey: (input?: RenInferenceKeyUsageInput) =>
+            input === undefined
+              ? (["ren-inference", "key", "usage"] as const)
+              : (["ren-inference", "key", "usage", input] as const),
+          queryOptions: (input: RenInferenceKeyUsageInput) =>
+            queryOptions({
+              queryKey: ["ren-inference", "key", "usage", input] as const,
+              queryFn: (context) => client["ren-inference"]["key"]["usage"](input, { signal: context.signal }),
+            }),
+        },
+        create: {
+          mutationKey: () => ["ren-inference", "key", "create"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "key", "create"] as const,
+              mutationFn: (input: RenInferenceKeyCreateInput) => client["ren-inference"]["key"]["create"](input),
+            }),
+        },
+        revoke: {
+          mutationKey: () => ["ren-inference", "key", "revoke"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "key", "revoke"] as const,
+              mutationFn: (input: RenInferenceKeyRevokeInput) => client["ren-inference"]["key"]["revoke"](input),
+            }),
+        },
+        secret: {
+          queryKey: (input?: RenInferenceKeySecretInput) =>
+            input === undefined
+              ? (["ren-inference", "key", "secret"] as const)
+              : (["ren-inference", "key", "secret", input] as const),
+          queryOptions: (input: RenInferenceKeySecretInput) =>
+            queryOptions({
+              queryKey: ["ren-inference", "key", "secret", input] as const,
+              queryFn: (context) => client["ren-inference"]["key"]["secret"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      "harness-plan": {
+        mutationKey: () => ["ren-inference", "harness-plan"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["ren-inference", "harness-plan"] as const,
+            mutationFn: (input: RenInferenceHarnessPlanInput) => client["ren-inference"]["harness-plan"](input),
+          }),
       },
     },
     billing: {

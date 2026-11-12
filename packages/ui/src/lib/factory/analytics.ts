@@ -1,4 +1,5 @@
-import { formatCount, formatMonthDay, formatWeekday } from "./format.js"
+import { formatCount } from "../../components/format.js"
+import { formatMonthDay, formatWeekday } from "./format.js"
 import { rngFor, between } from "./rng.js"
 import { costPerMs, tokensPerUsd } from "./simulate.js"
 import { DAY, addDays, isWeekend, startOfDay, startOfMonth, startOfWeek, startOfYear } from "./time.js"

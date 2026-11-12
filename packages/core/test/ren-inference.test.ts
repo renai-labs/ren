@@ -1,8 +1,10 @@
 import { describe, expect } from "bun:test"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
 import { Models } from "../src/models.js"
@@ -23,7 +25,7 @@ const Claims = Schema.Struct({
   member: Schema.optional(Schema.String),
 })
 
-type Seen = { claims: typeof Claims.Type; body: unknown; path: string }
+type Seen = { claims: typeof Claims.Type; body: unknown; path: string; method: string }
 
 const seen: Seen[] = []
 const replies = new Map<string, () => Response>()
@@ -51,8 +53,12 @@ const service = Bun.serve({
     if (Option.isNone(claims)) return new Response(null, { status: 401 })
     const body: unknown = request.method === "GET" || request.method === "DELETE" ? null : await request.json()
     const path = new URL(request.url).pathname
-    seen.push({ claims: claims.value, body, path })
-    return (replies.get(path) ?? (() => new Response(null, { status: 404 })))()
+    seen.push({ claims: claims.value, body, path, method: request.method })
+    return (
+      replies.get(`${request.method} ${path}`) ??
+      replies.get(path) ??
+      (() => new Response(null, { status: 404 }))
+    )()
   },
 })
 
@@ -121,6 +127,190 @@ describe("RenInferenceProvider with the Ren Inference Service", () => {
       expect((yield* Effect.flip(models.grant(brainId, owner.organizationId, owner.spaceId)))._tag).toBe(
         "Models.Unavailable",
       )
+    }),
+  )
+})
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const upstreamKey = (id: string, ownerMemberId: string) => ({
+  id,
+  name: `key ${id}`,
+  prefix: "sk-ren-7Hq2",
+  status: "active",
+  ownerMemberId,
+  expiresAt: null,
+  createdAt: "2026-10-02T08:00:00.000Z",
+})
+
+// oxlint-disable-next-line ren/no-comments -- An org with an owner and two members, Ada and Bo, one key each.
+const keyOrg = Effect.fnUntraced(function* () {
+  const organizationId = yield* Seed.organization()
+  const person = Effect.fnUntraced(function* (name: string, role: string) {
+    const user = yield* Seed.user({ name })
+    const memberId = yield* Seed.member(organizationId, user.id, role)
+    return { memberId, actor: { userId: user.id, organizationId, roles: [role] } }
+  })
+  const owner = yield* person("Olu", "owner")
+  const ada = yield* person("Ada", "member")
+  const bo = yield* person("Bo", "member")
+  replies.set("GET /v1/inference-keys", () =>
+    Response.json({
+      baseUrl: "https://llm.ren.test",
+      keys: [upstreamKey("ifk_bo", bo.memberId), upstreamKey("ifk_ada", ada.memberId)],
+    }),
+  )
+  replies.set("GET /v1/inference-keys/ifk_ada/secret", () =>
+    Response.json({ secret: "sk-ren-ada", baseUrl: "https://llm.ren.test" }),
+  )
+  replies.set("DELETE /v1/inference-keys/ifk_ada", () => new Response(null, { status: 204 }))
+  replies.set("DELETE /v1/inference-keys/ifk_bo", () => new Response(null, { status: 204 }))
+  seen.length = 0
+  return { organizationId, owner, ada, bo }
+})
+
+const call = Effect.fnUntraced(function* (input: {
+  readonly organizationId: Auth.OrganizationID
+  readonly key: string
+  readonly member: string
+  readonly daysAgo: number
+  readonly payer?: "ren" | "customer"
+  readonly cost?: number
+  readonly failed?: boolean
+}) {
+  const database = yield* Database.Service
+  yield* database.db.insert(Database.Schema.usage_event).values({
+    source: "ren-inference",
+    id: crypto.randomUUID(),
+    type: "model.call",
+    time: new Date(Date.now() - input.daysAgo * DAY_MS),
+    workload: `inference-key:${input.key}`,
+    organization: input.organizationId,
+    member: input.member,
+    payer: input.payer ?? "ren",
+    provider: "anthropic",
+    ...(input.failed ? { error: { status: 429, message: "rate limited" } } : { cost_micro_usd: input.cost ?? 1000 }),
+    data: {
+      requested_model: "anthropic/claude-opus-5-5",
+      served_model: "anthropic/claude-opus-5-5-ren",
+      ...(input.failed
+        ? {}
+        : { input_tokens: 100, output_tokens: 10, cache_write_tokens: 4, cache_write_1h_tokens: 1 }),
+    },
+  })
+})
+
+describe("inference keys", () => {
+  it.live("shows a member only their own keys, with the owner's name and the last call from usage_event", () =>
+    Effect.gen(function* () {
+      const inference = yield* RenInference.Service
+      const org = yield* keyOrg()
+      yield* call({ organizationId: org.organizationId, key: "ifk_ada", member: org.ada.memberId, daysAgo: 400 })
+      yield* call({ organizationId: org.organizationId, key: "ifk_ada", member: org.ada.memberId, daysAgo: 2 })
+
+      const listed = yield* inference.keys(org.ada.actor)
+
+      expect(listed.baseUrl).toBe("https://llm.ren.test")
+      expect(listed.keys.map((key) => [key.id, key.owner.name, key.canRevoke])).toEqual([["ifk_ada", "Ada", true]])
+      const last = listed.keys.at(0)?.lastUsedAt
+      expect(last ? DateTime.toEpochMillis(last) : 0).toBeGreaterThan(Date.now() - 3 * DAY_MS)
+      expect(seen.map((each) => Struct.omit(each.claims, ["kid", "exp"]))).toEqual([
+        { org: org.organizationId, sub: org.ada.actor.userId, member: org.ada.memberId },
+      ])
+    }),
+  )
+
+  it.live("answers 404 when a member revokes or reads another member's key, and never asks the service", () =>
+    Effect.gen(function* () {
+      const inference = yield* RenInference.Service
+      const org = yield* keyOrg()
+
+      expect((yield* Effect.flip(inference.revokeKey(org.ada.actor, "ifk_bo")))._tag).toBe("Primitive.NotFound")
+      expect((yield* Effect.flip(inference.keySecret(org.ada.actor, "ifk_bo")))._tag).toBe("Primitive.NotFound")
+      yield* inference.revokeKey(org.ada.actor, "ifk_ada")
+
+      expect(seen.filter((each) => each.method === "DELETE").map((each) => each.path)).toEqual([
+        "/v1/inference-keys/ifk_ada",
+      ])
+    }),
+  )
+
+  it.live("lets an admin see and revoke every key, but not read another member's secret", () =>
+    Effect.gen(function* () {
+      const inference = yield* RenInference.Service
+      const org = yield* keyOrg()
+
+      const listed = yield* inference.keys(org.owner.actor)
+      expect(listed.keys.map((key) => [key.id, key.owner.name, key.canRevoke])).toEqual([
+        ["ifk_bo", "Bo", true],
+        ["ifk_ada", "Ada", true],
+      ])
+      yield* inference.revokeKey(org.owner.actor, "ifk_bo")
+      expect((yield* Effect.flip(inference.keySecret(org.owner.actor, "ifk_ada")))._tag).toBe("Primitive.Forbidden")
+      expect(yield* inference.keySecret(org.ada.actor, "ifk_ada")).toEqual({
+        secret: "sk-ren-ada",
+        baseUrl: "https://llm.ren.test",
+      })
+    }),
+  )
+
+  it.live("reads usage of the keys that key.view allows, in the period, with no call to the service", () =>
+    Effect.gen(function* () {
+      const inference = yield* RenInference.Service
+      const org = yield* keyOrg()
+      const ada = { organizationId: org.organizationId, key: "ifk_ada", member: org.ada.memberId }
+      yield* call({ ...ada, daysAgo: 1, cost: 52_100 })
+      yield* call({ ...ada, daysAgo: 1, payer: "customer", cost: 0 })
+      yield* call({ ...ada, daysAgo: 1, failed: true })
+      yield* call({ ...ada, daysAgo: 40, cost: 7 })
+      yield* call({ organizationId: org.organizationId, key: "ifk_bo", member: org.bo.memberId, daysAgo: 1 })
+
+      const own = yield* inference.keyUsage(org.ada.actor, "30d")
+      const every = yield* inference.keyUsage(org.owner.actor, "all")
+
+      expect(own).toEqual([
+        {
+          keyId: "ifk_ada",
+          charged: 52_100,
+          calls: 3,
+          failed: 1,
+          models: [
+            {
+              model: "anthropic/claude-opus-5-5",
+              payer: "customer",
+              calls: 1,
+              failed: 0,
+              inputTokens: 100,
+              outputTokens: 10,
+              reasoningTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 5,
+              cost: 0,
+            },
+            {
+              model: "anthropic/claude-opus-5-5",
+              payer: "ren",
+              calls: 2,
+              failed: 1,
+              inputTokens: 100,
+              outputTokens: 10,
+              reasoningTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 5,
+              cost: 52_100,
+            },
+          ],
+        },
+      ])
+      expect(
+        every
+          .map((usage) => [usage.keyId, usage.calls, usage.charged])
+          .toSorted((left, right) => String(left.at(0)).localeCompare(String(right.at(0)))),
+      ).toEqual([
+        ["ifk_ada", 4, 52_107],
+        ["ifk_bo", 1, 1000],
+      ])
+      expect(seen).toEqual([])
     }),
   )
 })

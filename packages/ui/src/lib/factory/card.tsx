@@ -2,7 +2,8 @@ import { use, useState, type ReactNode } from "react"
 import { cn } from "cn"
 import { ColumnWidthContext } from "./context.js"
 import type { CardModel } from "./board.js"
-import { formatAge, formatClock24, formatElapsed, formatTokens, formatUsd } from "./format.js"
+import { formatTokens, formatUsd } from "../../components/format.js"
+import { formatAge, formatClock24, formatElapsed } from "./format.js"
 import type { Resolution } from "./types.js"
 import {
   ArrowRight,

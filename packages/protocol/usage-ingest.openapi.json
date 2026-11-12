@@ -216,7 +216,7 @@
           },
           "workload": {
             "type": "string",
-            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known; or `inference-key:<id>` for a call with a member’s inference key."
           },
           "organization": {
             "$ref": "#/components/schemas/Auth.OrganizationID"
@@ -390,7 +390,7 @@
           },
           "workload": {
             "type": "string",
-            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known."
+            "description": "`brain:<id>` or `hand:<id>`, then `:<generation>` when known; or `inference-key:<id>` for a call with a member’s inference key."
           },
           "organization": {
             "$ref": "#/components/schemas/Auth.OrganizationID"

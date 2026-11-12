@@ -309,6 +309,24 @@ export type RenInferenceTone = "ok" | "warn" | "error"
 
 export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
 
+export type RenInferenceKeyStatus = "active" | "revoke_pending" | "revoked" | "expired"
+
+export type AuthMemberID = string
+
+export type UsagePayer = "ren" | "customer"
+
+export type RenInferenceKeySecret = { secret: string; baseUrl: string }
+
+export type RenInferenceHarnessTarget =
+  | { kind: "claude-user-settings" }
+  | { kind: "codex-provider-configuration" }
+  | { kind: "codex-profile"; profileName: string }
+  | { kind: "codex-model-catalog"; profileName: string }
+  | { kind: "opencode-user-configuration" }
+  | { kind: "pi-model-catalog" }
+  | { kind: "hermes-provider-configuration" }
+  | { kind: "hermes-environment" }
+
 export type BillingSummary = {
   plan: string
   planStatus: string | null
@@ -824,6 +842,96 @@ export type RenInferenceConnection = {
   meters: Array<RenInferenceMeter>
 }
 
+export type RenInferenceKeyOwner = { memberId: AuthMemberID; name: string | null }
+
+export type RenInferenceModelUsage = {
+  model: string
+  payer: UsagePayer
+  calls: number
+  failed: number
+  inputTokens: number
+  outputTokens: number
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  cost: number
+}
+
+export type RenInferenceHarnessOperation =
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "set-object-path"
+      keyPath: Array<string>
+      value: JsonValue
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "remove-object-path"
+      keyPath: Array<string>
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "upsert-toml-table"
+      tableName: string | null
+      entries: { [x: string]: string | number | boolean }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "upsert-yaml-mapping"
+      keyPath: Array<string>
+      value: { [x: string]: JsonValue }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "append-unique-list-item"
+      listKey: string
+      identity: { key: string; value: string }
+      item: { [x: string]: JsonValue }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "replace-ren-owned-file"
+      format: "json" | "jsonc" | "toml" | "yaml"
+      value: { [x: string]: JsonValue }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "remove-ren-owned-file"
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "set-environment-variables"
+      entries: { [x: string]: string }
+    }
+
+export type RenInferenceHarnessVerificationStep =
+  | { kind: "file-exists"; target: RenInferenceHarnessTarget }
+  | { kind: "models-reachable" }
+
 export type BillingInvoice = {
   id: string
   number: string
@@ -1154,6 +1262,49 @@ export type WebhookTestResult = { items: Array<WebhookTested> }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
+export type RenInferenceKey = {
+  id: string
+  name: string
+  prefix: string
+  status: RenInferenceKeyStatus
+  owner: RenInferenceKeyOwner
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+  canRevoke: boolean
+}
+
+export type RenInferenceCreatedKey = {
+  id: string
+  name: string
+  prefix: string
+  status: RenInferenceKeyStatus
+  owner: RenInferenceKeyOwner
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+  canRevoke: boolean
+  secret: string
+  baseUrl: string
+}
+
+export type RenInferenceKeyUsage = {
+  keyId: string
+  charged: number
+  calls: number
+  failed: number
+  models: Array<RenInferenceModelUsage>
+}
+
+export type RenInferenceHarnessPlan = {
+  schemaVersion: number
+  setupPlan: {
+    operations: Array<RenInferenceHarnessOperation>
+    verificationSteps: Array<RenInferenceHarnessVerificationStep>
+  }
+  warnings: Array<string>
+}
+
 export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
@@ -1322,6 +1473,8 @@ export type TaskEventInfo = {
 }
 
 export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize: number; total: number }
+
+export type RenInferenceKeyList = { baseUrl: string; keys: Array<RenInferenceKey> }
 
 export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
 
@@ -8775,6 +8928,67 @@ export type RenInferenceConnectionRenameOutput = RenInferenceConnection
 export type RenInferenceConnectionRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type RenInferenceConnectionRemoveOutput = void
+
+export type RenInferenceKeyListOutput = RenInferenceKeyList
+
+export type RenInferenceKeyUsageInput = { readonly period: { readonly period: "7d" | "30d" | "90d" | "all" }["period"] }
+
+export type RenInferenceKeyUsageOutput = Array<RenInferenceKeyUsage>
+
+export type RenInferenceKeyCreateInput = {
+  readonly name: { readonly name: string; readonly expiresIn: "7d" | "30d" | "1y" | "never" }["name"]
+  readonly expiresIn: { readonly name: string; readonly expiresIn: "7d" | "30d" | "1y" | "never" }["expiresIn"]
+}
+
+export type RenInferenceKeyCreateOutput = RenInferenceCreatedKey
+
+export type RenInferenceKeyRevokeInput = { readonly id: { readonly id: string }["id"] }
+
+export type RenInferenceKeyRevokeOutput = void
+
+export type RenInferenceKeySecretInput = { readonly id: { readonly id: string }["id"] }
+
+export type RenInferenceKeySecretOutput = RenInferenceKeySecret
+
+export type RenInferenceHarnessPlanInput = {
+  readonly harnessId: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["harnessId"]
+  readonly keyEnvVar?: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["keyEnvVar"]
+  readonly withOptional?: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["withOptional"]
+  readonly schemaVersions: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["schemaVersions"]
+  readonly supportedMutationKinds: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["supportedMutationKinds"]
+}
+
+export type RenInferenceHarnessPlanOutput = RenInferenceHarnessPlan
 
 export type BillingGetOutput = BillingSummary
 
