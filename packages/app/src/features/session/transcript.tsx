@@ -99,6 +99,8 @@ import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 import { WorkspaceImage } from "./workspace-image.js"
+import { FileMentions, WorkspaceFileChip } from "./file-mention.js"
+import { dirsOf, isPath } from "./file-paths.js"
 
 interface Person {
   readonly name: string
@@ -504,20 +506,30 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   )
 }
 
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
+function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; root: Session.ID }) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
   const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
   if (at >= 0)
     return (
       <>
-        <UserText message={props.message} text={props.message.text.slice(0, at)} spaceId={props.spaceId} />
+        <UserText
+          message={props.message}
+          text={props.message.text.slice(0, at)}
+          spaceId={props.spaceId}
+          root={props.root}
+        />
         <WebhookRequest request={props.message.text.slice(at + 2)} />
       </>
     )
-  return <UserText message={props.message} spaceId={props.spaceId} />
+  return <UserText message={props.message} spaceId={props.spaceId} root={props.root} />
 }
 
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined }) {
+function UserText(props: {
+  message: SessionMessage.User
+  text?: string
+  spaceId: string | undefined
+  root: Session.ID
+}) {
   const parts = splitPasted(props.text ?? props.message.text)
   const apps = useMentionedApps(parts.typed)
   const files = props.message.files ?? []
@@ -535,7 +547,7 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
             data-searchable=""
             className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
           >
-            {withAppMentions(parts.typed, apps)}
+            <FileMentions text={parts.typed} root={props.root} plain={(text) => withAppMentions(text, apps)} />
           </BubbleContent>
         </Bubble>
       ) : null}
@@ -566,6 +578,7 @@ function UserFooter(props: { text: string; pending: boolean; onEdit?: (() => voi
 function UserMessage(props: {
   message: SessionMessage.User
   spaceId: string | undefined
+  root: Session.ID
   person: Person
   pending: boolean
   editing: boolean
@@ -594,7 +607,7 @@ function UserMessage(props: {
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (
           <>
-            <UserBody message={props.message} spaceId={props.spaceId} />
+            <UserBody message={props.message} spaceId={props.spaceId} root={props.root} />
             <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
           </>
         )}
@@ -1133,6 +1146,7 @@ function UserBlock(props: {
     <UserMessage
       message={message}
       spaceId={transcript.spaceId}
+      root={transcript.view.root}
       person={person}
       pending={pending}
       editing={props.editing}
@@ -1156,6 +1170,9 @@ function SmoothMarkdown(props: {
 }) {
   const text = useSmoothText(props.text, { streaming: props.streaming })
   const root = props.root
+  const dirs = dirsOf(
+    [...text.matchAll(/`([^`\n]+)`/gu)].flatMap((match) => (isPath(match[1] ?? "") ? [match[1] ?? ""] : [])),
+  )
   return (
     <Markdown
       streaming={props.streaming || text.length < props.text.length}
@@ -1164,6 +1181,12 @@ function SmoothMarkdown(props: {
       workspaceImage={
         root
           ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
+          : undefined
+      }
+      workspaceFile={
+        root
+          ? (code, fallback) =>
+              isPath(code) ? <WorkspaceFileChip root={root} input={code} dirs={dirs} fallback={fallback} /> : undefined
           : undefined
       }
     >

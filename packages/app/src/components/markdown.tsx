@@ -44,13 +44,19 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
   )
 }
 
+type WorkspaceFileRenderer = (text: string, fallback: ReactNode) => ReactNode | undefined
+const WorkspaceFiles = createContext<WorkspaceFileRenderer | undefined>(undefined)
+
 function MarkdownCode({ node: _node, className, children, ...props }: ComponentProps<"code"> & ExtraProps) {
-  if (!("data-block" in props))
-    return (
+  const file = use(WorkspaceFiles)
+  if (!("data-block" in props)) {
+    const code = (
       <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]" {...props}>
         {children}
       </code>
     )
+    return (typeof children === "string" && file?.(children, code)) || code
+  }
   return (
     <MarkdownCodeBlock
       code={typeof children === "string" ? children : ""}
@@ -133,6 +139,7 @@ export function Markdown(props: {
   className?: string | undefined
   apps?: ReadonlyArray<CatalogApp> | undefined
   workspaceImage?: WorkspaceImageRenderer | undefined
+  workspaceFile?: WorkspaceFileRenderer | undefined
 }) {
   const apps = props.apps ?? []
   const withApps =
@@ -154,18 +161,20 @@ export function Markdown(props: {
         }
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
-      >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
+      <WorkspaceFiles value={props.workspaceFile}>
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={withApps}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </WorkspaceFiles>
     </WorkspaceImages>
   )
 }
