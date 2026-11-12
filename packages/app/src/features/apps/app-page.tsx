@@ -62,7 +62,7 @@ function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) 
         </Button>
       }
       profiles={profiles}
-      caption={(each) => <SpacePills profile={each} />}
+      aside={(each) => <SpacePills profile={each} />}
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
       action={(each) => {
         const label = connectLabel(each)

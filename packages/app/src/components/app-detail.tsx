@@ -108,7 +108,6 @@ export function AppDetailsSample() {
           </Button>
         }
         profiles={[]}
-        caption={() => ""}
         action={() => null}
       />
       <AppSections app={sampleApp} />
