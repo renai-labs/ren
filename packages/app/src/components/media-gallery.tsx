@@ -8,18 +8,21 @@ const layouts = {
     trigger: "block w-fit max-w-full cursor-zoom-in rounded-md",
     image: "max-h-96 max-w-full rounded-md border object-contain",
     box: "",
+    compact: false,
   },
   pair: {
     gallery: "my-2 grid grid-cols-2 items-start gap-2",
     trigger: "block w-full cursor-zoom-in rounded-md",
     image: "aspect-4/3 w-full rounded-md border object-cover",
     box: "w-full",
+    compact: true,
   },
   grid: {
     gallery: "my-2 grid grid-cols-3 items-start gap-2",
     trigger: "block w-full cursor-zoom-in rounded-md",
     image: "aspect-square w-full rounded-md border object-cover",
     box: "w-full",
+    compact: true,
   },
 }
 

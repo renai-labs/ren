@@ -43,13 +43,21 @@ test("images the agent shows form one gallery with a file chip each, and a missi
     "And one that was never saved:",
     "",
     "![Lost](.ren/images/lost.png)",
+    "",
+    "Spaced apart:",
+    "",
+    "![Take D](.ren/images/logo-a.png)",
+    "",
+    "![Take E](.ren/images/logo-b.png)",
+    "",
+    "![Take F](.ren/images/logo-c.png)",
   ].join("\n")
   const scripted = await page.request.post(`http://127.0.0.1:${ports.mailbox}/script`, { data: { reply } })
   const marker = Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await scripted.json()).marker
   await send(page, `Show the logos ${marker}`)
 
   const gallery = page.locator('[data-slot="media-gallery"]')
-  await expect(gallery).toHaveCount(2, { timeout: brainStart })
+  await expect(gallery).toHaveCount(3, { timeout: brainStart })
   const logos = gallery.first()
   await expect(logos.getByRole("button", { name: /^Open Take / })).toHaveCount(3)
   await expect(logos.locator('[data-slot="attachment"]')).toHaveCount(3)
@@ -57,7 +65,17 @@ test("images the agent shows form one gallery with a file chip each, and a missi
     await expect(logos.getByText(name, { exact: true })).toBeVisible()
   await expect(logos.getByLabel("Save logo-a.png")).toHaveAttribute("download", "logo-a.png")
 
-  const lost = gallery.last()
+  for (const name of ["logo-a.png", "logo-b.png", "logo-c.png"]) {
+    const title = logos.locator('[data-slot="attachment-title"]', { hasText: name })
+    await expect(title).toHaveAttribute("title", name)
+    expect(await title.evaluate((node) => node.scrollHeight <= node.clientHeight)).toBe(true)
+  }
+
+  const spaced = gallery.last()
+  await expect(spaced.getByRole("button", { name: /^Open Take / })).toHaveCount(3)
+  await expect(spaced.locator('[data-slot="attachment"]')).toHaveCount(3)
+
+  const lost = gallery.nth(1)
   await expect(lost.getByText("Image unavailable")).toBeVisible()
   await expect(lost.getByText("Not in the workspace")).toBeVisible()
   await expect(lost.getByRole("button", { name: "Retry" })).toHaveCount(0)

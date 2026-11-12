@@ -60,11 +60,15 @@ function ImagePreview(props: { path: string; alt: string; src: string; size: num
         <img src={props.src} alt={alt} className={layout.image} />
       </ImageLightbox>
       <Attachment size="sm" className="w-full max-w-64 min-w-0">
-        <AttachmentMedia>
-          <IconPhoto />
-        </AttachmentMedia>
+        {layout.compact ? null : (
+          <AttachmentMedia>
+            <IconPhoto />
+          </AttachmentMedia>
+        )}
         <AttachmentContent>
-          <AttachmentTitle>{name}</AttachmentTitle>
+          <AttachmentTitle title={name} className="line-clamp-2 break-all whitespace-normal">
+            {name}
+          </AttachmentTitle>
           {props.size === undefined ? null : (
             <AttachmentDescription className="tabular-nums">{formatBytes(props.size)}</AttachmentDescription>
           )}

@@ -189,6 +189,14 @@ const mediaGallery = () => (tree: MarkdownNode) => {
   visit(tree)
 }
 
+const imageLine = /^([ \t]*!\[[^\]\n]*\]\([^)\s]+\))[ \t]*\n(?:[ \t]*\n)+(?=[ \t]*!\[[^\]\n]*\]\([^)\s]+\))/gmu
+
+const joinImageLines = (text: string) =>
+  text
+    .split(/(^[ \t]*(?:```|~~~)[^\n]*\n[\s\S]*?(?:^[ \t]*(?:```|~~~)[ \t]*$|$(?![\s\S])))/gmu)
+    .map((part, index) => (index % 2 === 1 ? part : part.replace(imageLine, "$1\n")))
+    .join("")
+
 const appLink = "#ren-app:"
 
 const withDataImages = (schema: unknown) => {
@@ -251,7 +259,7 @@ export function Markdown(props: {
         animated={streamAnimation}
         className={cn("min-w-0 text-sm/relaxed", props.className)}
       >
-        {mentionLinks(props.children, apps)}
+        {joinImageLines(mentionLinks(props.children, apps))}
       </Streamdown>
     </WorkspaceImages>
   )
