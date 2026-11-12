@@ -120,6 +120,7 @@ export function WorkspacePanel(props: {
   maximized: boolean
   onMaximize: (maximized: boolean) => void
   onClose: () => void
+  onMention?: ((path: string) => void) | undefined
 }) {
   const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
   const [active, setActive] = useState<string>()
@@ -206,7 +207,9 @@ export function WorkspacePanel(props: {
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {tab.kind === "browser" ? <BrowserTab /> : null}
-            {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
+            {tab.kind === "files" ? (
+              <FilesTab root={props.root} messages={props.messages} onMention={props.onMention} />
+            ) : null}
             {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
           </TabsContent>
         ))}

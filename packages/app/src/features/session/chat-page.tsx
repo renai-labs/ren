@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { IconArrowLeft, IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
+import { Composer } from "@ren/chat"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
@@ -262,6 +263,9 @@ export function ChatPage() {
             messages={chat.messages}
             maximized={maximized}
             onMaximize={setMaximized}
+            onMention={(path) =>
+              chat.setDraft(Composer.withText(chat.draft, `${chat.draft.text.trimEnd()} @${path} `.trimStart()))
+            }
             onClose={() => {
               setPanel(false)
               setMaximized(false)

@@ -1,5 +1,4 @@
 import { type ReactNode, useState } from "react"
-import { PatchFiles } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionInfo } from "@ren/schema/session/info"
@@ -12,44 +11,11 @@ import { FileTree } from "@ren/ui/file-tree"
 import { PatchDiff } from "@ren/ui/patch-diff"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { Theme } from "../../components/theme.js"
+import type { Change } from "./workspace-edits.js"
+import { editsOf } from "./workspace-edits.js"
 import { WorkspacePending } from "./workspace-state.js"
 
-interface Change {
-  readonly path: string
-  readonly status: "added" | "deleted" | "modified"
-  readonly additions: number
-  readonly deletions: number
-  readonly patches: ReadonlyArray<{ readonly patch: string; readonly additions: number; readonly deletions: number }>
-}
-
 type Source = "repository" | "edits"
-
-const workspace = /^.*\/workspace\/[^/]+\//u
-
-const editsOf = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArray<Change> => [
-  ...messages
-    .flatMap((message) => (message.type === "assistant" ? message.content : []))
-    .flatMap((content) =>
-      content.type === "tool" && PatchFiles.isFileChange(content) && content.state.status === "completed"
-        ? PatchFiles.toolFiles(content).filter(PatchFiles.changedFileDiff)
-        : [],
-    )
-    .reduce((byPath, file) => {
-      const path = file.file.replace(workspace, "")
-      const previous = byPath.get(path)
-      return byPath.set(path, {
-        path,
-        status: previous?.status === "added" && file.status !== "deleted" ? "added" : file.status,
-        additions: (previous?.additions ?? 0) + file.additions,
-        deletions: (previous?.deletions ?? 0) + file.deletions,
-        patches: [
-          ...(previous?.patches ?? []),
-          { patch: file.patch, additions: file.additions, deletions: file.deletions },
-        ],
-      })
-    }, new Map<string, Change>())
-    .values(),
-]
 
 const repositoryOf = (files: ReadonlyArray<SessionInfo.FileDiff>): ReadonlyArray<Change> =>
   files.map((file) => ({
