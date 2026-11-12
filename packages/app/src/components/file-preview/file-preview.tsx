@@ -13,12 +13,31 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/d
 import { Input } from "@ren/ui/input"
 import { Loading } from "@ren/ui/loading"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { maxPreviewBytes } from "./preview.js"
+import { maxPreviewBytes, type PreviewProps } from "./preview.js"
 
 const PdfView = lazy(() => import("./pdf.js").then((module) => ({ default: module.PdfView })))
+const DocxView = lazy(() => import("./docx.js").then((module) => ({ default: module.DocxView })))
+const PptxView = lazy(() => import("./pptx.js").then((module) => ({ default: module.PptxView })))
 const XlsxView = lazy(() => import("./xlsx.js").then((module) => ({ default: module.XlsxView })))
 
 const zoomSteps = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+
+const word = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+const slides = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+const kind = (file: SessionMessage.DriveFile) => {
+  if (file.mime === "application/pdf") return "pdf"
+  if (file.mime === word || /\.docx$/iu.test(file.name)) return "docx"
+  if (file.mime === slides || /\.pptx$/iu.test(file.name)) return "pptx"
+  return "xlsx"
+}
+
+function Renderer(props: PreviewProps & { kind: ReturnType<typeof kind> }) {
+  if (props.kind === "pdf") return <PdfView {...props} />
+  if (props.kind === "docx") return <DocxView {...props} />
+  if (props.kind === "pptx") return <PptxView {...props} />
+  return <XlsxView {...props} />
+}
 
 type Load = { status: "loading" } | { status: "ready"; bytes: ArrayBuffer } | { status: "failed" | "gone" }
 
@@ -198,7 +217,6 @@ function Viewer(props: {
     },
     onError: fail,
   }
-  const pdf = props.file.mime === "application/pdf"
   const blocked = tooLarge || load.status === "failed" || load.status === "gone"
   return (
     <>
@@ -233,7 +251,7 @@ function Viewer(props: {
       ) : null}
       {!blocked && load.status === "ready" ? (
         <Suspense fallback={<Pending />}>
-          {pdf ? <PdfView bytes={load.bytes} {...view} /> : <XlsxView bytes={load.bytes} {...view} />}
+          <Renderer kind={kind(props.file)} bytes={load.bytes} {...view} />
         </Suspense>
       ) : null}
       {!blocked && load.status === "loading" ? <Pending /> : null}

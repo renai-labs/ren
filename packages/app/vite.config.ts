@@ -35,6 +35,10 @@ export default defineConfig((env) => ({
   base,
   resolve: {
     alias: [
+      {
+        find: /^@betteroffice\/fonts-cjk$/u,
+        replacement: new URL("src/components/file-preview/office/fonts-cjk.ts", import.meta.url).pathname,
+      },
       { find: /^@tabler\/icons-react$/u, replacement: new URL("src/icons/heroicons.tsx", import.meta.url).pathname },
     ],
   },

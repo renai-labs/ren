@@ -18,7 +18,9 @@ const inline = (mime: string) =>
 const previewable = (file: SessionMessage.DriveFile) =>
   file.mime === "application/pdf" ||
   file.mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-  /\.xlsx$/iu.test(file.name)
+  file.mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+  file.mime === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+  /\.(xlsx|docx|pptx)$/iu.test(file.name)
 
 export function useDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
   const { api, platform, queryClient } = RouterContext.useRouterContext()
