@@ -16,6 +16,7 @@ const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MIN = 200
 const SIDEBAR_WIDTH_MAX = 420
 const SIDEBAR_DRAG_THRESHOLD = 3
+const SIDEBAR_COLLAPSE_AT = 120
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
@@ -265,8 +266,8 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
 
 // oxlint-disable-next-line ren/no-comments -- Drag the rail to resize the sidebar; a click without a drag collapses or expands it.
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar, open, setWidth, setResizing } = useSidebar()
-  const drag = React.useRef<{ x: number; width: number; moved: boolean } | null>(null)
+  const { toggleSidebar, open, setOpen, setWidth, setResizing } = useSidebar()
+  const drag = React.useRef<{ x: number; width: number; moved: boolean; collapsed: boolean } | null>(null)
 
   return (
     <button
@@ -278,18 +279,28 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       onPointerDown={(event) => {
         if (!open || event.button !== 0) return
         const sidebar = event.currentTarget.closest("[data-slot=sidebar-container]")
-        drag.current = { x: event.clientX, width: sidebar?.getBoundingClientRect().width ?? 0, moved: false }
+        drag.current = {
+          x: event.clientX,
+          width: sidebar?.getBoundingClientRect().width ?? 0,
+          moved: false,
+          collapsed: false,
+        }
         event.currentTarget.setPointerCapture(event.pointerId)
       }}
       onPointerMove={(event) => {
         const start = drag.current
-        if (!start) return
+        if (!start || start.collapsed) return
         const delta = event.clientX - start.x
         if (!start.moved && Math.abs(delta) < SIDEBAR_DRAG_THRESHOLD) return
         if (!start.moved) setResizing(true)
         start.moved = true
         const side = event.currentTarget.closest("[data-side]")?.getAttribute("data-side")
-        setWidth(start.width + (side === "right" ? -delta : delta))
+        const next = start.width + (side === "right" ? -delta : delta)
+        if (next >= SIDEBAR_COLLAPSE_AT) return setWidth(next)
+        start.collapsed = true
+        setWidth(start.width)
+        setResizing(false)
+        setOpen(false)
       }}
       onPointerUp={(event) => {
         const start = drag.current
