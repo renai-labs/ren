@@ -151,7 +151,7 @@ test("a member copies a reply's list and bold text and gets Markdown with clean 
   await page.evaluate(
     'document.addEventListener("copy", (event) => { window.copied = { text: event.clipboardData.getData("text/plain"), html: event.clipboardData.getData("text/html") } })',
   )
-  await list.evaluate('(element) => getSelection().selectAllChildren(element)')
+  await list.evaluate("(element) => getSelection().selectAllChildren(element)")
   await page.keyboard.press("ControlOrMeta+c")
 
   const copied = await page.evaluate<{ text: string; html: string }>("window.copied")

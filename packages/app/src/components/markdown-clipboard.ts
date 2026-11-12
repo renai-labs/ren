@@ -3,9 +3,6 @@ import { toMdast } from "hast-util-to-mdast"
 import { gfmToMarkdown } from "mdast-util-gfm"
 import { toMarkdown } from "mdast-util-to-markdown"
 
-// Chromium's default copy inlines computed styles, so text copied from a dark theme pastes as light text on the
-// destination's white page. Copied HTML keeps only semantic markup, and copied text is the Markdown of that HTML.
-
 const removedSelectors = [
   "button",
   "textarea",
@@ -23,7 +20,6 @@ const removedSelectors = [
 const htmlRemovedSelector = ["input", ...removedSelectors].join(", ")
 const markdownRemovedSelector = ['input:not([type="checkbox"])', ...removedSelectors].join(", ")
 
-// Ancestors that give a partial selection its meaning, such as a phrase inside bold text or an item inside a list.
 const semanticTags = new Set([
   "A",
   "B",
@@ -38,9 +34,7 @@ const semanticTags = new Set([
   "H6",
   "I",
   "KBD",
-  "LI",
   "OL",
-  "P",
   "S",
   "STRONG",
   "TABLE",
@@ -62,21 +56,21 @@ const hasProtocol = (value: string, protocols: Set<string>) =>
   URL.canParse(value) && protocols.has(new URL(value).protocol)
 
 const sanitizeAttributes = (element: Element) => {
-  for (const attribute of Array.from(element.attributes)) {
-    if (keptAttributes.has(attribute.name)) continue
-    if (attribute.name === "href" && element.tagName === "A" && hasProtocol(attribute.value, linkProtocols)) continue
-    if (attribute.name === "src" && element.tagName === "IMG" && hasProtocol(attribute.value, webProtocols)) continue
-    element.removeAttribute(attribute.name)
+  for (const name of element.getAttributeNames()) {
+    const value = element.getAttribute(name) ?? ""
+    if (keptAttributes.has(name)) continue
+    if (name === "href" && element.tagName === "A" && hasProtocol(value, linkProtocols)) continue
+    if (name === "src" && element.tagName === "IMG" && hasProtocol(value, webProtocols)) continue
+    element.removeAttribute(name)
   }
 }
 
-// Highlighted lines are block spans with no newline between them, so a block's text is its lines joined.
 const codeText = (scope: ParentNode) => {
   const lines = scope.querySelectorAll('[data-slot="code-block-line"]')
   const text =
     lines.length === 0
       ? (scope.textContent ?? "")
-      : Array.from(lines, (line) => (line.textContent ?? "").replace(/\n$/u, "")).join("\n")
+      : [...lines].map((line) => line.textContent.replace(/\n$/u, "")).join("\n")
   return text.replace(/\n$/u, "")
 }
 
@@ -85,30 +79,40 @@ export interface MarkdownClipboard {
   readonly html: string
 }
 
-// Returns undefined when the browser's own copy should run: a collapsed selection, or one that leaves `root`.
-export function markdownClipboard(root: Element, range: Range): MarkdownClipboard | undefined {
-  const ancestor = range.commonAncestorContainer
-  if (range.collapsed || !root.contains(ancestor)) return undefined
-  const start = ancestor instanceof Element ? ancestor : ancestor.parentElement
+const codeOnlyClipboard = (code: Element, range: Range) => {
+  const isBlock = code.tagName === "PRE"
+  const text = isBlock ? codeText(range.cloneContents()) : range.toString()
+  if (text === "") return null
+  const element = document.createElement("code")
+  element.textContent = text
+  const container = document.createElement("div")
+  if (isBlock) {
+    const pre = document.createElement("pre")
+    pre.appendChild(element)
+    container.appendChild(pre)
+  } else container.appendChild(element)
+  return { text, html: container.innerHTML }
+}
 
-  const code = start?.closest("pre, code")
-  if (code && root.contains(code)) {
-    const text = code.tagName === "PRE" ? codeText(range.cloneContents()) : range.toString()
-    if (text === "") return undefined
-    const element = document.createElement("code")
-    element.textContent = text
-    const container = document.createElement("div")
-    if (code.tagName === "PRE") {
-      const pre = document.createElement("pre")
-      pre.appendChild(element)
-      container.appendChild(pre)
-    } else container.appendChild(element)
-    return { text, html: container.innerHTML }
+const normalize = (container: Element) => {
+  for (const mention of container.querySelectorAll<HTMLElement>("[data-app-mention]")) {
+    mention.replaceWith(`@${mention.dataset.appMention ?? ""}`)
   }
+  for (const block of container.querySelectorAll<HTMLElement>('[data-slot="code-block"]')) {
+    const pre = document.createElement("pre")
+    const element = document.createElement("code")
+    if (block.dataset.language) element.className = `language-${block.dataset.language}`
+    element.textContent = codeText(block)
+    pre.appendChild(element)
+    block.replaceWith(pre)
+  }
+}
 
+const rewrap = (range: Range, root: Element) => {
+  const ancestor = range.commonAncestorContainer
   let content: Node = range.cloneContents()
   for (
-    let element = start;
+    let element = ancestor instanceof Element ? ancestor : ancestor.parentElement;
     element && element !== root && root.contains(element);
     element = element.parentElement
   ) {
@@ -117,33 +121,33 @@ export function markdownClipboard(root: Element, range: Range): MarkdownClipboar
     wrapper.appendChild(content)
     content = wrapper
   }
+  return content
+}
+
+const markdownOf = (container: Element) => {
+  const copy = document.createElement("div")
+  copy.append(...[...container.childNodes].map((node) => node.cloneNode(true)))
+  for (const element of copy.querySelectorAll(markdownRemovedSelector)) element.remove()
+  for (const box of copy.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) {
+    box.toggleAttribute("checked", box.checked)
+  }
+  return toMarkdown(toMdast(fromDom(copy)), { bullet: "-", extensions: [gfmToMarkdown()] }).trim()
+}
+
+export function markdownClipboard(root: Element, range: Range): MarkdownClipboard | null {
+  const ancestor = range.commonAncestorContainer
+  if (range.collapsed || !root.contains(ancestor)) return null
+  const start = ancestor instanceof Element ? ancestor : ancestor.parentElement
+
+  const code = start?.closest("pre") ?? start?.closest("code")
+  if (code && root.contains(code)) return codeOnlyClipboard(code, range)
 
   const container = document.createElement("div")
-  container.appendChild(content)
-  container.querySelectorAll<HTMLElement>("[data-app-mention]").forEach((mention) => {
-    mention.replaceWith(`@${mention.dataset.appMention ?? ""}`)
-  })
-  container.querySelectorAll<HTMLElement>('[data-slot="code-block"]').forEach((block) => {
-    const pre = document.createElement("pre")
-    const element = document.createElement("code")
-    if (block.dataset.language) element.className = `language-${block.dataset.language}`
-    element.textContent = codeText(block)
-    pre.appendChild(element)
-    block.replaceWith(pre)
-  })
+  container.appendChild(rewrap(range, root))
+  normalize(container)
+  const text = markdownOf(container)
 
-  const markdown = container.cloneNode(true)
-  if (!(markdown instanceof HTMLElement)) return undefined
-  markdown.querySelectorAll(markdownRemovedSelector).forEach((element) => element.remove())
-  markdown.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((box) => {
-    box.toggleAttribute("checked", box.checked)
-  })
-
-  container.querySelectorAll(htmlRemovedSelector).forEach((element) => element.remove())
-  container.querySelectorAll("*").forEach(sanitizeAttributes)
-
-  return {
-    text: toMarkdown(toMdast(fromDom(markdown)), { extensions: [gfmToMarkdown()] }).trim(),
-    html: container.innerHTML,
-  }
+  for (const element of container.querySelectorAll(htmlRemovedSelector)) element.remove()
+  for (const element of container.querySelectorAll("*")) sanitizeAttributes(element)
+  return { text, html: container.innerHTML }
 }

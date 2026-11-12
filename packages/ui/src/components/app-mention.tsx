@@ -33,7 +33,11 @@ export function MentionLogo(props: { name: string; icon: string | null; classNam
 
 export function AppMention(props: { app: MentionApp }) {
   return (
-    <span data-app-mention={props.app.slug} className="whitespace-nowrap" style={{ color: props.app.brandColor ?? "var(--ring)" }}>
+    <span
+      data-app-mention={props.app.slug}
+      className="whitespace-nowrap"
+      style={{ color: props.app.brandColor ?? "var(--ring)" }}
+    >
       <MentionLogo name={props.app.name} icon={props.app.icon} className="mr-[0.3em] align-[-0.28em]" />
       {props.app.name}
     </span>
