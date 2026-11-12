@@ -43,16 +43,6 @@ const countGaps = (profiles: ReadonlyArray<AppProfile>) =>
 
 export const needsAttention = (profiles: ReadonlyArray<AppProfile>) => countGaps(profiles) > 0
 
-export const reach = (profile: AppProfile) => {
-  if (profile.kind === "private") return "Personal"
-  if (profile.allSpaces) return "Every space"
-  const listed = [
-    ...profile.spaces.map((space) => space.name),
-    ...(profile.hiddenSpaces ? [`${profile.hiddenSpaces} more`] : []),
-  ]
-  return listed.length ? `In ${listed.join(", ")}` : "Not in any space"
-}
-
 export const reachedSpaces = (profile: AppProfile) => {
   if (profile.kind === "private") return ["Personal"]
   if (profile.allSpaces) return ["Every space"]

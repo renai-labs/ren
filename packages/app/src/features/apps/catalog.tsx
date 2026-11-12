@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router"
-import { AddToSpace, type Added } from "../../components/add-to-space.js"
+import { IconPlus } from "@tabler/icons-react"
+import { Button } from "@ren/ui/button"
 import { AppGrid, AppRow, AppRowSample, AppSection } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
@@ -7,7 +8,7 @@ import { needsAttention, type CatalogApp } from "../../lib/apps.js"
 import { Search } from "../../lib/search.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 
-export function CatalogAppRow(props: { app: CatalogApp; onAdded: Added }) {
+export function CatalogAppRow(props: { app: CatalogApp; onAdd: (app: CatalogApp) => void }) {
   const navigate = useNavigate()
   const profiles = useAppProfiles([props.app.id]).of(props.app.id)
   return (
@@ -17,7 +18,17 @@ export function CatalogAppRow(props: { app: CatalogApp; onAdded: Added }) {
       caption={props.app.description}
       attention={needsAttention(profiles)}
       onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: props.app.id } })}
-      action={<AddToSpace app={props.app} onAdded={props.onAdded} />}
+      action={
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-10 text-muted-foreground [&_svg:not([class*='size-'])]:size-6"
+          aria-label={`Add ${props.app.name} to a space`}
+          onClick={() => props.onAdd(props.app)}
+        >
+          <IconPlus />
+        </Button>
+      }
     />
   )
 }
@@ -42,10 +53,10 @@ export function CatalogList(props: {
   more: boolean
   onMore: () => void
   fetching: boolean
-  onAdded: Added
+  onAdd: (app: CatalogApp) => void
 }) {
   if (props.apps.length === 0 && !props.more) return <EmptyState>{Search.empty(props.query, props.empty)}</EmptyState>
-  const rows = props.apps.map((app) => <CatalogAppRow key={app.id} app={app} onAdded={props.onAdded} />)
+  const rows = props.apps.map((app) => <CatalogAppRow key={app.id} app={app} onAdd={props.onAdd} />)
   return (
     <div className="flex flex-col gap-0.5">
       {props.heading ? (

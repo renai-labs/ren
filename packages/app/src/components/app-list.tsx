@@ -18,7 +18,7 @@ import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo } from "@ren/client"
 import { RouterContext } from "../lib/router-context.js"
 import { useSpaces } from "../lib/use-spaces.js"
-import type { CatalogApp } from "../lib/apps.js"
+import type { CatalogApp, Status } from "../lib/apps.js"
 
 type App = CatalogApp
 type AppProfile = AppProfileInfo
@@ -452,6 +452,20 @@ export function SpacePills(props: { profile: AppProfile }) {
   ))
 }
 
+export function StatusDot(props: { status: Status }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        props.status === "connected" && "bg-chart-2",
+        props.status === "credits" && "bg-muted-foreground",
+        (props.status === "expired" || props.status === "missing") && "bg-chart-3",
+      )}
+    />
+  )
+}
+
 export function AccountList(props: {
   title: string
   app: Pick<CatalogApp, "mcps">
@@ -482,15 +496,7 @@ export function AccountList(props: {
                 key={profile.id}
                 className="group/row relative flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ease-out has-[[data-slot=account-open]:hover]:bg-muted"
               >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "size-2 shrink-0 rounded-full",
-                    status === "connected" && "bg-chart-2",
-                    status === "credits" && "bg-muted-foreground",
-                    (status === "expired" || status === "missing") && "bg-chart-3",
-                  )}
-                />
+                <StatusDot status={status} />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <Button
                     variant="ghost"

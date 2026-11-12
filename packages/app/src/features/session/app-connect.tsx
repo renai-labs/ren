@@ -233,7 +233,7 @@ function ConnectList(props: {
           connected={ready(app.id).length}
           elsewhere={elsewhere(app.id)}
           onConnect={() => setTarget({ appId: app.id, profileId: missingOf(app.id), from })}
-          onAdd={() => setTarget({ appId: app.id, from })}
+          onAdd={() => setTarget({ appId: app.id, from, newAccount: true })}
           onManage={() => setTarget({ appId: app.id, profileId: ready(app.id).at(0)?.id, from, edit: true })}
           onUse={reuse.onUse}
         />

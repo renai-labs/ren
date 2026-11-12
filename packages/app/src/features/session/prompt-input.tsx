@@ -144,7 +144,7 @@ function AppsStrip(props: { spaceId: string }) {
       <AddAppDialog
         space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
         added={new Set(profiles.map((profile) => profile.appId))}
-        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId, from, fromAdding: true })}
+        onPick={(app) => setConnecting({ appId: app.id, from, fromAdding: true })}
         open={adding}
         onOpenChange={setAdding}
       />

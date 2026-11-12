@@ -1,11 +1,9 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
-import type { Added } from "../../components/add-to-space.js"
+import { ProfileDialog } from "../../components/profile-dialog.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
-import { fromRegistry } from "../../lib/apps.js"
+import { fromRegistry, type CatalogApp } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { useSpaces } from "../../lib/use-spaces.js"
 
 export function useRegistryApps(slugs: ReadonlyArray<string>) {
   const { api } = RouterContext.useRouterContext()
@@ -17,21 +15,10 @@ export function useRegistryApps(slugs: ReadonlyArray<string>) {
   }
 }
 
-export function useAddedProfile() {
-  const spaces = useSpaces()
-  const [profile, setProfile] = useState<ProfileTarget>()
-  const added: Added = (added) =>
-    setProfile({
-      appId: added.app.id,
-      profileId: added.profileId,
-      from: {
-        spaceId: added.space.id,
-        name: added.space.name,
-        members: spaces.space(added.space.id)?.memberCount ?? 1,
-      },
-    })
+export function useAddSheet() {
+  const [appId, setAppId] = useState<string>()
   return {
-    added,
-    dialog: profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null,
+    add: (app: CatalogApp) => setAppId(app.id),
+    dialog: appId ? <ProfileDialog appId={appId} chooseSpace onClose={() => setAppId(undefined)} /> : null,
   }
 }

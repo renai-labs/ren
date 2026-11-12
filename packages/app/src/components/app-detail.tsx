@@ -46,13 +46,7 @@ export function AppDetailFrame(props: { name: string; children: ReactNode }) {
   )
 }
 
-export function AppHeader(props: {
-  name: string
-  description: string
-  icon: string | null
-  meta?: ReactNode
-  actions: ReactNode
-}) {
+export function AppHeader(props: { name: string; description: string; icon: string | null; actions: ReactNode }) {
   return (
     <header className="flex items-center justify-between gap-6 max-sm:flex-col max-sm:items-start">
       <div className="flex min-w-0 items-center gap-4">
@@ -65,7 +59,6 @@ export function AppHeader(props: {
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-2xl font-medium tracking-tight">{props.name}</h1>
           <p className="text-sm/6 text-muted-foreground">{props.description}</p>
-          {props.meta}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">{props.actions}</div>

@@ -4,7 +4,6 @@ import { IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
-import { useAddition, type Added } from "./add-to-space.js"
 import { AppRow } from "./app-list.js"
 import { LoadMore } from "./load-more.js"
 import { Loading } from "@ren/ui/loading"
@@ -17,30 +16,26 @@ import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { RouterContext } from "../lib/router-context.js"
 import { cn } from "cn"
 
-function AddAppRow(props: { app: CatalogApp; space: { id: string; name: string }; onAdded: Added }) {
-  const addition = useAddition(props.app, props.onAdded)
+function AddAppRow(props: { app: CatalogApp; onPick: (app: CatalogApp) => void }) {
   return (
-    <>
-      <AppRow
-        compact
-        name={props.app.name}
-        icon={props.app.icon}
-        caption={props.app.description}
-        onOpen={() => addition.add(props.space)}
-        action={
-          <span
-            aria-hidden
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "icon" }),
-              "pointer-events-none text-muted-foreground",
-            )}
-          >
-            <IconPlus />
-          </span>
-        }
-      />
-      {addition.dialog}
-    </>
+    <AppRow
+      compact
+      name={props.app.name}
+      icon={props.app.icon}
+      caption={props.app.description}
+      onOpen={() => props.onPick(props.app)}
+      action={
+        <span
+          aria-hidden
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon" }),
+            "pointer-events-none text-muted-foreground",
+          )}
+        >
+          <IconPlus />
+        </span>
+      }
+    />
   )
 }
 
@@ -58,7 +53,7 @@ function AppResults(props: {
   query: string
   space: { id: string; name: string }
   added: ReadonlySet<string>
-  onAdded: Added
+  onPick: (app: CatalogApp) => void
 }) {
   const { api, client } = RouterContext.useRouterContext()
   const needle = useDebouncedValue(props.query.trim(), 200)
@@ -85,7 +80,7 @@ function AppResults(props: {
         </p>
       ) : null}
       {found.map((app) => (
-        <AddAppRow key={app.id} app={app} space={props.space} onAdded={props.onAdded} />
+        <AddAppRow key={app.id} app={app} onPick={props.onPick} />
       ))}
       <LoadMore
         more={pages.hasNextPage}
@@ -101,7 +96,7 @@ function AppResults(props: {
 export function AddAppDialog(props: {
   space: { id: string; name: string }
   added: ReadonlySet<string>
-  onAdded: Added
+  onPick: (app: CatalogApp) => void
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
 }) {
@@ -139,9 +134,9 @@ export function AddAppDialog(props: {
           query={query}
           space={props.space}
           added={props.added}
-          onAdded={(added) => {
+          onPick={(app) => {
             setOpen(false)
-            props.onAdded(added)
+            props.onPick(app)
           }}
         />
       </DialogContent>

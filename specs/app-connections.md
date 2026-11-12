@@ -17,7 +17,7 @@ Words:
 4. A connected official MCP replaces the managed version in that space. "Use Ren credits instead" removes the account's sign-ins and keys (`credential.remove`), and the managed version comes back.
 5. The managed version is always on when no account has the official sign-in. It is not a setting.
 6. A shared account that leaves its last space is deleted when it has no credentials, and kept when it has a sign-in or key. A kept account shows in Settings → Credentials. This is built (`AppProfiles.access`); infra's `unlist` still refuses the last space.
-7. Every account list is the same component (`AccountList`): a status dot, the name, a status line only when the account does not work, space pills and a chevron. Lists have no buttons or menus on rows; a row opens the account dialog, the same one everywhere. Delete is in that dialog. This is built.
+7. Every account list is the same component (`AccountList`): a status dot, the name, a status line only when the account does not work, space pills and a chevron. Lists have no buttons or menus on rows; a row opens the account dialog, the same one everywhere. The dialog has no close button; Delete is in its ⋯ menu at the top right. This is built.
 8. Removing an app from a space removes each of its shared accounts from that space. An account set to every space stays, and the page says so. A remove never deletes a private account: it stays in its owner's private space, and the page offers no Remove for it. Only Delete in Settings removes it.
 9. Two accounts that reach the same space cannot have the same name. Names compare trimmed and without case. This is built: create, rename, adding a space and promote fail with "An account named “{name}” is already in {space}."
 10. "Use here" on a private account makes it shared in the target space only. This is built: `promote` takes a `spaceId`.
@@ -165,6 +165,15 @@ S2.10 Managed version:
 
 "Connect my own" configures the empty account in the space. It does not create a second account.
 
+This is built in the account dialog (`components/profile-dialog.tsx`): `ProfileDialog` with `from` and no `profileId` opens the sheet, `newAccount` starts at S2.1 with a new account, and `chooseSpace` starts at the space list. The space Apps tab, the composer's Add apps, the chat card, the app page and the Apps grid's [+] open it; `ChooseProfile`, `useAddition` and `AddToSpace` are gone. Connecting an account here ends at S2.7. Differences and gaps:
+
+- The app list stays the Add apps dialog (S1); the sheet always gets an app.
+- With no account in the space, an app with a managed version offers [Add to {space}] in S2.1, which creates the empty account and shows S2.10.
+- The S2.8 confirmation is a step in the same sheet. It shows when the space is shared and has more than one member.
+- S2.8 comes before S2.10, so with the seed "Acme · Kernel" shows S2.8 ("Ops · Kernel" can be used in Acme).
+- Not built: S2.5 (Ren cannot tell when the sign-in window closed), the key hint in S2.3, [Cancel] in S2.2 (Back returns to the sheet), and the admin's [Set up sign-in] and [Paste a key] in S2.6. Everyone sees "Ask an admin to set it up." with [Copy message].
+- The share link in S2.9 is copied, but the app page does not read `account` and `space` yet (S8).
+
 ### S3. Composer
 
 Today: `features/session/prompt-input.tsx` (`AppsStrip`) and `features/session/use-composer-suggestions.ts`. A mention is plain text, and nothing opens until the agent calls `app_request_connect`.
@@ -257,7 +266,7 @@ Today: `features/spaces/space-apps.tsx`.
 │                                                │
 │ [Remove Linear from Acme]                      │
 └────────────────────────────────────────────────┘
- Row ──► account dialog: Connection, Name, Spaces (searchable), Dependencies, Save, Delete account
+ Row ──► account dialog: Connection, Name, Spaces (searchable), Dependencies, Save; ⋯ menu: Delete account
  Use existing account ──► the dialog lists this app's other accounts, each with [Add], then [Done]
 ```
 

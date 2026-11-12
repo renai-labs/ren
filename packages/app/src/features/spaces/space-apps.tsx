@@ -93,7 +93,7 @@ export function SpaceAppsTab() {
         <AddAppDialog
           space={space}
           added={new Set(byApp.keys())}
-          onAdded={(added) => setProfile({ appId: added.app.id, profileId: added.profileId, from })}
+          onPick={(picked) => setProfile({ appId: picked.id, from })}
         />
       </PageActions>
       <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
@@ -104,7 +104,7 @@ export function SpaceAppsTab() {
             rows={shown.items}
             empty={Search.empty(query, "No apps")}
             onOpen={setOpened}
-            onNew={(appId) => setProfile({ appId, from })}
+            onNew={(appId) => setProfile({ appId, from, newAccount: true })}
           />
         )}
       </Loading>
@@ -116,7 +116,7 @@ export function SpaceAppsTab() {
             app={app}
             actions={
               <AddAccount
-                onNew={() => setProfile({ appId: app.id, from })}
+                onNew={() => setProfile({ appId: app.id, from, newAccount: true })}
                 onExisting={() => setProfile({ appId: app.id, from, existing: true })}
               />
             }
