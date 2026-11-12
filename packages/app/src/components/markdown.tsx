@@ -17,11 +17,11 @@ import {
   CodeBlockTitle,
   useHighlightedCode,
 } from "@ren/ui/code-block"
-import { AppMention, mentionLinks } from "@ren/ui/app-mention"
+import { mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
-import { Link } from "@ren/ui/link"
+import { MarkdownLink, MarkdownLinks } from "./markdown-link.js"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -78,7 +78,7 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+const components = { a: MarkdownLink, code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
@@ -104,8 +104,6 @@ const workspaceImages = () => (tree: MarkdownNode) => {
   visit(tree)
 }
 
-const appLink = "#ren-app:"
-
 const withDataImages = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
   const protocols = schema.protocols
@@ -125,6 +123,8 @@ const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([na
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
 
+const noApps: ReadonlyArray<CatalogApp> = []
+
 const streamAnimation = { animation: "fadeIn", duration: 180, easing: "ease-out", sep: "word" } as const
 
 export function Markdown(props: {
@@ -134,38 +134,24 @@ export function Markdown(props: {
   apps?: ReadonlyArray<CatalogApp> | undefined
   workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
-  const apps = props.apps ?? []
-  const withApps =
-    apps.length === 0
-      ? components
-      : {
-          ...components,
-          a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
-            const app = href?.startsWith(appLink)
-              ? apps.find((each) => each.slug === href.slice(appLink.length))
-              : undefined
-            if (app) return <AppMention app={app} />
-            return (
-              <Link href={href} external className="font-medium underline" {...rest}>
-                {children}
-              </Link>
-            )
-          },
-        }
+  const apps = props.apps ?? noApps
+  const streaming = props.streaming === true
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
-      >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
+      <MarkdownLinks value={{ apps, streaming }}>
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={components}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </MarkdownLinks>
     </WorkspaceImages>
   )
 }

@@ -21,6 +21,7 @@ import { IntakeThreads } from "@ren/core/intake-threads"
 import { MachineTemplates } from "@ren/core/machine-templates"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
+import { Favicon } from "@ren/core/favicon"
 import { Insights } from "@ren/core/insights"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
@@ -61,6 +62,7 @@ import { ChannelConnectHandler, ChannelInstallHandler, ChannelMappingHandler } f
 import { RepositoryHandler } from "./handlers/api/repository.js"
 import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
+import { FaviconRoutes } from "./favicon-routes.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
 import { WebhookRoutes } from "./webhook-routes.js"
@@ -256,6 +258,7 @@ export const layer = Layer.mergeAll(
     RenMcp.layer,
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
+    FaviconRoutes.layer.pipe(Layer.provide(Favicon.layer)),
     ChannelRoutes.layer.pipe(
       Layer.provide(intake),
       Layer.provide(SlackTaskActions.layer),
