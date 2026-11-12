@@ -46,6 +46,8 @@ const semanticTags = new Set([
   "UL",
 ])
 
+const boldSelector = '[data-streamdown="strong"]'
+
 const keptAttributes = new Set(["alt", "colspan", "rowspan", "start"])
 
 const linkProtocols = new Set(["http:", "https:", "mailto:"])
@@ -95,6 +97,11 @@ const codeOnlyClipboard = (code: Element, range: Range) => {
 }
 
 const normalize = (container: Element) => {
+  for (const bold of container.querySelectorAll(boldSelector)) {
+    const strong = document.createElement("strong")
+    strong.append(...bold.childNodes)
+    bold.replaceWith(strong)
+  }
   for (const mention of container.querySelectorAll<HTMLElement>("[data-app-mention]")) {
     mention.replaceWith(`@${mention.dataset.appMention ?? ""}`)
   }
@@ -116,8 +123,9 @@ const rewrap = (range: Range, root: Element) => {
     element && element !== root && root.contains(element);
     element = element.parentElement
   ) {
-    if (!semanticTags.has(element.tagName)) continue
-    const wrapper = element.cloneNode(false)
+    const bold = element.matches(boldSelector)
+    if (!bold && !semanticTags.has(element.tagName)) continue
+    const wrapper = bold ? document.createElement("strong") : element.cloneNode(false)
     wrapper.appendChild(content)
     content = wrapper
   }

@@ -142,9 +142,8 @@ test("a member copies a reply's list and bold text and gets Markdown with clean 
   await createOrganization(page.request, { name: "Dorothy Vaughan" })
   const marker = await scriptedReply(page.request, "Results:\n\n- **one** item\n- two items")
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill(`Summarise ${marker}`)
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill(`Summarise ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
   const list = page.getByRole("list").filter({ hasText: "two items" })
   await expect(list).toBeVisible({ timeout: brainStart })
 
