@@ -191,23 +191,41 @@ function ConnectList(props: {
   always?: boolean | undefined
 }) {
   const { api } = RouterContext.useRouterContext()
+  const reach = useQuery({
+    ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId ?? "" }),
+    enabled: props.spaceId !== undefined && props.apps.length > 0,
+    retry: false,
+  })
+  if (!reach.isSuccess && !reach.isError) return null
+  return (
+    <ConnectShown
+      apps={props.apps}
+      spaceId={props.spaceId}
+      always={props.always}
+      profiles={reach.data?.profiles ?? []}
+    />
+  )
+}
+
+function ConnectShown(props: {
+  apps: ReadonlyArray<CatalogApp>
+  spaceId: string | undefined
+  always?: boolean | undefined
+  profiles: ReadonlyArray<AppProfile>
+}) {
   const apps = props.apps
+  const profiles = props.profiles
   const others = useAppProfiles(apps.map((app) => app.id))
   const spaces = useSpaces().spaces
   const space = spaces.find((each) => each.id === props.spaceId)
-  const reach = useQuery({
-    ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId ?? "" }),
-    enabled: props.spaceId !== undefined && apps.length > 0,
-    retry: false,
-  })
   const reuse = useUseHere(space)
-  const [watched, setWatched] = useState<ReadonlySet<string>>()
-  const [target, setTarget] = useState<ProfileTarget>()
-  const profiles = reach.data?.profiles ?? []
   const ready = (appId: string) => profiles.filter((profile) => profile.appId === appId && gaps(profile).length === 0)
-  if (reach.isSuccess && watched === undefined)
-    setWatched(new Set(apps.filter((app) => props.always || ready(app.id).length === 0).map((app) => app.id)))
-  const shown = apps.filter((app) => watched?.has(app.id))
+  // oxlint-disable-next-line react/hook-use-state -- the apps shown are fixed at mount, so a card stays after its app connects
+  const [watched] = useState(
+    () => new Set(apps.filter((app) => props.always || ready(app.id).length === 0).map((app) => app.id)),
+  )
+  const [target, setTarget] = useState<ProfileTarget>()
+  const shown = apps.filter((app) => watched.has(app.id))
   if (!space || shown.length === 0) return null
   const from = {
     spaceId: space.id,
