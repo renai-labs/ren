@@ -26,7 +26,7 @@ export const codeSizes = [
   { size: 1.25, label: "125%" },
 ] as const
 
-export const font = (name: string) => {
+const font = (name: string) => {
   const family = name.replaceAll(/["\\]/g, "").trim()
   return family === "" ? undefined : `"${family}",`
 }
