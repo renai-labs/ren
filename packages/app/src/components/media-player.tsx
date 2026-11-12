@@ -73,7 +73,7 @@ export function MediaPlayer(props: {
     }
     setRefreshed(true)
     setResume({ time: media.currentTime, playing: !media.paused })
-    void props.refresh().then((next) => (next ? setSrc(next) : setFailed(true)))
+    void props.refresh().then((next) => (next && next !== url ? setSrc(next) : setFailed(true)))
   }
   const restore = (event: SyntheticEvent<HTMLMediaElement>) => {
     const media = event.currentTarget
