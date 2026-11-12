@@ -125,7 +125,7 @@ export const layer = Layer.effect(
       if (match.candidate.status === "reconnect") return Result.fail(deny("credential_reconnect", label))
       const value = yield* sources.value(match.candidate, scope).pipe(Effect.option, Effect.map(Option.flatten))
       if (Option.isNone(value)) return Result.fail(deny("credential_missing", label))
-      const named = Option.flatMap(match.placeholder, (found) => found.field)
+      const named = match.placeholder.field
       if (isOutsider(label, value.value.value, named)) {
         yield* Effect.logWarning("Egress refused a model request for a person outside the brain's space").pipe(
           Effect.annotateLogs({ workload, label, member: Option.getOrElse(named, () => ""), host: request.host }),
