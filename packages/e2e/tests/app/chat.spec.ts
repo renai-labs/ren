@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, scriptedReply, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -172,4 +172,27 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("double-clicking inline code selects the whole span and a code block keeps word selection", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const marker = await scriptedReply(page.request, "See `a.b-c` and [`d.e-f`](https://example.com).\n\n```\ng.h-i\n```")
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill(`Show code ${marker}`)
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page.locator("p code", { hasText: "a.b-c" })).toBeVisible({ timeout: brainStart })
+  const selection = () => page.evaluate<string>('getSelection()?.toString() ?? ""')
+
+  await page.locator("p code", { hasText: "a.b-c" }).dblclick({ position: { x: 20, y: 5 } })
+  expect(await selection()).toBe("a.b-c")
+
+  await page.locator("p a code", { hasText: "d.e-f" }).dblclick({ position: { x: 20, y: 5 } })
+  expect(await selection()).toBe("d.e-f")
+
+  await page
+    .locator("pre")
+    .getByText("g.h-i")
+    .dblclick({ position: { x: 5, y: 5 } })
+  expect(await selection()).not.toBe("g.h-i")
 })

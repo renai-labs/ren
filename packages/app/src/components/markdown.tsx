@@ -47,7 +47,12 @@ function MarkdownCodeBlock(props: { code: string; language: string }) {
 function MarkdownCode({ node: _node, className, children, ...props }: ComponentProps<"code"> & ExtraProps) {
   if (!("data-block" in props))
     return (
-      <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]" {...props}>
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- selecting text is not an action
+      <code
+        className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]"
+        onDoubleClick={(event) => window.getSelection()?.selectAllChildren(event.currentTarget)}
+        {...props}
+      >
         {children}
       </code>
     )

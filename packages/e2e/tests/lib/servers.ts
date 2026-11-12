@@ -24,6 +24,12 @@ export async function lastEmail(request: APIRequestContext, to: string, includes
   return text
 }
 
+export async function scriptedReply(request: APIRequestContext, reply: string) {
+  const response = await request.post(`${mailboxURL}/script`, { data: { reply } })
+  expect(response.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+}
+
 export async function emailedCode(request: APIRequestContext, to: string) {
   const code = /\b(\d{6}) is your Ren/.exec(await lastEmail(request, to, "is your Ren"))?.[1]
   if (code === undefined) throw new Error(`No code emailed to ${to}`)
