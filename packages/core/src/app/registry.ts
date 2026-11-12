@@ -33,6 +33,7 @@ const listingInfo = (row: typeof Database.Schema.app_listing.$inferSelect): AppL
   body: row.body,
   categories: row.categories,
   examplePrompts: row.example_prompts,
+  tools: row.tools,
   createdAt: DateTime.fromDateUnsafe(row.created_at),
   updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
@@ -301,6 +302,7 @@ export const layer = Layer.effect(
             body: publication.listing.body,
             categories: publication.listing.categories,
             example_prompts: [...publication.listing.examplePrompts],
+            tools: publication.listing.tools,
           }
           const isListingChanged =
             Boolean(listing) &&
@@ -310,6 +312,7 @@ export const layer = Layer.effect(
                   body: previous.body,
                   categories: previous.categories,
                   example_prompts: previous.example_prompts,
+                  tools: previous.tools,
                 }))
           if (listing && isListingChanged)
             yield* previous

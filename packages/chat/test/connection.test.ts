@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { type Cause, Deferred, Effect, Queue, type Scope, Stream } from "effect"
+import { type Cause, Deferred, Effect, Queue, type Scope, Stream, SubscriptionRef } from "effect"
 import { TestClock } from "effect/testing"
 import { Connection } from "../src/connection.js"
 
@@ -24,11 +24,10 @@ effect("a terminal startup failure parks without reconnecting until explicitly w
       onFrames: () => Effect.void,
       onStatus: (state) => Queue.offer(statuses, state).pipe(Effect.asVoid),
     })
-    expect((yield* Queue.take(statuses)).status).toBe("connecting")
     expect((yield* Queue.take(statuses)).status).toBe("parked")
     yield* TestClock.adjust("1 minute")
     expect(attempts.count).toBe(1)
-    expect((yield* connection.status).status).toBe("parked")
+    expect((yield* SubscriptionRef.get(connection.status)).status).toBe("parked")
     yield* connection.wake
     expect((yield* Queue.take(statuses)).status).toBe("connecting")
     expect((yield* Queue.take(statuses)).status).toBe("parked")
@@ -83,7 +82,7 @@ effect("a stream that goes silent past the idle timeout is replaced", () =>
     yield* Queue.offer(second.queue, { ...connected, id: "evt_connected_2" })
     yield* fake.until("connected")
     expect(yield* Queue.take(fake.frames)).toEqual({ ...connected, id: "evt_connected_2" })
-    expect((yield* fake.connection.status).status).toBe("connected")
+    expect((yield* SubscriptionRef.get(fake.connection.status)).status).toBe("connected")
   }),
 )
 
@@ -102,7 +101,7 @@ effect("keepalive comments hold a quiet stream open", () =>
 
     expect(yield* Queue.size(fake.subscriptions)).toBe(0)
     expect(yield* Deferred.isDone(first.closed)).toBe(false)
-    expect((yield* fake.connection.status).status).toBe("connected")
+    expect((yield* SubscriptionRef.get(fake.connection.status)).status).toBe("connected")
     expect((yield* Queue.takeAll(fake.frames)).filter((frame) => frame.type !== "server.heartbeat")).toEqual([
       connected,
     ])
@@ -175,8 +174,7 @@ effect(
       yield* fake.until("connected")
 
       yield* Queue.end(first.queue)
-      const waiting = yield* Queue.take(fake.statuses)
-      expect(waiting).toEqual({ status: "waiting", retryAt: 1_000 })
+      expect(yield* Queue.take(fake.statuses)).toEqual({ status: "waiting", retryAt: 1_000 })
       yield* TestClock.adjust("1 second")
       expect((yield* Queue.take(fake.statuses)).status).toBe("reconnecting")
       const second = yield* Queue.take(fake.subscriptions)
@@ -198,7 +196,6 @@ effect("a stream that does not start with server.connected is replaced", () =>
     yield* TestClock.adjust("1 second")
     const second = yield* Queue.take(fake.subscriptions)
     yield* TestClock.adjust("2 seconds")
-    yield* fake.until("waiting")
     yield* Deferred.await(second.closed)
     expect(yield* Queue.size(fake.frames)).toBe(0)
   }),
@@ -305,5 +302,25 @@ effect("two connect timeouts in a row report the brain unreachable once, so Ren 
     yield* Queue.take(subscriptions)
     yield* TestClock.adjust("2 seconds")
     expect(yield* Queue.size(unreachable)).toBe(1)
+  }),
+)
+
+effect("a repeated status is not published again (#196)", () =>
+  Effect.gen(function* () {
+    const statuses = yield* Queue.unbounded<Connection.State>()
+    const attempts = { count: 0 }
+    yield* Connection.make({
+      subscribe: Effect.suspend(() => {
+        attempts.count += 1
+        return Effect.fail(new Error("The brain is unreachable"))
+      }),
+      onFrames: () => Effect.void,
+      onStatus: (state) => Queue.offer(statuses, state).pipe(Effect.asVoid),
+    })
+    expect((yield* Queue.take(statuses)).status).toBe("waiting")
+    yield* TestClock.adjust("10 seconds")
+    expect(attempts.count).toBeGreaterThanOrEqual(3)
+    const states = yield* Queue.clear(statuses)
+    for (const [index, state] of states.entries()) expect(state).not.toEqual(states[index - 1])
   }),
 )

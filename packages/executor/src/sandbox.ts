@@ -67,7 +67,9 @@ export const layer = Layer.effect(
       environmentId: Config.schema(Hand.ID, ExecutorVariables.environmentId),
       workspaceDirectory: Config.String(workspaceVariable).pipe(Config.withDefault(process.cwd())),
       shell: Config.option(Config.String("SHELL")),
+      hidden: Config.String(ExecutorVariables.hidden).pipe(Config.withDefault("")),
     })
+    const hidden = new Set([ExecutorVariables.hidden, ...config.hidden.split(",")])
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))
     const shells = yield* Effect.filter(
       [
@@ -156,8 +158,16 @@ export const layer = Layer.effect(
         .spawn(
           ChildProcess.make(input.command, input.arguments, {
             cwd: path(input.directory ?? workspace),
-            env: input.variables,
-            extendEnv: true,
+            env: {
+              ...Object.fromEntries(
+                Object.keys(process.env).flatMap((name) => {
+                  const value = process.env[name]
+                  return typeof value === "string" && !hidden.has(name) ? [[name, value]] : []
+                }),
+              ),
+              ...input.variables,
+            },
+            extendEnv: false,
             shell: input.shell,
             stdin: stdin ? { stream: Stream.fromQueue(stdin), endOnDone: true } : "ignore",
             killSignal: "SIGKILL",
