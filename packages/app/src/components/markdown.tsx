@@ -22,6 +22,9 @@ import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
+import { ChatLink } from "@ren/chat/chat-link"
+import { ChatChip } from "./chat-chip.js"
+import { RouterContext } from "../lib/router-context.js"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -113,13 +116,16 @@ const withDataImages = (schema: unknown) => {
   const src: ReadonlyArray<unknown> = "src" in protocols && Array.isArray(protocols.src) ? protocols.src : []
   return { ...schema, protocols: { ...protocols, src: [...src, "data"] } }
 }
-const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
-  ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
-)
+const chatLinks = () => ChatLink.link
+const rehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
+  const safe: (typeof defaultRehypePlugins)[string] =
+    name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
+  return name === "harden" ? [chatLinks, safe] : [safe]
+})
 const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
   const safe: (typeof defaultRehypePlugins)[string] =
     name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
-  return name === "harden" ? [workspaceImages, safe] : [safe]
+  return name === "harden" ? [workspaceImages, chatLinks, safe] : [safe]
 })
 
 const urlTransform: UrlTransform = (url, key, node) =>
@@ -135,23 +141,29 @@ export function Markdown(props: {
   workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
   const apps = props.apps ?? []
-  const withApps =
-    apps.length === 0
-      ? components
-      : {
-          ...components,
-          a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
-            const app = href?.startsWith(appLink)
-              ? apps.find((each) => each.slug === href.slice(appLink.length))
-              : undefined
-            if (app) return <AppMention app={app} />
-            return (
-              <Link href={href} external className="font-medium underline" {...rest}>
-                {children}
-              </Link>
-            )
-          },
-        }
+  const { platform } = RouterContext.useRouterContext()
+  const withLinks = {
+    ...components,
+    a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
+      const app = href?.startsWith(appLink) ? apps.find((each) => each.slug === href.slice(appLink.length)) : undefined
+      if (app) return <AppMention app={app} />
+      const chat = href ? ChatLink.parse(href, platform.appUrl) : undefined
+      if (chat)
+        return (
+          <ChatChip
+            id={chat.id}
+            child={chat.child}
+            href={href?.startsWith(ChatLink.hash) ? undefined : href}
+            label={children}
+          />
+        )
+      return (
+        <Link href={href} external className="font-medium underline" {...rest}>
+          {children}
+        </Link>
+      )
+    },
+  }
   return (
     <WorkspaceImages value={props.workspaceImage}>
       <Streamdown
@@ -159,7 +171,7 @@ export function Markdown(props: {
         tableMaxHeight={0}
         urlTransform={urlTransform}
         rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
+        components={withLinks}
         isAnimating={props.streaming === true}
         animated={streamAnimation}
         className={cn("min-w-0 text-sm/relaxed", props.className)}
