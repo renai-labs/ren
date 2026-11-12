@@ -385,7 +385,7 @@ export function FilesTab(props: {
   const current = files.tabs.find((tab) => tab.path === files.active)
   return (
     <div className="flex min-h-0 flex-1">
-      <div className="flex w-73 shrink-0 flex-col border-r">
+      <div className="flex w-76 shrink-0 flex-col overflow-hidden border-r">
         <Tree
           tree={tree}
           selected={files.active}

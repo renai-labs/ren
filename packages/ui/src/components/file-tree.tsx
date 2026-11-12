@@ -41,6 +41,8 @@ function FileTree({
   return <FileTreePrimitive data-slot="file-tree" model={tree.model} className={cn(treeClass, className)} />
 }
 
+const headerButton = "px-1.5 text-muted-foreground has-data-[icon=inline-start]:pl-1"
+
 type Model = ReturnType<typeof useFileTree>["model"]
 
 const isOpen = (model: Model, path: string) => {
@@ -168,7 +170,7 @@ function FileExplorer(props: {
         for (const path of model.getSelectedPaths()) model.getItem(path)?.deselect()
       }}
     >
-      <div className="flex shrink-0 flex-col gap-1.5 px-2 pt-2 pb-1">
+      <div className="flex shrink-0 flex-col gap-1.5 px-1.5 pt-2 pb-1">
         <InputGroup className="h-7">
           <InputGroupAddon>
             <IconSearch />
@@ -181,21 +183,16 @@ function FileExplorer(props: {
             onChange={(event) => change(event.target.value)}
           />
         </InputGroup>
-        <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => each(folders, "collapse")}>
+        <div className="flex min-w-0 items-center">
+          <Button variant="ghost" size="sm" className={headerButton} onClick={() => each(folders, "collapse")}>
             <IconChevronUp data-icon="inline-start" />
             Collapse all
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={() => each(props.loaded, "expand")}
-          >
+          <Button variant="ghost" size="sm" className={headerButton} onClick={() => each(props.loaded, "expand")}>
             <IconChevronDown data-icon="inline-start" />
             Expand loaded
           </Button>
-          <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground" onClick={props.onRefresh}>
+          <Button variant="ghost" size="sm" className={cn(headerButton, "ml-auto")} onClick={props.onRefresh}>
             <IconRefresh data-icon="inline-start" />
             Refresh
           </Button>
