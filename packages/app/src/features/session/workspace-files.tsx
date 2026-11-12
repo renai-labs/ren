@@ -43,6 +43,8 @@ const FileView = lazy(() => import("@ren/ui/file-view").then((module) => ({ defa
 
 const nameOf = (path: string) => path.replace(/\/$/u, "").split("/").at(-1) ?? path
 
+const dirOf = (path: string) => path.replace(/[^/]*$/u, "")
+
 const parentOf = (folder: string) => folder.replace(/[^/]+\/$/u, "")
 
 function Folder(props: {
@@ -353,10 +355,22 @@ function TabStrip(props: {
 export function FilesTab(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
+  file: string | undefined
+  line: number | undefined
+  onFile: (path: string) => void
   onMention: ((path: string) => void) | undefined
 }) {
-  const [folder, setFolder] = useState("")
-  const [files, setFiles] = useState(FileTabs.empty)
+  const opened = props.file && !props.file.endsWith("/") ? props.file : undefined
+  const [folder, setFolder] = useState(() => dirOf(props.file ?? ""))
+  const [files, setFiles] = useState(() =>
+    opened ? FileTabs.open(FileTabs.empty, opened, props.line ? { line: props.line } : {}) : FileTabs.empty,
+  )
+  const [seen, setSeen] = useState(props.file)
+  if (seen !== props.file) {
+    setSeen(props.file)
+    if (props.file) setFolder(dirOf(props.file))
+    if (opened) setFiles(FileTabs.open(files, opened, props.line ? { line: props.line } : {}))
+  }
   const current = files.tabs.find((tab) => tab.path === files.active)
   const edits = editsOf(props.messages)
   return (
@@ -367,7 +381,10 @@ export function FilesTab(props: {
           folder={folder}
           selected={files.active}
           onFolder={setFolder}
-          onFile={(path) => setFiles(FileTabs.open(files, path))}
+          onFile={(path) => {
+            setFiles(FileTabs.open(files, path))
+            props.onFile(path)
+          }}
           onPin={(path) => setFiles(FileTabs.pin(files, path))}
         />
       </div>

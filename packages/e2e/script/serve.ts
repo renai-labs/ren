@@ -24,6 +24,9 @@ const admin = new Bun.SQL(databaseURL.href)
 await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
+const StubScript = Schema.Struct({
+  tools: Schema.Array(Schema.Struct({ name: Schema.String, input: Schema.Unknown })),
+})
 
 let log = ""
 const children: Bun.Subprocess[] = []
@@ -35,6 +38,10 @@ const mailbox = Bun.serve({
       Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
       return new Response(null, { status: 204 })
     }
+    if (request.method === "POST" && new URL(request.url).pathname === "/script")
+      return Response.json({
+        marker: Shared.stub().script(Schema.decodeUnknownSync(StubScript)(await request.json())).marker,
+      })
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })

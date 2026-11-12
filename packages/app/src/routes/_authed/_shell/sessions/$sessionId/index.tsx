@@ -6,7 +6,15 @@ import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
   head: () => ({ meta: [{ title: "Chat · Ren" }] }),
-  validateSearch: Schema.toStandardSchemaV1(Schema.Struct({ child: Schema.optional(Schema.String) })),
+  validateSearch: Schema.toStandardSchemaV1(
+    Schema.Struct({
+      child: Schema.optional(Schema.String),
+      panel: Schema.optional(Schema.String),
+      tab: Schema.optional(Schema.String),
+      file: Schema.optional(Schema.String),
+      line: Schema.optional(Schema.Number),
+    }),
+  ),
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(

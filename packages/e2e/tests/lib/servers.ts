@@ -88,3 +88,11 @@ export async function addMember(
   })
   expect(accepted.ok()).toBe(true)
 }
+
+export async function scriptTools(
+  request: APIRequestContext,
+  tools: ReadonlyArray<{ readonly name: string; readonly input: unknown }>,
+) {
+  const response = await request.post(`${mailboxURL}/script`, { data: { tools } })
+  return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+}

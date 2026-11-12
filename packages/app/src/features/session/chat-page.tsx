@@ -11,6 +11,7 @@ import { TurnRail } from "./turn-rail.js"
 import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
 import { Transcript } from "./transcript.js"
+import { WorkspaceFile } from "./workspace-file.js"
 import { PromptInput } from "./prompt-input.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
@@ -228,12 +229,29 @@ export function ChatPage() {
       void navigate({
         to: "/sessions/$sessionId",
         params: { sessionId: params.sessionId },
-        search: id ? { child: id } : {},
+        search: (previous) => ({ ...previous, child: id }),
       }),
     onArchived: () => void navigate({ to: "/" }),
   })
-  const [panel, setPanel] = useState(false)
+  const [panel, setPanel] = useState(search.panel !== undefined)
   const [maximized, setMaximized] = useState(false)
+  const openFile = chat.child
+    ? undefined
+    : (target: { path: string; line?: number | undefined }) => {
+        setPanel(true)
+        void navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId: params.sessionId },
+          replace: true,
+          search: (previous) => ({
+            ...previous,
+            panel: [...new Set([...(previous.panel?.split(",") ?? []).filter(Boolean), "files"])].join(","),
+            tab: "files",
+            file: target.path,
+            line: target.line,
+          }),
+        })
+      }
   return (
     <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
@@ -246,7 +264,9 @@ export function ChatPage() {
             </Button>
           </div>
         ) : (
-          <ChatThread chat={chat} />
+          <WorkspaceFile value={openFile}>
+            <ChatThread chat={chat} />
+          </WorkspaceFile>
         )}
         {chat.child ? null : <TurnRail messages={chat.messages} />}
       </div>
