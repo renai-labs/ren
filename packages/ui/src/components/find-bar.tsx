@@ -25,7 +25,7 @@ export type FindBarProps = {
 const hitName = "ren-find-hit"
 const activeName = "ren-find-active"
 const bodies = "[data-searchable]"
-const unsearchable = ".katex-mathml, [data-streamdown=\"mermaid-block\"]"
+const unsearchable = '.katex-mathml, [data-streamdown="mermaid-block"]'
 const seekFrames = 12
 const steps: Readonly<Record<string, number>> = { Enter: 1, ShiftEnter: -1, ArrowDown: 1, ArrowUp: -1 }
 
