@@ -13,12 +13,15 @@ import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
-import { and, eq, sql } from "drizzle-orm"
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm"
 import { Cause, Context, DateTime, Duration, Effect, Exit, Layer, Option, Predicate, Schedule, Schema } from "effect"
 import { ClusterSchema, EntityAddress, EntityId, EntityType, MessageStorage, Sharding } from "effect/cluster"
 import { Workflow, WorkflowEngine } from "effect/workflow"
+import { Access } from "./access.js"
+import { Actor } from "./actor.js"
 import { ArtifactProvider } from "./artifact-provider.js"
 import { ArtifactArchive } from "./artifact-archive.js"
+import { ArtifactPolicy } from "./artifact/policy.js"
 import { DurableRunner } from "./durable-runner.js"
 import { ObjectStorage } from "./object-storage.js"
 import { Primitive } from "./primitive.js"
@@ -30,7 +33,7 @@ export interface Owner {
   readonly spaceId: Space.ID
 }
 
-export interface Interface {
+export type Interface = Primitive.Interface<typeof Artifact.definition> & {
   readonly upload: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Upload, Primitive.Conflict | Failed>
   readonly deploy: (
     owner: Owner,
@@ -42,8 +45,8 @@ export interface Interface {
     id: Artifact.ID,
     deploymentId: Artifact.DeploymentID,
   ) => Effect.Effect<Artifact.Deployment, Primitive.NotFound>
-  readonly get: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Info, Primitive.NotFound>
-  readonly archive: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Archive, Primitive.NotFound | Failed>
+  readonly read: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Info, Primitive.NotFound>
+  readonly download: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Archive, Primitive.NotFound | Failed>
   readonly stop: (owner: Owner, id: Artifact.ID) => Effect.Effect<void, Failed>
 }
 
@@ -128,13 +131,56 @@ export const linkLifetime = Duration.minutes(15)
 const uploadsPrefix = "artifact-uploads/"
 const artifacts = Database.Schema.artifact
 
-const ownedBy = (row: typeof artifacts.$inferSelect, owner: Owner) =>
+type Row = typeof artifacts.$inferSelect
+
+const ownedBy = (row: Row, owner: Owner) =>
   row.space_id === owner.spaceId && row.organization_id === owner.organizationId
+
+const notFound = new Primitive.NotFound({ message: "Artifact not found." })
+
+const isID = Schema.is(Artifact.ID)
+
+const archivedConflict = (id: Artifact.ID) =>
+  new Primitive.Conflict({ message: `Artifact ${id} is archived. Publish a new artifact instead.` })
+
+const owned = (found: Row | undefined, owner: Owner) =>
+  found && !ownedBy(found, owner)
+    ? Effect.fail(new Primitive.Conflict({ message: `Artifact ${found.id} belongs to another space` }))
+    : Effect.void
+
+const unarchived = (found: Row | undefined) =>
+  found?.archived_at ? Effect.fail(archivedConflict(found.id)) : Effect.void
+
+const actions = {
+  get: Primitive.action(Artifact.definition, "get"),
+  archive: Primitive.action(Artifact.definition, "archive"),
+}
+
+const membershipOf = (actor: Actor.Info) =>
+  and(
+    eq(ArtifactPolicy.membership.space_id, artifacts.space_id),
+    eq(ArtifactPolicy.membership.user_id, actor.userId),
+    isNull(ArtifactPolicy.membership.archived_at),
+    Actor.fenced(actor, ArtifactPolicy.membership.space_id),
+  )
+
+const toInfo = (row: Row): Artifact.Info => ({
+  id: row.id,
+  spaceId: row.space_id,
+  title: row.title,
+  entry: row.config.entry,
+  url: row.url,
+  activeDeploymentId: row.active_deployment_id,
+  createdAt: DateTime.fromDateUnsafe(row.created_at),
+  updatedAt: DateTime.fromDateUnsafe(row.updated_at),
+  archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
+})
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
+    const access = yield* Access.Service
     const provider = yield* ArtifactProvider.Service
     const storage = yield* ObjectStorage.Service
     const signer = yield* Effect.acquireRelease(
@@ -365,18 +411,158 @@ export const layer = Layer.effect(
       return { url, expiresAt }
     })
 
+    const visibleTo = (actor: Actor.Info) =>
+      and(
+        eq(artifacts.organization_id, actor.organizationId),
+        isNull(artifacts.archived_at),
+        Access.where(access.plan(actor, actions.get), ArtifactPolicy.where),
+      )
+
+    const claimStop = Effect.fnUntraced(function* (transaction: Database.Transaction, row: Row) {
+      if (row.provider !== provider.id)
+        return yield* new Failed({
+          message: `Artifact ${row.id} runs on another provider; stop it using its original provider`,
+        })
+      if (row.active_deployment_id) {
+        const executionId = yield* DeployRun.executionId({
+          id: row.id,
+          deploymentId: row.active_deployment_id,
+          organizationId: row.organization_id,
+          title: row.title,
+          config: row.config,
+          codeArchive: row.code_archive ?? "",
+        })
+        if (!(yield* requested(DeployRun, executionId))) return { claimId: row.active_deployment_id, settlement: null }
+      } else if (!row.binding && !row.url) return
+      const stopId = Artifact.DeploymentID.make(crypto.randomUUID())
+      const payload = {
+        id: row.id,
+        deploymentId: row.active_deployment_id ?? stopId,
+        stopId,
+        ...(row.active_deployment_id ? { targetDeploymentId: row.active_deployment_id } : {}),
+      }
+      const executionId = yield* StopRun.executionId(payload)
+      yield* transaction
+        .update(artifacts)
+        .set({ active_deployment_id: stopId, updated_at: sql`now()` })
+        .where(eq(artifacts.id, row.id))
+      yield* StopRun.execute(payload, { discard: true }).pipe(
+        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      )
+      const settlement = { id: row.id, claimId: stopId, executionId, kind: "stop" as const }
+      yield* SettleRun.execute(settlement, { discard: true }).pipe(
+        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      )
+      return { claimId: stopId, settlement }
+    })
+
+    const stopped = Effect.fnUntraced(function* (
+      id: Artifact.ID,
+      pending: Effect.Success<ReturnType<typeof claimStop>>,
+    ) {
+      if (!pending) return
+      if (pending.settlement) {
+        yield* SettleRun.execute(pending.settlement).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+        return
+      }
+      yield* database.db
+        .select({ active: artifacts.active_deployment_id })
+        .from(artifacts)
+        .where(eq(artifacts.id, id))
+        .pipe(
+          Effect.orDie,
+          Effect.repeat({
+            schedule: Schedule.spaced("50 millis"),
+            until: (rows) => rows.at(0)?.active !== pending.claimId,
+          }),
+        )
+    })
+
     return Service.of({
+      list: Effect.fn("Artifacts.list")(function* (actor: Actor.Info, input: Artifact.ListInput) {
+        const where = and(visibleTo(actor), input.spaceId ? eq(artifacts.space_id, input.spaceId) : undefined)
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const rows = yield* transaction
+              .select({ artifact: artifacts })
+              .from(artifacts)
+              .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
+              .where(where)
+              .orderBy(desc(artifacts.created_at), desc(artifacts.id))
+              .limit(input.pageSize)
+              .offset((input.page - 1) * input.pageSize)
+            const totals = yield* transaction
+              .select({ total: count() })
+              .from(artifacts)
+              .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
+              .where(where)
+            return {
+              items: rows.map((row) => toInfo(row.artifact)),
+              page: input.page,
+              pageSize: input.pageSize,
+              total: totals.at(0)?.total ?? 0,
+            }
+          }),
+        )
+      }),
+      get: Effect.fn("Artifacts.get")(function* (actor: Actor.Info, idOrSlug: string) {
+        if (!isID(idOrSlug)) return yield* notFound
+        const found = (yield* database.db
+          .select({ artifact: artifacts })
+          .from(artifacts)
+          .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
+          .where(and(eq(artifacts.id, idOrSlug), visibleTo(actor)))
+          .pipe(Effect.orDie)).at(0)
+        if (!found) return yield* notFound
+        return toInfo(found.artifact)
+      }),
+      archive: Effect.fn("Artifacts.archive")(function* (actor: Actor.Info, id: Artifact.ID) {
+        const pending = yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const found = (yield* transaction
+                .select({ artifact: artifacts, membershipId: ArtifactPolicy.membership.id })
+                .from(artifacts)
+                .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
+                .where(and(eq(artifacts.id, id), visibleTo(actor)))
+                .for("update", { of: artifacts })).at(0)
+              if (!found) return yield* notFound
+              if (
+                !access.isAllowed({
+                  actor,
+                  action: actions.archive,
+                  resource: ArtifactPolicy.resource(found.membershipId),
+                })
+              )
+                return yield* new Primitive.Forbidden({ message: "You cannot archive this artifact." })
+              yield* transaction
+                .update(artifacts)
+                .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+                .where(eq(artifacts.id, id))
+              return yield* claimStop(transaction, found.artifact)
+            }),
+          )
+          .pipe(
+            Effect.catchTag("Artifacts.Failed", (error) =>
+              Effect.fail(new Primitive.Conflict({ message: error.message })),
+            ),
+          )
+        yield* stopped(id, pending).pipe(Effect.orDie)
+        const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
+        if (!row) return yield* notFound
+        return toInfo(row)
+      }),
       upload: Effect.fn("Artifacts.upload")(function* (owner, id) {
         const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        if (found && !ownedBy(found, owner))
-          return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+        yield* owned(found, owner)
+        yield* unarchived(found)
         const uploadId = Artifact.UploadID.make(crypto.randomUUID())
         const signed = yield* link(
           new PutObjectCommand({ Bucket: storage.bucket, Key: uploadKey(owner, id, uploadId) }),
         )
         return { uploadId, ...signed }
       }),
-      archive: Effect.fn("Artifacts.archive")(function* (owner, id) {
+      download: Effect.fn("Artifacts.download")(function* (owner, id) {
         const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
         if (!row || !ownedBy(row, owner) || !row.code_archive)
           return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
@@ -385,8 +571,7 @@ export const layer = Layer.effect(
       deploy: Effect.fn("Artifacts.deploy")(function* (owner, id, input) {
         const codeArchive = `${owner.organizationId}/artifacts/${id}/deployments/${input.deploymentId}/${input.uploadId}.tar.gz`
         const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        if (found && !ownedBy(found, owner))
-          return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+        yield* owned(found, owner)
         const title = input.title ?? found?.title
         if (!title) return yield* new Primitive.Invalid({ message: "A new artifact needs a title.", field: "title" })
         if (
@@ -406,6 +591,7 @@ export const layer = Layer.effect(
           return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
         if (found?.active_deployment_id === input.deploymentId)
           return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
+        yield* unarchived(found)
         const uploaded = uploadKey(owner, id, input.uploadId)
         const source = yield* ArtifactArchive.read(storage, uploaded).pipe(
           Effect.catchTags({
@@ -470,6 +656,7 @@ export const layer = Layer.effect(
               return yield* new Primitive.Conflict({ message: `Artifact ${id} runs on another provider` })
             if (yield* requested(DeployRun, executionId)) return
             if (row.active_deployment_id === input.deploymentId) return
+            if (row.archived_at) return yield* archivedConflict(id)
             if (row.active_deployment_id)
               return yield* new Primitive.Conflict({ message: `Artifact ${id} has active deployment work` })
             yield* transaction
@@ -491,82 +678,21 @@ export const layer = Layer.effect(
         return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
       }),
       status,
-      get: Effect.fn("Artifacts.get")(function* (owner, id) {
+      read: Effect.fn("Artifacts.read")(function* (owner, id) {
         const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
         if (!row || !ownedBy(row, owner))
           return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
-        return {
-          id: row.id,
-          spaceId: row.space_id,
-          title: row.title,
-          entry: row.config.entry,
-          url: row.url,
-          activeDeploymentId: row.active_deployment_id,
-          createdAt: DateTime.fromDateUnsafe(row.created_at),
-          updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-        }
+        return toInfo(row)
       }),
       stop: Effect.fn("Artifacts.stop")(function* (owner, id) {
         const pending = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = (yield* transaction.select().from(artifacts).where(eq(artifacts.id, id)).for("update")).at(0)
             if (!row || !ownedBy(row, owner)) return
-            if (row.provider !== provider.id)
-              return yield* new Failed({
-                message: `Artifact ${id} runs on another provider; stop it using its original provider`,
-              })
-            if (row.active_deployment_id) {
-              const executionId = yield* DeployRun.executionId({
-                id,
-                deploymentId: row.active_deployment_id,
-                organizationId: row.organization_id,
-                title: row.title,
-                config: row.config,
-                codeArchive: row.code_archive ?? "",
-              })
-              if (!(yield* requested(DeployRun, executionId)))
-                return { claimId: row.active_deployment_id, settlement: null }
-            } else if (!row.binding && !row.url) return
-            const stopId = Artifact.DeploymentID.make(crypto.randomUUID())
-            const payload = {
-              id,
-              deploymentId: row.active_deployment_id ?? stopId,
-              stopId,
-              ...(row.active_deployment_id ? { targetDeploymentId: row.active_deployment_id } : {}),
-            }
-            const executionId = yield* StopRun.executionId(payload)
-            yield* transaction
-              .update(artifacts)
-              .set({ active_deployment_id: stopId, updated_at: sql`now()` })
-              .where(eq(artifacts.id, id))
-            yield* StopRun.execute(payload, { discard: true }).pipe(
-              Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-            )
-            const settlement = { id, claimId: stopId, executionId, kind: "stop" as const }
-            yield* SettleRun.execute(settlement, { discard: true }).pipe(
-              Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-            )
-            return { claimId: stopId, settlement }
+            return yield* claimStop(transaction, row)
           }),
         )
-        if (!pending) return
-        if (pending.settlement) {
-          yield* SettleRun.execute(pending.settlement).pipe(
-            Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-          )
-          return
-        }
-        yield* database.db
-          .select({ active: artifacts.active_deployment_id })
-          .from(artifacts)
-          .where(eq(artifacts.id, id))
-          .pipe(
-            Effect.orDie,
-            Effect.repeat({
-              schedule: Schedule.spaced("50 millis"),
-              until: (rows) => rows.at(0)?.active !== pending.claimId,
-            }),
-          )
+        yield* stopped(id, pending)
       }),
     })
   }),
