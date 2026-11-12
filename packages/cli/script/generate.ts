@@ -370,6 +370,7 @@ const elsewhere = new Map([
   ["invitation.preview", "The sign-up page shows an invitation before its invitee signs in."],
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
   ["drive.startUpload", "The upload posts its file to the bucket with the returned form; the app does it."],
+  ["session.linkPreviews", "The chat shows a preview of each link in a reply; the app asks."],
   ["app.request-connect", "An agent asks the person to connect an app; the chat shows the card."],
 ])
 

@@ -235,6 +235,20 @@ export type SessionLinksIssue = { kind: "github_issue" | "linear_issue"; url: st
 
 export type PullRequestState = "open" | "draft" | "merged" | "closed"
 
+export type LinkPreviewPerson = { name: string; avatarUrl?: string }
+
+export type LinkPreviewLinearState = {
+  name: string
+  type: "triage" | "backlog" | "unstarted" | "started" | "completed" | "canceled"
+  color: string
+}
+
+export type LinkPreviewNotionIcon = { type: "emoji" | "image"; value: string }
+
+export type LinkPreviewProvider = "github" | "linear" | "notion"
+
+export type LinkPreviewReason = "not_connected" | "no_access" | "failed"
+
 export type ScheduleID = string
 
 export type ScheduleOnce = { at: string }
@@ -684,6 +698,54 @@ export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from
 
 export type PullRequestInfo = { url: string; number: number; title: string | null; state: PullRequestState | null }
 
+export type LinkPreviewGitHubPullRequest = {
+  kind: "github_pr"
+  url: string
+  ref: string
+  title: string
+  people: Array<LinkPreviewPerson>
+  updatedAt: string
+  state: PullRequestState
+}
+
+export type LinkPreviewGitHubIssue = {
+  kind: "github_issue"
+  url: string
+  ref: string
+  title: string
+  people: Array<LinkPreviewPerson>
+  updatedAt: string
+  state: "open" | "closed"
+}
+
+export type LinkPreviewLinearIssue = {
+  kind: "linear_issue"
+  url: string
+  ref: string
+  title: string
+  people: Array<LinkPreviewPerson>
+  updatedAt: string
+  state: LinkPreviewLinearState
+}
+
+export type LinkPreviewNotionPage = {
+  kind: "notion_page"
+  url: string
+  ref: string
+  title: string
+  people: Array<LinkPreviewPerson>
+  updatedAt: string
+  icon?: LinkPreviewNotionIcon
+}
+
+export type LinkPreviewUnavailable = {
+  kind: "unavailable"
+  url: string
+  provider: LinkPreviewProvider
+  reason: LinkPreviewReason
+  canConnect: boolean
+}
+
 export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
 
 export type ScheduleRunInfo = {
@@ -1091,6 +1153,13 @@ export type TaskEventData =
   | TaskEventLinksChanged
   | TaskEventParentChanged
   | TaskEventArchived
+
+export type LinkPreviewInfo =
+  | LinkPreviewGitHubPullRequest
+  | LinkPreviewGitHubIssue
+  | LinkPreviewLinearIssue
+  | LinkPreviewNotionPage
+  | LinkPreviewUnavailable
 
 export type ScheduleInfo = {
   id: ScheduleID
@@ -7491,6 +7560,13 @@ export type LinkSessionPullRequestsOutput = Array<PullRequestInfo>
 export type LinkTaskPullRequestsInput = { readonly id: { readonly id: string }["id"] }
 
 export type LinkTaskPullRequestsOutput = Array<PullRequestInfo>
+
+export type LinkSessionLinkPreviewsInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly urls: { readonly urls: ReadonlyArray<string> }["urls"]
+}
+
+export type LinkSessionLinkPreviewsOutput = Array<LinkPreviewInfo>
 
 export type LabelListInput = {
   readonly spaceId?: {

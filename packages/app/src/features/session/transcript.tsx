@@ -82,6 +82,7 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { DriveFileCards } from "./attachments.js"
+import { LinkPreviews } from "../../components/link-preview.js"
 import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
@@ -95,6 +96,7 @@ import { ChannelMark } from "../../components/channel-mark.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { useMentionedApps } from "../../lib/use-app.js"
 import type { CatalogApp } from "../../lib/apps.js"
+import { useLinkPreviews } from "../../lib/use-link-previews.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 import { WorkspaceImage } from "./workspace-image.js"
@@ -1175,6 +1177,7 @@ function AnswerBlock(props: {
   messages: ReadonlyArray<SessionMessage.Info>
 }) {
   const apps = useMentionedApps(props.text)
+  const { watch, previews } = useLinkPreviews({ root: props.root, text: props.text, streaming: props.streaming })
   const images = new Map(
     props.messages.flatMap((message) =>
       message.type !== "assistant"
@@ -1196,15 +1199,17 @@ function AnswerBlock(props: {
     <Message>
       <MessageContent>
         <Bubble variant="ghost">
-          <BubbleContent className="text-base leading-[1.7]">
-            <SmoothMarkdown
-              text={props.text}
-              root={props.root}
-              images={images}
-              streaming={props.streaming}
-              apps={apps}
-              className="text-base leading-[1.7]"
-            />
+          <BubbleContent ref={watch} className="text-base leading-[1.7]">
+            <LinkPreviews value={previews}>
+              <SmoothMarkdown
+                text={props.text}
+                root={props.root}
+                images={images}
+                streaming={props.streaming}
+                apps={apps}
+                className="text-base leading-[1.7]"
+              />
+            </LinkPreviews>
           </BubbleContent>
         </Bubble>
         {props.copy ? (

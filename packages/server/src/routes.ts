@@ -34,6 +34,7 @@ import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceMember } from "@ren/core/space/member"
+import { LinkPreview } from "@ren/core/link-preview"
 import { PullRequest } from "@ren/core/pull-request"
 import { ReferenceCheck } from "@ren/core/reference-check"
 import { RepositoryHosts } from "@ren/core/repository-hosts"
@@ -159,6 +160,8 @@ const Compression = HttpRouter.middleware(
   }),
 ).layer
 
+const sessions = Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer))
+
 export const layer = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
@@ -235,7 +238,8 @@ export const layer = Layer.mergeAll(
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
-        Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+        sessions,
+        LinkPreview.layer.pipe(Layer.provide(sessions)),
         OAuthApps.layer,
         ChannelInstalls.layer,
         RepositoryHosts.layer,
