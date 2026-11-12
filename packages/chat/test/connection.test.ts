@@ -283,3 +283,23 @@ effect("two connect timeouts in a row report the brain unreachable once, so Ren 
     expect(yield* Queue.size(unreachable)).toBe(1)
   }),
 )
+
+effect("a repeated status is not published again (#196)", () =>
+  Effect.gen(function* () {
+    const statuses = yield* Queue.unbounded<Connection.Status>()
+    const attempts = { count: 0 }
+    yield* Connection.make({
+      subscribe: Effect.suspend(() => {
+        attempts.count += 1
+        return Effect.fail(new Error("The brain is unreachable"))
+      }),
+      onFrames: () => Effect.void,
+      onStatus: (status) => Queue.offer(statuses, status).pipe(Effect.asVoid),
+    })
+    expect(yield* Queue.take(statuses)).toBe("connecting")
+    expect(yield* Queue.take(statuses)).toBe("reconnecting")
+    yield* TestClock.adjust("10 seconds")
+    expect(attempts.count).toBeGreaterThanOrEqual(3)
+    expect(yield* Queue.clear(statuses)).toEqual([])
+  }),
+)
