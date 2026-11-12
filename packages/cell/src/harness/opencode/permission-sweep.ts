@@ -1,7 +1,6 @@
 export * as OpenCodePermissionSweep from "./permission-sweep.js"
 
 import type { OpenCodeClient, Session } from "@opencode/client/effect"
-import type { SessionID } from "@opencode/schema/session-id"
 import type { Permission } from "@opencode/schema/permission"
 import { BrainSettings } from "@ren/brain/settings"
 import { Effect } from "effect"
@@ -33,15 +32,14 @@ export const run: (client: OpenCodeClient, change: Change) => Effect.Effect<void
     const previous = change.previous
     if (!previous) return
     const skip = (message: string) => () => Effect.logWarning(message).pipe(Effect.as(undefined))
-    const owned = (sessionID: SessionID): Effect.Effect<Session.Info | undefined> =>
-      client.session.get({ sessionID }).pipe(
-        Effect.flatMap((info) => {
-          if (info.id === change.id) return Effect.succeed(info)
-          if (!info.parentID) return Effect.undefined
-          return owned(info.parentID)
-        }),
-        Effect.catch(skip("The permission sweep could not read a session")),
+    const owned = (info: Session.Info): Effect.Effect<boolean> => {
+      if (info.id === change.id) return Effect.succeed(true)
+      if (!info.parentID) return Effect.succeed(false)
+      return client.session.get({ sessionID: info.parentID }).pipe(
+        Effect.flatMap(owned),
+        Effect.catch(() => Effect.logWarning("The permission sweep could not read a session").pipe(Effect.as(false))),
       )
+    }
     const waiting = yield* client.permission.request.list({ location: { directory: change.directory } }).pipe(
       Effect.map((found) => found.data),
       Effect.catch(() => Effect.logWarning("The permission sweep could not list requests").pipe(Effect.as([]))),
@@ -51,7 +49,7 @@ export const run: (client: OpenCodeClient, change: Change) => Effect.Effect<void
         const info = yield* client.session
           .get({ sessionID: request.sessionID })
           .pipe(Effect.catch(skip("The permission sweep could not read a session")))
-        if (!info || !(yield* owned(request.sessionID))) return []
+        if (!info || !(yield* owned(info))) return []
         const before = decide(previous, info.agent, request)
         const after = decide(change.next, info.agent, request)
         if (!before || !after || before === after || after === "ask") return []
@@ -65,6 +63,7 @@ export const run: (client: OpenCodeClient, change: Change) => Effect.Effect<void
         client.permission
           .reply({ sessionID: item.request.sessionID, requestID: item.request.id, decision: item.reply })
           .pipe(
+            Effect.retry({ times: 1, while: (error) => error._tag !== "PermissionNotFoundError" }),
             Effect.catchTag("PermissionNotFoundError", () => Effect.void),
             Effect.catch(() => Effect.logWarning("The permission sweep could not reply to a request")),
           ),
