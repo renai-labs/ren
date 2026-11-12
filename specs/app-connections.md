@@ -167,7 +167,7 @@ S2.10 Managed version:
 
 "Connect my own" configures the empty account in the space. It does not create a second account.
 
-This is built in the account dialog (`components/profile-dialog.tsx`): `ProfileDialog` with `from` and no `profileId` opens the sheet, `newAccount` starts at S2.1 with a new account, and `chooseSpace` starts at the space list. The space Apps tab, the composer's Add apps, the chat card, the app page and the Apps grid's [+] open it; `ChooseProfile`, `useAddition` and `AddToSpace` are gone. Connecting an account here ends at S2.7. Differences and gaps:
+This is built in the account dialog (`components/profile-dialog.tsx`): `ProfileDialog` with `from` and no `profileId` opens the sheet, `newAccount` starts at S2.1 with a new account, and no `from` starts at the space list. The space Apps tab, the composer's Add apps, the chat card, the app page and the Apps grid's [+] open it; `ChooseProfile`, `useAddition` and `AddToSpace` are gone. Connecting an account here ends at S2.7. Differences and gaps:
 
 - The app list stays the Add apps dialog (S1); the sheet always gets an app.
 - With no account in the space, an app with a managed version offers [Add to {space}] in S2.1, which creates the empty account and shows S2.10.
@@ -289,24 +289,33 @@ This is built (`features/spaces/space-apps.tsx`, `components/apps-table.tsx`). T
 
 ### S7. Settings → Credentials → Apps
 
-Today: `features/credentials/credentials-page.tsx` (`OrgApps`).
+`features/credentials/credentials-page.tsx` (`OrgApps`).
 
 ```
- Account                  App      Owner    Spaces       Status
- Acme · Linear            Linear   Shrey    Acme, Ops    ✓
- Old GitHub               GitHub   Raj ⚠    —            ✓            owner left the org
- Linear (Only me)         Linear   Shrey    Personal     ⚠ Reconnect
+ App        Used in              Status
+ Notion     Acme                 Needs sign-in       row ──► app sheet
 
- ⋯ = Rename | Reconnect | Spaces… | Delete
-
-┌─ Delete "Acme · Linear"? ───────────────────────────┐
-│ Acme and Ops use it. Ren signs it out of Linear.    │
-│ Those spaces use Ren credits or show Not connected. │
-│                             [Cancel]  [Delete]      │
-└─────────────────────────────────────────────────────┘
+┌─ Notion ───────────────────────────────────── ✕ ┐
+│ Accounts 3                       [+ New account] │
+│ ● Acme · Notion                        (Acme)  › │
+│ ● Acme · Notion · Priya                (Acme)  › │
+│   Needs sign-in                                  │
+│ ● Old Notion                  Not in any space › │
+└──────────────────────────────────────────────────┘
+ Row ──► account dialog: Connection, Name, Spaces; ⋯ menu: Delete account
 ```
 
-An account with no spaces shows "—" and stays until someone deletes it. Admins manage a shared account whose owner left the org, as the policy allows today. The "last space" warning in `components/account-actions.tsx` (`lastSpaceWarning`) changes to match rule 6.
+This is built. The Apps tab lists every app that has an account you can see, and the app sheet lists all of its accounts, in any space or none. An account with no spaces shows "Not in any space" and stays until someone deletes it. In Settings, a row also names the owner when that matters: "Only Priya can use it" on someone else's private account, and "Owner left the organization" when the person who made the account is no longer a member. Admins manage that account as the policy allows.
+
+[New account] in the sheet and the table's menu open S2 at the space list (`newAccount` with no `from`), as the app page's [New account] does. The old create step with spaces switches is gone. Any space can be picked, also one that already has the app; the personal space makes a private account.
+
+The account dialog's Spaces field can be emptied, so a shared account can leave its last space (rule 6, S9). Delete stays in the dialog's ⋯ menu: "Acme, Ops use it. Ren deletes the account and its sign-ins. Those spaces use Ren credits or show Not connected." A private account, or one with no spaces, says only "Ren deletes the account and its sign-ins."
+
+Differences:
+
+- There is no table of accounts with a ⋯ menu on each row. Rule 7 keeps one account list with no row menus, so the apps table and the app sheet stay. Rename, Spaces and Delete are in the account dialog, and Reconnect is under Connection.
+- "—" reads "Not in any space", as the space pills say everywhere else.
+- The owner is not named when they left: Ren cannot see the name of someone who is no longer a member.
 
 ### S8. Share link
 
@@ -348,6 +357,8 @@ The space side is built. `components/space-removal.ts` tells the three outcomes 
 - The toast title names the account: "Ops Linear removed from Acme", with "Still in Ops." or "Find it in Settings → Credentials." as its description. The toast with [Undo] stays until dismissed.
 - Remove Linear from Acme takes every shared account listed in the space out of it with `access remove`. It is offered only when there is such an account: an every-space account and a private account (in a private space) are never removed, and the warning says why for an every-space one. An account the person cannot remove from the space stays, with "Only an admin can remove “…” from Acme." The toast lists kept accounts: "Find “…” in Settings → Credentials." It has no [Undo].
 - When an account stays, the confirmation says "Acme stops using “…”." in place of "The agent in Acme loses Linear."
+
+The Settings side is built in the account dialog's Spaces field (`useEditProfile` in `components/profile-dialog.tsx`), which Settings and the space sheet share. Save works with no spaces left. Removing spaces shows the same toasts; the title lists every space it left ("removed from Acme, Ops", or "removed from every space" when "Every space" is turned off), and [Undo] adds them back. The dialog has no Remove for a private account, so Settings never removes one; only Delete does.
 
 ## 4. Seed data for review
 

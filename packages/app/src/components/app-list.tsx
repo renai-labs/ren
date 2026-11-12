@@ -481,6 +481,7 @@ export function AccountList(props: {
   actions?: ReactNode
   profiles: ReadonlyArray<AppProfile>
   empty?: string
+  note?: (profile: AppProfile) => string | null
   onOpen: (profile: AppProfile) => void
 }) {
   return (
@@ -500,6 +501,9 @@ export function AccountList(props: {
         <div className="-mx-3 flex flex-col gap-1">
           {props.profiles.map((profile) => {
             const status = statusOf(props.app, [profile])
+            const caption = [status === "connected" ? undefined : statusLabel[status], props.note?.(profile)]
+              .filter(Boolean)
+              .join(" · ")
             return (
               <div
                 key={profile.id}
@@ -515,9 +519,7 @@ export function AccountList(props: {
                   >
                     {profile.name}
                   </Button>
-                  {status === "connected" ? null : (
-                    <span className="truncate text-xs text-muted-foreground">{statusLabel[status]}</span>
-                  )}
+                  {caption ? <span className="truncate text-xs text-muted-foreground">{caption}</span> : null}
                 </div>
                 <div className="flex max-w-1/2 flex-wrap justify-end gap-1">
                   <SpacePills profile={profile} />

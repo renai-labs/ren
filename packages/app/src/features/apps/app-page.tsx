@@ -50,7 +50,7 @@ function AppAccounts(props: { app: CatalogApp; onProfile: (target: ProfileTarget
       title="Accounts"
       app={props.app}
       actions={
-        <Button size="sm" onClick={() => props.onProfile({ appId: props.app.id })}>
+        <Button size="sm" onClick={() => props.onProfile({ appId: props.app.id, newAccount: true })}>
           <IconPlus data-icon="inline-start" />
           New account
         </Button>
