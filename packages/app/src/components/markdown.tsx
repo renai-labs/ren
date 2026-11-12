@@ -78,7 +78,17 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { a: MarkdownLink, code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+const MentionedApps = createContext<ReadonlyArray<CatalogApp>>([])
+
+function MarkdownAnchor(link: ComponentProps<"a"> & ExtraProps) {
+  const apps = use(MentionedApps)
+  const app = link.href?.startsWith(appLink)
+    ? apps.find((each) => each.slug === link.href?.slice(appLink.length))
+    : undefined
+  return app ? <AppMention app={app} /> : <MarkdownLink {...link} />
+}
+
+const components = { a: MarkdownAnchor, code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
@@ -135,32 +145,22 @@ export function Markdown(props: {
   workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
   const apps = props.apps ?? []
-  const withApps =
-    apps.length === 0
-      ? components
-      : {
-          ...components,
-          a: (link: ComponentProps<"a"> & ExtraProps) => {
-            const app = link.href?.startsWith(appLink)
-              ? apps.find((each) => each.slug === link.href?.slice(appLink.length))
-              : undefined
-            return app ? <AppMention app={app} /> : <MarkdownLink {...link} />
-          },
-        }
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
-      >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
+      <MentionedApps value={apps}>
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+          components={components}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </MentionedApps>
     </WorkspaceImages>
   )
 }
