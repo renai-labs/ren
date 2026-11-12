@@ -67,8 +67,6 @@ export const patchFile = (value: unknown): File | undefined => {
 export const patchFiles = (value: unknown): ReadonlyArray<File> =>
   Array.isArray(value) ? value.flatMap((item) => patchFile(item) ?? []) : []
 
-const statuses: Readonly<Record<Kind, FileDiff.Status>> = { add: "added", delete: "deleted", update: "modified" }
-
 const groupType = (first: File, last: File): Kind => {
   if (last.type === "delete") return "delete"
   return first.type === "add" ? "add" : "update"
@@ -79,34 +77,14 @@ const group = (path: string, files: ReadonlyArray<File>): Group | undefined => {
   const last = files.at(-1)
   if (!first || !last) return
   const type = groupType(first, last)
-  const chained = files.every(
-    (file, index) =>
-      Boolean(file.contents) && (index === 0 || files.at(index - 1)?.contents?.after === file.contents?.before),
-  )
-  if (!chained)
-    return {
-      path,
-      type,
-      additions: files.reduce((total, file) => total + file.additions, 0),
-      deletions: files.reduce((total, file) => total + file.deletions, 0),
-      views: files.map((file) => file.view),
-    }
-  const view =
-    files.length === 1
-      ? first.view
-      : FileDiff.normalize({
-          file: path,
-          before: first.contents?.before ?? "",
-          after: last.contents?.after ?? "",
-          status: statuses[type],
-          additions: 0,
-          deletions: 0,
-        })
-  const counts = view.diff.hunks.reduce(
-    (result, hunk) => ({ additions: result.additions + hunk.additions, deletions: result.deletions + hunk.deletions }),
-    { additions: 0, deletions: 0 },
-  )
-  return { path, type, ...counts, views: [{ ...view, ...counts }] }
+  const views = FileDiff.merge(files.map((file) => file.view))
+  return {
+    path,
+    type,
+    additions: views.reduce((total, view) => total + view.additions, 0),
+    deletions: views.reduce((total, view) => total + view.deletions, 0),
+    views,
+  }
 }
 
 export const patchFileGroups = (value: unknown): ReadonlyArray<Group> => {

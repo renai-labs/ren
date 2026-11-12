@@ -4,8 +4,11 @@ import { IconArrowLeft, IconCube, IconGhostFilled, IconLayoutSidebarRight, IconR
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
 import { Button } from "@ren/ui/button"
+import { DiffWorkers } from "@ren/ui/diff-workers"
 import { Queue } from "./queue.js"
 import { WorkspacePanel } from "./workspace-panel.js"
+import { OpenChanges, workspacePath } from "./open-changes.js"
+import type { Focus } from "./workspace-changes.js"
 import { TurnRail } from "./turn-rail.js"
 import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
@@ -233,47 +236,62 @@ export function ChatPage() {
   })
   const [panel, setPanel] = useState(false)
   const [maximized, setMaximized] = useState(false)
+  const [changesFocus, setChangesFocus] = useState<Focus>()
   return (
-    <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
-      <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
-        <ChatHeader chat={chat} panel={panel} onTogglePanel={() => setPanel((current) => !current)} />
-        {chat.failed ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-            Ren couldn’t open this chat.
-            <Button variant="outline" disabled={chat.retrying} onClick={chat.retry}>
-              Try again
-            </Button>
-          </div>
-        ) : (
-          <ChatThread chat={chat} />
-        )}
-        {chat.child ? null : <TurnRail messages={chat.messages} />}
-      </div>
-      <div
-        inert={!panel}
-        className={cn(
-          "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear motion-reduce:transition-none",
-          panelWidth({ open: panel, maximized }),
-        )}
+    <DiffWorkers>
+      <OpenChanges.Provider
+        value={(path) => {
+          setChangesFocus({ path: workspacePath(path) })
+          setPanel(true)
+        }}
       >
-        <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
-          <WorkspacePanel
-            root={chat.root}
-            messages={chat.messages}
-            maximized={maximized}
-            onMaximize={setMaximized}
-            onClose={() => {
-              setPanel(false)
-              setMaximized(false)
-            }}
-          />
+        <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
+          <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
+            <ChatHeader chat={chat} panel={panel} onTogglePanel={() => setPanel((current) => !current)} />
+            {chat.failed ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                Ren couldn’t open this chat.
+                <Button variant="outline" disabled={chat.retrying} onClick={chat.retry}>
+                  Try again
+                </Button>
+              </div>
+            ) : (
+              <ChatThread chat={chat} />
+            )}
+            {chat.child ? null : <TurnRail messages={chat.messages} />}
+          </div>
+          <div
+            inert={!panel}
+            className={cn(
+              "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear motion-reduce:transition-none",
+              panelWidth({ open: panel, maximized }),
+            )}
+          >
+            <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
+              <WorkspacePanel
+                root={chat.root}
+                messages={chat.messages}
+                maximized={maximized}
+                changesFocus={changesFocus}
+                onMaximize={setMaximized}
+                onClose={() => {
+                  setPanel(false)
+                  setMaximized(false)
+                }}
+              />
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </OpenChanges.Provider>
+    </DiffWorkers>
   )
 }
 
 export function SessionThread(props: { sessionId: string; dock?: ReactNode }) {
   const chat = useChat(props.sessionId, {})
-  return <ChatThread chat={chat} dock={props.dock} />
+  return (
+    <DiffWorkers>
+      <ChatThread chat={chat} dock={props.dock} />
+    </DiffWorkers>
+  )
 }

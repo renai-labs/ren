@@ -19,7 +19,7 @@ import { Button } from "@ren/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { ChangesTab } from "./workspace-changes.js"
+import { ChangesTab, type Focus } from "./workspace-changes.js"
 import { ProgressTab } from "./workspace-progress.js"
 import { FilesTab } from "./workspace-files.js"
 import { BrowserTab, ComputerTab } from "./workspace-streams.js"
@@ -118,11 +118,13 @@ export function WorkspacePanel(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
   maximized: boolean
+  changesFocus?: Focus | undefined
   onMaximize: (maximized: boolean) => void
   onClose: () => void
 }) {
   const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
   const [active, setActive] = useState<string>()
+  const [seen, setSeen] = useState(props.changesFocus)
   const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
   const pick = (kind: Kind) => {
     const meta = byKind.get(kind)
@@ -139,6 +141,10 @@ export function WorkspacePanel(props: {
     }
     setTabs([...tabs, tab])
     setActive(tab.id)
+  }
+  if (props.changesFocus !== seen) {
+    setSeen(props.changesFocus)
+    if (props.changesFocus) pick("changes")
   }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
@@ -202,7 +208,9 @@ export function WorkspacePanel(props: {
         {tabs.length === 0 ? <Launcher onPick={pick} /> : null}
         {tabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-col">
-            {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
+            {tab.kind === "changes" ? (
+              <ChangesTab root={props.root} messages={props.messages} focus={props.changesFocus} />
+            ) : null}
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {tab.kind === "browser" ? <BrowserTab /> : null}

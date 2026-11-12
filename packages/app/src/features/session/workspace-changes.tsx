@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react"
-import { PatchFiles } from "@ren/chat"
+import { FileDiff, PatchFiles } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionInfo } from "@ren/schema/session/info"
@@ -9,9 +9,9 @@ import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { FileTree } from "@ren/ui/file-tree"
-import { PatchDiff } from "@ren/ui/patch-diff"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
-import { Theme } from "../../components/theme.js"
+import { DiffFile } from "./diff-file.js"
+import { workspacePath } from "./open-changes.js"
 import { WorkspacePending } from "./workspace-state.js"
 
 interface Change {
@@ -19,37 +19,42 @@ interface Change {
   readonly status: "added" | "deleted" | "modified"
   readonly additions: number
   readonly deletions: number
-  readonly patches: ReadonlyArray<{ readonly patch: string; readonly additions: number; readonly deletions: number }>
+  readonly views: ReadonlyArray<FileDiff.View>
 }
 
 type Source = "repository" | "edits"
 
-const workspace = /^.*\/workspace\/[^/]+\//u
+export interface Focus {
+  readonly path: string
+}
 
-const editsOf = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArray<Change> => [
-  ...messages
-    .flatMap((message) => (message.type === "assistant" ? message.content : []))
-    .flatMap((content) =>
-      content.type === "tool" && PatchFiles.isFileChange(content) && content.state.status === "completed"
-        ? PatchFiles.toolFiles(content).filter(PatchFiles.changedFileDiff)
-        : [],
-    )
-    .reduce((byPath, file) => {
-      const path = file.file.replace(workspace, "")
-      const previous = byPath.get(path)
-      return byPath.set(path, {
-        path,
-        status: previous?.status === "added" && file.status !== "deleted" ? "added" : file.status,
-        additions: (previous?.additions ?? 0) + file.additions,
-        deletions: (previous?.deletions ?? 0) + file.deletions,
-        patches: [
-          ...(previous?.patches ?? []),
-          { patch: file.patch, additions: file.additions, deletions: file.deletions },
-        ],
-      })
-    }, new Map<string, Change>())
-    .values(),
-]
+const sum = (views: ReadonlyArray<FileDiff.View>, side: "additions" | "deletions") =>
+  views.reduce((total, view) => total + view[side], 0)
+
+const editsOf = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArray<Change> =>
+  [
+    ...messages
+      .flatMap((message) => (message.type === "assistant" ? message.content : []))
+      .flatMap((content) =>
+        content.type === "tool" && PatchFiles.isFileChange(content) && content.state.status === "completed"
+          ? PatchFiles.toolFiles(content).filter(PatchFiles.changedFileDiff)
+          : [],
+      )
+      .reduce((byPath, file) => {
+        const path = workspacePath(file.file)
+        return byPath.set(path, [...(byPath.get(path) ?? []), FileDiff.normalize(file)])
+      }, new Map<string, ReadonlyArray<FileDiff.View>>())
+      .entries(),
+  ].map(([path, edits]) => {
+    const views = FileDiff.merge(edits)
+    return {
+      path,
+      status: FileDiff.mergedStatus(edits),
+      additions: sum(views, "additions"),
+      deletions: sum(views, "deletions"),
+      views,
+    }
+  })
 
 const repositoryOf = (files: ReadonlyArray<SessionInfo.FileDiff>): ReadonlyArray<Change> =>
   files.map((file) => ({
@@ -57,7 +62,7 @@ const repositoryOf = (files: ReadonlyArray<SessionInfo.FileDiff>): ReadonlyArray
     status: file.status,
     additions: file.additions,
     deletions: file.deletions,
-    patches: [{ patch: file.patch, additions: file.additions, deletions: file.deletions }],
+    views: [FileDiff.normalize(file)],
   }))
 
 function NoChanges(props: { description: string }) {
@@ -74,9 +79,13 @@ function NoChanges(props: { description: string }) {
   )
 }
 
-function Changes(props: { changes: ReadonlyArray<Change>; empty: string }) {
-  const theme = Theme.useTheme().preference
-  const [chosen, setChosen] = useState<string>()
+function Changes(props: { changes: ReadonlyArray<Change>; empty: string; focus?: Focus | undefined }) {
+  const [chosen, setChosen] = useState(props.focus?.path)
+  const [seen, setSeen] = useState(props.focus)
+  if (props.focus !== seen) {
+    setSeen(props.focus)
+    setChosen(props.focus?.path)
+  }
   const selected = props.changes.find((change) => change.path === chosen) ?? props.changes.at(0)
   if (props.changes.length === 0) return <NoChanges description={props.empty} />
   const additions = props.changes.reduce((total, change) => total + change.additions, 0)
@@ -94,14 +103,8 @@ function Changes(props: { changes: ReadonlyArray<Change>; empty: string }) {
         </div>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-1">
-        {selected?.patches.map((each, index) => (
-          <PatchDiff key={each.patch} patch={each.patch} theme={theme}>
-            <span className="flex items-center gap-2 py-2 text-xs text-muted-foreground tabular-nums">
-              {selected.patches.length > 1 ? `Change ${index + 1}` : selected.path}
-              <span className="text-chart-2">+{each.additions}</span>
-              <span className="text-chart-4">−{each.deletions}</span>
-            </span>
-          </PatchDiff>
+        {selected?.views.map((view) => (
+          <DiffFile key={view.diff.cacheKey} view={view} />
         ))}
       </div>
     </div>
@@ -112,7 +115,12 @@ function Bar(props: { children: ReactNode }) {
   return <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">{props.children}</div>
 }
 
-function RepositoryChanges(props: { root: Session.ID; picker: ReactNode; onRefresh: () => void }) {
+function RepositoryChanges(props: {
+  root: Session.ID
+  picker: ReactNode
+  focus: Focus | undefined
+  onRefresh: () => void
+}) {
   const diff = ChatReact.useVcsDiff(props.root, "working")
   return (
     <>
@@ -135,6 +143,7 @@ function RepositoryChanges(props: { root: Session.ID; picker: ReactNode; onRefre
         <Changes
           changes={repositoryOf(diff.result.value)}
           empty="The repository has no changes since its last commit."
+          focus={props.focus}
         />
       ) : (
         <WorkspacePending
@@ -148,12 +157,25 @@ function RepositoryChanges(props: { root: Session.ID; picker: ReactNode; onRefre
   )
 }
 
-export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<SessionMessage.Info> }) {
+export function ChangesTab(props: {
+  root: Session.ID
+  messages: ReadonlyArray<SessionMessage.Info>
+  focus?: Focus | undefined
+}) {
   const vcs = ChatReact.useVcs(props.root)
   const repository = AsyncResult.isSuccess(vcs.result) && vcs.result.value.provider ? vcs.result.value : undefined
-  const [chosen, setChosen] = useState<Source>()
+  const [chosen, setChosen] = useState<Source | undefined>(props.focus ? "edits" : undefined)
+  const [seen, setSeen] = useState(props.focus)
+  if (props.focus !== seen) {
+    setSeen(props.focus)
+    if (props.focus) setChosen("edits")
+  }
   const edits = (
-    <Changes changes={editsOf(props.messages)} empty="Files Ren creates or edits in this chat show up here as diffs." />
+    <Changes
+      changes={editsOf(props.messages)}
+      empty="Files Ren creates or edits in this chat show up here as diffs."
+      focus={props.focus}
+    />
   )
   if (AsyncResult.isInitial(vcs.result))
     return (
@@ -190,7 +212,7 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {source === "repository" ? (
-        <RepositoryChanges root={props.root} picker={picker} onRefresh={vcs.refresh} />
+        <RepositoryChanges root={props.root} picker={picker} focus={props.focus} onRefresh={vcs.refresh} />
       ) : (
         <>
           <Bar>{picker}</Bar>

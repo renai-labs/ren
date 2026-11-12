@@ -1,6 +1,7 @@
 import { DateTime, Option } from "effect"
 import { flushSync } from "react-dom"
 import {
+  use,
   useRef,
   useState,
   type KeyboardEvent,
@@ -48,6 +49,8 @@ import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
+import { DiffFile } from "./diff-file.js"
+import { OpenChanges } from "./open-changes.js"
 import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
 import {
   Attachment,
@@ -58,7 +61,7 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from "@ren/ui/code-block"
+import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
@@ -706,34 +709,8 @@ function StepRow(props: {
   )
 }
 
-const lineVariant = (type: string) => {
-  if (type === "addition") return "added"
-  return type === "deletion" ? "removed" : "default"
-}
-
-function FileDiff(props: { file: PatchFiles.File; titled: boolean }) {
-  return (
-    <CodeBlock size="sm">
-      {props.titled ? (
-        <CodeBlockHeader>
-          <CodeBlockTitle>{props.file.path}</CodeBlockTitle>
-        </CodeBlockHeader>
-      ) : null}
-      <CodeBlockContent wrap className="max-h-64">
-        {props.file.view.diff.hunks
-          .flatMap((hunk) => hunk.lines)
-          .map((line, index) => (
-            // oxlint-disable-next-line react/no-array-index-key -- diff lines have no identity besides their place
-            <CodeBlockLine key={index} variant={lineVariant(line.type)}>
-              {line.text.replace(/\n$/u, "")}
-            </CodeBlockLine>
-          ))}
-      </CodeBlockContent>
-    </CodeBlock>
-  )
-}
-
 function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: ReadonlyArray<PatchFiles.File> }) {
+  const openChanges = use(OpenChanges)
   const additions = props.files.reduce((total, file) => total + file.additions, 0)
   const deletions = props.files.reduce((total, file) => total + file.deletions, 0)
   return (
@@ -753,7 +730,23 @@ function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: Re
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-2">
           {props.files.map((file) => (
-            <FileDiff key={file.path} file={file} titled={props.files.length > 1} />
+            <DiffFile
+              key={file.path}
+              view={file.view}
+              capped
+              action={
+                openChanges ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-mr-2 text-muted-foreground"
+                    onClick={() => openChanges(file.path)}
+                  >
+                    Open in Changes
+                  </Button>
+                ) : undefined
+              }
+            />
           ))}
         </TraceCollapsibleContent>
       </TraceCollapsible>

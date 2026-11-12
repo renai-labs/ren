@@ -37,6 +37,7 @@ export interface Diff {
   readonly hunks: ReadonlyArray<Hunk>
   readonly deletionLines: ReadonlyArray<string>
   readonly additionLines: ReadonlyArray<string>
+  readonly patch?: string | undefined
   readonly cacheKey: string
 }
 
@@ -252,6 +253,7 @@ const build = (file: string, patch: string, cacheKey: string): Diff => {
     hunks: toHunks(partial.hunks),
     deletionLines: partial.hunks.flatMap((hunk) => sideLines(hunk.lines, "+")),
     additionLines: partial.hunks.flatMap((hunk) => sideLines(hunk.lines, "-")),
+    patch: input,
     cacheKey,
   }
 }
@@ -297,3 +299,36 @@ export const normalize = (input: Input): View => ({
 
 export const text = (view: View, side: "deletions" | "additions") =>
   (side === "deletions" ? view.diff.deletionLines : view.diff.additionLines).join("")
+
+export const mergedStatus = (views: ReadonlyArray<View>) =>
+  views.reduce<Status>(
+    (previous, view) => (previous === "added" && view.status !== "deleted" ? "added" : (view.status ?? "modified")),
+    "modified",
+  )
+
+export const merge = (views: ReadonlyArray<View>): ReadonlyArray<View> => {
+  const first = views.at(0)
+  const last = views.at(-1)
+  if (!first || !last) return views
+  const chained = views.every(
+    (view, index) =>
+      !view.diff.partial && (index === 0 || text(views[index - 1] ?? view, "additions") === text(view, "deletions")),
+  )
+  if (!chained) return views
+  const merged =
+    views.length === 1
+      ? first
+      : normalize({
+          file: first.file,
+          before: text(first, "deletions"),
+          after: text(last, "additions"),
+          status: mergedStatus(views),
+          additions: 0,
+          deletions: 0,
+        })
+  const counts = merged.diff.hunks.reduce(
+    (result, hunk) => ({ additions: result.additions + hunk.additions, deletions: result.deletions + hunk.deletions }),
+    { additions: 0, deletions: 0 },
+  )
+  return [{ ...merged, ...counts }]
+}
