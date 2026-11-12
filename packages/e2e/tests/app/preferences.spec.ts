@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { createUser, password, signIn, uniqueEmail } from "../lib/servers.js"
+import { createOrganization, createUser, password, signIn, uniqueEmail } from "../lib/servers.js"
 
 test("renames the account and picks a theme", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("rename") })
@@ -38,4 +38,27 @@ test("changes the password", async ({ page, request }) => {
   await expect(dialog).toBeHidden()
   await expect(page.getByText("Password changed")).toBeVisible()
   expect((await signIn(request, { email, password: "second password" })).ok()).toBe(true)
+})
+
+test("keeps the diff style chosen in the Changes tab after a reload", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Set up the project")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: 30_000 })
+  await page.getByRole("button", { name: "Open panel", exact: true }).click()
+  const panel = page.getByRole("complementary", { name: "Workspace" })
+  await panel.getByRole("button", { name: /^Changes:/ }).click()
+  await expect(panel.getByRole("button", { name: "Stacked", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await panel.getByRole("button", { name: "Split", exact: true }).click()
+  await expect(panel.getByRole("button", { name: "Split", exact: true })).toHaveAttribute("aria-pressed", "true")
+
+  await page.reload()
+  await page.getByRole("button", { name: "Open panel", exact: true }).click()
+  await panel.getByRole("button", { name: /^Changes:/ }).click()
+  await expect(panel.getByRole("button", { name: "Split", exact: true })).toHaveAttribute("aria-pressed", "true")
+
+  await page.goto("/app/settings/preferences")
+  await expect(page.getByRole("combobox", { name: "Diff style" })).toContainText("Split")
 })

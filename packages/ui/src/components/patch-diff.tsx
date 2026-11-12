@@ -4,10 +4,12 @@ import { PatchDiff as PatchDiffPrimitive } from "@pierre/diffs/react"
 function PatchDiff({
   patch,
   theme,
+  diffStyle = "unified",
   children,
 }: {
   patch: string
   theme: "system" | "light" | "dark"
+  diffStyle?: "unified" | "split"
   children: ReactNode
 }) {
   return (
@@ -19,7 +21,7 @@ function PatchDiff({
       options={{
         theme: { dark: "pierre-dark", light: "pierre-light" },
         themeType: theme,
-        diffStyle: "unified",
+        diffStyle,
         overflow: "wrap",
         lineDiffType: "word",
         unsafeCSS:

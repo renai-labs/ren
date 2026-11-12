@@ -74,6 +74,10 @@ export const details = [
   { value: "compact", label: "Compact" },
   { value: "detailed", label: "Detailed" },
 ]
+export const diffStyles = [
+  { value: "unified", label: "Stacked" },
+  { value: "split", label: "Split" },
+]
 export const deliveries = [
   { value: "steer", label: "Steer the current turn" },
   { value: "queue", label: "Queue for the next turn" },

@@ -12,6 +12,9 @@ import { FileTree } from "@ren/ui/file-tree"
 import { PatchDiff } from "@ren/ui/patch-diff"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { Theme } from "../../components/theme.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { useWidth } from "../../lib/use-width.js"
+import { Platform } from "../../platform/platform.js"
 import { WorkspacePending } from "./workspace-state.js"
 
 interface Change {
@@ -23,6 +26,10 @@ interface Change {
 }
 
 type Source = "repository" | "edits"
+
+type DiffStyle = "unified" | "split"
+
+const splitMinWidth = 640
 
 const workspace = /^.*\/workspace\/[^/]+\//u
 
@@ -74,15 +81,16 @@ function NoChanges(props: { description: string }) {
   )
 }
 
-function Changes(props: { changes: ReadonlyArray<Change>; empty: string }) {
+function Changes(props: { changes: ReadonlyArray<Change>; empty: string; diffStyle: DiffStyle }) {
   const theme = Theme.useTheme().preference
+  const [measure, width] = useWidth()
   const [chosen, setChosen] = useState<string>()
   const selected = props.changes.find((change) => change.path === chosen) ?? props.changes.at(0)
   if (props.changes.length === 0) return <NoChanges description={props.empty} />
   const additions = props.changes.reduce((total, change) => total + change.additions, 0)
   const deletions = props.changes.reduce((total, change) => total + change.deletions, 0)
   return (
-    <div className="flex min-h-0 flex-1">
+    <div ref={measure} className="flex min-h-0 flex-1">
       <div className="flex w-52 shrink-0 flex-col border-r">
         <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs text-muted-foreground tabular-nums">
           {props.changes.length === 1 ? "1 file" : `${props.changes.length} files`}
@@ -95,7 +103,12 @@ function Changes(props: { changes: ReadonlyArray<Change>; empty: string }) {
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-1">
         {selected?.patches.map((each, index) => (
-          <PatchDiff key={each.patch} patch={each.patch} theme={theme}>
+          <PatchDiff
+            key={each.patch}
+            patch={each.patch}
+            theme={theme}
+            diffStyle={(width ?? splitMinWidth) >= splitMinWidth ? props.diffStyle : "unified"}
+          >
             <span className="flex items-center gap-2 py-2 text-xs text-muted-foreground tabular-nums">
               {selected.patches.length > 1 ? `Change ${index + 1}` : selected.path}
               <span className="text-chart-2">+{each.additions}</span>
@@ -108,33 +121,52 @@ function Changes(props: { changes: ReadonlyArray<Change>; empty: string }) {
   )
 }
 
-function Bar(props: { children: ReactNode }) {
-  return <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">{props.children}</div>
+function Bar(props: { children?: ReactNode; diffToggle: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+      {props.children}
+      <div className="ml-auto flex items-center gap-1">
+        {props.diffToggle}
+        {props.actions}
+      </div>
+    </div>
+  )
 }
 
-function RepositoryChanges(props: { root: Session.ID; picker: ReactNode; onRefresh: () => void }) {
+function RepositoryChanges(props: {
+  root: Session.ID
+  picker: ReactNode
+  diffToggle: ReactNode
+  diffStyle: DiffStyle
+  onRefresh: () => void
+}) {
   const diff = ChatReact.useVcsDiff(props.root, "working")
   return (
     <>
-      <Bar>
+      <Bar
+        diffToggle={props.diffToggle}
+        actions={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Refresh changes"
+            className="text-muted-foreground"
+            onClick={() => {
+              props.onRefresh()
+              diff.refresh()
+            }}
+          >
+            <IconRefresh />
+          </Button>
+        }
+      >
         {props.picker}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Refresh changes"
-          className="ml-auto text-muted-foreground"
-          onClick={() => {
-            props.onRefresh()
-            diff.refresh()
-          }}
-        >
-          <IconRefresh />
-        </Button>
       </Bar>
       {AsyncResult.isSuccess(diff.result) ? (
         <Changes
           changes={repositoryOf(diff.result.value)}
           empty="The repository has no changes since its last commit."
+          diffStyle={props.diffStyle}
         />
       ) : (
         <WorkspacePending
@@ -151,9 +183,31 @@ function RepositoryChanges(props: { root: Session.ID; picker: ReactNode; onRefre
 export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<SessionMessage.Info> }) {
   const vcs = ChatReact.useVcs(props.root)
   const repository = AsyncResult.isSuccess(vcs.result) && vcs.result.value.provider ? vcs.result.value : undefined
+  const platform = Platform.usePlatform()
   const [chosen, setChosen] = useState<Source>()
+  const [diffStyle, setDiffStyle] = useState(() => ChatPreferences.diffStyle.read(platform.storage))
+  const diffToggle = (
+    <ToggleGroup
+      size="sm"
+      aria-label="Diff style"
+      value={[diffStyle]}
+      onValueChange={(value: ReadonlyArray<string>) => {
+        const next = value.at(0)
+        if (next !== "unified" && next !== "split") return
+        ChatPreferences.diffStyle.write(platform.storage, next)
+        setDiffStyle(next)
+      }}
+    >
+      <ToggleGroupItem value="unified">Stacked</ToggleGroupItem>
+      <ToggleGroupItem value="split">Split</ToggleGroupItem>
+    </ToggleGroup>
+  )
   const edits = (
-    <Changes changes={editsOf(props.messages)} empty="Files Ren creates or edits in this chat show up here as diffs." />
+    <Changes
+      changes={editsOf(props.messages)}
+      empty="Files Ren creates or edits in this chat show up here as diffs."
+      diffStyle={diffStyle}
+    />
   )
   if (AsyncResult.isInitial(vcs.result))
     return (
@@ -164,7 +218,13 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
         onRetry={vcs.refresh}
       />
     )
-  if (!repository) return edits
+  if (!repository)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Bar diffToggle={diffToggle} />
+        {edits}
+      </div>
+    )
   const source = chosen ?? "repository"
   const picker = (
     <>
@@ -190,10 +250,16 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {source === "repository" ? (
-        <RepositoryChanges root={props.root} picker={picker} onRefresh={vcs.refresh} />
+        <RepositoryChanges
+          root={props.root}
+          picker={picker}
+          diffToggle={diffToggle}
+          diffStyle={diffStyle}
+          onRefresh={vcs.refresh}
+        />
       ) : (
         <>
-          <Bar>{picker}</Bar>
+          <Bar diffToggle={diffToggle}>{picker}</Bar>
           {edits}
         </>
       )}
