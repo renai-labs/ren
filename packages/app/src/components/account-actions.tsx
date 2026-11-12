@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { IconBuilding, IconChevronDown, IconCube, IconDots, IconTrash } from "@tabler/icons-react"
+import { IconBuilding, IconChevronDown, IconCube } from "@tabler/icons-react"
 import type { AppProfileInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
@@ -9,117 +9,17 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { ConfirmDialog, type Confirmation } from "./confirm-dialog.js"
-import { isLastSpace, lastSpaceWarning, signsIn } from "../lib/apps.js"
-import { useSignIn } from "../lib/use-sign-in.js"
+import { ConfirmDialog } from "./confirm-dialog.js"
+import { lastSpaceWarning } from "../lib/apps.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
 import { RouterContext } from "../lib/router-context.js"
 
 type AppProfile = AppProfileInfo
-
-export function AccountActions(props: {
-  profile: AppProfile
-  onOpen: () => void
-  onRemove?: (() => void | Promise<unknown>) | undefined
-  onDelete?: (() => Promise<unknown>) | undefined
-}) {
-  const [confirming, setConfirming] = useState<{ confirmation: Confirmation; run: () => void | Promise<unknown> }>()
-  const signIn = useSignIn()
-  const startSignIn = (item: AppProfile["items"][number]) => signIn.start(props.profile.id, item)
-  const items = props.profile.items.filter((item) => item.status !== "unavailable")
-  const missing = items.filter((item) => !item.optional && item.status !== "ok")
-  const first = missing.at(0)
-  const remove = props.onRemove
-  const deleting = props.onDelete
-  return (
-    <>
-      {first ? (
-        <Button
-          size="sm"
-          disabled={signIn.pending}
-          onClick={() => (missing.length === 1 && signsIn(first) ? startSignIn(first) : props.onOpen())}
-        >
-          {missing.length === 1 ? "Connect" : `Connect ${missing.length}`}
-        </Button>
-      ) : null}
-      {remove || deleting ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground"
-                aria-label={`${props.profile.name} actions`}
-              />
-            }
-          >
-            <IconDots />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuGroup>
-              {remove ? (
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() =>
-                    isLastSpace(props.profile)
-                      ? setConfirming({
-                          confirmation: {
-                            title: `Remove ${props.profile.name}?`,
-                            description: lastSpaceWarning(props.profile),
-                            action: "Remove and delete",
-                          },
-                          run: remove,
-                        })
-                      : void remove()
-                  }
-                >
-                  <IconTrash />
-                  Remove from space
-                </DropdownMenuItem>
-              ) : null}
-              {deleting ? (
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() =>
-                    setConfirming({
-                      confirmation: {
-                        title: `Delete ${props.profile.name}?`,
-                        description:
-                          "Ren deletes this account and its saved sign-ins. Every space that uses it loses access at once.",
-                        action: "Delete account",
-                      },
-                      run: deleting,
-                    })
-                  }
-                >
-                  <IconTrash />
-                  Delete account
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-      {confirming ? (
-        <ConfirmDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setConfirming(undefined)
-          }}
-          confirmation={confirming.confirmation}
-          onConfirm={confirming.run}
-        />
-      ) : null}
-    </>
-  )
-}
 
 export function AccountAccess(props: { profile: AppProfile }) {
   const { api } = RouterContext.useRouterContext()
@@ -186,7 +86,7 @@ export function AccountAccess(props: { profile: AppProfile }) {
           confirmation={{
             title: `Remove ${props.profile.name} from its last space?`,
             description: lastSpaceWarning(props.profile),
-            action: "Remove and delete",
+            action: "Remove from space",
           }}
           onConfirm={() => remove(confirming)}
         />

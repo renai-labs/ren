@@ -19,7 +19,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { useAddition, type Added } from "../../components/add-to-space.js"
 import { AppDetailFrame, AppDetailSample, AppDetailsSample, AppHeader } from "../../components/app-detail.js"
-import { AccountList, AppSections, SpacePills } from "../../components/app-list.js"
+import { AccountList, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
@@ -28,7 +28,7 @@ import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { connectLabel, fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
+import { fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Seed } from "../../lib/seed.js"
@@ -45,33 +45,20 @@ type Space = ReturnType<typeof useSpaces>["joined"][number]
 
 const withoutMention = (prompt: string) => prompt.replace(/^@\S+\s*/u, "")
 
-function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) => void }) {
-  const profiles = useAppProfiles([props.appId]).of(props.appId)
+function AppAccounts(props: { app: CatalogApp; onProfile: (target: ProfileTarget) => void }) {
+  const profiles = useAppProfiles([props.app.id]).of(props.app.id)
   return (
     <AccountList
       title="Accounts"
+      app={props.app}
       actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => props.onProfile({ appId: props.appId })}
-        >
-          <IconPlus />
+        <Button size="sm" onClick={() => props.onProfile({ appId: props.app.id })}>
+          <IconPlus data-icon="inline-start" />
           New account
         </Button>
       }
       profiles={profiles}
-      aside={(each) => <SpacePills profile={each} />}
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
-      action={(each) => {
-        const label = connectLabel(each)
-        return label ? (
-          <Button size="sm" onClick={() => props.onProfile({ appId: each.appId, profileId: each.id })}>
-            {label}
-          </Button>
-        ) : null
-      }}
     />
   )
 }
@@ -298,7 +285,7 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
             {body && body !== app.description ? (
               <p className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</p>
             ) : null}
-            <AppAccounts appId={app.id} onProfile={setEditing} />
+            <AppAccounts app={app} onProfile={setEditing} />
             <AppSections app={app} />
           </div>
         )}

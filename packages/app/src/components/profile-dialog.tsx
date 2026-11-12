@@ -12,6 +12,7 @@ import {
   IconChevronRight,
   IconCube,
   IconLock,
+  IconSearch,
 } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
@@ -19,11 +20,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/d
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia } from "@ren/ui/empty"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { Spinner } from "@ren/ui/spinner"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Switch } from "@ren/ui/switch"
 import { AccountAccess } from "./account-actions.js"
 import { AppIcon } from "./app-icon.js"
+import { SpacePills } from "./app-list.js"
+import { ConfirmDialog } from "./confirm-dialog.js"
 import { Row, Rows } from "./page.js"
 import { useApp, useApps } from "../lib/use-app.js"
 import { useAppProfiles } from "../lib/use-app-profiles.js"
@@ -31,7 +35,8 @@ import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { useMe } from "../lib/use-me.js"
 import { errorMessage } from "../lib/errors.js"
-import { gaps, signsIn, slugOf, type CatalogApp } from "../lib/apps.js"
+import { gaps, reachedSpaces, signsIn, slugOf, type CatalogApp } from "../lib/apps.js"
+import { Search } from "../lib/search.js"
 import { cn } from "cn"
 import { useScrollEdges } from "../lib/use-scroll-edges.js"
 import { RouterContext } from "../lib/router-context.js"
@@ -45,6 +50,7 @@ export type ProfileTarget = {
   profileId?: string | undefined
   from?: From | undefined
   edit?: boolean | undefined
+  existing?: boolean | undefined
 }
 
 const freeSlug = (name: string, taken: ReadonlySet<string>) => {
@@ -57,21 +63,24 @@ const freeSlug = (name: string, taken: ReadonlySet<string>) => {
 }
 
 function defaultName(input: {
-  typed: string
   from: From | undefined
   only: boolean
   picked: ReadonlySet<string>
   spaces: ReadonlyArray<{ id: string; name: string }>
+  others: ReadonlyArray<AppProfile>
   app: App
   user: string
 }) {
-  if (input.typed.trim()) return input.typed.trim()
+  const first = input.user.split(" ").at(0)
+  if (input.only || input.from?.private) return [input.app.name, first].join(" · ")
+  const targets = input.from ? [input.from.spaceId] : [...input.picked]
   const chosen = input.spaces.filter((space) => input.picked.has(space.id))
-  const space =
-    input.only || input.from?.private
-      ? undefined
-      : (input.from?.name ?? (chosen.length === 1 ? chosen.at(0)?.name : undefined))
-  return [space, input.app.name, input.user.split(" ").at(0)].filter(Boolean).join(" · ")
+  const space = input.from?.name ?? (chosen.length === 1 ? chosen.at(0)?.name : undefined)
+  const isFirst = !input.others.some(
+    (other) =>
+      other.kind === "shared" && (other.allSpaces || other.spaces.some((listed) => targets.includes(listed.id))),
+  )
+  return [space, input.app.name, isFirst ? undefined : first].filter(Boolean).join(" · ")
 }
 
 const slideIn = "animate-in duration-250 ease-out fade-in-0 slide-in-from-right-4 motion-reduce:slide-in-from-right-0"
@@ -84,7 +93,8 @@ function stepMotion(input: { fresh: boolean; creating: boolean; step: string; ba
   )
 }
 
-function stepOf(input: { creating: boolean; edit: boolean; section: "edit" | "connection" }) {
+function stepOf(input: { creating: boolean; existing: boolean; edit: boolean; section: "edit" | "connection" }) {
+  if (input.existing) return "existing"
   if (input.creating) return "create"
   return input.edit ? input.section : "connect"
 }
@@ -107,7 +117,7 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
   if (!app && !found.pending) return null
   const creating = !profileId
   const fresh = !props.profileId
-  const step = stepOf({ creating, edit: Boolean(props.edit), section })
+  const step = stepOf({ creating, existing: Boolean(props.existing), edit: Boolean(props.edit), section })
   const go = (next: "edit" | "connection") => {
     setBack(next === "edit")
     setReplacing(false)
@@ -121,9 +131,9 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
       }}
     >
       <DialogContent // ast-grep-ignore: require-overlay-title -- each step renders its DialogTitle through Screen
-        className="flex min-h-136 flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        className="flex h-[min(--spacing(148),calc(100dvh-(--spacing(8))))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
-        {fresh ? (
+        {fresh && step !== "existing" ? (
           <span className="absolute top-4.5 left-5 text-xs text-muted-foreground tabular-nums">
             Step {creating ? 1 : 2} of 2
           </span>
@@ -139,7 +149,7 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
             Back
           </Button>
         ) : null}
-        <div key={step} className={cn("flex flex-1 flex-col", stepMotion({ fresh, creating, step, back }))}>
+        <div key={step} className={cn("flex min-h-0 flex-1 flex-col", stepMotion({ fresh, creating, step, back }))}>
           {app ? (
             <ProfileStep
               app={app}
@@ -184,6 +194,8 @@ function ProfileStep(props: {
 }) {
   const app = props.app
   const profile = props.profile
+  if (props.step === "existing" && props.from)
+    return <ExistingStep app={app} from={props.from} onDone={props.onClose} />
   if (props.step === "create") return <CreateStep app={app} from={props.from} onCreated={props.onCreated} />
   if (props.step === "edit" && profile)
     return <EditStep app={app} profile={profile} onConnection={props.onConnection} onDone={props.onClose} />
@@ -226,13 +238,13 @@ function Screen(props: {
 }) {
   return (
     <form
-      className="flex flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault()
         props.onSubmit?.()
       }}
     >
-      <Empty className="gap-8 px-10 pt-14 pb-6">
+      <Empty className="min-h-0 justify-start gap-8 overflow-y-auto overscroll-contain px-10 pt-14 pb-6">
         <EmptyHeader className="max-w-xs gap-3">
           <EmptyMedia className="mb-3">
             <AppIcon
@@ -247,7 +259,7 @@ function Screen(props: {
         {props.children ? <EmptyContent className="max-w-sm gap-4">{props.children}</EmptyContent> : null}
       </Empty>
       {props.action || props.note ? (
-        <div className="flex flex-col gap-3 px-10 pb-8">
+        <div className="flex shrink-0 flex-col gap-3 px-10 pt-2 pb-8">
           {props.action}
           {props.note ? <p className="text-center text-xs text-muted-foreground">{props.note}</p> : null}
         </div>
@@ -266,12 +278,27 @@ function SpacesField(props: {
 }) {
   const row = "flex h-11 shrink-0 items-center justify-between gap-3 px-3"
   const [listRef, edges] = useScrollEdges({ axis: "y" })
+  const [query, setQuery] = useState("")
   const every = props.every
   const onOnly = props.onOnly
+  const shown = props.spaces.filter((space) => Search.matches(query, space.name))
   return (
     <Field className="text-left">
       <FieldLabel>Spaces</FieldLabel>
       <div className="flex flex-col divide-y overflow-hidden rounded-lg border bg-card">
+        {props.spaces.length > 5 ? (
+          <InputGroup className="h-11 rounded-none border-0 bg-transparent shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
+            <InputGroupAddon>
+              <IconSearch />
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label="Search spaces"
+              placeholder="Design"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </InputGroup>
+        ) : null}
         {every ? (
           <div className={row}>
             <FieldLabel htmlFor="profile-every" className="flex-1 font-normal">
@@ -290,7 +317,8 @@ function SpacesField(props: {
             !edges.start && edges.end && "mask-b-from-65%",
           )}
         >
-          {props.spaces.map((space) => (
+          {shown.length === 0 ? <p className="p-3 text-sm text-muted-foreground">No spaces match “{query}”</p> : null}
+          {shown.map((space) => (
             <div key={space.id} className={row}>
               <FieldLabel htmlFor={`profile-space-${space.id}`} className="min-w-0 flex-1 font-normal">
                 <IconCube className="size-4 shrink-0 text-muted-foreground" />
@@ -393,10 +421,12 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
             {edit.pending ? <Spinner data-icon="inline-start" /> : null}
             Save
           </Button>
+          <DeleteAccount profile={profile} onDeleted={props.onDone} />
         </>
       }
     >
       <FieldGroup className="w-full gap-6">
+        {profile.items.length > 0 ? <ConnectionField profile={profile} onConnection={props.onConnection} /> : null}
         <Field className="text-left">
           <FieldLabel htmlFor="profile-name">Name</FieldLabel>
           <Input id="profile-name" required value={edit.name} onChange={(event) => edit.setName(event.target.value)} />
@@ -410,10 +440,50 @@ function EditStep(props: { app: App; profile: AppProfile; onConnection: () => vo
             {...(profile.canShareEverySpace && { every: { checked: edit.every, onChange: edit.setEvery } })}
           />
         ) : null}
-        {profile.items.length > 0 ? <ConnectionField profile={profile} onConnection={props.onConnection} /> : null}
         <DependenciesField profile={profile} />
       </FieldGroup>
     </Screen>
+  )
+}
+
+function DeleteAccount(props: { profile: AppProfile; onDeleted: () => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const remove = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
+  const [confirming, setConfirming] = useState(false)
+  const profile = props.profile
+  const used = reachedSpaces(profile)
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-10 w-full text-destructive hover:text-destructive"
+        onClick={() => setConfirming(true)}
+      >
+        Delete account
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        confirmation={{
+          title: `Delete ${profile.name}?`,
+          description: `${used.length > 0 ? `${used.join(", ")} ${used.length === 1 ? "uses" : "use"} it. ` : ""}Ren deletes the account and its sign-ins. Those spaces use Ren credits or show Not connected.`,
+          action: "Delete account",
+        }}
+        onConfirm={() =>
+          remove.mutateAsync(
+            { id: profile.id },
+            {
+              onSuccess: () => {
+                toast.success(`${profile.name} deleted`)
+                props.onDeleted()
+              },
+              onError: (error) => toast.error("Couldn’t delete the account", { description: errorMessage(error) }),
+            },
+          )
+        }
+      />
+    </>
   )
 }
 
@@ -498,6 +568,96 @@ function ConnectionField(props: { profile: AppProfile; onConnection: () => void 
   )
 }
 
+function ExistingStep(props: { app: App; from: From; onDone: () => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const me = useMe().user.id
+  const profiles = useAppProfiles([props.app.id])
+  const access = useMutation(api["app-profile"].access.mutationOptions())
+  const promote = useMutation(api["app-profile"].promote.mutationOptions())
+  const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set())
+  const [adding, setAdding] = useState<string>()
+  const from = props.from
+  const reaches = (profile: AppProfile) =>
+    profile.allSpaces ||
+    profile.spaces.some((space) => space.id === from.spaceId) ||
+    (profile.kind === "private" && from.private === true && profile.userId === me)
+  const canAdd = (profile: AppProfile) =>
+    profile.kind === "private"
+      ? profile.userId === me && !from.private
+      : profile.canAdd.includes(from.private ? "ownPrivate" : "joined")
+  const candidates = profiles.of(props.app.id).filter((profile) => added.has(profile.id) || !reaches(profile))
+  const add = (profile: AppProfile) => {
+    setAdding(profile.id)
+    void (
+      profile.kind === "private"
+        ? promote.mutateAsync({ id: profile.id, spaceId: from.spaceId })
+        : access.mutateAsync({ id: profile.id, add: [from.spaceId] })
+    )
+      .then(
+        () => setAdded((previous) => new Set([...previous, profile.id])),
+        (error: unknown) => toast.error(`Couldn’t add ${profile.name}`, { description: errorMessage(error) }),
+      )
+      .finally(() => setAdding(undefined))
+  }
+  return (
+    <Screen
+      app={props.app}
+      title={`Use an existing ${props.app.name} account`}
+      description={
+        from.private
+          ? "Only you can use the accounts you add here."
+          : `Everyone in ${from.name} can use the accounts you add.`
+      }
+      onSubmit={props.onDone}
+      action={
+        <Button type="submit" className="h-10 w-full">
+          Done
+        </Button>
+      }
+    >
+      {profiles.pending ? <SkeletonRows count={2} label="Loading accounts" /> : null}
+      {!profiles.pending && candidates.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No other {props.app.name} accounts in your organization.</p>
+      ) : null}
+      {!profiles.pending && candidates.length > 0 ? (
+        <div className="flex w-full flex-col divide-y overflow-hidden rounded-lg border bg-card text-left">
+          {candidates.map((profile) => (
+            <div key={profile.id} className="flex min-h-14 items-center gap-3 px-3 py-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate text-sm">{profile.name}</span>
+                {canAdd(profile) ? (
+                  <span className="flex flex-wrap gap-1">
+                    <SpacePills profile={profile} />
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Only its owner or an admin can add it</span>
+                )}
+              </div>
+              {added.has(profile.id) ? (
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <IconCheck className="size-4 text-chart-2" />
+                  Added
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canAdd(profile) || adding !== undefined}
+                  onClick={() => add(profile)}
+                >
+                  {adding === profile.id ? <Spinner data-icon="inline-start" /> : null}
+                  Add
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </Screen>
+  )
+}
+
 function createDescription(from: From | undefined) {
   if (!from) return "You’ll connect it next."
   if (from.private) return "Only you can use it. You’ll connect it next."
@@ -510,25 +670,25 @@ function CreateStep(props: { app: App; from: From | undefined; onCreated: (profi
   const user = useMe().user.name
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const create = useMutation({ ...api["app-profile"].create.mutationOptions() })
-  const [name, setName] = useState("")
+  const [name, setName] = useState<string>()
   const [only, setOnly] = useState(props.from?.private === true)
   const [picked, setPicked] = useState<ReadonlySet<string>>(
     () => new Set(props.from ? [props.from.spaceId] : spaces.slice(0, 1).map((space) => space.id)),
   )
   const from = props.from
   const blocked = !from && !only && picked.size === 0
+  const accountName = name ?? defaultName({ from, only, picked, spaces, others, app: props.app, user })
   return (
     <Screen
       app={props.app}
       title={`New ${props.app.name} account`}
       description={createDescription(from)}
       onSubmit={() => {
-        if (blocked) return
-        const accountName = defaultName({ typed: name, from, only, picked, spaces, app: props.app, user })
+        if (blocked || !accountName.trim()) return
         create.mutate(
           {
             appId: props.app.id,
-            name: accountName,
+            name: accountName.trim(),
             slug: freeSlug(accountName, new Set(others.map((each) => each.slug))),
             kind: only ? "private" : "shared",
             ...(!only && { spaceIds: [...picked] }),
@@ -539,42 +699,31 @@ function CreateStep(props: { app: App; from: From | undefined; onCreated: (profi
       action={
         <>
           {create.error ? <FieldError className="text-center">{errorMessage(create.error)}</FieldError> : null}
-          <Button type="submit" className="h-10 w-full" disabled={create.isPending || blocked}>
+          <Button type="submit" className="h-10 w-full" disabled={create.isPending || blocked || !accountName.trim()}>
             {create.isPending ? <Spinner data-icon="inline-start" /> : null}
             Create account
           </Button>
         </>
       }
     >
-      {others.length > 0 || !from ? (
-        <FieldGroup className="w-full gap-6">
-          {others.length > 0 ? (
-            <Field className="text-left">
-              <FieldLabel htmlFor="profile-name">Name</FieldLabel>
-              <Input
-                id="profile-name"
-                // oxlint-disable-next-line jsx-a11y/no-autofocus -- a second account needs a name before anything else
-                autoFocus
-                placeholder={defaultName({ typed: "", from, only, picked, spaces, app: props.app, user })}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-          ) : null}
-          {from ? null : (
-            <SpacesField
-              spaces={spaces}
-              picked={picked}
-              only={only}
-              onPick={(next) => {
-                setOnly(false)
-                setPicked(next)
-              }}
-              onOnly={setOnly}
-            />
-          )}
-        </FieldGroup>
-      ) : null}
+      <FieldGroup className="w-full gap-6">
+        <Field className="text-left">
+          <FieldLabel htmlFor="profile-name">Name</FieldLabel>
+          <Input id="profile-name" value={accountName} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        {from ? null : (
+          <SpacesField
+            spaces={spaces}
+            picked={picked}
+            only={only}
+            onPick={(next) => {
+              setOnly(false)
+              setPicked(next)
+            }}
+            onOnly={setOnly}
+          />
+        )}
+      </FieldGroup>
     </Screen>
   )
 }

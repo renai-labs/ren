@@ -12,7 +12,7 @@ import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
 import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
-import { categoryLabel, gaps, reachedSpaces } from "../lib/apps.js"
+import { categoryLabel, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo } from "@ren/client"
@@ -281,7 +281,7 @@ export function AppSheet(props: {
         if (!open) props.onClose()
       }}
     >
-      <SheetContent className="gap-0 data-[side=right]:sm:max-w-3xl">
+      <SheetContent className="gap-0 data-[side=right]:sm:max-w-xl">
         {app ? (
           <AppDetails app={app} action={props.action}>
             {props.children}
@@ -444,7 +444,7 @@ function McpDialog(props: {
 
 export function SpacePills(props: { profile: AppProfile }) {
   const names = reachedSpaces(props.profile)
-  if (names.length === 0) return <span>Not in any space</span>
+  if (names.length === 0) return <span className="text-xs text-muted-foreground">Not in any space</span>
   return names.map((name) => (
     <Badge key={name} variant="secondary" className="rounded-full px-2 font-normal">
       {name}
@@ -454,15 +454,12 @@ export function SpacePills(props: { profile: AppProfile }) {
 
 export function AccountList(props: {
   title: string
+  app: Pick<CatalogApp, "mcps">
   actions?: ReactNode
   profiles: ReadonlyArray<AppProfile>
   empty?: string
-  caption?: (profile: AppProfile) => string
-  aside?: (profile: AppProfile) => ReactNode
-  action: (profile: AppProfile) => ReactNode
-  onOpen?: ((profile: AppProfile) => void) | undefined
+  onOpen: (profile: AppProfile) => void
 }) {
-  if (props.profiles.length === 0 && !props.actions) return null
   return (
     <section className="flex flex-col gap-3">
       <div className="flex min-h-6.5 items-center justify-between gap-2">
@@ -479,8 +476,7 @@ export function AccountList(props: {
       ) : (
         <div className="-mx-3 flex flex-col gap-1">
           {props.profiles.map((profile) => {
-            const missing = gaps(profile).length > 0
-            const open = props.onOpen
+            const status = statusOf(props.app, [profile])
             return (
               <div
                 key={profile.id}
@@ -488,44 +484,30 @@ export function AccountList(props: {
               >
                 <span
                   aria-hidden
-                  className={cn("size-2 shrink-0 rounded-full", missing ? "bg-chart-3" : "bg-chart-2")}
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    status === "connected" && "bg-chart-2",
+                    status === "credits" && "bg-muted-foreground",
+                    (status === "expired" || status === "missing") && "bg-chart-3",
+                  )}
                 />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  {open ? (
-                    <Button
-                      variant="ghost"
-                      data-slot="account-open"
-                      onClick={() => open(profile)}
-                      className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-lg hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-                    >
-                      {profile.name}
-                    </Button>
-                  ) : (
-                    <span className="truncate text-sm">{profile.name}</span>
+                  <Button
+                    variant="ghost"
+                    data-slot="account-open"
+                    onClick={() => props.onOpen(profile)}
+                    className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-lg hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
+                  >
+                    {profile.name}
+                  </Button>
+                  {status === "connected" ? null : (
+                    <span className="truncate text-xs text-muted-foreground">{statusLabel[status]}</span>
                   )}
-                  {missing || props.caption ? (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {[missing ? "Not connected" : undefined, props.caption?.(profile)]
-                        .filter((part) => part !== undefined)
-                        .join(" · ")}
-                    </span>
-                  ) : null}
                 </div>
-                {props.aside ? (
-                  <div className="flex max-w-1/2 flex-wrap justify-end gap-1">{props.aside(profile)}</div>
-                ) : null}
-                <div
-                  className={cn(
-                    "relative flex shrink-0 items-center gap-1",
-                    open &&
-                      "transition-opacity duration-150 ease-out group-focus-within/row:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100",
-                  )}
-                >
-                  {props.action(profile)}
+                <div className="flex max-w-1/2 flex-wrap justify-end gap-1">
+                  <SpacePills profile={profile} />
                 </div>
-                {open && !missing ? (
-                  <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
-                ) : null}
+                <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
               </div>
             )
           })}

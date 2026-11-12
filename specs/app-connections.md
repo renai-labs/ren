@@ -17,17 +17,17 @@ Words:
 4. A connected official MCP replaces the managed version in that space. "Use Ren credits instead" removes the account's sign-ins and keys (`credential.remove`), and the managed version comes back.
 5. The managed version is always on when no account has the official sign-in. It is not a setting.
 6. A shared account that leaves its last space is deleted when it has no credentials, and kept when it has a sign-in or key. A kept account shows in Settings → Credentials. This is built (`AppProfiles.access`); infra's `unlist` still refuses the last space.
-7. **Delete** is only in Settings → Credentials. Every other page offers only **Remove from space**.
+7. Every account list is the same component (`AccountList`): a status dot, the name, a status line only when the account does not work, space pills and a chevron. Lists have no buttons or menus on rows; a row opens the account dialog, the same one everywhere. Delete is in that dialog. This is built.
 8. Removing an app from a space removes each of its shared accounts from that space. An account set to every space stays, and the page says so. A remove never deletes a private account: it stays in its owner's private space, and the page offers no Remove for it. Only Delete in Settings removes it.
 9. Two accounts that reach the same space cannot have the same name. Names compare trimmed and without case. This is built: create, rename, adding a space and promote fail with "An account named “{name}” is already in {space}."
 10. "Use here" on a private account makes it shared in the target space only. This is built: `promote` takes a `spaceId`.
-11. Default names: the space's first account of the app is `Space · App`. Each next one is `Space · App · FirstName`. A private space leaves out the space part. The name field always shows, filled in with the default.
+11. Default names: the space's first shared account of the app is `Space · App`. Each next one is `Space · App · FirstName`. A private account is `App · FirstName`. The name field always shows, filled in with the default. This is built (`profile-dialog.tsx`, `defaultName`).
 12. The agent never switches accounts by itself. An account whose sign-in expired keeps its servers, and a call fails with "Sign-in expired". This is built.
 13. Access to someone else's account goes through a share link (S8). An ask-and-grant flow comes later (§6).
 
 ## 2. Status of an app in a space
 
-The app computes the status from the app's MCPs and the accounts that reach the space. It goes in `app/src/lib/apps.ts` and every page uses it. The first row that matches wins.
+The app computes the status from the app's MCPs and the accounts that reach the space, with `statusOf` in `app/src/lib/apps.ts`. The apps table and the account rows use it; the other pages switch to it as they are rebuilt. The first row that matches wins.
 
 | Status          | Condition                                                                                     | Action         |
 | --------------- | --------------------------------------------------------------------------------------------- | -------------- |
@@ -250,18 +250,18 @@ Today: `features/spaces/space-apps.tsx`.
  │ Notion   ○ Not connected                     [Connect]             │
  └───────────────────────────────────────────────────────────────────┘
 
-┌─ Linear in Acme ───────────────────────────────────── ✕ ┐
-│ Accounts                                  [+ Add account]│   primary button
-│   Acme · Linear             Shrey   ✓          [⋯]       │
-│   Ops Linear                Priya   ✓          [⋯]       │
-│                       [Use an account from another space]│
-│                                                          │
-│ [Remove Linear from Acme]                                │
-└──────────────────────────────────────────────────────────┘
- ⋯ = Rename | Reconnect | Use Ren credits instead* | Remove from Acme**
-     * only for apps with a managed version and an account with a sign-in
-     ** reads "Remove Linear from Acme" on the only account
+┌─ Linear in Acme ─────────────────────────── ✕ ┐
+│ Accounts 2                    [+ Add account ▾]│   New account | Use existing account
+│ ● Acme · Linear                 (Acme)       › │
+│ ● Acme · Linear · Priya         (Acme)       › │
+│                                                │
+│ [Remove Linear from Acme]                      │
+└────────────────────────────────────────────────┘
+ Row ──► account dialog: Connection, Name, Spaces (searchable), Dependencies, Save, Delete account
+ Use existing account ──► the dialog lists this app's other accounts, each with [Add], then [Done]
 ```
+
+The sheet lists only the accounts in this space. This is built, except Remove Linear from Acme and the table's actions.
 
 Empty state: "No apps in Acme yet." with [Add app]. Non-members keep "Only members of this space see its apps."
 
@@ -318,40 +318,38 @@ An account with no spaces shows "—" and stays until someone deletes it. Admins
 
 Each page is reviewed in the browser against seeded data before it is committed. The seed is a local script outside the repo. It writes through core services, because the API cannot make a credential in `reconnect` or an account whose owner left the org. A second run resets the seeded accounts.
 
-People: Shrey (admin), Priya (member), Raj (left the org). Spaces: Acme (shared, Shrey and Priya), Ops (shared, Priya), Sales (shared, Priya), Shrey's personal space, Empty (shared, no apps).
+People: you (admin), Priya (member) and Raj (not in the org any more). Spaces: Acme (you and Priya), Ops (you and Priya), Sales (Priya only), Empty (you only), and your personal space.
 
-| Scenario                                | Seed                                                                 | Shows                 |
-| --------------------------------------- | -------------------------------------------------------------------- | --------------------- |
-| Managed app, empty account              | Kernel, empty shared account in Acme                                 | ◐, S2.10, S6          |
-| Managed app, own account                | Kernel, account with an `ok` sign-in in Ops                          | ✓, official replaces  |
-| OAuth app, connected, two accounts      | Linear, "Acme · Linear" and "Ops Linear", both `ok`, both in Acme    | ✓ 2 accounts, S2.7    |
-| Sign-in expired                         | GitHub, two accounts in Acme, one in `reconnect`                     | ⚠ 1 of 2, S3 pill     |
-| Not connected                           | Notion, empty account in Acme                                        | ○, S2.1               |
-| Several items, one done                 | An app with a sign-in, a key and a dependency, only the sign-in `ok` | S2.4                  |
-| Org OAuth app not set up                | An app whose provider has no org OAuth app                           | S2.6 admin and member |
-| Account in another space you can use    | Linear "Linear Sales" in Sales, Shrey can access it                  | S2.8 in Acme          |
-| Account in another space you cannot use | Priya's private Linear account, in Priya's personal space            | S2.9, S8              |
-| Private account                         | Shrey's private Linear account                                       | S5, S7 "Personal"     |
-| Account with no spaces                  | A shared account with a sign-in and no spaces                        | S7 "—"                |
-| Owner left the org                      | "Old GitHub", made by Raj                                            | S7 owner badge        |
-| Every-space account                     | A shared account with `all_spaces`                                   | S9 message            |
-| Duplicate name                          | Try to add a second "Acme · Linear" to Acme                          | rule 9 error          |
-| Empty states                            | The Empty space; a search with no results; a space with every app    | S1, S6                |
+| Scenario                                | Seed                                                                  | Shows                |
+| --------------------------------------- | --------------------------------------------------------------------- | -------------------- |
+| Managed app, empty account              | "Acme · Kernel" in Acme, no sign-in                                   | ◐, S2.10, S6         |
+| Managed app, own account                | "Ops · Kernel" in Ops, signed in                                      | ✓, official replaces |
+| Two connected accounts in one space     | "Acme · Linear" and "Acme · Linear · Priya" in Acme                   | ✓ 2 accounts, S2.7   |
+| Sign-in expired next to one that works  | "Acme · Notion" and "Acme · Notion · Priya" (expired) in Acme         | ⚠ 1 of 2, S3 pill    |
+| Not connected                           | "Acme · Airtable" in Acme, no sign-in                                 | ○, S2.1              |
+| No sign-in needed                       | "Acme · AllTrails" in Acme, no sign-in                                | ✓                    |
+| Several items, org OAuth app not set up | Custom app Acme CRM: signed in, key and Linear dependency missing     | S2.4, S2.6           |
+| Account in another space you can use    | "Sales · Linear" in Sales                                             | S2.8 from Ops        |
+| Account you cannot use                  | Priya's private "Figma · Priya"                                       | S2.9 from Acme, S8   |
+| Your private account, expired           | "Linear · {you}"                                                      | S5, S7 "Personal"    |
+| Account with no spaces                  | "Old Notion", signed in                                               | S7 "—"               |
+| Owner left the org                      | "Atlassian · Raj" in Ops                                              | S7 owner badge       |
+| Every-space account                     | Not seeded: it would reach Empty. Set "Every space" by hand to review | S9 message           |
+| Duplicate name                          | Add a second "Acme · Linear" to Acme by hand                          | rule 9 error         |
+| Empty states                            | The Empty space; a search with no results                             | S1, S6               |
 
-Sign-ins in the seed are fake credentials. A review that needs a real OAuth popup (S2.2, S2.5) uses a real provider by hand.
+The seed signs in as nobody: Priya and Raj have no password, so the review sees the admin's view. Sign-ins in the seed are fake credentials. A review that needs a real OAuth popup (S2.2, S2.5) uses a real provider by hand.
 
 ## 5. Order of work
 
-Each step: seed its scenarios, build, review in the browser step by step, add or extend the Playwright flow in `packages/e2e`, then commit. The app package has no unit tests; core has.
+Each step: build, seed, review in the browser step by step, then commit.
 
-1. The seed script (§4).
-2. The status helper and default names (`lib/apps.ts`, §2, rule 11).
-3. S2, the sheet. Every other screen opens it.
-4. S1 and S6, the space flows.
-5. S3 and S4, the composer and the chat card.
-6. S5, the app page.
-7. S7 and S9, Settings and remove.
-8. S8, the share link.
+1. S2, the sheet. Every other screen opens it.
+2. S1 and S6, the space flows.
+3. S3 and S4, the composer and the chat card.
+4. S5, the app page.
+5. S7 and S9, Settings and remove.
+6. S8, the share link.
 
 Remove each part of this spec in the change that builds it.
 
