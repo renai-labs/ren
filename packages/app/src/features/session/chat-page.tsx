@@ -144,7 +144,7 @@ function useCustomAgentName(root: Session.ID) {
   const agents = useAgents()
   const agent = useRunningAgent(root)
   if (!agent || agent === "ren") return
-  return agents.agent(agent)?.name
+  return agents.agents.find((each) => each.name === agent)?.name
 }
 
 function ChatBreadcrumb(props: { chat: Chat; editing: boolean; onEditingChange: (editing: boolean) => void }) {
