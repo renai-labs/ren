@@ -206,6 +206,7 @@ function useSuggestions(input: {
           label: token.item.label,
           icon: app?.icon ?? null,
           color: mentionColor(app),
+          file: token.item.kind === "file",
         }
       }),
     unmention: (text, press) => Mentions.remove(text, tokens(text), press),
