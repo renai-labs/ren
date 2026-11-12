@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -265,6 +267,76 @@ func TestResolveDoesNotKeepAnAnswerInvalidatedWhileInFlight(t *testing.T) {
 	require.Equal(t, int32(2), h.calls.Load(), "an answer Ren read before an invalidate is not kept after it")
 }
 
+// joined is how many calls wait for the one in flight for this request.
+func joined(client *Client, r Request) int {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	f, ok := client.flights[answerKey(r)]
+	if !ok {
+		return 0
+	}
+	return f.joined
+}
+
+func TestResolveAsksRenOnceForIdenticalRequestsInFlight(t *testing.T) {
+	client, h, _ := newClient(t)
+	ctx := t.Context()
+	wait := h.holdNext()
+	const n = 5
+	replies := make(chan Reply, n)
+	for range n {
+		go func() {
+			reply, err := client.Resolve(ctx, stripe("ren-a"))
+			assert.NoError(t, err)
+			replies <- reply
+		}()
+	}
+	<-wait.entered
+	for joined(client, stripe("ren-a")) < n-1 {
+		runtime.Gosched()
+	}
+	close(wait.release)
+	for range n {
+		require.True(t, (<-replies).Allow)
+	}
+	require.Equal(t, int32(1), h.calls.Load(), "identical requests in flight share one call to Ren")
+
+	other, err := client.Resolve(ctx, stripe("ren-b"))
+	require.NoError(t, err)
+	require.True(t, other.Allow)
+	require.Equal(t, int32(2), h.calls.Load(), "another login asks on its own")
+}
+
+func TestResolveAfterAnInvalidateDoesNotJoinACallFromBeforeIt(t *testing.T) {
+	client, h, _ := newClient(t)
+	ctx := t.Context()
+	wait := h.holdNext()
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Resolve(ctx, stripe("ren-a"))
+		done <- err
+	}()
+	<-wait.entered
+	client.Invalidate(Selector{Label: "STRIPE_API_KEY"})
+	_, err := client.Resolve(ctx, stripe("ren-a"))
+	require.NoError(t, err)
+	close(wait.release)
+	require.NoError(t, <-done)
+	require.Equal(t, int32(2), h.calls.Load(), "a request after an invalidate asks Ren again")
+}
+
+func TestHandleSendsARequestWithoutAPlaceholderWithoutAskingRen(t *testing.T) {
+	client, h, _ := newClient(t)
+	req := newRequest(t, "GET", "https://registry.npmjs.org/effect/-/effect-4.1.0.tgz", nil, "")
+	req.Host = "registry.npmjs.org"
+	req.Header.Set("Authorization", "Bearer npm_own_token")
+	resp, applied := client.Handle(t.Context(), req, "ren-a")
+	require.Nil(t, resp)
+	require.Nil(t, applied)
+	require.Equal(t, "Bearer npm_own_token", req.Header.Get("Authorization"))
+	require.Equal(t, int32(0), h.calls.Load(), "only a request with a placeholder needs Ren")
+}
+
 func TestAuthenticateDoesNotKeepALoginInvalidatedWhileInFlight(t *testing.T) {
 	client, h, _ := newClient(t)
 	ctx := t.Context()
@@ -329,6 +401,7 @@ func TestHandleRoutes(t *testing.T) {
 	}})
 	req := newRequest(t, "POST", "https://ren.internal/host/pull", nil, "")
 	req.Host = "ren.internal"
+	req.Header.Set("Authorization", "Bearer ren:REN")
 	resp, applied := client.Handle(t.Context(), req, "ren-a")
 	require.Nil(t, resp)
 	require.Equal(t, "http://ren-server:4000/host/pull", applied.Upstream.String())
