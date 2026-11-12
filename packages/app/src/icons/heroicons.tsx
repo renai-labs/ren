@@ -46,7 +46,6 @@ import {
   ChevronUpDownIcon,
   ChevronUpIcon,
   CircleStackIcon,
-  ClipboardDocumentCheckIcon,
   ClipboardDocumentListIcon,
   ClockIcon,
   CodeBracketIcon,
@@ -130,8 +129,6 @@ import {
   ChatBubbleLeftRightIcon,
 } from "@heroicons/react/20/solid"
 
-import { AutomationIcon } from "./automation.js"
-
 export * from "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
 
 type Props = SVGProps<SVGSVGElement> & {
@@ -194,7 +191,7 @@ export const IconCalendarWeek = wrap(CalendarDaysIcon)
 export const IconChartBar = wrap(ChartBarIcon)
 export const IconChartLine = wrap(PresentationChartLineIcon)
 export const IconCheck = wrap(CheckIcon)
-export const IconChecklist = wrap(ClipboardDocumentCheckIcon)
+export const IconChecklist = wrap(QueueListIcon)
 export const IconChevronDown = wrap(ChevronDownIcon)
 export const IconChevronLeft = wrap(ChevronLeftIcon)
 export const IconChevronRight = wrap(ChevronRightIcon)
@@ -204,7 +201,7 @@ export const IconCirclePlus = wrap(PlusCircleIcon)
 export const IconCircleX = wrap(XCircleIcon)
 export const IconClipboardText = wrap(ClipboardDocumentListIcon)
 export const IconClock = wrap(ClockIcon)
-export const IconClockBolt = wrap(AutomationIcon)
+export const IconClockBolt = wrap(BoltIcon)
 export const IconCode = wrap(CodeBracketIcon)
 export const IconCopy = wrap(DocumentDuplicateIcon)
 export const IconCpu = wrap(CpuChipIcon)
