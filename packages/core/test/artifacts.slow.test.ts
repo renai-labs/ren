@@ -9,6 +9,7 @@ import { FetchHttpClient, HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { join } from "node:path"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
+import { Access } from "../src/access.js"
 import { Artifacts } from "../src/artifacts.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { ObjectStorage } from "../src/object-storage.js"
@@ -18,7 +19,7 @@ import { Seed } from "./lib/seed.js"
 import { ArtifactSamples } from "./lib/artifact-samples.js"
 
 const runtime = Artifacts.layer.pipe(
-  Layer.provide(ArtifactWorkerd.layer),
+  Layer.provide([ArtifactWorkerd.layer, Access.layer]),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide(TestDrives.layer),
 )
@@ -365,8 +366,8 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect((yield* artifacts.status(elsewhere, id, first.deploymentId).pipe(Effect.flip))._tag).toBe(
           "Primitive.NotFound",
         )
-        expect((yield* artifacts.get(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-        expect((yield* artifacts.archive(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect((yield* artifacts.read(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect((yield* artifacts.download(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
         expect((yield* ArtifactSamples.deploy(artifacts, elsewhere, id, first).pipe(Effect.flip))._tag).toBe(
           "Primitive.Conflict",
         )
@@ -395,7 +396,7 @@ describe("Artifacts with durable workflows and workerd", () => {
           .where(eq(Database.Schema.artifact.id, id))).at(0)
         expect(after?.code_archive).toBe(before?.code_archive)
         expect(after?.config).toEqual(first.config)
-        expect(yield* artifacts.get(owner, id)).toMatchObject({ title: first.title, entry: "index.html", url })
+        expect(yield* artifacts.read(owner, id)).toMatchObject({ title: first.title, entry: "index.html", url })
         yield* stop(artifacts, owner, id)
         expect(yield* ArtifactSamples.published(artifacts, owner, id)).toEqual(first.files)
         expect(yield* Effect.promise(() => Bun.file(join(binding.directory, "state", "keep.txt")).text())).toBe(
@@ -493,5 +494,97 @@ describe("Artifacts with durable workflows and workerd", () => {
         }).pipe(Effect.scoped, Effect.provide(Layer.fresh(runtime)))
       }),
     120_000,
+  )
+})
+
+const page = { page: 1, pageSize: 50 }
+
+const orders = { "index.html": text("<h1>Orders</h1>") }
+
+const deploy = (owner: Artifacts.Owner, id: Artifact.ID) =>
+  Effect.flatMap(Artifacts.Service, (artifacts) =>
+    ArtifactSamples.deploy(artifacts, owner, id, {
+      deploymentId: deployment(),
+      title: "Orders",
+      config: { entry: "index.html" },
+      files: orders,
+    }),
+  )
+
+const memberOf = (owner: Effect.Success<ReturnType<typeof Seed.owner>>) => ({
+  userId: owner.createdBy,
+  organizationId: owner.organizationId,
+  roles: ["member"],
+})
+
+describe("artifacts for people", () => {
+  it.live("members list a space's artifacts newest first and get each; a member of another space sees none", () =>
+    Effect.gen(function* () {
+      const artifacts = yield* Artifacts.Service
+      const owner = yield* Seed.owner()
+      const older = artifactId()
+      const newer = artifactId()
+      yield* deploy(owner, older)
+      yield* artifacts.stop(owner, older)
+      yield* deploy(owner, newer)
+      yield* artifacts.stop(owner, newer)
+      const member = memberOf(owner)
+      const listed = yield* artifacts.list(member, { spaceId: owner.spaceId, ...page })
+      expect([listed.items.map((item) => item.id), listed.total]).toEqual([[newer, older], 2])
+      expect(yield* artifacts.get(member, newer)).toMatchObject({
+        id: newer,
+        spaceId: owner.spaceId,
+        title: "Orders",
+        entry: "index.html",
+        archivedAt: null,
+      })
+      const outsider = yield* Seed.actor(owner.organizationId, "owner")
+      yield* Seed.join(yield* Seed.space(owner.organizationId), outsider.userId)
+      expect((yield* artifacts.list(outsider, page)).total).toBe(0)
+      expect((yield* artifacts.get(outsider, newer).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+      expect((yield* artifacts.archive(outsider, newer).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+    }),
+  )
+
+  it.live(
+    "archiving takes the artifact down and out of the list, refuses new deployments but answers a retried one, and keeps its source",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const member = memberOf(owner)
+        const id = artifactId()
+        const upload = yield* artifacts.upload(owner, id)
+        const body = yield* Effect.promise(() => ArtifactSamples.archive(orders))
+        yield* Effect.promise(() => fetch(upload.url, { method: "PUT", body }))
+        const first = {
+          deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
+          uploadId: upload.uploadId,
+          title: "Orders",
+        }
+        yield* artifacts.deploy(owner, id, first)
+        const archived = yield* artifacts.archive(member, id)
+        expect([archived.url, archived.activeDeploymentId, archived.archivedAt === null]).toEqual([null, null, false])
+        const row = (yield* database.db
+          .select()
+          .from(Database.Schema.artifact)
+          .where(eq(Database.Schema.artifact.id, id))).at(0)
+        expect([row?.binding, row?.url]).toEqual([null, null])
+        expect((yield* artifacts.list(member, { spaceId: owner.spaceId, ...page })).total).toBe(0)
+        expect((yield* artifacts.get(member, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect((yield* artifacts.archive(member, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect((yield* artifacts.upload(owner, id).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
+        expect(
+          (yield* artifacts
+            .deploy(owner, id, {
+              deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
+              uploadId: Artifact.UploadID.make(crypto.randomUUID()),
+            })
+            .pipe(Effect.flip))._tag,
+        ).toBe("Primitive.Conflict")
+        expect((yield* artifacts.deploy(owner, id, first)).deploymentId).toBe(first.deploymentId)
+        expect(yield* ArtifactSamples.published(artifacts, owner, id)).toEqual(orders)
+      }),
   )
 })

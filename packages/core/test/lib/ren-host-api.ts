@@ -50,9 +50,12 @@ const handlers = (around: Around) =>
             upload: () => none,
             deploy: () => none,
             status: () => none,
+            read: () => none,
+            download: () => none,
+            stop: () => none,
+            list: () => none,
             get: () => none,
             archive: () => none,
-            stop: () => none,
           }
         })
         const failed = (error: { readonly message: string }) => new ArtifactFailedError({ message: error.message })
@@ -66,8 +69,8 @@ const handlers = (around: Around) =>
               ),
             ),
           )
-          .handle("artifacts.archive", (request) =>
-            Effect.flatMap(CurrentHost, (host) => artifacts.archive(host, request.params.id)).pipe(
+          .handle("artifacts.download", (request) =>
+            Effect.flatMap(CurrentHost, (host) => artifacts.download(host, request.params.id)).pipe(
               Effect.mapError((error) =>
                 error._tag === "Primitive.NotFound"
                   ? new ArtifactNotFoundError({ message: error.message })
@@ -89,8 +92,8 @@ const handlers = (around: Around) =>
               }),
             ),
           )
-          .handle("artifacts.get", (request) =>
-            Effect.flatMap(CurrentHost, (host) => artifacts.get(host, request.params.id)).pipe(
+          .handle("artifacts.read", (request) =>
+            Effect.flatMap(CurrentHost, (host) => artifacts.read(host, request.params.id)).pipe(
               Effect.mapError((error) => new ArtifactNotFoundError({ message: error.message })),
             ),
           )

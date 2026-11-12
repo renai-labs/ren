@@ -5,6 +5,7 @@ import { Artifact } from "@ren/schema/artifact"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, FileSystem, Layer, Option, Schedule } from "effect"
 import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
+import { Access } from "../src/access.js"
 import { Artifacts } from "../src/artifacts.js"
 import { ArtifactProvider } from "../src/artifact-provider.js"
 import { DurableRunner } from "../src/durable-runner.js"
@@ -23,7 +24,7 @@ setDefaultTimeout(600_000)
 
 const it = testEffect(
   Artifacts.layer.pipe(
-    Layer.provide(ArtifactCloudflare.layer),
+    Layer.provide([ArtifactCloudflare.layer, Access.layer]),
     Layer.provideMerge(DurableRunner.layerEffect),
     Layer.provide(TestDrives.layer),
     Layer.provideMerge(Layer.mergeAll(Testing.layer, TestCloudflare.layer)),
@@ -47,6 +48,7 @@ const bounded = testEffect(
         ),
       ),
     ),
+    Layer.provide(Access.layer),
     Layer.provideMerge(DurableRunner.layerEffect),
     Layer.provide(TestDrives.layer),
     Layer.provideMerge(Layer.mergeAll(Testing.layer, TestCloudflare.layer)),

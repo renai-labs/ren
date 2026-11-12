@@ -158,8 +158,11 @@ describe("Ren MCP tools", () => {
           annotations: expect.objectContaining({ destructiveHint: true }),
         }),
         expect.objectContaining({ name: "channel_mapping_create" }),
+        expect.objectContaining({ name: "artifact_list" }),
       ]),
     )
+    expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "artifact_get" }))
+    expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "artifact_archive" }))
     expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "credential_create" }))
     expect(listed.tools).not.toContainEqual(expect.objectContaining({ name: "sign_in_provider_list" }))
   })
