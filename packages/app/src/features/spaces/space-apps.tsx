@@ -1,11 +1,16 @@
 import { getRouteApi } from "@tanstack/react-router"
 import { useState } from "react"
 import type { AppProfileInfo } from "@ren/client"
-import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconPlus } from "@tabler/icons-react"
-import { toast } from "@ren/ui/sonner"
+import { useQuery } from "@tanstack/react-query"
+import { IconPlus, IconUserPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { AccountActions } from "../../components/account-actions.js"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ren/ui/dropdown-menu"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
@@ -17,9 +22,7 @@ import { ProfileDialog, type ProfileTarget } from "../../components/profile-dial
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Search } from "../../lib/search.js"
 import { useApp, useApps } from "../../lib/use-app.js"
-import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { errorMessage } from "../../lib/errors.js"
-import { caption, source } from "../../lib/apps.js"
+import { source } from "../../lib/apps.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -27,50 +30,26 @@ const route = getRouteApi("/_authed/_shell/spaces/$spaceId/apps")
 
 const hiddenBy = (error: Error | null) => error?.name === "NotFoundError" || error?.name === "ForbiddenError"
 
-function SpaceAppAccounts(props: {
-  spaceId: string
-  here: ReadonlyArray<AppProfileInfo>
-  elsewhere: ReadonlyArray<AppProfileInfo>
-  onNew: () => void
-  onOpen: (profile: AppProfileInfo) => void
-  onEdit: (profile: AppProfileInfo) => void
-  onRemove: (profileId: string) => Promise<unknown>
-  onAddHere: (profileId: string) => Promise<unknown>
-}) {
+function AddAccount(props: { onNew: () => void; onExisting: () => void }) {
   return (
-    <>
-      <AccountList
-        title="Accounts"
-        actions={
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onNew}>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button size="sm" />}>
+        <IconPlus data-icon="inline-start" />
+        Add account
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={props.onNew}>
             <IconPlus />
             New account
-          </Button>
-        }
-        profiles={props.here}
-        caption={(each) => caption(each, props.spaceId)}
-        onOpen={props.onEdit}
-        action={(each) => (
-          <AccountActions
-            profile={each}
-            onOpen={() => props.onOpen(each)}
-            onRemove={
-              each.spaces.some((listed) => listed.id === props.spaceId) ? () => props.onRemove(each.id) : undefined
-            }
-          />
-        )}
-      />
-      <AccountList
-        title="Other accounts in your org"
-        profiles={props.elsewhere}
-        caption={(each) => source(each, props.spaceId)}
-        action={(each) => (
-          <Button variant="outline" size="sm" onClick={() => void props.onAddHere(each.id)}>
-            Use here
-          </Button>
-        )}
-      />
-    </>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={props.onExisting}>
+            <IconUserPlus />
+            Use existing account
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -82,7 +61,6 @@ export function SpaceAppsTab() {
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }),
     refetchOnWindowFocus: "always",
   })
-  const access = useMutation(api["app-profile"].access.mutationOptions())
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const opened = search.app
@@ -93,11 +71,8 @@ export function SpaceAppsTab() {
   const byApp = Map.groupBy(reached, (each) => each.appId)
   const catalog = useApps([...byApp.keys()])
   const app = useApp(opened).app
-  const elsewhere = useAppProfiles(app ? [app.id] : [])
   const here: ReadonlyArray<AppProfileInfo> = app ? (byApp.get(app.id) ?? []) : []
   const from = { spaceId: space.id, name: space.name, members: space.memberCount, private: space.kind === "private" }
-  const change = (input: { id: string; add?: string[]; remove?: string[] }, title: string) =>
-    access.mutateAsync(input, { onError: (error) => toast.error(title, { description: errorMessage(error) }) })
   const rows = [...byApp].flatMap(([appId, profiles]) => {
     const each = catalog.of(appId)
     return each
@@ -136,17 +111,18 @@ export function SpaceAppsTab() {
       <LoadMore more={shown.more} onMore={shown.next} />
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
-          <SpaceAppAccounts
-            spaceId={space.id}
-            here={here}
-            elsewhere={elsewhere
-              .of(app.id)
-              .filter((each) => each.kind === "shared" && !here.some((own) => own.id === each.id))}
-            onNew={() => setProfile({ appId: app.id, from })}
-            onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, from })}
-            onEdit={(each) => setProfile({ appId: each.appId, profileId: each.id, from, edit: true })}
-            onRemove={(profileId) => change({ id: profileId, remove: [space.id] }, "Couldn’t remove the account")}
-            onAddHere={(profileId) => change({ id: profileId, add: [space.id] }, "Couldn’t add the account")}
+          <AccountList
+            title="Accounts"
+            app={app}
+            actions={
+              <AddAccount
+                onNew={() => setProfile({ appId: app.id, from })}
+                onExisting={() => setProfile({ appId: app.id, from, existing: true })}
+              />
+            }
+            profiles={here}
+            empty={`No ${app.name} accounts in ${space.name} yet`}
+            onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, from, edit: true })}
           />
         ) : null}
       </AppSheet>

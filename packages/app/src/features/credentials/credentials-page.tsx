@@ -1,12 +1,9 @@
 import { useState } from "react"
-import { keepPreviousData, useInfiniteQuery, useMutation } from "@tanstack/react-query"
-import { toast } from "@ren/ui/sonner"
-import { errorMessage } from "../../lib/errors.js"
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { IconPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Tabs } from "@ren/ui/tabs"
-import { AccountActions } from "../../components/account-actions.js"
 import { AccountList, AppSheet } from "../../components/app-list.js"
 import { AppsTable } from "../../components/apps-table.js"
 import { CredentialSheet, ownerOptions } from "../../components/credential-sheet.js"
@@ -23,7 +20,7 @@ import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Pages } from "../../lib/pages.js"
 import { Search } from "../../lib/search.js"
-import { fromApp, isSpaceApp, reach, usedIn } from "../../lib/apps.js"
+import { fromApp, isSpaceApp, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -120,8 +117,7 @@ function OrgApps() {
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
-  const { api, client } = RouterContext.useRouterContext()
-  const deleteProfile = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
+  const { client } = RouterContext.useRouterContext()
   const spaces = useSpaces().spaces
   const list = useInfiniteQuery(Pages.connectedApps(client))
   const used = (list.data?.pages ?? [])
@@ -157,36 +153,15 @@ function OrgApps() {
         {app ? (
           <AccountList
             title="Accounts"
+            app={app}
             actions={
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={() => setProfile({ appId: app.id })}
-              >
-                <IconPlus />
+              <Button size="sm" onClick={() => setProfile({ appId: app.id })}>
+                <IconPlus data-icon="inline-start" />
                 New account
               </Button>
             }
             profiles={accounts.of(app.id)}
-            caption={reach}
             onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, edit: true })}
-            action={(each) => (
-              <AccountActions
-                profile={each}
-                onOpen={() => setProfile({ appId: each.appId, profileId: each.id })}
-                onDelete={() =>
-                  deleteProfile.mutateAsync(
-                    { id: each.id },
-                    {
-                      onSuccess: () => toast.success(`${each.name} deleted`),
-                      onError: (error) =>
-                        toast.error("Couldn’t delete the account", { description: errorMessage(error) }),
-                    },
-                  )
-                }
-              />
-            )}
           />
         ) : null}
       </AppSheet>

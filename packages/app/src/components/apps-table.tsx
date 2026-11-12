@@ -6,12 +6,15 @@ import { AppIcon } from "./app-icon.js"
 import { TableCard, TableEmpty } from "./page.js"
 import { RowMenu } from "./row-menu.js"
 import { StatusBadge } from "./status-badge.js"
-import { gaps } from "../lib/apps.js"
+import type { StatusTone } from "./status-badge.js"
+import { statusLabel, statusOf } from "../lib/apps.js"
 import type { AppProfileInfo } from "@ren/client"
-import type { CatalogApp } from "../lib/apps.js"
+import type { CatalogApp, Status } from "../lib/apps.js"
 
 type App = CatalogApp
 type AppProfile = AppProfileInfo
+
+const tones: Record<Status, StatusTone> = { expired: "warn", connected: "ok", credits: "neutral", missing: "warn" }
 
 const accounts = (count: number) => (count === 1 ? "1 account" : `${count} accounts`)
 
@@ -59,7 +62,8 @@ export function AppsTable(props: {
             const app = row.app
             const profiles = row.profiles
             const usedIn = row.usedIn
-            const missing = profiles.reduce((total, profile) => total + gaps(profile).length, 0)
+            const status = statusOf(app, profiles)
+            const expired = profiles.filter((profile) => statusOf(app, [profile]) === "expired").length
             return (
               <TableRow key={app.id} className="cursor-pointer" onClick={() => props.onOpen(app.id)}>
                 <TableCell>
@@ -69,11 +73,11 @@ export function AppsTable(props: {
                   {usedIn}
                 </TableCell>
                 <TableCell>
-                  {missing ? (
-                    <StatusBadge tone="warn">{missing} not connected</StatusBadge>
-                  ) : (
-                    <StatusBadge tone="ok">Connected</StatusBadge>
-                  )}
+                  <StatusBadge tone={tones[status]}>
+                    {status === "expired" && profiles.length > 1
+                      ? `${expired} of ${profiles.length} need sign-in`
+                      : statusLabel[status]}
+                  </StatusBadge>
                 </TableCell>
                 <TableCell onClick={(event) => event.stopPropagation()}>
                   <RowMenu

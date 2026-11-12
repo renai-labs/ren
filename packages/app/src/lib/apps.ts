@@ -15,6 +15,29 @@ export const gaps = (profile: AppProfile) => [
   ...profile.oauthApps.filter((gate) => !gate.isConfigured).map((gate) => gate.name),
 ]
 
+export type Status = "expired" | "connected" | "credits" | "missing"
+
+export const statusLabel: Record<Status, string> = {
+  expired: "Needs sign-in",
+  connected: "Connected",
+  credits: "Ren credits",
+  missing: "Not connected",
+}
+
+export const statusOf = (app: Pick<CatalogApp, "mcps">, profiles: ReadonlyArray<AppProfile>): Status => {
+  if (profiles.some((profile) => profile.items.some((item) => item.status === "reconnect"))) return "expired"
+  if (profiles.some((profile) => gaps(profile).length === 0)) return "connected"
+  const signedIn = new Set(
+    profiles.flatMap((profile) =>
+      profile.items.flatMap((item) => ("mcp" in item.item && item.status === "ok" ? [item.item.mcp] : [])),
+    ),
+  )
+  const managed = Object.values(app.mcps ?? {}).flatMap((mcp) =>
+    mcp.transport.type === "managed" ? [mcp.transport] : [],
+  )
+  return managed.some((transport) => !transport.replaces || !signedIn.has(transport.replaces)) ? "credits" : "missing"
+}
+
 const countGaps = (profiles: ReadonlyArray<AppProfile>) =>
   profiles.reduce((total, profile) => total + gaps(profile).length, 0)
 
@@ -48,38 +71,13 @@ export const source = (profile: AppProfile, spaceId: string) => {
   return profile.hiddenSpaces ? "From another space" : "Not in any space"
 }
 
-const progress = (profile: AppProfile) => {
-  const needed = required(profile)
-  return {
-    set: needed.filter((item) => item.status === "ok").length,
-    total: needed.length,
-  }
-}
-
-export const caption = (profile: AppProfile, spaceId: string) => {
-  const counted = progress(profile)
-  if (counted.total === 0) return "No keys needed"
-  if (counted.set === counted.total) return source(profile, spaceId)
-  if (counted.set === 0) return "Not connected"
-  return `${counted.set} of ${counted.total} keys`
-}
-
-export const connectLabel = (profile: AppProfile) => {
-  const counted = progress(profile)
-  if (counted.set === counted.total) return
-  return counted.set === 0 ? "Connect" : `Add ${counted.total - counted.set} missing`
-}
-
 export const categoryLabel = (slug: string) => slug.charAt(0).toUpperCase() + slug.slice(1).replaceAll("-", " ")
 
 export const listsSpace = (profile: AppProfile, spaceId: string) =>
   profile.allSpaces || profile.spaces.some((space) => space.id === spaceId)
 
-export const isLastSpace = (profile: AppProfile) =>
-  profile.kind === "shared" && !profile.allSpaces && profile.spaces.length + profile.hiddenSpaces === 1
-
 export const lastSpaceWarning = (profile: AppProfile) =>
-  `This is the last space that uses “${profile.name}”, so the account and its sign-ins are deleted.`
+  `No other space uses “${profile.name}”. Ren keeps it in Settings while it has a sign-in, and deletes it if it has none.`
 
 export const slugOf = (name: string) => Slug.of(name, 32)
 

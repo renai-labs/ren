@@ -101,14 +101,15 @@ export function AppDetailsSample() {
       <p className="text-sm/6 text-muted-foreground">What this app does and how to set it up.</p>
       <AccountList
         title="Accounts"
+        app={sampleApp}
         actions={
-          <Button variant="ghost" size="sm" className="text-muted-foreground">
-            <IconPlus />
+          <Button size="sm">
+            <IconPlus data-icon="inline-start" />
             New account
           </Button>
         }
         profiles={[]}
-        action={() => null}
+        onOpen={() => undefined}
       />
       <AppSections app={sampleApp} />
     </div>
