@@ -31,12 +31,11 @@ test("a member opens one of three attached images in the viewer, steps to the ne
   const second = (await thumbnails.nth(1).getAttribute("aria-label"))?.replace("Open ", "") ?? ""
   await thumbnails.nth(1).click()
   const viewer = page.getByRole("dialog")
-  await expect(viewer.getByText(second)).toBeVisible()
-  await expect(viewer.getByText("2 of 3")).toBeVisible()
+  await expect(viewer).toHaveAccessibleName(`${second} · 2 of 3`)
   await expect(viewer.getByRole("button", { name: "Previous image" })).toBeEnabled()
 
   await page.keyboard.press("ArrowRight")
-  await expect(viewer.getByText("3 of 3")).toBeVisible()
+  await expect(viewer).toHaveAccessibleName(/ · 3 of 3$/)
   await expect(viewer.getByRole("button", { name: "Next image" })).toBeDisabled()
 
   const level = viewer.getByRole("button", { name: "Fit to window" })
@@ -45,6 +44,12 @@ test("a member opens one of three attached images in the viewer, steps to the ne
   await expect(level).toHaveText("141%")
   await page.keyboard.press("0")
   await expect(level).toHaveText("100%")
+  await viewer.getByRole("button", { name: "Fit width" }).click()
+  await expect(level).toHaveText("800%")
+  await page.keyboard.press("0")
+  await viewer.getByRole("button", { name: "Actual size" }).click()
+  await expect(level).toHaveText("100%")
+  await page.screenshot({ path: "/tmp/opencode/image-viewer.png" })
 
   await viewer.getByRole("button", { name: "Copy" }).click()
   await expect(page.getByText("Image copied")).toBeVisible()

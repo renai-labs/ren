@@ -95,9 +95,8 @@ function useBox(viewport: RefObject<HTMLDivElement | null>) {
     if (!element) return
     const measure = () => setBox({ width: element.clientWidth, height: element.clientHeight })
     measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
   }, [viewport])
   return box
 }
@@ -106,7 +105,7 @@ function Toolbar(props: { item: Item; count: number; position: number }) {
   const actions = useImageActions(props.item)
   return (
     <div className="absolute inset-x-0 top-0 flex h-14 items-center gap-2 px-4">
-      <DialogTitle className="min-w-0 flex-1 truncate text-sm text-white">
+      <span aria-hidden className="min-w-0 flex-1 truncate text-sm text-white">
         {props.item.name}
         {props.count > 1 ? (
           <span className="text-white/60 tabular-nums">
@@ -114,7 +113,7 @@ function Toolbar(props: { item: Item; count: number; position: number }) {
             · {props.position + 1} of {props.count}
           </span>
         ) : null}
-      </DialogTitle>
+      </span>
       {actions.copy ? (
         <Button variant="ghost" size="sm" className={iconButton} onClick={actions.copy}>
           <IconCopy /> Copy
@@ -422,6 +421,10 @@ export function ImageViewer(props: {
         showCloseButton={false}
         className="top-0 left-0 block h-dvh w-full max-w-none translate-0 gap-0 rounded-none bg-black/95 p-0 text-white sm:max-w-none"
       >
+        <DialogTitle className="sr-only">
+          {item.name}
+          {props.items.length > 1 ? ` · ${position + 1} of ${props.items.length}` : ""}
+        </DialogTitle>
         <Stage
           key={item.key}
           item={item}
