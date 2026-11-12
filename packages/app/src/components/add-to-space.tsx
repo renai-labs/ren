@@ -22,6 +22,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
+import { cn } from "cn"
 import { Row, Rows } from "./page.js"
 import { useAppProfiles } from "../lib/use-app-profiles.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -81,7 +82,7 @@ export function useAddition(app: App, onAdded: Added) {
   }
 }
 
-export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added }) {
+export function AddToSpace(props: { app: App; primary?: boolean; large?: boolean; onAdded: Added }) {
   const navigate = useNavigate()
   const addition = useAddition(props.app, props.onAdded)
   const profiles = useAppProfiles([props.app.id]).of(props.app.id)
@@ -94,7 +95,10 @@ export function AddToSpace(props: { app: App; primary?: boolean; onAdded: Added 
             <Button
               variant={props.primary ? "default" : "ghost"}
               size={props.primary ? "default" : "icon"}
-              className={props.primary ? undefined : "text-muted-foreground"}
+              className={cn(
+                !props.primary && "text-muted-foreground",
+                props.large && "size-10 [&_svg:not([class*='size-'])]:size-6",
+              )}
               aria-label={`Add ${props.app.name} to a space`}
             />
           }

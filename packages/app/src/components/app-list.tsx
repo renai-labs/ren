@@ -7,8 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@ren/ui/dialog
 import { Loading } from "@ren/ui/loading"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
-import { Avatar, AvatarGroup } from "@ren/ui/avatar"
-import { AppAvatarFallback, AppAvatarImage, AppIcon, appTile } from "./app-icon.js"
+import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
 import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
@@ -34,11 +33,16 @@ function AttentionDot() {
   )
 }
 
-export function AppSection(props: { title: string; count?: number | undefined; children: ReactNode }) {
+export function AppSection(props: {
+  title: string
+  heading?: ReactNode
+  count?: number | undefined
+  children: ReactNode
+}) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">
-        {props.title}
+        {props.heading ?? props.title}
         {props.count === undefined ? null : <span className="ml-1.5 text-muted-foreground">{props.count}</span>}
       </h2>
       <AppGrid label={props.title}>{props.children}</AppGrid>
@@ -46,7 +50,7 @@ export function AppSection(props: { title: string; count?: number | undefined; c
   )
 }
 
-function AppGrid(props: { label: string; children: ReactNode }) {
+export function AppGrid(props: { label: string; children: ReactNode }) {
   return (
     <div
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a grid of Item rows; Item renders a div
@@ -59,20 +63,30 @@ function AppGrid(props: { label: string; children: ReactNode }) {
   )
 }
 
-export function AppListingSample() {
+export function AppRowSample() {
   return (
-    <AppSection title="All apps">
-      {Array.from({ length: 6 }, (_, index) => (
-        <AppRow
-          key={index}
-          name="Team app"
-          caption="Tools for your team’s work"
-          action={
-            <Button variant="ghost" size="icon" aria-label="Add app to a space">
-              <IconPlus />
-            </Button>
-          }
-        />
+    <AppRow
+      name="Team app"
+      caption="Tools for your team’s work"
+      action={
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-10 [&_svg:not([class*='size-'])]:size-6"
+          aria-label="Add app to a space"
+        >
+          <IconPlus />
+        </Button>
+      }
+    />
+  )
+}
+
+export function AppListingSample(props: { title?: string | undefined; count?: number | undefined }) {
+  return (
+    <AppSection title={props.title ?? "All apps"}>
+      {Array.from({ length: props.count ?? 6 }, (_, index) => (
+        <AppRowSample key={index} />
       ))}
     </AppSection>
   )
@@ -126,45 +140,6 @@ export function AppRow(props: {
           {props.action}
         </ItemActions>
       ) : null}
-    </Item>
-  )
-}
-
-export function SeeAllRow(props: {
-  apps: ReadonlyArray<{ id: string; name: string; icon?: string | null }>
-  more?: number | undefined
-  onOpen: () => void
-}) {
-  return (
-    <Item
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
-      role="listitem"
-      className="relative flex-nowrap gap-3 p-2 has-[[data-slot=app-open]:hover]:bg-muted"
-    >
-      <ItemMedia>
-        <AvatarGroup className="-space-x-3 *:data-[slot=avatar]:ring-background">
-          {props.apps.slice(0, 3).map((app) => (
-            // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-            <Avatar key={app.id} size="lg">
-              {app.icon ? <AppAvatarImage src={app.icon} /> : null}
-              <AppAvatarFallback name={app.name} />
-            </Avatar>
-          ))}
-        </AvatarGroup>
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle className="font-normal">
-          <Button
-            variant="ghost"
-            data-slot="app-open"
-            onClick={props.onOpen}
-            className="h-auto min-w-0 justify-start rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-lg hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-          >
-            See all
-          </Button>
-        </ItemTitle>
-        <ItemDescription>{plural(props.more ?? props.apps.length, "more app")}</ItemDescription>
-      </ItemContent>
     </Item>
   )
 }
