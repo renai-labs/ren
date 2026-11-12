@@ -3,6 +3,7 @@ export * as Artifact from "./artifact.js"
 import { Schema } from "effect"
 import { Drive } from "./drive.js"
 import { Identifier } from "./identifier.js"
+import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { Space } from "./space.js"
 
@@ -65,12 +66,35 @@ export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   title: Primitive.Name,
-  entry: Drive.Path.annotate({ description: "The file a person opens first, such as index.html." }),
-  url: Schema.NullOr(Schema.String),
-  activeDeploymentId: Schema.NullOr(DeploymentID),
+  entry: Schema.String.annotate({ description: "The file a person opens first, such as index.html." }),
+  url: Schema.NullOr(Schema.String).annotate({
+    description: "The link anyone can open without signing in. Null while the artifact is not served.",
+  }),
+  activeDeploymentId: Schema.NullOr(DeploymentID).annotate({
+    description: "The deployment or stop in progress. Null when none is.",
+  }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
+  archivedAt: Schema.NullOr(Schema.DateTimeUtc),
 }).annotate({ identifier: "Artifact.Info" })
+
+export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
+export const ListInput = Schema.Struct({
+  spaceId: Schema.optional(Space.ID).annotate({ description: "Without it, the artifacts of every space you are in." }),
+  ...Pagination.fields(50),
+}).annotate({ identifier: "Artifact.ListInput" })
+
+const Page = Pagination.Page(Info).annotate({ identifier: "Artifact.Page" })
+
+export const definition = Primitive.define({
+  name: "artifact",
+  plural: "artifacts",
+  id: ID,
+  info: Info,
+  list: { input: ListInput, page: Page },
+  get: true,
+  archive: true,
+})
 
 export const DurableObjects = Schema.Record(
   Schema.String,

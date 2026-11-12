@@ -27,6 +27,7 @@ export const artifact = pgTable(
     active_deployment_id: text().$type<Artifact.DeploymentID>(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
+    archived_at: timestamp(),
   },
   (table) => [index("artifact_space_id_idx").on(table.space_id)],
 )
