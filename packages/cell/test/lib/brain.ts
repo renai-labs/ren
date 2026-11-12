@@ -23,7 +23,7 @@ import {
   Semaphore,
   Stream,
 } from "effect"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -73,15 +73,18 @@ export const make = Effect.fnUntraced(function* (
     readonly plugin?: Plugin.Plugin
     readonly apps?: AppCatalog.Info
     readonly unreadableEvent?: string
+    readonly chats?: boolean
   } = {},
 ) {
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
-  const directory = yield* Effect.acquireRelease(
+  const id = options.id ?? Session.ID.create()
+  const base = yield* Effect.acquireRelease(
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-brain-"))),
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
   )
+  const directory = options.chats ? join(base, id) : base
+  if (options.chats) yield* Effect.promise(() => mkdir(directory))
   const issuer = yield* ModelsTest.issuer
-  const id = options.id ?? Session.ID.create()
   const alarm: { at: number | null } = { at: null }
   const pulls = yield* Ref.make(0)
   const services = yield* Layer.build(
@@ -157,7 +160,10 @@ export const make = Effect.fnUntraced(function* (
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
-    { saved: Option.none(), directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps) },
+    {
+      saved: options.chats ? Option.some(Effect.succeed(new Map())) : Option.none(),
+      directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps),
+    },
   )
   const harness = yield* OpenCodeHarness.make(
     options.unreadableEvent

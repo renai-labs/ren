@@ -14,6 +14,7 @@ import {
   AppConnect,
   ChannelReply,
   ChatState,
+  McpApp,
   PatchFiles,
   Projection,
   RenderedPage,
@@ -102,6 +103,7 @@ import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Platform } from "../../platform/platform.js"
+import { McpAppView } from "./mcp-app.js"
 import { VisualReply } from "./visual-reply.js"
 import { WorkspaceImage } from "./workspace-image.js"
 
@@ -128,6 +130,7 @@ export interface TranscriptProps {
   readonly find?: FindBarProps | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
+  readonly onPost?: ((text: string) => void) | undefined
   readonly expanded?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
@@ -162,6 +165,12 @@ type Block =
     }
   | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
   | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
+  | {
+      readonly kind: "app"
+      readonly key: string
+      readonly tool: SessionMessage.Tool
+      readonly app: SessionMessage.McpAppView["app"]
+    }
   | {
       readonly kind: "page"
       readonly key: string
@@ -227,6 +236,8 @@ function toolBlock(content: SessionMessage.Tool, key: string): Block | undefined
   if (ChannelReply.shown(content)) return { kind: "reply", key, tool: content }
   const connects = AppConnect.of(content)
   if (connects.length > 0) return { kind: "connect", key, connects }
+  const app = Option.getOrUndefined(McpApp.of(content))
+  if (app) return { kind: "app", key, tool: content, app }
   const shown = Option.getOrUndefined(ShownFile.of(content))
   return shown && { kind: "file", key, file: shown }
 }
@@ -1336,6 +1347,21 @@ function BlockView(props: {
             spaceId={props.transcript.spaceId}
             source={block.source}
             version={block.key}
+          />
+        </MessageContent>
+      </Message>
+    )
+  if (block.kind === "app")
+    return (
+      <Message>
+        <MessageContent>
+          <McpAppView
+            root={props.transcript.view.root}
+            spaceId={props.transcript.spaceId}
+            tool={block.tool}
+            app={block.app}
+            onPost={props.transcript.onPost}
+            row={<ToolStep tool={block.tool} view={props.transcript.view} onOpenChild={props.transcript.onOpenChild} />}
           />
         </MessageContent>
       </Message>

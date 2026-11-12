@@ -56,6 +56,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         find={find}
         onOpenChild={(id) => chat.openChild(id)}
         onEdit={chat.canRevert && !chat.child && !chat.reverting ? chat.edit : undefined}
+        onPost={chat.child ? undefined : chat.post}
         expanded={chat.expanded}
         modelNames={chat.modelNames}
         admin={admin}

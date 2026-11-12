@@ -299,6 +299,8 @@ export function useChat(
       void loadAll().catch((error: unknown) =>
         toast.error("Could not load earlier messages", { description: errorMessage(error) }),
       ),
+    post: (text: string) =>
+      kept.update((current) => Composer.withText(current, [current.text.trimEnd(), text].filter(Boolean).join("\n\n"))),
     edit: (message: SessionMessage.User, text: string) => {
       setReverting(true)
       void revert(message.id)

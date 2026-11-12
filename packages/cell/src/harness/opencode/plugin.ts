@@ -738,7 +738,16 @@ export const make = (
                   (each) => each.name === call.tool && each.options?.namespace === naming.normalize(call.server),
                 )
                 if (!found) return yield* new Harness.NotFound({ message: `${call.server} has no tool ${call.tool}` })
-                const agent = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.primary.name
+                const agent =
+                  Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.primary.name ??
+                  (yield* context.agent.list().pipe(Effect.option)).pipe(
+                    Option.flatMap((listed) =>
+                      Option.fromUndefinedOr(
+                        listed.data.find((each) => each.mode !== "subagent" && !each.hidden)?.id,
+                      ),
+                    ),
+                    Option.getOrUndefined,
+                  )
                 if (!agent) return yield* new Harness.Rejected({ message: "This chat has no agent yet." })
                 const result = yield* found
                   .execute(call.input, {

@@ -6,7 +6,7 @@ import { testEffect } from "@ren/executor/testing"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { SessionMessage } from "@ren/schema/session/message"
 import { App } from "@ren/schema/app"
-import { Clock, Effect, Fiber, Layer, Option, Queue } from "effect"
+import { Clock, Effect, Fiber, Layer, Option, Queue, Schedule } from "effect"
 import { TestClock } from "effect/testing"
 import { OpenCodeMcp } from "../src/harness/opencode/mcp.js"
 import { BrainTest } from "./lib/brain.js"
@@ -15,10 +15,11 @@ import { Shared } from "./lib/shared.js"
 
 const it = testEffect(Layer.empty)
 
-const observed = Effect.fnUntraced(function* (apps?: AppCatalog.Info) {
+const observed = Effect.fnUntraced(function* (apps?: AppCatalog.Info, chats?: boolean) {
   const tools = yield* Queue.unbounded<ReadonlyArray<{ readonly id: string; readonly description: string }>>()
   const brain = yield* BrainTest.make({
     ...(apps && { apps }),
+    ...(chats && { chats }),
     plugin: Plugin.define({
       id: "tool-catalog",
       effect: (context) =>
@@ -433,5 +434,28 @@ it.live("a tool that declares a view leaves Code Mode, so its call is its own to
     yield* test.brain.opencode.experimental.session.wait({ sessionID: test.sessionID })
     expect(script.calls.at(0)?.system ?? "").not.toContain("tools.docs.marker()")
     expect((yield* test.tools((tools) => tools.some((tool) => tool.id.endsWith("marker")))).length).toBeGreaterThan(0)
+  }),
+)
+
+it.live("a view calls a tool of its own server through the Chat API, and no other", () =>
+  Effect.gen(function* () {
+    const peer = yield* McpPeer.make({ view: "<p>view</p>" })
+    const test = yield* observed(undefined, true)
+    yield* test.brain.configureApps(McpPeer.catalog("view", [{ slug: "docs", url: peer.url }]))
+    const script = McpPeer.execute("docs.marker")
+    yield* test.prompt(`${script.marker} read the marker`)
+    yield* test.brain.opencode.experimental.session.wait({ sessionID: test.sessionID })
+    const call = (server: string, tool: string) =>
+      test.brain.chat.session["session.callAppTool"]({
+        params: { sessionID: test.brain.id },
+        payload: { server, tool, input: {} },
+      })
+    const result = yield* call("docs", "marker").pipe(
+      Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }),
+    )
+    expect(result.content).toEqual([{ type: "text", text: "first" }])
+    for (const refused of [yield* Effect.flip(call("other", "marker")), yield* Effect.flip(call("docs", "nope"))])
+      expect(refused._tag).toBe("NotFoundError")
+    expect(peer.calls).toEqual(["marker"])
   }),
 )
