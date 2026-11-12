@@ -6,7 +6,11 @@ import { Composer } from "./composer.js"
 export const max = 100
 
 export interface Entry extends Schema.Schema.Type<typeof Entry> {}
-export const Entry = Schema.Struct({ text: Schema.String, pasted: Schema.Array(Composer.Pasted) })
+export const Entry = Schema.Struct({
+  text: Schema.String,
+  pasted: Schema.Array(Composer.Pasted),
+  sentAt: Schema.optionalKey(Schema.Number),
+})
 
 const decodeList = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Array(Schema.Unknown)))
 const decodeEntry = Schema.decodeUnknownOption(Entry)
@@ -25,11 +29,23 @@ const equal = (left: Entry, right: Entry) =>
   left.pasted.length === right.pasted.length &&
   left.pasted.every((item, index) => item.text === right.pasted[index]?.text)
 
-export const prepend = (entries: ReadonlyArray<Entry>, entry: Entry, limit = max): ReadonlyArray<Entry> => {
+export const prepend = (
+  entries: ReadonlyArray<Entry>,
+  entry: Entry,
+  options: { readonly limit?: number; readonly now?: number } = {},
+): ReadonlyArray<Entry> => {
   if (Composer.isBlank(entry)) return entries
   const last = entries.at(0)
   if (last && equal(last, entry)) return entries
-  return [{ text: entry.text, pasted: entry.pasted }, ...entries].slice(0, limit)
+  return [{ text: entry.text, pasted: entry.pasted, sentAt: options.now ?? Date.now() }, ...entries].slice(
+    0,
+    options.limit ?? max,
+  )
+}
+
+export const search = (entries: ReadonlyArray<Entry>, query: string) => {
+  const needle = query.trim().toLowerCase()
+  return needle ? entries.filter((entry) => entry.text.toLowerCase().includes(needle)) : entries
 }
 
 export const remove = (entries: ReadonlyArray<Entry>, entry: Entry) => {

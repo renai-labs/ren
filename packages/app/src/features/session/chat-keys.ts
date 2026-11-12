@@ -10,7 +10,16 @@ export interface Press {
   readonly isComposing: boolean
 }
 
-const actions = ["send", "sendOther", "stop", "historyUp", "historyDown", "editQueued", "chooseModel"] as const
+const actions = [
+  "send",
+  "sendOther",
+  "stop",
+  "historyUp",
+  "historyDown",
+  "historySearch",
+  "editQueued",
+  "chooseModel",
+] as const
 
 export type Action = (typeof actions)[number]
 
@@ -22,6 +31,7 @@ const keys: Readonly<Record<Action, ReadonlyArray<string>>> = {
   stop: ["Escape", "Ctrl+g"],
   historyUp: ["ArrowUp"],
   historyDown: ["ArrowDown"],
+  historySearch: ["Shift+ArrowUp"],
   editQueued: ["Mod+ArrowUp"],
   chooseModel: ["Mod+'"],
 }

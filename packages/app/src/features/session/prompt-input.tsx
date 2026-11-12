@@ -61,6 +61,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { Drafts } from "../../lib/drafts.js"
 import { ChatKeys } from "./chat-keys.js"
+import { HistorySearch, type Opened } from "./history-search.js"
 
 function AddMenu(props: {
   onInsert: (text: string) => void
@@ -563,6 +564,7 @@ export function PromptInput(props: {
   }
   const history = Drafts.useHistory()
   const [browsing, setBrowsing] = useState(ComposerHistory.idle)
+  const [searching, setSearching] = useState<Opened | undefined>()
   const submit = (options: { readonly alternative: boolean }) => {
     if (props.sending || booting) return
     if (uploading) {
@@ -605,7 +607,17 @@ export function PromptInput(props: {
     place(moved.entry.text, moved.cursor === "start" ? 0 : moved.entry.text.length)
     return true
   }
+  const searchHistory = () => {
+    if (props.suggest?.open) return false
+    const entries = history.read()
+    setBrowsing(ComposerHistory.idle)
+    setSearching({ saved: draft, entries, now: Date.now() })
+    const first = entries.at(0)
+    if (first) change(Composer.fromHistory(draft, first))
+    return true
+  }
   const act = (action: ChatKeys.Action | "swallow", node: HTMLTextAreaElement) => {
+    if (action === "historySearch") return searchHistory()
     if (action === "historyUp" || action === "historyDown") return browse(node, action === "historyUp" ? "up" : "down")
     if (action === "send" || action === "sendOther") {
       if (!blank) submit({ alternative: action === "sendOther" })
@@ -635,6 +647,14 @@ export function PromptInput(props: {
   return (
     <div ref={root} className="relative flex flex-col gap-2">
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
+      <HistorySearch
+        open={searching}
+        anchor={root}
+        returnFocus={textarea}
+        onChange={change}
+        onKeep={(entry) => place(entry.text, entry.text.length)}
+        onDone={() => setSearching(undefined)}
+      />
       <DropOverlay onFiles={attach} />
       <Input
         ref={picker}

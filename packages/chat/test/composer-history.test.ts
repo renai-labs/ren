@@ -9,8 +9,8 @@ const entry = (text: string, pasted: ReadonlyArray<string> = []): ComposerHistor
 describe("Composer history", () => {
   test("prependHistoryEntry skips empty prompt and deduplicates consecutive entries", () => {
     expect(ComposerHistory.prepend([], entry("  "))).toEqual([])
-    const withOne = ComposerHistory.prepend([], entry("hello"))
-    expect(withOne).toEqual([entry("hello")])
+    const withOne = ComposerHistory.prepend([], entry("hello"), { now: 5 })
+    expect(withOne).toEqual([{ text: "hello", pasted: [], sentAt: 5 }])
     expect(ComposerHistory.prepend(withOne, entry("hello"))).toBe(withOne)
     expect(ComposerHistory.prepend(withOne, entry("hello", ["block"]))).toHaveLength(2)
   })
@@ -19,14 +19,32 @@ describe("Composer history", () => {
     const full = Array.from({ length: 100 }, (_, index) => entry(`entry ${index}`))
     const next = ComposerHistory.prepend(full, entry("newest"))
     expect(next).toHaveLength(100)
-    expect(next[0]).toEqual(entry("newest"))
+    expect(next[0]).toMatchObject(entry("newest"))
     expect(next.at(-1)).toEqual(entry("entry 98"))
   })
 
   test("removeHistoryEntry drops the entry recorded for a prompt and leaves others alone", () => {
     const entries = ComposerHistory.prepend(ComposerHistory.prepend([], entry("earlier")), entry("sent"))
     expect(ComposerHistory.remove(entries, entry("never sent"))).toBe(entries)
-    expect(ComposerHistory.remove(entries, entry("sent"))).toEqual([entry("earlier")])
+    expect(ComposerHistory.remove(entries, entry("sent"))).toEqual(entries.slice(1))
+  })
+
+  test("records when an entry was sent and still decodes entries without it", () => {
+    const entries = ComposerHistory.prepend([], entry("new"), { now: 1000 })
+    expect(entries[0]?.sentAt).toBe(1000)
+    expect(ComposerHistory.decode(ComposerHistory.encode(entries))).toEqual(entries)
+    expect(ComposerHistory.decode(JSON.stringify([{ text: "old", pasted: [] }]))).toEqual([entry("old")])
+    expect(ComposerHistory.decode(JSON.stringify([{ text: "bad", pasted: [], sentAt: "x" }]))).toEqual([])
+  })
+
+  test("search matches the text without regard to case and keeps the order", () => {
+    const entries = [entry("Update the Forecast"), entry("Draft a summary"), entry("why is the forecast off")]
+    expect(ComposerHistory.search(entries, "FORECAST").map((item) => item.text)).toEqual([
+      "Update the Forecast",
+      "why is the forecast off",
+    ])
+    expect(ComposerHistory.search(entries, "  ")).toBe(entries)
+    expect(ComposerHistory.search(entries, "zzz")).toEqual([])
   })
 
   test("drops corrupt entries one by one", () => {

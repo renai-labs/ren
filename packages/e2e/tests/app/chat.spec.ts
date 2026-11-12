@@ -168,6 +168,51 @@ test("a member queues a message while Ren works, steers with the other key, reca
   await page.request.post(`${mailboxURL}/release?marker=${marker}`)
 })
 
+test("a member searches earlier prompts with Shift+ArrowUp and keeps one without sending it", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const message = page.getByRole("textbox", { name: "Message" })
+  await message.fill("Add the budget")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toHaveCount(2, { timeout: brainStart })
+  await message.fill("Draft the agenda")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toHaveCount(3, { timeout: brainStart })
+
+  const sent: Array<string> = []
+  page.on("request", (request) => {
+    if (request.method() === "POST" && (request.postData() ?? "").includes("budget")) sent.push(request.url())
+  })
+  await message.fill("half typed")
+  await message.press("Shift+ArrowUp")
+  const search = page.getByRole("combobox", { name: "Search history" })
+  await expect(search).toBeFocused()
+  await expect(page.getByRole("option")).toHaveText([/^Draft the agenda/, /^Add the budget/, /^Plan the launch/])
+  await expect(message).toHaveValue("Draft the agenda")
+  await search.fill("BUDGET")
+  await expect(page.getByRole("option")).toHaveCount(1)
+  await expect(message).toHaveValue("Add the budget")
+  await search.fill("zzz")
+  await expect(page.getByText("No matches")).toBeVisible()
+  await expect(message).toHaveValue("half typed")
+  await search.press("Escape")
+  await expect(search).toHaveCount(0)
+  await expect(message).toHaveValue("half typed")
+
+  await message.press("Shift+ArrowUp")
+  await page.getByRole("combobox", { name: "Search history" }).fill("budget")
+  await page.getByRole("combobox", { name: "Search history" }).press("Enter")
+  await expect(page.getByRole("combobox", { name: "Search history" })).toHaveCount(0)
+  await expect(message).toHaveValue("Add the budget")
+  await expect(message).toBeFocused()
+  await expect(page.getByText("stub reply")).toHaveCount(3)
+  expect(sent).toEqual([])
+})
+
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
   await page.goto("/app/")
