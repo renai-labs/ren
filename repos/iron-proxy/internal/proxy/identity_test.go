@@ -68,6 +68,7 @@ func TestIdentityEntrySendsTheRequestToItsTargetWithoutRenHeaders(t *testing.T) 
 	req.Header.Set("X-Ren-Identity", "Bearer "+rentest.Sign(t, key, jose.ES256, issuer.Claims(time.Now())))
 	req.Header.Set("X-Ren-Target", upstream.URL+"/v1/items?page=2")
 	req.Header.Set("X-Other", "kept")
+	req.Header.Set("Authorization", "Bearer ren:GITHUB")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -97,7 +98,7 @@ func TestIdentityEntryRefuses(t *testing.T) {
 	valid := "Bearer " + rentest.Sign(t, key, jose.ES256, issuer.Claims(time.Now()))
 	otherAudience := issuer.Claims(time.Now())
 	otherAudience.Audience = jwt.Audience{"https://prod.ren"}
-	target := upstream.URL + "/v1"
+	target := upstream.URL + "/v1?key=ren:GITHUB"
 
 	for name, c := range map[string]struct {
 		identities []string
@@ -112,6 +113,7 @@ func TestIdentityEntryRefuses(t *testing.T) {
 		"two targets":                {[]string{valid}, []string{target, target}, http.StatusBadRequest},
 		"a target that is not HTTP":  {[]string{valid}, []string{"ftp://example.com/file"}, http.StatusBadRequest},
 		"a target with a login":      {[]string{valid}, []string{"https://user:pass@example.com/"}, http.StatusBadRequest},
+		"no placeholder":             {[]string{valid}, []string{upstream.URL + "/v1"}, http.StatusForbidden},
 	} {
 		t.Run(name, func(t *testing.T) {
 			req, err := http.NewRequest("GET", "https://"+addr+"/", nil)
@@ -126,8 +128,11 @@ func TestIdentityEntryRefuses(t *testing.T) {
 			require.NoError(t, err)
 			_ = resp.Body.Close() // only the status matters
 			require.Equal(t, c.status, resp.StatusCode)
-			if c.status == http.StatusForbidden {
+			if c.status == http.StatusForbidden && name != "no placeholder" {
 				require.Equal(t, "unknown_workload", resp.Header.Get("X-Ren-Egress"))
+			}
+			if name == "no placeholder" {
+				require.Equal(t, "no_placeholder", resp.Header.Get("X-Ren-Egress"), "only credential requests use the egress")
 			}
 		})
 	}

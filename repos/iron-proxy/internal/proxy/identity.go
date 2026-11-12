@@ -63,6 +63,13 @@ func (p *Proxy) handleIdentity(w http.ResponseWriter, r *http.Request) {
 	if target.Scheme == "https" {
 		r.TLS = &tls.ConnectionState{ServerName: target.Hostname()}
 	}
+	// Only credential requests use the egress. The forwarder sends the other
+	// requests to their targets, so one here comes from a program that called
+	// the entry itself.
+	if !ren.HasPlaceholder(r) {
+		p.writeResponse(w, ren.Deny("no_placeholder", ""))
+		return
+	}
 	p.handleHTTP(w, r, &transform.TunnelInfo{
 		Target:      net.JoinHostPort(target.Hostname(), port),
 		SandboxID:   identity.SandboxID,

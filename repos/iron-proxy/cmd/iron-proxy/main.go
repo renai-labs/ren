@@ -56,6 +56,9 @@ func main() {
 		case "generate-ca":
 			runGenerateCA(os.Args[2:])
 			return
+		case "forward":
+			runForward(os.Args[2:])
+			return
 		case "version", "--version", "-v":
 			fmt.Println(version.Version)
 			return
