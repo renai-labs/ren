@@ -36,11 +36,20 @@ export const prepend = (
 ): ReadonlyArray<Entry> => {
   if (Composer.isBlank(entry)) return entries
   const last = entries.at(0)
-  if (last && equal(last, entry)) return entries
+  if (last && equal(last, entry))
+    return [{ text: last.text, pasted: last.pasted, sentAt: options.now ?? Date.now() }, ...entries.slice(1)]
   return [{ text: entry.text, pasted: entry.pasted, sentAt: options.now ?? Date.now() }, ...entries].slice(
     0,
     options.limit ?? max,
   )
+}
+
+export const age = (sentAt: number, now: number) => {
+  const minutes = Math.floor((now - sentAt) / 60_000)
+  if (minutes < 1) return "now"
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  return hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`
 }
 
 export const search = (entries: ReadonlyArray<Entry>, query: string) => {

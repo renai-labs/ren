@@ -11,7 +11,9 @@ describe("Composer history", () => {
     expect(ComposerHistory.prepend([], entry("  "))).toEqual([])
     const withOne = ComposerHistory.prepend([], entry("hello"), { now: 5 })
     expect(withOne).toEqual([{ text: "hello", pasted: [], sentAt: 5 }])
-    expect(ComposerHistory.prepend(withOne, entry("hello"))).toBe(withOne)
+    expect(ComposerHistory.prepend(withOne, entry("hello"), { now: 9 })).toEqual([
+      { text: "hello", pasted: [], sentAt: 9 },
+    ])
     expect(ComposerHistory.prepend(withOne, entry("hello", ["block"]))).toHaveLength(2)
   })
 
@@ -35,6 +37,13 @@ describe("Composer history", () => {
     expect(ComposerHistory.decode(ComposerHistory.encode(entries))).toEqual(entries)
     expect(ComposerHistory.decode(JSON.stringify([{ text: "old", pasted: [] }]))).toEqual([entry("old")])
     expect(ComposerHistory.decode(JSON.stringify([{ text: "bad", pasted: [], sentAt: "x" }]))).toEqual([])
+  })
+
+  test("age shows now, minutes, hours and days at each boundary", () => {
+    const minute = 60_000
+    const age = (ago: number) => ComposerHistory.age(0, ago)
+    expect([age(59_999), age(minute), age(59 * minute), age(60 * minute)]).toEqual(["now", "1m", "59m", "1h"])
+    expect([age(23 * 60 * minute), age(24 * 60 * minute), age(49 * 60 * minute)]).toEqual(["23h", "1d", "2d"])
   })
 
   test("search matches the text without regard to case and keeps the order", () => {

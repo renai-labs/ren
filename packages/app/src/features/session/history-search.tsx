@@ -11,14 +11,6 @@ import {
 } from "@ren/ui/command"
 import { Popover, PopoverContent } from "@ren/ui/popover"
 
-const age = (sentAt: number, now: number) => {
-  const minutes = Math.floor((now - sentAt) / 60_000)
-  if (minutes < 1) return "now"
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  return hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`
-}
-
 export interface Opened {
   readonly saved: Composer.Draft
   readonly entries: ReadonlyArray<ComposerHistory.Entry>
@@ -102,7 +94,7 @@ function HistoryPanel(props: {
                 <CommandItem key={index} value={String(index)} onSelect={() => keep(entry)}>
                   <span className="min-w-0 flex-1 truncate">{entry.text.replaceAll(/\s+/gu, " ")}</span>
                   {entry.sentAt === undefined ? null : (
-                    <CommandShortcut>{age(entry.sentAt, search.now)}</CommandShortcut>
+                    <CommandShortcut>{ComposerHistory.age(entry.sentAt, search.now)}</CommandShortcut>
                   )}
                 </CommandItem>
               ))}
