@@ -14,6 +14,7 @@ type Pdfjs = typeof import("pdfjs-dist")
 type Hit = { page: number; item: number }
 type Size = { width: number; height: number }
 
+const assets = `${import.meta.env.BASE_URL}pdfjs/`
 const lookAhead = "1200px"
 const thumbnailWidth = 96
 const hitClass = "bg-yellow-300/70"
@@ -210,7 +211,12 @@ export function PdfView(props: PreviewProps) {
     const destroy: { current: (() => void) | undefined } = { current: undefined }
     loadPdfjs()
       .then(async (pdfjs) => {
-        const task = pdfjs.getDocument({ data: new Uint8Array(structuredClone(props.bytes)) })
+        const task = pdfjs.getDocument({
+          data: new Uint8Array(structuredClone(props.bytes)),
+          cMapUrl: `${assets}cmaps/`,
+          standardFontDataUrl: `${assets}standard_fonts/`,
+          wasmUrl: `${assets}wasm/`,
+        })
         const timer = setTimeout(() => void task.destroy(), workerTimeoutMs)
         destroy.current = () => {
           clearTimeout(timer)

@@ -11,15 +11,94 @@ const decodeTabs = Schema.decodeUnknownSync(SheetTabs)
 const decodeSheet = Schema.decodeUnknownSync(Sheet)
 
 type Loaded = { tab: number; sheet: typeof Sheet.Type }
+type Rows = readonly (readonly string[])[]
+
+const rowHeight = 28
+const overscan = 12
 
 const columnName = (index: number): string =>
   (index < 26 ? "" : columnName(Math.floor(index / 26) - 1)) + String.fromCharCode(65 + (index % 26))
+
+const findCells = (rows: Rows, needle: string) =>
+  needle
+    ? rows.flatMap((row, r) => row.flatMap((cell, c) => (cell.toLowerCase().includes(needle) ? [`${r}:${c}`] : [])))
+    : []
+
+const rowsWidth = (rows: Rows) => rows.reduce((most, row) => Math.max(most, row.length), 0)
+
+function Spacer(props: { columns: number; height: number }) {
+  return (
+    <TableRow aria-hidden className="border-0">
+      <TableCell
+        colSpan={props.columns + 1}
+        className="p-0"
+        // oxlint-disable-next-line react/forbid-component-props -- the spacer stands for the rows outside the window
+        style={{ height: props.height }}
+      />
+    </TableRow>
+  )
+}
+
+function Grid(props: {
+  rows: Rows
+  columns: number
+  first: number
+  last: number
+  hitSet: ReadonlySet<string>
+  current: string | undefined
+}) {
+  return (
+    <Table className="w-max text-xs">
+      <TableHeader className="sticky top-0 z-10 bg-muted">
+        <TableRow>
+          <TableHead className="sticky left-0 z-20 w-12 bg-muted" />
+          {Array.from({ length: props.columns }, (_, c) => (
+            <TableHead key={columnName(c)} className="px-2 py-1 font-medium text-muted-foreground">
+              {columnName(c)}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {props.first > 0 ? <Spacer columns={props.columns} height={props.first * rowHeight} /> : null}
+        {props.rows.slice(props.first, props.last).map((row, offset) => {
+          const r = props.first + offset
+          return (
+            <TableRow key={r} className="h-7">
+              <TableHead className="sticky left-0 z-10 h-7 bg-muted px-2 py-0 text-right font-medium text-muted-foreground tabular-nums">
+                {r + 1}
+              </TableHead>
+              {Array.from({ length: props.columns }, (_, c) => (
+                <TableCell
+                  key={columnName(c)}
+                  data-active={props.current === `${r}:${c}`}
+                  className={cn(
+                    "h-7 max-w-80 truncate px-2 py-0",
+                    props.hitSet.has(`${r}:${c}`) && "bg-yellow-300/70 dark:bg-yellow-500/40",
+                    props.current === `${r}:${c}` && "bg-orange-400/80",
+                  )}
+                >
+                  {row[c]}
+                </TableCell>
+              ))}
+            </TableRow>
+          )
+        })}
+        {props.last < props.rows.length ? (
+          <Spacer columns={props.columns} height={(props.rows.length - props.last) * rowHeight} />
+        ) : null}
+      </TableBody>
+    </Table>
+  )
+}
 
 export function XlsxView(props: PreviewProps) {
   const [tabs, setTabs] = useState<typeof SheetTabs.Type>([])
   const [tab, setTab] = useState(0)
   const [loaded, setLoaded] = useState<Loaded>()
+  const [view, setView] = useState({ top: 0, height: 600 })
   const client = useRef<ReturnType<typeof workerCalls>>(undefined)
+  const grid = useRef<HTMLDivElement>(null)
   const fail = useEffectEvent(props.onError)
   const count = useEffectEvent(props.onCount)
   useEffect(() => {
@@ -48,65 +127,54 @@ export function XlsxView(props: PreviewProps) {
     }
   }, [tabs, tab])
   const sheet = loaded?.tab === tab ? loaded.sheet : undefined
-  const needle = props.query.trim().toLowerCase()
-  const hits = needle
-    ? (sheet?.rows ?? []).flatMap((row, r) =>
-        row.flatMap((cell, c) => (cell.toLowerCase().includes(needle) ? [`${r}:${c}`] : [])),
-      )
-    : []
+  const rows = sheet?.rows ?? []
+  const hits = findCells(rows, props.query.trim().toLowerCase())
   const hitKey = hits.join(",")
   const total = hits.length
   useEffect(() => count(total), [hitKey, total])
-  const grid = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    grid.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "center", inline: "center" })
-  }, [hitKey, props.active])
-  const columns = sheet?.rows.reduce((most, row) => Math.max(most, row.length), 0) ?? 0
+  const rowPx = rowHeight * (props.zoom === "fit" ? 1 : props.zoom)
   const current = hits[props.active]
+  const reveal = useEffectEvent((key: string) => {
+    grid.current?.scrollTo({ top: Math.max(0, Number(key.split(":")[0]) * rowPx - view.height / 2) })
+    setTimeout(
+      () => grid.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest", inline: "center" }),
+      50,
+    )
+  })
+  useEffect(() => {
+    if (current) reveal(current)
+  }, [current])
+  useEffect(() => {
+    const element = grid.current
+    if (!element) return
+    // ast-grep-ignore: no-manual-scroll -- measures the grid to render only the rows in view, not a chat
+    const observer = new ResizeObserver(() => setView((previous) => ({ ...previous, height: element.clientHeight })))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [sheet])
+  const first = Math.max(0, Math.floor(view.top / rowPx) - overscan)
+  const last = Math.min(rows.length, Math.ceil((view.top + view.height) / rowPx) + overscan)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={grid} className="min-h-0 flex-1 overflow-auto overscroll-contain bg-background">
+      <div
+        ref={grid}
+        className="min-h-0 flex-1 overflow-auto overscroll-contain bg-background"
+        onScroll={(event) => setView({ top: event.currentTarget.scrollTop, height: event.currentTarget.clientHeight })}
+      >
         {sheet ? (
           <div
             className="w-max [&_[data-slot=table-container]]:overflow-visible"
             // oxlint-disable-next-line react/forbid-dom-props -- the zoom level is a number the user picks
             style={{ zoom: props.zoom === "fit" ? 1 : props.zoom }}
           >
-            <Table className="w-max text-xs">
-              <TableHeader className="sticky top-0 z-10 bg-muted">
-                <TableRow>
-                  <TableHead className="sticky left-0 z-20 w-12 bg-muted" />
-                  {Array.from({ length: columns }, (_, c) => (
-                    <TableHead key={columnName(c)} className="px-2 py-1 font-medium text-muted-foreground">
-                      {columnName(c)}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sheet.rows.map((row, r) => (
-                  // oxlint-disable-next-line react/no-array-index-key -- a row has no identity but its position
-                  <TableRow key={r}>
-                    <TableHead className="sticky left-0 z-10 bg-muted px-2 py-1 text-right font-medium text-muted-foreground tabular-nums">
-                      {r + 1}
-                    </TableHead>
-                    {Array.from({ length: columns }, (_, c) => (
-                      <TableCell
-                        key={columnName(c)}
-                        data-active={current === `${r}:${c}`}
-                        className={cn(
-                          "max-w-80 truncate px-2 py-1",
-                          hits.includes(`${r}:${c}`) && "bg-yellow-300/70 dark:bg-yellow-500/40",
-                          current === `${r}:${c}` && "bg-orange-400/80",
-                        )}
-                      >
-                        {row[c]}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <Grid
+              rows={rows}
+              columns={rowsWidth(rows)}
+              first={first}
+              last={last}
+              hitSet={new Set(hits)}
+              current={current}
+            />
           </div>
         ) : (
           <Loading className="m-6 h-2/3">

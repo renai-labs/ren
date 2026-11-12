@@ -39,8 +39,8 @@ function Page(props: {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [near, setNear] = useState(false)
   const visible = useEffectEvent(props.onVisible)
-  const paint = props.paint
-  const loadText = props.text
+  const paint = useEffectEvent(props.paint)
+  const loadText = useEffectEvent(props.text)
   useEffect(() => {
     const element = host.current
     if (!element) return
@@ -78,10 +78,10 @@ function Page(props: {
     return () => {
       cancelled.value = true
     }
-  }, [near, props.index, props.scale, paint])
+  }, [near, props.index, props.scale])
   useEffect(() => {
     if (near) void loadText(props.index)
-  }, [near, props.index, loadText])
+  }, [near, props.index])
   const width = Math.floor(props.size.width * props.scale)
   const marks = props.hits.reduce((all, hit, index) => {
     if (hit.page === props.index) all.set(hit.span, [...(all.get(hit.span) ?? []), index])

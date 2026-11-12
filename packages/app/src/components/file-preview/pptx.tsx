@@ -24,7 +24,7 @@ type Paint = (index: number, density: number) => Promise<ImageBitmap | undefined
 
 function SlideCanvas(props: { index: number; width: number; height: number; density: number; paint: Paint }) {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const paint = props.paint
+  const paint = useEffectEvent(props.paint)
   useEffect(() => {
     const target = canvas.current
     if (!target) return
@@ -43,7 +43,7 @@ function SlideCanvas(props: { index: number; width: number; height: number; dens
     return () => {
       cancelled.value = true
     }
-  }, [props.index, props.density, paint])
+  }, [props.index, props.density])
   return (
     <canvas
       ref={canvas}

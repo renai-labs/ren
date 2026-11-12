@@ -1,3 +1,5 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs"
+import path from "node:path"
 import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
@@ -31,6 +33,30 @@ const preloadFonts: Plugin = {
   },
 }
 
+const pdfjsAssets: Plugin = (() => {
+  const root = new URL("node_modules/pdfjs-dist/", import.meta.url).pathname
+  const folders = ["cmaps", "standard_fonts", "wasm"]
+  return {
+    name: "ren:pdfjs-assets",
+    configureServer: (server) => {
+      server.middlewares.use(`${base}pdfjs`, (request, response, next) => {
+        const target = path.join(root, path.normalize(request.url ?? "/"))
+        if (!folders.some((folder) => target.startsWith(path.join(root, folder))) || !existsSync(target)) return next()
+        response.end(readFileSync(target))
+      })
+    },
+    generateBundle() {
+      for (const folder of folders)
+        for (const name of readdirSync(path.join(root, folder)))
+          this.emitFile({
+            type: "asset",
+            fileName: `pdfjs/${folder}/${name}`,
+            source: readFileSync(path.join(root, folder, name)),
+          })
+    },
+  }
+})()
+
 export default defineConfig((env) => ({
   base,
   resolve: {
@@ -42,7 +68,14 @@ export default defineConfig((env) => ({
       { find: /^@tabler\/icons-react$/u, replacement: new URL("src/icons/heroicons.tsx", import.meta.url).pathname },
     ],
   },
-  plugins: [tanstackRouter(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), preloadFonts],
+  plugins: [
+    pdfjsAssets,
+    tanstackRouter(),
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
+    tailwindcss(),
+    preloadFonts,
+  ],
   build: { sourcemap: "hidden" },
   define:
     env.command === "serve"
