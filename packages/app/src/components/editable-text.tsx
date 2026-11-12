@@ -23,7 +23,18 @@ function TextView(props: {
     >
       <Tooltip>
         <TooltipTrigger
-          render={<span className={cn(text, props.multiline && "py-1", !props.value && "text-muted-foreground")} />}
+          render={
+            <Button
+              variant="ghost"
+              className={cn(
+                "h-auto min-w-0 cursor-text justify-start p-0 text-left font-normal hover:bg-transparent",
+                text,
+                props.multiline && "py-1",
+                !props.value && "text-muted-foreground",
+              )}
+              onClick={props.onEdit}
+            />
+          }
         >
           {props.value || props.placeholder}
         </TooltipTrigger>
