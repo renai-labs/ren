@@ -205,7 +205,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       ),
       Retention.layer,
       RenInferenceRemoval.layer,
-      BillingEnrollment.layer.pipe(Layer.provide(Billing.layerConfig)),
+      BillingEnrollment.layer.pipe(Layer.provideMerge(Billing.layerConfig)),
     ),
     Layer.mergeAll(
       Layer.mergeAll(ChannelNotice.layer, TaskCard.layer).pipe(

@@ -82,7 +82,7 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide(CredentialEnv.layerNone),
     ),
     RenInferenceRemoval.layer,
-    BillingEnrollment.layer.pipe(Layer.provide(Billing.layerNone)),
+    BillingEnrollment.layer.pipe(Layer.provideMerge(Billing.layerNone)),
     ChannelRoute.layer.pipe(
       Layer.provide(ChannelIdentity.layer),
       Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),

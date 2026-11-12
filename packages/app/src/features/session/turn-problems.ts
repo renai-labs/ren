@@ -1,4 +1,4 @@
-export type ProblemAction = "try" | "continue" | "model" | "providers" | "new" | "stop"
+export type ProblemAction = "try" | "continue" | "model" | "billing" | "providers" | "new" | "stop"
 
 export interface ProblemHandlers {
   readonly onTryAgain?: (() => void) | undefined
@@ -37,14 +37,14 @@ const outOfCredits = (input: Context): Problem => {
       fix: input.admin
         ? "Add credits, then hit Continue to pick up where Ren left off."
         : "Ask an admin to add credits, then hit Continue to pick up where Ren left off.",
-      actions: input.admin ? ["continue", "providers"] : ["continue"],
+      actions: input.admin ? ["continue", "billing", "providers"] : ["continue"],
     }
   return {
     title: "You’re out of Ren credits.",
     fix: input.admin
       ? "Add credits, or connect your own Claude or ChatGPT account in Providers. Then try again."
       : "Ask an admin to add credits, then try again.",
-    actions: input.admin ? ["try", "providers"] : ["try"],
+    actions: input.admin ? ["try", "billing", "providers"] : ["try"],
   }
 }
 

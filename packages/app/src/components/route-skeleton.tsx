@@ -248,6 +248,7 @@ function SettingsPageSkeleton() {
     credentials: "Credentials",
     providers: "Providers",
     channels: "Channels",
+    billing: "Billing & plans",
   }
   let body = <RowsSample />
   if (section === "members") body = <TableSample columns={["Name", "Email", "Role", ""]} />

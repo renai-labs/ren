@@ -35,6 +35,7 @@ import { Route as AuthedShellTasksIndexRouteImport } from "./routes/_authed/_she
 import { Route as AuthedShellAppsAppIdIndexRouteImport } from "./routes/_authed/_shell/apps/$appId/index"
 import { Route as AuthedShellMarketplaceAppIdIndexRouteImport } from "./routes/_authed/_shell/marketplace/$appId/index"
 import { Route as AuthedShellSessionsSessionIdIndexRouteImport } from "./routes/_authed/_shell/sessions/$sessionId/index"
+import { Route as AuthedShellSettingsAdminBillingRouteImport } from "./routes/_authed/_shell/settings/_admin/billing"
 import { Route as AuthedShellSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/settings/_admin/general"
 import { Route as AuthedShellSettingsAdminMachinesRouteImport } from "./routes/_authed/_shell/settings/_admin/machines"
 import { Route as AuthedShellSettingsAdminMembersRouteImport } from "./routes/_authed/_shell/settings/_admin/members"
@@ -193,6 +194,12 @@ const AuthedShellSessionsSessionIdIndexRoute =
     path: "/sessions/$sessionId/",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSettingsAdminBillingRoute =
+  AuthedShellSettingsAdminBillingRouteImport.update({
+    id: "/billing",
+    path: "/billing",
+    getParentRoute: () => AuthedShellSettingsAdminRoute,
+  } as any)
 const AuthedShellSettingsAdminGeneralRoute =
   AuthedShellSettingsAdminGeneralRouteImport.update({
     id: "/general",
@@ -334,6 +341,7 @@ export interface FileRoutesByFullPath {
   "/settings/": typeof AuthedShellSettingsIndexRoute
   "/spaces/": typeof AuthedShellSpacesIndexRoute
   "/tasks/": typeof AuthedShellTasksIndexRoute
+  "/settings/billing": typeof AuthedShellSettingsAdminBillingRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/settings/machines": typeof AuthedShellSettingsAdminMachinesRoute
   "/settings/members": typeof AuthedShellSettingsAdminMembersRoute
@@ -377,6 +385,7 @@ export interface FileRoutesByTo {
   "/marketplace": typeof AuthedShellMarketplaceIndexRoute
   "/spaces": typeof AuthedShellSpacesIndexRoute
   "/tasks": typeof AuthedShellTasksIndexRoute
+  "/settings/billing": typeof AuthedShellSettingsAdminBillingRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/settings/machines": typeof AuthedShellSettingsAdminMachinesRoute
   "/settings/members": typeof AuthedShellSettingsAdminMembersRoute
@@ -425,6 +434,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/": typeof AuthedShellSettingsIndexRoute
   "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
   "/_authed/_shell/tasks/": typeof AuthedShellTasksIndexRoute
+  "/_authed/_shell/settings/_admin/billing": typeof AuthedShellSettingsAdminBillingRoute
   "/_authed/_shell/settings/_admin/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/_authed/_shell/settings/_admin/machines": typeof AuthedShellSettingsAdminMachinesRoute
   "/_authed/_shell/settings/_admin/members": typeof AuthedShellSettingsAdminMembersRoute
@@ -472,6 +482,7 @@ export interface FileRouteTypes {
     | "/settings/"
     | "/spaces/"
     | "/tasks/"
+    | "/settings/billing"
     | "/settings/general"
     | "/settings/machines"
     | "/settings/members"
@@ -515,6 +526,7 @@ export interface FileRouteTypes {
     | "/marketplace"
     | "/spaces"
     | "/tasks"
+    | "/settings/billing"
     | "/settings/general"
     | "/settings/machines"
     | "/settings/members"
@@ -562,6 +574,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/"
     | "/_authed/_shell/spaces/"
     | "/_authed/_shell/tasks/"
+    | "/_authed/_shell/settings/_admin/billing"
     | "/_authed/_shell/settings/_admin/general"
     | "/_authed/_shell/settings/_admin/machines"
     | "/_authed/_shell/settings/_admin/members"
@@ -781,6 +794,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSessionsSessionIdIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/settings/_admin/billing": {
+      id: "/_authed/_shell/settings/_admin/billing"
+      path: "/billing"
+      fullPath: "/settings/billing"
+      preLoaderRoute: typeof AuthedShellSettingsAdminBillingRouteImport
+      parentRoute: typeof AuthedShellSettingsAdminRoute
+    }
     "/_authed/_shell/settings/_admin/general": {
       id: "/_authed/_shell/settings/_admin/general"
       path: "/general"
@@ -963,6 +983,7 @@ const AuthedShellSpacesSpaceIdRouteRouteWithChildren =
   )
 
 interface AuthedShellSettingsAdminRouteChildren {
+  AuthedShellSettingsAdminBillingRoute: typeof AuthedShellSettingsAdminBillingRoute
   AuthedShellSettingsAdminGeneralRoute: typeof AuthedShellSettingsAdminGeneralRoute
   AuthedShellSettingsAdminMachinesRoute: typeof AuthedShellSettingsAdminMachinesRoute
   AuthedShellSettingsAdminMembersRoute: typeof AuthedShellSettingsAdminMembersRoute
@@ -970,6 +991,7 @@ interface AuthedShellSettingsAdminRouteChildren {
 
 const AuthedShellSettingsAdminRouteChildren: AuthedShellSettingsAdminRouteChildren =
   {
+    AuthedShellSettingsAdminBillingRoute: AuthedShellSettingsAdminBillingRoute,
     AuthedShellSettingsAdminGeneralRoute: AuthedShellSettingsAdminGeneralRoute,
     AuthedShellSettingsAdminMachinesRoute:
       AuthedShellSettingsAdminMachinesRoute,

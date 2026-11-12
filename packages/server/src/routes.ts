@@ -53,6 +53,7 @@ import { AppHandler } from "./handlers/api/app.js"
 import { AppRegistryHandler, AppToolsHandler } from "./handlers/api/app-registry.js"
 import { AppProfileHandler, AppProfileReachHandler } from "./handlers/api/app-profile.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
+import { BillingHandler } from "./handlers/api/billing.js"
 import { ChatHandler } from "./handlers/api/chat.js"
 import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
@@ -197,6 +198,7 @@ export const layer = Layer.mergeAll(
         OAuthSessionHandler,
         OAuthAppHandler,
         RenInferenceHandler,
+        BillingHandler,
         ChannelInstallHandler,
         ChannelMappingHandler,
         ChannelConnectHandler,

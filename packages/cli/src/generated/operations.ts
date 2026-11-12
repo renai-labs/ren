@@ -1965,3 +1965,51 @@ export const RepositoryList = () =>
   Operation.run(ClientApi.groups["repository"].endpoints["repository.list"], { labels: {} }, (client) =>
     client["repository"]["list"](),
   )
+
+export const BillingGet = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.get"], { labels: {} }, (client) =>
+    client["billing"]["get"](),
+  )
+
+export const BillingPlanList = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.plan.list"], { labels: {} }, (client) =>
+    client["billing"]["plan"]["list"](),
+  )
+
+export const BillingInvoiceList = (input: Command.Command.Config.Infer<typeof Commands.BillingInvoiceList>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.invoice.list"],
+    { query: { page: input["page"], perPage: input["perPage"] }, labels: { page: "--page", perPage: "--per-page" } },
+    (client, request) => client["billing"]["invoice"]["list"]({ ...request.query }),
+  )
+
+export const BillingInvoiceUrl = (input: Command.Command.Config.Infer<typeof Commands.BillingInvoiceUrl>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.invoice.url"],
+    { params: { id: input["id"] }, labels: { id: "<invoice>" } },
+    (client, request) => client["billing"]["invoice"]["url"]({ ...request.params }),
+  )
+
+export const BillingSubscribe = (input: Command.Command.Config.Infer<typeof Commands.BillingSubscribe>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.subscribe"],
+    { payload: { plan: input["plan"] }, input: input["input"], labels: { plan: "--plan" } },
+    (client, request) => client["billing"]["subscribe"]({ ...request.payload }),
+  )
+
+export const BillingChangePlan = (input: Command.Command.Config.Infer<typeof Commands.BillingChangePlan>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.change-plan"],
+    { payload: { plan: input["plan"] }, input: input["input"], labels: { plan: "--plan" } },
+    (client, request) => client["billing"]["change-plan"]({ ...request.payload }),
+  )
+
+export const BillingCancel = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.cancel"], { labels: {} }, (client) =>
+    client["billing"]["cancel"](),
+  )
+
+export const BillingPortal = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.portal"], { labels: {} }, (client) =>
+    client["billing"]["portal"](),
+  )

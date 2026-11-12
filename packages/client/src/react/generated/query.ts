@@ -128,6 +128,10 @@ import type {
   RenInferenceConnectInput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
+  BillingInvoiceListInput,
+  BillingInvoiceUrlInput,
+  BillingSubscribeInput,
+  BillingChangePlanInput,
   ChannelInstallListInput,
   ChannelInstallUpdateInput,
   ChannelInstallRemoveInput,
@@ -1357,6 +1361,82 @@ export function make(client: ReturnType<typeof Ren.make>) {
                 client["ren-inference"]["connection"]["remove"](input),
             }),
         },
+      },
+    },
+    billing: {
+      get: {
+        queryKey: () => ["billing", "get"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["billing", "get"] as const,
+            queryFn: (context) => client["billing"]["get"]({ signal: context.signal }),
+          }),
+      },
+      plan: {
+        list: {
+          queryKey: () => ["billing", "plan", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["billing", "plan", "list"] as const,
+              queryFn: (context) => client["billing"]["plan"]["list"]({ signal: context.signal }),
+            }),
+        },
+      },
+      invoice: {
+        list: {
+          queryKey: (input?: BillingInvoiceListInput) =>
+            input === undefined
+              ? (["billing", "invoice", "list"] as const)
+              : (["billing", "invoice", "list", input] as const),
+          queryOptions: (input: BillingInvoiceListInput) =>
+            queryOptions({
+              queryKey: ["billing", "invoice", "list", input] as const,
+              queryFn: (context) => client["billing"]["invoice"]["list"](input, { signal: context.signal }),
+            }),
+        },
+        url: {
+          queryKey: (input?: BillingInvoiceUrlInput) =>
+            input === undefined
+              ? (["billing", "invoice", "url"] as const)
+              : (["billing", "invoice", "url", input] as const),
+          queryOptions: (input: BillingInvoiceUrlInput) =>
+            queryOptions({
+              queryKey: ["billing", "invoice", "url", input] as const,
+              queryFn: (context) => client["billing"]["invoice"]["url"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      subscribe: {
+        mutationKey: () => ["billing", "subscribe"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "subscribe"] as const,
+            mutationFn: (input: BillingSubscribeInput) => client["billing"]["subscribe"](input),
+          }),
+      },
+      "change-plan": {
+        mutationKey: () => ["billing", "change-plan"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "change-plan"] as const,
+            mutationFn: (input: BillingChangePlanInput) => client["billing"]["change-plan"](input),
+          }),
+      },
+      cancel: {
+        mutationKey: () => ["billing", "cancel"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "cancel"] as const,
+            mutationFn: () => client["billing"]["cancel"](),
+          }),
+      },
+      portal: {
+        mutationKey: () => ["billing", "portal"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "portal"] as const,
+            mutationFn: () => client["billing"]["portal"](),
+          }),
       },
     },
     "channel-install": {

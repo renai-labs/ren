@@ -15,6 +15,8 @@ export type Confirmation = {
   title: string
   description: string
   action: string
+  cancel?: string | undefined
+  working?: string | undefined
 }
 
 export function ConfirmDialog(props: {
@@ -42,7 +44,7 @@ export function ConfirmDialog(props: {
         </DialogHeader>
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />} disabled={pending}>
-            Cancel
+            {props.confirmation.cancel ?? "Cancel"}
           </DialogClose>
           <Button
             variant="destructive"
@@ -51,7 +53,7 @@ export function ConfirmDialog(props: {
             onClick={() => void confirm()}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            {props.confirmation.action}
+            {pending ? (props.confirmation.working ?? props.confirmation.action) : props.confirmation.action}
           </Button>
         </DialogFooter>
       </DialogContent>

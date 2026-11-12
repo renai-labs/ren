@@ -12,6 +12,7 @@ const labels: Record<ProblemAction, string> = {
   try: "Try again",
   continue: "Continue",
   model: "Change model",
+  billing: "Add credits",
   providers: "Providers",
   new: "New chat",
   stop: "Stop",
@@ -20,6 +21,13 @@ const labels: Record<ProblemAction, string> = {
 function ActionButton(props: { action: ProblemAction; primary: boolean; handlers: ProblemHandlers }) {
   const variant = props.primary ? "default" : "ghost"
   const className = props.primary ? undefined : "text-muted-foreground"
+  if (props.action === "billing")
+    return (
+      <Link to="/settings/billing" className={buttonVariants({ variant, size: "sm", className })}>
+        {labels.billing}
+        <IconArrowUpRight data-icon="inline-end" />
+      </Link>
+    )
   if (props.action === "providers")
     return (
       <Link to="/settings/providers" className={buttonVariants({ variant, size: "sm", className })}>
