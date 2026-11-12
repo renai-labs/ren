@@ -17,7 +17,7 @@ import {
   CodeBlockTitle,
   useHighlightedCode,
 } from "@ren/ui/code-block"
-import { AppMention, mentionLinks } from "@ren/ui/app-mention"
+import { AppMention, chipClosing, chipOpening, mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
@@ -106,6 +106,48 @@ const workspaceImages = () => (tree: MarkdownNode) => {
 
 const appLink = "#ren-app:"
 
+const isAppLink = (node: MarkdownNode | undefined) =>
+  node?.tagName === "a" && typeof node.properties?.href === "string" && node.properties.href.startsWith(appLink)
+
+const textEdge = (node: MarkdownNode | undefined, pattern: RegExp) =>
+  node?.type === "text" ? (pattern.exec(node.value ?? "")?.[0] ?? "") : ""
+
+const wrapChips = (children: MarkdownNode[]): MarkdownNode[] =>
+  children.flatMap((child, index) => {
+    const previous = children[index - 1]
+    const next = children[index + 1]
+    if (isAppLink(child)) {
+      const opening = textEdge(previous, chipOpening)
+      const closing = textEdge(next, chipClosing)
+      return [
+        {
+          type: "element",
+          tagName: "span",
+          properties: { className: ["whitespace-nowrap"] },
+          children: [
+            ...(opening ? [{ type: "text", value: opening }] : []),
+            child,
+            ...(closing ? [{ type: "text", value: closing }] : []),
+          ],
+        },
+      ]
+    }
+    if (child.type !== "text") return [child]
+    const head = isAppLink(previous) ? textEdge(child, chipClosing).length : 0
+    const tail = isAppLink(next) ? textEdge(child, chipOpening).length : 0
+    const value = (child.value ?? "").slice(head, (child.value ?? "").length - tail)
+    return value ? [{ ...child, value }] : []
+  })
+
+const chipPunctuation = () => (tree: MarkdownNode) => {
+  const visit = (node: MarkdownNode) => {
+    if (!node.children) return
+    for (const child of node.children) visit(child)
+    node.children = wrapChips(node.children)
+  }
+  visit(tree)
+}
+
 const withDataImages = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
   const protocols = schema.protocols
@@ -121,6 +163,8 @@ const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([na
     name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
   return name === "harden" ? [workspaceImages, safe] : [safe]
 })
+const plainPlugins = [...rehypePlugins, chipPunctuation]
+const workspacePlugins = [...workspaceRehypePlugins, chipPunctuation]
 
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
@@ -158,7 +202,7 @@ export function Markdown(props: {
         controls={false}
         tableMaxHeight={0}
         urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+        rehypePlugins={props.workspaceImage ? workspacePlugins : plainPlugins}
         components={withApps}
         isAnimating={props.streaming === true}
         animated={streamAnimation}

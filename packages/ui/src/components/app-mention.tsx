@@ -10,6 +10,13 @@ export type MentionApp = {
 
 const mention = /(^|\s)@([a-z0-9][a-z0-9-]*)/giu
 
+export const chipClosing = /^[.,;:!?)\]}"'’”…]+/u
+export const chipOpening = /[([{"'‘“]+$/u
+
+export function ChipText(props: { children: ReactNode }) {
+  return <span className="whitespace-nowrap">{props.children}</span>
+}
+
 export function MentionLogo(props: { name: string; icon: string | null; className?: string | undefined }) {
   return props.icon ? (
     <img
@@ -46,11 +53,22 @@ export function withAppMentions(text: string, apps: ReadonlyArray<MentionApp>): 
   const nodes: ReactNode[] = []
   const state = { from: 0 }
   for (const match of text.matchAll(mention)) {
-    const app = bySlug.get((match[2] ?? "").toLowerCase())
+    const slug = match[2] ?? ""
+    const app = bySlug.get(slug.toLowerCase())
     if (!app) continue
     const start = match.index + (match[1] ?? "").length
-    nodes.push(text.slice(state.from, start), <AppMention key={start} app={app} />)
-    state.from = start + 1 + (match[2] ?? "").length
+    const end = start + 1 + slug.length
+    const opening = chipOpening.exec(text.slice(state.from, start))?.[0] ?? ""
+    const closing = chipClosing.exec(text.slice(end))?.[0] ?? ""
+    nodes.push(
+      text.slice(state.from, start - opening.length),
+      <ChipText key={start}>
+        {opening}
+        <AppMention app={app} />
+        {closing}
+      </ChipText>,
+    )
+    state.from = end + closing.length
   }
   if (nodes.length === 0) return text
   nodes.push(text.slice(state.from))
