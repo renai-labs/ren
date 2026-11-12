@@ -109,9 +109,9 @@ function MarkdownBlockquote({ node, children, ...props }: ComponentProps<"blockq
     <Alert role="note" aria-label={callout.label} data-callout={kind} className="my-4">
       <callout.Icon className={callout.tone} aria-hidden />
       <AlertTitle className={callout.tone}>{callout.label}</AlertTitle>
-      {node?.children.some((child) => child.type === "element") && (
+      {node?.children.some((child) => child.type === "element") ? (
         <AlertDescription className="text-foreground">{children}</AlertDescription>
-      )}
+      ) : null}
     </Alert>
   )
 }
