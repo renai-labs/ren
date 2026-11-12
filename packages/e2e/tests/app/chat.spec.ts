@@ -45,7 +45,7 @@ test("chat placeholders remain until the first message page arrives", async ({ p
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
 })
 
-test("a member starts a chat, follows the reply, sends again, mentions an agent and finds the chat in the sidebar", async ({
+test("a member starts a chat, follows the reply, sends again, mentions a file and finds the chat in the sidebar", async ({
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
@@ -65,13 +65,22 @@ test("a member starts a chat, follows the reply, sends again, mentions an agent 
   await expect(page.getByText("Add the budget")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(2)
 
+  await page.getByRole("button", { name: "Open panel", exact: true }).click()
+  const panel = page.getByRole("complementary", { name: "Workspace" })
+  await panel.getByRole("button", { name: /^Terminal:/ }).click()
+  const command = panel.getByRole("textbox", { name: "Command" })
+  await command.fill("mkdir -p src && echo 'export const budget = 1' > src/budget.ts && echo created")
+  await command.press("Enter")
+  await expect(panel.getByText("created", { exact: true })).toBeVisible()
+
   const message = composer.getByRole("textbox", { name: "Message" })
-  await message.pressSequentially("Ask @genera")
-  await expect(page.getByRole("listbox", { name: "Mentions" }).getByRole("option")).toHaveText([/^general/])
+  await message.pressSequentially("Ask @budge")
+  const mentions = page.getByRole("listbox", { name: "Mentions" })
+  await expect(mentions.getByRole("group", { name: "Files" }).getByRole("option")).toHaveText([/src\/budget\.ts$/])
   await message.press("Enter")
   await message.pressSequentially("to check it")
   await message.press("Enter")
-  await expect(page.getByText("Ask @general to check it")).toBeVisible()
+  await expect(page.getByText("Ask @src/budget.ts to check it")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(3)
 
   await page.goto("/app/")

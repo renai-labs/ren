@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
 import { fromApp, fromRegistry, hasManaged, isSpaceApp, mentionColor, type Status } from "../../lib/apps.js"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
@@ -11,11 +11,16 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useSpaceApps } from "./use-space-apps.js"
+import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+
+const groupSize = 5
+const fileSearchDelay = 250
 
 interface SuggestionItem {
   readonly value: string
   readonly kind: "command" | Mentions.Kind
   readonly label: string
+  readonly group?: "Apps" | "Repositories" | "Files" | undefined
   readonly description?: string | undefined
   readonly icon?: string | null | undefined
   readonly status?: Status | undefined
@@ -57,6 +62,7 @@ export function useComposerSuggestions(input: {
   const offered = Composer.offeredCommands(listed(ChatReact.useCommands(input.root)))
   const brain = input.commands ? offered : []
   const core = useSuggestions({
+    root: input.root,
     spaceId: input.spaceId,
     mentions: input.mentions,
     commands: (query) => ClientCommand.suggestions(ClientCommand.offered(input.client), brain, query),
@@ -66,7 +72,7 @@ export function useComposerSuggestions(input: {
 }
 
 export const useMentionSuggestions = (spaceId: string | undefined, mentions: ReadonlyArray<Composer.MentionedApp>) =>
-  useSuggestions({ spaceId, mentions, commands: () => [], onClient: () => undefined })
+  useSuggestions({ root: undefined, spaceId, mentions, commands: () => [], onClient: () => undefined })
 
 function useRepositoryMentions(spaceId: string | undefined): ReadonlyArray<Mentions.Item> {
   const { api } = RouterContext.useRouterContext()
@@ -127,12 +133,24 @@ function useAppMentions(query: string | undefined, mentions: ReadonlyArray<Compo
   }
 }
 
-const suggestionLabel = (trigger: Composer.Trigger | undefined, options: { repositories: boolean }) => {
-  if (trigger?.kind === "command") return "Commands"
-  return options.repositories ? "Apps and repositories" : "Apps"
+function useFileMentions(root: Session.ID | undefined, query: string | undefined) {
+  const [unrooted] = useState(() => Session.ID.create())
+  const text = useDebouncedValue(query ?? "", fileSearchDelay)
+  const result = ChatReact.useFiles({ root: root ?? unrooted, query: root ? text : "", type: "file" })
+  const [kept, setKept] = useState<ReadonlyArray<Mentions.Item>>([])
+  if (AsyncResult.isSuccess(result)) {
+    const next = result.value.map(Mentions.fromFile)
+    if (next.length !== kept.length || next.some((item, index) => item.id !== kept[index]?.id)) setKept(next)
+  }
+  const active = root !== undefined && query !== undefined && query !== ""
+  return {
+    items: active ? kept : [],
+    searching: active && (text !== query || AsyncResult.isWaiting(result)),
+  }
 }
 
 function useSuggestions(input: {
+  root: Session.ID | undefined
   spaceId: string | undefined
   mentions: ReadonlyArray<Composer.MentionedApp>
   commands: (query: string) => ReadonlyArray<ClientCommand.Suggestion>
@@ -145,12 +163,23 @@ function useSuggestions(input: {
   const space = useSpaceApps(input.spaceId)
   const appById = apps.byId
   const repositories = useRepositoryMentions(input.spaceId)
-  const connectors = [...apps.items, ...repositories]
+  const found = useFileMentions(input.root, query)
+  const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
+  const connectors = [...apps.items, ...repositories, ...picked]
   const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
-  const mentionable =
+  const named = (items: ReadonlyArray<Mentions.Item>) =>
+    items
+      .filter((item) => [item.label, item.handle].some((value) => value.toLowerCase().includes(query ?? "")))
+      .slice(0, groupSize)
+  const grouped =
     query === undefined
       ? []
-      : connectors.filter((item) => [item.label, item.handle].some((value) => value.toLowerCase().includes(query)))
+      : [
+          ...named(apps.items).map((item) => ({ item, group: "Apps" as const })),
+          ...named(repositories).map((item) => ({ item, group: "Repositories" as const })),
+          ...found.items.slice(0, groupSize).map((item) => ({ item, group: "Files" as const })),
+        ]
+  const mentionable = grouped.map((entry) => entry.item)
   const items: ReadonlyArray<SuggestionItem> =
     trigger?.kind === "command"
       ? runnable.map((item) => ({
@@ -159,9 +188,10 @@ function useSuggestions(input: {
           label: `/${item.trigger}`,
           description: item.description,
         }))
-      : mentionable.map((item) => ({
+      : grouped.map(({ item, group }) => ({
           value: Mentions.key(item),
           kind: item.kind,
+          group,
           label: item.label,
           description: item.description,
           icon: appById.get(item.id)?.icon,
@@ -178,9 +208,9 @@ function useSuggestions(input: {
     setActive(undefined)
   }
   const suggest: Suggest = {
-    open: trigger !== undefined && (items.length > 0 || apps.searching),
-    label: suggestionLabel(trigger, { repositories: repositories.length > 0 }),
-    searching: apps.searching,
+    open: trigger !== undefined && (items.length > 0 || apps.searching || found.searching),
+    label: trigger?.kind === "command" ? "Commands" : "Mentions",
+    searching: apps.searching || found.searching,
     items,
     active: current,
     onCursor: (text, cursor) => {
@@ -207,6 +237,7 @@ function useSuggestions(input: {
       }
       const item = mentionable.find((entry) => Mentions.key(entry) === value)
       if (!item || trigger?.kind !== "mention") return
+      if (item.kind === "file") setPicked((current) => [...current.filter((entry) => entry.id !== item.id), item])
       return {
         ...Mentions.insert(text, item, trigger.start, cursor),
         mention: item.kind === "app" ? apps.mentionOf(item.id) : undefined,

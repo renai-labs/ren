@@ -8,7 +8,7 @@ import { Breadcrumb } from "./breadcrumb.js"
 export function ComposerFrame() {
   return (
     <InputGroup className="rounded-2xl bg-card dark:bg-card">
-      <InputGroupTextarea aria-label="Message" placeholder="Ask anything, @ to add an app" readOnly />
+      <InputGroupTextarea aria-label="Message" placeholder="Ask anything, @ to mention" readOnly />
       <InputGroupAddon align="block-end">
         <InputGroupButton size="icon-sm" aria-label="Add to this chat" disabled>
           <IconPlus />

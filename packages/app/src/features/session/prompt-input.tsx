@@ -9,6 +9,7 @@ import {
   IconArrowUp,
   IconChevronRight,
   IconClipboardText,
+  IconFile,
   IconLoader2,
   IconPaperclip,
   IconPlayerStopFilled,
@@ -472,6 +473,10 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
   const suggest = props.suggest
   const choose = props.onChoose
   if (!suggest.open) return null
+  const groups = (["Apps", "Repositories", "Files"] as const)
+    .map((heading) => ({ heading, items: suggest.items.filter((item) => item.group === heading) }))
+    .filter((group) => group.items.length > 0)
+  const listed = groups.length > 0 ? groups : [{ heading: suggest.label, items: suggest.items }]
   return (
     <Command
       value={suggest.active ?? ""}
@@ -481,45 +486,49 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
         props.below ? "top-full mt-2" : "bottom-full mb-2",
       )}
     >
-      <CommandList className="max-h-72">
-        <CommandGroup
-          heading={
-            <span className="flex items-center justify-between gap-2">
-              {suggest.label}
-              {suggest.searching ? (
-                <span className="flex items-center gap-1">
-                  <Spinner aria-hidden className="size-3" />
-                  Searching all apps
-                </span>
-              ) : null}
-            </span>
-          }
-        >
-          {suggest.items.map((item) => (
-            <CommandItem
-              key={item.value}
-              value={item.value}
-              onMouseDown={(event) => event.preventDefault()}
-              onSelect={() => choose(item.value)}
-            >
-              {item.kind === "command" ? <IconTerminal2 /> : null}
-              {item.kind === "repository" ? <GitHubMark /> : null}
-              {item.kind === "command" || item.kind === "repository" ? null : (
-                <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
-              )}
-              <span className="min-w-0 flex-1 truncate">
-                <span className="font-medium text-foreground">{item.label}</span>
-                {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
+      <CommandList className="max-h-72" label={suggest.label}>
+        {listed.map((group) => (
+          <CommandGroup
+            key={group.heading}
+            heading={
+              <span className="flex items-center justify-between gap-2">
+                {group.heading}
+                {suggest.searching && group.heading === listed.at(-1)?.heading ? (
+                  <span className="flex items-center gap-1">
+                    <Spinner aria-hidden className="size-3" />
+                    Searching
+                  </span>
+                ) : null}
               </span>
-              {item.status ? (
-                <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <StatusDot status={item.status} />
-                  {statusLabel[item.status]}
+            }
+          >
+            {group.items.map((item) => (
+              <CommandItem
+                key={item.value}
+                value={item.value}
+                onMouseDown={(event) => event.preventDefault()}
+                onSelect={() => choose(item.value)}
+              >
+                {item.kind === "command" ? <IconTerminal2 /> : null}
+                {item.kind === "repository" ? <GitHubMark /> : null}
+                {item.kind === "file" ? <IconFile /> : null}
+                {item.kind === "app" ? (
+                  <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
+                ) : null}
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium text-foreground">{item.label}</span>
+                  {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
                 </span>
-              ) : null}
-            </CommandItem>
-          ))}
-        </CommandGroup>
+                {item.status ? (
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <StatusDot status={item.status} />
+                    {statusLabel[item.status]}
+                  </span>
+                ) : null}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
       </CommandList>
     </Command>
   )
@@ -818,7 +827,7 @@ export function PromptInput(props: {
             )
             if (action && act(action, event.currentTarget)) event.preventDefault()
           }}
-          placeholder={status ? "" : "Ask anything, @ to add an app"}
+          placeholder={status ? "" : "Ask anything, @ to mention"}
           aria-label="Message"
           readOnly={state.sending || booting}
           aria-busy={booting || undefined}
