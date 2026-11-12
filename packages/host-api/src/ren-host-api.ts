@@ -17,6 +17,7 @@ import { Host } from "./host.js"
 import {
   ArtifactConflictError,
   ArtifactFailedError,
+  ArtifactInvalidError,
   ArtifactNotFoundError,
   EnvironmentNotFoundError,
   EnvironmentStartingError,
@@ -223,23 +224,35 @@ const HandsGroup = HttpApiGroup.make("environments")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "environments" }))
 
-export const hostBodyBytes = 32 * 1024 * 1024
-
 const ArtifactParams = { id: Artifact.ID }
 
 const ArtifactsGroup = HttpApiGroup.make("artifacts")
+  .add(
+    HttpApiEndpoint.post("artifacts.upload", "/host/artifacts/:id/uploads", {
+      params: ArtifactParams,
+      success: Artifact.Upload,
+      error: [ArtifactConflictError, ArtifactFailedError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.upload",
+        summary: "Start an artifact upload",
+        description:
+          "Give a short-lived URL that takes one PUT of the artifact’s source archive. The bytes go straight to storage, not through Ren.",
+      }),
+    ),
+  )
   .add(
     HttpApiEndpoint.put("artifacts.deploy", "/host/artifacts/:id", {
       params: ArtifactParams,
       payload: Artifact.DeployInput,
       success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
-      error: [ArtifactConflictError, ArtifactFailedError],
+      error: [ArtifactConflictError, ArtifactInvalidError, ArtifactFailedError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "artifacts.deploy",
         summary: "Publish an artifact",
         description:
-          "Store the source and queue a durable deployment. Returns accepted without waiting for deployment. Read status before reporting the artifact as live.",
+          "Check the uploaded source, keep a copy and queue a durable deployment. Returns accepted without waiting for deployment. Read status before reporting the artifact as live.",
       }),
     ),
   )
@@ -257,15 +270,30 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
     ),
   )
   .add(
-    HttpApiEndpoint.get("artifacts.files", "/host/artifacts/:id/files", {
+    HttpApiEndpoint.get("artifacts.get", "/host/artifacts/:id", {
       params: ArtifactParams,
-      success: Artifact.Files,
+      success: Artifact.Info,
+      error: ArtifactNotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.get",
+        summary: "Read an artifact",
+        description:
+          "Read an artifact’s title, entry, URL and active deployment. Its files are in the archive that artifacts.archive links to.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("artifacts.archive", "/host/artifacts/:id/archive", {
+      params: ArtifactParams,
+      success: Artifact.Archive,
       error: [ArtifactNotFoundError, ArtifactFailedError],
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "artifacts.files",
-        summary: "Read an artifact's files",
-        description: "Read the last published source files, including after the deployment is stopped.",
+        identifier: "artifacts.archive",
+        summary: "Download an artifact’s source archive",
+        description:
+          "Give a short-lived URL of the last published source archive, which an environment unpacks into a folder.",
       }),
     ),
   )

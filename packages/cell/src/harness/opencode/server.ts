@@ -48,6 +48,7 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
+import { OpenCodeArtifacts } from "./artifacts.js"
 import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
@@ -210,6 +211,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     )
   const api = yield* client(fetch)
   const sources = options.sources ?? (yield* GitSources.make())
+  const ren = options.ren ?? Option.none()
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
@@ -257,12 +259,15 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       executions.get,
       options.directoryOf,
       sources,
-      Option.map(options.ren ?? Option.none(), (access) => ({
+      Option.map(ren, (access) => ({
         ...access,
         lastSpeaker,
       })),
       { egress: options.egress ?? false, lastUserMessage },
     ),
+  )
+  yield* Effect.forEach(Option.toArray(ren), (access) =>
+    plugins.register(OpenCodeArtifacts.make({ ren: access, connections, directoryOf: options.directoryOf })),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))

@@ -42,6 +42,15 @@ Before using a new account:
 4. Ensure the server's existing private drive bucket permits `GetObject` and
    conditional `PutObject` under `artifact-provider/cloudflare/*`, in addition to
    its existing source-archive permissions. Preserve this prefix and its backups.
+   Source archives also need `PutObject`, `GetObject` and `DeleteObject`
+   under `artifact-uploads/*` (presigned uploads, which a deploy copies and
+   deletes) and `PutObject` and `GetObject` under `<organization>/artifacts/*`
+   (the kept copies and presigned downloads). Environments PUT uploads straight
+   to the bucket, so its endpoint must be reachable from them.
+5. Add a lifecycle rule that expires objects under `artifact-uploads/` after
+   one day. An upload that no deploy claims, or that a deploy refused, stays
+   there until then. Its link takes any size for 15 minutes; a deploy refuses
+   an archive over the limits.
 
 The account-owned smoke token is temporary and expires on November 18, 2026;
 production needs its own appropriately managed credential.

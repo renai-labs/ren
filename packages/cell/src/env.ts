@@ -32,7 +32,7 @@ export const Vars = Schema.Struct({
     Schema.decode({
       decode: SchemaGetter.transform((config) => ({
         ...config,
-        plugins: [...(config.plugins ?? []), "-opencode.plan"],
+        plugins: [...(config.plugins ?? []), "-opencode.plan", "-opencode.tool.artifact"],
       })),
       encode: SchemaGetter.passthrough(),
     }),
@@ -40,7 +40,7 @@ export const Vars = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("{}")),
   ).annotate({
     description:
-      "OpenCode’s config as JSON. Ren removes OpenCode’s Plan plugin, which puts any agent named plan in read-only Plan mode.",
+      "OpenCode’s config as JSON. Ren removes OpenCode’s Plan plugin, which puts any agent named plan in read-only Plan mode, and OpenCode’s artifact tools, which Ren’s own plugin serves under the same names.",
   }),
   REN_URL: Schema.optional(Schema.String),
   REN_EGRESS: Schema.optional(Schema.Literal("1")).annotate({

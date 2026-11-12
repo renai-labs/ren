@@ -44,7 +44,6 @@ import { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
-import { OpenCodeArtifacts } from "./artifacts.js"
 import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -297,6 +296,13 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
   } satisfies Chats
 })
 
+export const sessionOf = (location: Plugin.Context["location"], directoryOf: (sessionId: string) => string) => {
+  const sessionId = location.workspaceID
+    ? RenWorkspaceDriver.sessionIdOf(location.workspaceID)
+    : basename(location.directory)
+  return { sessionId, isSession: Boolean(location.workspaceID) || directoryOf(sessionId) === location.directory }
+}
+
 export const make = (
   desired: Ref.Ref<HarnessConfig.Snapshot>,
   locations: Ref.Ref<ReadonlyArray<HarnessConfig.Location>>,
@@ -358,10 +364,9 @@ export const make = (
         }
         const turns = { running: new Set<string>(), ended: [] as Array<(sessionID: string) => Effect.Effect<void>> }
         const workspaceID = context.location.workspaceID
-        const sessionId = workspaceID
-          ? RenWorkspaceDriver.sessionIdOf(workspaceID)
-          : basename(context.location.directory)
-        const isSession = Boolean(workspaceID) || directoryOf(sessionId) === context.location.directory
+        const session = sessionOf(context.location, directoryOf)
+        const sessionId = session.sessionId
+        const isSession = session.isSession
         if (Option.isSome(connections) && workspaceID) {
           const own = RenWorkspaceDriver.sessionIdOf(workspaceID)
           turns.ended.push((sessionID) =>
@@ -709,7 +714,6 @@ export const make = (
           OpenCodeModelTools.register(editor, modelTools)
         })
         yield* context.websearch.transform((editor) => editor.default.set(editor.default.get() ?? "random"))
-        yield* OpenCodeArtifacts.install(context, { ren, isSession, sessionId })
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]

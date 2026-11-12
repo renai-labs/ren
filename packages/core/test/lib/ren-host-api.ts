@@ -1,6 +1,11 @@
 export * as RenHostApiTest from "./ren-host-api.js"
 
-import { ArtifactConflictError, ArtifactFailedError, ArtifactNotFoundError } from "@ren/host-api/errors"
+import {
+  ArtifactConflictError,
+  ArtifactFailedError,
+  ArtifactInvalidError,
+  ArtifactNotFoundError,
+} from "@ren/host-api/errors"
 import { CurrentHost, RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Effect, Layer, Option } from "effect"
@@ -41,17 +46,19 @@ const handlers = (around: Around) =>
       Effect.map(Effect.serviceOption(Artifacts.Service), (found) => {
         const artifacts = Option.getOrElse(found, (): Artifacts.Interface => {
           const none = Effect.die(new Error("This test serves no artifacts"))
-          return { deploy: () => none, status: () => none, files: () => none, stop: () => none }
+          return {
+            upload: () => none,
+            deploy: () => none,
+            status: () => none,
+            get: () => none,
+            archive: () => none,
+            stop: () => none,
+          }
         })
         const failed = (error: { readonly message: string }) => new ArtifactFailedError({ message: error.message })
         return group
-          .handle("artifacts.status", (request) =>
-            Effect.flatMap(CurrentHost, (host) =>
-              artifacts.status(host, request.params.id, request.params.deploymentId),
-            ).pipe(Effect.mapError((error) => new ArtifactNotFoundError({ message: error.message }))),
-          )
-          .handle("artifacts.deploy", (request) =>
-            Effect.flatMap(CurrentHost, (host) => artifacts.deploy(host, request.params.id, request.payload)).pipe(
+          .handle("artifacts.upload", (request) =>
+            Effect.flatMap(CurrentHost, (host) => artifacts.upload(host, request.params.id)).pipe(
               Effect.mapError((error) =>
                 error._tag === "Primitive.Conflict"
                   ? new ArtifactConflictError({ message: error.message })
@@ -59,13 +66,32 @@ const handlers = (around: Around) =>
               ),
             ),
           )
-          .handle("artifacts.files", (request) =>
-            Effect.flatMap(CurrentHost, (host) => artifacts.files(host, request.params.id)).pipe(
+          .handle("artifacts.archive", (request) =>
+            Effect.flatMap(CurrentHost, (host) => artifacts.archive(host, request.params.id)).pipe(
               Effect.mapError((error) =>
                 error._tag === "Primitive.NotFound"
                   ? new ArtifactNotFoundError({ message: error.message })
                   : failed(error),
               ),
+            ),
+          )
+          .handle("artifacts.status", (request) =>
+            Effect.flatMap(CurrentHost, (host) =>
+              artifacts.status(host, request.params.id, request.params.deploymentId),
+            ).pipe(Effect.mapError((error) => new ArtifactNotFoundError({ message: error.message }))),
+          )
+          .handle("artifacts.deploy", (request) =>
+            Effect.flatMap(CurrentHost, (host) => artifacts.deploy(host, request.params.id, request.payload)).pipe(
+              Effect.catchTags({
+                "Primitive.Conflict": (error) => Effect.fail(new ArtifactConflictError({ message: error.message })),
+                "Primitive.Invalid": (error) => Effect.fail(new ArtifactInvalidError({ message: error.message })),
+                "Artifacts.Failed": (error) => Effect.fail(failed(error)),
+              }),
+            ),
+          )
+          .handle("artifacts.get", (request) =>
+            Effect.flatMap(CurrentHost, (host) => artifacts.get(host, request.params.id)).pipe(
+              Effect.mapError((error) => new ArtifactNotFoundError({ message: error.message })),
             ),
           )
           .handle("artifacts.stop", (request) =>

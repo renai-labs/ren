@@ -23,6 +23,59 @@ export const files = async (name: string) => {
   )
 }
 
+export const archive = (files: Readonly<Record<string, Uint8Array | string>>) =>
+  new Bun.Archive(Object.fromEntries(Object.entries(files).map((entry) => [`artifact/${entry[0]}`, entry[1]])), {
+    compress: "gzip",
+  }).bytes()
+
+export const published = Effect.fnUntraced(function* (
+  artifacts: Artifacts.Interface,
+  owner: Artifacts.Owner,
+  id: Artifact.ID,
+) {
+  const link = yield* artifacts.archive(owner, id)
+  return yield* Effect.promise(async () =>
+    Object.fromEntries(
+      await Promise.all(
+        [...(await new Bun.Archive(await (await fetch(link.url)).bytes()).files()).values()].map(
+          async (file) => [file.name.slice(file.name.indexOf("/") + 1), await file.bytes()] as const,
+        ),
+      ),
+    ),
+  )
+})
+
+export const deploy = (
+  artifacts: Artifacts.Interface,
+  owner: Artifacts.Owner,
+  id: Artifact.ID,
+  input: {
+    readonly deploymentId: Artifact.DeploymentID
+    readonly title: string
+    readonly config: Artifact.Config
+    readonly files: Readonly<Record<string, Uint8Array>>
+  },
+) =>
+  Effect.gen(function* () {
+    const upload = yield* artifacts.upload(owner, id)
+    const files = Object.fromEntries(Object.entries(input.files).filter((entry) => entry[0] !== Artifact.manifestPath))
+    const body = yield* Effect.promise(() =>
+      archive(
+        input.config.durableObjects
+          ? { ...files, [Artifact.manifestPath]: JSON.stringify({ durableObjects: input.config.durableObjects }) }
+          : files,
+      ),
+    )
+    const put = yield* Effect.promise(() => fetch(upload.url, { method: "PUT", body }))
+    expect(put.status).toBe(200)
+    return yield* artifacts.deploy(owner, id, {
+      deploymentId: input.deploymentId,
+      title: input.title,
+      entry: input.config.entry,
+      uploadId: upload.uploadId,
+    })
+  })
+
 export const idle = (id: Artifact.ID) =>
   Effect.gen(function* () {
     const database = yield* Database.Service
