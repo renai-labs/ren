@@ -18,20 +18,25 @@ import { errorMessage } from "../../lib/errors.js"
 import { handoff } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
+import { Artifacts } from "../../lib/artifacts.js"
 import { useMentionSuggestions } from "./use-composer-suggestions.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const route = getRouteApi("/_authed/_shell/")
 
-export function HomePage() {
+export function HomePage(props: {
+  draftKey: string
+  initialDraft: Composer.Draft
+  artifact?: Artifacts.Mention | undefined
+}) {
   const { api, platform } = RouterContext.useRouterContext()
   const me = useMe()
   const navigate = useNavigate()
   const spaces = useSpaces().joined
   const search = route.useSearch()
   const [remembered, setRemembered] = useState(() => ChatPreferences.homeSpace.read(platform.storage))
-  const kept = Drafts.useDraft(search.spaceId ? Drafts.space(search.spaceId) : Drafts.fresh)
+  const kept = Drafts.useDraft(props.draftKey, props.initialDraft)
   const draft = kept.draft
   const setDraft = kept.set
   const spaceId =
@@ -71,7 +76,7 @@ export function HomePage() {
     const files = Composer.files(draft)
     const message = {
       id: Composer.messageID(draft) ?? SessionMessage.ID.create(),
-      text: mentions.resolve(trimmed).text,
+      text: Artifacts.resolveMention(mentions.resolve(trimmed).text, props.artifact),
       ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
     }
     setSent(draft)
@@ -140,6 +145,7 @@ export function HomePage() {
                 }),
             }}
             suggest={suggest}
+            artifact={props.artifact}
             model={
               <ModelPicker
                 models={models.models}

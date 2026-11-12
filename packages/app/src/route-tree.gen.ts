@@ -20,6 +20,7 @@ import { Route as AuthedShellRouteImport } from "./routes/_authed/_shell"
 import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
+import { Route as AuthedShellArtifactsRouteImport } from "./routes/_authed/_shell/artifacts"
 import { Route as AuthedShellSchedulesRouteImport } from "./routes/_authed/_shell/schedules"
 import { Route as AuthedOrganizationsNewRouteImport } from "./routes/_authed/organizations/new"
 import { Route as AuthedShellAppsIndexRouteImport } from "./routes/_authed/_shell/apps/index"
@@ -44,6 +45,7 @@ import { Route as AuthedShellSettingsProvidersIndexRouteImport } from "./routes/
 import { Route as AuthedShellSettingsProvidersKeysRouteImport } from "./routes/_authed/_shell/settings/providers/keys"
 import { Route as AuthedShellSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/index"
 import { Route as AuthedShellSpacesSpaceIdAppsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/apps"
+import { Route as AuthedShellSpacesSpaceIdArtifactsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/artifacts"
 import { Route as AuthedShellSpacesSpaceIdChannelsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/channels"
 import { Route as AuthedShellSpacesSpaceIdComputeRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/compute"
 import { Route as AuthedShellSpacesSpaceIdCredentialsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/credentials"
@@ -108,6 +110,11 @@ const AuthedShellIndexRoute = AuthedShellIndexRouteImport.update({
 const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
   id: "/$",
   path: "/$",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellArtifactsRoute = AuthedShellArtifactsRouteImport.update({
+  id: "/artifacts",
+  path: "/artifacts",
   getParentRoute: () => AuthedShellRoute,
 } as any)
 const AuthedShellSchedulesRoute = AuthedShellSchedulesRouteImport.update({
@@ -249,6 +256,12 @@ const AuthedShellSpacesSpaceIdAppsRoute =
     path: "/apps",
     getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
+const AuthedShellSpacesSpaceIdArtifactsRoute =
+  AuthedShellSpacesSpaceIdArtifactsRouteImport.update({
+    id: "/artifacts",
+    path: "/artifacts",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
 const AuthedShellSpacesSpaceIdChannelsRoute =
   AuthedShellSpacesSpaceIdChannelsRouteImport.update({
     id: "/channels",
@@ -336,6 +349,7 @@ export interface FileRoutesByFullPath {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
+  "/artifacts": typeof AuthedShellArtifactsRoute
   "/schedules": typeof AuthedShellSchedulesRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -354,6 +368,7 @@ export interface FileRoutesByFullPath {
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
+  "/spaces/$spaceId/artifacts": typeof AuthedShellSpacesSpaceIdArtifactsRoute
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
@@ -383,6 +398,7 @@ export interface FileRoutesByTo {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
+  "/artifacts": typeof AuthedShellArtifactsRoute
   "/schedules": typeof AuthedShellSchedulesRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
@@ -399,6 +415,7 @@ export interface FileRoutesByTo {
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
+  "/spaces/$spaceId/artifacts": typeof AuthedShellSpacesSpaceIdArtifactsRoute
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
@@ -430,6 +447,7 @@ export interface FileRoutesById {
   "/_authed/_shell": typeof AuthedShellRouteWithChildren
   "/invites/accept": typeof InvitesAcceptRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
+  "/_authed/_shell/artifacts": typeof AuthedShellArtifactsRoute
   "/_authed/_shell/schedules": typeof AuthedShellSchedulesRoute
   "/_authed/organizations/new": typeof AuthedOrganizationsNewRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
@@ -449,6 +467,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/_authed/_shell/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/_authed/_shell/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
+  "/_authed/_shell/spaces/$spaceId/artifacts": typeof AuthedShellSpacesSpaceIdArtifactsRoute
   "/_authed/_shell/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/_authed/_shell/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/_authed/_shell/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
@@ -480,6 +499,7 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
+    | "/artifacts"
     | "/schedules"
     | "/organizations/new"
     | "/spaces/$spaceId"
@@ -498,6 +518,7 @@ export interface FileRouteTypes {
     | "/settings/channels/$provider"
     | "/settings/providers/keys"
     | "/spaces/$spaceId/apps"
+    | "/spaces/$spaceId/artifacts"
     | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/compute"
     | "/spaces/$spaceId/credentials"
@@ -527,6 +548,7 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
+    | "/artifacts"
     | "/schedules"
     | "/organizations/new"
     | "/settings"
@@ -543,6 +565,7 @@ export interface FileRouteTypes {
     | "/settings/channels/$provider"
     | "/settings/providers/keys"
     | "/spaces/$spaceId/apps"
+    | "/spaces/$spaceId/artifacts"
     | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/compute"
     | "/spaces/$spaceId/credentials"
@@ -573,6 +596,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell"
     | "/invites/accept"
     | "/_authed/_shell/$"
+    | "/_authed/_shell/artifacts"
     | "/_authed/_shell/schedules"
     | "/_authed/organizations/new"
     | "/_authed/_shell/"
@@ -592,6 +616,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/channels/$provider"
     | "/_authed/_shell/settings/providers/keys"
     | "/_authed/_shell/spaces/$spaceId/apps"
+    | "/_authed/_shell/spaces/$spaceId/artifacts"
     | "/_authed/_shell/spaces/$spaceId/channels"
     | "/_authed/_shell/spaces/$spaceId/compute"
     | "/_authed/_shell/spaces/$spaceId/credentials"
@@ -700,6 +725,13 @@ declare module "@tanstack/react-router" {
       path: "/$"
       fullPath: "/$"
       preLoaderRoute: typeof AuthedShellSplatRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/artifacts": {
+      id: "/_authed/_shell/artifacts"
+      path: "/artifacts"
+      fullPath: "/artifacts"
+      preLoaderRoute: typeof AuthedShellArtifactsRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/schedules": {
@@ -870,6 +902,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdAppsRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
+    "/_authed/_shell/spaces/$spaceId/artifacts": {
+      id: "/_authed/_shell/spaces/$spaceId/artifacts"
+      path: "/artifacts"
+      fullPath: "/spaces/$spaceId/artifacts"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdArtifactsRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
     "/_authed/_shell/spaces/$spaceId/channels": {
       id: "/_authed/_shell/spaces/$spaceId/channels"
       path: "/channels"
@@ -959,6 +998,7 @@ declare module "@tanstack/react-router" {
 
 interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdAppsRoute: typeof AuthedShellSpacesSpaceIdAppsRoute
+  AuthedShellSpacesSpaceIdArtifactsRoute: typeof AuthedShellSpacesSpaceIdArtifactsRoute
   AuthedShellSpacesSpaceIdChannelsRoute: typeof AuthedShellSpacesSpaceIdChannelsRoute
   AuthedShellSpacesSpaceIdComputeRoute: typeof AuthedShellSpacesSpaceIdComputeRoute
   AuthedShellSpacesSpaceIdCredentialsRoute: typeof AuthedShellSpacesSpaceIdCredentialsRoute
@@ -976,6 +1016,8 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
 const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteRouteChildren =
   {
     AuthedShellSpacesSpaceIdAppsRoute: AuthedShellSpacesSpaceIdAppsRoute,
+    AuthedShellSpacesSpaceIdArtifactsRoute:
+      AuthedShellSpacesSpaceIdArtifactsRoute,
     AuthedShellSpacesSpaceIdChannelsRoute:
       AuthedShellSpacesSpaceIdChannelsRoute,
     AuthedShellSpacesSpaceIdComputeRoute: AuthedShellSpacesSpaceIdComputeRoute,
@@ -1025,6 +1067,7 @@ const AuthedShellSettingsAdminRouteWithChildren =
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
+  AuthedShellArtifactsRoute: typeof AuthedShellArtifactsRoute
   AuthedShellSchedulesRoute: typeof AuthedShellSchedulesRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -1048,6 +1091,7 @@ interface AuthedShellRouteChildren {
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
+  AuthedShellArtifactsRoute: AuthedShellArtifactsRoute,
   AuthedShellSchedulesRoute: AuthedShellSchedulesRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSpacesSpaceIdRouteRoute:

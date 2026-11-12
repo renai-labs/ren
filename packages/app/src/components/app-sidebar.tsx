@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useLocation } from "@tanstack/react-router"
-import { IconApps, IconChecklist, IconClock, IconCube, IconEdit } from "@tabler/icons-react"
+import { IconApps, IconBrowser, IconChecklist, IconClock, IconCube, IconEdit } from "@tabler/icons-react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
 import { ChatsList, Footer, Header, NavRow, Section, SpacesActions, useChatFilters } from "./sidebar-parts.js"
 import { SpacesList } from "./sidebar-spaces.js"
@@ -11,7 +11,8 @@ const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
 const tasks = { to: "/tasks", label: "Tasks", icon: IconChecklist } as const
 const scheduled = { to: "/schedules", label: "Scheduled", icon: IconClock } as const
 const apps = { to: "/apps", label: "Apps", icon: IconApps } as const
-type Page = typeof newChat | typeof tasks | typeof scheduled | typeof apps
+const artifacts = { to: "/artifacts", label: "Artifacts", icon: IconBrowser } as const
+type Page = typeof newChat | typeof tasks | typeof scheduled | typeof artifacts | typeof apps
 
 function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
   return (
@@ -50,7 +51,7 @@ function CollapsibleLayout(props: { path: string }) {
   return (
     <>
       <SidebarContent className="scrollbar-thin overflow-y-auto overscroll-contain">
-        <Nav path={props.path} pages={[newChat, tasks, scheduled, apps]} />
+        <Nav path={props.path} pages={[newChat, tasks, scheduled, artifacts, apps]} />
         <Section
           label="Spaces"
           actions={<SpacesActions />}
