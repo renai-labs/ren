@@ -17,7 +17,7 @@ artifacts in v1, 66 have images or fonts, and 4 are over the old 5 MiB file or
   `artifact_create`, `artifact_update`, `artifact_read` and `artifact_delete`,
   plus `artifact_status`. Create and update also take `directory`, a folder on
   the environment, published with its binary files. Read returns the
-  artifact's title, entry and URL from Ren's database (`artifacts.get`), not
+  artifact's title, entry and URL from Ren's database (`artifacts.read`), not
   its files as OpenCode's does; with `directory`, a new folder on the
   environment gets every file back. A chat without an environment cannot read
   an artifact's files.
@@ -28,10 +28,20 @@ artifacts in v1, 66 have images or fonts, and 4 are over the old 5 MiB file or
   25 MiB each, 200 MiB in all; safe paths; the entry; `ren-artifact.json`),
   copies the version it checked to an immutable key and queues the deployment.
   Uploads sit under `artifact-uploads/`; a deploy deletes its own, and a
-  bucket lifecycle rule removes the rest after a day. `artifacts.archive`
+  bucket lifecycle rule removes the rest after a day. `artifacts.download`
   gives a presigned GET URL that the executor's `files.unpack` reads.
 - An executor without `files.pack` cannot publish a folder; inline files still
   work. The environment must reach the bucket's endpoint.
+- People use the public artifacts API (`artifact.list` of a space, newest
+  first; `artifact.get`; `artifact.archive`), from the app, the SDK and
+  `ren artifacts`. Archiving stops serving the artifact, hides it, and refuses
+  its next upload or deploy; Ren keeps its source and data.
+- One tool for each job. An agent publishes, reads, stops and follows an
+  artifact with the `opencode` tools above, as its brain, and finds the space's
+  artifacts with Ren MCP's `artifact_list`, as the person in the chat. Ren MCP
+  hides `artifact_get` and `artifact_archive`: `artifact_read` reads, and
+  archiving is a person's choice in the app. An agent's `artifact_delete`
+  stops serving, and publishing again serves the artifact at the same URL.
 
 When OpenCode takes bytes or file references, Ren removes its plugin, enables
 OpenCode's, and registers Ren as an OpenCode artifact provider. The tool names
@@ -41,14 +51,22 @@ not per brain.
 
 ### Next: artifacts in the app
 
-1. A public artifacts API in `@ren/protocol`, shaped like OpenCode's
-   `/api/experimental/artifacts` (`artifacts.list` by space and chat,
-   `artifacts.get`, `artifacts.delete`), served from Ren's database.
-2. A `session_id` column on `artifact`, set by the deploy that created it, so a
-   chat lists its own artifacts.
-3. A chat card for an `opencode_artifact_create` or `opencode_artifact_update`
-   tool call, beside `show_file`'s, that reads live status from that API.
-4. The space's Artifacts page and a chat's artifacts panel, as in v1.
+1. A `session_id` column on `artifact`, set by the deploy that created it, and
+   a chat filter on `artifact.list`, so a chat lists its own artifacts.
+2. A chat card for an artifact that a chat created or updated, beside
+   `show_file`'s, that reads live status from that API. The tools are in code
+   mode, so the agent calls them inside `execute`: find
+   `.artifact_create` and `.artifact_update` in the `execute` call's
+   `toolCalls` metadata, as `AppConnect` finds `.app_request_connect`, as well
+   as a direct `opencode_artifact_create` or `opencode_artifact_update` call.
+3. The space's Artifacts page and a chat's artifacts panel, as in v1.
+4. The site's artifacts page (`concepts/artifacts.mdx`) describes the
+   Artifacts page, its card menu (Open, Copy link, Archive) and
+   `ren artifacts get <space-id> <artifact-id>`. Check it against what ships,
+   and change one or the other: the CLI takes `ren artifacts get <artifact>`,
+   and its help says "slug or ID", although artifacts have no slug.
+5. Move v1's artifacts: each one's files into a source archive, a row and a
+   deployment, at the same URL where that is possible.
 
 ### Next: Wrangler's upload
 
