@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { useLocation } from "@tanstack/react-router"
-import { IconApps, IconBrowser, IconChecklist, IconClock, IconCube, IconEdit } from "@tabler/icons-react"
+import { IconBrowser, IconChecklist, IconClock, IconCube, IconEdit, IconLayoutGridFilled } from "@tabler/icons-react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
-import { ChatsList, Footer, Header, NavRow, Section, SpacesActions, useChatFilters } from "./sidebar-parts.js"
+import { ChatsList, Footer, Header, NavRow, Section, useChatFilters } from "./sidebar-parts.js"
 import { SpacesList } from "./sidebar-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
@@ -10,7 +10,7 @@ import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
 const tasks = { to: "/tasks", label: "Tasks", icon: IconChecklist } as const
 const scheduled = { to: "/schedules", label: "Scheduled", icon: IconClock } as const
-const apps = { to: "/apps", label: "Apps", icon: IconApps } as const
+const apps = { to: "/apps", label: "Apps", icon: IconLayoutGridFilled } as const
 const artifacts = { to: "/artifacts", label: "Artifacts", icon: IconBrowser } as const
 type Page = typeof newChat | typeof tasks | typeof scheduled | typeof artifacts | typeof apps
 
@@ -52,13 +52,7 @@ function CollapsibleLayout(props: { path: string }) {
     <>
       <SidebarContent className="scrollbar-thin overflow-y-auto overscroll-contain">
         <Nav path={props.path} pages={[newChat, tasks, scheduled, artifacts, apps]} />
-        <Section
-          label="Spaces"
-          actions={<SpacesActions />}
-          open={sections.spaces}
-          onToggle={() => toggle("spaces")}
-          className="shrink-0 group-data-[collapsible=icon]:hidden"
-        >
+        <Section label="Spaces" to="/spaces" className="shrink-0 group-data-[collapsible=icon]:hidden">
           <SpacesList path={props.path} />
         </Section>
         <Section

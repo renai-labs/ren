@@ -2,8 +2,8 @@ import { describe, expect, setDefaultTimeout } from "bun:test"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { TestEnvironment } from "@ren/executor/testing"
-import type { Environment } from "@ren/schema/environment"
+import { TestHand } from "@ren/executor/testing"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
 import { Cache, Effect, Layer } from "effect"
@@ -17,14 +17,18 @@ import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
 import { Artifacts } from "../src/artifacts.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
-import { EnvironmentProvider } from "../src/environment-provider.js"
-import { Environments } from "../src/environments.js"
+import { HandProvider } from "../src/hand-provider.js"
+import { Hands } from "../src/hands.js"
+import { DurableRunner } from "../src/durable-runner.js"
+import { SandboxEgress } from "../src/sandbox-egress.js"
+import { MachineNetwork } from "../src/machine-network.js"
+import { Bundles } from "../src/bundles.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { Signer } from "../src/signer.js"
 import { Configured } from "./lib/configured.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/environment-provider.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 import { TestCloudflare } from "./lib/cloudflare.js"
@@ -41,19 +45,20 @@ const environments = Layer.unwrap(
     const scope = yield* Effect.scope
     const executors = yield* Cache.make({
       capacity: 16,
-      lookup: (environmentId: Environment.ID) =>
-        Layer.buildWithScope(TestEnvironment.layer({ environmentId, workspace: remote }), scope).pipe(
-          Effect.flatMap((context) => Effect.provideContext(TestEnvironment.url, context)),
+      lookup: (environmentId: Hand.ID) =>
+        Layer.buildWithScope(TestHand.layer({ environmentId, workspace: remote }), scope).pipe(
+          Effect.flatMap((context) => Effect.provideContext(TestHand.url, context)),
           Effect.orDie,
         ),
     })
     const probe = yield* TestProvider.make({
-      endpoint: (environmentId) =>
-        Cache.get(executors, environmentId).pipe(Effect.map((url) => ({ url: new URL(url) }))),
+      endpoint: (environmentId) => Cache.get(executors, environmentId).pipe(Effect.map((url) => ({ url }))),
     })
-    return Environments.layer.pipe(
-      Layer.provide(Signer.layerLocal),
-      Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+    return Hands.layer.pipe(
+      Layer.provide(DurableRunner.layerMemory),
+      Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer]),
+      Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+      Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
     )
   }),
 )
@@ -180,6 +185,13 @@ describe("artifacts from a chat", () => {
         const brains = yield* Brains.Service
         const owner = yield* Seed.owner()
         const environmentTemplateId = yield* Seed.environmentTemplate(owner.organizationId)
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({
+            hand_placement: "remote",
+            environment_template_id: environmentTemplateId,
+          })
+          .where(eq(Database.Schema.space.id, owner.spaceId))
         const sessionId = Session.ID.create()
         const folder = join(remote, sessionId)
         const logo = crypto.getRandomValues(new Uint8Array(384 * 1024))
@@ -195,7 +207,6 @@ describe("artifacts from a chat", () => {
           sessionId,
           harness: "opencode",
           interactive: true,
-          environmentTemplateId,
           initialMessage: {
             messageId: Session.MessageID.create(),
             prompt: { text: `publish ${published.marker}` },

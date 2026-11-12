@@ -252,13 +252,7 @@ export const layer = Layer.mergeAll(
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([
-        HostPullHandler,
-        HostModelsHandler,
-        HostHandsHandler,
-        HostArtifactsHandler,
-        HostTokenHandler,
-      ]),
+      Layer.provide([HostPullHandler, HostModelsHandler, HostHandsHandler, HostArtifactsHandler, HostTokenHandler]),
       Layer.provide(Brains.hostAuthentication),
       Layer.provide(Artifacts.layer),
     ),

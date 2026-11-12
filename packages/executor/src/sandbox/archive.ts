@@ -108,22 +108,21 @@ export const stallAfter = Duration.seconds(60)
 const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
 export const pack = (workspace: string) =>
-  Effect.fn("Executor.pack")(function* (input: EnvironmentApi.PackInput) {
+  Effect.fn("Executor.pack")(function* (input: HandApi.PackInput) {
     const root = resolve(workspace, input.path)
     const target = new URL(input.url)
-    const failed = (message: string) =>
-      new EnvironmentApi.ArchiveError({ url: `${target.origin}${target.pathname}`, message })
+    const failed = (message: string) => new HandApi.ArchiveError({ url: `${target.origin}${target.pathname}`, message })
     const fileSystem = (path: string) => (cause: unknown) =>
-      new EnvironmentApi.FileSystemError({ path, message: messageOf(cause) })
+      new HandApi.FileSystemError({ path, message: messageOf(cause) })
     const found = yield* Effect.tryPromise({
       try: () => stat(root),
       catch: (cause) =>
         cause instanceof Error && "code" in cause && cause.code === "ENOENT"
-          ? new EnvironmentApi.FileNotFoundError({ path: input.path })
+          ? new HandApi.FileNotFoundError({ path: input.path })
           : fileSystem(input.path)(cause),
     })
     if (!found.isDirectory())
-      return yield* new EnvironmentApi.WrongKindError({
+      return yield* new HandApi.WrongKindError({
         path: input.path,
         actual: found.isFile() ? "file" : "other",
       })

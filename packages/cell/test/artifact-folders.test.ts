@@ -1,7 +1,7 @@
 import { expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
-import { Environment } from "@ren/schema/environment"
+import { TestHand, testEffect } from "@ren/executor/testing"
+import { Hand } from "@ren/schema/hand"
 import { Effect, Option } from "effect"
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -11,9 +11,9 @@ import { FakeRen } from "./lib/ren.js"
 
 setDefaultTimeout(60_000)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 
 it.live(
   "a chat publishes a folder with binary files from its environment and reads it back byte for byte, and the executor unpacks the cell's own archive of inline files",
@@ -24,7 +24,7 @@ it.live(
         (fake) => Effect.promise(() => fake.stop()),
       )
       const github = yield* TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
-      const chat = yield* Effect.flatMap(TestEnvironment.url, (url) =>
+      const chat = yield* Effect.flatMap(TestHand.url, (url) =>
         ReferenceChat.open(
           { url, environmentId, directoryOf: (sessionId) => join(workspace, sessionId) },
           github,
@@ -32,8 +32,8 @@ it.live(
           undefined,
           {
             ren: {
-            address: Effect.succeed(Option.some(ren.url)),
-            token: Effect.promise(() => FakeRen.hostToken()).pipe(Effect.map(Option.some)),
+              address: Effect.succeed(Option.some(ren.url)),
+              token: Effect.promise(() => FakeRen.hostToken()).pipe(Effect.map(Option.some)),
             },
           },
         ),
