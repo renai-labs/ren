@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { Auth } from "@ren/schema/auth"
 import { Hand } from "@ren/schema/hand"
 import { MachineTemplate } from "@ren/schema/machine-template"
@@ -47,6 +48,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
     const running = new Set<Hand.ID>()
     const images: Array<Option.Option<string>> = []
     const networks: Array<Option.Option<ReadonlyArray<string>>> = []
+    const variables: Array<Readonly<Record<string, string>>> = []
     const steps: Array<ReadonlyArray<string>> = []
     const updated: Array<string> = []
     const destroyed: Array<number> = []
@@ -74,6 +76,7 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       create: (input) => {
         images.push(input.image)
         networks.push(input.network.hosts)
+        variables.push(input.variables)
         if (switches.capacity || switches.full) {
           switches.capacity = false
           return Effect.fail(new MachineProvider.Capacity({ message: "no room", retryAfter: capacityFor }))
@@ -142,7 +145,11 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
               Effect.ignore,
               Effect.ensuring(Effect.sync(() => running.delete(row.id))),
             ),
-      startup: () => Effect.succeed({ variables: {}, created: Effect.void }),
+      startup: () =>
+        Effect.succeed({
+          variables: { POSTHOG_PROJECT_KEY: "phc_ren", REN_URL: "https://ren.test" },
+          created: Effect.void,
+        }),
       desiredSetup: () => Effect.sync(() => switches.wanted),
       appliedHosts: () => Effect.sync(() => switches.applied),
       target: (row) => Option.fromNullishOr(row.url),
@@ -202,12 +209,27 @@ const kindWith = (options: { readonly canUpdateInPlace: boolean; readonly canSam
       })
       return id
     }
-    return { machines, switches, destroyed, updated, read, update, add, images, networks, steps }
+    return { machines, switches, destroyed, updated, read, update, add, images, networks, variables, steps }
   })
 
 const kind = kindWith({ canUpdateInPlace: true })
 
 describe("MachineLifecycle", () => {
+  it.effect("a new machine gets the names of Ren's own variables, so its executor keeps them from the agent", () =>
+    Effect.gen(function* () {
+      const memory = yield* kind
+      memory.switches.boots = true
+      yield* memory.machines.access(memory.add())
+      expect(memory.variables).toEqual([
+        {
+          POSTHOG_PROJECT_KEY: "phc_ren",
+          REN_URL: "https://ren.test",
+          [ExecutorVariables.hidden]: "POSTHOG_PROJECT_KEY",
+        },
+      ])
+    }),
+  )
+
   it.effect(
     "a machine that fails 3 times waits 10 min, then 30 min, then every hour; the next access after that starts it again",
     () =>

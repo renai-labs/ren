@@ -1,35 +1,23 @@
-import { AppListingSample } from "../../components/app-list.js"
-import { Loading } from "@ren/ui/loading"
 import { useState, type ReactNode } from "react"
-import { EmptyState } from "../../components/empty-state.js"
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { getRouteApi } from "@tanstack/react-router"
-import { Button } from "@ren/ui/button"
-import { IconPlus } from "@tabler/icons-react"
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
+import { getRouteApi, useNavigate } from "@tanstack/react-router"
+import { Loading } from "@ren/ui/loading"
+import { Tabs } from "@ren/ui/tabs"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
-import { AccountList, AppRow, AppSection, AppSheet, SeeAllRow } from "../../components/app-list.js"
-import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { Page, useShapeId } from "../../components/page.js"
+import { AppListingSample, AppRow, AppSection, MoreApps, SeeAllRow } from "../../components/app-list.js"
+import { EmptyState } from "../../components/empty-state.js"
+import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
-import { ListPagination } from "../../components/list-pagination.js"
-import { useApp } from "../../lib/use-app.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { AppRegistryPages } from "../../lib/app-registry.js"
+import { categoryLabel, fromApp, fromRegistry, isSpaceApp, needsAttention, type CatalogApp } from "../../lib/apps.js"
+import { pickerPageSize } from "../../lib/pagination.js"
+import { RouterContext } from "../../lib/router-context.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { pageSize, currentPage, pickerPageSize } from "../../lib/pagination.js"
-import {
-  audience,
-  connectLabel,
-  fromApp,
-  fromRegistry,
-  isSpaceApp,
-  needsAttention,
-  type CatalogApp,
-} from "../../lib/apps.js"
-import { RouterContext } from "../../lib/router-context.js"
-import { Loader } from "../../lib/loader.js"
 
-const route = getRouteApi("/_authed/_shell/marketplace")
+const route = getRouteApi("/_authed/_shell/apps/")
 
 const matches = (app: { name: string; description: string }, query: string) =>
   `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
@@ -87,15 +75,41 @@ function InstalledApps(props: {
   )
 }
 
+function CategoryPills(props: { categories: ReadonlyArray<string>; value: string | undefined }) {
+  const navigate = route.useNavigate()
+  if (props.categories.length === 0) return null
+  return (
+    <Tabs
+      value={props.value ?? "all"}
+      onValueChange={(value: string) =>
+        void navigate({ search: value === "all" ? {} : { category: value }, replace: true })
+      }
+    >
+      <PageTabsList className="w-full flex-wrap justify-start gap-y-1.5 group-data-horizontal/tabs:h-auto">
+        <PageTabsTrigger value="all">All</PageTabsTrigger>
+        {props.categories.map((category) => (
+          <PageTabsTrigger key={category} value={category}>
+            {categoryLabel(category)}
+          </PageTabsTrigger>
+        ))}
+      </PageTabsList>
+    </Tabs>
+  )
+}
+
 function AppListing(props: {
   inUse: ReadonlyArray<CatalogApp>
   installed: number
   onAll: () => void
   rest: ReadonlyArray<CatalogApp>
+  restTitle: string
   query: string
+  more: boolean
+  onMore: () => void
+  fetching: boolean
   row: (app: CatalogApp) => ReactNode
 }) {
-  if (props.inUse.length === 0 && props.rest.length === 0)
+  if (props.inUse.length === 0 && props.rest.length === 0 && !props.more)
     return <EmptyState>{props.query ? `Nothing matches “${props.query.trim()}”` : "No apps yet"}</EmptyState>
   return (
     <div className="flex flex-col gap-10">
@@ -107,84 +121,42 @@ function AppListing(props: {
           row={props.row}
         />
       ) : null}
-      {props.rest.length > 0 ? <AppSection title="All apps">{props.rest.map(props.row)}</AppSection> : null}
+      {props.rest.length > 0 ? <AppSection title={props.restTitle}>{props.rest.map(props.row)}</AppSection> : null}
+      {props.more ? <MoreApps onVisible={props.onMore} /> : null}
+      {props.fetching ? <AppListingSample /> : null}
     </div>
   )
 }
 
-function MarketplaceSheet(props: {
-  app: CatalogApp | undefined
-  onAdded: Added
-  onProfile: (target: ProfileTarget) => void
-  onClose: () => void
-}) {
-  const app = props.app
-  return (
-    <AppSheet
-      app={app}
-      action={app ? <AddToSpace app={app} primary onAdded={props.onAdded} /> : null}
-      onClose={props.onClose}
-    >
-      {app ? <AppAccounts appId={app.id} onProfile={props.onProfile} /> : null}
-    </AppSheet>
-  )
-}
-
-function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) => void }) {
-  const profiles = useAppProfiles([props.appId]).of(props.appId)
-  return (
-    <AccountList
-      title="Accounts"
-      actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => props.onProfile({ appId: props.appId })}
-        >
-          <IconPlus />
-          New account
-        </Button>
-      }
-      profiles={profiles}
-      caption={audience}
-      onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
-      action={(each) => {
-        const label = connectLabel(each)
-        return label ? (
-          <Button size="sm" onClick={() => props.onProfile({ appId: each.appId, profileId: each.id })}>
-            {label}
-          </Button>
-        ) : null
-      }}
-    />
-  )
-}
-
-export function MarketplacePage() {
-  const { api } = RouterContext.useRouterContext()
-  const search = route.useSearch()
-  const page = currentPage(search)
-  const spaces = useSpaces()
+export function AppsPage() {
+  const { client } = RouterContext.useRouterContext()
+  const category = route.useSearch().category
   const shapeId = useShapeId("apps")
   const [query, setQuery] = useState("")
   const needle = useDebouncedValue(query.trim(), 250)
-  const registry = useQuery({
-    ...api["app-registry"].list.queryOptions({ page, pageSize, ...(needle && { query: needle }) }),
+  const all = useInfiniteQuery({ ...AppRegistryPages.options(client, needle), placeholderData: keepPreviousData })
+  const filtered = useInfiniteQuery({
+    ...AppRegistryPages.options(client, needle, category),
     placeholderData: keepPreviousData,
-    ...Loader.required,
+    enabled: category !== undefined,
   })
+  const registry = category ? filtered : all
+  const loaded = (pages: typeof all) => (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromRegistry)
+  const browse = loaded(registry)
+  const categories = [
+    ...new Set([
+      ...loaded(all).flatMap((app) => Object.values(app.listing?.categories ?? {}).flat()),
+      ...(category ? [category] : []),
+    ]),
+  ].toSorted()
   const connected = useConnectedApps()
-  const browse = (registry.data?.items ?? []).map(fromRegistry)
-  const usedApps = connected.apps
+  const usedApps = category ? [] : connected.apps
   const used = new Set(usedApps.map((app) => app.id))
-  const profiles = useAppProfiles([...usedApps, ...browse].map((app) => app.id))
+  const profiles = useAppProfiles([...connected.apps, ...browse].map((app) => app.id))
   const loading = registry.isPending || connected.pending
-  const navigate = route.useNavigate()
-  const opened = search.app
-  const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
+  const navigate = useNavigate()
+  const spaces = useSpaces()
   const [profile, setProfile] = useState<ProfileTarget>()
-  const app = useApp(opened).app
   const added: Added = (added) =>
     setProfile({
       appId: added.app.id,
@@ -195,26 +167,25 @@ export function MarketplacePage() {
         members: spaces.space(added.space.id)?.memberCount ?? 1,
       },
     })
-  const row = (each: CatalogApp) => {
-    return (
-      <AppRow
-        key={each.id}
-        name={each.name}
-        icon={each.icon}
-        caption={each.description}
-        attention={needsAttention(profiles.of(each.id))}
-        onOpen={() => setOpened(each.id)}
-        action={<AddToSpace app={each} onAdded={added} />}
-      />
-    )
-  }
+  const row = (each: CatalogApp) => (
+    <AppRow
+      key={each.id}
+      name={each.name}
+      icon={each.icon}
+      caption={each.description}
+      attention={needsAttention(profiles.of(each.id))}
+      onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: each.id } })}
+      action={<AddToSpace app={each} onAdded={added} />}
+    />
+  )
   return (
     <Page
-      title="Marketplace"
+      title="Apps"
+      width="wide"
       description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-      actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
-      footer={<ListPagination page={page} pageSize={pageSize} total={registry.data?.total ?? 0} noun="app" />}
+      search={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
     >
+      <CategoryPills categories={categories} value={category} />
       <Loading id={shapeId} loading={loading} label="Loading apps">
         {loading ? (
           <AppListingSample />
@@ -224,12 +195,17 @@ export function MarketplacePage() {
             installed={connected.total}
             onAll={connected.loadAll}
             rest={browse.filter((each) => !used.has(each.id))}
+            restTitle={category ? categoryLabel(category) : "All apps"}
             query={query}
+            more={registry.hasNextPage}
+            onMore={() => {
+              if (!registry.isFetchingNextPage) void registry.fetchNextPage()
+            }}
+            fetching={registry.isFetchingNextPage}
             row={row}
           />
         )}
       </Loading>
-      <MarketplaceSheet app={app} onAdded={added} onProfile={setProfile} onClose={() => setOpened(undefined)} />
       {profile ? <ProfileDialog {...profile} onClose={() => setProfile(undefined)} /> : null}
     </Page>
   )
