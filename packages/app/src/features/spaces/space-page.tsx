@@ -21,7 +21,7 @@ export function SpaceLayout() {
   const tab = path.at(3) ?? "overview"
   const factory = (tab === "overview" || tab === "kanban") && isSoftwareFactory(space)
   const section = spaceSections[tab] ?? spaceSections.overview
-  if (tab === "webhooks" && path.at(4))
+  if ((tab === "webhooks" && path.at(4)) || tab === "artifacts")
     return (
       <Suspense fallback={<SpaceSectionSkeleton />}>
         <Outlet />

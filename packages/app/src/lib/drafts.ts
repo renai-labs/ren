@@ -20,10 +20,13 @@ export function useWrite() {
   }
 }
 
-export function useDraft(key: string) {
+export function useDraft(key: string, initial?: Composer.Draft) {
   const platform = Platform.usePlatform()
   const drafts = platform.drafts ?? platform.storage
-  const read = () => Composer.decode(drafts.get(key))
+  const read = () => {
+    const stored = drafts.get(key)
+    return stored === undefined && initial ? initial : Composer.decode(stored)
+  }
   const [kept, setKept] = useState(() => ({ key, draft: read() }))
   const latest = useRef(kept)
   const draft = kept.key === key ? kept.draft : read()

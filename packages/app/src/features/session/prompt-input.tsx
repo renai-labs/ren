@@ -36,6 +36,7 @@ import { Spinner } from "@ren/ui/spinner"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { DropOverlay, UploadChips } from "./attachments.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
+import { Artifacts } from "../../lib/artifacts.js"
 import { AppAvatarFallback, AppAvatarImage, AppIcon } from "../../components/app-icon.js"
 import { Button } from "@ren/ui/button"
 import {
@@ -614,6 +615,7 @@ export function PromptInput(props: {
   onStop?: (() => void) | undefined
   sending?: boolean | undefined
   suggest?: Suggest | undefined
+  artifact?: Artifacts.Mention | undefined
   files: Target
   header?: ReactNode
 }) {
@@ -678,9 +680,22 @@ export function PromptInput(props: {
     place(result.text, result.cursor)
   }
   const suggest = props.suggest
-  const marks = suggest?.marks(text) ?? []
   const root = useRef<HTMLDivElement | null>(null)
   ComposerMotion.useComposer(root, { placement: props.placement })
+  const artifact = props.artifact
+  const ranges = Artifacts.mentionRanges(text, artifact)
+  const marks = [
+    ...(suggest?.marks(text) ?? []).filter(
+      (mark) => !ranges.some((range) => mark.start < range.end && mark.end > range.start),
+    ),
+    ...ranges.map((range) => ({
+      start: range.start,
+      end: range.end,
+      label: artifact?.title ?? "",
+      icon: null,
+      color: "var(--primary)",
+    })),
+  ].toSorted((a, b) => a.start - b.start)
   return (
     <div ref={root} className="relative flex flex-col gap-2">
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}

@@ -6,6 +6,7 @@ import {
   IconApps,
   IconArrowLeft,
   IconMessagesFilled,
+  IconBrowser,
   IconBuildingFactory2,
   IconClock,
   IconCube,
@@ -50,6 +51,7 @@ import { Seed } from "../lib/seed.js"
 const spaceSections = [
   { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
   { value: "kanban", label: "Kanban", icon: IconLayoutKanban, to: "/spaces/$spaceId/kanban" },
+  { value: "artifacts", label: "Artifacts", icon: IconBrowser, to: "/spaces/$spaceId/artifacts" },
   { value: "settings", label: "Settings", icon: IconSettings, to: "/spaces/$spaceId/settings" },
   { value: "compute", label: "Compute", icon: IconCpu, to: "/spaces/$spaceId/compute" },
   { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },

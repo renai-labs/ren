@@ -31,6 +31,28 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
   webhooks: { title: "Webhooks", description: (space) => `URLs other apps call to start sessions in ${space}.` },
   factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
+  artifacts: {
+    title: "Artifacts",
+    description: (space) => `Sites and apps Ren published in ${space}, each at a link anyone can open.`,
+  },
+}
+
+function ArtifactsSkeleton() {
+  return (
+    <PageSkeleton title="Artifacts" width="full">
+      <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {Array.from({ length: 6 }, (_, index) => (
+          <div key={index} className="flex flex-col gap-2.5">
+            <div className="aspect-16/10 rounded-xl border bg-muted" />
+            <div className="flex min-h-7 items-center justify-between gap-2">
+              <span className="text-sm font-medium">Artifact title</span>
+              <span className="text-xs">1 day ago</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </PageSkeleton>
+  )
 }
 
 export function TasksSample() {
@@ -126,6 +148,7 @@ function SpaceSectionSample(props: { section: string }) {
 export function SpaceSectionSkeleton() {
   const path = Routing.useRenderedPath()
   const shapeId = useShapeId("page")
+  if (path.split("/").at(3) === "artifacts") return <ArtifactsSkeleton />
   return (
     <Loading id={shapeId} label="Loading space">
       <div className="flex flex-col gap-6">
@@ -134,6 +157,16 @@ export function SpaceSectionSkeleton() {
         </div>
       </div>
     </Loading>
+  )
+}
+
+function SpaceRouteSkeleton(props: { tab: string }) {
+  if (props.tab === "artifacts") return <ArtifactsSkeleton />
+  const section = spaceSections[props.tab] ?? spaceSections.overview
+  return (
+    <Page title={section.title} description={section.description("this space")} loading>
+      <SpaceSectionSample section={props.tab} />
+    </Page>
   )
 }
 
@@ -161,15 +194,8 @@ export function RouteSkeleton() {
         </div>
       </Loading>
     )
-  if (path.startsWith("/spaces/")) {
-    const tab = path.split("/").at(3) ?? "overview"
-    const section = spaceSections[tab] ?? spaceSections.overview
-    return (
-      <Page title={section.title} description={section.description("this space")} loading>
-        <SpaceSectionSample section={tab} />
-      </Page>
-    )
-  }
+  if (path === "/artifacts") return <ArtifactsSkeleton />
+  if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton tab={path.split("/").at(3) ?? "overview"} />
   if (path === "/spaces")
     return (
       <PageSkeleton
