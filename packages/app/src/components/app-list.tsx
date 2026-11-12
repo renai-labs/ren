@@ -75,26 +75,6 @@ export function AppListingSample() {
   )
 }
 
-export function MoreApps(props: { onVisible: () => void }) {
-  return (
-    <div
-      aria-hidden
-      className="h-px shrink-0"
-      ref={(node) => {
-        if (!node) return
-        const observer = new IntersectionObserver(
-          (entries) => {
-            if (entries.some((entry) => entry.isIntersecting)) props.onVisible()
-          },
-          { rootMargin: "320px 0px" },
-        )
-        observer.observe(node)
-        return () => observer.disconnect()
-      }}
-    />
-  )
-}
-
 export function AppRow(props: {
   name: string
   icon?: string | null

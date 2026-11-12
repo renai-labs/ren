@@ -5,7 +5,8 @@ import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { useAddition, type Added } from "./add-to-space.js"
-import { AppRow, MoreApps } from "./app-list.js"
+import { AppRow } from "./app-list.js"
+import { LoadMore } from "./load-more.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
 import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../lib/apps.js"
@@ -91,13 +92,12 @@ function AppResults(props: {
       {found.map((app) => (
         <AddAppRow key={app.id} app={app} space={props.space} onAdded={props.onAdded} />
       ))}
-      {pages.hasNextPage ? (
-        <MoreApps
-          onVisible={() => {
-            if (!pages.isFetchingNextPage) void pages.fetchNextPage()
-          }}
-        />
-      ) : null}
+      <LoadMore
+        more={pages.hasNextPage}
+        onMore={() => {
+          if (!pages.isFetchingNextPage) void pages.fetchNextPage()
+        }}
+      />
       {pages.isFetchingNextPage ? <AppRowsSample count={3} /> : null}
     </div>
   )

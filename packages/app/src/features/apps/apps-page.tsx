@@ -4,8 +4,9 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Loading } from "@ren/ui/loading"
 import { Tabs } from "@ren/ui/tabs"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
-import { AppListingSample, AppRow, AppSection, MoreApps, SeeAllRow } from "../../components/app-list.js"
+import { AppListingSample, AppRow, AppSection, SeeAllRow } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
+import { LoadMore } from "../../components/load-more.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
@@ -122,7 +123,7 @@ function AppListing(props: {
         />
       ) : null}
       {props.rest.length > 0 ? <AppSection title={props.restTitle}>{props.rest.map(props.row)}</AppSection> : null}
-      {props.more ? <MoreApps onVisible={props.onMore} /> : null}
+      <LoadMore more={props.more} onMore={props.onMore} />
       {props.fetching ? <AppListingSample /> : null}
     </div>
   )
