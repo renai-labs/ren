@@ -15,6 +15,9 @@ import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 
 const groupSize = 5
 const fileSearchDelay = 250
+const unrooted = Session.ID.create()
+type Items = ReadonlyArray<Mentions.Item>
+const filePill = /(?<=^|\s)@ {2}([^\s@]*[./][^\s@]*)/g
 
 interface SuggestionItem {
   readonly value: string
@@ -133,8 +136,37 @@ function useAppMentions(query: string | undefined, mentions: ReadonlyArray<Compo
   }
 }
 
+const filePills = (text: string) =>
+  Array.from(text.matchAll(filePill), (match) => Mentions.fromFile({ path: match[1] ?? "", type: "file" }))
+
+const groupMentions = (query: string, lists: readonly [apps: Items, repositories: Items, files: Items]) => {
+  const named = (items: Items) =>
+    items
+      .filter((item) => [item.label, item.handle].some((value) => value.toLowerCase().includes(query)))
+      .slice(0, groupSize)
+  return [
+    ...named(lists[0]).map((item) => ({ item, group: "Apps" as const })),
+    ...named(lists[1]).map((item) => ({ item, group: "Repositories" as const })),
+    ...lists[2].slice(0, groupSize).map((item) => ({ item, group: "Files" as const })),
+  ]
+}
+
+const suggestionLabel = (trigger: Composer.Trigger | undefined) =>
+  trigger?.kind === "command" ? "Commands" : "Mentions"
+
+const mentionItem = (
+  entry: ReturnType<typeof groupMentions>[number],
+  icon: string | null | undefined,
+): SuggestionItem => ({
+  value: Mentions.key(entry.item),
+  kind: entry.item.kind,
+  group: entry.group,
+  label: entry.item.label,
+  description: entry.item.description,
+  icon,
+})
+
 function useFileMentions(root: Session.ID | undefined, query: string | undefined) {
-  const [unrooted] = useState(() => Session.ID.create())
   const text = useDebouncedValue(query ?? "", fileSearchDelay)
   const result = ChatReact.useFiles({ root: root ?? unrooted, query: root ? text : "", type: "file" })
   const [kept, setKept] = useState<ReadonlyArray<Mentions.Item>>([])
@@ -164,21 +196,10 @@ function useSuggestions(input: {
   const appById = apps.byId
   const repositories = useRepositoryMentions(input.spaceId)
   const found = useFileMentions(input.root, query)
-  const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
-  const connectors = [...apps.items, ...repositories, ...picked]
+  const connectors = [...apps.items, ...repositories]
   const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
-  const named = (items: ReadonlyArray<Mentions.Item>) =>
-    items
-      .filter((item) => [item.label, item.handle].some((value) => value.toLowerCase().includes(query ?? "")))
-      .slice(0, groupSize)
-  const grouped =
-    query === undefined
-      ? []
-      : [
-          ...named(apps.items).map((item) => ({ item, group: "Apps" as const })),
-          ...named(repositories).map((item) => ({ item, group: "Repositories" as const })),
-          ...found.items.slice(0, groupSize).map((item) => ({ item, group: "Files" as const })),
-        ]
+  const searching = apps.searching || found.searching
+  const grouped = query === undefined ? [] : groupMentions(query, [apps.items, repositories, found.items])
   const mentionable = grouped.map((entry) => entry.item)
   const items: ReadonlyArray<SuggestionItem> =
     trigger?.kind === "command"
@@ -188,29 +209,24 @@ function useSuggestions(input: {
           label: `/${item.trigger}`,
           description: item.description,
         }))
-      : grouped.map(({ item, group }) => ({
-          value: Mentions.key(item),
-          kind: item.kind,
-          group,
-          label: item.label,
-          description: item.description,
-          icon: appById.get(item.id)?.icon,
+      : grouped.map((entry) => ({
+          ...mentionItem(entry, appById.get(entry.item.id)?.icon),
           status:
-            item.kind === "app" && input.spaceId
-              ? space.status(item.id, { managed: apps.managed(item.id) })
+            entry.item.kind === "app" && input.spaceId
+              ? space.status(entry.item.id, { managed: apps.managed(entry.item.id) })
               : undefined,
         }))
   const ids = items.map((item) => item.value)
   const current = Composer.activeSuggestion(ids, active)
-  const tokens = (text: string) => Mentions.tokens(text, connectors)
+  const tokens = (text: string) => Mentions.tokens(text, [...connectors, ...filePills(text)])
   const close = () => {
     setTrigger(undefined)
     setActive(undefined)
   }
   const suggest: Suggest = {
-    open: trigger !== undefined && (items.length > 0 || apps.searching || found.searching),
-    label: trigger?.kind === "command" ? "Commands" : "Mentions",
-    searching: apps.searching || found.searching,
+    open: trigger !== undefined && (items.length > 0 || searching),
+    label: suggestionLabel(trigger),
+    searching,
     items,
     active: current,
     onCursor: (text, cursor) => {
@@ -237,7 +253,6 @@ function useSuggestions(input: {
       }
       const item = mentionable.find((entry) => Mentions.key(entry) === value)
       if (!item || trigger?.kind !== "mention") return
-      if (item.kind === "file") setPicked((current) => [...current.filter((entry) => entry.id !== item.id), item])
       return {
         ...Mentions.insert(text, item, trigger.start, cursor),
         mention: item.kind === "app" ? apps.mentionOf(item.id) : undefined,
