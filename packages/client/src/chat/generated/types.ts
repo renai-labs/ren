@@ -34,7 +34,15 @@ export type SessionMessageSender = { userId: string }
 
 export type SessionInboxDelivery = "steer" | "queue"
 
-export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
+export type SessionMessageSyntheticMetadata = {
+  source?: string
+  childID?: string
+  shellID?: string
+  jobID?: string
+  state?: string
+  exit?: number
+  timeout?: boolean
+}
 
 export type SessionErrorInfo = { type: string; message: string; status?: number; response?: { body: string } }
 
@@ -104,6 +112,16 @@ export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt
 export type WebhookOriginInfo = { webhookId: string; name: string; requestId: string; receivedAt: string }
 
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
+
+export type SessionMessageSyntheticMetadata1 = {
+  source?: string
+  childID?: string
+  shellID?: string
+  jobID?: string
+  state?: string
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  timeout?: boolean
+}
 
 export type SessionMessageText = { type: "text"; text: string }
 
@@ -501,15 +519,6 @@ export type SessionEventSessionSynthetic = {
   data: { sessionID: SessionID; text: string; description?: string; metadata?: SessionMessageSyntheticMetadata }
 }
 
-export type SessionMessageSynthetic = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "synthetic"
-  text: string
-  description?: string
-  metadata?: SessionMessageSyntheticMetadata
-}
-
 export type SessionEventSessionExecutionFailed = {
   id: string
   created: number
@@ -760,6 +769,21 @@ export type ChannelOriginInfo = {
   trigger?: string
 }
 
+export type SessionMessageSynthetic = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "synthetic"
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata1
+}
+
+export type SessionInboxSyntheticPayload1 = {
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata1
+}
+
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy
 
 export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
@@ -771,15 +795,6 @@ export type SessionInboxUserPayload = {
   agents?: Array<SessionMessageAgentAttachment>
   skills?: Array<SessionMessageSkillAttachment>
   sender?: SessionMessageSender
-}
-
-export type SessionInboxSynthetic = {
-  id: SessionMessageID
-  sessionID: SessionID
-  time: { created: number }
-  type: "synthetic"
-  payload: SessionInboxSyntheticPayload
-  delivery: SessionInboxDelivery
 }
 
 export type SessionMessageCompaction =
@@ -883,6 +898,15 @@ export type SessionMessageUser = {
   schedule?: ScheduleOriginInfo
   webhook?: WebhookOriginInfo
   task?: TaskAssignmentInfo
+}
+
+export type SessionInboxSynthetic = {
+  id: SessionMessageID
+  sessionID: SessionID
+  time: { created: number }
+  type: "synthetic"
+  payload: SessionInboxSyntheticPayload1
+  delivery: SessionInboxDelivery
 }
 
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }

@@ -20803,6 +20803,23 @@
           },
           "jobID": {
             "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "exit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "timeout": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false

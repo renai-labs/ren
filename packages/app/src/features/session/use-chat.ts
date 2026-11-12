@@ -160,7 +160,9 @@ export function useChat(
     ...api.session.get.queryOptions({ idOrSlug: params.sessionId }),
     ...Seed.fromList<SessionInfo>(queryClient, [api.session.list.queryKey(), sessionKeys.infinite()], params.sessionId),
   })
-  const view = useView(root, child)
+  const detail = ChatPreferences.timelineDetail.read(platform.storage)
+  const fold = ChatPreferences.foldTurns.read(platform.storage)
+  const view = useView(root, child, detail)
   const state = view.state
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
@@ -201,7 +203,6 @@ export function useChat(
   const reverted = ChatState.revertMessageID(state, root) !== undefined
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
 
-  const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
   const blocked = Boolean(view.permission ?? view.form)
   useAttentionNotification({ running, asking: blocked, title })
   useChatCacheBridge(root, bridgeOf(info, { running }))
@@ -224,7 +225,8 @@ export function useChat(
     spaceId,
     spaceName,
     viewer: viewerOf(me.user),
-    expanded,
+    fold,
+    detail,
     bootStatus,
     blocked,
     view: { root, sessionID: view.viewed },

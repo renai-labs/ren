@@ -1,10 +1,17 @@
 export * as ChatPreferences from "./chat-preferences.js"
 
+import { TimelineDetail } from "@ren/chat"
 import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
 import { Preference } from "./preference.js"
 
-export const detail = Preference.make("chat.detail.v1", Schema.Literals(["compact", "detailed"]), "compact")
+export const timelineDetail = Preference.make(
+  "chat.timeline-detail.v1",
+  TimelineDetail.Detail,
+  TimelineDetail.presets[2].value,
+)
+
+export const foldTurns = Preference.make("chat.fold-turns.v1", Schema.Boolean, true)
 
 export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "steer")
 

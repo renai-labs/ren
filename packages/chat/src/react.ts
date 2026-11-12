@@ -9,6 +9,7 @@ import type { AsyncResult, Atom } from "effect/reactivity"
 import { createContext, createElement, type ReactNode, useCallback, useContext } from "react"
 import type { ChatAtoms } from "./atoms.js"
 import type { ChatSession } from "./chat-session.js"
+import type { TimelineDetail } from "./timeline-detail.js"
 
 const AtomsContext = createContext<ChatAtoms.ChatAtoms | undefined>(undefined)
 
@@ -22,18 +23,19 @@ export const useAtoms = () => {
   return atoms
 }
 
-export const useSession = (sessionID: Session.ID) => {
+export const useSession = (sessionID: Session.ID, detail?: TimelineDetail.Detail) => {
   const atoms = useAtoms()
   useAtomMount(atoms.session(sessionID))
   return {
     state: useAtomValue(atoms.state(sessionID)),
     status: useAtomValue(atoms.status(sessionID)),
     boot: useAtomValue(atoms.boot(sessionID)),
-    timeline: useAtomValue(atoms.timeline(sessionID)),
+    timeline: useAtomValue(atoms.timeline({ root: sessionID, detail })),
   }
 }
 
-export const useChild = (root: Session.ID, sessionID: Session.ID) => useAtomValue(useAtoms().child({ root, sessionID }))
+export const useChild = (root: Session.ID, sessionID: Session.ID, detail?: TimelineDetail.Detail) =>
+  useAtomValue(useAtoms().child({ root, sessionID, detail }))
 
 export const useShellRunning = (root: Session.ID, shellID: Shell.ID) =>
   useAtomValue(useAtoms().shellRunning({ root, shellID }))
