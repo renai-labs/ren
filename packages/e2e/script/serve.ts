@@ -2,10 +2,14 @@ import { PgClient } from "@effect/sql-pg"
 import { Shared } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
-import { Seed, TestDrives } from "@ren/core/testing"
+import { SettingsRows } from "@ren/core/settings/rows"
+import { GitHubServer, Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestHand } from "@ren/executor/testing"
+import { Auth } from "@ren/schema/auth"
+import { ChannelInstall } from "@ren/schema/channel-install"
 import { Signature } from "@ren/schema/signature"
+import { Space } from "@ren/schema/space"
 import { Models } from "@ren/schema/models"
 import { Effect, Layer, Redacted, Schema } from "effect"
 import { realpathSync } from "fs"
@@ -25,6 +29,44 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
+const github = GitHubServer.start()
+
+const GitHubPull = Schema.Struct({
+  organizationId: Auth.OrganizationID,
+  userId: Auth.UserID,
+  spaceId: Space.ID,
+  repository: Schema.String,
+  number: Schema.Int,
+  title: Schema.String,
+})
+
+const Reply = Schema.Struct({ reply: Schema.String })
+
+const installGitHub = (body: typeof GitHubPull.Type, installation: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database.Service
+    yield* db.db.insert(Database.Schema.channel_install).values({
+      id: ChannelInstall.ID.create(),
+      organization_id: body.organizationId,
+      provider: "github",
+      workspace: installation,
+      name: "acme",
+      installed_by: body.userId,
+    })
+    yield* db.transaction((transaction) =>
+      SettingsRows.write(
+        transaction,
+        { space_id: body.spaceId },
+        {
+          permissions: [],
+          references: [
+            { alias: "web", repository: `https://github.com/${body.repository}`, description: "The web app" },
+          ],
+        },
+      ),
+    )
+  }).pipe(Effect.provide(Database.layer.pipe(Layer.provide(PgClient.layer({ url: Redacted.make(database.href) })))))
+
 let log = ""
 const children: Bun.Subprocess[] = []
 const mailbox = Bun.serve({
@@ -33,6 +75,26 @@ const mailbox = Bun.serve({
   fetch: async (request) => {
     if (request.method === "POST" && new URL(request.url).pathname === "/models") {
       Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
+      return new Response(null, { status: 204 })
+    }
+    if (request.method === "POST" && new URL(request.url).pathname === "/reply") {
+      const body = Schema.decodeUnknownSync(Reply)(await request.json())
+      return Response.json({ marker: Shared.stub().script({ reply: body.reply }).marker })
+    }
+    if (request.method === "POST" && new URL(request.url).pathname === "/github") {
+      const body = Schema.decodeUnknownSync(GitHubPull)(await request.json())
+      const installation = String(Math.floor(Math.random() * 1e9))
+      github.installations.set(installation, "acme")
+      github.resources.set(`/repos/${body.repository}/pulls/${body.number}`, {
+        title: body.title,
+        state: "open",
+        draft: false,
+        head: { ref: "fix" },
+        base: { ref: "main" },
+        user: { login: "shrey" },
+        updated_at: new Date().toISOString(),
+      })
+      await Effect.runPromise(installGitHub(body, installation))
       return new Response(null, { status: 204 })
     }
     const to = new URL(request.url).searchParams.get("to") ?? ""
@@ -47,6 +109,7 @@ let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
   (stopping ??= (async () => {
     void mailbox.stop(true)
+    github.stop()
     for (const child of children) child.kill()
     await Promise.all(children.map((child) => child.exited))
     await Shared.dispose()
@@ -121,6 +184,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
   env: {
     ...process.env,
     NODE_ENV: "test",
+    ...GitHubServer.config(github.url, { GITHUB_URL: "https://github.com" }),
     PORT: String(ports.server),
     DATABASE_URL: database.href,
     BETTER_AUTH_SECRET: "e2e-secret-do-not-use-in-production",
