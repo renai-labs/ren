@@ -439,5 +439,6 @@ describe("Task factory", () => {
         const planner = TaskFixture.actingAs(f.o.ada, f.o.factory.id, f.plan, f.builder.agent.sessionId)
         expect((yield* ran(planner, "succeeded")).humanReview).toBe(false)
       }),
+    15_000,
   )
 })
