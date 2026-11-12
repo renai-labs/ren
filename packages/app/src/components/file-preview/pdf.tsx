@@ -155,14 +155,14 @@ function Page(props: {
     const spans = layer.current?.textDivs ?? []
     for (const span of spans) {
       span.classList.remove(hitClass, activeClass)
-      delete span.dataset.hit
+      span.removeAttribute("data-hit")
     }
     for (const [index, hit] of props.hits.entries()) {
       if (hit.page !== props.number) continue
       const span = spans[hit.item]
       span?.classList.add(index === props.active ? activeClass : hitClass)
       if (index === props.active && span) {
-        span.dataset.hit = "active"
+        span.setAttribute("data-hit", "active")
         span.scrollIntoView({ block: "center" })
       }
     }
