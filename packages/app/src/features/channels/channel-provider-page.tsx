@@ -19,6 +19,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { Loader } from "../../lib/loader.js"
 import { Channels } from "../../lib/channels.js"
 import { FilterMenu, spaceOptions } from "../../components/filter-menu.js"
+import { Search } from "../../lib/search.js"
 import { useShown } from "../../lib/use-shown.js"
 import { LoadMore } from "../../components/load-more.js"
 import { MappingsTable } from "./mappings-table.js"
@@ -159,7 +160,7 @@ function MappingList(props: {
   const visible = items.filter(
     (mapping) =>
       (!search.spaces?.length || search.spaces.includes(mapping.space.id)) &&
-      `${mapping.placeName} ${mapping.space.name}`.toLowerCase().includes((search.q ?? "").trim().toLowerCase()),
+      Search.matches(search.q ?? "", mapping.placeName, mapping.space.name),
   )
   const shown = useShown(visible)
   const editableSpaces = (spaces.data ?? []).filter((space) => space.membershipId !== null || space.canJoin)

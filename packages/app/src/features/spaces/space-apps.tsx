@@ -14,6 +14,8 @@ import { LoadMore } from "../../components/load-more.js"
 import { useShown } from "../../lib/use-shown.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { Search } from "../../lib/search.js"
 import { useApp, useApps } from "../../lib/use-app.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -86,6 +88,7 @@ export function SpaceAppsTab() {
   const opened = search.app
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
+  const [query, setQuery] = useState("")
   const reached = reach.data?.profiles ?? []
   const byApp = Map.groupBy(reached, (each) => each.appId)
   const catalog = useApps([...byApp.keys()])
@@ -101,7 +104,7 @@ export function SpaceAppsTab() {
       ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
       : []
   })
-  const shown = useShown(rows)
+  const shown = useShown(rows.filter((row) => Search.matches(query, row.app.name, row.app.description, row.usedIn)))
   if (hiddenBy(reach.error))
     return (
       <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
@@ -111,6 +114,7 @@ export function SpaceAppsTab() {
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageActions>
+        <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
         <AddAppDialog
           space={space}
           added={new Set(byApp.keys())}
@@ -123,7 +127,7 @@ export function SpaceAppsTab() {
         ) : (
           <AppsTable
             rows={shown.items}
-            empty="No apps"
+            empty={Search.empty(query, "No apps")}
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId, from })}
           />

@@ -26,6 +26,7 @@ import { Loading } from "@ren/ui/loading"
 import { Spinner } from "@ren/ui/spinner"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { Pages } from "../../lib/pages.js"
+import { Search } from "../../lib/search.js"
 import { NewSpaceDialog } from "../../components/new-space-dialog.js"
 import { SpaceCard } from "./space-card.js"
 import { useState } from "react"
@@ -80,7 +81,6 @@ export function SpacesPage() {
     )
   const [filters, setFilters] = useState<Filters>({})
   const [query, setQuery] = useState("")
-  const needle = query.trim().toLowerCase()
   return (
     <Page
       title="Spaces"
@@ -140,7 +140,7 @@ export function SpacesPage() {
         {spaces ? null : <CardsSample />}
         <div className={spaces ? "mt-4 grid gap-5 sm:grid-cols-2" : "hidden"}>
           {(spaces ?? [])
-            .filter((space) => !needle || `${space.name} ${space.description ?? ""}`.toLowerCase().includes(needle))
+            .filter((space) => Search.matches(query, space.name, space.description))
             .filter((space) =>
               passes(filters, {
                 visibility: [isPrivate(space) ? "private" : "shared"],

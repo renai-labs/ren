@@ -12,7 +12,7 @@ import { AppsTable } from "../../components/apps-table.js"
 import { CredentialSheet, ownerOptions } from "../../components/credential-sheet.js"
 import { CredentialsTable } from "../../components/credentials-table.js"
 import { LoadMore } from "../../components/load-more.js"
-import { Page, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
+import { Page, PageActions, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
@@ -22,6 +22,7 @@ import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Pages } from "../../lib/pages.js"
+import { Search } from "../../lib/search.js"
 import { fromApp, isSpaceApp, reach, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
@@ -93,7 +94,7 @@ function CredentialKeys() {
           <CredentialsTable
             credentials={list.data.items}
             stale={list.isPlaceholderData}
-            empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
+            empty={Search.empty(query, "No keys")}
           />
         ) : (
           <TableSample columns={["Key", "Hosts", "Owner", ""]} />
@@ -131,19 +132,21 @@ function OrgApps() {
   const profiles = useAppProfiles(used.map((each) => each.id))
   const accounts = useAppProfiles(app ? [app.id] : [])
   const loading = list.isPending || profiles.pending
+  const [query, setQuery] = useState("")
   return (
     <>
+      <PageActions>
+        <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
+      </PageActions>
       <Loading id={appsShapeId} loading={loading} label="Loading apps">
         {loading ? (
           <TableSample columns={["App", "Used in", "Status", ""]} />
         ) : (
           <AppsTable
-            rows={used.map((each) => ({
-              app: each,
-              profiles: profiles.of(each.id),
-              usedIn: usedIn(profiles.of(each.id)),
-            }))}
-            empty="No apps. Add one to a space from Apps."
+            rows={used
+              .map((each) => ({ app: each, profiles: profiles.of(each.id), usedIn: usedIn(profiles.of(each.id)) }))
+              .filter((row) => Search.matches(query, row.app.name, row.app.description, row.usedIn))}
+            empty={Search.empty(query, "No apps. Add one to a space from Apps.")}
             onOpen={setOpened}
             onNew={(appId) => setProfile({ appId })}
           />

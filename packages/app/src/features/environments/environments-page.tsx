@@ -26,7 +26,9 @@ import { Page, Row, Rows, RowsSample } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Choice } from "../../components/settings-shared.js"
 import { StatusBadge, type StatusTone } from "../../components/status-badge.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { errorMessage } from "../../lib/errors.js"
+import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Machines } from "../../lib/machines.js"
 import { ConfigFields } from "./config-fields.js"
@@ -354,7 +356,10 @@ export function EnvironmentsSettingsPage() {
   }>()
   const providerList = providers.data ?? []
   const titleOf = (id: string) => providerList.find((each) => each.id === id)?.title ?? id
-  const items = templates.data ?? []
+  const [query, setQuery] = useState("")
+  const shown = (templates.data ?? []).filter((template) =>
+    Search.matches(query, template.name, titleOf(template.provider)),
+  )
   const createButton = (
     <Button onClick={() => setEditing({ template: undefined })} disabled={providerList.length === 0}>
       <IconPlus />
@@ -362,14 +367,23 @@ export function EnvironmentsSettingsPage() {
     </Button>
   )
   return (
-    <Page title="Machines" actions={createButton} loading={templates.isPending}>
+    <Page
+      title="Machines"
+      actions={
+        <>
+          <ToolbarSearch label="Search machines" value={query} onChange={setQuery} />
+          {createButton}
+        </>
+      }
+      loading={templates.isPending}
+    >
       {templates.isPending ? <RowsSample count={3} /> : null}
-      {!templates.isPending && items.length === 0 ? (
-        <EmptyState action={createButton}>No machines yet.</EmptyState>
+      {!templates.isPending && shown.length === 0 ? (
+        <EmptyState action={createButton}>{Search.empty(query, "No machines yet.")}</EmptyState>
       ) : null}
-      {items.length > 0 ? (
+      {shown.length > 0 ? (
         <Rows>
-          {items.map((template) => (
+          {shown.map((template) => (
             <Row
               key={template.id}
               title={template.name}

@@ -31,6 +31,7 @@ import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { Pages } from "../../lib/pages.js"
+import { Search } from "../../lib/search.js"
 import { canCopy, ownerLabel } from "../../lib/apps.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -98,11 +99,7 @@ export function SpaceCredentialsTab() {
         {loading ? (
           <TableSample columns={["Key", "Hosts", "Owner", ""]} count={3} />
         ) : (
-          <CredentialsTable
-            credentials={here}
-            stale={stale}
-            empty={query ? `Nothing matches “${query.trim()}”` : "No keys"}
-          />
+          <CredentialsTable credentials={here} stale={stale} empty={Search.empty(query, "No keys")} />
         )}
       </Loading>
       <LoadMore more={keys.hasNextPage} loading={keys.isFetchingNextPage} onMore={() => void keys.fetchNextPage()} />

@@ -27,6 +27,7 @@ import { useOrganization } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { Pages } from "../../lib/pages.js"
+import { Search } from "../../lib/search.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
@@ -171,7 +172,6 @@ export function SpaceMembersTab() {
     pending: false,
   }))
   const shapeId = useShapeId("members")
-  const needle = query.trim().toLowerCase()
   const candidatesLoading = everyone.isPending
   const creating = create.isPending
   const add = (candidate: Candidate) =>
@@ -206,9 +206,7 @@ export function SpaceMembersTab() {
       </PageActions>
       <Loading id={shapeId} loading={members.isPending} label="Loading members">
         <MembersTable
-          rows={(members.isPending ? sampleRows : rows).filter((row) =>
-            `${row.name} ${row.email}`.toLowerCase().includes(needle),
-          )}
+          rows={(members.isPending ? sampleRows : rows).filter((row) => Search.matches(query, row.name, row.email))}
           column={{
             heading: "Status",
             cell: (row) =>
@@ -236,7 +234,7 @@ export function SpaceMembersTab() {
               },
             )
           }
-          empty={query ? `Nothing matches “${query.trim()}”` : "No members"}
+          empty={Search.empty(query, "No members")}
         />
       </Loading>
       <LoadMore

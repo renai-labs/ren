@@ -28,6 +28,7 @@ import { RowMenu } from "../../components/row-menu.js"
 import { GitHubMark } from "../../icons/brands.js"
 import { Platform } from "../../platform/platform.js"
 import { errorMessage } from "../../lib/errors.js"
+import { Search } from "../../lib/search.js"
 import { useShown } from "../../lib/use-shown.js"
 import { formText } from "../../lib/format.js"
 import { Repositories } from "../../lib/repositories.js"
@@ -85,13 +86,11 @@ export function SpaceRepositoriesTab() {
   const [query, setQuery] = useState("")
   const [dialog, setDialog] = useState<"add" | ReferenceInfo>()
   const references = settings.settings.references ?? []
-  const needle = query.trim().toLowerCase()
-  const matching = references.filter((reference) =>
-    [reference.alias, reference.repository, reference.description, reference.branch ?? ""].some((text) =>
-      text.toLowerCase().includes(needle),
+  const shown = useShown(
+    references.filter((reference) =>
+      Search.matches(query, reference.alias, reference.repository, reference.description, reference.branch),
     ),
   )
-  const shown = useShown(matching)
   const save = (next: ReadonlyArray<ReferenceInfo>) =>
     update.mutateAsync({ id: space.id, settings: { ...settings.settings, references: [...next] } })
   const canUpdate = settings.canUpdate
@@ -136,9 +135,7 @@ export function SpaceRepositoriesTab() {
           <TableBody>
             {shown.items.length === 0 ? (
               <TableEmpty columns={3}>
-                {query.trim()
-                  ? `Nothing matches “${query.trim()}”`
-                  : "No repositories yet. Add one so Ren can read it."}
+                {Search.empty(query, "No repositories yet. Add one so Ren can read it.")}
               </TableEmpty>
             ) : null}
             {shown.items.map((reference) => (
