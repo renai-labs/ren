@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useMemo } from "react"
+// ast-grep-ignore: no-import-alias -- the React Virtualizer component below has the same name
 import { Virtualizer as WindowVirtualizer } from "@pierre/diffs"
 import { MultiFileDiff, PatchDiff, Virtualizer, VirtualizerContext, WorkerPoolContext } from "@pierre/diffs/react"
 import { getOrCreateWorkerPoolSingleton, terminateWorkerPoolSingleton } from "@pierre/diffs/worker"

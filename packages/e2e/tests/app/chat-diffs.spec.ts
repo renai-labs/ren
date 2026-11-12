@@ -47,3 +47,29 @@ test("an edit by Ren shows as a diff with line numbers, and Open in Changes show
   await expect(panel.getByText("gamma")).toBeVisible()
   await page.screenshot({ path: test.info().outputPath("changes-diff.png") })
 })
+
+test("a diff above 200 changed lines renders only the lines in view", async ({ page }) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
+  const content = `${Array.from({ length: 600 }, (_, index) => `row ${index + 1}`).join("\n")}\n`
+  const script = await page.request.post(`http://127.0.0.1:${ports.mailbox}/script`, {
+    data: { reply: "big file written", tools: [{ name: "write", input: { path: "big.txt", content } }] },
+  })
+  const marker = Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await script.json()).marker
+
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill(`${marker} write the big file`)
+  await message.press("Enter")
+  await expect(page.getByText("big file written")).toBeVisible({ timeout: brainStart })
+
+  await page.getByRole("button", { name: /^Worked for/ }).click()
+  await page
+    .getByRole("button", { name: /^Wrote big\.txt/ })
+    .first()
+    .click()
+  const diff = page.locator('[data-slot="file-diff"]')
+  await expect(diff.getByText("row 1", { exact: true })).toBeVisible()
+  await expect.poll(() => diff.locator("[data-line]").count()).toBeGreaterThan(0)
+  expect(await diff.locator("[data-line]").count()).toBeLessThan(600)
+  await page.screenshot({ path: test.info().outputPath("large-diff.png") })
+})
