@@ -150,9 +150,9 @@ export function FileView(props: {
         {props.actions}
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{props.meta}</span>
       </div>
-      <div className="relative flex min-h-0 flex-1 flex-col border-t">
+      <div className="flex min-h-0 flex-1 flex-col border-t">
         {find ? (
-          <div className="absolute top-2 right-4 z-10">
+          <div className="flex shrink-0 justify-end border-b px-3 py-1.5">
             <FindBar
               label="Find in file"
               scope={() => shadowOf(host.current)}
