@@ -35,7 +35,7 @@ test("closing punctuation stays on the line of the app pill it follows", async (
   for (const width of [900, 700, 560, 480, 420, 380, 340, 320]) {
     await page.setViewportSize({ width, height: 800 })
     const lines = await chip.evaluate((node) => {
-      const stop = document.createRange()
+      const stop = node.ownerDocument.createRange()
       stop.selectNodeContents(node.lastChild ?? node)
       const pill = node.firstElementChild?.getBoundingClientRect() ?? node.getBoundingClientRect()
       const mark = stop.getBoundingClientRect()
