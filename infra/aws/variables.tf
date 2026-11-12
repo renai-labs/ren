@@ -59,6 +59,19 @@ variable "server_environment" {
   description = "Plain environment values of the server, which are not secret."
 }
 
+variable "artifact_cloudflare" {
+  type = object({
+    account_id = string
+  })
+  default     = null
+  description = "Enable ordinary Cloudflare Workers for artifacts. Store CLOUDFLARE_API_TOKEN in the existing server secret before deploying. No custom domain or Workers for Platforms is required."
+
+  validation {
+    condition     = var.artifact_cloudflare == null ? true : can(regex("^[a-f0-9]{32}$", var.artifact_cloudflare.account_id))
+    error_message = "The Cloudflare account ID must be 32 lowercase hexadecimal characters."
+  }
+}
+
 variable "rate_limit" {
   type        = number
   default     = 2000

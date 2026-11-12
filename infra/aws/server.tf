@@ -159,10 +159,13 @@ resource "aws_ecs_task_definition" "server" {
         DRIVE_ROLE_ARN = aws_iam_role.drive_access.arn
         BUNDLE_BUCKET  = aws_s3_bucket.artifacts.id
         BUNDLE_REGION  = var.region
+        }, var.artifact_cloudflare == null ? {} : {
+        ARTIFACT_PROVIDER     = "cloudflare"
+        CLOUDFLARE_ACCOUNT_ID = var.artifact_cloudflare.account_id
       }) : { name = key, value = value }
     ]
     secrets = [
-      for key in var.server_secret_keys : { name = key, valueFrom = "${aws_secretsmanager_secret.server.arn}:${key}::" }
+      for key in distinct(concat(var.server_secret_keys, var.artifact_cloudflare == null ? [] : ["CLOUDFLARE_API_TOKEN"])) : { name = key, valueFrom = "${aws_secretsmanager_secret.server.arn}:${key}::" }
     ]
     logConfiguration = {
       logDriver = "awslogs"
