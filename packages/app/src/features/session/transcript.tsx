@@ -271,11 +271,11 @@ function groupTurns(blocks: ReadonlyArray<Block>, live: (turn: string) => boolea
 
 const isPasteBlock = (text: string) => text.length >= 2000 || text.split("\n").length >= 20
 
-function splitPasted(text: string) {
+function splitPasted(text: string, fold: boolean) {
   const separator = text.indexOf("\n\n")
   const head = separator === -1 ? text : text.slice(0, separator)
   const tail = separator === -1 ? "" : text.slice(separator + 2)
-  if (tail && isPasteBlock(tail)) return { typed: head, pasted: tail }
+  if (tail && isPasteBlock(tail) && (fold || !isPasteBlock(head))) return { typed: head, pasted: tail }
   if (isPasteBlock(text)) return { typed: "", pasted: text }
   return { typed: text, pasted: undefined }
 }
@@ -283,9 +283,10 @@ function splitPasted(text: string) {
 const foldAbove = 20
 const foldShown = 12
 
-function foundBelowFold(text: string, find: FindBarProps | undefined, rowKey: string) {
+function foundBelowFold(message: SessionMessage.User, find: FindBarProps | undefined, rowKey: string) {
   const query = find?.value.trim().toLowerCase()
   if (!find?.match || find.match.row !== rowKey || !query) return false
+  const text = splitPasted(message.text, true).typed
   const lower = text.toLowerCase()
   const at = Array.from({ length: find.match.occurrence + 1 }).reduce<{ from: number; at: number }>(
     (found) => {
@@ -593,7 +594,7 @@ function UserText(props: {
   fold: boolean
   reveal: boolean
 }) {
-  const parts = splitPasted(props.text ?? props.message.text)
+  const parts = splitPasted(props.text ?? props.message.text, props.fold)
   const message = props.message
   const typed = !message.schedule && !message.webhook && !message.channel
   const foldable = props.fold && typed && parts.typed.split("\n").length > foldAbove
@@ -1205,7 +1206,7 @@ function UserBlock(props: {
       message={message}
       spaceId={transcript.spaceId}
       fold={transcript.foldMessages === true}
-      reveal={foundBelowFold(message.text, transcript.find, props.rowKey)}
+      reveal={foundBelowFold(message, transcript.find, props.rowKey)}
       person={person}
       pending={pending}
       editing={props.editing}

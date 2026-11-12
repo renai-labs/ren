@@ -32,9 +32,8 @@ test("a member folds long typed messages from Preferences and reads more", async
   await expect(page.getByText("Show the first 12 lines of a message over 20 lines.")).toBeVisible()
 
   await send(page, { typed: lines("Line", 25), pasted: lines("Pasted", 25) })
-  const bubble = page.locator("[data-searchable]").filter({ hasText: "Line 25" })
-  await expect(bubble).toBeVisible()
   await expect(page.getByText("Pasted text")).toBeVisible()
+  await expect(page.locator("[data-searchable]").filter({ hasText: "Line 25" })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Read more" })).toHaveCount(0)
 
   await page.goto("/app/settings/preferences")
