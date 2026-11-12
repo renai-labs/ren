@@ -13,11 +13,13 @@ async function send(page: import("@playwright/test").Page, input: { typed: strin
   const box = page.getByRole("textbox", { name: "Message" })
   await box.fill(input.typed)
   if (input.pasted)
-    await box.evaluate((element, text) => {
+    await page.evaluate(`(() => {
       const transfer = new DataTransfer()
-      transfer.setData("text/plain", text)
-      element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }))
-    }, input.pasted)
+      transfer.setData("text/plain", ${JSON.stringify(input.pasted)})
+      document
+        .querySelector('main textarea[aria-label="Message"]')
+        .dispatchEvent(new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }))
+    })()`)
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 }

@@ -1,7 +1,6 @@
 import { DateTime, Option } from "effect"
 import { flushSync } from "react-dom"
 import {
-  useEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -524,7 +523,12 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   )
 }
 
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; fold: boolean; reveal: boolean }) {
+function UserBody(props: {
+  message: SessionMessage.User
+  spaceId: string | undefined
+  fold: boolean
+  reveal: boolean
+}) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
   const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
   if (at >= 0)
@@ -545,9 +549,11 @@ function UserBody(props: { message: SessionMessage.User; spaceId: string | undef
 
 function TypedBubble(props: { text: string; foldable: boolean; reveal: boolean }) {
   const [open, setOpen] = useState(false)
-  useEffect(() => {
+  const [revealed, setRevealed] = useState(false)
+  if (props.reveal !== revealed) {
+    setRevealed(props.reveal)
     if (props.reveal) setOpen(true)
-  }, [props.reveal])
+  }
   const apps = useMentionedApps(props.text)
   const folded = props.foldable && !open
   const shown = folded ? props.text.split("\n").slice(0, foldShown).join("\n") : props.text
@@ -580,7 +586,13 @@ function TypedBubble(props: { text: string; foldable: boolean; reveal: boolean }
   )
 }
 
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined; fold: boolean; reveal: boolean }) {
+function UserText(props: {
+  message: SessionMessage.User
+  text?: string
+  spaceId: string | undefined
+  fold: boolean
+  reveal: boolean
+}) {
   const parts = splitPasted(props.text ?? props.message.text)
   const message = props.message
   const typed = !message.schedule && !message.webhook && !message.channel
