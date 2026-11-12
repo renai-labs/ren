@@ -4,23 +4,22 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Loading } from "@ren/ui/loading"
 import { Tabs } from "@ren/ui/tabs"
 import { AddToSpace, type Added } from "../../components/add-to-space.js"
-import { AppListingSample, AppRow, AppSection, MoreApps, SeeAllRow } from "../../components/app-list.js"
+import { AppListingSample, AppRow, AppSection, SeeAllRow } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
+import { LoadMore } from "../../components/load-more.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
 import { categoryLabel, fromApp, fromRegistry, isSpaceApp, needsAttention, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
+import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 
 const route = getRouteApi("/_authed/_shell/apps/")
-
-const matches = (app: { name: string; description: string }, query: string) =>
-  `${app.name} ${app.description}`.toLowerCase().includes(query.trim().toLowerCase())
 
 function useConnectedApps() {
   const { client } = RouterContext.useRouterContext()
@@ -110,7 +109,7 @@ function AppListing(props: {
   row: (app: CatalogApp) => ReactNode
 }) {
   if (props.inUse.length === 0 && props.rest.length === 0 && !props.more)
-    return <EmptyState>{props.query ? `Nothing matches “${props.query.trim()}”` : "No apps yet"}</EmptyState>
+    return <EmptyState>{Search.empty(props.query, "No apps yet")}</EmptyState>
   return (
     <div className="flex flex-col gap-10">
       {props.inUse.length > 0 ? (
@@ -122,7 +121,7 @@ function AppListing(props: {
         />
       ) : null}
       {props.rest.length > 0 ? <AppSection title={props.restTitle}>{props.rest.map(props.row)}</AppSection> : null}
-      {props.more ? <MoreApps onVisible={props.onMore} /> : null}
+      <LoadMore more={props.more} onMore={props.onMore} />
       {props.fetching ? <AppListingSample /> : null}
     </div>
   )
@@ -183,7 +182,7 @@ export function AppsPage() {
       title="Apps"
       width="wide"
       description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-      search={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
+      actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
     >
       <CategoryPills categories={categories} value={category} />
       <Loading id={shapeId} loading={loading} label="Loading apps">
@@ -191,7 +190,7 @@ export function AppsPage() {
           <AppListingSample />
         ) : (
           <AppListing
-            inUse={usedApps.filter((each) => matches(each, query))}
+            inUse={usedApps.filter((each) => Search.matches(query, each.name, each.description))}
             installed={connected.total}
             onAll={connected.loadAll}
             rest={browse.filter((each) => !used.has(each.id))}

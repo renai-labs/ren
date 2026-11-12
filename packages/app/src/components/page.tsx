@@ -4,7 +4,8 @@ import { Avatar, AvatarFallback } from "@ren/ui/avatar"
 import { SpaceCardFrame } from "./space-card-frame.js"
 import { IconDots } from "@tabler/icons-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
-import { Fragment, type ComponentProps, type ReactElement, type ReactNode } from "react"
+import { createContext, Fragment, use, useState, type ComponentProps, type ReactElement, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import {
   Item,
   ItemActions,
@@ -41,12 +42,18 @@ type PageProps = {
   aside?: ReactNode | undefined
   leading?: ReactNode | undefined
   actions?: ReactNode | undefined
-  search?: ReactNode | undefined
   width?: PageWidth | undefined
   footer?: ReactNode | undefined
   loading?: boolean | undefined
   shape?: string | undefined
   children: ReactNode
+}
+
+const PageActionsSlot = createContext<HTMLElement | null>(null)
+
+export function PageActions(props: { children: ReactNode }) {
+  const slot = use(PageActionsSlot)
+  return slot ? createPortal(props.children, slot) : null
 }
 
 function PageHeading(props: Pick<PageProps, "title" | "description">) {
@@ -59,15 +66,6 @@ function PageHeading(props: Pick<PageProps, "title" | "description">) {
 }
 
 function PageHeader(props: PageProps) {
-  if (props.search)
-    return (
-      <header className="sticky top-0 z-20 -mx-6 -mt-3 flex items-end justify-between gap-4 bg-background px-6 py-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-linear-to-b after:from-background after:to-transparent">
-        <div className="flex min-w-0 flex-col gap-1">
-          <PageHeading title={props.title} description={props.description} />
-        </div>
-        {props.search}
-      </header>
-    )
   const heading = <PageHeading title={props.title} description={props.description} />
   if (props.media)
     return (
@@ -90,20 +88,41 @@ function PageHeader(props: PageProps) {
     return (
       <header className="flex items-center justify-between gap-4">
         {heading}
-        {props.actions ? <div className="flex items-center gap-1">{props.actions}</div> : null}
+        <div className="flex items-center gap-1">{props.actions}</div>
       </header>
     )
-  return <header className="flex flex-col gap-1">{heading}</header>
+  return (
+    <header className="sticky top-0 z-20 -mx-6 -mt-3 flex items-end justify-between gap-4 bg-background px-6 py-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-linear-to-b after:from-background after:to-transparent">
+      <div className="flex min-w-0 flex-col gap-1">
+        <h1 className="text-xl font-medium">{props.title}</h1>
+        {props.description ? (
+          <p className="truncate text-sm text-muted-foreground" title={props.description}>
+            {props.description}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex min-h-8 shrink-0 items-center gap-1">{props.actions}</div>
+    </header>
+  )
 }
 
 export function Page(props: PageProps) {
   const shapeId = useShapeId(props.shape ?? "page")
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
   const full = props.width === "full"
   const frame = pageFrames[props.width ?? "column"]
   return (
     <div className={frame}>
       {props.back ? <div className="flex">{props.back}</div> : null}
-      <PageHeader {...props} />
+      <PageHeader
+        {...props}
+        actions={
+          <>
+            {props.actions}
+            <div ref={setSlot} className="contents" />
+          </>
+        }
+      />
       <Loading
         id={shapeId}
         loading={props.loading ?? false}
@@ -111,14 +130,11 @@ export function Page(props: PageProps) {
         className={full ? undefined : "flex flex-1 flex-col"}
       >
         <div className={full ? "flex flex-col gap-4" : "flex flex-1 flex-col gap-6"}>
-          {(props.leading || props.actions) && !full ? (
-            <div className="flex min-h-8 items-center justify-between gap-4">
-              <div>{props.leading}</div>
-              <div className="flex items-center gap-1">{props.actions}</div>
-            </div>
-          ) : null}
+          {props.leading && !full ? <div className="flex min-h-8 items-center">{props.leading}</div> : null}
           {full ? props.leading : null}
-          <div className="flex flex-1 flex-col gap-8">{props.children}</div>
+          <PageActionsSlot value={slot}>
+            <div className="flex flex-1 flex-col gap-8">{props.children}</div>
+          </PageActionsSlot>
           {props.footer ? <PageFooter>{props.footer}</PageFooter> : null}
         </div>
       </Loading>
@@ -126,7 +142,7 @@ export function Page(props: PageProps) {
   )
 }
 
-export function PageFooter(props: { children: ReactNode }) {
+function PageFooter(props: { children: ReactNode }) {
   return <div className="mt-auto flex items-center justify-between gap-4 empty:hidden">{props.children}</div>
 }
 
@@ -299,7 +315,7 @@ export function PageSkeleton(props: {
   title?: string | undefined
   description?: string | undefined
   width?: PageWidth | undefined
-  search?: ReactNode | undefined
+  actions?: ReactNode | undefined
   body?: "rows" | "cards" | undefined
   columns?: 2 | 3 | undefined
   shape?: string | undefined
@@ -311,8 +327,7 @@ export function PageSkeleton(props: {
       title={props.title ?? ""}
       description={props.description}
       width={props.width}
-      search={props.search}
-      actions={props.search ? undefined : <div className="min-h-8" />}
+      actions={props.actions}
       loading
     >
       {props.children ?? (props.body === "cards" ? <CardsSample columns={props.columns} /> : <RowsSample />)}
