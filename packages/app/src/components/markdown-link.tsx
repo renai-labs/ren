@@ -11,7 +11,8 @@ import { Platform } from "../platform/platform.js"
 export function MarkdownLink({ node: _node, href, children, className, ...rest }: ComponentProps<"a"> & ExtraProps) {
   const platform = Platform.usePlatform()
   const [menuOpen, setMenuOpen] = useState(false)
-  const text = useRef("")
+  const [tipOpen, setTipOpen] = useState(false)
+  const anchor = useRef<HTMLAnchorElement>(null)
   if (!href)
     return (
       <Link className={className} {...rest}>
@@ -25,13 +26,12 @@ export function MarkdownLink({ node: _node, href, children, className, ...rest }
     )
   return (
     <ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
-      <Tooltip open={menuOpen ? false : undefined}>
+      <Tooltip open={tipOpen && !menuOpen} onOpenChange={setTipOpen}>
         <TooltipTrigger
           render={
             <ContextMenuTrigger
-              render={<Link href={href} external className={className} {...rest} />}
+              render={<Link ref={anchor} href={href} external className={className} {...rest} />}
               onContextMenu={(event) => {
-                text.current = event.currentTarget.textContent
                 if (event.button !== 2 || !event.shiftKey) return
                 event.nativeEvent.stopPropagation()
                 event.preventBaseUIHandler()
@@ -56,7 +56,9 @@ export function MarkdownLink({ node: _node, href, children, className, ...rest }
               <IconCopy />
               Copy link
             </ContextMenuItem>
-            <ContextMenuItem onClick={() => copy(text.current, "Link text copied")}>Copy link text</ContextMenuItem>
+            <ContextMenuItem onClick={() => copy(anchor.current?.textContent ?? "", "Link text copied")}>
+              Copy link text
+            </ContextMenuItem>
           </>
         ) : null}
       </ContextMenuContent>
