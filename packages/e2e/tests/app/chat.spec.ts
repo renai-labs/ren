@@ -178,9 +178,8 @@ test("double-clicking inline code selects the whole span and a code block keeps 
   await createOrganization(page.request, { name: "Grace Hopper" })
   const marker = await scriptedReply(page.request, "See `a.b-c` and [`d.e-f`](https://example.com).\n\n```\ng.h-i\n```")
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill(`Show code ${marker}`)
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill(`Show code ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page.locator("p code", { hasText: "a.b-c" })).toBeVisible({ timeout: brainStart })
   const selection = () => page.evaluate<string>('getSelection()?.toString() ?? ""')
 

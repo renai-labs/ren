@@ -140,23 +140,18 @@ export function Markdown(props: {
   workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
   const apps = props.apps ?? []
-  const withApps =
-    apps.length === 0
-      ? components
-      : {
-          ...components,
-          a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
-            const app = href?.startsWith(appLink)
-              ? apps.find((each) => each.slug === href.slice(appLink.length))
-              : undefined
-            if (app) return <AppMention app={app} />
-            return (
-              <Link href={href} external className="font-medium underline" {...rest}>
-                {children}
-              </Link>
-            )
-          },
-        }
+  const withLinks = {
+    ...components,
+    a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
+      const app = href?.startsWith(appLink) ? apps.find((each) => each.slug === href.slice(appLink.length)) : undefined
+      if (app) return <AppMention app={app} />
+      return (
+        <Link href={href} external className="font-medium underline" {...rest}>
+          {children}
+        </Link>
+      )
+    },
+  }
   return (
     <WorkspaceImages value={props.workspaceImage}>
       <Streamdown
@@ -164,7 +159,7 @@ export function Markdown(props: {
         tableMaxHeight={0}
         urlTransform={urlTransform}
         rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
+        components={withLinks}
         isAnimating={props.streaming === true}
         animated={streamAnimation}
         className={cn("min-w-0 text-sm/relaxed", props.className)}
