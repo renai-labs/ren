@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
   IconApps,
+  IconClockBolt,
   IconArrowLeft,
   IconMessagesFilled,
   IconBuildingFactory2,
-  IconClock,
   IconCube,
   IconKey,
   IconLayoutDashboard,
@@ -16,7 +16,6 @@ import {
   IconSelector,
   IconSettings,
   IconUsers,
-  IconWebhook,
 } from "@tabler/icons-react"
 import { GitMark } from "../icons/brands.js"
 import {
@@ -55,8 +54,7 @@ const spaceSections = [
   { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },
   { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
   { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
-  { value: "schedules", label: "Scheduled", icon: IconClock, to: "/spaces/$spaceId/schedules" },
-  { value: "webhooks", label: "Webhooks", icon: IconWebhook, to: "/spaces/$spaceId/webhooks" },
+  { value: "automations", label: "Automations", icon: IconClockBolt, to: "/spaces/$spaceId/automations" },
   { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
 ] as const
 

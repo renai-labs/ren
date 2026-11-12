@@ -34,7 +34,7 @@ import { WebhookRequests } from "./webhook-requests.js"
 import { parserOf, useWebhookForm, type Draft } from "./use-webhook-form.js"
 import { WebhookFormProvider } from "./webhook-form.js"
 import { useWebhookActions } from "./use-webhook-actions.js"
-import { AgentSelect } from "./webhooks-tab.js"
+import { AgentSelect } from "../../components/agent-select.js"
 
 const route = getRouteApi("/_authed/_shell/spaces/$spaceId/webhooks/$webhookId/")
 
@@ -106,7 +106,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
       description={webhook.modeReason ? Webhooks.modeReasons[webhook.modeReason] : undefined}
       back={
         <Link
-          to="/spaces/$spaceId/webhooks"
+          to="/spaces/$spaceId/automations"
           params={{ spaceId: props.spaceId }}
           className={buttonVariants({
             variant: "ghost",
@@ -115,7 +115,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
           })}
         >
           <IconArrowLeft />
-          Back to webhooks
+          Back to automations
         </Link>
       }
       aside={

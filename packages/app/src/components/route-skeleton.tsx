@@ -32,7 +32,10 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
     description: (space) => `Channels where people can mention @Ren to work in ${space}.`,
   },
   credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
-  schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
+  automations: {
+    title: "Automations",
+    description: (space) => `Agents that run in ${space} on a schedule, or when another app sends a request.`,
+  },
   webhooks: {
     title: "Webhooks",
     description: (space) => `URLs that start sessions in ${space} when another app sends a request.`,
@@ -113,7 +116,7 @@ function SpaceSectionSample(props: { section: string }) {
   if (props.section === "credentials") return table(["Key", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
-  if (props.section === "schedules") return table(["Name", "Frequency", "Next run", "Status", ""])
+  if (props.section === "automations") return table(["Automation", "Trigger", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
   if (props.section === "factory") return <RowsSample count={3} />
   if (props.section === "kanban")
@@ -196,10 +199,13 @@ export function RouteSkeleton() {
         <TasksSample />
       </PageSkeleton>
     )
-  if (path === "/schedules")
+  if (path === "/automations")
     return (
-      <PageSkeleton title="Scheduled" description="Work that starts on a schedule instead of a message.">
-        <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
+      <PageSkeleton
+        title="Automations"
+        description="Agents that run on a schedule, or when another app sends a request."
+      >
+        <TableSample columns={["Automation", "Trigger", "Next run", "Status", ""]} />
       </PageSkeleton>
     )
   if (path === "/marketplace")

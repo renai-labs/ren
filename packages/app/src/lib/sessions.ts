@@ -1,6 +1,7 @@
 import type { SessionListInput } from "@ren/client"
 import { infiniteQueryOptions } from "@tanstack/react-query"
 import { sessionKeys } from "./chat.js"
+import { Automations } from "./automations.js"
 import type { Runtime } from "./runtime.js"
 
 const untitled = "New chat"
@@ -16,7 +17,10 @@ const sidebarPageSize = 30
 
 export type SessionFilter = Omit<SessionListInput, "page" | "pageSize">
 
-export const ownChats = (userId: string): SessionFilter => ({ createdBy: [userId] })
+export const ownChats = (userId: string): SessionFilter => ({
+  createdBy: [userId],
+  origin: [...Automations.chatOrigins],
+})
 
 export const sidebarSessionsOptions = (client: Runtime.Context["client"], filter: SessionFilter = {}) =>
   infiniteQueryOptions({

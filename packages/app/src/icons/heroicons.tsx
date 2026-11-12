@@ -130,6 +130,8 @@ import {
   ChatBubbleLeftRightIcon,
 } from "@heroicons/react/20/solid"
 
+import { AutomationIcon } from "./automation.js"
+
 export * from "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
 
 type Props = SVGProps<SVGSVGElement> & {
@@ -202,6 +204,7 @@ export const IconCirclePlus = wrap(PlusCircleIcon)
 export const IconCircleX = wrap(XCircleIcon)
 export const IconClipboardText = wrap(ClipboardDocumentListIcon)
 export const IconClock = wrap(ClockIcon)
+export const IconClockBolt = wrap(AutomationIcon)
 export const IconCode = wrap(CodeBracketIcon)
 export const IconCopy = wrap(DocumentDuplicateIcon)
 export const IconCpu = wrap(CpuChipIcon)

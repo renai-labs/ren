@@ -386,7 +386,7 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
       </MarkerIcon>
       <MarkerContent>
         Scheduled ·{" "}
-        <Link to="/schedules" search={{ schedule: props.schedule.scheduleId }}>
+        <Link to="/automations" search={{ schedule: props.schedule.scheduleId }}>
           {props.schedule.name}
         </Link>{" "}
         · {formatRun(props.schedule.scheduledAt, localTimeZone())}

@@ -1,51 +1,9 @@
-import type { ScheduleInfo, ScheduleListInput, ScheduleWhen } from "@ren/client"
-import { Cron, DateTime, Option, Result, Schema } from "effect"
-import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
-
-const ScheduleSearchSchema = Schema.Struct({
-  page: Schema.optional(Schema.Number),
-  filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
-  schedule: Schema.optional(Schema.String),
-})
-
-export type ScheduleSearch = typeof ScheduleSearchSchema.Type
-
-export const ScheduleSearch = Schema.toStandardSchemaV1(ScheduleSearchSchema)
-
-export function scheduleListInput(
-  search: ScheduleSearch,
-  paging: {
-    readonly page: number
-    readonly pageSize: number
-    readonly text?: string | undefined
-    readonly spaceId?: string | undefined
-  },
-): ScheduleListInput {
-  const status = search.filters?.state?.at(0)
-  const spaceId = paging.spaceId ?? search.filters?.space?.at(0)
-  return {
-    page: paging.page,
-    pageSize: paging.pageSize,
-    ...((status === "active" || status === "paused") && { status }),
-    ...(spaceId && { spaceId }),
-    ...(paging.text && { search: paging.text }),
-  }
-}
+import type { ScheduleWhen } from "@ren/client"
+import { DateTime, Option } from "effect"
+import { formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
 
 const frequencies = ["hourly", "daily", "weekdays", "weekly", "monthly", "custom", "once"] as const
 export type Frequency = (typeof frequencies)[number]
-
-export const frequencyOptions = [
-  { value: "hourly", label: "Every hour" },
-  { value: "daily", label: "Every day" },
-  { value: "weekdays", label: "Every weekday" },
-  { value: "weekly", label: "Every week" },
-  { value: "monthly", label: "Every month" },
-  { value: "custom", label: "Custom cron" },
-  { value: "once", label: "Once" },
-] satisfies ReadonlyArray<{ value: Frequency; label: string }>
-
-export const isFrequency = (value: unknown): value is Frequency => frequencies.some((frequency) => frequency === value)
 
 export const weekdays = [
   { value: "1", label: "Monday" },
@@ -86,13 +44,6 @@ const pad = (value: number) => `${value}`.padStart(2, "0")
 const partsOf = (time: string) => {
   const match = timePattern.exec(time)
   return match ? { hours: Number(match[1]), minutes: Number(match[2]) } : undefined
-}
-
-export const dateKey = civilDate
-
-export const dateOfKey = (key: string) => {
-  const day = datePattern.exec(key)
-  return day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])) : undefined
 }
 
 const cronOf = (cadence: Cadence) => {
@@ -192,7 +143,7 @@ const clock = (time: string) => {
 
 const zoneName = (timeZone: string) => timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone
 
-export const describeCadence = (cadence: Cadence) => {
+const describeCadence = (cadence: Cadence) => {
   const days = cadence.weekday.split(",").flatMap((value) => {
     const day = weekdayNames.get(value)
     return day ? [day.slice(0, 3)] : []
@@ -215,40 +166,3 @@ export const describe = (when: ScheduleWhen, viewerZone: string) => {
 }
 
 export const formatRun = formatInZone
-
-const pauseWords = {
-  user: "Paused",
-  owner_left: "Paused · owner left",
-  agent_removed: "Paused · agent removed",
-  failing: "Paused · failing",
-} as const
-
-export const statusOf = (schedule: ScheduleInfo, now: number) => {
-  if (schedule.status === "paused") return pauseWords[schedule.pausedReason ?? "user"]
-  if (schedule.status === "ended" || !schedule.nextRunAt) return "Expired"
-  return `Next run ${formatRelative(schedule.nextRunAt, now)}`
-}
-
-export const nameOf = (message: string) =>
-  (
-    message
-      .trim()
-      .split("\n")
-      .find((line) => line.trim() !== "") ?? ""
-  )
-    .trim()
-    .slice(0, 80)
-    .trim()
-
-export const preview = (cadence: Cadence) => {
-  const when = whenOf(cadence)
-  if (Option.isNone(when)) return { kind: "invalid" as const }
-  if ("at" in when.value) return { kind: "next" as const, at: when.value.at }
-  const parsed = Cron.parse(when.value.cron, when.value.timeZone)
-  if (Result.isFailure(parsed)) return { kind: "invalid" as const }
-  const next = Option.liftThrowable(Cron.next)(parsed.success)
-  if (Option.isNone(next)) return { kind: "never" as const }
-  const until = when.value.until
-  if (until && next.value.getTime() > Date.parse(until)) return { kind: "never" as const }
-  return { kind: "next" as const, at: next.value.toISOString() }
-}

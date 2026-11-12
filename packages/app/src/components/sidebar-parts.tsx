@@ -18,7 +18,6 @@ import {
   IconCalendarWeek,
   IconChevronRight,
   IconCircle,
-  IconClock,
   IconCube,
   IconHelpCircle,
   IconLayoutGridFilled,
@@ -36,7 +35,6 @@ import {
   IconSettings,
   IconSubtask,
   IconTicket,
-  IconWebhook,
   type Icon,
 } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -372,11 +370,9 @@ const days = { today: 0, week: 7, month: 30 } as const
 const origins = [
   { value: "chat", label: "Chat", icon: IconMessageCircle },
   { value: "task", label: "Task", icon: IconSubtask },
-  { value: "schedule", label: "Schedule", icon: IconClock },
   { value: "slack", label: "Slack", icon: IconBrandSlack },
   { value: "linear", label: "Linear", icon: IconTicket },
   { value: "github", label: "GitHub", icon: IconBrandGithubFilled },
-  { value: "webhook", label: "Webhook", icon: IconWebhook },
 ] as const
 
 type Origin = (typeof origins)[number]["value"]

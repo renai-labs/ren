@@ -1,21 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { SchedulesPage } from "../../../features/schedules/schedules-page.js"
-import { pageSize, currentPage } from "../../../lib/pagination.js"
-import { Loader } from "../../../lib/loader.js"
-import { scheduleListInput, ScheduleSearch } from "../../../lib/schedules.js"
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { Schema } from "effect"
+
+const Search = Schema.toStandardSchemaV1(Schema.Struct({ schedule: Schema.optional(Schema.String) }))
 
 export const Route = createFileRoute("/_authed/_shell/schedules")({
-  head: () => ({ meta: [{ title: "Scheduled · Ren" }] }),
-  validateSearch: ScheduleSearch,
-  loaderDeps: (options) => ({ page: options.search.page, filters: options.search.filters }),
-  loader: (options) => {
-    Loader.start(
-      options.context.queryClient.query(
-        options.context.api.schedule.list.queryOptions(
-          scheduleListInput(options.deps, { page: currentPage(options.deps), pageSize }),
-        ),
-      ),
-    )
+  head: () => ({ meta: [{ title: "Automations · Ren" }] }),
+  validateSearch: Search,
+  beforeLoad: (options) => {
+    throw redirect({
+      to: "/automations",
+      search: options.search.schedule ? { schedule: options.search.schedule } : {},
+      replace: true,
+    })
   },
-  component: SchedulesPage,
 })

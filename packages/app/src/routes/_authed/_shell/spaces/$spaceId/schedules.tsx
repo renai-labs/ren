@@ -1,26 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { SpaceSchedulesTab } from "../../../../../features/spaces/space-schedules.js"
-import { pageSize, currentPage } from "../../../../../lib/pagination.js"
-import { Loader } from "../../../../../lib/loader.js"
-import { scheduleListInput, ScheduleSearch } from "../../../../../lib/schedules.js"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/schedules")({
-  head: () => ({ meta: [{ title: "Scheduled · Space · Ren" }] }),
-  validateSearch: ScheduleSearch,
-  loaderDeps: (options) => ({ page: options.search.page, filters: options.search.filters }),
-  loader: (options) => {
-    Loader.start(
-      options.context.queryClient.query(
-        options.context.api.schedule.list.queryOptions(
-          scheduleListInput(options.deps, {
-            page: currentPage(options.deps),
-            pageSize,
-            spaceId: options.params.spaceId,
-          }),
-        ),
-      ),
-    )
+  head: () => ({ meta: [{ title: "Automations · Space · Ren" }] }),
+  beforeLoad: (options) => {
+    throw redirect({ to: "/spaces/$spaceId/automations", params: { spaceId: options.params.spaceId }, replace: true })
   },
-  wrapInSuspense: false,
-  component: SpaceSchedulesTab,
 })

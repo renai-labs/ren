@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useLocation } from "@tanstack/react-router"
-import { IconChecklist, IconClock, IconCube, IconEdit, IconLayoutGrid } from "@tabler/icons-react"
+import { IconClockBolt, IconChecklist, IconCube, IconEdit, IconLayoutGrid } from "@tabler/icons-react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
 import { ChatsList, Footer, Header, NavRow, Section, SpacesActions, useChatFilters } from "./sidebar-parts.js"
 import { SpacesList } from "./sidebar-spaces.js"
@@ -9,9 +9,9 @@ import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 
 const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
 const tasks = { to: "/tasks", label: "Tasks", icon: IconChecklist } as const
-const scheduled = { to: "/schedules", label: "Scheduled", icon: IconClock } as const
+const automations = { to: "/automations", label: "Automations", icon: IconClockBolt } as const
 const marketplace = { to: "/marketplace", label: "Marketplace", icon: IconLayoutGrid } as const
-type Page = typeof newChat | typeof tasks | typeof scheduled | typeof marketplace
+type Page = typeof newChat | typeof tasks | typeof automations | typeof marketplace
 
 function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
   return (
@@ -50,7 +50,7 @@ function CollapsibleLayout(props: { path: string }) {
   return (
     <>
       <SidebarContent className="scrollbar-thin overflow-y-auto overscroll-contain">
-        <Nav path={props.path} pages={[newChat, tasks, scheduled, marketplace]} />
+        <Nav path={props.path} pages={[newChat, tasks, automations, marketplace]} />
         <Section
           label="Spaces"
           actions={<SpacesActions />}

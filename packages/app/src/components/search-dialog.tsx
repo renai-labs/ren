@@ -28,6 +28,7 @@ import { canAdministerOptions } from "../lib/auth.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { formatRelative } from "@ren/ui/time"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
+import { Automations } from "../lib/automations.js"
 import { ownChats, sessionTitle, sidebarSessionsOptions } from "../lib/sessions.js"
 import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { useMe } from "../lib/use-me.js"
@@ -45,7 +46,7 @@ function ChatResults(props: {
   const needle = useDebouncedValue(props.query.trim(), 250)
   const recent = useInfiniteQuery(sidebarSessionsOptions(client, ownChats(me.user.id)))
   const found = useQuery({
-    ...api.session.list.queryOptions({ search: needle, page: 1, pageSize: 20 }),
+    ...api.session.list.queryOptions({ search: needle, origin: [...Automations.chatOrigins], page: 1, pageSize: 20 }),
     enabled: needle !== "",
     placeholderData: keepPreviousData,
   })
