@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useAtomRefresh } from "@effect/atom-react"
 import { ChatState, Composer, SessionTasks, type ChatSession } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
@@ -194,8 +193,8 @@ export function useChat(
   const redo = ChatReact.useAction(root, (opened) => opened.redo)
   const undo = ChatReact.useAction(root, (opened) => opened.undo)
   const compact = ChatReact.useAction(root, (opened) => opened.compact(info?.model))
-  const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
-  const restart = useMutation(api.chat.retry.mutationOptions())
+  const restart = ChatReact.useAction(root, (opened) => opened.retry)
+  const [retrying, setRetrying] = useState(false)
   const archive = useMutation(api.session.archive.mutationOptions())
   const reverted = ChatState.revertMessageID(state, root) !== undefined
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
@@ -253,7 +252,7 @@ export function useChat(
     failed: AsyncResult.isFailure(view.session.state),
     boot,
     reconnecting: connection === "reconnecting",
-    retrying: restart.isPending,
+    retrying,
     draft,
     setDraft,
     files: { sessionId: root, spaceId, update: kept.update },
@@ -318,14 +317,12 @@ export function useChat(
       void redo().catch((error: unknown) =>
         toast.error("Could not restore messages", { description: errorMessage(error) }),
       ),
-    retry: () =>
-      restart.mutate(
-        { id: root },
-        {
-          onSuccess: () => reopen(),
-          onError: (error) => toast.error("Could not start this chat again", { description: errorMessage(error) }),
-        },
-      ),
+    retry: () => {
+      setRetrying(true)
+      void restart()
+        .catch((error: unknown) => toast.error("Could not start this chat again", { description: errorMessage(error) }))
+        .finally(() => setRetrying(false))
+    },
     openChild: (id: Session.ID | undefined) => (options.onChild ? options.onChild(id) : setLocalChild(id)),
     archive: () =>
       archive.mutateAsync(

@@ -798,6 +798,50 @@ test("a prompt to a chat whose space was shut down starts it again once, then is
     }),
   ))
 
+test("a chat whose start failed starts again on retry, without a new session, and sends the message kept while it failed", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const space = { failed: true, armed: false, restarts: 0 }
+      const script = stub.script({ reply: "started again" })
+      const stored = {
+        items: [
+          { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+        ] as ReadonlyArray<Outbox.Kept>,
+      }
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => (space.failed ? Effect.succeed({ status: "failed" as const, reason: "no capacity" }) : access()),
+        restart: Effect.suspend(() =>
+          space.armed
+            ? Effect.sync(() => {
+                space.restarts += 1
+                space.failed = false
+              })
+            : Effect.fail(new Error("no capacity")),
+        ),
+        outbox: {
+          load: Effect.sync(() => stored.items),
+          keep: (items) => Effect.sync(() => void (stored.items = items)),
+        },
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* ChatTest.until(chat.state, (state) => state.outbox.size === 1)
+      yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Failed")
+      expect(stored.items).toHaveLength(1)
+      space.armed = true
+      yield* chat.retry
+      yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Ready")
+      yield* chat.open(brain.id)
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
+      expect([
+        space.restarts,
+        ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
+      ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
+    }),
+  ))
+
 test("a permission request arrives live and leaves once the member answers it", () =>
   ChatTest.live(
     Effect.gen(function* () {

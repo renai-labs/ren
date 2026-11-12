@@ -683,7 +683,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         ...(files && { files }),
       },
     ])
-    if ((yield* SubscriptionRef.get(boot))._tag === "Stopped" && options.restart) {
+    const stopped = (yield* SubscriptionRef.get(boot))._tag
+    if ((stopped === "Stopped" || stopped === "Failed") && options.restart) {
       yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
       yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
     }
@@ -727,6 +728,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     ])
     if (!echoed) yield* execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })
     return id
+  })
+
+  const retry = Effect.gen(function* () {
+    if ((yield* SubscriptionRef.get(boot))._tag !== "Failed") return
+    if (!options.restart) return yield* new AccessFailed({ cause: new Error("This chat cannot start again") })
+    yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+    yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
+    yield* connection.wake
+    yield* Effect.forEach(yield* Ref.get(kept), (item) => prompt(item).pipe(Effect.catch(report)), {
+      discard: true,
+    }).pipe(Effect.forkIn(scope))
   })
 
   const command = Effect.fnUntraced(function* (input: CommandInput) {
@@ -1059,6 +1071,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     loadMore,
     reveal,
     prompt,
+    retry,
     compact,
     revert,
     undo,
