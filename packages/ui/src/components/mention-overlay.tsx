@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type CSSProperties, type RefObject } from "react"
+import { useEffect, useState, type CSSProperties, type RefObject } from "react"
 import { MentionLogo } from "#components/app-mention"
 
 const copied = [
@@ -39,7 +39,7 @@ export function MentionOverlay(props: {
   const [box, setBox] = useState<Box>()
   const textarea = props.textarea
   const active = props.marks.length > 0
-  useLayoutEffect(() => {
+  useEffect(() => {
     const node = textarea.current
     if (!node || !active) return
     const measure = () => {

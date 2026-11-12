@@ -398,12 +398,13 @@ describe("Egress.resolve", () => {
         hosts: ["acme.atlassian.net"],
         value: { type: "basic", username: "ada@acme.dev", password: Redacted.make('p&ss/"') },
       })
-      expect(values(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", [])))).toEqual([
+      expect(values(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", ["ren:JIRA"])))).toEqual([
         {
           op: "setHeader",
           name: "Authorization",
           value: `Basic ${Buffer.from('ada@acme.dev:p&ss/"').toString("base64")}`,
         },
+        { op: "replace", placeholder: "ren:JIRA", value: 'ada@acme.dev:p&ss/"', in: ["header"] },
       ])
     }),
   )
@@ -454,7 +455,7 @@ describe("Egress.resolve", () => {
           hosts: ["acme.atlassian.net"],
           value: { type: "basic", username: "ada@acme.dev", password: Redacted.make("pass") },
         })
-        expect(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", [], old))).toEqual({
+        expect(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", ["ren:JIRA"], old))).toEqual({
           allow: false,
           reason: "egress_outdated",
           label: "JIRA",

@@ -48,6 +48,7 @@ import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
+import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
 import {
   Attachment,
   AttachmentContent,
@@ -119,6 +120,7 @@ export interface TranscriptProps {
   readonly loading?: boolean | undefined
   readonly loadingHistory: boolean
   readonly onLoadMore: () => void
+  readonly find?: FindBarProps | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
   readonly expanded?: boolean | undefined
@@ -532,6 +534,7 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
         <Bubble variant="muted" align="end">
           <BubbleContent
             dir="auto"
+            data-searchable=""
             className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
           >
             {withAppMentions(parts.typed, apps)}
@@ -1200,7 +1203,7 @@ function AnswerBlock(props: {
     <Message>
       <MessageContent>
         <Bubble variant="ghost">
-          <BubbleContent className="text-base leading-[1.7]">
+          <BubbleContent data-searchable="" className="text-base leading-[1.7]">
             <SmoothMarkdown
               text={props.text}
               root={props.root}
@@ -1389,9 +1392,22 @@ export function Transcript(props: TranscriptProps) {
       </div>
     )
   return (
-    <MessageScrollerProvider autoScroll={follow.following}>
+    <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
       <TranscriptScroller transcript={props} follow={follow} />
     </MessageScrollerProvider>
+  )
+}
+
+function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Block> }) {
+  const match = props.find.match
+  const row = props.blocks.find(
+    (block) =>
+      block.key === match?.row || (block.kind === "steps" && block.steps.some((step) => step.key === match?.row)),
+  )?.key
+  return (
+    <div className="absolute top-2 right-4 z-10">
+      <FindBar {...props.find} match={row && match ? { row, occurrence: match.occurrence } : undefined} />
+    </div>
   )
 }
 
@@ -1433,7 +1449,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     <MessageScroller className="@container flex-1">
       <MessageScrollerViewport
         preserveScrollOnPrepend
-        pinEnd={follow.following}
+        pinEnd={follow.following && props.find === undefined}
         data-easing={easing}
         className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
         onWheel={(event: WheelEvent<HTMLDivElement>) => {
@@ -1467,6 +1483,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
             <MessageScrollerItem
               key={block.key}
               messageId={block.key}
+              data-row-key={block.key}
               scrollAnchor={block.kind === "user"}
               className={cn(
                 block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
@@ -1493,6 +1510,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
           <WorkingMarker busy={props.busy || watched.live(props.activeMessageID)} working={props.working} />
         </MessageScrollerContent>
       </MessageScrollerViewport>
+      {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
       <MessageScrollerButton />
     </MessageScroller>
   )
