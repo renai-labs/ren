@@ -30,7 +30,6 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
-import { Link } from "@ren/ui/link"
 import { Skeleton } from "@ren/ui/skeleton"
 import { cn } from "cn"
 import { errorStatus } from "../../lib/errors.js"
@@ -142,7 +141,7 @@ function PageFrame(props: {
         allow=""
         className={cn(
           "block w-full border-0 transition-opacity duration-150 ease-out motion-reduce:transition-none",
-          props.fill ? "h-full" : "h-60 max-h-[70vh] min-h-30",
+          props.fill ? "h-full max-h-full" : "h-60 max-h-[70vh] min-h-30",
           ready ? "opacity-100" : "opacity-0",
         )}
       />
@@ -187,6 +186,15 @@ function PageHeader(props: { title: string; zoom: number; onZoom: (zoom: number)
   )
 }
 
+function download(name: string, html: string) {
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }))
+  const link = document.createElement("a")
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 function PageMenu(props: { name: string; html: string; source: boolean; onSource: () => void }) {
   return (
     <DropdownMenu>
@@ -195,15 +203,7 @@ function PageMenu(props: { name: string; html: string; source: boolean; onSource
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            render={
-              <Link
-                appearance="plain"
-                href={`data:text/html;charset=utf-8,${encodeURIComponent(props.html)}`}
-                download={props.name}
-              />
-            }
-          >
+          <DropdownMenuItem onClick={() => download(props.name, props.html)}>
             <IconDownload />
             Download HTML
           </DropdownMenuItem>

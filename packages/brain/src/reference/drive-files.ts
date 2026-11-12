@@ -115,8 +115,15 @@ export const show = Effect.fn("DriveFiles.show")(function* (
 
 export const maxPageBytes = 5 * 1024 * 1024
 
-const localReference = (reference: string) =>
-  /^(?:[a-z][a-z0-9+.-]*:|\/|#|$)/iu.test(reference) ? "" : decodeURI(reference.replace(/[?#].*$/u, ""))
+const localReference = (reference: string) => {
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/|#|$)/iu.test(reference)) return ""
+  const bare = reference.replace(/[?#].*$/u, "")
+  try {
+    return decodeURI(bare)
+  } catch {
+    return bare
+  }
+}
 
 export const publishPage = Effect.fn("DriveFiles.publishPage")(function* (
   client: HandClient.Client,

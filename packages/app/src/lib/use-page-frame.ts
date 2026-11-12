@@ -56,7 +56,12 @@ export function usePageFrame(options: {
         frame.style.height = `${message.height}px`
         setReady(true)
       }
-      if (message.type === "open-link" && URL.canParse(message.href) && new URL(message.href).protocol === "https:")
+      if (
+        message.type === "open-link" &&
+        navigator.userActivation.isActive &&
+        URL.canParse(message.href) &&
+        new URL(message.href).protocol === "https:"
+      )
         platform.openExternal(message.href)
       if (message.type === "open-image" && message.src.startsWith("data:image/"))
         onImage({ src: message.src, alt: message.alt })
