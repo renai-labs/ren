@@ -41,6 +41,7 @@
     "posthog-js": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "remark-breaks": "catalog:",
     "streamdown": "catalog:"
   },
   "devDependencies": {

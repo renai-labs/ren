@@ -1,4 +1,3 @@
-import type { ReactNode } from "react"
 import { cn } from "cn"
 
 export type MentionApp = {
@@ -38,23 +37,6 @@ export function AppMention(props: { app: MentionApp }) {
       {props.app.name}
     </span>
   )
-}
-
-export function withAppMentions(text: string, apps: ReadonlyArray<MentionApp>): ReactNode {
-  if (!text.includes("@") || apps.length === 0) return text
-  const bySlug = new Map(apps.map((app) => [app.slug.toLowerCase(), app]))
-  const nodes: ReactNode[] = []
-  const state = { from: 0 }
-  for (const match of text.matchAll(mention)) {
-    const app = bySlug.get((match[2] ?? "").toLowerCase())
-    if (!app) continue
-    const start = match.index + (match[1] ?? "").length
-    nodes.push(text.slice(state.from, start), <AppMention key={start} app={app} />)
-    state.from = start + 1 + (match[2] ?? "").length
-  }
-  if (nodes.length === 0) return text
-  nodes.push(text.slice(state.from))
-  return nodes
 }
 
 export const mentionLinks = (markdown: string, apps: ReadonlyArray<MentionApp>) => {

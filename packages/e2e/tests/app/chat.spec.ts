@@ -173,3 +173,29 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
 })
+
+test("a member's message renders as markdown, shows raw HTML as text and keeps a long paste as a chip", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const composer = page.getByRole("textbox", { name: "Message" })
+  await composer.fill("**bold**\nsecond line")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
+  const typed = page.locator("[data-searchable]").filter({ hasText: "second line" })
+  await expect(typed.locator("[data-streamdown=strong]")).toHaveText("bold")
+  await expect(typed.locator("br")).toHaveCount(1)
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  await composer.fill("<b>x</b>")
+  await page.getByRole("button", { name: "Send" }).click()
+  const html = page.locator("[data-searchable]").filter({ hasText: "<b>x</b>" })
+  await expect(html).toBeVisible()
+  await expect(html.locator("b")).toHaveCount(0)
+
+  await composer.fill(Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join("\n"))
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("Pasted text")).toBeVisible()
+  await expect(page.locator("[data-searchable]").filter({ hasText: "line 25" })).toHaveCount(0)
+})

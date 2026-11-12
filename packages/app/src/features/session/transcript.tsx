@@ -91,7 +91,6 @@ import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSkeleton } from "../../components/chat-skeleton.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ImageLightbox } from "../../components/image-lightbox.js"
-import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { useMentionedApps } from "../../lib/use-app.js"
@@ -533,9 +532,11 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
         <Bubble variant="muted" align="end">
           <BubbleContent
             data-searchable=""
-            className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
+            className="min-w-0 rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6]"
           >
-            {withAppMentions(parts.typed, apps)}
+            <Markdown source="user" apps={apps} className="text-base leading-[1.6]">
+              {parts.typed}
+            </Markdown>
           </BubbleContent>
         </Bubble>
       ) : null}

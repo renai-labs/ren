@@ -2,6 +2,7 @@ import { createContext, use, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
+  defaultRemarkPlugins,
   defaultUrlTransform,
   useIsCodeFenceIncomplete,
   type ExtraProps,
@@ -21,6 +22,7 @@ import { AppMention, mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
+import remarkBreaks from "remark-breaks"
 import { Link } from "@ren/ui/link"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
@@ -122,6 +124,10 @@ const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([na
   return name === "harden" ? [workspaceImages, safe] : [safe]
 })
 
+const userRehypePlugins = rehypePlugins.filter((plugin) => plugin !== defaultRehypePlugins.raw)
+const remarkPlugins = Object.values(defaultRemarkPlugins)
+const userRemarkPlugins = [...remarkPlugins, remarkBreaks]
+
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
 
@@ -130,6 +136,7 @@ const streamAnimation = { animation: "fadeIn", duration: 180, easing: "ease-out"
 export function Markdown(props: {
   children: string
   streaming?: boolean | undefined
+  source?: "user" | undefined
   className?: string | undefined
   apps?: ReadonlyArray<CatalogApp> | undefined
   workspaceImage?: WorkspaceImageRenderer | undefined
@@ -152,16 +159,19 @@ export function Markdown(props: {
             )
           },
         }
+  const user = props.source === "user"
+  const rehype = props.workspaceImage ? workspaceRehypePlugins : rehypePlugins
   return (
     <WorkspaceImages value={props.workspaceImage}>
       <Streamdown
         controls={false}
         tableMaxHeight={0}
         urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+        rehypePlugins={user ? userRehypePlugins : rehype}
+        remarkPlugins={user ? userRemarkPlugins : remarkPlugins}
         components={withApps}
         isAnimating={props.streaming === true}
-        animated={streamAnimation}
+        animated={user ? false : streamAnimation}
         className={cn("min-w-0 text-sm/relaxed", props.className)}
       >
         {mentionLinks(props.children, apps)}
