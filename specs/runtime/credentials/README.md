@@ -2,6 +2,8 @@
 
 The egress, credentials, owners and access, OAuth apps and sessions, app profiles, Composio, `egress.unauthorized` and MCP reconnect are built.
 
+Only credential requests through the egress, with a forwarder in the sandbox: [egress-split.md](egress-split.md).
+
 Words: the **egress** is Ren's proxy (`repos/iron-proxy`). A workload holds a placeholder such as `ren:GITHUB`; the egress replaces it with the real secret on the way out. A **delivered secret** is a real value that Ren puts in the workload, because the egress cannot inject it.
 
 ## 1. Sign-in
