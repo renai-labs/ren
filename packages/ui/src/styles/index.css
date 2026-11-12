@@ -52,6 +52,9 @@
   --chart-5: #5d5d5d;
   --chart-6: #8250df;
 
+  --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
+  --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
+
   --radius: 8px;
 
   --sidebar: #f2f2f2;
@@ -96,6 +99,9 @@
   --chart-4: #f47780;
   --chart-5: #a3a3a3;
   --chart-6: #a371f7;
+
+  --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
+  --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
 
   --sidebar: #101010;
   --sidebar-foreground: #c4c4c4;
@@ -174,6 +180,15 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+}
+
+::highlight(ren-find-hit) {
+  background-color: var(--find-hit);
+}
+
+::highlight(ren-find-active) {
+  background-color: var(--find-active);
+  color: var(--background);
 }
 
 @layer base {

@@ -52,12 +52,15 @@ it.live("only execution changes raise the revision; every org that reaches the a
     expect(yield* publish(renamed)).toMatchObject({ revision: 1, changed: { execution: false, metadata: true } })
     const relabeled = {
       ...renamed,
-      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"] },
+      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"], tools: {} },
     }
     expect((yield* publish(relabeled)).changed).toEqual({ execution: false, metadata: false, listing: true })
+    const tools = { docs: [{ name: "search", description: "Search the docs", readOnly: true }] }
+    const cataloged = publication("docs", { ...relabeled, listing: { ...relabeled.listing, tools } })
+    expect((yield* publish(cataloged)).changed).toEqual({ execution: false, metadata: false, listing: true })
     const next = yield* publish(
       publication("docs", {
-        ...relabeled,
+        ...cataloged,
         skills: { guide: { ...skill, upstream: { ...skill.upstream, path: "b" } } },
       }),
     )
@@ -65,7 +68,7 @@ it.live("only execution changes raise the revision; every org that reaches the a
     const reader = yield* Seed.actor(yield* Seed.organization(), "member")
     expect(yield* registry.get(reader, "docs")).toMatchObject({
       name: "Docs",
-      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"] },
+      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"], tools },
       revision: 2,
       skills: { guide: { upstream: { path: "b" } } },
     })

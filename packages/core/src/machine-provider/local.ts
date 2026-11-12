@@ -1,5 +1,6 @@
 export * as LocalSandbox from "./local.js"
 
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { Workload } from "@ren/schema/workload"
 import { DateTime, Duration, Effect, FiberMap, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
@@ -131,6 +132,12 @@ export const provider = (options: {
         const handPort = yield* freePort
         const ca = Option.flatMap(input.network.proxy, (proxy) => proxy.ca)
         if (Option.isSome(ca)) yield* Effect.promise(() => Bun.write(join(state, "egress-ca.pem"), ca.value))
+        const own = {
+          REN_HOME: home,
+          PORT: String(port),
+          EXECUTOR_HOST: "127.0.0.1",
+          EXECUTOR_WORKSPACE: join(home, "workspace"),
+        }
         const child = spawn(
           "sh",
           [
@@ -149,15 +156,13 @@ export const provider = (options: {
             env: {
               PATH: process.env.PATH,
               HOME: home,
-              REN_HOME: home,
-              PORT: String(port),
-              EXECUTOR_HOST: "127.0.0.1",
-              EXECUTOR_WORKSPACE: join(home, "workspace"),
+              ...own,
               ...Option.match(input.network.proxy, {
                 onNone: () => ({}),
                 onSome: (proxy) => MachineProvider.proxyEnv(proxy, join(state, "egress-ca.pem")),
               }),
               ...input.variables,
+              ...ExecutorVariables.hiding([...ExecutorVariables.hiddenIn(input.variables), ...Object.keys(own)]),
             },
           },
         )

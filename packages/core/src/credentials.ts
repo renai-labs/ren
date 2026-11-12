@@ -82,14 +82,14 @@ export interface Request {
 
 export interface Matched {
   readonly candidate: Candidate
-  readonly placeholder: Option.Option<{ readonly text: string; readonly field: Option.Option<string> }>
+  readonly placeholder: { readonly text: string; readonly field: Option.Option<string> }
 }
 
 export type Match =
   | { readonly ok: true; readonly matches: ReadonlyArray<Matched> }
   | {
       readonly ok: false
-      readonly reason: "host_not_allowed" | "credential_missing" | "ambiguous"
+      readonly reason: "host_not_allowed" | "credential_missing"
       readonly label?: string
     }
 
@@ -105,25 +105,13 @@ const allowsHost = (candidate: Candidate, request: Request) =>
 const byOrder = (candidates: ReadonlyArray<Candidate>) =>
   candidates.toSorted((left, right) => lookupOrder.indexOf(left.owner) - lookupOrder.indexOf(right.owner))
 
-// oxlint-disable-next-line ren/no-comments -- README §6.3. A placeholder takes the first credential of its label in the lookup order; that credential must allow the host. Without placeholders, the credentials that inject by host (`setHeader`, `route`) for this host apply, and two labels for one host are `ambiguous`.
+// oxlint-disable-next-line ren/no-comments -- README §6.3. A placeholder takes the first credential of its label in the lookup order; that credential must allow the host. A credential goes in only by its placeholder, so a request without one gets none, and the egress sends it without asking Ren.
 export const match = (candidates: ReadonlyArray<Candidate>, request: Request): Match => {
   const ordered = byOrder(candidates)
   const placeholders = request.placeholders.flatMap((text) => {
     const parsed = parse(text)
     return parsed ? [{ text, ...parsed }] : []
   })
-  if (placeholders.length === 0) {
-    const byHost = ordered.filter(
-      (candidate) =>
-        candidate.inject.op !== "replace" &&
-        candidate.inject.op !== "awsSign" &&
-        candidate.source !== "provider" &&
-        allowsHost(candidate, request),
-    )
-    const chosen = [...new Map(byHost.toReversed().map((candidate) => [candidate.label, candidate])).values()]
-    if (chosen.length > 1) return { ok: false, reason: "ambiguous" }
-    return { ok: true, matches: chosen.map((candidate) => ({ candidate, placeholder: Option.none() })) }
-  }
   const matches: Array<Matched> = []
   for (const placeholder of placeholders) {
     const labelled = ordered.filter((candidate) => candidate.label === placeholder.label)
@@ -133,7 +121,7 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
     const candidate = allowed.at(0)
     if (labelled.length === 0) return { ok: false, reason: "credential_missing", label: placeholder.label }
     if (!candidate) return { ok: false, reason: "host_not_allowed", label: placeholder.label }
-    matches.push({ candidate, placeholder: Option.some({ text: placeholder.text, field: placeholder.field }) })
+    matches.push({ candidate, placeholder: { text: placeholder.text, field: placeholder.field } })
   }
   return { ok: true, matches }
 }

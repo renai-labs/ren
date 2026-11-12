@@ -3,12 +3,12 @@ import { useState } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import {
+  IconApps,
   IconBook,
   IconCalendar,
   IconChecklist,
   IconCube,
   IconEdit,
-  IconLayoutGrid,
   IconLock,
   IconMessage,
   IconSettings,
@@ -103,7 +103,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
     { label: "New chat", icon: IconEdit, run: () => navigate({ to: "/" }) },
     { label: "Open tasks", icon: IconChecklist, run: () => navigate({ to: "/tasks" }) },
     { label: "Open spaces", icon: IconCube, run: () => navigate({ to: "/spaces" }) },
-    { label: "Open marketplace", icon: IconLayoutGrid, run: () => navigate({ to: "/marketplace" }) },
+    { label: "Open apps", icon: IconApps, run: () => navigate({ to: "/apps" }) },
     { label: "Open settings", icon: IconSettings, run: () => navigate({ to: "/settings/preferences" }) },
     { label: "Documentation", icon: IconBook, run: external(docsUrl) },
     { label: "Talk to founder", icon: IconCalendar, run: external(founderCallUrl) },
