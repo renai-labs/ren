@@ -68,7 +68,7 @@ export function XlsxView(props: PreviewProps) {
       <div ref={grid} className="min-h-0 flex-1 overflow-auto overscroll-contain bg-background">
         {sheet ? (
           <div
-            className="w-max"
+            className="w-max [&_[data-slot=table-container]]:overflow-visible"
             // oxlint-disable-next-line react/forbid-dom-props -- the zoom level is a number the user picks
             style={{ zoom: props.zoom === "fit" ? 1 : props.zoom }}
           >

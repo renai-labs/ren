@@ -153,12 +153,18 @@ function Page(props: {
   }, [near, props.doc, props.pdfjs, props.number, props.scale])
   useEffect(() => {
     const spans = layer.current?.textDivs ?? []
-    for (const span of spans) span.classList.remove(hitClass, activeClass)
+    for (const span of spans) {
+      span.classList.remove(hitClass, activeClass)
+      delete span.dataset.hit
+    }
     for (const [index, hit] of props.hits.entries()) {
       if (hit.page !== props.number) continue
       const span = spans[hit.item]
       span?.classList.add(index === props.active ? activeClass : hitClass)
-      if (index === props.active) span?.scrollIntoView({ block: "center" })
+      if (index === props.active && span) {
+        span.dataset.hit = "active"
+        span.scrollIntoView({ block: "center" })
+      }
     }
   }, [props.hits, props.active, props.number, rendered])
   return (
@@ -314,7 +320,8 @@ export function PdfView(props: PreviewProps) {
   }, [])
   const hit = shownHits[props.active]
   useEffect(() => {
-    if (hit) scroller.current?.querySelector(`[data-page="${hit.page}"]`)?.scrollIntoView({ block: "center" })
+    if (hit && !scroller.current?.querySelector('[data-hit="active"]'))
+      scroller.current?.querySelector(`[data-page="${hit.page}"]`)?.scrollIntoView({ block: "center" })
   }, [hit])
   if (!opened) {
     return (

@@ -25,7 +25,7 @@ type Load = { status: "loading" } | { status: "ready"; bytes: ArrayBuffer } | { 
 const notice = (reason: { tooLarge: boolean; load: Load }) => {
   if (reason.tooLarge) return "Too large to preview"
   if (reason.load.status === "gone") return "Not in the drive"
-  return "Couldn’t preview this file"
+  return "Couldn't preview this file"
 }
 
 const matchLabel = (query: string, count: number, active: number) => {
