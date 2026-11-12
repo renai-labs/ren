@@ -1,4 +1,6 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, type ComponentProps, type MouseEvent, type ReactNode } from "react"
+import GithubSlugger from "github-slugger"
+import { IconChevronRight } from "@tabler/icons-react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -19,6 +21,7 @@ import {
 } from "@ren/ui/code-block"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
+import { scrollToFragment } from "./markdown-fragment-links.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
@@ -78,7 +81,52 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+function MarkdownDetails({ node: _node, className, ...props }: ComponentProps<"details"> & ExtraProps) {
+  return (
+    <details
+      className={cn("group/details my-2 [&>:not(summary)]:mt-1 [&>:not(summary)]:ml-5.5", className)}
+      {...props}
+    />
+  )
+}
+
+function MarkdownSummary({ node: _node, className, children, ...props }: ComponentProps<"summary"> & ExtraProps) {
+  return (
+    <summary
+      className={cn(
+        "flex cursor-pointer list-none items-center gap-1.5 font-medium select-none marker:content-none [&::-webkit-details-marker]:hidden",
+        className,
+      )}
+      {...props}
+    >
+      <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open/details:rotate-90" />
+      {children}
+    </summary>
+  )
+}
+
+function MarkdownSection({ node: _node, className, ...props }: ComponentProps<"section"> & ExtraProps) {
+  return (
+    <section
+      className={cn(
+        "data-footnotes:mt-4 data-footnotes:border-t data-footnotes:pt-3 data-footnotes:text-[87.5%] data-footnotes:text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+const components = {
+  code: MarkdownCode,
+  img: MarkdownImage,
+  span: MarkdownSpan,
+  details: MarkdownDetails,
+  summary: MarkdownSummary,
+  section: MarkdownSection,
+}
+
+export const MarkdownScroll = createContext<((viewport: HTMLElement) => void) | undefined>(undefined)
 
 interface MarkdownNode {
   type: string
@@ -122,12 +170,30 @@ const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([na
   return name === "harden" ? [workspaceImages, safe] : [safe]
 })
 
+const headingTags = new Set(["h1", "h2", "h3", "h4", "h5", "h6"])
+
+const headingIds = (id: string) => () => (tree: MarkdownNode) => {
+  const slugger = new GithubSlugger()
+  const visit = (node: MarkdownNode, footnotes: boolean) => {
+    const inside = footnotes || node.properties?.["dataFootnotes"] === true || node.properties?.["dataFootnotes"] === ""
+    if (node.tagName && headingTags.has(node.tagName) && !inside) {
+      const text = (function flatten(each: MarkdownNode): string {
+        return each.type === "text" ? (each.value ?? "") : (each.children ?? []).map(flatten).join("")
+      })(node)
+      node.properties = { ...node.properties, id: `${id}-${slugger.slug(text)}` }
+    }
+    for (const child of node.children ?? []) visit(child, inside)
+  }
+  visit(tree, false)
+}
+
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)
 
 const streamAnimation = { animation: "fadeIn", duration: 180, easing: "ease-out", sep: "word" } as const
 
 export function Markdown(props: {
+  id: string
   children: string
   streaming?: boolean | undefined
   className?: string | undefined
@@ -135,37 +201,58 @@ export function Markdown(props: {
   workspaceImage?: WorkspaceImageRenderer | undefined
 }) {
   const apps = props.apps ?? []
-  const withApps =
-    apps.length === 0
-      ? components
-      : {
-          ...components,
-          a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
-            const app = href?.startsWith(appLink)
-              ? apps.find((each) => each.slug === href.slice(appLink.length))
-              : undefined
-            if (app) return <AppMention app={app} />
-            return (
-              <Link href={href} external className="font-medium underline" {...rest}>
-                {children}
-              </Link>
-            )
-          },
-        }
+  const release = use(MarkdownScroll)
+  const id = props.id
+  const plugins = [...(props.workspaceImage ? workspaceRehypePlugins : rehypePlugins), headingIds(id)]
+  const withLinks = {
+    ...components,
+    a: ({ node: _node, href, children, ...rest }: ComponentProps<"a"> & ExtraProps) => {
+      const app = href?.startsWith(appLink) ? apps.find((each) => each.slug === href.slice(appLink.length)) : undefined
+      if (app) return <AppMention app={app} />
+      if (href?.startsWith("#"))
+        return (
+          <Link
+            href={href}
+            {...rest}
+            target={undefined}
+            rel={undefined}
+            className={cn(
+              "font-medium underline",
+              "data-footnote-ref" in rest && "no-underline before:content-['['] after:content-[']']",
+            )}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+              event.preventDefault()
+              const root = event.currentTarget.closest<HTMLElement>("[data-markdown]")
+              if (root) scrollToFragment(root, id, href, release)
+            }}
+          >
+            {children}
+          </Link>
+        )
+      return (
+        <Link href={href} external className="font-medium underline" {...rest}>
+          {children}
+        </Link>
+      )
+    },
+  }
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <Streamdown
-        controls={false}
-        tableMaxHeight={0}
-        urlTransform={urlTransform}
-        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-        components={withApps}
-        isAnimating={props.streaming === true}
-        animated={streamAnimation}
-        className={cn("min-w-0 text-sm/relaxed", props.className)}
-      >
-        {mentionLinks(props.children, apps)}
-      </Streamdown>
+      <div data-markdown={id} className="contents">
+        <Streamdown
+          controls={false}
+          tableMaxHeight={0}
+          urlTransform={urlTransform}
+          rehypePlugins={plugins}
+          remarkRehypeOptions={{ clobberPrefix: `${id}-` }}
+          components={withLinks}
+          isAnimating={props.streaming === true}
+          animated={streamAnimation}
+          className={cn("min-w-0 text-sm/relaxed", props.className)}
+        >
+          {mentionLinks(props.children, apps)}
+        </Streamdown>
+      </div>
     </WorkspaceImages>
   )
 }

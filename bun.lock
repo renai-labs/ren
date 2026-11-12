@@ -48,6 +48,7 @@
         "better-auth": "catalog:",
         "cn": "catalog:",
         "effect": "catalog:",
+        "github-slugger": "2.0.0",
         "posthog-js": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",

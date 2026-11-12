@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
+import { ports } from "../lib/env.js"
 import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
@@ -173,4 +174,44 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("a footnote and a heading link in a reply scroll the transcript to their own message", async ({ page }) => {
+  const filler = Array.from({ length: 40 }, (_, index) => `Paragraph ${index} of filler text.`).join("\n\n")
+  const script = async (note: string) => {
+    const response = await page.request.post(`http://127.0.0.1:${ports.mailbox}/replies`, {
+      data: { reply: `# Title\n\nSee the note[^1] and [back to top](#title).\n\n${filler}\n\n[^1]: ${note}` },
+    })
+    return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+  }
+  const first = await script("first note")
+  const second = await script("second note")
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill(`${first} first`)
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
+  await expect(page.getByText("first note")).toBeAttached({ timeout: brainStart })
+  const composer = page.getByRole("form", { name: "Message Ren" })
+  await composer.getByRole("textbox", { name: "Message" }).fill(`${second} second`)
+  await composer.getByRole("textbox", { name: "Message" }).press("Enter")
+  await expect(page.getByText("second note")).toBeAttached({ timeout: brainStart })
+
+  const reply = page.locator("[data-markdown]").filter({ hasText: "second note" })
+  const note = reply.getByRole("listitem").filter({ hasText: "second note" })
+  const reference = reply.getByRole("link", { name: "1", exact: true })
+  await reference.scrollIntoViewIfNeeded()
+  await reference.click()
+  await expect(note).toBeInViewport()
+  await expect(page.getByRole("listitem").filter({ hasText: "first note" })).not.toBeInViewport()
+  await expect(composer).toBeInViewport()
+
+  await note.getByRole("link", { name: "Back to reference 1" }).click()
+  await expect(reference).toBeInViewport()
+
+  const top = reply.getByRole("link", { name: "back to top" })
+  await top.click()
+  await expect(reply.getByRole("heading", { name: "Title" })).toBeInViewport()
+  await expect(composer).toBeInViewport()
 })

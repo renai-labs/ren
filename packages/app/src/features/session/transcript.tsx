@@ -82,7 +82,7 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { DriveFileCards } from "./attachments.js"
-import { Markdown } from "../../components/markdown.js"
+import { Markdown, MarkdownScroll } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { useSubagentCard } from "./chat-view.js"
@@ -598,7 +598,7 @@ function UserMessage(props: {
   )
 }
 
-function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
+function ChannelReplyMessage(props: { id: string; tool: SessionMessage.Tool }) {
   const reply = ChannelReply.of(props.tool)
   return (
     <Message>
@@ -615,7 +615,9 @@ function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
         </Marker>
         <Bubble variant="ghost">
           <BubbleContent className="text-base leading-[1.7]">
-            <Markdown className="text-base leading-[1.7]">{reply.text}</Markdown>
+            <Markdown id={props.id} className="text-base leading-[1.7]">
+              {reply.text}
+            </Markdown>
           </BubbleContent>
         </Bubble>
       </MessageContent>
@@ -890,7 +892,15 @@ function ReasoningStep(props: { step: Extract<Step, { kind: "reasoning" }> }) {
   const text = props.step.content.text.trim()
   return (
     <Trace>
-      <Expandable content={text ? <Markdown className="text-sm/relaxed">{text}</Markdown> : undefined}>
+      <Expandable
+        content={
+          text ? (
+            <Markdown id={props.step.key} className="text-sm/relaxed">
+              {text}
+            </Markdown>
+          ) : undefined
+        }
+      >
         <TraceLine status={props.step.running ? "running" : undefined}>
           <TraceIcon>
             <IconBrain />
@@ -985,6 +995,7 @@ function Steps(props: {
             run.text ? (
               <SmoothMarkdown
                 key={run.key}
+                id={run.key}
                 text={run.text.text}
                 streaming={run.text.streaming}
                 className="text-sm/relaxed text-foreground"
@@ -1142,6 +1153,7 @@ function UserBlock(props: {
 }
 
 function SmoothMarkdown(props: {
+  id: string
   text: string
   streaming: boolean
   className: string
@@ -1153,6 +1165,7 @@ function SmoothMarkdown(props: {
   const root = props.root
   return (
     <Markdown
+      id={props.id}
       streaming={props.streaming || text.length < props.text.length}
       apps={props.apps}
       className={props.className}
@@ -1168,6 +1181,7 @@ function SmoothMarkdown(props: {
 }
 
 function AnswerBlock(props: {
+  id: string
   text: string
   streaming: boolean
   copy: string | undefined
@@ -1198,6 +1212,7 @@ function AnswerBlock(props: {
         <Bubble variant="ghost">
           <BubbleContent className="text-base leading-[1.7]">
             <SmoothMarkdown
+              id={props.id}
               text={props.text}
               root={props.root}
               images={images}
@@ -1255,6 +1270,7 @@ function BlockView(props: {
   if (block.kind === "answer")
     return (
       <AnswerBlock
+        id={block.key}
         root={props.transcript.view.root}
         messages={props.transcript.messages}
         text={block.text}
@@ -1262,7 +1278,7 @@ function BlockView(props: {
         copy={props.copyOf(block.turn, block.key)}
       />
     )
-  if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
+  if (block.kind === "reply") return <ChannelReplyMessage id={block.key} tool={block.tool} />
   if (block.kind === "connect")
     return (
       <Message>
@@ -1426,70 +1442,72 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const empty =
     props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
-    <MessageScroller className="@container flex-1">
-      <MessageScrollerViewport
-        preserveScrollOnPrepend
-        pinEnd={follow.following}
-        data-easing={easing}
-        className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
-        onWheel={(event: WheelEvent<HTMLDivElement>) => {
-          if (event.deltaY < 0) pause(event.currentTarget)
-          else if (atBottom(event.currentTarget)) toEnd()
-        }}
-        onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
-          touchY.current = event.touches[0]?.clientY ?? 0
-        }}
-        onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
-          if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
-        }}
-        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-          if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
-        }}
-        onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
-          const viewport = event.currentTarget
-          if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
-            pause(event.currentTarget)
-        }}
-        onScroll={(event: UIEvent<HTMLDivElement>) => {
-          const viewport = event.currentTarget
-          const down = viewport.scrollTop > lastTop.current
-          lastTop.current = viewport.scrollTop
-          if (!follow.following && down && atBottom(viewport)) toEnd()
-        }}
-      >
-        {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
-        <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
-          {blocks.map((block, index) => (
-            <MessageScrollerItem
-              key={block.key}
-              messageId={block.key}
-              scrollAnchor={block.kind === "user"}
-              className={cn(
-                block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
-                index >= blocks.length - liveItems && "[content-visibility:visible]",
-              )}
-            >
-              <BlockView
-                block={block}
-                transcript={props}
-                context={context}
-                editing={editing}
-                onEditing={setEditing}
-                activeTurn={activeTurn}
-                copyOf={copyOf}
-                workedFor={workedFor}
-              />
-            </MessageScrollerItem>
-          ))}
-          {empty ? (
-            <MessageScrollerItem messageId="empty">
-              <EmptyState>{props.empty}</EmptyState>
-            </MessageScrollerItem>
-          ) : null}
-          <WorkingMarker busy={props.busy || watched.live(props.activeMessageID)} working={props.working} />
-        </MessageScrollerContent>
-      </MessageScrollerViewport>
-      <MessageScrollerButton />
-    </MessageScroller>
+    <MarkdownScroll value={pause}>
+      <MessageScroller className="@container flex-1">
+        <MessageScrollerViewport
+          preserveScrollOnPrepend
+          pinEnd={follow.following}
+          data-easing={easing}
+          className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
+          onWheel={(event: WheelEvent<HTMLDivElement>) => {
+            if (event.deltaY < 0) pause(event.currentTarget)
+            else if (atBottom(event.currentTarget)) toEnd()
+          }}
+          onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
+            touchY.current = event.touches[0]?.clientY ?? 0
+          }}
+          onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
+            if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
+          }}
+          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+            if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
+          }}
+          onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
+            const viewport = event.currentTarget
+            if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
+              pause(event.currentTarget)
+          }}
+          onScroll={(event: UIEvent<HTMLDivElement>) => {
+            const viewport = event.currentTarget
+            const down = viewport.scrollTop > lastTop.current
+            lastTop.current = viewport.scrollTop
+            if (!follow.following && down && atBottom(viewport)) toEnd()
+          }}
+        >
+          {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
+          <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
+            {blocks.map((block, index) => (
+              <MessageScrollerItem
+                key={block.key}
+                messageId={block.key}
+                scrollAnchor={block.kind === "user"}
+                className={cn(
+                  block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
+                  index >= blocks.length - liveItems && "[content-visibility:visible]",
+                )}
+              >
+                <BlockView
+                  block={block}
+                  transcript={props}
+                  context={context}
+                  editing={editing}
+                  onEditing={setEditing}
+                  activeTurn={activeTurn}
+                  copyOf={copyOf}
+                  workedFor={workedFor}
+                />
+              </MessageScrollerItem>
+            ))}
+            {empty ? (
+              <MessageScrollerItem messageId="empty">
+                <EmptyState>{props.empty}</EmptyState>
+              </MessageScrollerItem>
+            ) : null}
+            <WorkingMarker busy={props.busy || watched.live(props.activeMessageID)} working={props.working} />
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        <MessageScrollerButton />
+      </MessageScroller>
+    </MarkdownScroll>
   )
 }

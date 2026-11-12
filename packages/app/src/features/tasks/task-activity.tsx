@@ -312,7 +312,7 @@ function CommentCard(props: {
         <span className="font-medium">{props.names.actor(props.comment.author)}</span>
         <span className="text-muted-foreground">{when(props.comment.createdAt)}</span>
       </ItemHeader>
-      <Markdown className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md">
+      <Markdown id={props.comment.id} className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md">
         {props.comment.body}
       </Markdown>
     </Item>
