@@ -40,6 +40,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
       <Transcript
         key={chat.view.sessionID}
         view={chat.view}
+        files={chat.canReadFiles}
         spaceId={chat.spaceId}
         messages={chat.messages}
         rows={chat.rows}

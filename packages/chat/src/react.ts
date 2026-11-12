@@ -57,6 +57,8 @@ const useRefreshable = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>) =>
 
 export const useFolder = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().folder(view))
 
+export const useFileExists = (view: ChatAtoms.PathView) => useAtomValue(useAtoms().fileExists(view))
+
 export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))
 
 export const useVcs = (root: Session.ID) => useRefreshable(useAtoms().vcs(root))

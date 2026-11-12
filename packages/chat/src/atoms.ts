@@ -243,6 +243,24 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const folder = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.listFiles(view.path)))
 
+  const fileExists = Atom.family((view: PathView) =>
+    Atom.make((get) => {
+      const slash = view.path.lastIndexOf("/")
+      const listed = get
+        .result(folder({ root: view.root, path: view.path.slice(0, slash + 1) }))
+        .pipe(Effect.map((entries) => entries.some((entry) => entry.type === "file" && entry.path === view.path)))
+      if (slash >= 0) return Effect.map(listed, (found) => (found ? view.path : undefined))
+      return Effect.flatMap(listed, (found) =>
+        found
+          ? Effect.succeed(view.path)
+          : Effect.map(get.result(files({ root: view.root, query: view.path, type: "file" })), (matches) => {
+              const named = matches.filter((entry) => entry.path.split("/").at(-1) === view.path)
+              return named.length === 1 ? named.at(0)?.path : undefined
+            }),
+      )
+    }),
+  )
+
   const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
 
   const vcs = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcs))
@@ -318,6 +336,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     commands,
     files,
     folder,
+    fileExists,
     file,
     vcs,
     vcsDiff,

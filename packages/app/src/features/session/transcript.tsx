@@ -98,6 +98,7 @@ import { useMentionedApps } from "../../lib/use-app.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
+import { InlineFile } from "./inline-file.js"
 import { WorkspaceImage } from "./workspace-image.js"
 
 interface Person {
@@ -107,6 +108,7 @@ interface Person {
 
 export interface TranscriptProps {
   readonly view: ChatAtoms.View
+  readonly files?: boolean | undefined
   readonly spaceId?: string | undefined
   readonly messages: ReadonlyArray<SessionMessage.Info>
   readonly rows: ReadonlyArray<TimelineRow.Row>
@@ -960,6 +962,7 @@ function Steps(props: {
   workedFor: string | undefined
   running: boolean
   view: ChatAtoms.View
+  files: boolean
   onOpenChild: (id: Session.ID) => void
 }) {
   const count = props.steps.filter((step) => step.kind !== "text").length
@@ -992,6 +995,8 @@ function Steps(props: {
                 key={run.key}
                 text={run.text.text}
                 streaming={run.text.streaming}
+                root={props.view.root}
+                files={props.files}
                 className="text-sm/relaxed text-foreground"
               />
             ) : (
@@ -1152,6 +1157,7 @@ function SmoothMarkdown(props: {
   className: string
   apps?: ReadonlyArray<CatalogApp> | undefined
   root?: Session.ID | undefined
+  files?: boolean | undefined
   images?: ReadonlyMap<string, string> | undefined
 }) {
   const text = useSmoothText(props.text, { streaming: props.streaming })
@@ -1166,6 +1172,11 @@ function SmoothMarkdown(props: {
           ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
           : undefined
       }
+      fileReference={
+        root && props.files && !props.streaming
+          ? (text, code) => <InlineFile root={root} text={text} code={code} />
+          : undefined
+      }
     >
       {text}
     </Markdown>
@@ -1177,6 +1188,7 @@ function AnswerBlock(props: {
   streaming: boolean
   copy: string | undefined
   root: Session.ID
+  files: boolean
   messages: ReadonlyArray<SessionMessage.Info>
 }) {
   const apps = useMentionedApps(props.text)
@@ -1205,6 +1217,7 @@ function AnswerBlock(props: {
             <SmoothMarkdown
               text={props.text}
               root={props.root}
+              files={props.files}
               images={images}
               streaming={props.streaming}
               apps={apps}
@@ -1252,6 +1265,7 @@ function BlockView(props: {
             running={props.activeTurn === block.turn}
             workedFor={props.workedFor(block.turn)}
             view={props.transcript.view}
+            files={props.transcript.files === true}
             onOpenChild={props.transcript.onOpenChild}
           />
         </MessageContent>
@@ -1261,6 +1275,7 @@ function BlockView(props: {
     return (
       <AnswerBlock
         root={props.transcript.view.root}
+        files={props.transcript.files === true}
         messages={props.transcript.messages}
         text={block.text}
         streaming={block.streaming}
