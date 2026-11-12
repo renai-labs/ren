@@ -174,3 +174,33 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
 })
+
+test("a long link breaks inside the column and a short ref stays whole in a narrow table cell", async ({ page }) => {
+  const url = `https://example.com/${"a".repeat(180)}`
+  const reply = `Opened ${url}\n\n| Ref | Note |\n| --- | --- |\n| [#337](https://github.com/renai-labs/ren/pull/337) | fixed |`
+  await page.setViewportSize({ width: 360, height: 740 })
+  await createOrganization(page.request, { name: "Katherine Johnson" })
+  await page.route(
+    (target) => /\/(?:chat\/session\/[^/]+\/message|sessions\/[^/]+\/messages)$/u.test(target.pathname),
+    async (route) => {
+      const response = await route.fetch()
+      const body = (await response.text()).replaceAll("stub reply", JSON.stringify(reply).slice(1, -1))
+      await route.fulfill({ response, body })
+    },
+  )
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill("Link me")
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("Link me")).toBeVisible({ timeout: brainStart })
+  await page.reload()
+
+  const long = page.getByRole("link", { name: url })
+  await expect(long).toBeVisible({ timeout: brainStart })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(await long.evaluate((link) => link.getClientRects().length)).toBeGreaterThan(1)
+
+  const short = page.getByRole("cell").getByRole("link", { name: "#337" })
+  await expect(short).toBeVisible()
+  expect(await short.evaluate((link) => link.getClientRects().length)).toBe(1)
+})

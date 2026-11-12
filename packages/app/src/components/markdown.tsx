@@ -21,7 +21,7 @@ import { AppMention, mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
-import { Link } from "@ren/ui/link"
+import { MarkdownLink } from "./markdown-link.js"
 
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
@@ -78,7 +78,7 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
   return <span {...props}>{children}</span>
 }
 
-const components = { code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
+const components = { a: MarkdownLink, code: MarkdownCode, img: MarkdownImage, span: MarkdownSpan }
 
 interface MarkdownNode {
   type: string
@@ -145,11 +145,7 @@ export function Markdown(props: {
               ? apps.find((each) => each.slug === href.slice(appLink.length))
               : undefined
             if (app) return <AppMention app={app} />
-            return (
-              <Link href={href} external className="font-medium underline" {...rest}>
-                {children}
-              </Link>
-            )
+            return <MarkdownLink href={href} {...rest}>{children}</MarkdownLink>
           },
         }
   return (
