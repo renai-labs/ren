@@ -7,7 +7,7 @@ import { SpacesList } from "./sidebar-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 
-const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
+const newChat = { to: "/", label: "New Chat", icon: IconEdit } as const
 const tasks = { to: "/tasks", label: "Tasks", icon: IconChecklist } as const
 const automations = { to: "/automations", label: "Automations", icon: IconClockBolt } as const
 const marketplace = { to: "/marketplace", label: "Marketplace", icon: IconLayoutGrid } as const
@@ -16,7 +16,7 @@ type Page = typeof newChat | typeof tasks | typeof automations | typeof marketpl
 function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
   return (
     <SidebarGroup className="shrink-0 px-0.5 py-0">
-      <SidebarMenu className="gap-1">
+      <SidebarMenu className="gap-0.5">
         {props.pages.map((page) => (
           <NavRow
             key={page.to}

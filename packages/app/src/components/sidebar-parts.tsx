@@ -85,7 +85,7 @@ import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
 export const sidebarRow =
-  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-9 gap-1 rounded-md p-1.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.75 [&_svg]:size-4.5"
+  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-8 gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.5 [&_svg]:size-4"
 
 const iconButton =
   "size-8 text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
@@ -242,7 +242,7 @@ export function SpaceEntry(props: {
         <SidebarMenuButton
           className={cn(
             sidebarRow,
-            "min-w-0 flex-1 gap-2 py-1.5 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
+            "min-w-0 flex-1 gap-1.5 py-1 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
             props.space.membershipId === null
               ? "pr-8 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-8 pointer-fine:group-hover/space:pr-8 pointer-fine:group-has-data-popup-open/space:pr-8"
               : "pr-15 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-15 pointer-fine:group-hover/space:pr-15 pointer-fine:group-has-data-popup-open/space:pr-15",
@@ -250,7 +250,7 @@ export function SpaceEntry(props: {
           isActive={props.path.startsWith(`/spaces/${props.space.id}`)}
           render={<Link to="/spaces/$spaceId" params={{ spaceId: props.space.id }} />}
         >
-          <span className="flex size-6 shrink-0 items-center justify-center text-current">
+          <span className="flex size-5 shrink-0 items-center justify-center text-current">
             {props.space.kind === "private" ? <IconLock /> : <IconCube />}
           </span>
           <span className="min-w-0 flex-1 truncate">{props.space.name}</span>

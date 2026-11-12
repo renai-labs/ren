@@ -42,11 +42,11 @@ export function SpacesList(props: { path: string }) {
         {rest > 0 ? (
           <SidebarMenuItem>
             <SidebarMenuButton
-              className={cn(sidebarRow, "gap-2 text-sidebar-foreground/70")}
+              className={cn(sidebarRow, "gap-1.5 text-sidebar-foreground/70")}
               aria-expanded={open}
               onClick={() => setOpen(!open)}
             >
-              <span className="flex size-6 shrink-0 items-center justify-center">
+              <span className="flex size-5 shrink-0 items-center justify-center">
                 <IconChevronDown
                   className={cn(
                     "transition-transform duration-150 ease-out motion-reduce:transition-none",
