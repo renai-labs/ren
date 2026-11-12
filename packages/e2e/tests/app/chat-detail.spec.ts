@@ -9,12 +9,11 @@ test("a member hides steps with Messages only and keeps them in the timeline wit
   await createOrganization(page.request, { name: "Grace Hopper" })
   const marker = await scriptModel(page.request, {
     reply: "All done",
-    tool: { name: "read", input: { filePath: "package.json" } },
+    tool: { name: "glob", input: { pattern: "*" } },
   })
   await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill(`Look around ${marker}`)
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.getByRole("textbox", { name: "Message" }).fill(`Look around ${marker}`)
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
   const chat = page.url()
   await expect(page.getByText("All done")).toBeVisible({ timeout: brainStart })
@@ -36,5 +35,5 @@ test("a member hides steps with Messages only and keeps them in the timeline wit
   await page.goto(chat)
   await expect(page.getByText("All done")).toBeVisible({ timeout: brainStart })
   await expect(page.getByRole("button", { name: /^Worked/ })).toHaveCount(0)
-  await expect(page.getByRole("button", { name: /Read|package\.json/ }).first()).toBeVisible()
+  await expect(page.getByRole("button", { name: /Found/ }).first()).toBeVisible()
 })

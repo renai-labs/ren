@@ -58,7 +58,7 @@ export function TimelineDetailSetting(props: {
           if (chosen) props.onChange(chosen.value)
         }}
       />
-      <div className="flex justify-between text-xs text-muted-foreground" aria-hidden>
+      <div className="flex justify-between gap-2 text-xs text-muted-foreground" aria-hidden>
         {levels.map((level) => (
           <span key={level.id} className={level.id === preset?.id ? "font-medium text-foreground" : undefined}>
             {level.label}
