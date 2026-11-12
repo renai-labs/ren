@@ -123,6 +123,23 @@ test("a member opens the model picker with its shortcut", async ({ page }) => {
   await expect(message).toBeFocused()
 })
 
+test("a member undoes the last message with a command", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const message = page.getByRole("textbox", { name: "Message" })
+  await message.pressSequentially("/und")
+  await page
+    .getByRole("listbox", { name: "Commands" })
+    .getByRole("option", { name: /^\/undo/ })
+    .click()
+  await expect(message).toHaveValue("Draft the memo")
+  await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
+})
+
 test("a member queues a message while Ren works, steers with the other key, recalls a prompt and stops with Escape", async ({
   page,
 }) => {
