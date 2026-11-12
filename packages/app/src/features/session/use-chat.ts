@@ -188,6 +188,8 @@ export function useChat(
       ),
     ),
   )
+  const retryMessage = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.retryMessage(id))
+  const removeMessage = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.removeMessage(id))
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
@@ -285,6 +287,23 @@ export function useChat(
     resend: (text: string) =>
       void prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }).catch(
         (error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }),
+      ),
+    retryUnsent: (id: SessionMessage.ID) =>
+      void retryMessage(id).catch((error: unknown) =>
+        toast.error("Could not send your message", { description: errorMessage(error) }),
+      ),
+    removeUnsent: (id: SessionMessage.ID) =>
+      void removeMessage(id).then(
+        (item) => {
+          if (!item) return
+          kept.update((current) => {
+            const next = Composer.recall(current, item)
+            return item.files?.length && spaceId && !next.chat
+              ? Composer.withChat(next, { sessionId: root, spaceId })
+              : next
+          })
+        },
+        (error: unknown) => toast.error("Could not remove your message", { description: errorMessage(error) }),
       ),
     stop: () =>
       void interrupt().catch((error: unknown) =>

@@ -46,6 +46,8 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
         onOpenChild={(id) => chat.openChild(id)}
+        onRetry={chat.retryUnsent}
+        onRemove={chat.removeUnsent}
         onEdit={chat.canRevert && !chat.child && !chat.reverting ? chat.edit : undefined}
         expanded={chat.expanded}
         modelNames={chat.modelNames}

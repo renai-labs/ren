@@ -121,6 +121,8 @@ export interface TranscriptProps {
   readonly onLoadMore: () => void
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
+  readonly onRetry?: ((id: SessionMessage.ID) => void) | undefined
+  readonly onRemove?: ((id: SessionMessage.ID) => void) | undefined
   readonly expanded?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
@@ -538,10 +540,28 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
   )
 }
 
-function UserFooter(props: { text: string; pending: boolean; onEdit?: (() => void) | undefined }) {
+function UserFooter(props: {
+  text: string
+  pending: boolean
+  unsent: boolean
+  onEdit?: (() => void) | undefined
+  onRetry?: (() => void) | undefined
+  onRemove?: (() => void) | undefined
+}) {
   return (
     <MessageFooter className="justify-end gap-1">
       {props.pending ? <span className="px-1 text-xs text-muted-foreground">Pending</span> : null}
+      {props.unsent ? <span className="px-1 text-xs text-destructive">Not sent</span> : null}
+      {props.unsent && props.onRetry ? (
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRetry}>
+          Retry
+        </Button>
+      ) : null}
+      {props.unsent && props.onRemove ? (
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRemove}>
+          Remove
+        </Button>
+      ) : null}
       {props.onEdit ? (
         <Button
           variant="ghost"
@@ -563,8 +583,11 @@ function UserMessage(props: {
   spaceId: string | undefined
   person: Person
   pending: boolean
+  unsent: boolean
   editing: boolean
   onEdit?: (() => void) | undefined
+  onRetry?: (() => void) | undefined
+  onRemove?: (() => void) | undefined
   onCancel: () => void
   onSave: (text: string) => void
 }) {
@@ -590,7 +613,14 @@ function UserMessage(props: {
         ) : (
           <>
             <UserBody message={props.message} spaceId={props.spaceId} />
-            <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
+            <UserFooter
+              text={props.message.text}
+              pending={props.pending}
+              unsent={props.unsent}
+              onEdit={props.onEdit}
+              onRetry={props.onRetry}
+              onRemove={props.onRemove}
+            />
           </>
         )}
       </MessageContent>
@@ -1118,6 +1148,7 @@ function UserBlock(props: {
   const message = props.message
   const status = transcript.statuses.get(message.id)
   const pending = status === "starting" || status === "steering" || status === "stranded"
+  const unsent = status === "unsent"
   const senderId = message.sender?.userId
   const person =
     senderId && senderId !== transcript.viewer.id
@@ -1130,8 +1161,11 @@ function UserBlock(props: {
       spaceId={transcript.spaceId}
       person={person}
       pending={pending}
+      unsent={unsent}
       editing={props.editing}
-      onEdit={edit && !pending ? () => props.onEditing(message.id) : undefined}
+      onEdit={edit && !pending && !unsent ? () => props.onEditing(message.id) : undefined}
+      onRetry={transcript.onRetry && (() => transcript.onRetry?.(message.id))}
+      onRemove={transcript.onRemove && (() => transcript.onRemove?.(message.id))}
       onCancel={() => props.onEditing(undefined)}
       onSave={(text) => {
         props.onEditing(undefined)

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { SessionMessage } from "@ren/schema/session/message"
 import { ChatState } from "../src/chat-state.js"
 import { Hydrate } from "../src/hydrate.js"
+import { Outbox } from "../src/outbox.js"
 import { Projection } from "../src/projection.js"
 import { TimelineDetail } from "../src/timeline-detail.js"
 import { TimelineRow } from "../src/timeline-row.js"
@@ -159,4 +160,15 @@ test("selects user history strictly before the revert boundary", () => {
   const reverted = Hydrate.revert(loaded, sessionID, { messageID: SessionMessage.ID.make("msg_b") })
   expect(ChatState.visibleUserMessages(reverted, sessionID).map((message): string => message.id)).toEqual(["msg_a"])
   expect(ChatState.visible(reverted, sessionID).map((message): string => message.id)).toEqual(["msg_a", "msg_2"])
+})
+
+test("an unsent prompt is unsent, not starting", () => {
+  const id = SessionMessage.ID.make("msg_unsent")
+  const sent = Outbox.admit(ChatState.empty, { sessionID, id, text: "hello", delivery: "steer" }, Fixture.at(1))
+  expect(ChatState.pendingStatus(sent, sessionID, id)).toBe("starting")
+  const stalled = Outbox.stall(sent, id)
+  expect(ChatState.pendingStatus(stalled, sessionID, id)).toBe("unsent")
+  expect(ChatState.pendingStatus(Outbox.acknowledge(stalled, id), sessionID, id)).toBe("starting")
+  expect(ChatState.pending(Outbox.rollback(stalled, sessionID, id), sessionID)).toEqual([])
+  expect(Outbox.rollback(stalled, sessionID, id).stalled.has(id)).toBe(false)
 })

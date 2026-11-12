@@ -248,7 +248,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const kept = yield* Ref.make(options.outbox ? yield* options.outbox.load : [])
   const keep = (f: (items: ReadonlyArray<Outbox.Kept>) => ReadonlyArray<Outbox.Kept>) =>
-    options.outbox ? Ref.updateAndGet(kept, f).pipe(Effect.flatMap(options.outbox.keep)) : Effect.void
+    Ref.updateAndGet(kept, f).pipe(
+      Effect.flatMap((items) => (options.outbox ? options.outbox.keep(items) : Effect.void)),
+    )
   const unkeep = (id: SessionMessage.ID) => keep((items) => items.filter((item) => item.id !== id))
 
   const savedPage = (sizes: ReadonlyArray<number>): Effect.Effect<SessionMessage.Page, unknown> => {
@@ -714,7 +716,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     ).pipe(
       Effect.tapError((error) =>
         error instanceof AccessFailed
-          ? Effect.void
+          ? update((current) => Outbox.stall(current, id))
           : unkeep(id).pipe(
               Effect.andThen(fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void),
             ),
@@ -727,6 +729,24 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     ])
     if (!echoed) yield* execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })
     return id
+  })
+
+  const retryMessage = Effect.fnUntraced(function* (id: SessionMessage.ID) {
+    const stalled = (yield* SubscriptionRef.get(state)).stalled
+    const unsent = (yield* Ref.get(kept)).filter((item) => stalled.has(item.id))
+    yield* Effect.forEach(
+      unsent.slice(0, unsent.findIndex((item) => item.id === id) + 1),
+      (item) => update((current) => Outbox.resume(current, item.id)).pipe(Effect.andThen(prompt(item))),
+      { discard: true },
+    ).pipe(Effect.catchTag("ChatSession.AccessFailed", () => Effect.void))
+  })
+
+  const removeMessage = Effect.fnUntraced(function* (id: SessionMessage.ID) {
+    if (!(yield* SubscriptionRef.get(state)).stalled.has(id)) return null
+    const item = (yield* Ref.get(kept)).find((entry) => entry.id === id) ?? null
+    yield* unkeep(id)
+    yield* update((current) => Outbox.rollback(current, root, id))
+    return item
   })
 
   const command = Effect.fnUntraced(function* (input: CommandInput) {
@@ -1059,6 +1079,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     loadMore,
     reveal,
     prompt,
+    retryMessage,
+    removeMessage,
     compact,
     revert,
     undo,

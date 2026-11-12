@@ -739,19 +739,69 @@ test("a brain URL that takes no connection, as a paused sandbox, makes the next 
     }),
   ))
 
-test("a prompt that Ren cannot give access for stays pending, so it is not lost (E126)", () =>
+test("a prompt that Ren cannot give access for stays in the chat as unsent, and retrying it sends it once with its id (E126)", () =>
   ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const reachable = { value: false }
+      const script = stub.script()
       const chat = yield* ChatSession.make({
         sessionID: brain.id,
-        access: () => Effect.fail(new Error("Ren is unreachable")),
+        access: () => (reachable.value ? access() : Effect.fail(new Error("Ren is unreachable"))),
         connection: { reconnectDelay: 60_000 },
       }).pipe(Effect.provide(http(brain)))
-      const failed = yield* chat.prompt({ text: "hello" }).pipe(Effect.flip)
+      const failed = yield* chat.prompt({ text: script.marker }).pipe(Effect.flip)
       expect(failed._tag).toBe("ChatSession.AccessFailed")
-      expect(ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id)).toMatchObject([{ text: "hello" }])
-      expect((yield* SubscriptionRef.get(chat.state)).outbox.size).toBe(1)
+      const unsent = yield* SubscriptionRef.get(chat.state)
+      const id = ChatState.messages(unsent, brain.id).at(0)?.id ?? ""
+      expect(ChatState.messages(unsent, brain.id)).toMatchObject([{ text: script.marker }])
+      expect(unsent.outbox.size).toBe(1)
+      expect(ChatState.pendingStatus(unsent, brain.id, id)).toBe("unsent")
+      reachable.value = true
+      yield* chat.retryMessage(SessionMessage.ID.make(id))
+      const retried = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.pendingStatus(retried, brain.id, id)).not.toBe("unsent")
+      yield* chat.open(brain.id)
+      yield* Effect.promise(() => script.called())
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
+      expect(ChatState.messages(done, brain.id).filter((message) => message.id === id)).toHaveLength(1)
+      expect(script.calls.filter((call) => call.kind === "turn")).toHaveLength(1)
+    }),
+  ))
+
+test("removing an unsent prompt takes it out of the chat and returns what it held, and retrying one sends the unsent before it first (E126)", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const reachable = { value: false }
+      const first = stub.script()
+      const second = stub.script()
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => (reachable.value ? access() : Effect.fail(new Error("Ren is unreachable"))),
+        connection: { reconnectDelay: 60_000 },
+      }).pipe(Effect.provide(http(brain)))
+      const one = SessionMessage.ID.create()
+      const two = SessionMessage.ID.create()
+      const three = SessionMessage.ID.create()
+      yield* chat.prompt({ id: one, text: first.marker }).pipe(Effect.flip)
+      yield* chat.prompt({ id: two, text: "drop me" }).pipe(Effect.flip)
+      yield* chat.prompt({ id: three, text: second.marker }).pipe(Effect.flip)
+      const removed = yield* chat.removeMessage(two)
+      expect(removed).toMatchObject({ id: two, text: "drop me" })
+      const left = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.messages(left, brain.id).map((message) => message.id)).toEqual([one, three])
+      expect(left.stalled.has(two)).toBe(false)
+      reachable.value = true
+      yield* chat.retryMessage(three)
+      yield* chat.open(brain.id)
+      yield* ChatTest.until(chat.state, (state) => ChatState.pending(state, brain.id).length === 0)
+      const ids = ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id)
+        .filter((message) => message.type === "user")
+        .map((message) => message.id)
+      expect(ids).toEqual([one, three])
     }),
   ))
 
