@@ -15,6 +15,7 @@ import {
   Ref,
   Semaphore,
   Stream,
+  SubscriptionRef,
 } from "effect"
 
 export type Status = "connecting" | "connected" | "reconnecting" | "parked"
@@ -42,7 +43,7 @@ export interface Options {
 }
 
 export interface Connection {
-  readonly status: Effect.Effect<Status>
+  readonly status: SubscriptionRef.SubscriptionRef<Status>
   readonly wake: Effect.Effect<void>
   readonly resync: (reason: string) => Effect.Effect<void>
   readonly foreground: Effect.Effect<void>
@@ -63,7 +64,7 @@ export const foregroundIdleThreshold = 20_000
 export const make = Effect.fnUntraced(function* (options: Options) {
   const settings = { ...defaults, ...options }
   const scope = yield* Effect.scope
-  const status = yield* Ref.make<Status>("connecting")
+  const status = yield* SubscriptionRef.make<Status>("connecting")
   const buffer = yield* Ref.make<ReadonlyArray<SessionEvent.Frame>>([])
   const flushing = yield* Ref.make(false)
   const applying = yield* Semaphore.make(1)
@@ -76,7 +77,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const touch = Effect.flatMap(Clock.currentTimeMillis, (now) => Ref.set(activity, now))
 
-  const setStatus = (next: Status) => Ref.set(status, next).pipe(Effect.andThen(options.onStatus(next)))
+  const setStatus = Effect.fnUntraced(function* (next: Status) {
+    // oxlint-disable-next-line ren/no-comments -- Each retry reports reconnecting again; publishing it again would make every reader of the status ask Ren for access again (#196).
+    if ((yield* SubscriptionRef.get(status)) === next) return
+    yield* options.onStatus(next)
+    yield* SubscriptionRef.set(status, next)
+  })
 
   const flush = Effect.gen(function* () {
     yield* Effect.sleep(settings.flushInterval)
@@ -161,14 +167,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const resync = (reason: string) =>
     Effect.gen(function* () {
-      if ((yield* Ref.get(status)) !== "connected") return
+      if ((yield* SubscriptionRef.get(status)) !== "connected") return
       yield* Effect.logInfo("The chat event stream resyncs", { reason })
       yield* Ref.set(forced, true)
       yield* FiberHandle.clear(current)
     })
 
   return {
-    status: Ref.get(status),
+    status,
     wake,
     resync,
     foreground: Effect.gen(function* () {
