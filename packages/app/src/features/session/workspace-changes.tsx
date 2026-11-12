@@ -13,6 +13,7 @@ import { PatchDiff } from "@ren/ui/patch-diff"
 import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { Theme } from "../../components/theme.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { ScrollAnchor } from "../../lib/scroll-anchor.js"
 import { useWidth } from "../../lib/use-width.js"
 import { Platform } from "../../platform/platform.js"
 import { WorkspacePending } from "./workspace-state.js"
@@ -29,7 +30,12 @@ type Source = "repository" | "edits"
 
 type DiffStyle = "unified" | "split"
 
-const splitMinWidth = 640
+const diffStyles: ReadonlyArray<{ value: DiffStyle; label: string }> = [
+  { value: "unified", label: "Stacked" },
+  { value: "split", label: "Split" },
+]
+
+const splitMinWidth = 639
 
 const workspace = /^.*\/workspace\/[^/]+\//u
 
@@ -101,7 +107,10 @@ function Changes(props: { changes: ReadonlyArray<Change>; empty: string; diffSty
           <FileTree files={props.changes} selected={selected?.path} onSelect={setChosen} />
         </div>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-1">
+      <div
+        data-changes-scroller
+        className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-1"
+      >
         {selected?.patches.map((each, index) => (
           <PatchDiff
             key={each.patch}
@@ -187,19 +196,24 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
   const [chosen, setChosen] = useState<Source>()
   const [diffStyle, setDiffStyle] = useState(() => ChatPreferences.diffStyle.read(platform.storage))
   const diffToggle = (
-    <ToggleGroup
-      size="sm"
-      aria-label="Diff style"
-      value={[diffStyle]}
-      onValueChange={(value: ReadonlyArray<string>) => {
-        const next = value.at(0)
-        if (next !== "unified" && next !== "split") return
-        ChatPreferences.diffStyle.write(platform.storage, next)
-        setDiffStyle(next)
-      }}
-    >
-      <ToggleGroupItem value="unified">Stacked</ToggleGroupItem>
-      <ToggleGroupItem value="split">Split</ToggleGroupItem>
+    <ToggleGroup size="sm" aria-label="Diff style" value={[diffStyle]}>
+      {diffStyles.map((each) => (
+        <ToggleGroupItem
+          key={each.value}
+          value={each.value}
+          onClick={(event) => {
+            ChatPreferences.diffStyle.write(platform.storage, each.value)
+            ScrollAnchor.keep(
+              event.currentTarget
+                .closest("[data-changes-tab]")
+                ?.querySelector<HTMLElement>("[data-changes-scroller]") ?? null,
+              () => setDiffStyle(each.value),
+            )
+          }}
+        >
+          {each.label}
+        </ToggleGroupItem>
+      ))}
     </ToggleGroup>
   )
   const edits = (
@@ -220,7 +234,7 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
     )
   if (!repository)
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div data-changes-tab className="flex min-h-0 flex-1 flex-col">
         <Bar diffToggle={diffToggle} />
         {edits}
       </div>
@@ -248,7 +262,7 @@ export function ChangesTab(props: { root: Session.ID; messages: ReadonlyArray<Se
     </>
   )
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div data-changes-tab className="flex min-h-0 flex-1 flex-col">
       {source === "repository" ? (
         <RepositoryChanges
           root={props.root}
