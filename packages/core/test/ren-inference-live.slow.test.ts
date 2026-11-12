@@ -7,6 +7,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { ConfigProvider, Effect, Layer, Schedule, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { Billing } from "../src/billing.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { EgressControl } from "../src/egress-control.js"
 import { GitHubApp } from "../src/github-app.js"
@@ -57,6 +58,7 @@ const it = testEffect(
   Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
+    Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
     Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Host.layer({}, models)),

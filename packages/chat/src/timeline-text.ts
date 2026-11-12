@@ -3,6 +3,7 @@ export * as TimelineText from "./timeline-text.js"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { DateTime } from "effect"
+import { ChatState } from "./chat-state.js"
 import { Projection } from "./projection.js"
 
 export interface Retry {
@@ -80,7 +81,7 @@ const usage = (tokens: SessionMessage.TokenUsage | undefined) => {
   if (!tokens) return
   const input = tokens.input + tokens.cache.read + tokens.cache.write
   const output = tokens.output + tokens.reasoning
-  if (input + output <= 0) return
+  if (ChatState.contextTokens(tokens) <= 0) return
   formatters.compact ??= new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })
   return `${formatters.compact.format(input)} in · ${formatters.compact.format(output)} out`
 }

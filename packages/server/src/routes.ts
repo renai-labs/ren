@@ -9,6 +9,7 @@ import { Agent } from "@ren/core/agent"
 import { App } from "@ren/core/app"
 import { AppRegistry } from "@ren/core/app/registry"
 import { AgentMembership } from "@ren/core/agent/membership"
+import { Billing } from "@ren/core/billing"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
@@ -243,7 +244,11 @@ export const layer = Layer.mergeAll(
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
-        Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+        Session.layer.pipe(
+          Layer.provide(SessionRunner.layer),
+          Layer.provide(BrainRegistry.layer),
+          Layer.provide(Billing.layerConfig),
+        ),
         OAuthApps.layer,
         ChannelInstalls.layer,
         RepositoryHosts.layer,

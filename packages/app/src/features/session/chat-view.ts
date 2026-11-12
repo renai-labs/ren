@@ -3,6 +3,7 @@ import { ChatState, Family, Working, type ChatAtoms, type TimelineRow } from "@r
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { SessionModel } from "@ren/schema/session/model"
 import { AsyncResult } from "effect/reactivity"
 import { sessionTitle } from "../../lib/sessions.js"
 
@@ -16,12 +17,46 @@ const workingRoot = (
   view: { readonly root: Session.ID; readonly child: Session.ID | undefined },
 ) => (view.child ? (state.info[view.child]?.parentID ?? view.root) : view.root)
 
+export interface ContextUsage {
+  readonly tokens: number
+  readonly input: number
+  readonly output: number
+  readonly reasoning: number
+  readonly cacheRead: number
+  readonly cacheWrite: number
+  readonly model: SessionModel.Ref
+  readonly limit?: number
+  readonly percent?: number
+}
+
+const contextUsageOf = (
+  state: ChatState.State,
+  sessionID: string,
+  models: ReadonlyArray<SessionModel.Info>,
+): ContextUsage | undefined => {
+  const step = ChatState.contextStep(state, sessionID)
+  if (!step) return undefined
+  const tokens = ChatState.contextTokens(step.tokens)
+  const limit = models.find((each) => SessionModel.key(each) === SessionModel.key(step.model))?.limit.context
+  return {
+    tokens,
+    input: step.tokens.input,
+    output: step.tokens.output,
+    reasoning: step.tokens.reasoning,
+    cacheRead: step.tokens.cache.read,
+    cacheWrite: step.tokens.cache.write,
+    model: step.model,
+    ...(limit && limit > 0 && { limit, percent: Math.min(100, Math.round((tokens / limit) * 100)) }),
+  }
+}
+
 export function useView(root: Session.ID, child: Session.ID | undefined) {
   const session = ChatReact.useSession(root)
   const childResult = ChatReact.useChild(root, child ?? root)
   const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
   const viewed = child ?? root
   const projection = AsyncResult.getOrElse(child ? childResult : session.timeline, () => undefined)
+  const models = ChatReact.useModels(root)
   const permission = Family.permission(state, viewed)
   const form = Family.form(state, viewed)
   return {
@@ -31,6 +66,7 @@ export function useView(root: Session.ID, child: Session.ID | undefined) {
     projection,
     loading: state.messages[viewed] === undefined && !AsyncResult.isFailure(session.state),
     messages: ChatState.messages(state, viewed),
+    contextUsage: contextUsageOf(state, viewed, AsyncResult.isSuccess(models) ? models.value : []),
     rows: projection?.rows ?? noRows,
     running: ChatState.activity(state, viewed) === "running",
     working: projection ? Working.show(state, viewed, projection, workingRoot(state, { root, child })) : false,

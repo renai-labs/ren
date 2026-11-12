@@ -2,6 +2,7 @@ export * as Billing from "./billing.js"
 
 import { Auth } from "@ren/schema/auth"
 import { Billing } from "@ren/schema/billing"
+import type { SessionUsage } from "@ren/schema/session/usage"
 import { Clock, Config, Context, Effect, Layer, Option, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { Primitive } from "./primitive.js"
@@ -21,6 +22,15 @@ export const Customer = Schema.Struct({
 })
 export type Customer = typeof Customer.Type
 
+export interface Costs {
+  readonly models: number
+  readonly tools: number
+}
+
+export interface Priced extends Costs {
+  readonly source: SessionUsage.Source
+}
+
 export interface Interface {
   readonly ensureCustomer: (customer: Customer) => Effect.Effect<void, Unavailable>
   readonly summary: (organizationId: Auth.OrganizationID) => Effect.Effect<Billing.Summary, Failure>
@@ -37,6 +47,7 @@ export interface Interface {
   readonly changePlan: (organizationId: Auth.OrganizationID, input: Billing.PlanInput) => Effect.Effect<void, Failure>
   readonly cancel: (organizationId: Auth.OrganizationID) => Effect.Effect<void, Failure>
   readonly portal: (organizationId: Auth.OrganizationID) => Effect.Effect<Billing.Link, Failure>
+  readonly price: (organizationId: Auth.OrganizationID, costs: Costs) => Effect.Effect<Priced>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Billing") {}
@@ -112,6 +123,7 @@ export const layerRenCloud = Layer.effect(
     })
 
     return Service.of({
+      price: (_organizationId, costs) => Effect.succeed({ ...costs, source: "provider" }),
       ensureCustomer: Effect.fn("Billing.ensureCustomer")(
         function* (customer) {
           yield* send(
@@ -189,6 +201,7 @@ export const none = Service.of({
   changePlan: () => Effect.void,
   cancel: () => Effect.void,
   portal: () => Effect.succeed({ url: "" }),
+  price: (_organizationId, costs) => Effect.succeed({ ...costs, source: "provider" }),
 })
 
 export const layerNone = Layer.succeed(Service, none)

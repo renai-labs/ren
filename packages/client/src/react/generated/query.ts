@@ -83,6 +83,7 @@ import type {
   TaskCommentArchiveInput,
   TaskActivityListInput,
   LinkSessionLinksInput,
+  LinkSessionUsageInput,
   LinkSessionPullRequestsInput,
   LinkTaskPullRequestsInput,
   LabelListInput,
@@ -952,6 +953,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryOptions({
               queryKey: ["link", "session", "links", input] as const,
               queryFn: (context) => client["link"]["session"]["links"](input, { signal: context.signal }),
+            }),
+        },
+        usage: {
+          queryKey: (input?: LinkSessionUsageInput) =>
+            input === undefined
+              ? (["link", "session", "usage"] as const)
+              : (["link", "session", "usage", input] as const),
+          queryOptions: (input: LinkSessionUsageInput) =>
+            queryOptions({
+              queryKey: ["link", "session", "usage", input] as const,
+              queryFn: (context) => client["link"]["session"]["usage"](input, { signal: context.signal }),
             }),
         },
         pullRequests: {

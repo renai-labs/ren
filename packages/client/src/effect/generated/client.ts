@@ -1120,6 +1120,11 @@ type LinkSessionLinksInput = { readonly id: LinkSessionLinksRequest["params"]["i
 const EndpointLinkSessionLinks = (raw: RawClient["link"]) => (input: LinkSessionLinksInput) =>
   raw["session.links"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type LinkSessionUsageRequest = Parameters<RawClient["link"]["session.usage"]>[0]
+type LinkSessionUsageInput = { readonly id: LinkSessionUsageRequest["params"]["id"] }
+const EndpointLinkSessionUsage = (raw: RawClient["link"]) => (input: LinkSessionUsageInput) =>
+  raw["session.usage"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
 type LinkSessionPullRequestsRequest = Parameters<RawClient["link"]["session.pullRequests"]>[0]
 type LinkSessionPullRequestsInput = { readonly id: LinkSessionPullRequestsRequest["params"]["id"] }
 const EndpointLinkSessionPullRequests = (raw: RawClient["link"]) => (input: LinkSessionPullRequestsInput) =>
@@ -1131,7 +1136,11 @@ const EndpointLinkTaskPullRequests = (raw: RawClient["link"]) => (input: LinkTas
   raw["task.pullRequests"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupLink = (raw: RawClient["link"]) => ({
-  session: { links: EndpointLinkSessionLinks(raw), pullRequests: EndpointLinkSessionPullRequests(raw) },
+  session: {
+    links: EndpointLinkSessionLinks(raw),
+    usage: EndpointLinkSessionUsage(raw),
+    pullRequests: EndpointLinkSessionPullRequests(raw),
+  },
   task: { pullRequests: EndpointLinkTaskPullRequests(raw) },
 })
 

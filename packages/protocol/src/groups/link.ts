@@ -1,6 +1,7 @@
 import { PullRequest } from "@ren/schema/pull-request"
 import { Session } from "@ren/schema/session"
 import { SessionLinks } from "@ren/schema/session/links"
+import { SessionUsage } from "@ren/schema/session/usage"
 import { Task } from "@ren/schema/task"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
@@ -21,6 +22,20 @@ export const LinkGroup = HttpApiGroup.make("link")
         summary: "List a chat’s links",
         description:
           "Return the chat’s tasks, the pull requests and issues they link, and the chat’s channel threads, as Ren stores them. A subagent’s chat reads through its root chat.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("session.usage", "/sessions/:id/usage", {
+      params: { id: Session.ID },
+      success: SessionUsage.Info,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.usage",
+        summary: "Read a chat’s cost",
+        description:
+          "Return what the chat and its subagents cost, from Ren’s usage events, split into models and tools. Sandbox compute is not counted per chat. Events that the organization paid with its own key or subscription are left out. Events arrive a few seconds after each call. A subagent’s chat reads through its root chat.",
       }),
     ),
   )

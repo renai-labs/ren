@@ -804,6 +804,8 @@ export const SessionProfiles = { id: Argument.String("session").pipe(Argument.wi
 
 export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
 
+export const SessionUsage = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+
 export const SessionPullRequests = {
   id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")),
 }
@@ -1285,6 +1287,12 @@ export const commands = [
         Command.withDescription("List a chat’s tasks, pull requests, issues and threads"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.SessionLinks(input)),
+        ),
+      ),
+      Command.make("usage", SessionUsage).pipe(
+        Command.withDescription("Show what a chat and its subagents cost"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.SessionUsage(input)),
         ),
       ),
       Command.make("pull-requests", SessionPullRequests).pipe(

@@ -160,3 +160,51 @@ test("selects user history strictly before the revert boundary", () => {
   expect(ChatState.visibleUserMessages(reverted, sessionID).map((message): string => message.id)).toEqual(["msg_a"])
   expect(ChatState.visible(reverted, sessionID).map((message): string => message.id)).toEqual(["msg_a", "msg_2"])
 })
+
+describe("contextStep", () => {
+  const step = (id: string, created: number, input: number) =>
+    Fixture.message({
+      id,
+      type: "assistant",
+      agent: "build",
+      model: Fixture.model,
+      content: [],
+      tokens: { input, output: 2, reasoning: 3, cache: { read: 4, write: 5 } },
+      time: { created },
+    })
+  const compaction = (id: string, created: number, status: "completed" | "running") =>
+    Fixture.message({ id, type: "compaction", status, reason: "manual", summary: "", recent: "", time: { created } })
+  const load = (items: ReadonlyArray<SessionMessage.Info>) =>
+    Hydrate.messages(
+      Hydrate.info(ChatState.empty, [Fixture.session(sessionID)]),
+      sessionID,
+      Fixture.page(items.toReversed()),
+    )
+
+  test("sums input, output, reasoning and both cache counts", () => {
+    expect(ChatState.contextTokens({ input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 5 } })).toBe(15)
+  })
+
+  test("selects the newest step with tokens", () => {
+    const state = load([Fixture.user("msg_1", 1), step("msg_2", 2, 10), step("msg_3", 3, 20), assistant("msg_4", 4)])
+    expect(ChatState.contextStep(state, sessionID)?.id).toBe(SessionMessage.ID.make("msg_3"))
+  })
+
+  test("ignores steps before the last completed compaction", () => {
+    const state = load([step("msg_1", 1, 10), compaction("msg_2", 2, "completed")])
+    expect(ChatState.contextStep(state, sessionID)).toBeUndefined()
+    const next = load([step("msg_1", 1, 10), compaction("msg_2", 2, "completed"), step("msg_3", 3, 7)])
+    expect(ChatState.contextStep(next, sessionID)?.id).toBe(SessionMessage.ID.make("msg_3"))
+    const running = load([step("msg_1", 1, 10), compaction("msg_2", 2, "running")])
+    expect(ChatState.contextStep(running, sessionID)?.id).toBe(SessionMessage.ID.make("msg_1"))
+  })
+
+  test("ignores steps at or after the revert boundary", () => {
+    const state = Hydrate.revert(
+      load([Fixture.user("msg_1", 1), step("msg_2", 2, 10), Fixture.user("msg_3", 3), step("msg_4", 4, 20)]),
+      sessionID,
+      { messageID: SessionMessage.ID.make("msg_3") },
+    )
+    expect(ChatState.contextStep(state, sessionID)?.id).toBe(SessionMessage.ID.make("msg_2"))
+  })
+})

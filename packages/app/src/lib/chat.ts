@@ -159,6 +159,9 @@ export function useChatCacheBridge(
   const title = live.title
   const status = live.status
   useEffect(() => {
+    if (status === "idle")
+      // ast-grep-ignore: no-manual-invalidation -- a chat's turn ends in the brain, not in a generated mutation
+      void queryClient.invalidateQueries({ queryKey: api.link.session.usage.queryKey({ id: sessionID }) })
     if (title === undefined && status === undefined) return
     patchSession(queryClient, api, sessionID, {
       ...(title !== undefined && { title }),

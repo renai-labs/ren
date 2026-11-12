@@ -6,9 +6,11 @@ import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
 import type { SessionLinks } from "@ren/schema/session/links"
+import type { SessionUsage } from "@ren/schema/session/usage"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { Space } from "@ren/schema/space"
+import type { Usage } from "@ren/schema/usage"
 import {
   and,
   asc,
@@ -30,6 +32,7 @@ import type { NonEmptyReadonlyArray } from "effect/Array"
 import { Array, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore, Struct } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
+import { Billing } from "./billing.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
@@ -66,6 +69,7 @@ export type Interface = Primitive.Interface<typeof Session.definition> & {
   ) => Effect.Effect<SessionMessage.Page, Primitive.NotFound | Primitive.Invalid | Busy | PageTooLarge>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
   readonly links: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionLinks.Info, Primitive.NotFound>
+  readonly usage: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionUsage.Info, Primitive.NotFound>
   readonly pullRequests: (
     actor: Actor.Info,
     id: Session.ID,
@@ -183,6 +187,7 @@ export const layer = Layer.effect(
     const catalog = yield* Models.Service
     const codecs = yield* TranscriptCodec.Registry
     const pulls = yield* PullRequest.Service
+    const billing = yield* Billing.Service
     const historyAdmitted = yield* Semaphore.make(historyReads + historyWaiting)
     const historyReading = yield* Semaphore.make(historyReads)
     const historyMemory = yield* Semaphore.make(historyMemoryBytes)
@@ -293,7 +298,7 @@ export const layer = Layer.effect(
         .pipe(Effect.timeoutOrElse({ duration: historyReadsWithin, orElse: () => Effect.fail(busy) }))
     })
 
-    const linked = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
+    const rootOf = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
       const session = (yield* database.db
         .select({ rootId: Database.Schema.agent_session.root_id })
         .from(Database.Schema.agent_session)
@@ -306,6 +311,11 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)).at(0)
       if (!session) return yield* notFound
       yield* read(actor, session.rootId)
+      return session.rootId
+    })
+
+    const linked = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
+      yield* rootOf(actor, id)
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const tasks = yield* TaskQueries.select(transaction, actor)
@@ -520,6 +530,30 @@ export const layer = Layer.effect(
               ? [{ provider: thread.origin, url: thread.url, place: thread.place }]
               : [],
           ),
+        }
+      }),
+      usage: Effect.fn("Session.usage")(function* (actor: Actor.Info, id: Session.ID) {
+        const root = yield* rootOf(actor, id)
+        const events = Database.Schema.usage_event
+        const rows = yield* database.db
+          .select({ type: events.type, cost: sql`coalesce(sum(${events.cost_micro_usd}), 0)`.mapWith(Number) })
+          .from(events)
+          .where(
+            and(eq(events.organization, actor.organizationId), eq(events.root_session, root), eq(events.payer, "ren")),
+          )
+          .groupBy(events.type)
+          .pipe(Effect.orDie)
+        const cost = (type: Usage.Event["type"]) => rows.find((row) => row.type === type)?.cost ?? 0
+        const priced = yield* billing.price(actor.organizationId, {
+          models: cost("model.call"),
+          tools: cost("api.call"),
+        })
+        return {
+          total: priced.models + priced.tools,
+          models: priced.models,
+          tools: priced.tools,
+          currency: "usd" as const,
+          source: priced.source,
         }
       }),
       pullRequests: Effect.fn("Session.pullRequests")(function* (actor: Actor.Info, id: Session.ID) {

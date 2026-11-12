@@ -13,6 +13,7 @@ import { Effect, Fiber, Layer, Schedule, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
+import { Billing } from "../src/billing.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
 import { GitHubApp } from "../src/github-app.js"
@@ -46,6 +47,7 @@ const it = testEffect(
   Session.layer.pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
+    Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
     Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Access.layer),

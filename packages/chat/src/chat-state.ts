@@ -134,6 +134,24 @@ export const revertMessageID = (state: State, sessionID: string) => state.info[s
 export const visible = (state: State, sessionID: string) =>
   visibleMessages(messages(state, sessionID), pending(state, sessionID), revertMessageID(state, sessionID))
 
+export const contextTokens = (tokens: SessionMessage.TokenUsage) =>
+  tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
+
+export const contextStep = (state: State, sessionID: string) => {
+  const list = messages(state, sessionID)
+  const boundary = revertMessageID(state, sessionID)
+  const boundaryIndex = boundary ? list.findIndex((item) => item.id === boundary) : -1
+  if (boundary && boundaryIndex === -1) return
+  const end = boundaryIndex === -1 ? list.length : boundaryIndex
+  const compactionIndex = list.findLastIndex(
+    (item, index) => item.type === "compaction" && item.status === "completed" && index < end,
+  )
+  return list.findLast(
+    (item, index): item is SessionMessage.Assistant & { tokens: SessionMessage.TokenUsage } =>
+      item.type === "assistant" && Boolean(item.tokens) && index > compactionIndex && index < end,
+  )
+}
+
 export const userMessages = (state: State, sessionID: string) =>
   messages(state, sessionID).filter((item): item is SessionMessage.User => item.type === "user")
 
