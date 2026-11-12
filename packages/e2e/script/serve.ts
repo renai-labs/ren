@@ -12,6 +12,7 @@ import { realpathSync } from "fs"
 import os from "os"
 import path from "path"
 import { databaseURL, ports } from "../tests/lib/env.js"
+import { StandInInference } from "./inference.js"
 
 const root = path.resolve(import.meta.dir, "../..")
 const name = `ren_e2e_${crypto.randomUUID().replaceAll("-", "")}`
@@ -43,10 +44,13 @@ const mailbox = Bun.serve({
   },
 })
 
+const inference = StandInInference.start(Shared.stub().root)
+
 let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
   (stopping ??= (async () => {
     void mailbox.stop(true)
+    void inference.stop()
     for (const child of children) child.kill()
     await Promise.all(children.map((child) => child.exited))
     await Shared.dispose()
@@ -90,11 +94,17 @@ await Effect.runPromise(
               docs: {
                 name: "Docs",
                 description: "Library documentation",
-                transport: { type: "remote", url: "https://docs.example.com/mcp" },
+                transport: {
+                  type: "remote",
+                  url: "https://docs.example.com/mcp",
+                },
                 auth: { type: "none" },
               },
             },
-            listing: { body: "Answers questions from library docs.", categories: { roles: ["engineer"] } },
+            listing: {
+              body: "Answers questions from library docs.",
+              categories: { roles: ["engineer"] },
+            },
           },
           ...Array.from({ length: 110 }, (_, index) => {
             const number = String(index + 1).padStart(3, "0")
@@ -105,7 +115,12 @@ await Effect.runPromise(
               listing: {},
             }
           }),
-          { slug: "zz-notes", name: "Zeta Notes", description: "Notes past the first page", listing: {} },
+          {
+            slug: "zz-notes",
+            name: "Zeta Notes",
+            description: "Notes past the first page",
+            listing: {},
+          },
         ],
       }),
     )
@@ -116,6 +131,7 @@ await Effect.runPromise(
 ).catch(failed)
 
 const brainKey = await Effect.runPromise(Signature.generate("e2e"))
+const inferenceKey = await Effect.runPromise(Signature.generate("e2e-inference"))
 const server = Bun.spawn(["bun", "run", "src/main.ts"], {
   cwd: path.join(root, "server"),
   env: {
@@ -143,10 +159,20 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
         key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestHand.keys.privateKey.key),
       },
     ]),
+    REN_INFERENCE_URL: inference.url,
+    REN_INFERENCE_KEYS: JSON.stringify([
+      {
+        id: inferenceKey.privateKey.id,
+        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(inferenceKey.privateKey.key),
+      },
+    ]),
     REN_INFERENCE_GATEWAY_URL: Shared.stub().root,
     REN_INFERENCE_GATEWAY_KEY: "stub-key",
     ENVELOPE_KEYS: JSON.stringify([
-      { id: "local:e2e", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+      {
+        id: "local:e2e",
+        key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+      },
     ]),
     BRAIN_KEYS: JSON.stringify([
       {
@@ -181,7 +207,9 @@ Bun.serve({
     if (!pathname.startsWith("/app/")) return new Response("Not found", { status: 404 })
     const file = Bun.file(path.join(dist, path.normalize(pathname.slice("/app/".length))))
     if (await file.exists()) return new Response(file)
-    return new Response(Bun.file(path.join(dist, "index.html")), { headers: { "content-type": "text/html" } })
+    return new Response(Bun.file(path.join(dist, "index.html")), {
+      headers: { "content-type": "text/html" },
+    })
   },
 })
 
