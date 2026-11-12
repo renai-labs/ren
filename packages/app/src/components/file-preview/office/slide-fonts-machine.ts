@@ -1,7 +1,7 @@
 import type { PositionedTextRun, SlideDisplayList, SlidePrimitive } from "@betteroffice/pptx"
 import type { DeckText, FallbackScript, FontStyle } from "./slide-text.js"
 
-export const SLIDE_FONT_LOAD_TIMEOUT_MS = 10_000
+const SLIDE_FONT_LOAD_TIMEOUT_MS = 10_000
 
 export const MAX_SLIDE_LAYOUT_PASSES = 8
 
@@ -16,7 +16,7 @@ export type SlideFontResolver<S> = (
   style: FontStyle,
 ) => (SlideFontRequest & { source: S }) | undefined
 
-export type SlideFontEntry =
+type SlideFontEntry =
   | {
       readonly status: "loading"
       readonly attempt: number
@@ -34,7 +34,7 @@ export type SlideFontEntry =
   | { readonly status: "registered"; readonly want: SlideFontWant; readonly style: FontStyle; readonly css: string }
   | { readonly status: "failed"; readonly want: SlideFontWant; readonly style: FontStyle }
 
-export type SlideFontBatch = { readonly id: number; readonly keys: readonly string[] }
+type SlideFontBatch = { readonly id: number; readonly keys: readonly string[] }
 
 export type SlideFontsState = {
   readonly issued: number

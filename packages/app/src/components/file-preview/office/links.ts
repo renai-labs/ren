@@ -2,7 +2,7 @@ import type { WordLink } from "./word-protocol.js"
 
 const schemes = new Set(["https:"])
 
-export function externalUrl(href: string) {
+function externalUrl(href: string) {
   const url = URL.parse(href)
 
   return url && schemes.has(url.protocol) ? url.href : undefined

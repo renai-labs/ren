@@ -3,7 +3,7 @@ import { inspectPresentation, type DeckSnapshot } from "@betteroffice/pptx"
 
 export type FontStyle = { readonly bold: boolean; readonly italic: boolean }
 
-export type DeckFamily = { readonly name: string; readonly styles: readonly FontStyle[] }
+type DeckFamily = { readonly name: string; readonly styles: readonly FontStyle[] }
 
 export type FallbackScript = "hebrew" | "arabic"
 
@@ -133,7 +133,7 @@ export function deckText(bytes: Uint8Array, snapshot: DeckSnapshot): DeckText {
 
 type Entry = { readonly name: string; readonly record: number; readonly length: number; readonly local: number }
 
-export function withoutMedia(bytes: Uint8Array): Uint8Array {
+function withoutMedia(bytes: Uint8Array): Uint8Array {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const end = endOfDirectory(view)
 
