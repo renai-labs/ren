@@ -527,6 +527,7 @@
   ],
   "patchedDependencies": {
     "@modelcontextprotocol/client@2.3.1": "patches/@modelcontextprotocol%2Fclient@2.3.1.patch",
+    "@opencode/core@2.2.6": "patches/@opencode%2Fcore@2.2.6.patch",
   },
   "overrides": {
     "@types/bun": "catalog:",

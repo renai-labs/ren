@@ -223,6 +223,19 @@ export const publishPage = Effect.fn("DriveFiles.publishPage")(function* (
   }
 })
 
+export const store = Effect.fn("DriveFiles.store")(function* (
+  client: HandClient.Client,
+  root: string,
+  path: string,
+  bytes: Uint8Array,
+) {
+  const target = `${root}/${path}`
+  const failed = (error: { readonly _tag: string; readonly message?: string }) =>
+    new Refused({ message: `${path} did not reach the space’s drive: ${error.message ?? error._tag}` })
+  yield* client["files.write"]({ path: target, bytes }).pipe(Effect.mapError(failed))
+  yield* client["drives.uploaded"]({ path: target }).pipe(Effect.mapError(failed))
+})
+
 export const note = (root: string, files: ReadonlyArray<SessionMessage.DriveFile>) =>
   [
     "The person attached these files. Each one is in the space’s drive, on the environment:",

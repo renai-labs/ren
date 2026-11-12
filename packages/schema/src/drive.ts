@@ -164,4 +164,5 @@ export const outputsOf = (sessionId: string) => `chats/${sessionId}/outputs`
 
 export const pagesOf = (sessionId: string) => `chats/${sessionId}/pages`
 
+export const appsOf = (sessionId: string) => `chats/${sessionId}/apps`
 export const typeOf = (name: string) => Option.getOrElse(Mime.getType(name), () => "application/octet-stream")
