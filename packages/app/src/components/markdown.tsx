@@ -229,6 +229,7 @@ export function Markdown(props: {
             {children}
           </Link>
         )
+      if (!href) return <span>{children}</span>
       return (
         <Link href={href} external className="font-medium underline" {...rest}>
           {children}

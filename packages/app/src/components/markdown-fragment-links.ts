@@ -1,6 +1,6 @@
 function fragmentTarget(root: HTMLElement, id: string, fragment: string) {
   const lower = fragment.toLowerCase()
-  const found = [fragment, `${id}-${lower}`, `user-content-${fragment}`].map((candidate) =>
+  const found = [fragment, `${id}-${lower}`].map((candidate) =>
     root.querySelector<HTMLElement>(`[id="${CSS.escape(candidate)}"]`),
   )
   return found.find((element) => element !== null) ?? undefined
