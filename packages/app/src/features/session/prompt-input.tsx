@@ -180,7 +180,7 @@ function AppsStrip(props: { spaceId: string }) {
             />
           }
         >
-          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+          <AvatarGroup className="items-center gap-1 *:mx-0 *:data-[slot=avatar]:ring-0">
             {shown.map(([app, icon]) => (
               // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
               <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
@@ -189,7 +189,7 @@ function AppsStrip(props: { spaceId: string }) {
               </Avatar>
             ))}
             {apps.length > shown.length ? (
-              <AvatarGroupCount className="size-5 text-2xs group-has-data-[size=sm]/avatar-group:size-5">
+              <AvatarGroupCount className="h-5 w-auto bg-transparent pl-0.5 text-xs text-muted-foreground tabular-nums ring-0 group-has-data-[size=sm]/avatar-group:h-5 group-has-data-[size=sm]/avatar-group:w-auto">
                 +{apps.length - shown.length}
               </AvatarGroupCount>
             ) : null}

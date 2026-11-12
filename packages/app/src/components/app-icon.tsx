@@ -30,7 +30,7 @@ export function AppAvatarImage(props: { src: string | undefined }) {
       src={props.src}
       alt=""
       onLoad={(event) => setTiled(needsTile(event))}
-      className={tiled ? onWhiteTile : "object-cover"}
+      className={cn("bg-white", tiled ? onWhiteTile : "object-cover")}
     />
   )
 }
@@ -84,7 +84,7 @@ export function AppIcon(props: {
     <span
       aria-hidden
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden ring-1 ring-black/6 ring-inset dark:ring-white/8",
+        "flex shrink-0 items-center justify-center overflow-hidden bg-white ring-1 ring-black/6 ring-inset dark:ring-white/8",
         size,
         props.className,
       )}
