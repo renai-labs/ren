@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { createOrganization } from "../lib/servers.js"
+import { createOrganization, scriptedReply } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -34,4 +34,35 @@ test("a member runs a command from the composer's shell mode and recalls it with
   await page.getByRole("main").getByRole("textbox", { name: "Command" }).fill("")
   await page.keyboard.press("Backspace")
   await expect(page.getByRole("main").getByRole("textbox", { name: "Message" })).toBeVisible()
+})
+
+test("a member runs a command from a bash fence: Run fills the composer in shell mode and Enter runs it", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const marker = await scriptedReply(page.request, "```bash\necho from-fence\n```")
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill(`Show the command ${marker}`)
+  await message.press("Enter")
+  const block = page.locator("[data-slot=code-block]")
+  await expect(block).toContainText("echo from-fence", { timeout: brainStart })
+
+  await page.getByRole("main").getByRole("textbox", { name: "Message" }).fill("my draft")
+  await block.hover()
+  await block.getByRole("button", { name: "Run" }).click()
+  await page.getByRole("dialog", { name: "Replace your draft?" }).getByRole("button", { name: "Cancel" }).click()
+  await expect(page.getByRole("main").getByRole("textbox", { name: "Message" })).toHaveValue("my draft")
+
+  await block.hover()
+  await block.getByRole("button", { name: "Run" }).click()
+  await page.getByRole("dialog", { name: "Replace your draft?" }).getByRole("button", { name: "Replace" }).click()
+  const command = page.getByRole("main").getByRole("textbox", { name: "Command" })
+  await expect(command).toHaveValue("echo from-fence")
+  await expect(command).toBeFocused()
+  await command.press("Enter")
+  await page.getByRole("button", { name: "Worked 1 step" }).click({ timeout: brainStart })
+  await expect(page.getByRole("button", { name: "Ran echo from-fence", exact: true })).toBeVisible({
+    timeout: brainStart,
+  })
 })

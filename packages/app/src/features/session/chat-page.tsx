@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode, type RefObject } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { IconArrowLeft, IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
@@ -11,6 +11,9 @@ import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
 import { Transcript } from "./transcript.js"
 import { PromptInput } from "./prompt-input.js"
+import { RunCommands } from "../../components/markdown.js"
+import { ConfirmDialog } from "../../components/confirm-dialog.js"
+import { Composer } from "@ren/chat"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { cn } from "cn"
@@ -24,10 +27,41 @@ const route = getRouteApi("/_authed/_shell/sessions/$sessionId/")
 
 type Chat = ReturnType<typeof useChat>
 
+function RunCommandHost(props: { chat: Chat; input: RefObject<HTMLTextAreaElement | null>; children: ReactNode }) {
+  const chat = props.chat
+  const [replacing, setReplacing] = useState<string>()
+  const run = (command: string) => {
+    chat.runCommand(command)
+    requestAnimationFrame(() => props.input.current?.focus())
+  }
+  return (
+    <RunCommands
+      value={
+        chat.child || chat.blocked
+          ? undefined
+          : (command) => (Composer.isBlank(chat.draft) ? run(command) : setReplacing(command))
+      }
+    >
+      {props.children}
+      <ConfirmDialog
+        open={replacing !== undefined}
+        onOpenChange={(open) => (open ? undefined : setReplacing(undefined))}
+        confirmation={{
+          title: "Replace your draft?",
+          description: "The command replaces what you typed in the composer.",
+          action: "Replace",
+        }}
+        onConfirm={() => (replacing === undefined ? undefined : run(replacing))}
+      />
+    </RunCommands>
+  )
+}
+
 function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
   const admin = useCanAdminister()
   const [picking, setPicking] = useState(false)
+  const input = useRef<HTMLTextAreaElement>(null)
   const find = useFind({
     messages: chat.messages,
     rows: chat.rows,
@@ -36,7 +70,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
     onSearchEarlier: chat.loadAll,
   })
   return (
-    <>
+    <RunCommandHost chat={chat} input={input}>
       <Transcript
         key={chat.view.sessionID}
         view={chat.view}
@@ -67,15 +101,16 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
       />
       <div className="px-6 pb-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <ChatComposer chat={chat} dock={props.dock} picking={picking} onPickingChange={setPicking} />
+          <ChatComposer chat={chat} dock={props.dock} input={input} picking={picking} onPickingChange={setPicking} />
         </div>
       </div>
-    </>
+    </RunCommandHost>
   )
 }
 
 function ChatComposer(props: {
   chat: Chat
+  input: RefObject<HTMLTextAreaElement | null>
   dock?: ReactNode
   picking: boolean
   onPickingChange: (open: boolean) => void
@@ -108,6 +143,7 @@ function ChatComposer(props: {
       />
       {chat.blocked || chat.child ? null : (
         <PromptInput
+          inputRef={props.input}
           placement="chat"
           spaceId={chat.spaceId}
           value={chat.draft}

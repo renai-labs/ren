@@ -88,3 +88,9 @@ export async function addMember(
   })
   expect(accepted.ok()).toBe(true)
 }
+
+export async function scriptedReply(request: APIRequestContext, reply: string) {
+  const response = await request.post(`${mailboxURL}/script`, { data: { reply } })
+  expect(response.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+}

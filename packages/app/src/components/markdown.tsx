@@ -1,4 +1,4 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, useState, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -17,28 +17,86 @@ import {
   CodeBlockTitle,
   useHighlightedCode,
 } from "@ren/ui/code-block"
+import { Button } from "@ren/ui/button"
+import { IconPlayerPlay, IconTextWrap } from "@tabler/icons-react"
 import { AppMention, mentionLinks } from "@ren/ui/app-mention"
 import { ImageLightbox } from "./image-lightbox.js"
 import type { CatalogApp } from "../lib/apps.js"
 import { cn } from "cn"
 import { Link } from "@ren/ui/link"
 
+const shellLanguages = new Set(["bash", "sh", "shell", "zsh", "console", "shellsession"])
+const promptLanguages = new Set(["console", "shellsession"])
+const maxHighlightedLines = 2000
+const maxHighlightedCharacters = 200_000
+
+const shellCommand = (code: string, language: string) => {
+  const name = language.toLowerCase()
+  if (!shellLanguages.has(name)) return ""
+  return promptLanguages.has(name)
+    ? code
+        .split("\n")
+        .filter((line) => line.startsWith("$ "))
+        .map((line) => line.slice(2))
+        .join("\n")
+    : code.trim()
+}
+
+export const RunCommands = createContext<((command: string) => void) | undefined>(undefined)
+
+function HighlightedLines(props: { code: string; language: string }) {
+  const lines = useHighlightedCode(props.code, props.language)
+  return lines.map((line, index) => (
+    // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity in highlighted code
+    <CodeBlockLine key={index}>{line}</CodeBlockLine>
+  ))
+}
+
+function PlainLines(props: { code: string }) {
+  return props.code
+    .replace(/\n$/u, "")
+    .split("\n")
+    .map((line, index) => (
+      // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity
+      <CodeBlockLine key={index}>{line}</CodeBlockLine>
+    ))
+}
+
 function MarkdownCodeBlock(props: { code: string; language: string }) {
   const incomplete = useIsCodeFenceIncomplete()
-  const lines = useHighlightedCode(props.code, props.language)
+  const run = use(RunCommands)
+  const [wrap, setWrap] = useState(false)
+  const plain = props.code.length > maxHighlightedCharacters || props.code.split("\n").length > maxHighlightedLines
+  const command = run && !incomplete ? shellCommand(props.code, props.language) : ""
   return (
     <CodeBlock className="my-3">
       <CodeBlockHeader>
-        <CodeBlockTitle>{props.language || "text"}</CodeBlockTitle>
+        <CodeBlockTitle>
+          {props.language || "text"}
+          {plain ? <span className="font-normal text-muted-foreground"> · not highlighted</span> : null}
+        </CodeBlockTitle>
         <CodeBlockActions>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={wrap ? "Don’t wrap lines" : "Wrap lines"}
+            aria-pressed={wrap}
+            className={cn(wrap && "bg-muted")}
+            onClick={() => setWrap(!wrap)}
+          >
+            <IconTextWrap />
+          </Button>
+          {run && command ? (
+            <Button variant="ghost" size="sm" onClick={() => run(command)}>
+              <IconPlayerPlay />
+              Run
+            </Button>
+          ) : null}
           <CodeBlockCopyButton value={props.code} disabled={incomplete} />
         </CodeBlockActions>
       </CodeBlockHeader>
-      <CodeBlockContent className="max-h-96">
-        {lines.map((line, index) => (
-          // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity in highlighted code
-          <CodeBlockLine key={index}>{line}</CodeBlockLine>
-        ))}
+      <CodeBlockContent className="max-h-96" wrap={wrap}>
+        {plain ? <PlainLines code={props.code} /> : <HighlightedLines code={props.code} language={props.language} />}
       </CodeBlockContent>
     </CodeBlock>
   )
