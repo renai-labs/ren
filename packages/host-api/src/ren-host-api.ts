@@ -270,27 +270,27 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
     ),
   )
   .add(
-    HttpApiEndpoint.get("artifacts.get", "/host/artifacts/:id", {
+    HttpApiEndpoint.get("artifacts.read", "/host/artifacts/:id", {
       params: ArtifactParams,
       success: Artifact.Info,
       error: ArtifactNotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "artifacts.get",
+        identifier: "artifacts.read",
         summary: "Read an artifact",
         description:
-          "Read an artifact’s title, entry, URL and active deployment. Its files are in the archive that artifacts.archive links to.",
+          "Read an artifact’s title, entry, URL and active deployment. Its files are in the archive that artifacts.download links to.",
       }),
     ),
   )
   .add(
-    HttpApiEndpoint.get("artifacts.archive", "/host/artifacts/:id/archive", {
+    HttpApiEndpoint.get("artifacts.download", "/host/artifacts/:id/download", {
       params: ArtifactParams,
       success: Artifact.Archive,
       error: [ArtifactNotFoundError, ArtifactFailedError],
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "artifacts.archive",
+        identifier: "artifacts.download",
         summary: "Download an artifact’s source archive",
         description:
           "Give a short-lived URL of the last published source archive, which an environment unpacks into a folder.",

@@ -82,6 +82,7 @@ import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
 import { HostHandsHandler } from "./handlers/ren-host/hand.js"
+import { ArtifactHandler } from "./handlers/api/artifact.js"
 import { HostArtifactsHandler } from "./handlers/ren-host/artifacts.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -195,6 +196,7 @@ export const layer = Layer.mergeAll(
         ScheduleRunHandler,
         WebhookHandler,
         WebhookRequestHandler,
+        ArtifactHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
@@ -237,6 +239,7 @@ export const layer = Layer.mergeAll(
         ),
         schedules,
         webhooks,
+        Artifacts.layer,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,
