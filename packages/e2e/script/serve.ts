@@ -140,7 +140,7 @@ const failed = async (error: unknown): Promise<never> => {
 
 await Effect.runPromise(
   Effect.gen(function* () {
-    yield* Seed.ren()
+    yield* Seed.ren({ model: { endpointId: "ren", modelId: "stub/stub-model" } })
     const registry = yield* AppRegistry.Service
     yield* registry.publish(
       Schema.decodeUnknownSync(AppRegistry.Batch)({
