@@ -16,6 +16,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
+import { TypographySection } from "./typography-section.js"
 
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
@@ -100,6 +101,7 @@ export function PreferencesPage() {
       <Section title="Appearance">
         <Rows>{[<ThemePicker key="theme" />]}</Rows>
       </Section>
+      <TypographySection />
       <Section title="Time">
         <Rows>
           {[

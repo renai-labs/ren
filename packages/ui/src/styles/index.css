@@ -16,6 +16,9 @@
 }
 
 :root {
+  --ren-code-size: calc(1em * var(--code-scale, 1));
+  --ren-code-terminal-size: calc(var(--text-xs) * var(--code-scale, 1));
+  --ren-code-inline-size: calc(0.9em * var(--code-scale, 1));
   --skullet-base: var(--muted);
   --skullet-highlight: var(--accent);
   --skullet-radius: var(--radius);
@@ -112,10 +115,10 @@
 }
 
 @theme inline {
-  --font-sans: "SF Pro Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--user-font-sans,) "SF Pro Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
   --font-avatar: ui-rounded, "SF Pro Rounded", "SF Pro Variable", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-mono: var(--user-font-mono,) "IBM Plex Mono", ui-monospace, monospace;
 
   --radius-sm: 4px;
   --radius-md: 8px;

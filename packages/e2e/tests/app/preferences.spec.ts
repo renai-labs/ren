@@ -39,3 +39,25 @@ test("changes the password", async ({ page, request }) => {
   await expect(page.getByText("Password changed")).toBeVisible()
   expect((await signIn(request, { email, password: "second password" })).ok()).toBe(true)
 })
+
+test("sets the code font and interface size, then resets them", async ({ page }) => {
+  await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("typography") })
+  await page.goto("/app/settings/preferences")
+  const code = page.locator("[data-slot=code-block-content]").first()
+  await expect(code).not.toHaveCSS("font-family", /Courier New/)
+
+  await page.getByRole("textbox", { name: "Code font" }).fill("Courier New")
+  await expect(code).toHaveCSS("font-family", /Courier New/)
+  await page.getByRole("combobox", { name: "Interface size" }).click()
+  await page.getByRole("option", { name: "Large", exact: true }).click()
+  await expect(page.locator("html")).toHaveCSS("font-size", "17px")
+
+  await page.reload()
+  await expect(page.locator("html")).toHaveCSS("font-size", "17px")
+  await expect(page.locator("html")).toHaveCSS("--user-font-mono", /Courier New/)
+
+  await page.getByRole("button", { name: "Reset to defaults" }).click()
+  await expect(page.locator("html")).toHaveCSS("font-size", "16px")
+  await expect(page.getByRole("textbox", { name: "Code font" })).toHaveValue("")
+  await expect(code).not.toHaveCSS("font-family", /Courier New/)
+})
