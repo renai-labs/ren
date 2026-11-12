@@ -167,14 +167,11 @@ function Settings(props: {
   )
   return (
     <div className="flex flex-col gap-10">
-      <Section
-        title="Triggers"
-        description="When the agent runs: on a schedule, when a request reaches its URL, or both."
-      >
+      <Section title="Triggers">
         <TriggerList add={add}>{triggers}</TriggerList>
         <TriggerWarning webhook={props.automation?.webhook} active={draft.active} />
       </Section>
-      <Section title="Agent instructions" description="What the agent does each time it runs, and which agent runs it.">
+      <Section title="Agent instructions">
         <InputGroup>
           <InputGroupTextarea
             aria-label="Agent instructions"
