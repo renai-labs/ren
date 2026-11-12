@@ -43,10 +43,5 @@ export const FileContent = Schema.Struct({
   truncated: Schema.Boolean,
 }).annotate({ identifier: "SessionCatalog.FileContent" })
 
-export interface WebSearchProvider extends Schema.Schema.Type<typeof WebSearchProvider> {}
-export const WebSearchProvider = Schema.Struct({ id: Schema.String, name: Schema.String }).annotate({
-  identifier: "SessionCatalog.WebSearchProvider",
-})
-
 export const mentionable = (agents: ReadonlyArray<Agent>) =>
   agents.filter((agent) => !agent.hidden && agent.mode !== "primary")

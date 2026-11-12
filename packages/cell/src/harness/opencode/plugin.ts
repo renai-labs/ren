@@ -44,7 +44,6 @@ import { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
-import { OpenCodeSearch } from "./search-provider.js"
 import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -708,9 +707,7 @@ export const make = (
           }
           OpenCodeModelTools.register(editor, modelTools)
         })
-        yield* context.websearch.transform((editor) =>
-          OpenCodeSearch.register(editor, { current: applied, keyFor: refreshKey }),
-        )
+        yield* context.websearch.transform((editor) => editor.default.set(editor.default.get() ?? "random"))
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
@@ -762,10 +759,7 @@ export const make = (
               const before = (yield* Ref.get(applied)).apps
               const apps = conflicts.length ? before : snapshot.apps
               yield* Ref.set(applied, { ...snapshot, apps })
-              if (isSession) {
-                yield* tool.reload()
-                yield* context.websearch.reload()
-              }
+              if (isSession) yield* tool.reload()
               yield* mcp.apply(apps, snapshot.channels)
               if (!conflicts.length) yield* skills.apply(prepared)
               yield* synced

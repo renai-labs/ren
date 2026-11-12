@@ -694,24 +694,6 @@ export const VcsGroup = HttpApiGroup.make("vcs")
   .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "vcs" }))
 
-export const WebSearchGroup = HttpApiGroup.make("websearch")
-  .add(
-    HttpApiEndpoint.get("websearch.providers", "/chat/session/:sessionID/websearch/provider", {
-      params,
-      success: Schema.Array(SessionCatalog.WebSearchProvider),
-      error: NotFoundError,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "websearch.providers",
-        summary: "List web search providers",
-        description:
-          "Return the web search providers where the session works, for a question of kind `websearch.provider` that lets the member pick one.",
-      }),
-    ),
-  )
-  .middleware(ChatAccess)
-  .annotateMerge(OpenApi.annotations({ title: "websearch" }))
-
 export const ChatApi = HttpApi.make("chat")
   .add(EventGroup)
   .add(ModelGroup)
@@ -722,7 +704,6 @@ export const ChatApi = HttpApi.make("chat")
   .add(CommandGroup)
   .add(FileGroup)
   .add(VcsGroup)
-  .add(WebSearchGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Chat API",

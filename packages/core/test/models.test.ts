@@ -88,10 +88,8 @@ describe("Models.layer", () => {
 })
 
 describe("RenInferenceProvider (HR28)", () => {
-  it.live("Ren registers one endpoint with its name, models, search and the brains' base URL, and Ren's key", () =>
+  it.live("Ren registers one endpoint with its name, models and the brains' base URL, and Ren's key", () =>
     Effect.gen(function* () {
-      stub.modelInfo.search([{ id: "ren/search", name: "Search" }])
-      yield* Effect.addFinalizer(() => Effect.sync(() => stub.modelInfo.search([])))
       const models = yield* Effect.provide(Models.Service, gateway)
       const organizationId = Auth.OrganizationID.create()
       const catalog = yield* models.catalog(organizationId)
@@ -101,11 +99,10 @@ describe("RenInferenceProvider (HR28)", () => {
           name: "Ren",
           protocol: "openai-chat",
           baseUrl: "http://gateway.brains.invalid/v1",
-          search: [{ id: "ren/search", name: "Search" }],
         },
       ])
       expect(catalog.endpoints[0]?.models.map((model) => model.id)).toContain("stub/stub-model")
-      expect(stub.modelInfo.reads.slice(-2)).toEqual(["Bearer sk-ren", "Bearer sk-ren"])
+      expect(stub.modelInfo.reads.at(-1)).toBe("Bearer sk-ren")
       const granted = yield* models.grant(Brain.ID.create(), organizationId, Space.ID.create())
       const now = yield* DateTime.now
       expect(Models.catalog(granted).endpoints.map((endpoint) => [endpoint.id, endpoint.baseUrl])).toEqual([

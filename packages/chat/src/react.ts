@@ -70,11 +70,6 @@ export const useShell = (view: Omit<ChatAtoms.ShellView, "running">) => useAtomV
 
 export const useStatus = (sessionID: Session.ID) => useAtomValue(useAtoms().status(sessionID))
 
-export const useWebSearchProviders = (root: Session.ID, sessionID: Session.ID) => {
-  const atom = useAtoms().webSearchProviders({ root, sessionID })
-  return { result: useAtomValue(atom), retry: useAtomRefresh(atom) }
-}
-
 export const useAction = <A, E, Args extends ReadonlyArray<unknown>>(
   sessionID: Session.ID,
   action: (opened: ChatSession.ChatSession, ...args: Args) => Effect.Effect<A, E>,

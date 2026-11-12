@@ -25,7 +25,7 @@ export interface Interface {
   readonly update: (
     generation: number,
     id: string,
-    fields: Partial<Pick<Models.CatalogEndpoint, "models" | "search">>,
+    fields: Pick<Models.CatalogEndpoint, "models">,
   ) => Effect.Effect<void>
 }
 
@@ -85,8 +85,7 @@ export const layer = Layer.effect(
               ...current,
               catalog: Option.some({
                 endpoints: current.providers.flatMap((provider) => {
-                  if (provider.id === id)
-                    return [{ ...Struct.omit(provider, ["catalog"]), models: [], ...endpoint, ...fields }]
+                  if (provider.id === id) return [{ ...Struct.omit(provider, ["catalog"]), ...endpoint, ...fields }]
                   return previous.filter((endpoint) => endpoint.id === provider.id)
                 }),
               }),

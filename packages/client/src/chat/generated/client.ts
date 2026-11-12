@@ -72,8 +72,6 @@ import type {
   VcsGetOutput,
   VcsDiffInput,
   VcsDiffOutput,
-  WebsearchProvidersInput,
-  WebsearchProvidersOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -672,19 +670,6 @@ export function make(options: ClientOptions) {
             query: { mode: input["mode"], context: input["context"] },
             successStatus: 200,
             declaredStatuses: [400, 403, 404, 503],
-            empty: false,
-          },
-          requestOptions,
-        ),
-    },
-    websearch: {
-      providers: (input: WebsearchProvidersInput, requestOptions?: RequestOptions) =>
-        request<WebsearchProvidersOutput>(
-          {
-            method: "GET",
-            path: `/chat/session/${encodeURIComponent(input.sessionID)}/websearch/provider`,
-            successStatus: 200,
-            declaredStatuses: [403, 404, 503],
             empty: false,
           },
           requestOptions,

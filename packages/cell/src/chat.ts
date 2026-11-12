@@ -580,13 +580,6 @@ const handlers = Layer.mergeAll(
         )
     }),
   ),
-  HttpApiBuilder.group(ChatApi, "websearch", (group) =>
-    Effect.map(harnessed, (run) =>
-      group.handle("websearch.providers", (request) =>
-        run((harness) => harness.chat.webSearchProviders(request.params.sessionID).pipe(notFound)),
-      ),
-    ),
-  ),
 )
 
 export const layer = Layer.effect(

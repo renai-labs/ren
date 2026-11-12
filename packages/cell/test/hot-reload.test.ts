@@ -355,7 +355,6 @@ it.live("a pull saves registered providers, and a pull without them keeps the la
           protocol: "openai-chat",
           baseUrl: "https://llm.ren.test/v1",
           models: ids.map((id) => ({ id, type: "chat" as const, protocol: "openai-chat" as const })),
-          search: [{ id: "ren/search", name: "Search" }],
         },
       ],
     })

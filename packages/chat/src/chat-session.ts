@@ -1088,8 +1088,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       send(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
     autoApprove,
     replyPermission,
-    webSearchProviders: (sessionID: Session.ID) =>
-      Effect.flatMap(client, (api) => api.websearch.providers({ sessionID })),
     replyWebSearch: (form: Form.Info, selection: string | false) =>
       connection.wake.pipe(
         Effect.andThen(

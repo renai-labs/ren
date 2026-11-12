@@ -1,7 +1,7 @@
 import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
-import { Context, Effect, Layer, Option, Redacted, Struct } from "effect"
+import { Context, Effect, Layer, Option, Redacted } from "effect"
 import { ModelCatalog } from "../src/model-catalog.js"
 import { ModelsTest } from "./lib/models.js"
 
@@ -24,7 +24,7 @@ it.live("the last catalog survives a restart, and the same catalog again writes 
     const storage = new Map<string, string>()
     const catalog = yield* opened(storage)
     expect(yield* catalog.current).toEqual(Option.none())
-    const sent = { endpoints: [Struct.assign(endpoint("ren"), { search: [{ id: "ren/search", name: "Search" }] })] }
+    const sent = { endpoints: [endpoint("ren")] }
     expect(yield* catalog.save(sent)).toBe(true)
     expect(yield* catalog.save(sent)).toBe(false)
     expect(yield* (yield* opened(storage)).current).toEqual(Option.some(sent))

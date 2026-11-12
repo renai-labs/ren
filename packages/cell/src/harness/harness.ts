@@ -125,9 +125,6 @@ export interface Chat {
     sessionId: Session.ID,
     options: { readonly mode: SessionVcs.Mode; readonly context?: number },
   ) => Effect.Effect<ReadonlyArray<SessionInfo.FileDiff>, NotFound | Rejected>
-  readonly webSearchProviders: (
-    sessionId: Session.ID,
-  ) => Effect.Effect<ReadonlyArray<SessionCatalog.WebSearchProvider>, NotFound>
   readonly replyPermission: (
     sessionId: Session.ID,
     requestId: Permission.RequestID,
