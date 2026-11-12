@@ -162,7 +162,7 @@ export function Section(props: {
             size="sm"
             aria-expanded={props.open}
             onClick={props.onToggle}
-            className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-medium text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
+            className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-semibold text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
           >
             {props.label}
             <IconChevronRight
@@ -174,7 +174,7 @@ export function Section(props: {
             />
           </Button>
         ) : (
-          <span className="text-sm font-medium text-sidebar-foreground/80">{props.label}</span>
+          <span className="text-sm font-semibold text-sidebar-foreground/80">{props.label}</span>
         )}
         <span className="flex-1" />
         <span className="flex items-center">{props.actions}</span>
