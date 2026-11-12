@@ -1,19 +1,29 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { TestEnvironment } from "@ren/executor/testing"
+import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
-import { Effect, Layer } from "effect"
+import { Cache, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
+import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
 import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
 import { Artifacts } from "../src/artifacts.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
+import { EnvironmentProvider } from "../src/environment-provider.js"
+import { Environments } from "../src/environments.js"
 import { SessionRunner } from "../src/session/runner.js"
+import { Signer } from "../src/signer.js"
 import { Configured } from "./lib/configured.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
+import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 import { TestCloudflare } from "./lib/cloudflare.js"
@@ -23,11 +33,35 @@ setDefaultTimeout(120_000)
 
 const stub = Configured.stub
 
+const remote = await realpath(await mkdtemp(join(tmpdir(), "ren-artifact-environment-")))
+
+const environments = Layer.unwrap(
+  Effect.gen(function* () {
+    const scope = yield* Effect.scope
+    const executors = yield* Cache.make({
+      capacity: 16,
+      lookup: (environmentId: Environment.ID) =>
+        Layer.buildWithScope(TestEnvironment.layer({ environmentId, workspace: remote }), scope).pipe(
+          Effect.flatMap((context) => Effect.provideContext(TestEnvironment.url, context)),
+          Effect.orDie,
+        ),
+    })
+    const probe = yield* TestProvider.make({
+      endpoint: (environmentId) =>
+        Cache.get(executors, environmentId).pipe(Effect.map((url) => ({ url: new URL(url) }))),
+    })
+    return Environments.layer.pipe(
+      Layer.provide(Signer.layerLocal),
+      Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+    )
+  }),
+)
+
 const it = testEffect(
   Layer.mergeAll(
     SessionRunner.layer.pipe(
       Layer.provideMerge(BrainRegistry.layer),
-      Layer.provideMerge(Host.layer({}, Configured.models)),
+      Layer.provideMerge(Host.layerWith({ ENVIRONMENT_DIRECTORY: remote }, Configured.models, environments)),
       Layer.provideMerge(
         Artifacts.layer.pipe(
           Layer.provide(
@@ -46,6 +80,9 @@ const it = testEffect(
 )
 
 const create = (code: string) => ({ tool: { name: "execute", input: { code } } })
+
+const lastToolResult = (call: StubModel.Call) =>
+  JSON.stringify(call.body.messages.findLast((message) => message.role === "tool")?.content ?? "")
 
 describe("artifacts from a chat", () => {
   it.live("a chat on a local brain publishes an artifact that Ren serves at its URL, and updates it there", () =>
@@ -128,5 +165,80 @@ describe("artifacts from a chat", () => {
       expect(updateCompleted.text).toContain(`"deploymentId":"${updateRow.active_deployment_id}","status":"ready"`)
       expect(yield* http.get(url).pipe(Effect.flatMap((response) => response.text))).toBe("<h1>updated</h1>")
     }),
+  )
+
+  it.live(
+    "a chat on an environment publishes a folder with a binary file that Ren serves byte for byte, and reads it back into a new folder",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* SessionRunner.Service
+        const database = yield* Database.Service
+        const artifacts = yield* Artifacts.Service
+        const http = yield* HttpClient.HttpClient
+        const brains = yield* Brains.Service
+        const owner = yield* Seed.owner()
+        const environmentTemplateId = yield* Seed.environmentTemplate(owner.organizationId)
+        const sessionId = Session.ID.create()
+        const folder = join(remote, sessionId)
+        const logo = crypto.getRandomValues(new Uint8Array(384 * 1024))
+        yield* Effect.promise(async () => {
+          await mkdir(join(folder, "site"), { recursive: true })
+          await writeFile(join(folder, "site/index.html"), '<img src="logo.png">')
+          await writeFile(join(folder, "site/logo.png"), logo)
+        })
+        const published = stub.script(
+          create('return await tools.opencode.artifact_create({ title: "Site", directory: "site" })'),
+        )
+        yield* sessions.create(owner, {
+          sessionId,
+          harness: "opencode",
+          interactive: true,
+          environmentTemplateId,
+          initialMessage: {
+            messageId: Session.MessageID.create(),
+            prompt: { text: `publish ${published.marker}` },
+            sender: { userId: owner.createdBy },
+          },
+        })
+        const answered = lastToolResult(yield* Effect.promise(() => published.called(2)))
+        expect(answered).toContain("Deployment accepted")
+        const row = (yield* database.db
+          .select()
+          .from(Database.Schema.artifact)
+          .where(eq(Database.Schema.artifact.space_id, owner.spaceId))).at(0)
+        if (!row) return yield* Effect.die(new Error(`No artifact was published: ${answered}`))
+        yield* Effect.addFinalizer(() => artifacts.stop(owner, row.id).pipe(Effect.ignore))
+        const completed = yield* Effect.promise(() =>
+          stub.waitFor((call) => call.text.includes("Artifact deployment result:") && call.text.includes(row.id)),
+        )
+        expect(completed.text).toContain('"status":"ready"')
+        const deployed = (yield* database.db
+          .select()
+          .from(Database.Schema.artifact)
+          .where(eq(Database.Schema.artifact.id, row.id))).at(0)
+        const url = deployed?.url ?? ""
+        expect(yield* http.get(url).pipe(Effect.flatMap((response) => response.text))).toBe('<img src="logo.png">')
+        expect(
+          new Uint8Array(
+            yield* http.get(new URL("logo.png", url).href).pipe(Effect.flatMap((response) => response.arrayBuffer)),
+          ),
+        ).toEqual(logo)
+
+        const read = stub.script(
+          create(`return await tools.opencode.artifact_read({ id: "${row.id}", directory: "copy" })`),
+        )
+        yield* brains.send({
+          sessionId,
+          messageId: Session.MessageID.create(),
+          prompt: { text: `read ${read.marker}` },
+          delivery: "steer",
+          sender: { userId: owner.createdBy },
+        })
+        expect(lastToolResult(yield* Effect.promise(() => read.called(2)))).toContain(join(folder, "copy"))
+        expect(yield* Effect.promise(() => Bun.file(join(folder, "copy/logo.png")).bytes())).toEqual(logo)
+        expect(yield* Effect.promise(() => Bun.file(join(folder, "copy/index.html")).text())).toBe(
+          '<img src="logo.png">',
+        )
+      }),
   )
 })
