@@ -39,15 +39,15 @@ export const HostArtifactsHandler = HttpApiBuilder.group(RenHostApi, "artifacts"
           }),
         ),
       )
-      .handle("artifacts.get", (request) =>
-        Effect.flatMap(CurrentHost, (host) => artifacts.get(host, request.params.id)).pipe(
+      .handle("artifacts.read", (request) =>
+        Effect.flatMap(CurrentHost, (host) => artifacts.read(host, request.params.id)).pipe(
           Effect.catchTag("Primitive.NotFound", (error) =>
             Effect.fail(new ArtifactNotFoundError({ message: error.message })),
           ),
         ),
       )
-      .handle("artifacts.archive", (request) =>
-        Effect.flatMap(CurrentHost, (host) => artifacts.archive(host, request.params.id)).pipe(
+      .handle("artifacts.download", (request) =>
+        Effect.flatMap(CurrentHost, (host) => artifacts.download(host, request.params.id)).pipe(
           Effect.catchTags({
             "Primitive.NotFound": (error) => Effect.fail(new ArtifactNotFoundError({ message: error.message })),
             "Artifacts.Failed": (error) => Effect.fail(new ArtifactFailedError({ message: error.message })),

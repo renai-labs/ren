@@ -2,6 +2,7 @@ import { HttpApi, OpenApi } from "effect/http-api"
 import { AgentGroup } from "./groups/agent.js"
 import { AppGroup } from "./groups/app.js"
 import { AppRegistryGroup, AppToolsGroup } from "./groups/app-registry.js"
+import { ArtifactGroup } from "./groups/artifact.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
 import { BillingGroup } from "./groups/billing.js"
@@ -66,6 +67,7 @@ export const Api = HttpApi.make("server")
   .add(ScheduleRunGroup)
   .add(WebhookGroup)
   .add(WebhookRequestGroup)
+  .add(ArtifactGroup)
   .add(CredentialGroup)
   .add(CredentialConnectGroup)
   .add(OAuthSessionGroup)
