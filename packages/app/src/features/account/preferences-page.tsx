@@ -15,6 +15,7 @@ import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
+import { SidebarLayout } from "../../lib/sidebar-layout.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
 
 export function PreferencesPage() {
@@ -24,6 +25,7 @@ export function PreferencesPage() {
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
+  const sidebar = SidebarLayout.useGrouped(platform.storage)
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const result = await auth.updateUser({ name })
@@ -142,6 +144,19 @@ export function PreferencesPage() {
                 onCheckedChange={chooseNotify}
                 aria-label="Notify me when Ren finishes or needs input"
               />
+            </Row>,
+          ]}
+        </Rows>
+      </Section>
+      <Section title="Sidebar">
+        <Rows>
+          {[
+            <Row
+              key="group"
+              title="Group chats by space"
+              description="Chats sit under their space, and Spaces moves to the menu at the top."
+            >
+              <Switch checked={sidebar.grouped} onCheckedChange={sidebar.set} aria-label="Group chats by space" />
             </Row>,
           ]}
         </Rows>

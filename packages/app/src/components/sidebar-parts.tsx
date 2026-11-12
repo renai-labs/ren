@@ -83,6 +83,7 @@ import { useMe } from "../lib/use-me.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
+import { GroupedChats } from "./sidebar-chats.js"
 
 export const sidebarRow =
   "[&_svg]:text-sidebar-foreground/80 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground data-active:hover:[&_svg]:text-sidebar-accent-foreground h-8 gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.5 [&_svg]:size-4"
@@ -512,7 +513,8 @@ export function useChatFilters() {
   }
 }
 
-export function ChatsList(props: { path: string; filters: Filters }) {
+export function ChatsList(props: { path: string; filters: Filters; grouped: boolean }) {
+  const spaces = useSpaces().spaces
   const { client } = RouterContext.useRouterContext()
   const me = useMe()
   const filtered = Object.values(props.filters).some((values) => values.length > 0)
@@ -529,18 +531,28 @@ export function ChatsList(props: { path: string; filters: Filters }) {
             {filtered ? "No chats match these filters" : "No chats yet"}
           </li>
         ) : null}
-        {chats.map((chat) => (
-          <SidebarMenuItem key={chat.id}>
-            <SidebarMenuButton
-              className={cn(sidebarRow, "py-1.5 pr-2 pl-2.25 group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
-              isActive={props.path === `/sessions/${chat.id}`}
-              render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
-            >
-              <span>{sessionTitle(chat.title)}</span>
-            </SidebarMenuButton>
-            <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
-          </SidebarMenuItem>
-        ))}
+        {props.grouped ? (
+          <GroupedChats
+            chats={chats}
+            spaces={spaces}
+            path={props.path}
+            rowClass={sidebarRow}
+            status={(chat) => <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />}
+          />
+        ) : (
+          chats.map((chat) => (
+            <SidebarMenuItem key={chat.id}>
+              <SidebarMenuButton
+                className={cn(sidebarRow, "py-1.5 pr-2 pl-2.25 group-has-data-[sidebar=menu-badge]/menu-item:pr-7")}
+                isActive={props.path === `/sessions/${chat.id}`}
+                render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
+              >
+                <span>{sessionTitle(chat.title)}</span>
+              </SidebarMenuButton>
+              <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
+            </SidebarMenuItem>
+          ))
+        )}
         {chatPages.hasNextPage ? (
           <LoadMore
             onVisible={() => {
