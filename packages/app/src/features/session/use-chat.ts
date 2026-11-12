@@ -271,6 +271,10 @@ export function useChat(
       setSaved(next)
     },
     shellHistory,
+    runCommand: (command: string) => {
+      const next = Composer.withText(Composer.emptyShell, command)
+      setDraft(draft.model ? Composer.withModel(next, draft.model) : next)
+    },
     send: () => {
       if (Composer.isShell(draft)) {
         const command = Composer.message(draft).trim()

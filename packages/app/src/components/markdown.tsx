@@ -42,8 +42,7 @@ const shellCommand = (code: string, language: string) => {
     : code.trim()
 }
 
-type RunCommand = (command: string) => void
-const RunCommands = createContext<RunCommand | undefined>(undefined)
+export const RunCommands = createContext<((command: string) => void) | undefined>(undefined)
 
 function HighlightedLines(props: { code: string; language: string }) {
   const lines = useHighlightedCode(props.code, props.language)
@@ -192,7 +191,6 @@ export function Markdown(props: {
   className?: string | undefined
   apps?: ReadonlyArray<CatalogApp> | undefined
   workspaceImage?: WorkspaceImageRenderer | undefined
-  onRunCommand?: RunCommand | undefined
 }) {
   const apps = props.apps ?? []
   const withApps =
@@ -214,20 +212,18 @@ export function Markdown(props: {
         }
   return (
     <WorkspaceImages value={props.workspaceImage}>
-      <RunCommands value={props.onRunCommand}>
-        <Streamdown
-          controls={false}
-          tableMaxHeight={0}
-          urlTransform={urlTransform}
-          rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
-          components={withApps}
-          isAnimating={props.streaming === true}
-          animated={streamAnimation}
-          className={cn("min-w-0 text-sm/relaxed", props.className)}
-        >
-          {mentionLinks(props.children, apps)}
-        </Streamdown>
-      </RunCommands>
+      <Streamdown
+        controls={false}
+        tableMaxHeight={0}
+        urlTransform={urlTransform}
+        rehypePlugins={props.workspaceImage ? workspaceRehypePlugins : rehypePlugins}
+        components={withApps}
+        isAnimating={props.streaming === true}
+        animated={streamAnimation}
+        className={cn("min-w-0 text-sm/relaxed", props.className)}
+      >
+        {mentionLinks(props.children, apps)}
+      </Streamdown>
     </WorkspaceImages>
   )
 }

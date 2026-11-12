@@ -1,4 +1,13 @@
-import { useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react"
+import {
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from "react"
 import { Composer, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
@@ -670,6 +679,7 @@ function pasteKind(event: ClipboardEvent<HTMLTextAreaElement>) {
 }
 
 export function PromptInput(props: {
+  inputRef?: Ref<HTMLTextAreaElement | null> | undefined
   value: Composer.Draft
   onChange: (draft: Composer.Draft) => void
   onSubmit: () => void
@@ -686,6 +696,7 @@ export function PromptInput(props: {
   files: Target
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
+  useImperativeHandle<HTMLTextAreaElement | null, HTMLTextAreaElement | null>(props.inputRef, () => textarea.current)
   const [repositories, setRepositories] = useState(false)
   const draft = props.value
   const uploads = useUploads(props.files, draft)
