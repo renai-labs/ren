@@ -2,6 +2,7 @@ import { RegistryContext } from "@effect/atom-react"
 import { ChatReact } from "@ren/chat/react"
 import { Outlet } from "@tanstack/react-router"
 import { Suspense, useState } from "react"
+import { Preference } from "../lib/preference.js"
 import { RouteSkeleton } from "./route-skeleton.js"
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -51,20 +52,15 @@ export function AppShell() {
   const chat = chatFor(platform, me.user.id)
   const [searching, setSearching] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(() => SidebarPreferences.open.read(platform.storage))
+  const sidebarOpen = Preference.usePreference(SidebarPreferences.open)
+  const setPreference = Preference.useSetPreference()
   useSearchShortcut(() => setSearching((current) => !current))
   useNewTaskShortcut(() => setCreatingTask(true))
   const path = Routing.useRenderedPath()
   return (
     <RegistryContext value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
-        <SidebarProvider
-          open={sidebarOpen}
-          onOpenChange={(next) => {
-            SidebarPreferences.open.write(platform.storage, next)
-            setSidebarOpen(next)
-          }}
-        >
+        <SidebarProvider open={sidebarOpen} onOpenChange={(next) => setPreference(SidebarPreferences.open, next)}>
           <ShellSidebar path={path} onSearch={() => setSearching(true)} />
           <SidebarInset className={insetClass}>
             <SidebarOpen />

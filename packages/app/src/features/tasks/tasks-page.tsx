@@ -1,3 +1,4 @@
+import { Preference } from "../../lib/preference.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { Link, getRouteApi } from "@tanstack/react-router"
 import {
@@ -334,7 +335,7 @@ function TaskGroups(props: {
 }
 
 export function TasksPage() {
-  const { api, client, platform } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const tasks = useQuery({
@@ -342,7 +343,8 @@ export function TasksPage() {
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
-  const [display, setDisplay] = useState(() => TaskDisplay.preference.read(platform.storage))
+  const display = Preference.usePreference(TaskDisplay.preference)
+  const setPreference = Preference.useSetPreference()
   const spaces = useSpaces()
   const agents = useAgents()
   const members = useMembers()
@@ -462,10 +464,7 @@ export function TasksPage() {
           />
           <DisplayOptions
             value={display}
-            onChange={(next: TaskDisplay.Display) => {
-              TaskDisplay.preference.write(platform.storage, next)
-              setDisplay(next)
-            }}
+            onChange={(next: TaskDisplay.Display) => setPreference(TaskDisplay.preference, next)}
           />
           <NewTaskDialog trigger={<Button />}>
             <IconPlus data-icon="inline-start" />

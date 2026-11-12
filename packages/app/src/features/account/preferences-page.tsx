@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Switch } from "@ren/ui/switch"
+import { Preference } from "../../lib/preference.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
@@ -20,10 +21,11 @@ import { TimeZonePicker } from "../../components/time-zone-picker.js"
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
   const me = useMe()
-  const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
-  const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
-  const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
-  const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
+  const detail = Preference.usePreference(ChatPreferences.detail)
+  const followUp = Preference.usePreference(ChatPreferences.followUp)
+  const notify = Preference.usePreference(ChatPreferences.notify)
+  const timeZone = Preference.usePreference(TimeZone.chosen) ?? ""
+  const setPreference = Preference.useSetPreference()
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const result = await auth.updateUser({ name })
@@ -58,18 +60,15 @@ export function PreferencesPage() {
   }
   const chooseDetail = (value: string) => {
     const next = value === "detailed" ? "detailed" : "compact"
-    ChatPreferences.detail.write(platform.storage, next)
-    setDetail(next)
+    setPreference(ChatPreferences.detail, next)
   }
   const chooseFollowUp = (value: string) => {
     const next = value === "queue" ? "queue" : "steer"
-    ChatPreferences.followUp.write(platform.storage, next)
-    setFollowUp(next)
+    setPreference(ChatPreferences.followUp, next)
   }
   const chooseNotify = (enabled: boolean) => {
     if (enabled) void platform.requestNotifications?.()
-    ChatPreferences.notify.write(platform.storage, enabled)
-    setNotify(enabled)
+    setPreference(ChatPreferences.notify, enabled)
   }
   return (
     <Page title="Preferences">
@@ -109,10 +108,7 @@ export function PreferencesPage() {
                 value={timeZone}
                 variant="ghost"
                 className="gap-2 text-muted-foreground"
-                onChange={(value) => {
-                  TimeZone.chosen.write(platform.storage, value || null)
-                  setTimeZone(value)
-                }}
+                onChange={(value) => setPreference(TimeZone.chosen, value || null)}
               />
             </Row>,
           ]}
