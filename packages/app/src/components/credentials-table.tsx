@@ -216,7 +216,6 @@ export function CredentialsTable(props: {
   credentials: ReadonlyArray<Credential>
   empty: ReactNode
   stale?: boolean | undefined
-  onRemoved?: (() => void) | undefined
 }) {
   const { api } = RouterContext.useRouterContext()
   const me = useMe()
@@ -285,10 +284,7 @@ export function CredentialsTable(props: {
                           remove.mutateAsync(
                             { id: credential.id },
                             {
-                              onSuccess: () => {
-                                toast.success(`${credential.label} deleted`)
-                                props.onRemoved?.()
-                              },
+                              onSuccess: () => toast.success(`${credential.label} deleted`),
                               onError: (error) =>
                                 toast.error("Could not delete the key", { description: errorMessage(error) }),
                             },
@@ -310,7 +306,6 @@ export function CredentialsTable(props: {
       <KeySheet
         credential={props.credentials.find((credential) => credential.id === opened)}
         onClose={() => setOpened(undefined)}
-        onRemoved={props.onRemoved}
       />
       {editing?.kind === "rotate" ? (
         <RotateDialog credential={editing.credential} onClose={() => setEditing(undefined)} />

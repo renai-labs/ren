@@ -20,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
 import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
-import { ListPagination } from "../../components/list-pagination.js"
+import { LoadMore } from "../../components/load-more.js"
 import { MembersTable } from "../../components/members-table.js"
 import { Page, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
@@ -28,7 +28,8 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useCanAdminister, useOrganization } from "../../lib/use-organization.js"
-import { pageSize, currentPage } from "../../lib/pagination.js"
+import { Search } from "../../lib/search.js"
+import { useShown } from "../../lib/use-shown.js"
 import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { formatDate } from "@ren/ui/time"
@@ -131,13 +132,11 @@ export function MembersSettingsPage() {
   const members = useMembers().members
   const canAdminister = useCanAdminister()
   const tab = search.tab ?? "members"
-  const page = currentPage(search)
   const [filters, setFilters] = useState<Filters>({})
   const [query, setQuery] = useState("")
-  const needle = query.trim().toLowerCase()
   const rows = members
     .filter((member) => passes(filters, { role: [member.role] }))
-    .filter((member) => !needle || `${member.name} ${member.email}`.toLowerCase().includes(needle))
+    .filter((member) => Search.matches(query, member.name, member.email))
     .map((member) => ({
       id: member.id,
       memberId: member.memberId,
@@ -151,9 +150,9 @@ export function MembersSettingsPage() {
   const refresh = () =>
     // ast-grep-ignore: no-manual-invalidation -- members and invitations change through Better Auth
     queryClient.invalidateQueries({ queryKey: organizationOptions(auth, me.organization.id).queryKey })
-  const visibleRows = rows.slice((page - 1) * pageSize, page * pageSize)
-  const visibleInvitations = invitations.slice((page - 1) * pageSize, page * pageSize)
-  const total = tab === "members" ? rows.length : invitations.length
+  const shownRows = useShown(rows)
+  const shownInvitations = useShown(invitations)
+  const shown = tab === "members" ? shownRows : shownInvitations
   const openTab = (next: string) =>
     void navigate({ search: { tab: next === "invitations" ? "invitations" : "members" } })
   const memberCount = members.length
@@ -235,18 +234,10 @@ export function MembersSettingsPage() {
           {canAdminister ? <InviteDialog onInvite={invite} /> : null}
         </>
       }
-      footer={
-        <ListPagination
-          page={page}
-          pageSize={pageSize}
-          total={total}
-          noun={tab === "members" ? "member" : "invitation"}
-        />
-      }
     >
       {tab === "members" ? (
         <MembersTable
-          rows={visibleRows}
+          rows={shownRows.items}
           column={{
             heading: "Role",
             cell: (row) => (
@@ -285,8 +276,8 @@ export function MembersSettingsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleInvitations.length === 0 ? <TableEmpty columns={5}>No pending invitations</TableEmpty> : null}
-              {visibleInvitations.map((invite) => (
+              {shownInvitations.items.length === 0 ? <TableEmpty columns={5}>No pending invitations</TableEmpty> : null}
+              {shownInvitations.items.map((invite) => (
                 <TableRow key={invite.id}>
                   <TableCell>{invite.email}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -319,6 +310,7 @@ export function MembersSettingsPage() {
           </Table>
         </TableCard>
       )}
+      <LoadMore more={shown.more} onMore={shown.next} />
     </Page>
   )
 }
