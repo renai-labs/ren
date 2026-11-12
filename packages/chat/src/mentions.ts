@@ -77,6 +77,8 @@ export const suggest = (input: {
   return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
 }
 
+export const fileDragType = "application/x-ren-file"
+
 export const text = (item: Pick<Item, "label">) => `@  ${item.label}`
 
 const space = /\s/

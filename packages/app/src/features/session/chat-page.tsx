@@ -284,7 +284,9 @@ export function ChatPage() {
             maximized={maximized}
             onMaximize={setMaximized}
             onMention={(path) =>
-              chat.setDraft(Composer.withText(chat.draft, `${chat.draft.text.trimEnd()} @${path} `.trimStart()))
+              chat.setDraft(
+                Composer.withText(chat.draft, chat.suggest.onFile(path, chat.draft.text, chat.draft.text.length).text),
+              )
             }
             onClose={() => {
               setPanel(false)

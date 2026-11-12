@@ -76,7 +76,7 @@ function Starting(props: { command: string; error: string | undefined }) {
   )
 }
 
-export function TerminalTab(props: { root: Session.ID }) {
+export function TerminalTab(props: { root: Session.ID; folder?: string | undefined }) {
   const [runs, setRuns] = useState<ReadonlyArray<Run>>([])
   const [command, setCommand] = useState("")
   const runShell = ChatReact.useAction(props.root, (opened, text: string) => opened.runShell(text))
@@ -122,6 +122,11 @@ export function TerminalTab(props: { root: Session.ID }) {
           </MessageScroller>
         </MessageScrollerProvider>
       )}
+      {props.folder ? (
+        <p className="shrink-0 truncate px-3 pt-1 font-mono text-xs text-muted-foreground" title={props.folder}>
+          Commands start in {props.folder}
+        </p>
+      ) : null}
       <form
         className="shrink-0 px-3 pt-1 pb-3"
         onSubmit={(event) => {
@@ -131,7 +136,7 @@ export function TerminalTab(props: { root: Session.ID }) {
           const id = crypto.randomUUID()
           setRuns((previous) => [...previous, { id, command: text }])
           setCommand("")
-          runShell(text).then(
+          runShell(props.folder ? `cd '${props.folder.replaceAll("'", "'\\''")}' && ${text}` : text).then(
             (shell) => update(id, { shell }),
             (error: unknown) => update(id, { error: errorMessage(error) }),
           )

@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { Composer, type ChatSession } from "@ren/chat"
+import { Composer, Mentions, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
@@ -641,7 +641,20 @@ export function PromptInput(props: {
       {repositories && props.spaceId ? (
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
-      <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
+      <InputGroup
+        className="rounded-xl bg-card shadow-soft dark:bg-card"
+        onDragOver={(event) => {
+          if (suggest && event.dataTransfer.types.includes(Mentions.fileDragType)) event.preventDefault()
+        }}
+        onDrop={(event) => {
+          const path = event.dataTransfer.getData(Mentions.fileDragType)
+          if (!suggest || !path) return
+          event.preventDefault()
+          const result = suggest.onFile(path, text, textarea.current?.selectionStart ?? text.length)
+          change(Composer.withText(draft, result.text))
+          place(result.text, result.cursor)
+        }}
+      >
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea

@@ -33,6 +33,7 @@ export interface Suggest {
     cursor: number,
   ) => { text: string; cursor: number; mention?: Composer.MentionedApp | undefined } | undefined
   readonly onClose: () => void
+  readonly onFile: (path: string, text: string, cursor: number) => { text: string; cursor: number }
   readonly marks: (text: string) => ReadonlyArray<MentionMark>
   readonly unmention: (
     text: string,
@@ -129,6 +130,7 @@ function useSuggestions(input: {
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
+  const [files, setFiles] = useState<ReadonlyArray<Mentions.Item>>([])
   const query = trigger?.kind === "mention" ? trigger.query.toLowerCase() : undefined
   const apps = useAppMentions(query, input.mentions)
   const appById = apps.byId
@@ -156,7 +158,7 @@ function useSuggestions(input: {
         }))
   const ids = items.map((item) => item.value)
   const current = Composer.activeSuggestion(ids, active)
-  const tokens = (text: string) => Mentions.tokens(text, connectors)
+  const tokens = (text: string) => Mentions.tokens(text, [...connectors, ...files])
   const close = () => {
     setTrigger(undefined)
     setActive(undefined)
@@ -197,6 +199,13 @@ function useSuggestions(input: {
       }
     },
     onClose: close,
+    onFile: (path, text, cursor) => {
+      const item = Mentions.fromFile({ path, type: "file" })
+      setFiles((previous) => (previous.some((file) => file.id === item.id) ? previous : [...previous, item]))
+      const padded = cursor > 0 && !/\s/u.test(text.charAt(cursor - 1))
+      const at = padded ? cursor + 1 : cursor
+      return Mentions.insert(padded ? `${text.slice(0, cursor)} ${text.slice(cursor)}` : text, item, at, at)
+    },
     marks: (text) =>
       tokens(text).map((token) => {
         const app = appById.get(token.item.id)

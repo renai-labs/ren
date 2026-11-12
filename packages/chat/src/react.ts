@@ -5,8 +5,8 @@ import type { Session } from "@ren/schema/session"
 import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
 import { Effect } from "effect"
-import type { AsyncResult, Atom } from "effect/reactivity"
-import { createContext, createElement, type ReactNode, useCallback, useContext } from "react"
+import { type AsyncResult, Atom } from "effect/reactivity"
+import { createContext, createElement, type ReactNode, useCallback, useContext, useMemo } from "react"
 import type { ChatAtoms } from "./atoms.js"
 import type { ChatSession } from "./chat-session.js"
 
@@ -56,6 +56,26 @@ const useRefreshable = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>) =>
 })
 
 export const useFolder = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().folder(view))
+
+export const useFolders = (root: Session.ID, opened: ReadonlyArray<string>) => {
+  const atoms = useAtoms()
+  const registry = useContext(RegistryContext)
+  const key = opened.join("\u0000")
+  const combined = useMemo(
+    () =>
+      Atom.make(
+        (get) =>
+          new Map(
+            ["", ...(key ? key.split("\u0000") : [])].map((path) => [path, get(atoms.folder({ root, path }))] as const),
+          ),
+      ),
+    [atoms, root, key],
+  )
+  return {
+    results: useAtomValue(combined),
+    refresh: useCallback((path: string) => registry.refresh(atoms.folder({ root, path })), [atoms, registry, root]),
+  }
+}
 
 export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))
 

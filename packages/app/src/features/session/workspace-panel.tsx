@@ -134,6 +134,7 @@ export function WorkspacePanel(props: {
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const tabs = tabsOf(parseKinds(search.panel))
+  const [folders, setFolders] = useState<Readonly<Record<string, string>>>({})
   const current =
     tabs.find((tab) => tab.id === search.tab) ??
     (search.file === undefined ? undefined : tabs.find((tab) => tab.kind === "files")) ??
@@ -157,9 +158,24 @@ export function WorkspacePanel(props: {
     const next = tabsOf([...tabs.map((tab) => tab.kind), kind])
     show(next, next.at(-1)?.id)
   }
+  const openTerminal = (folder: string) => {
+    const next = tabsOf([...tabs.map((tab) => tab.kind), "terminal"])
+    const id = next.at(-1)?.id
+    if (id) setFolders({ ...folders, [id]: folder })
+    show(next, id)
+  }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
-    const next = tabsOf(tabs.filter((tab) => tab.id !== id).map((tab) => tab.kind))
+    const kept = tabs.filter((tab) => tab.id !== id)
+    const next = tabsOf(kept.map((tab) => tab.kind))
+    setFolders(
+      Object.fromEntries(
+        next.flatMap((tab, position) => {
+          const folder = folders[kept[position]?.id ?? ""]
+          return folder === undefined ? [] : [[tab.id, folder]]
+        }),
+      ),
+    )
     show(next, current?.id === id ? next[Math.min(index, next.length - 1)]?.id : current?.id)
   }
   const line = search.line !== undefined && Number.isInteger(search.line) && search.line > 0 ? search.line : undefined
@@ -232,6 +248,7 @@ export function WorkspacePanel(props: {
                 root={props.root}
                 messages={props.messages}
                 onMention={props.onMention}
+                onTerminal={openTerminal}
                 file={search.file}
                 line={line}
                 onFile={(file) =>
@@ -239,7 +256,7 @@ export function WorkspacePanel(props: {
                 }
               />
             ) : null}
-            {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
+            {tab.kind === "terminal" ? <TerminalTab root={props.root} folder={folders[tab.id]} /> : null}
           </TabsContent>
         ))}
       </Tabs>

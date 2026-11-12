@@ -1,10 +1,10 @@
 import { lazy, Suspense, useState } from "react"
 import { ChatReact } from "@ren/chat/react"
-import { FileTabs } from "@ren/chat"
+import { FileTabs, Mentions } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
-import { IconArrowLeft, IconDots, IconFile, IconFiles, IconFolder, IconRefresh, IconX } from "@tabler/icons-react"
+import { IconDots, IconFile, IconFiles, IconX } from "@tabler/icons-react"
 import { Cause } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
@@ -23,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { FileIcon } from "@ren/ui/file-icon"
+import { FileExplorer } from "@ren/ui/file-tree"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/sonner"
@@ -33,6 +33,7 @@ import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { errorMessage, errorStatus } from "../../lib/errors.js"
 import { formatBytes } from "../../lib/format.js"
 import { useRefreshOn } from "../../lib/use-refresh-on.js"
+import { ancestorsOf, useWorkspaceFiles, type WorkspaceFiles } from "../../lib/use-workspace-files.js"
 import { Platform } from "../../platform/platform.js"
 import { editsOf } from "./workspace-edits.js"
 import { WorkspacePending } from "./workspace-state.js"
@@ -42,86 +43,6 @@ const highlightLimit = 256 * 1024
 const FileView = lazy(() => import("@ren/ui/file-view").then((module) => ({ default: module.FileView })))
 
 const nameOf = (path: string) => path.replace(/\/$/u, "").split("/").at(-1) ?? path
-
-const dirOf = (path: string) => path.replace(/[^/]*$/u, "")
-
-const parentOf = (folder: string) => folder.replace(/[^/]+\/$/u, "")
-
-function Folder(props: {
-  root: Session.ID
-  folder: string
-  selected: string | undefined
-  onFolder: (folder: string) => void
-  onFile: (path: string) => void
-  onPin: (path: string) => void
-}) {
-  const listed = ChatReact.useFolder({ root: props.root, path: props.folder })
-  return (
-    <>
-      <div className="flex h-9 shrink-0 items-center gap-1 pr-1.5 pl-3 text-xs text-muted-foreground">
-        {props.folder ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Open the parent folder"
-            className="-ml-1.5 text-muted-foreground"
-            onClick={() => props.onFolder(parentOf(props.folder))}
-          >
-            <IconArrowLeft />
-          </Button>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate font-mono" title={props.folder || "/"}>
-          {props.folder || "/"}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Refresh files"
-          className="text-muted-foreground"
-          onClick={listed.refresh}
-        >
-          <IconRefresh />
-        </Button>
-      </div>
-      {AsyncResult.isSuccess(listed.result) ? (
-        <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 pb-2">
-          {listed.result.value.map((entry: SessionCatalog.File) => (
-            <li key={entry.path}>
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-current={entry.path === props.selected || undefined}
-                onClick={() => (entry.type === "directory" ? props.onFolder(entry.path) : props.onFile(entry.path))}
-                onDoubleClick={() => (entry.type === "directory" ? undefined : props.onPin(entry.path))}
-                className={cn(
-                  "w-full justify-start font-normal aria-current:bg-secondary",
-                  entry.type === "directory" ? "text-foreground" : "text-muted-foreground aria-current:text-foreground",
-                )}
-              >
-                {entry.type === "directory" ? (
-                  <IconFolder data-icon="inline-start" />
-                ) : (
-                  <FileIcon name={entry.path} data-icon="inline-start" />
-                )}
-                <span className="min-w-0 truncate">{nameOf(entry.path)}</span>
-              </Button>
-            </li>
-          ))}
-          {listed.result.value.length === 0 ? (
-            <li className="px-2 py-1.5 text-xs text-muted-foreground">This folder is empty</li>
-          ) : null}
-        </ul>
-      ) : (
-        <WorkspacePending
-          result={listed.result}
-          icon={<IconFiles />}
-          title="Could not list the files"
-          onRetry={listed.refresh}
-        />
-      )}
-    </>
-  )
-}
 
 function Crumbs(props: { path: string; onFolder: (folder: string) => void }) {
   const parts = props.path.split("/")
@@ -352,6 +273,93 @@ function TabStrip(props: {
   )
 }
 
+function MenuItem(props: { label: string; onClick: () => void }) {
+  return (
+    <Button variant="ghost" size="sm" role="menuitem" className="justify-start font-normal" onClick={props.onClick}>
+      {props.label}
+    </Button>
+  )
+}
+
+function Tree(props: {
+  tree: WorkspaceFiles
+  selected: string | undefined
+  onOpen: (path: string) => void
+  onPin: (path: string) => void
+  onMention: ((path: string) => void) | undefined
+  onTerminal: ((folder: string) => void) | undefined
+}) {
+  const tree = props.tree
+  const root = tree.root
+  if (!root || !AsyncResult.isSuccess(root))
+    return (
+      <WorkspacePending
+        result={root ?? AsyncResult.initial()}
+        icon={<IconFiles />}
+        title="Could not list the files"
+        onRetry={() => tree.refreshFolder("")}
+      />
+    )
+  return (
+    <FileExplorer
+      paths={tree.paths}
+      loaded={tree.loaded}
+      gitStatus={tree.gitStatus}
+      selected={props.selected}
+      dragType={Mentions.fileDragType}
+      onSelect={props.onOpen}
+      onPin={props.onPin}
+      onExpand={tree.expand}
+      onQuery={tree.setQuery}
+      onRefresh={tree.refresh}
+      notice={
+        root.value.length === 0 ? (
+          <p className="px-3 py-1.5 text-xs text-muted-foreground">This folder is empty</p>
+        ) : null
+      }
+      // ast-grep-ignore: no-render-props -- the tree hands back the row that was right-clicked
+      renderMenu={(item, close) => (
+        <>
+          {item.kind === "file" ? (
+            <MenuItem
+              label="Open"
+              onClick={() => {
+                close()
+                props.onOpen(item.path)
+              }}
+            />
+          ) : null}
+          <MenuItem
+            label="Copy path"
+            onClick={() => {
+              close()
+              void navigator.clipboard.writeText(item.path).then(() => toast.success("Path copied"))
+            }}
+          />
+          {item.kind === "file" && props.onMention ? (
+            <MenuItem
+              label="Mention in prompt"
+              onClick={() => {
+                close()
+                props.onMention?.(item.path)
+              }}
+            />
+          ) : null}
+          {props.onTerminal ? (
+            <MenuItem
+              label="Reveal in terminal"
+              onClick={() => {
+                close()
+                props.onTerminal?.(item.kind === "directory" ? item.path : (ancestorsOf(item.path).at(-1) ?? ""))
+              }}
+            />
+          ) : null}
+        </>
+      )}
+    />
+  )
+}
+
 export function FilesTab(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
@@ -359,33 +367,35 @@ export function FilesTab(props: {
   line: number | undefined
   onFile: (path: string) => void
   onMention: ((path: string) => void) | undefined
+  onTerminal: ((folder: string) => void) | undefined
 }) {
   const opened = props.file && !props.file.endsWith("/") ? props.file : undefined
-  const [folder, setFolder] = useState(() => dirOf(props.file ?? ""))
-  const [files, setFiles] = useState(() =>
-    opened ? FileTabs.open(FileTabs.empty, opened, props.line ? { line: props.line } : {}) : FileTabs.empty,
+  const edits = editsOf(props.messages)
+  const tree = useWorkspaceFiles(
+    props.root,
+    edits.flatMap((edit) => edit.patches.map(() => edit.path)),
   )
-  const [seen, setSeen] = useState(props.file)
+  const [files, setFiles] = useState(FileTabs.empty)
+  const [seen, setSeen] = useState<string>()
   if (seen !== props.file) {
     setSeen(props.file)
-    if (props.file) setFolder(dirOf(props.file))
+    if (props.file) tree.reveal(props.file)
     if (opened) setFiles(FileTabs.open(files, opened, props.line ? { line: props.line } : {}))
   }
   const current = files.tabs.find((tab) => tab.path === files.active)
-  const edits = editsOf(props.messages)
   return (
     <div className="flex min-h-0 flex-1">
-      <div className="flex w-56 shrink-0 flex-col border-r">
-        <Folder
-          root={props.root}
-          folder={folder}
+      <div className="flex w-73 shrink-0 flex-col border-r">
+        <Tree
+          tree={tree}
           selected={files.active}
-          onFolder={setFolder}
-          onFile={(path) => {
+          onOpen={(path) => {
             setFiles(FileTabs.open(files, path))
             props.onFile(path)
           }}
-          onPin={(path) => setFiles(FileTabs.pin(files, path))}
+          onPin={(path) => setFiles(FileTabs.open(files, path, { pin: true }))}
+          onMention={props.onMention}
+          onTerminal={props.onTerminal}
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -402,7 +412,7 @@ export function FilesTab(props: {
               root={props.root}
               tab={current}
               edits={edits.find((edit) => edit.path === current.path)?.patches.length ?? 0}
-              onFolder={setFolder}
+              onFolder={tree.reveal}
               onMention={props.onMention}
             />
           </>
