@@ -1,5 +1,6 @@
 import { expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
@@ -35,6 +36,13 @@ const executor = Sandbox.layer.pipe(
         EXECUTOR_ENVIRONMENT_ID: Hand.ID.create(),
         EXECUTOR_WORKSPACE: workspace,
         ...(process.env.SHELL && { SHELL: process.env.SHELL }),
+        ...ExecutorVariables.hiding([
+          "POSTHOG_PROJECT_KEY",
+          "OTEL_EXPORTER_OTLP_HEADERS",
+          "REN_BRAIN_ID",
+          "PORT",
+          "REN_URL",
+        ]),
       }),
     ),
   ),
@@ -137,6 +145,47 @@ it.live("runs in the workspace with its environment and the given variables on t
     const output = yield* collect(process.events)
     expect(output.stdout).toBe(`${workspace}\nhi\n`)
     expect(output.exit).toEqual({ type: "exit", exitCode: 0, signal: null })
+  }),
+)
+
+it.live("gives a command every variable except the ones Ren gave the machine for itself", () =>
+  Effect.gen(function* () {
+    const machine = {
+      POSTHOG_PROJECT_KEY: "phc_ren",
+      OTEL_EXPORTER_OTLP_HEADERS: "authorization=Bearer%20phc_ren",
+      REN_BRAIN_ID: "brn_ren",
+      PORT: "4801",
+      REN_URL: "https://api.ren.test",
+      OTEL_SERVICE_NAME: "the-template's-own",
+    }
+    yield* Effect.acquireRelease(
+      Effect.sync(() => Object.assign(process.env, machine)),
+      () =>
+        Effect.sync(() => {
+          for (const name of Object.keys(machine)) delete process.env[name]
+        }),
+    )
+    const spawned = yield* run({
+      command: "env",
+      arguments: [],
+      variables: { POSTHOG_PROJECT_KEY: "phc_the_users_own", STRIPE_API_KEY: "ren:STRIPE_API_KEY" },
+    })
+    const seen = Object.fromEntries(
+      (yield* collect(spawned.events)).stdout
+        .split("\n")
+        .filter((line) => line.includes("="))
+        .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+    )
+    expect(seen).not.toHaveProperty("OTEL_EXPORTER_OTLP_HEADERS")
+    expect(seen).not.toHaveProperty("REN_BRAIN_ID")
+    expect(seen).not.toHaveProperty("PORT")
+    expect(seen).not.toHaveProperty(ExecutorVariables.hidden)
+    expect(seen).toMatchObject({
+      POSTHOG_PROJECT_KEY: "phc_the_users_own",
+      STRIPE_API_KEY: "ren:STRIPE_API_KEY",
+      REN_URL: "https://api.ren.test",
+      OTEL_SERVICE_NAME: "the-template's-own",
+    })
   }),
 )
 
