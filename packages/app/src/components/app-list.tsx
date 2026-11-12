@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { IconChevronRight, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@ren/ui/dialog"
@@ -11,7 +12,7 @@ import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
 import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
-import { categoryLabel, gaps } from "../lib/apps.js"
+import { categoryLabel, gaps, reachedSpaces } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo } from "@ren/client"
@@ -441,12 +442,22 @@ function McpDialog(props: {
   )
 }
 
+export function SpacePills(props: { profile: AppProfile }) {
+  const names = reachedSpaces(props.profile)
+  if (names.length === 0) return <span>Not in any space</span>
+  return names.map((name) => (
+    <Badge key={name} variant="secondary" className="rounded-full px-2 font-normal">
+      {name}
+    </Badge>
+  ))
+}
+
 export function AccountList(props: {
   title: string
   actions?: ReactNode
   profiles: ReadonlyArray<AppProfile>
   empty?: string
-  caption: (profile: AppProfile) => string
+  caption: (profile: AppProfile) => ReactNode
   action: (profile: AppProfile) => ReactNode
   onOpen?: ((profile: AppProfile) => void) | undefined
 }) {
@@ -491,8 +502,9 @@ export function AccountList(props: {
                   ) : (
                     <span className="truncate text-sm">{profile.name}</span>
                   )}
-                  <span className="truncate text-xs text-muted-foreground">
-                    {missing ? `Not connected · ${props.caption(profile)}` : props.caption(profile)}
+                  <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    {missing ? <span>Not connected ·</span> : null}
+                    {props.caption(profile)}
                   </span>
                 </div>
                 <div

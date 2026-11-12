@@ -17,7 +17,7 @@ export function CatalogAppRow(props: { app: CatalogApp; onAdded: Added }) {
       caption={props.app.description}
       attention={needsAttention(profiles)}
       onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: props.app.id } })}
-      action={<AddToSpace app={props.app} large onAdded={props.onAdded} />}
+      action={<AddToSpace app={props.app} onAdded={props.onAdded} />}
     />
   )
 }

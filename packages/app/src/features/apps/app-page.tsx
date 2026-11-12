@@ -1,23 +1,25 @@
-import { lazy, Suspense, useState } from "react"
-import { IconArrowRight, IconMessagePlus, IconPlus } from "@tabler/icons-react"
+import { Fragment, lazy, Suspense, useState } from "react"
+import { IconArrowRight, IconChevronDown, IconCube, IconLock, IconPlus } from "@tabler/icons-react"
 import { Composer, Mentions } from "@ren/chat"
 import { AppMention } from "@ren/ui/app-mention"
+import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
-import type { AppRegistryInfo } from "@ren/client"
+import type { AppProfileInfo, AppRegistryInfo } from "@ren/client"
 import { Loading } from "@ren/ui/loading"
 import { useQuery } from "@tanstack/react-query"
-import { getRouteApi, useNavigate } from "@tanstack/react-router"
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { AddToSpace } from "../../components/add-to-space.js"
+import { useAddition, type Added } from "../../components/add-to-space.js"
 import { AppDetailFrame, AppDetailSample, AppDetailsSample, AppHeader } from "../../components/app-detail.js"
-import { AccountList, AppSections } from "../../components/app-list.js"
+import { AccountList, AppSections, SpacePills } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
@@ -26,7 +28,7 @@ import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { audience, connectLabel, fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
+import { connectLabel, fromRegistry, gaps, listsSpace, type CatalogApp } from "../../lib/apps.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Seed } from "../../lib/seed.js"
@@ -60,7 +62,7 @@ function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) 
         </Button>
       }
       profiles={profiles}
-      caption={audience}
+      caption={(each) => <SpacePills profile={each} />}
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
       action={(each) => {
         const label = connectLabel(each)
@@ -74,14 +76,29 @@ function AppAccounts(props: { appId: string; onProfile: (target: ProfileTarget) 
   )
 }
 
-function useConnectedSpaces(app: CatalogApp) {
+type SpaceUse = { space: Space; profile: AppProfileInfo | undefined; status: "ready" | "unconnected" | "absent" }
+
+const statusOf = (profile: AppProfileInfo | undefined): SpaceUse["status"] => {
+  if (!profile) return "absent"
+  return gaps(profile).length === 0 ? "ready" : "unconnected"
+}
+
+function useSpaceUses(app: CatalogApp): ReadonlyArray<SpaceUse> {
   const joined = useSpaces().joined
-  const ready = useAppProfiles([app.id])
-    .of(app.id)
-    .filter((profile) => gaps(profile).length === 0)
-  return joined.filter((space) =>
-    ready.some((profile) => (profile.kind === "private" ? space.kind === "private" : listsSpace(profile, space.id))),
+  const bySpace = new Map(
+    useAppProfiles([app.id])
+      .of(app.id)
+      .toSorted((one, other) => gaps(other).length - gaps(one).length)
+      .flatMap((profile) =>
+        joined
+          .filter((space) => (profile.kind === "private" ? space.kind === "private" : listsSpace(profile, space.id)))
+          .map((space) => [space.id, profile] as const),
+      ),
   )
+  return joined.map((space) => {
+    const profile = bySpace.get(space.id)
+    return { space, profile, status: statusOf(profile) }
+  })
 }
 
 function useStartChat(app: CatalogApp) {
@@ -102,32 +119,82 @@ function useStartChat(app: CatalogApp) {
   }
 }
 
-function StartChat(props: { spaces: ReadonlyArray<Space>; onStart: (spaceId: string) => void }) {
-  const only = props.spaces.length === 1 ? props.spaces[0] : undefined
-  if (only)
-    return (
-      <Button onClick={() => props.onStart(only.id)}>
-        <IconMessagePlus data-icon="inline-start" />
-        Start chat
-      </Button>
-    )
+function OpenInChat(props: {
+  app: CatalogApp
+  uses: ReadonlyArray<SpaceUse>
+  onStart: (spaceId: string) => void
+  onProfile: (target: ProfileTarget) => void
+  onAdded: Added
+}) {
+  const addition = useAddition(props.app, props.onAdded)
+  const isUsed = props.uses.some((use) => use.profile)
+  const open = (use: SpaceUse) => {
+    if (use.status === "ready") return props.onStart(use.space.id)
+    if (use.profile) return props.onProfile({ appId: props.app.id, profileId: use.profile.id })
+    addition.add(use.space)
+  }
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button />}>
-        <IconMessagePlus data-icon="inline-start" />
-        Start chat
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Start a chat in</DropdownMenuLabel>
-          {props.spaces.map((space) => (
-            <DropdownMenuItem key={space.id} onClick={() => props.onStart(space.id)}>
-              {space.name}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button />}>
+          {isUsed ? "Open in chat" : "Add to space"}
+          <IconChevronDown data-icon="inline-end" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="max-h-96 w-64">
+          {[
+            { label: "Chat in", uses: props.uses.filter((use) => use.profile) },
+            { label: "Add to", uses: props.uses.filter((use) => !use.profile) },
+          ]
+            .filter((group) => group.uses.length > 0)
+            .map((group, index) => (
+              <Fragment key={group.label}>
+                {index > 0 ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                  {group.uses.map((use) => (
+                    <DropdownMenuItem key={use.space.id} onClick={() => open(use)}>
+                      {use.space.kind === "private" ? <IconLock /> : <IconCube />}
+                      <span className="min-w-0 flex-1 truncate">{use.space.name}</span>
+                      <span className="text-xs text-muted-foreground">{actions[use.status]}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </Fragment>
+            ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {addition.dialog}
+    </>
+  )
+}
+
+const actions = { ready: "Chat", unconnected: "Connect", absent: "Add" } as const
+
+function UsedIn(props: { uses: ReadonlyArray<SpaceUse> }) {
+  const used = props.uses.filter((use) => use.profile)
+  if (used.length === 0) return null
+  return (
+    <ul aria-label="Spaces with this app" className="mt-1.5 flex flex-wrap gap-1.5">
+      {used.map((use) => (
+        <li key={use.space.id}>
+          <Badge
+            variant="secondary"
+            className="h-6 rounded-full px-2.5 font-normal"
+            render={<Link to="/spaces/$spaceId" params={{ spaceId: use.space.id }} />}
+          >
+            {use.status === "ready" ? null : (
+              <span
+                // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a colored dot drawn with CSS, announced as an image
+                role="img"
+                aria-label="Not connected"
+                className="size-1.5 rounded-full bg-chart-3"
+              />
+            )}
+            {use.space.name}
+          </Badge>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -195,13 +262,13 @@ function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => 
 
 function AppDetail(props: { app: CatalogApp; loading: boolean }) {
   const app = props.app
-  const connected = useConnectedSpaces(app)
+  const uses = useSpaceUses(app)
   const start = useStartChat(app)
   const profile = useAddedProfile()
   const [editing, setEditing] = useState<ProfileTarget>()
   const headerShape = useShapeId("app-header")
   const detailsShape = useShapeId("app-details")
-  const first = connected.at(0)
+  const first = uses.find((use) => use.status === "ready")?.space
   const body = app.listing?.body
   return (
     <AppDetailFrame name={app.name}>
@@ -210,15 +277,15 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
           name={app.name}
           description={app.description}
           icon={app.icon}
+          meta={<UsedIn uses={uses} />}
           actions={
-            connected.length > 0 ? (
-              <>
-                <StartChat spaces={connected} onStart={(spaceId) => start(spaceId)} />
-                <AddToSpace app={app} onAdded={profile.added} />
-              </>
-            ) : (
-              <AddToSpace app={app} primary onAdded={profile.added} />
-            )
+            <OpenInChat
+              app={app}
+              uses={uses}
+              onStart={(spaceId) => start(spaceId)}
+              onProfile={setEditing}
+              onAdded={profile.added}
+            />
           }
         />
       </Loading>

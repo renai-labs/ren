@@ -30,13 +30,13 @@ export const reach = (profile: AppProfile) => {
   return listed.length ? `In ${listed.join(", ")}` : "Not in any space"
 }
 
-export const audience = (profile: AppProfile) => {
-  if (profile.kind === "private") return "Only you can use this account, in your Personal Space."
-  if (profile.allSpaces) return "Everyone in the organization can use this account."
-  const names = profile.spaces.map((space) => space.name)
-  if (names.length === 0) return "No space uses this profile yet. Add a space to share it."
-  const listed = names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
-  return `Everyone in ${listed}, and in the personal spaces of their members, can use this account.`
+export const reachedSpaces = (profile: AppProfile) => {
+  if (profile.kind === "private") return ["Personal"]
+  if (profile.allSpaces) return ["Every space"]
+  return [
+    ...profile.spaces.map((space) => space.name),
+    ...(profile.hiddenSpaces ? [`${profile.hiddenSpaces} more`] : []),
+  ]
 }
 
 export const source = (profile: AppProfile, spaceId: string) => {
