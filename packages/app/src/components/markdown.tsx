@@ -1,4 +1,4 @@
-import { createContext, use, type ComponentProps, type ReactNode } from "react"
+import { createContext, use, useState, type ComponentProps, type ReactNode } from "react"
 import {
   Streamdown,
   defaultRehypePlugins,
@@ -59,22 +59,40 @@ function MarkdownCode({ node: _node, className, children, ...props }: ComponentP
   )
 }
 
-function MarkdownImage({ node: _node, src, alt, ...props }: ComponentProps<"img"> & ExtraProps) {
+function MarkdownImage({ node, src, alt, ...props }: ComponentProps<"img"> & ExtraProps) {
+  const [failed, setFailed] = useState<string>()
   if (typeof src !== "string" || !src) return null
+  if (failed === src) return <span className="text-muted-foreground">{alt}</span>
+  const inline = node?.properties["data-inline"] === true
+  const linked = node?.properties["data-linked"] === true
+  const image = (className: string) => (
+    <img
+      src={src}
+      alt={alt ?? ""}
+      {...props}
+      onError={() => setFailed(src)}
+      className={cn("h-auto max-h-96 max-w-full object-contain", className)}
+    />
+  )
+  if (inline) return image("inline-block align-middle")
+  if (linked) return image("my-2 block rounded-md border")
   return (
     <ImageLightbox src={src} alt={alt ?? ""} className="my-2 block w-fit max-w-full cursor-zoom-in rounded-md">
-      <img src={src} alt={alt ?? ""} {...props} className="max-h-96 max-w-full rounded-md border object-contain" />
+      {image("rounded-md border")}
     </ImageLightbox>
   )
 }
 
-type WorkspaceImageRenderer = (path: string, alt: string) => ReactNode
+type WorkspaceImageRenderer = (path: string, alt: string, options: { inline: boolean }) => ReactNode
 const WorkspaceImages = createContext<WorkspaceImageRenderer | undefined>(undefined)
 
 function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & ExtraProps) {
   const render = use(WorkspaceImages)
   const path = node?.properties["data-workspace-image"]
-  if (typeof path === "string" && render) return render(path, typeof children === "string" ? children : "")
+  if (typeof path === "string" && render)
+    return render(path, typeof children === "string" ? children : "", {
+      inline: node?.properties["data-inline"] === true,
+    })
   return <span {...props}>{children}</span>
 }
 
@@ -104,6 +122,28 @@ const workspaceImages = () => (tree: MarkdownNode) => {
   visit(tree)
 }
 
+const significant = (node: MarkdownNode) =>
+  (node.children ?? []).filter((child) => child.type !== "text" || child.value?.trim())
+
+const markImages = () => (tree: MarkdownNode) => {
+  const visit = (node: MarkdownNode, context: { inline: boolean; linked: boolean }) => {
+    const isLink = node.tagName === "a"
+    const isInline = context.inline || ((node.tagName === "p" || isLink) && significant(node).length > 1)
+    if (
+      node.tagName === "img" ||
+      (node.tagName === "span" && node.properties?.["data-workspace-image"] !== undefined)
+    ) {
+      node.properties = {
+        ...node.properties,
+        "data-inline": isInline,
+        "data-linked": context.linked,
+      }
+    }
+    for (const child of node.children ?? []) visit(child, { inline: isInline, linked: context.linked || isLink })
+  }
+  visit(tree, { inline: false, linked: false })
+}
+
 const appLink = "#ren-app:"
 
 const withDataImages = (schema: unknown) => {
@@ -116,11 +156,13 @@ const withDataImages = (schema: unknown) => {
 const rehypePlugins: Array<(typeof defaultRehypePlugins)[string]> = Object.entries(defaultRehypePlugins).map(
   ([name, plugin]) => (name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin),
 )
+rehypePlugins.push(markImages)
 const workspaceRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) => {
   const safe: (typeof defaultRehypePlugins)[string] =
     name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin
   return name === "harden" ? [workspaceImages, safe] : [safe]
 })
+workspaceRehypePlugins.push(markImages)
 
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" && node.tagName === "img" && url.startsWith("data:image/") ? url : defaultUrlTransform(url, key, node)

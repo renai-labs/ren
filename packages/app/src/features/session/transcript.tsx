@@ -1163,7 +1163,9 @@ function SmoothMarkdown(props: {
       className={props.className}
       workspaceImage={
         root
-          ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
+          ? (path, alt, options) => (
+              <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} inline={options.inline} />
+            )
           : undefined
       }
     >

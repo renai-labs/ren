@@ -173,3 +173,41 @@ test("a member edits a sent message, which replaces it and what came after", asy
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
 })
+
+test("images in a reply keep a badge row in a row, open a lone image in a lightbox and leave a linked one to its link", async ({
+  page,
+}) => {
+  const pixel =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+  const markdown = [
+    `![one](${pixel}) ![two](${pixel}) ![three](${pixel})`,
+    `![lone](${pixel})`,
+    `[![linked](${pixel})](https://example.com/)`,
+  ].join("\n\n")
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Show the badges")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+  const sessionId = new URL(page.url()).pathname.split("/").at(-1) ?? ""
+  await page.route(
+    (url) =>
+      url.pathname === `/chat/session/${sessionId}/message` || url.pathname === `/sessions/${sessionId}/messages`,
+    async (route) => {
+      const response = await route.fetch()
+      const body = (await response.text()).replaceAll("stub reply", JSON.stringify(markdown).slice(1, -1))
+      await route.fulfill({ response, body })
+    },
+  )
+  await page.reload()
+
+  const badges = page.getByRole("img", { name: /^(one|two|three)$/ })
+  await expect(badges).toHaveCount(3)
+  const tops = await badges.evaluateAll((images) => images.map((image) => image.getBoundingClientRect().top))
+  expect(new Set(tops).size).toBe(1)
+
+  await expect(page.getByRole("button", { name: "Open one" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Open linked" })).toHaveCount(0)
+  await page.getByRole("button", { name: "Open lone" }).click()
+  await expect(page.getByRole("dialog")).toBeVisible()
+})
