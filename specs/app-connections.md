@@ -199,6 +199,14 @@ Today: `features/session/prompt-input.tsx` (`AppsStrip`) and `features/session/u
 
 On send, the app creates an empty account for each mentioned app with a managed version that is not in the space yet, before it sends the message. The brain pulls before every prompt (`cell/src/chat.ts`), so the first turn has the tools.
 
+This is built (`features/session/prompt-input.tsx`, `use-composer-suggestions.ts` and `use-space-apps.ts`), except:
+
+- The strip keeps its stack of app icons, with a ⚠ dot when an app needs sign-in. The pills are rows in its popover: each app with its status line and one action. A row opens S2.
+- The @ list keeps the description and shows the status words of §2 at the right.
+- The chip sits above the composer, next to attachments, and shows for a mentioned app that is ⚠ or ○, and for one connected from its chip.
+- Reconnect and Connect my own open S2 at that account's connection step; Connect opens S2 at the step that §2 resolves.
+- When the empty account cannot be made, a toast says so and the message is still sent.
+
 ### S4. Chat card
 
 Today: `features/session/app-connect.tsx` (`AppConnectCard`). The card shows the same status line and buttons as S2, and its buttons open S2 over the chat.
@@ -217,6 +225,8 @@ Today: `features/session/app-connect.tsx` (`AppConnectCard`). The card shows the
 ```
 
 Today the agent does not continue: `app_request_connect` returns at once, and Ren's MCP instructions tell the agent to end its turn (`server/src/ren-mcp.ts`). The message starts the next turn. When a turn is still running, the message waits in the queue like any other.
+
+This is built: the card keeps its look with the status line of §2 and one action, as in S3. When S2 closes and the app's status in the space got better (○ or ⚠ to ◐ or ✓, or ◐ to ✓), the app sends "I connected {App}." with the delivery the person chose for follow-ups. Ren's MCP instructions tell the agent to go on after that message. A connected card shows ✓ Connected and no button.
 
 ### S5. Apps page and app page
 

@@ -24,6 +24,16 @@ export const statusLabel: Record<Status, string> = {
   missing: "Not connected",
 }
 
+export const statusAction: Record<Status, string | undefined> = {
+  expired: "Reconnect",
+  connected: undefined,
+  credits: "Connect my own",
+  missing: "Connect",
+}
+
+export const hasManaged = (app: Pick<CatalogApp, "mcps">) =>
+  Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed")
+
 export const statusOf = (app: Pick<CatalogApp, "mcps">, profiles: ReadonlyArray<AppProfile>): Status => {
   if (profiles.some((profile) => profile.items.some((item) => item.status === "reconnect"))) return "expired"
   if (profiles.some((profile) => gaps(profile).length === 0)) return "connected"

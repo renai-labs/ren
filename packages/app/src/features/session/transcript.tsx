@@ -129,6 +129,7 @@ export interface TranscriptProps {
   readonly admin?: boolean | undefined
   readonly onTryAgain?: ((text: string) => void) | undefined
   readonly onContinue?: (() => void) | undefined
+  readonly onConnected?: ((app: string) => void) | undefined
   readonly onChangeModel?: (() => void) | undefined
   readonly onStop?: (() => void) | undefined
 }
@@ -1277,6 +1278,7 @@ function BlockView(props: {
               key={`${connect.appId}:${connect.spaceId}`}
               appId={connect.appId}
               spaceId={connect.spaceId}
+              onConnected={props.transcript.onConnected}
             />
           ))}
         </MessageContent>

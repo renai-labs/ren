@@ -4,7 +4,6 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
 import { toast } from "@ren/ui/sonner"
-import { useQuery } from "@tanstack/react-query"
 import {
   IconApps,
   IconArrowUp,
@@ -50,14 +49,15 @@ import {
 import { Input } from "@ren/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/popover"
-import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { ProfileDialog, useAddManaged, type ProfileTarget } from "../../components/profile-dialog.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
-import { useApps } from "../../lib/use-app.js"
+import { StatusDot } from "../../components/app-list.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { gaps, isSpaceApp } from "../../lib/apps.js"
+import { isSpaceApp, statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
+import { errorMessage } from "../../lib/errors.js"
+import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
 import { useStep } from "../../lib/use-step.js"
-import { RouterContext } from "../../lib/router-context.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 
 function AddMenu(props: {
@@ -106,44 +106,24 @@ function AddMenu(props: {
 }
 
 function AppsStrip(props: { spaceId: string }) {
-  const { api } = RouterContext.useRouterContext()
   const spaces = useSpaces()
-  const spaceName = spaces.spaceName
-  const space = spaces.spaces.find((each) => each.id === props.spaceId)
-  const from = {
-    spaceId: props.spaceId,
-    name: spaceName(props.spaceId),
-    members: space?.memberCount ?? 1,
-    private: space?.kind === "private",
-  }
+  const space = useSpaceApps(props.spaceId)
   const [connecting, setConnecting] = useState<ProfileTarget & { fromAdding?: boolean }>()
   const [open, setOpen] = useState(false)
   const [adding, setAdding] = useState(false)
-  const reach = useQuery({
-    ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
-    retry: false,
+  const from = space.from
+  if (space.pending || !from) return null
+  const apps = [...new Set(space.profiles.map((profile) => profile.appId))].flatMap((appId) => {
+    const app = space.app(appId)
+    return app && !isSpaceApp(app, spaces.spaces) ? [{ app, status: space.status(appId), here: space.here(appId) }] : []
   })
-  const reached = reach.data?.profiles ?? []
-  const catalog = useApps(reached.map((profile) => profile.appId))
-  const profiles = reached
-    .filter((profile) => !isSpaceApp(catalog.of(profile.appId), spaces.spaces))
-    .map((profile) => ({
-      id: profile.id,
-      appId: profile.appId,
-      name: profile.name,
-      app: catalog.of(profile.appId)?.name ?? profile.appSlug,
-      icon: catalog.of(profile.appId)?.icon ?? undefined,
-      gaps: gaps(profile),
-    }))
-  if (reach.isPending || catalog.pending) return null
-  const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
   const shown = apps.slice(0, 3)
-  const missing = profiles.filter((profile) => profile.gaps.length > 0).length
+  const expired = apps.filter((each) => each.status === "expired").length
   const dialogs = (
     <>
       <AddAppDialog
-        space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
-        added={new Set(profiles.map((profile) => profile.appId))}
+        space={{ id: props.spaceId, name: from.name }}
+        added={new Set(apps.map((each) => each.app.id))}
         onPick={(app) => setConnecting({ appId: app.id, from, fromAdding: true })}
         open={adding}
         onOpenChange={setAdding}
@@ -159,7 +139,7 @@ function AppsStrip(props: { spaceId: string }) {
       ) : null}
     </>
   )
-  if (profiles.length === 0)
+  if (apps.length === 0)
     return (
       <>
         <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" onClick={() => setAdding(true)}>
@@ -177,16 +157,16 @@ function AppsStrip(props: { spaceId: string }) {
             <InputGroupButton
               size="sm"
               className="-ml-1 font-normal"
-              aria-label={`Apps: ${apps.map(([app]) => app).join(", ")}${missing ? `, ${missing} not connected` : ""}`}
+              aria-label={`Apps: ${apps.map((each) => each.app.name).join(", ")}${expired ? `, ${expired} ${statusLabel.expired.toLowerCase()}` : ""}`}
             />
           }
         >
           <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
-            {shown.map(([app, icon]) => (
+            {shown.map((each) => (
               // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-              <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
-                <AppAvatarImage src={icon} />
-                <AppAvatarFallback name={app} />
+              <Avatar key={each.app.id} size="sm" className="data-[size=sm]:size-5">
+                <AppAvatarImage src={each.app.icon ?? undefined} />
+                <AppAvatarFallback name={each.app.name} />
               </Avatar>
             ))}
             {apps.length > shown.length ? (
@@ -195,25 +175,27 @@ function AppsStrip(props: { spaceId: string }) {
               </AvatarGroupCount>
             ) : null}
           </AvatarGroup>
+          {expired ? <StatusDot status="expired" /> : null}
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
-          <Command filter={matchesAppOrProfileName} className="h-auto rounded-none p-0">
+          <Command filter={matchesAppName} className="h-auto rounded-none p-0">
             <CommandInput placeholder="Search apps" aria-label="Search apps" />
             <CommandList className="pt-1">
               <CommandEmpty>No apps found</CommandEmpty>
               <CommandGroup className="p-0">
-                {profiles.map((profile) => (
-                  <AppProfileItem
-                    key={profile.id}
-                    profile={profile}
-                    onEdit={() => {
+                {apps.map((each) => (
+                  <AppStatusItem
+                    key={each.app.id}
+                    app={each.app}
+                    status={each.status}
+                    onOpen={() => {
                       setOpen(false)
-                      setConnecting({ appId: profile.appId, profileId: profile.id, from, edit: true })
+                      setConnecting({ appId: each.app.id, from })
                     }}
-                    onConnect={() => {
+                    onAction={() => {
                       setOpen(false)
-                      setConnecting({ appId: profile.appId, profileId: profile.id, from })
+                      setConnecting(connectTarget({ appId: each.app.id, status: each.status, here: each.here }, from))
                     }}
                   />
                 ))}
@@ -239,37 +221,39 @@ function AppsStrip(props: { spaceId: string }) {
   )
 }
 
-const matchesAppOrProfileName = (_profileId: string, search: string, names?: ReadonlyArray<string>) =>
+const matchesAppName = (_appId: string, search: string, names?: ReadonlyArray<string>) =>
   names?.some((name) => name.toLowerCase().includes(search.trim().toLowerCase())) ? 1 : 0
 
-function AppProfileItem(props: {
-  profile: { id: string; name: string; app: string; icon: string | undefined; gaps: ReadonlyArray<unknown> }
-  onEdit: () => void
-  onConnect: () => void
+function AppStatusItem(props: {
+  app: Pick<CatalogApp, "id" | "name" | "icon">
+  status: Status
+  onOpen: () => void
+  onAction: () => void
 }) {
-  const profile = props.profile
+  const action = statusAction[props.status]
   return (
     // ast-grep-ignore: require-item-group -- rows render inside the apps popover's CommandGroup
     <CommandItem
-      value={profile.id}
-      keywords={[profile.app, profile.name]}
+      value={props.app.id}
+      keywords={[props.app.name]}
       className="gap-3 rounded-md p-2 [&>svg:last-child]:hidden"
-      onSelect={props.onEdit}
+      onSelect={props.onOpen}
     >
       <Avatar // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
         size="sm"
         className="data-[size=sm]:size-5"
       >
-        <AppAvatarImage src={profile.icon} />
-        <AppAvatarFallback name={profile.app} />
+        <AppAvatarImage src={props.app.icon ?? undefined} />
+        <AppAvatarFallback name={props.app.name} />
       </Avatar>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm">{profile.app}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          {profile.gaps.length ? "Not connected" : "Connected"}
+        <span className="truncate text-sm">{props.app.name}</span>
+        <span className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+          <StatusDot status={props.status} />
+          {statusLabel[props.status]}
         </span>
       </span>
-      {profile.gaps.length ? (
+      {action ? (
         <Button
           variant="secondary"
           size="sm"
@@ -277,16 +261,98 @@ function AppProfileItem(props: {
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation()
-            props.onConnect()
+            props.onAction()
           }}
         >
-          Connect
+          {action}
         </Button>
       ) : (
         <IconChevronRight className="text-muted-foreground" />
       )}
     </CommandItem>
   )
+}
+
+function MentionChips(props: {
+  space: ReturnType<typeof useSpaceApps>
+  statuses: ReadonlyArray<{ app: Composer.MentionedApp; status: Status }>
+}) {
+  const [connecting, setConnecting] = useState<ProfileTarget>()
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
+  const space = props.space
+  const from = space.from
+  const shown = props.statuses.filter((each) => !isReady(each.status) || opened.has(each.app.id))
+  if (shown.length === 0 || !from) return null
+  return (
+    <div className="ml-auto flex flex-wrap justify-end gap-1">
+      {shown.map((each) => {
+        const action = isReady(each.status) ? undefined : statusAction[each.status]
+        return (
+          <span
+            key={each.app.id}
+            className="flex h-8 items-center gap-2 rounded-full border bg-card pr-1 pl-1.5 text-sm"
+          >
+            <AppIcon name={each.app.name} icon={each.app.icon} size="sm" />
+            <span className="font-medium">{each.app.name}</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <StatusDot status={each.status} />
+              {statusLabel[each.status]}
+            </span>
+            {action ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full"
+                onClick={() => {
+                  setOpened((previous) => new Set([...previous, each.app.id]))
+                  setConnecting(
+                    connectTarget({ appId: each.app.id, status: each.status, here: space.here(each.app.id) }, from),
+                  )
+                }}
+              >
+                {action}
+              </Button>
+            ) : null}
+          </span>
+        )
+      })}
+      {connecting ? <ProfileDialog {...connecting} onClose={() => setConnecting(undefined)} /> : null}
+    </div>
+  )
+}
+
+function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, text: string) {
+  const mentioned = suggest?.mentioned(text) ?? []
+  const [adding, setAdding] = useState(false)
+  const space = useSpaceApps(
+    spaceId,
+    mentioned.map((app) => app.id),
+  )
+  const addManaged = useAddManaged()
+  const statuses = space.pending ? [] : mentioned.map((app) => ({ app, status: space.status(app.id) }))
+  return {
+    space,
+    statuses,
+    adding,
+    send: (onSubmit: () => void) => {
+      const from = space.from
+      const missing = statuses.flatMap((each) => {
+        const app = space.app(each.app.id)
+        return app && each.status === "credits" && space.here(app.id).length === 0 ? [app] : []
+      })
+      if (missing.length === 0 || !from) return onSubmit()
+      setAdding(true)
+      void Promise.all(
+        missing.map((app) =>
+          addManaged(app, from).catch((error: unknown) =>
+            toast.error(`Couldn’t add ${app.name} to ${from.name}`, { description: errorMessage(error) }),
+          ),
+        ),
+      )
+        .then(onSubmit)
+        .finally(() => setAdding(false))
+    },
+  }
 }
 
 export type PromptInputBoot = Exclude<ChatSession.Boot, { readonly _tag: "Ready" }> | { readonly _tag: "Reconnecting" }
@@ -442,6 +508,12 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
                 <span className="font-medium text-foreground">{item.label}</span>
                 {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
               </span>
+              {item.status ? (
+                <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <StatusDot status={item.status} />
+                  {statusLabel[item.status]}
+                </span>
+              ) : null}
             </CommandItem>
           ))}
         </CommandGroup>
@@ -485,12 +557,12 @@ function composerState(
     readonly sending?: boolean | undefined
     readonly onStop?: (() => void) | undefined
   },
-  draft: { readonly blank: boolean },
+  draft: { readonly blank: boolean; readonly adding: boolean },
 ) {
   const booting = props.boot?._tag === "Starting"
   return {
     booting,
-    sending: props.sending === true,
+    sending: props.sending === true || draft.adding,
     status: props.boot && (draft.blank || booting) ? props.boot : undefined,
     stop: Boolean(props.running && draft.blank && props.onStop),
   }
@@ -543,6 +615,7 @@ export function PromptInput(props: {
   sending?: boolean | undefined
   suggest?: Suggest | undefined
   files: Target
+  header?: ReactNode
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   const [repositories, setRepositories] = useState(false)
@@ -551,7 +624,8 @@ export function PromptInput(props: {
   const picker = useRef<HTMLInputElement>(null)
   const text = draft.text
   const blank = Composer.isBlank(draft)
-  const state = composerState(props, { blank })
+  const mentions = useMentions(props.spaceId, props.suggest, text)
+  const state = composerState(props, { blank, adding: mentions.adding })
   const booting = state.booting
   const uploading = uploads.uploads.length > 0
   const change = (next: Composer.Draft) => props.onChange(next)
@@ -559,7 +633,7 @@ export function PromptInput(props: {
     if (!props.sending) uploads.add(files)
   }
   const submit = () => {
-    if (props.sending || booting) return
+    if (state.sending || booting) return
     if (uploading) {
       toast("Wait for the files to upload", {
         description: "Send the message once every file is uploaded, or remove the ones that failed.",
@@ -570,7 +644,7 @@ export function PromptInput(props: {
       if (props.running) props.onStop?.()
       return
     }
-    props.onSubmit()
+    mentions.send(props.onSubmit)
   }
   const home = props.placement === "home"
   const status = state.status
@@ -621,6 +695,10 @@ export function PromptInput(props: {
           event.target.value = ""
         }}
       />
+      <div className="flex flex-wrap items-center gap-1 empty:hidden">
+        {props.header}
+        <MentionChips space={mentions.space} statuses={mentions.statuses} />
+      </div>
       <UploadChips
         spaceId={props.files.spaceId}
         files={Composer.files(draft)}

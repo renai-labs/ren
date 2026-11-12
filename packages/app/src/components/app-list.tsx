@@ -12,7 +12,7 @@ import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
 import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
-import { categoryLabel, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
+import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo } from "@ren/client"
@@ -306,7 +306,7 @@ const transportLabel = (transport: Mcp["transport"]) => {
 }
 
 const usageOf = (mcps: NonNullable<App["mcps"]>, mcp: Mcp) => {
-  if (!Object.values(mcps).some((each) => each.transport.type === "managed")) return null
+  if (!hasManaged({ mcps })) return null
   if (mcp.transport.type === "managed") return "Uses Ren credits"
   if (mcp.auth.type === "none" && mcp.transport.type !== "provider") return null
   return "Uses your account"

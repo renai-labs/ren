@@ -62,6 +62,7 @@ import { errorMessage } from "../lib/errors.js"
 import { plural } from "../lib/format.js"
 import {
   gaps,
+  hasManaged,
   lastSpaceWarning,
   listsSpace,
   reachedSpaces,
@@ -92,7 +93,7 @@ export type ProfileTarget = {
   chooseSpace?: boolean | undefined
 }
 
-export const freeSlug = (name: string, taken: ReadonlySet<string>) => {
+const freeSlug = (name: string, taken: ReadonlySet<string>) => {
   const base = slugOf(name) || "account"
   if (!taken.has(base)) return base
   const number = Array.from({ length: taken.size + 1 }, (_, index) => index + 2).find(
@@ -101,7 +102,7 @@ export const freeSlug = (name: string, taken: ReadonlySet<string>) => {
   return `${base}-${number}`
 }
 
-export function defaultName(input: {
+function defaultName(input: {
   from: From | undefined
   only: boolean
   picked: ReadonlySet<string>
@@ -120,6 +121,24 @@ export function defaultName(input: {
       other.kind === "shared" && (other.allSpaces || other.spaces.some((listed) => targets.includes(listed.id))),
   )
   return [space, input.app.name, isFirst ? undefined : first].filter(Boolean).join(" · ")
+}
+
+export function useAddManaged() {
+  const { api } = RouterContext.useRouterContext()
+  const user = useMe().user.name
+  const accounts = useAppProfiles([])
+  const create = useMutation(api["app-profile"].create.mutationOptions())
+  return async (app: App, from: From) => {
+    const others = await accounts.load(app.id)
+    const name = defaultName({ from, only: false, picked: new Set(), spaces: [], others, app, user })
+    await create.mutateAsync({
+      appId: app.id,
+      name,
+      slug: freeSlug(name, new Set(others.map((profile) => profile.slug))),
+      kind: from.private ? "private" : "shared",
+      ...(!from.private && { spaceIds: [from.spaceId] }),
+    })
+  }
 }
 
 const slideIn = "animate-in duration-250 ease-out fade-in-0 slide-in-from-right-4 motion-reduce:slide-in-from-right-0"
@@ -395,8 +414,6 @@ const targetOf = (from: From, space: SpaceInfo | undefined): Target => ({
   private: space?.kind === "private",
 })
 
-const hasManaged = (app: App) => Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed")
-
 function AddStep(props: {
   app: App
   from: From
@@ -422,7 +439,8 @@ function AddStep(props: {
       ? profile.userId === me && !from.private
       : profile.canAdd.includes(from.private ? "ownPrivate" : "joined")
   const here = profiles.filter(reaches)
-  const elsewhere = profiles.filter((profile) => !reaches(profile) && gaps(profile).length === 0)
+  const expired = here.find((profile) => profile.items.some((item) => item.status === "reconnect"))
+  const elsewhere = profiles.filter((profile) => !expired && !reaches(profile) && gaps(profile).length === 0)
   const options = elsewhere.filter(usable)
   const locked = elsewhere.find((profile) => !usable(profile))
   const credits = here.find((profile) => statusOf(app, [profile]) === "credits")
@@ -437,7 +455,7 @@ function AddStep(props: {
     onOpen: props.onOpen,
     onClose: props.onClose,
   }
-  const spare = here.find((profile) => gaps(profile).length > 0)
+  const spare = [expired, ...here].find((profile) => profile !== undefined && gaps(profile).length > 0)
   if (listed.pending)
     return (
       <Screen app={app} title={state.title} description="Loading accounts" action={null}>
@@ -583,7 +601,7 @@ function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> 
             <FieldLabel
               key={profile.id}
               htmlFor={`use-${profile.id}`}
-              className="flex min-h-14 items-center gap-3 px-3 py-2 font-normal"
+              className="flex min-h-14 w-full items-center gap-3 px-3 py-2 font-normal"
             >
               <RadioGroupItem id={`use-${profile.id}`} value={profile.id} />
               <span className="flex min-w-0 flex-1 flex-col gap-1">
