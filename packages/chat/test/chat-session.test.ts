@@ -798,6 +798,32 @@ test("a prompt to a chat whose space was shut down starts it again once, then is
     }),
   ))
 
+test("a prompt to a chat whose start failed starts it again once, then is delivered", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const space = { failed: true, restarts: 0 }
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => (space.failed ? Effect.succeed({ status: "failed" as const, reason: "no capacity" }) : access()),
+        restart: Effect.sync(() => {
+          space.restarts += 1
+          space.failed = false
+        }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* chat.open(brain.id).pipe(Effect.ignore)
+      expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe("Failed")
+      yield* chat.prompt({ text: stub.script({ reply: "started again" }).marker })
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
+      expect([
+        space.restarts,
+        ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
+      ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
+    }),
+  ))
+
 test("a chat whose start failed starts again on retry, without a new session, and sends the message kept while it failed", () =>
   ChatTest.live(
     Effect.gen(function* () {
