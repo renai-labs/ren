@@ -17,6 +17,8 @@ export type FindBarProps = {
   focus: number
   more: boolean
   loadingHistory: boolean
+  label?: string
+  scope?: () => Element | ShadowRoot | null | undefined
   onStep: (delta: number) => void
   onSearchEarlier: () => void
   onClose: () => void
@@ -25,6 +27,8 @@ export type FindBarProps = {
 const hitName = "ren-find-hit"
 const activeName = "ren-find-active"
 const bodies = "[data-searchable]"
+const chatRows = { rows: "[data-row-key]", key: "data-row-key", bodies }
+const lineRows = { rows: "[data-line]", key: "data-line", bodies: undefined }
 const seekFrames = 12
 const steps: Readonly<Record<string, number>> = { Enter: 1, ShiftEnter: -1, ArrowDown: 1, ArrowUp: -1 }
 
@@ -38,7 +42,7 @@ const clear = () => {
 
 const special = /[.*+?^${}()|[\]\\]/g
 
-const bodyRanges = (body: Element, pattern: RegExp) => {
+const bodyRanges = (body: Node, pattern: RegExp) => {
   const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
   const nodes: Array<{ node: Text; start: number }> = []
   const text = { value: "" }
@@ -62,15 +66,22 @@ const bodyRanges = (body: Element, pattern: RegExp) => {
   })
 }
 
-const rowRanges = (row: Element, pattern: RegExp) =>
-  [...row.querySelectorAll(bodies)].flatMap((body) => bodyRanges(body, pattern))
+const rowRanges = (row: Element, pattern: RegExp, kind: typeof chatRows | typeof lineRows) =>
+  kind.bodies
+    ? [...row.querySelectorAll(kind.bodies)].flatMap((body) => bodyRanges(body, pattern))
+    : bodyRanges(row, pattern)
 
-const ranges = (root: Element, query: string, match: FindBarMatch | undefined) => {
+const ranges = (
+  root: Element | ShadowRoot,
+  query: string,
+  match: FindBarMatch | undefined,
+  kind: typeof chatRows | typeof lineRows,
+) => {
   const pattern = new RegExp(query.replaceAll(special, "\\$&"), "gi")
-  return [...root.querySelectorAll("[data-row-key]")].reduce<{ hits: Array<Range>; active: Array<Range> }>(
+  return [...root.querySelectorAll(kind.rows)].reduce<{ hits: Array<Range>; active: Array<Range> }>(
     (found, row) => {
-      const current = match !== undefined && row.getAttribute("data-row-key") === match.row
-      const each = rowRanges(row, pattern)
+      const current = match !== undefined && row.getAttribute(kind.key) === match.row
+      const each = rowRanges(row, pattern, kind)
       found.hits.push(...each.filter((_range, index) => !current || index !== match.occurrence))
       found.active.push(...each.filter((_range, index) => current && index === match.occurrence))
       return found
@@ -93,24 +104,34 @@ export function FindBar(props: FindBarProps) {
     input.current?.select()
   }, [props.focus])
 
-  const highlight = useEffectEvent((root: Element | null | undefined, options: { readonly seek: boolean }) => {
-    if (!root || !query) return true
-    const found = ranges(root, query, props.match)
-    if (supported()) {
-      CSS.highlights.set(hitName, new Highlight(...found.hits))
-      CSS.highlights.set(activeName, new Highlight(...found.active))
-    }
-    const target =
-      found.active.at(0)?.startContainer.parentElement ??
-      (row ? root.querySelector(`[data-row-key="${CSS.escape(row)}"]`) : null)
-    if (options.seek) target?.scrollIntoView({ block: "center" })
-    return target !== null
-  })
+  const rootOf = useEffectEvent(() =>
+    props.scope
+      ? props.scope()
+      : input.current
+          ?.closest('[data-slot="message-scroller"]')
+          ?.querySelector('[data-slot="message-scroller-viewport"]'),
+  )
+  const kind = props.scope ? lineRows : chatRows
+  const label = props.label ?? "Find in chat"
+
+  const highlight = useEffectEvent(
+    (root: Element | ShadowRoot | null | undefined, options: { readonly seek: boolean }) => {
+      if (!root || !query) return true
+      const found = ranges(root, query, props.match, kind)
+      if (supported()) {
+        CSS.highlights.set(hitName, new Highlight(...found.hits))
+        CSS.highlights.set(activeName, new Highlight(...found.active))
+      }
+      const target =
+        found.active.at(0)?.startContainer.parentElement ??
+        (row ? root.querySelector(`[${kind.key}="${CSS.escape(row)}"]`) : null)
+      if (options.seek) target?.scrollIntoView({ block: "center" })
+      return target !== null
+    },
+  )
 
   useEffect(() => {
-    const root = input.current
-      ?.closest('[data-slot="message-scroller"]')
-      ?.querySelector('[data-slot="message-scroller-viewport"]')
+    const root = rootOf()
     const loop = { frame: 0, tries: 0, apply: 0 }
     const seek = () => {
       if (highlight(root, { seek: true }) || loop.tries++ >= seekFrames) return
@@ -135,7 +156,7 @@ export function FindBar(props: FindBarProps) {
 
   return (
     <div className="flex w-80 flex-col items-end gap-2">
-      <search aria-label="Find in chat" className="w-full">
+      <search aria-label={label} className="w-full">
         <InputGroup className="bg-popover shadow-overlay">
           <InputGroupAddon>
             <IconSearch />
@@ -144,8 +165,8 @@ export function FindBar(props: FindBarProps) {
             ref={input}
             type="search"
             value={props.value}
-            placeholder="Find in chat"
-            aria-label="Find in chat"
+            placeholder={label}
+            aria-label={label}
             className="[&::-webkit-search-cancel-button]:appearance-none"
             onChange={(event) => props.onValueChange(event.target.value)}
             onKeyDown={(event) => {

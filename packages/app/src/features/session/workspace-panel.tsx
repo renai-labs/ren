@@ -44,7 +44,10 @@ const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; ico
 
 const byKind = new Map(kinds.map((each) => [each.kind, each]))
 
-export type PanelTarget = { readonly kind: "terminal" } | { readonly kind: "files"; readonly path: string }
+export type PanelTarget =
+  | { readonly kind: "terminal"; readonly folder?: string }
+  | { readonly kind: "files"; readonly path: string; readonly line?: number | undefined }
+  | { readonly kind: "changes"; readonly path: string }
 
 export type PanelRequest = PanelTarget & { readonly id: string }
 
@@ -152,6 +155,44 @@ function Launcher(props: { onPick: (kind: Kind) => void }) {
   )
 }
 
+function TabBody(props: {
+  tab: OpenTab
+  root: Session.ID
+  messages: ReadonlyArray<SessionMessage.Info>
+  onMention: ((path: string) => void) | undefined
+  onTerminal: (folder: string) => void
+}) {
+  const request = props.tab.request
+  switch (props.tab.kind) {
+    case "changes":
+      return <ChangesTab root={props.root} messages={props.messages} request={request} />
+    case "progress":
+      return <ProgressTab messages={props.messages} />
+    case "computer":
+      return <ComputerTab />
+    case "browser":
+      return <BrowserTab />
+    case "files":
+      return (
+        <FilesTab
+          root={props.root}
+          messages={props.messages}
+          request={request}
+          onMention={props.onMention}
+          onTerminal={props.onTerminal}
+        />
+      )
+    case "terminal":
+      return (
+        <TerminalTab
+          root={props.root}
+          focus={request?.id}
+          folder={request?.kind === "terminal" ? request.folder : undefined}
+        />
+      )
+  }
+}
+
 export function WorkspacePanel(props: {
   root: Session.ID
   request: PanelRequest | undefined
@@ -159,6 +200,7 @@ export function WorkspacePanel(props: {
   maximized: boolean
   onMaximize: (maximized: boolean) => void
   onClose: () => void
+  onMention: ((path: string) => void) | undefined
 }) {
   const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
   const [active, setActive] = useState<string>()
@@ -235,14 +277,13 @@ export function WorkspacePanel(props: {
         {tabs.length === 0 ? <Launcher onPick={pick} /> : null}
         {tabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-col">
-            {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
-            {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
-            {tab.kind === "computer" ? <ComputerTab /> : null}
-            {tab.kind === "browser" ? <BrowserTab /> : null}
-            {tab.kind === "files" ? (
-              <FilesTab root={props.root} request={tab.request?.kind === "files" ? tab.request : undefined} />
-            ) : null}
-            {tab.kind === "terminal" ? <TerminalTab root={props.root} focus={tab.request?.id} /> : null}
+            <TabBody
+              tab={tab}
+              root={props.root}
+              messages={props.messages}
+              onMention={props.onMention}
+              onTerminal={(folder) => pick("terminal", { kind: "terminal", folder, id: crypto.randomUUID() })}
+            />
           </TabsContent>
         ))}
       </Tabs>

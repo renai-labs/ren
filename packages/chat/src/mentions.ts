@@ -77,6 +77,8 @@ export const suggest = (input: {
   return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
 }
 
+export const fileDragType = "application/x-ren-file"
+
 export const text = (item: Pick<Item, "label">) => `@  ${item.label}`
 
 const space = /\s/
@@ -114,6 +116,17 @@ export const insert = (input: string, item: Item, start: number, cursor: number)
   const rest = input.slice(cursor)
   const inserted = text(item) + (rest.startsWith(" ") ? "" : " ")
   return { text: before + inserted + rest, cursor: before.length + inserted.length }
+}
+
+export const insertFile = (input: string, path: string, cursor: number) => {
+  const padded = cursor > 0 && !space.test(input.charAt(cursor - 1))
+  const at = padded ? cursor + 1 : cursor
+  return insert(
+    padded ? `${input.slice(0, cursor)} ${input.slice(cursor)}` : input,
+    fromFile({ path, type: "file" }),
+    at,
+    at,
+  )
 }
 
 export const remove = (

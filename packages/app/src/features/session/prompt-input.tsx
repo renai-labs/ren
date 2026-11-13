@@ -8,7 +8,7 @@ import {
   type Ref,
   type RefObject,
 } from "react"
-import { Composer, ComposerHistory, type ChatSession } from "@ren/chat"
+import { Composer, ComposerHistory, Mentions, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
@@ -925,6 +925,7 @@ export function PromptInput(props: {
       label: artifact?.title ?? "",
       icon: null,
       color: "var(--primary)",
+      file: false,
     })),
   ].toSorted((a, b) => a.start - b.start)
   return (
@@ -969,6 +970,17 @@ export function PromptInput(props: {
       <InputGroup
         data-shell={shell}
         className="rounded-xl bg-card shadow-soft data-[shell=true]:border-primary data-[shell=true]:ring-3 data-[shell=true]:ring-primary/15 dark:bg-card"
+        onDragOver={(event) => {
+          if (suggest && event.dataTransfer.types.includes(Mentions.fileDragType)) event.preventDefault()
+        }}
+        onDrop={(event) => {
+          const path = event.dataTransfer.getData(Mentions.fileDragType)
+          if (!suggest || !path) return
+          event.preventDefault()
+          const result = Mentions.insertFile(text, path, textarea.current?.selectionStart ?? text.length)
+          change(Composer.withText(draft, result.text))
+          place(result.text, result.cursor)
+        }}
       >
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />

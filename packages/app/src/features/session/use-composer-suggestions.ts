@@ -279,6 +279,7 @@ function useSuggestions(input: {
           label: token.item.label,
           icon: app?.icon ?? null,
           color: mentionColor(app),
+          file: token.item.kind === "file",
         }
       }),
     mentioned: (text) => [

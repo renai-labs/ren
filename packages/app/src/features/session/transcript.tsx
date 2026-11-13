@@ -2,6 +2,7 @@ import { DateTime, Option } from "effect"
 import { flushSync } from "react-dom"
 import {
   useImperativeHandle,
+  use,
   useRef,
   useState,
   type KeyboardEvent,
@@ -40,7 +41,6 @@ import {
   IconClipboardText,
   IconClock,
   IconCopy,
-  IconFile,
   IconInfoCircle,
   IconPencil,
   IconChecklist,
@@ -51,6 +51,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { Kbd, KbdGroup } from "@ren/ui/kbd"
+import { DiffFile } from "./diff-file.js"
+import { workspacePath } from "./workspace-edits.js"
+import { OpenPanel } from "./open-panel.js"
+import { FileIcon } from "@ren/ui/file-icon"
 import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
 import {
   Attachment,
@@ -61,7 +65,7 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from "@ren/ui/code-block"
+import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
@@ -101,6 +105,7 @@ import { useMentionedApps } from "../../lib/use-app.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
+import { InlineFile } from "./file-chip.js"
 import { WorkspaceImage } from "./workspace-image.js"
 
 interface Person {
@@ -116,6 +121,7 @@ export interface TranscriptHandle {
 export interface TranscriptProps {
   readonly handle?: Ref<TranscriptHandle> | undefined
   readonly view: ChatAtoms.View
+  readonly files?: boolean | undefined
   readonly spaceId?: string | undefined
   readonly messages: ReadonlyArray<SessionMessage.Info>
   readonly rows: ReadonlyArray<TimelineRow.Row>
@@ -339,7 +345,7 @@ function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> 
               </AttachmentMedia>
             ) : (
               <AttachmentMedia>
-                <IconFile />
+                <FileIcon name={file.name ?? ""} mime={file.mime} className="size-5" />
               </AttachmentMedia>
             )}
             <AttachmentContent>
@@ -755,34 +761,8 @@ function StepRow(props: {
   )
 }
 
-const lineVariant = (type: string) => {
-  if (type === "addition") return "added"
-  return type === "deletion" ? "removed" : "default"
-}
-
-function FileDiff(props: { file: PatchFiles.File; titled: boolean }) {
-  return (
-    <CodeBlock size="sm">
-      {props.titled ? (
-        <CodeBlockHeader>
-          <CodeBlockTitle>{props.file.path}</CodeBlockTitle>
-        </CodeBlockHeader>
-      ) : null}
-      <CodeBlockContent wrap className="max-h-64">
-        {props.file.view.diff.hunks
-          .flatMap((hunk) => hunk.lines)
-          .map((line, index) => (
-            // oxlint-disable-next-line react/no-array-index-key -- diff lines have no identity besides their place
-            <CodeBlockLine key={index} variant={lineVariant(line.type)}>
-              {line.text.replace(/\n$/u, "")}
-            </CodeBlockLine>
-          ))}
-      </CodeBlockContent>
-    </CodeBlock>
-  )
-}
-
 function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: ReadonlyArray<PatchFiles.File> }) {
+  const openPanel = use(OpenPanel)
   const additions = props.files.reduce((total, file) => total + file.additions, 0)
   const deletions = props.files.reduce((total, file) => total + file.deletions, 0)
   return (
@@ -802,7 +782,23 @@ function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: Re
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-2">
           {props.files.map((file) => (
-            <FileDiff key={file.path} file={file} titled={props.files.length > 1} />
+            <DiffFile
+              key={file.path}
+              view={file.view}
+              capped
+              action={
+                openPanel ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-mr-2 text-muted-foreground"
+                    onClick={() => openPanel({ kind: "changes", path: workspacePath(file.path) })}
+                  >
+                    Open in Changes
+                  </Button>
+                ) : undefined
+              }
+            />
           ))}
         </TraceCollapsibleContent>
       </TraceCollapsible>
@@ -1018,6 +1014,7 @@ function Steps(props: {
   workedFor: string | undefined
   running: boolean
   view: ChatAtoms.View
+  files: boolean
   onOpenChild: (id: Session.ID) => void
 }) {
   const backgrounded = props.steps.filter((step) => step.kind === "tool" && movedToBackground(step.tool))
@@ -1052,6 +1049,8 @@ function Steps(props: {
                 key={run.key}
                 text={run.text.text}
                 streaming={run.text.streaming}
+                root={props.view.root}
+                files={props.files}
                 className="text-sm/relaxed text-foreground"
               />
             ) : (
@@ -1216,6 +1215,7 @@ function SmoothMarkdown(props: {
   className: string
   apps?: ReadonlyArray<CatalogApp> | undefined
   root?: Session.ID | undefined
+  files?: boolean | undefined
   images?: ReadonlyMap<string, string> | undefined
 }) {
   const text = useSmoothText(props.text, { streaming: props.streaming })
@@ -1230,6 +1230,11 @@ function SmoothMarkdown(props: {
           ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
           : undefined
       }
+      fileReference={
+        root && props.files && !props.streaming
+          ? (text, code) => <InlineFile root={root} text={text} code={code} />
+          : undefined
+      }
     >
       {text}
     </Markdown>
@@ -1241,6 +1246,7 @@ function AnswerBlock(props: {
   streaming: boolean
   copy: string | undefined
   root: Session.ID
+  files: boolean
   messages: ReadonlyArray<SessionMessage.Info>
 }) {
   const apps = useMentionedApps(props.text)
@@ -1269,6 +1275,7 @@ function AnswerBlock(props: {
             <SmoothMarkdown
               text={props.text}
               root={props.root}
+              files={props.files}
               images={images}
               streaming={props.streaming}
               apps={apps}
@@ -1316,6 +1323,7 @@ function BlockView(props: {
             running={props.activeTurn === block.turn}
             workedFor={props.workedFor(block.turn)}
             view={props.transcript.view}
+            files={props.transcript.files === true}
             onOpenChild={props.transcript.onOpenChild}
           />
         </MessageContent>
@@ -1325,6 +1333,7 @@ function BlockView(props: {
     return (
       <AnswerBlock
         root={props.transcript.view.root}
+        files={props.transcript.files === true}
         messages={props.transcript.messages}
         text={block.text}
         streaming={block.streaming}

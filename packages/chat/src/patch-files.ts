@@ -48,10 +48,14 @@ export const changedFileDiff = (value: unknown): value is Changed =>
 
 const kinds: Readonly<Record<FileDiff.Status, Kind>> = { added: "add", deleted: "delete", modified: "update" }
 
+const parsed = new WeakMap<Changed, File>()
+
 export const patchFile = (value: unknown): File | undefined => {
   if (!changedFileDiff(value)) return
+  const previous = parsed.get(value)
+  if (previous) return previous
   const cached: { view?: FileDiff.View } = {}
-  return {
+  const file: File = {
     path: value.file,
     type: kinds[value.status],
     additions: value.additions,
@@ -62,12 +66,12 @@ export const patchFile = (value: unknown): File | undefined => {
     },
     contents: FileDiff.completePatchContents(value.patch),
   }
+  parsed.set(value, file)
+  return file
 }
 
 export const patchFiles = (value: unknown): ReadonlyArray<File> =>
   Array.isArray(value) ? value.flatMap((item) => patchFile(item) ?? []) : []
-
-const statuses: Readonly<Record<Kind, FileDiff.Status>> = { add: "added", delete: "deleted", update: "modified" }
 
 const groupType = (first: File, last: File): Kind => {
   if (last.type === "delete") return "delete"
@@ -79,47 +83,28 @@ const group = (path: string, files: ReadonlyArray<File>): Group | undefined => {
   const last = files.at(-1)
   if (!first || !last) return
   const type = groupType(first, last)
-  const chained = files.every(
-    (file, index) =>
-      Boolean(file.contents) && (index === 0 || files.at(index - 1)?.contents?.after === file.contents?.before),
-  )
-  if (!chained)
-    return {
-      path,
-      type,
-      additions: files.reduce((total, file) => total + file.additions, 0),
-      deletions: files.reduce((total, file) => total + file.deletions, 0),
-      views: files.map((file) => file.view),
-    }
-  const view =
-    files.length === 1
-      ? first.view
-      : FileDiff.normalize({
-          file: path,
-          before: first.contents?.before ?? "",
-          after: last.contents?.after ?? "",
-          status: statuses[type],
-          additions: 0,
-          deletions: 0,
-        })
-  const counts = view.diff.hunks.reduce(
-    (result, hunk) => ({ additions: result.additions + hunk.additions, deletions: result.deletions + hunk.deletions }),
-    { additions: 0, deletions: 0 },
-  )
-  return { path, type, ...counts, views: [{ ...view, ...counts }] }
+  const views = FileDiff.merge(files.map((file) => file.view))
+  return {
+    path,
+    type,
+    additions: views.reduce((total, view) => total + view.additions, 0),
+    deletions: views.reduce((total, view) => total + view.deletions, 0),
+    views,
+  }
 }
 
-export const patchFileGroups = (value: unknown): ReadonlyArray<Group> => {
+export const patchFileGroups = (
+  value: unknown,
+  options?: { readonly path: (path: string) => string },
+): ReadonlyArray<Group> => {
   const byPath = patchFiles(value).reduce((result, file) => {
-    const files = result.get(file.path)
+    const path = options ? options.path(file.path) : file.path
+    const files = result.get(path)
     if (files) files.push(file)
-    else result.set(file.path, [file])
+    else result.set(path, [file])
     return result
   }, new Map<string, Array<File>>())
-  return [...byPath.values()].flatMap((files) => {
-    const path = files.at(0)?.path
-    return path ? (group(path, files) ?? []) : []
-  })
+  return [...byPath.entries()].flatMap(([path, files]) => (path ? (group(path, files) ?? []) : []))
 }
 
 const editFile = (path: string, before: string, after: string): ReadonlyArray<Changed> => {
@@ -134,28 +119,49 @@ const editFile = (path: string, before: string, after: string): ReadonlyArray<Ch
 
 const pathOf = (input: Readonly<Record<string, unknown>>) => [input.path, input.filePath].find(Predicate.isString)
 
+export const toolPaths = (tool: SessionMessage.Tool): ReadonlyArray<string> => {
+  const files = ToolState.metadata(tool).files
+  if (Array.isArray(files) && files.length > 0) return files.filter(changedFileDiff).map((file) => file.file)
+  const input = ToolState.input(tool)
+  const path = pathOf(input)
+  if (!path) return []
+  if (tool.name === "edit" && typeof input.oldString === "string" && typeof input.newString === "string")
+    return input.oldString === input.newString ? [] : [path]
+  return tool.name === "write" && typeof input.content === "string" && input.content ? [path] : []
+}
+
+const generated = new WeakMap<SessionMessage.Tool, ReadonlyArray<Changed>>()
+
 export const toolFiles = (tool: SessionMessage.Tool): ReadonlyArray<unknown> => {
   const files = ToolState.metadata(tool).files
   if (Array.isArray(files) && files.length > 0) return files
   const input = ToolState.input(tool)
   const path = pathOf(input)
   if (!path) return []
+  const previous = generated.get(tool)
+  if (previous) return previous
+  let result: ReadonlyArray<Changed> = []
   if (tool.name === "edit" && typeof input.oldString === "string" && typeof input.newString === "string")
-    return editFile(path, input.oldString, input.newString)
-  if (tool.name !== "write" || typeof input.content !== "string" || !input.content) return []
-  return [
-    {
-      file: path,
-      patch: createTwoFilesPatch(path, path, "", input.content),
-      additions: input.content.split("\n").length - Number(input.content.endsWith("\n")),
-      deletions: 0,
-      status: "modified",
-    },
-  ]
+    result = editFile(path, input.oldString, input.newString)
+  else if (tool.name === "write" && typeof input.content === "string" && input.content)
+    result = [
+      {
+        file: path,
+        patch: createTwoFilesPatch(path, path, "", input.content),
+        additions: input.content.split("\n").length - Number(input.content.endsWith("\n")),
+        deletions: 0,
+        status: "modified",
+      },
+    ]
+  if (tool.state.status === "completed") generated.set(tool, result)
+  return result
 }
 
 export const isFileChange = (tool: SessionMessage.Tool) =>
   tool.state.status !== "error" &&
   (tool.name === "edit" || tool.name === "write" || tool.name === "patch" || tool.name === "apply_patch")
 
-export const groups = (tools: ReadonlyArray<SessionMessage.Tool>) => patchFileGroups(tools.flatMap(toolFiles))
+export const groups = (
+  tools: ReadonlyArray<SessionMessage.Tool>,
+  options?: { readonly path: (path: string) => string },
+) => patchFileGroups(tools.flatMap(toolFiles), options)

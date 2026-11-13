@@ -34,6 +34,11 @@ export interface PathView {
   readonly path: string
 }
 
+export interface FoldersView {
+  readonly root: Session.ID
+  readonly opened: ReadonlyArray<string>
+}
+
 export interface ShellView extends View {
   readonly shellID: Shell.ID
   readonly running: boolean
@@ -249,6 +254,33 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const folder = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.listFiles(view.path)))
 
+  const folders = Atom.family((view: FoldersView) =>
+    Atom.make(
+      (get) => new Map(["", ...view.opened].map((path) => [path, get(folder({ root: view.root, path }))] as const)),
+    ),
+  )
+
+  const fileExists = Atom.family((view: PathView) =>
+    Atom.make((get) => {
+      get(running(view.root))
+      const slash = view.path.lastIndexOf("/")
+      const listed = get
+        .result(folder({ root: view.root, path: view.path.slice(0, slash + 1) }))
+        .pipe(Effect.map((entries) => entries.some((entry) => entry.type === "file" && entry.path === view.path)))
+      if (slash >= 0) return Effect.map(listed, (found) => (found ? view.path : undefined))
+      return Effect.flatMap(listed, (found) =>
+        found
+          ? Effect.succeed(view.path)
+          : Effect.flatMap(get.result(session(view.root)), (opened) => opened.searchFiles(view.path, "file")).pipe(
+              Effect.map((matches) => {
+                const named = matches.filter((entry) => entry.path.split("/").at(-1) === view.path)
+                return named.length === 1 ? named.at(0)?.path : undefined
+              }),
+            ),
+      )
+    }),
+  )
+
   const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
 
   const vcs = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcs))
@@ -319,6 +351,8 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     commands,
     files,
     folder,
+    folders,
+    fileExists,
     file,
     vcs,
     vcsDiff,

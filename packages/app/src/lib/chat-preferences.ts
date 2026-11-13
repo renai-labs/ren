@@ -9,6 +9,10 @@ export const detail = Preference.make("chat.detail.v1", Schema.Literals(["compac
 
 export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "queue")
 
+export const fileWrap = Preference.make("chat.file-wrap.v1", Schema.Boolean, false)
+
+export const diffStyle = Preference.make("chat.diff-style.v1", Schema.Literals(["unified", "split"]), "unified")
+
 export const backgroundActivity = Preference.make(
   "chat.background-activity.v1",
   Schema.Literals(["off", "left", "center", "right"]),

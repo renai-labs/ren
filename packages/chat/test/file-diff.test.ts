@@ -237,4 +237,44 @@ describe("session diff", () => {
     expect(FileDiff.text(view, "deletions")).toBe("")
     expect(FileDiff.text(view, "additions")).toBe("")
   })
+
+  describe("merge", () => {
+    const edit = (before: string, after: string, status: FileDiff.Status = "modified") =>
+      FileDiff.normalize({ file: "a.ts", before, after, additions: 1, deletions: 1, status })
+    const partial = FileDiff.normalize({
+      file: "a.ts",
+      patch: "@@ -10,2 +10,2 @@\n keep\n-old\n+new\n",
+      additions: 1,
+      deletions: 1,
+      status: "modified",
+    })
+
+    test("joins complete edits that chain into one before and after", () => {
+      const merged = FileDiff.merge([edit("one\ntwo\n", "one\nthree\n"), edit("one\nthree\n", "one\nfour\n")])
+      expect(merged).toHaveLength(1)
+      const view = merged.at(0)
+      expect(view && FileDiff.text(view, "deletions")).toBe("one\ntwo\n")
+      expect(view && FileDiff.text(view, "additions")).toBe("one\nfour\n")
+      expect([view?.additions, view?.deletions]).toEqual([1, 1])
+    })
+
+    test("keeps an added file added when later edits modify it", () => {
+      const merged = FileDiff.merge([edit("", "one\n", "added"), edit("one\n", "two\n")])
+      expect(merged[0]?.status).toBe("added")
+    })
+
+    test("keeps patches separate when one is partial", () => {
+      const views = [edit("one\n", "two\n"), partial]
+      expect(FileDiff.merge(views)).toEqual(views)
+    })
+
+    test("keeps patches separate when the second does not start where the first ended", () => {
+      const views = [edit("one\n", "two\n"), edit("other\n", "three\n")]
+      expect(FileDiff.merge(views)).toEqual(views)
+    })
+
+    test("keeps the original patch of a partial view for rendering", () => {
+      expect(partial.diff.patch).toContain("@@ -10,2 +10,2 @@")
+    })
+  })
 })

@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type RefObject } from "react"
 import { MentionLogo } from "#components/app-mention"
+import { FileIcon } from "#components/file-icon"
 
 const copied = [
   "paddingTop",
@@ -20,6 +21,7 @@ export interface MentionMark {
   readonly label: string
   readonly icon: string | null
   readonly color: string
+  readonly file: boolean
 }
 
 interface Box {
@@ -89,11 +91,15 @@ export function MentionOverlay(props: {
           node.mark ? (
             <span key={node.key} className="relative" style={{ color: node.mark.color }}>
               <span className="invisible">{node.text.slice(0, node.text.length - node.mark.label.length)}</span>
-              <MentionLogo
-                name={node.mark.label}
-                icon={node.mark.icon}
-                className="absolute top-1/2 left-0 -translate-y-1/2"
-              />
+              {node.mark.file ? (
+                <FileIcon name={node.mark.label} className="absolute top-1/2 left-0 size-[1em] -translate-y-1/2" />
+              ) : (
+                <MentionLogo
+                  name={node.mark.label}
+                  icon={node.mark.icon}
+                  className="absolute top-1/2 left-0 -translate-y-1/2"
+                />
+              )}
               {node.mark.label}
             </span>
           ) : (
