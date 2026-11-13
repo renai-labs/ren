@@ -29,6 +29,7 @@
     "@bufbuild/cel": "catalog:",
     "@effect/sql-pg": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
+    "@noble/hashes": "catalog:",
     "@ren/db": "workspace:*",
     "@ren/hand-api": "workspace:*",
     "@ren/host-api": "workspace:*",

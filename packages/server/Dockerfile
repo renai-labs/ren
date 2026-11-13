@@ -1,7 +1,5 @@
 # syntax=docker/dockerfile:1-labs
 # Build from the repository root: docker build -f packages/server/Dockerfile .
-FROM node:22-bookworm-slim AS node
-
 FROM oven/bun:1.4.2 AS deps
 WORKDIR /repo
 
@@ -19,7 +17,6 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /repo ./
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY packages/server ./packages/server
 COPY packages/core ./packages/core
 COPY packages/db ./packages/db

@@ -7,12 +7,11 @@ import { fileURLToPath } from "node:url"
 const program = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
   if (process.env.REN_ARTIFACT_SMOKE_DRY_RUN === "1") {
-    const version = yield* spawner
-      .string(ChildProcess.make(process.env.ARTIFACT_NODE ?? "node", ["--version"], { forceKillAfter: "3 seconds" }))
-      .pipe(Effect.timeout("5 seconds"))
-    yield* Effect.log(
-      `Node ${version.trim()}; Wrangler ${fileURLToPath(import.meta.resolve("wrangler/package.json"))}. No Cloudflare calls or deployments performed.`,
-    )
+    yield* Config.all({
+      account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID"),
+      token: Config.Redacted("CLOUDFLARE_API_TOKEN"),
+    })
+    yield* Effect.log("Cloudflare credentials are set. No Cloudflare calls or deployments performed.")
     return
   }
   if (process.env.REN_ARTIFACT_SMOKE_APPROVED !== "1")

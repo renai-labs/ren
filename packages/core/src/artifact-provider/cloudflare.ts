@@ -1,18 +1,13 @@
 export * as ArtifactCloudflare from "./cloudflare.js"
 
 import { Artifact } from "@ren/schema/artifact"
-import { Config, Duration, Effect, FileSystem, Layer, Option, Result, Schedule, Schema } from "effect"
+import { Config, Duration, Effect, Layer, Option, Predicate, Redacted, Result, Schedule, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
-import { ChildProcessSpawner } from "effect/process"
-import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { ArtifactArchive } from "../artifact-archive.js"
 import { ArtifactProvider } from "../artifact-provider.js"
 import { ObjectStorage } from "../object-storage.js"
 import { ArtifactCloudflareCode } from "./cloudflare-code.js"
 import { ArtifactCloudflarePlan } from "./cloudflare-plan.js"
-import { ArtifactCloudflareUpload } from "./cloudflare-upload.js"
 
 export const id = Artifact.ProviderID.make("cloudflare")
 
@@ -20,7 +15,7 @@ const Version = Schema.Struct({ deploymentId: Artifact.DeploymentID, proof: Sche
 type Version = typeof Version.Type
 const Snapshot = Schema.Struct({ ...Version.fields, config: Artifact.Config, archive: Schema.NonEmptyString })
 type Snapshot = typeof Snapshot.Type
-const State = Schema.Struct({
+export const State = Schema.Struct({
   version: Schema.Literal(2),
   account: Schema.String,
   script: Schema.String,
@@ -39,6 +34,11 @@ const Metadata = Schema.Struct({
   }),
 })
 const Subdomain = Schema.Struct({ result: Schema.Struct({ subdomain: Schema.NonEmptyString }) })
+const UploadSession = Schema.Struct({
+  result: Schema.Struct({ jwt: Schema.NonEmptyString, buckets: Schema.Array(Schema.Array(Schema.String)) }),
+})
+const UploadAnswer = Schema.Struct({ result: Schema.Struct({ jwt: Schema.optional(Schema.NonEmptyString) }) })
+const Uploaded = Schema.Struct({ result: Schema.Struct({ etag: Schema.NonEmptyString }) })
 const failed = (error: unknown, options: { readonly retryable: boolean } = { retryable: false }) =>
   error instanceof ArtifactProvider.Failed
     ? error
@@ -57,6 +57,51 @@ const budgeted = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
       orElse: () => Effect.fail(failed(`Cloudflare did not finish within ${Duration.format(budget)}`)),
     }),
   )
+const apiBase = (account: string) =>
+  `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/workers`
+
+// oxlint-disable-next-line ren/no-comments -- Uploads a Worker: one multipart PUT of its metadata and its ES modules. guard is the ETag of the upload it replaces, or none for a new Worker; Cloudflare refuses a stale guard with 412.
+export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (input: {
+  readonly account: string
+  readonly token: Redacted.Redacted
+  readonly script: string
+  readonly metadata: Readonly<Record<string, unknown>>
+  readonly modules: Readonly<Record<string, string>>
+  readonly guard: Option.Option<string>
+}) {
+  const http = yield* HttpClient.HttpClient
+  const form = new FormData()
+  form.append("metadata", JSON.stringify(input.metadata))
+  for (const name of Object.keys(input.modules))
+    form.append(name, new File([input.modules[name] ?? ""], name, { type: "application/javascript+module" }))
+  const response = yield* http
+    .execute(
+      HttpClientRequest.put(`${apiBase(input.account)}/scripts/${input.script}`).pipe(
+        HttpClientRequest.bearerToken(input.token),
+        HttpClientRequest.bodyFormData(form),
+        HttpClientRequest.setHeader(
+          Option.isSome(input.guard) ? "if-match" : "if-none-match",
+          Option.getOrElse(input.guard, () => "*"),
+        ),
+      ),
+    )
+    .pipe(
+      Effect.timeout("30 seconds"),
+      Effect.mapError(() => failed("Cloudflare did not take the Worker upload", { retryable: true })),
+    )
+  if (response.status === 412)
+    return yield* failed("Cloudflare publication was fenced by a newer upload (HTTP 412)", { retryable: true })
+  if (response.status !== 200)
+    return yield* failed(
+      `Cloudflare refused the Worker upload (${response.status}): ${(yield* response.text.pipe(Effect.orElseSucceed(() => ""))).slice(-1500)}`,
+      retryableStatus(response.status),
+    )
+  return (yield* response.json.pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(Uploaded)),
+    Effect.mapError(() => failed("Cloudflare did not return the Worker upload's ETag", { retryable: true })),
+  )).result.etag
+})
+
 const deployed = (state: State, snapshot: Snapshot) => ({
   remote: { ...state, active: snapshot, pending: null, stopped: false, stop: null },
   url: `https://${state.script}.${state.subdomain}.workers.dev${snapshot.config.entry === "index.html" ? "/" : `/${snapshot.config.entry}`}`,
@@ -68,14 +113,7 @@ export const layer = Layer.effect(
     const config = yield* Config.all({
       account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID"),
       token: Config.Redacted("CLOUDFLARE_API_TOKEN"),
-      root: Config.String("ARTIFACT_CLOUDFLARE_ROOT").pipe(
-        Config.withDefault(join(tmpdir(), "ren-artifacts-cloudflare")),
-      ),
-      node: Config.String("ARTIFACT_NODE").pipe(Config.withDefault("node")),
       namespace: Config.option(Config.String("ARTIFACT_CLOUDFLARE_NAMESPACE")),
-      uploadWithin: Config.Duration("ARTIFACT_CLOUDFLARE_UPLOAD_TIMEOUT").pipe(
-        Config.withDefault(Duration.seconds(55)),
-      ),
       recoverWithin: Config.Duration("ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT").pipe(
         Config.withDefault(Duration.seconds(25)),
       ),
@@ -85,10 +123,8 @@ export const layer = Layer.effect(
         "WFP dispatch is not implemented: omit ARTIFACT_CLOUDFLARE_NAMESPACE to use ordinary Workers",
       )
     const storage = yield* ObjectStorage.Service
-    const fs = yield* FileSystem.FileSystem
     const http = yield* HttpClient.HttpClient
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const base = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(config.account)}/workers`
+    const base = apiBase(config.account)
     const api = (request: HttpClientRequest.HttpClientRequest) =>
       http.execute(request.pipe(HttpClientRequest.bearerToken(config.token))).pipe(
         Effect.flatMap((response) => response.json.pipe(Effect.map((body) => ({ status: response.status, body })))),
@@ -104,8 +140,6 @@ export const layer = Layer.effect(
     const subdomain = (yield* Schema.decodeUnknownEffect(Subdomain)(subdomainResponse.body).pipe(
       Effect.mapError(failed),
     )).result.subdomain
-    const wrangler = join(dirname(fileURLToPath(import.meta.resolve("wrangler/package.json"))), "wrangler-dist/cli.js")
-    yield* fs.makeDirectory(config.root, { recursive: true }).pipe(Effect.mapError(failed))
 
     const workerEtag = Effect.fnUntraced(function* (script: string) {
       const response = yield* api(
@@ -166,88 +200,123 @@ export const layer = Layer.effect(
         Effect.mapError(() => failed("Cloudflare did not serve the matching artifact deployment version")),
       )
 
-    const upload = Effect.fnUntraced(
-      function* (state: State, source: Option.Option<Snapshot>, version: Version, guard: Option.Option<string>) {
-        const directory = yield* fs.makeTempDirectoryScoped({ directory: config.root, prefix: `${state.script}-` })
-        const archiveSource = Option.orElse(source, () => Option.fromNullishOr(state.active ?? state.pending))
-        const files = Option.isSome(archiveSource)
-          ? (yield* ArtifactArchive.read(storage, archiveSource.value.archive)).files
-          : {}
-        const objects = Option.isSome(source) ? (source.value.config.durableObjects ?? {}) : {}
-        if (Object.keys(objects).length && !files[Artifact.workerPath])
-          return yield* failed("Durable Objects require _worker.js with exported classes")
-        const modules = ArtifactCloudflareCode.modules({
-          ...version,
-          objects: state.plan.objects,
-          mode: Option.isSome(source) ? "serving" : "stopped",
-          active:
-            Option.isSome(source) && files[Artifact.workerPath]
-              ? { source: new TextDecoder().decode(files[Artifact.workerPath]), classes: Object.values(objects) }
-              : null,
-        })
-        yield* fs.makeDirectory(join(directory, "worker"))
-        yield* Effect.forEach(
-          Object.entries(modules),
-          ([path, text]) => fs.writeFileString(join(directory, "worker", path), text),
-          { concurrency: 4 },
-        )
-        if (Option.isSome(archiveSource)) {
-          yield* fs.makeDirectory(join(directory, "public"))
-          yield* Effect.forEach(
-            Object.entries(files).filter(([path]) => path !== Artifact.workerPath),
-            ([path, bytes]) =>
-              fs
-                .makeDirectory(dirname(join(directory, "public", path)), { recursive: true })
-                .pipe(Effect.andThen(fs.writeFile(join(directory, "public", path), bytes))),
-            { concurrency: 4 },
-          )
-        }
-        yield* fs.writeFileString(
-          join(directory, "parent.mjs"),
-          'process.stdin.resume(); process.stdin.unref?.(); process.stdin.once("end", () => process.exit(1));',
-        )
-        yield* fs.writeFileString(
-          join(directory, "wrangler.json"),
-          JSON.stringify({
-            name: state.script,
-            main: "worker/main.js",
-            base_dir: "worker",
-            no_bundle: true,
-            find_additional_modules: true,
-            rules: [{ type: "ESModule", globs: ["active.js", "retained-*.js"] }],
-            compatibility_date: "2026-06-01",
-            workers_dev: true,
-            preview_urls: false,
-            ...(Option.isSome(archiveSource) && {
-              assets: { directory: "public", binding: "ASSETS", run_worker_first: true },
-            }),
-            durable_objects: {
-              code_update_strategy: { mode: "immediate" },
-              bindings: Object.entries(objects).map(([name, className]) => ({
-                name,
-                class_name: className,
-              })),
-            },
-            exports: ArtifactCloudflarePlan.exports(state.plan.objects),
+    // oxlint-disable-next-line ren/no-comments -- Direct upload: Cloudflare names the assets it lacks by hash in buckets, takes each bucket under the session's token, and answers the last one with the token the Worker upload attaches.
+    const uploadAssets = Effect.fnUntraced(function* (script: string, files: Readonly<Record<string, Uint8Array>>) {
+      const hashed = Object.keys(files).flatMap((path) => {
+        const bytes = files[path]
+        return bytes ? [{ path, bytes, hash: ArtifactCloudflareCode.assetHash(path, bytes) }] : []
+      })
+      const session = yield* api(
+        HttpClientRequest.post(`${base}/scripts/${script}/assets-upload-session`).pipe(
+          HttpClientRequest.bodyJsonUnsafe({
+            manifest: Object.fromEntries(
+              hashed.map((asset) => [`/${asset.path}`, { hash: asset.hash, size: asset.bytes.byteLength }]),
+            ),
           }),
+        ),
+      )
+      if (session.status !== 200)
+        return yield* failed(
+          `Cloudflare did not start the asset upload (${session.status})`,
+          retryableStatus(session.status),
         )
-        return yield* ArtifactCloudflareUpload.stage({
-          account: config.account,
-          script: state.script,
-          token: config.token,
-          node: config.node,
-          directory,
-          wrangler,
-          guard,
-        }).pipe(
-          Effect.provideService(HttpClient.HttpClient, http),
-          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-          Effect.timeout(Duration.min(config.uploadWithin, Duration.seconds(55))),
-        )
-      },
-      Effect.scoped,
-      Effect.mapError(failed),
-    )
+      const started = (yield* Schema.decodeUnknownEffect(UploadSession)(session.body).pipe(Effect.mapError(failed)))
+        .result
+      if (started.buckets.length === 0) return started.jwt
+      const byHash = new Map(hashed.map((asset) => [asset.hash, asset]))
+      const answers = yield* Effect.forEach(
+        started.buckets,
+        Effect.fnUntraced(function* (bucket) {
+          const form = new FormData()
+          for (const hash of bucket) {
+            const asset = byHash.get(hash)
+            if (!asset) return yield* failed(`Cloudflare asked for an asset Ren did not send (${hash})`)
+            form.append(hash, new File([asset.bytes.toBase64()], hash, { type: Bun.file(asset.path).type }))
+          }
+          const response = yield* http
+            .execute(
+              HttpClientRequest.post(`${base}/assets/upload?base64=true`).pipe(
+                HttpClientRequest.bearerToken(started.jwt),
+                HttpClientRequest.bodyFormData(form),
+              ),
+            )
+            .pipe(
+              Effect.timeout("60 seconds"),
+              Effect.mapError(() => failed("Cloudflare did not take the assets", { retryable: true })),
+            )
+          if (![200, 201, 202].includes(response.status))
+            return yield* failed(`Cloudflare refused the assets (${response.status})`, retryableStatus(response.status))
+          return (yield* response.json.pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(UploadAnswer)),
+            Effect.mapError(failed),
+          )).result.jwt
+        }),
+        { concurrency: 3 },
+      )
+      const completion = answers.find(Predicate.isNotUndefined)
+      if (!completion) return yield* failed("Cloudflare did not finish the asset upload", { retryable: true })
+      return completion
+    })
+
+    const upload = Effect.fnUntraced(function* (
+      state: State,
+      source: Option.Option<Snapshot>,
+      version: Version,
+      guard: Option.Option<string>,
+    ) {
+      const archiveSource = Option.orElse(source, () => Option.fromNullishOr(state.active ?? state.pending))
+      const files = Option.isSome(archiveSource)
+        ? (yield* ArtifactArchive.read(storage, archiveSource.value.archive).pipe(
+            Effect.mapError((error) => failed(error, { retryable: error._tag === "ArtifactArchive.Failed" })),
+          )).files
+        : {}
+      const objects = Option.isSome(source) ? (source.value.config.durableObjects ?? {}) : {}
+      if (Object.keys(objects).length && !files[Artifact.workerPath])
+        return yield* failed("Durable Objects require _worker.js with exported classes")
+      const modules = ArtifactCloudflareCode.modules({
+        ...version,
+        objects: state.plan.objects,
+        mode: Option.isSome(source) ? "serving" : "stopped",
+        active:
+          Option.isSome(source) && files[Artifact.workerPath]
+            ? { source: new TextDecoder().decode(files[Artifact.workerPath]), classes: Object.values(objects) }
+            : null,
+      })
+      const assets = Option.isSome(archiveSource)
+        ? Option.some(
+            yield* uploadAssets(
+              state.script,
+              Object.fromEntries(Object.entries(files).filter((file) => file.at(0) !== Artifact.workerPath)),
+            ),
+          )
+        : Option.none()
+      // oxlint-disable-next-line ren/no-comments -- The metadata Wrangler sends for this Worker, captured from a live deploy.
+      const metadata = {
+        main_module: "main.js",
+        bindings: [
+          ...Object.keys(objects).map((name) => ({
+            name,
+            type: "durable_object_namespace",
+            class_name: objects[name],
+          })),
+          ...(Option.isSome(assets) ? [{ name: "ASSETS", type: "assets" }] : []),
+        ],
+        compatibility_date: "2026-06-01",
+        compatibility_flags: [],
+        code_update_strategy: { mode: "immediate" },
+        exports: ArtifactCloudflarePlan.exports(state.plan.objects),
+        keep_bindings: ["secret_text", "secret_key"],
+        ...(Option.isSome(assets) && { assets: { jwt: assets.value, config: { run_worker_first: true } } }),
+      }
+      return yield* putScript({
+        account: config.account,
+        token: config.token,
+        script: state.script,
+        metadata,
+        modules,
+        guard,
+      }).pipe(Effect.provideService(HttpClient.HttpClient, http))
+    })
 
     // oxlint-disable-next-line ren/no-comments -- The artifact's state, which Ren keeps on its row. save writes it before each change to Cloudflare, so a call after a crash finds what the last one started.
     const access = Effect.fnUntraced(function* (
