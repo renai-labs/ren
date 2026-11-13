@@ -100,14 +100,21 @@ const adaptGroupSpace = (raw: RawClient["space"]) => ({
 
 type SpaceMemberListRequest = Parameters<RawClient["space-member"]["space-member.list"]>[0]
 type SpaceMemberListInput = {
-  readonly spaceId: SpaceMemberListRequest["query"]["spaceId"]
+  readonly spaceId?: SpaceMemberListRequest["query"]["spaceId"]
+  readonly userId?: SpaceMemberListRequest["query"]["userId"]
   readonly status?: SpaceMemberListRequest["query"]["status"]
   readonly page: SpaceMemberListRequest["query"]["page"]
   readonly pageSize: SpaceMemberListRequest["query"]["pageSize"]
 }
 const EndpointSpaceMemberList = (raw: RawClient["space-member"]) => (input: SpaceMemberListInput) =>
   raw["space-member.list"]({
-    query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+    query: {
+      spaceId: input["spaceId"],
+      userId: input["userId"],
+      status: input["status"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 type SpaceMemberCreateRequest = Parameters<RawClient["space-member"]["space-member.create"]>[0]

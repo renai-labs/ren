@@ -79,8 +79,14 @@ export const SpaceMemberList = (input: Command.Command.Config.Infer<typeof Comma
   Operation.run(
     ClientApi.groups["space-member"].endpoints["space-member.list"],
     {
-      query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { spaceId: "<space>", status: "--status", page: "--page", pageSize: "--page-size" },
+      query: {
+        spaceId: input["spaceId"],
+        userId: input["userId"],
+        status: input["status"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { spaceId: "<space>", userId: "--user-id", status: "--status", page: "--page", pageSize: "--page-size" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),

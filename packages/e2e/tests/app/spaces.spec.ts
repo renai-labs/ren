@@ -4,6 +4,7 @@ import {
   appOrigin,
   appURL,
   createOrganization,
+  createSpace,
   inviteMember,
   serverURL,
   uniqueEmail,
@@ -116,4 +117,23 @@ test("an admin joins a space they are not in", async ({ page, request }) => {
   await join.getByRole("button", { name: "Join space" }).click()
   await expect(page.getByText("Joined Cryptography")).toBeVisible()
   await expect(page.getByRole("heading", { level: 1, name: "Cryptography" })).toBeVisible()
+})
+
+test("a member adds two people to a space in one go", async ({ page, request }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await addMember(page.request, request, { name: "Alan Turing", email: uniqueEmail("member") })
+  const invitee = uniqueEmail("invitee")
+  await inviteMember(page.request, invitee)
+  const spaceId = await createSpace(page.request, "Research")
+
+  await page.goto(`/app/spaces/${spaceId}/members`)
+  await page.getByRole("button", { name: "Add member" }).click()
+  const add = page.getByRole("dialog", { name: "Add member" })
+  await add.getByRole("option", { name: /Alan Turing/ }).click()
+  await add.getByRole("option", { name: new RegExp(invitee) }).click()
+  await expect(add.getByRole("option", { name: /Alan Turing/ })).toHaveAttribute("data-checked", "true")
+  await add.getByRole("button", { name: "Add 2 members" }).click()
+  await expect(page.getByText("2 members added to space")).toBeVisible()
+  await expect(page.getByRole("row", { name: /Alan Turing/ })).toBeVisible()
+  await expect(page.getByRole("row", { name: new RegExp(invitee) })).toContainText("Pending")
 })

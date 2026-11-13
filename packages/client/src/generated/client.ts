@@ -516,6 +516,7 @@ export function make(options: ClientOptions) {
             path: `/space-members`,
             query: {
               spaceId: input["spaceId"],
+              userId: input["userId"],
               status: input["status"],
               page: input["page"],
               pageSize: input["pageSize"],

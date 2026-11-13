@@ -43,7 +43,7 @@ interface Candidate {
 function CandidateList(props: {
   candidates: ReadonlyArray<Candidate>
   loading: boolean
-  selected: string | undefined
+  selected: ReadonlySet<string>
   onSelect: (value: string) => void
 }) {
   return (
@@ -56,7 +56,7 @@ function CandidateList(props: {
             <CommandItem
               key={member.value}
               value={`${member.name} ${member.email}`}
-              data-checked={props.selected === member.value}
+              data-checked={props.selected.has(member.value)}
               onSelect={() => props.onSelect(member.value)}
             >
               <PersonAvatar name={member.name} image={member.image} />
@@ -76,10 +76,10 @@ function AddSpaceMemberDialog(props: {
   loading: boolean
   pending: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: (candidate: Candidate) => void
+  onAdd: (candidates: ReadonlyArray<Candidate>) => void
 }) {
-  const [selected, setSelected] = useState<string>()
-  const candidate = props.candidates.find((each) => each.value === selected)
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const chosen = props.candidates.filter((each) => selected.has(each.value))
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogTrigger render={<Button />}>
@@ -97,13 +97,19 @@ function AddSpaceMemberDialog(props: {
           candidates={props.candidates}
           loading={props.loading}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={(value) =>
+            setSelected((current) => {
+              const next = new Set(current)
+              if (!next.delete(value)) next.add(value)
+              return next
+            })
+          }
         />
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-          <Button disabled={!candidate || props.pending} onClick={() => candidate && props.onAdd(candidate)}>
+          <Button disabled={chosen.length === 0 || props.pending} onClick={() => props.onAdd(chosen)}>
             {props.pending ? <Spinner data-icon="inline-start" /> : null}
-            Add member
+            {chosen.length > 1 ? `Add ${chosen.length} members` : "Add member"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -117,6 +123,7 @@ export function SpaceMembersTab() {
   const me = useMe()
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
+  const [bulk, setBulk] = useState(false)
   const members = useInfiniteQuery({ ...Pages.spaceMembers(client, space.id), ...Loader.required })
   const everyone = useQuery({
     ...api["space-member"].list.queryOptions({ spaceId: space.id, page: 1, pageSize: pickerPageSize }),
@@ -173,22 +180,24 @@ export function SpaceMembersTab() {
   }))
   const shapeId = useShapeId("members")
   const candidatesLoading = everyone.isPending
-  const creating = create.isPending
-  const add = (candidate: Candidate) =>
-    create.mutate(
-      { payload: { spaceId: space.id, ...candidate.target } },
-      {
-        onSuccess: () => {
-          setAdding(false)
-          toast.success(
-            "userId" in candidate.target
-              ? `${candidate.name} added to space`
-              : `${candidate.name} will join when they accept their invite`,
-          )
-        },
-        onError: (error) => toast.error("Could not add the member", { description: errorMessage(error) }),
-      },
+  const creating = bulk
+  const add = async (chosen: ReadonlyArray<Candidate>) => {
+    setBulk(true)
+    const results = await Promise.allSettled(
+      chosen.map((candidate) => create.mutateAsync({ payload: { spaceId: space.id, ...candidate.target } })),
     )
+    setBulk(false)
+    const failed = results.filter((result) => result.status === "rejected")
+    const added = chosen.filter((_, index) => results[index]?.status === "fulfilled")
+    if (added.length > 0) {
+      setAdding(false)
+      const only = added.length === 1 ? added[0] : undefined
+      if (!only) toast.success(`${added.length} members added to space`)
+      else if ("userId" in only.target) toast.success(`${only.name} added to space`)
+      else toast.success(`${only.name} will join when they accept their invite`)
+    }
+    if (failed.length > 0) toast.error("Could not add the member", { description: errorMessage(failed[0]?.reason) })
+  }
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageActions>
@@ -200,7 +209,7 @@ export function SpaceMembersTab() {
             loading={candidatesLoading}
             pending={creating}
             onOpenChange={setAdding}
-            onAdd={add}
+            onAdd={(chosen) => void add(chosen)}
           />
         ) : null}
       </PageActions>

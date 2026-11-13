@@ -312,6 +312,29 @@ describe("SpaceMember", () => {
     }),
   )
 
+  it.live("lists one person's memberships only in spaces the caller may list", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const members = yield* SpaceMember.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* user(organizationId)
+      const grace = yield* user(organizationId)
+      const henry = yield* user(organizationId)
+      const shared = yield* spaces.create(ada, { name: "Shared" })
+      const hidden = yield* spaces.create(ada, { name: "Hidden" })
+      yield* members.create(ada, { spaceId: shared.id, userId: grace.userId })
+      yield* members.create(ada, { spaceId: shared.id, userId: henry.userId })
+      yield* members.create(ada, { spaceId: hidden.id, userId: grace.userId })
+      const general = (yield* spaces.list(henry, page)).items.find((space) => space.name === "General Space")
+      if (!general) return yield* Effect.die(new Error("Expected the General space"))
+      const seen = (yield* members.list(henry, { ...page, userId: grace.userId })).items.map((item) => item.spaceId)
+      expect(seen).toHaveLength(2)
+      expect(seen).toContain(shared.id)
+      expect(seen).toContain(general.id)
+      expect((yield* members.list(henry, { ...page, userId: grace.userId, pageSize: 1 })).total).toBe(2)
+    }),
+  )
+
   it.live(
     "requires a pending organization invitation for email assignments, which grant no access until accepted",
     () =>

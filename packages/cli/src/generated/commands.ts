@@ -39,7 +39,8 @@ export const SpaceShutdown = {
 }
 
 export const SpaceMemberList = {
-  spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  spaceId: Argument.String("space").pipe(Argument.optional, Argument.withDescription("Space slug or ID")),
+  userId: Flag.String("user-id").pipe(Flag.optional),
   status: Flag.Literals("status", ["active", "pending"]).pipe(Flag.optional),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
