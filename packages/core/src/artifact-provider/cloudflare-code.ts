@@ -1,8 +1,14 @@
 export * as ArtifactCloudflareCode from "./cloudflare-code.js"
 
+import { blake3 } from "@noble/hashes/blake3.js"
+import { bytesToHex } from "@noble/hashes/utils.js"
 import { createHash } from "node:crypto"
+import { extname } from "node:path"
 
 export const name = (identity: string) => `a-${createHash("sha256").update(identity).digest("hex").slice(0, 56)}`
+
+export const assetHash = (path: string, bytes: Uint8Array) =>
+  bytesToHex(blake3(new TextEncoder().encode(bytes.toBase64() + extname(path).slice(1)))).slice(0, 32)
 
 export const marker = (deploymentId: string, proof: string) => `${deploymentId}:${proof}`
 

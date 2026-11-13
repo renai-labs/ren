@@ -3,18 +3,19 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Artifact } from "@ren/schema/artifact"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, FileSystem, Layer, Option, Schedule } from "effect"
+import { PutObjectCommand } from "@aws-sdk/client-s3"
+import { Deferred, Effect, Fiber, Layer, Option, Schedule } from "effect"
 import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
 import { Access } from "../src/access.js"
 import { Artifacts } from "../src/artifacts.js"
 import { ArtifactProvider } from "../src/artifact-provider.js"
 import { DurableRunner } from "../src/durable-runner.js"
+import { ObjectStorage } from "../src/object-storage.js"
 import { ArtifactSamples } from "./lib/artifact-samples.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 import { TestCloudflare } from "./lib/cloudflare.js"
-import { ArtifactCloudflareUpload } from "../src/artifact-provider/cloudflare-upload.js"
 import { Config, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { join } from "node:path"
@@ -31,25 +32,8 @@ const it = testEffect(
   ),
 )
 const text = (value: string) => new TextEncoder().encode(value)
-const failureRoot = join(tmpdir(), "opencode", `artifact-timeout-${crypto.randomUUID()}`)
-const bounded = testEffect(
-  Artifacts.layer.pipe(
-    Layer.provide(
-      ArtifactCloudflare.layer.pipe(
-        Layer.provide(
-          ConfigProvider.layerAdd(
-            ConfigProvider.fromUnknown({
-              ARTIFACT_CLOUDFLARE_ROOT: failureRoot,
-              ARTIFACT_CLOUDFLARE_UPLOAD_TIMEOUT: "1 millis",
-              ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT: "250 millis",
-            }),
-            { asPrimary: true },
-          ),
-        ),
-      ),
-    ),
-    Layer.provide(Access.layer),
-    Layer.provideMerge(DurableRunner.layerEffect),
+const cutoff = testEffect(
+  ObjectStorage.layer.pipe(
     Layer.provide(TestDrives.layer),
     Layer.provideMerge(Layer.mergeAll(Testing.layer, TestCloudflare.layer)),
   ),
@@ -100,67 +84,43 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
       "legacy SQLite classes transition to exports and reject a stale ETag",
       () =>
         Effect.gen(function* () {
-          const fs = yield* FileSystem.FileSystem
           const account = yield* Config.String("CLOUDFLARE_ACCOUNT_ID")
           const token = yield* Config.Redacted("CLOUDFLARE_API_TOKEN")
-          const directory = yield* fs.makeTempDirectoryScoped()
           const script = `ren-artifact-smoke-etag-${crypto.randomUUID().slice(0, 8)}`
-          yield* fs.writeFileString(
-            join(directory, "parent.mjs"),
-            'process.stdin.resume(); process.stdin.unref?.(); process.stdin.once("end", () => process.exit(1));',
-          )
-          yield* fs.writeFileString(
-            join(directory, "main.js"),
-            'import {DurableObject} from "cloudflare:workers"; export class Guard extends DurableObject {} export default {fetch(){return new Response("first",{status:410})}}',
-          )
-          yield* fs.writeFileString(
-            join(directory, "wrangler.json"),
-            JSON.stringify({
-              name: script,
-              main: "main.js",
-              no_bundle: true,
-              compatibility_date: "2026-06-01",
-              workers_dev: false,
-              migrations: [{ tag: "legacy-v1", new_sqlite_classes: ["Guard"] }],
-            }),
-          )
-          const input = {
-            account,
-            token,
-            directory,
-            script,
-            node: "node",
-            wrangler: join(
-              new URL(import.meta.resolve("wrangler/package.json")).pathname,
-              "..",
-              "wrangler-dist",
-              "cli.js",
-            ),
-          }
-          const first = yield* ArtifactCloudflareUpload.stage({ ...input, guard: Option.none() })
-          yield* fs.writeFileString(
-            join(directory, "wrangler.json"),
-            JSON.stringify({
-              name: script,
-              main: "main.js",
-              no_bundle: true,
-              compatibility_date: "2026-06-01",
-              workers_dev: false,
-              exports: { Guard: { type: "durable-object", storage: "sqlite" } },
-            }),
-          )
-          yield* fs.writeFileString(
-            join(directory, "main.js"),
-            'import {DurableObject} from "cloudflare:workers"; export class Guard extends DurableObject {} export default {fetch(){return new Response("second",{status:410})}}',
-          )
-          const second = yield* ArtifactCloudflareUpload.stage({ ...input, guard: Option.some(JSON.stringify(first)) })
+          const put = (input: {
+            readonly metadata: Readonly<Record<string, unknown>>
+            readonly body: string
+            readonly guard: Option.Option<string>
+          }) =>
+            ArtifactCloudflare.putScript({
+              account,
+              token,
+              script,
+              metadata: { main_module: "main.js", compatibility_date: "2026-06-01", ...input.metadata },
+              modules: {
+                "main.js": `import {DurableObject} from "cloudflare:workers"; export class Guard extends DurableObject {} export default {fetch(){return new Response("${input.body}",{status:410})}}`,
+              },
+              guard: input.guard,
+            })
+          const first = yield* put({
+            metadata: { migrations: { new_tag: "legacy-v1", new_sqlite_classes: ["Guard"] } },
+            body: "first",
+            guard: Option.none(),
+          })
+          const exports = { exports: { Guard: { type: "durable-object", storage: "sqlite" } } }
+          const second = yield* put({ metadata: exports, body: "second", guard: Option.some(JSON.stringify(first)) })
           expect(second).not.toBe(first)
-          const stale = yield* ArtifactCloudflareUpload.stage({
-            ...input,
+          const stale = yield* put({
+            metadata: exports,
+            body: "stale",
             guard: Option.some(JSON.stringify(first)),
           }).pipe(Effect.result)
           expect(stale).toMatchObject({ _tag: "Failure" })
-          if (stale._tag === "Failure") expect(stale.failure.message).toContain("HTTP 412")
+          if (stale._tag === "Failure")
+            expect([stale.failure.message, stale.failure.retryable]).toEqual([
+              expect.stringContaining("HTTP 412"),
+              true,
+            ])
           const http = yield* HttpClient.HttpClient
           const response = yield* http.execute(
             HttpClientRequest.get(
@@ -183,71 +143,77 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
         }),
       120_000,
     )
-    bounded.live(
-      "bounds a real Wrangler timeout, cleans staging, and repairs pending state with a fresh provider",
-      () =>
-        Effect.gen(function* () {
-          const artifacts = yield* Artifacts.Service
-          const database = yield* Database.Service
-          const fs = yield* FileSystem.FileSystem
-          yield* Effect.addFinalizer(() => fs.remove(failureRoot, { recursive: true }).pipe(Effect.ignore))
-          const owner = yield* Seed.owner()
-          const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
-          const deploymentId = Artifact.DeploymentID.make(crypto.randomUUID())
-          yield* ArtifactSamples.deploy(artifacts, owner, id, {
-            deploymentId,
-            title: "Bounded upload",
-            config: { entry: "index.html" },
-            files: { "index.html": text("source retained after timeout") },
-          })
-          yield* ArtifactSamples.idle(id).pipe(Effect.timeout("15 seconds"))
-          const status = yield* artifacts.status(owner, id, deploymentId)
-          expect(status.status).toBe("failed")
-          expect(status.error).toContain("Recovery remains pending")
-          expect(yield* fs.readDirectory(failureRoot)).toEqual([])
-          const row = (yield* database.db
+    cutoff.live("a deployment cut off after its write-ahead save is repaired by a fresh provider from that state", () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const storage = yield* ObjectStorage.Service
+        const owner = yield* Seed.owner()
+        const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
+        yield* database.db.insert(Database.Schema.artifact).values({
+          id,
+          organization_id: owner.organizationId,
+          space_id: owner.spaceId,
+          title: "Cut off",
+          provider: ArtifactCloudflare.id,
+        })
+        const archive = `${owner.organizationId}/artifacts/${id}/source.tar.gz`
+        const body = yield* Effect.promise(() => ArtifactSamples.archive({ "index.html": "source kept after the cut" }))
+        yield* Effect.promise(() =>
+          storage.s3.send(new PutObjectCommand({ Bucket: storage.bucket, Key: archive, Body: body })),
+        )
+        const saved = Effect.gen(function* () {
+          const artifact = (yield* database.db
             .select()
-            .from(Database.Schema.artifact_deployment)
-            .where(eq(Database.Schema.artifact_deployment.id, deploymentId))).at(0)
-          if (!row?.code_archive) return yield* Effect.die(new Error("Failed deployment lost its source archive"))
-          const archive = row.code_archive
-          const saved = Effect.gen(function* () {
-            const artifact = (yield* database.db
-              .select()
-              .from(Database.Schema.artifact)
-              .where(eq(Database.Schema.artifact.id, id))).at(0)
-            const store = yield* Artifacts.remoteStore(database, id, artifact?.remote_version ?? 0)
-            return { remote: Option.fromNullishOr(artifact?.remote), save: store.save }
-          })
-          yield* Effect.gen(function* () {
+            .from(Database.Schema.artifact)
+            .where(eq(Database.Schema.artifact.id, id))).at(0)
+          const store = yield* Artifacts.remoteStore(database, id, artifact?.remote_version ?? 0)
+          return { remote: Option.fromNullishOr(artifact?.remote), save: store.save }
+        })
+        const fresh = ArtifactCloudflare.layer.pipe(
+          Layer.fresh,
+          Layer.provide(TestDrives.layer),
+          Layer.provide(TestCloudflare.layer),
+        )
+        yield* Effect.addFinalizer(() =>
+          Effect.gen(function* () {
             const provider = yield* ArtifactProvider.Service
-            yield* Effect.addFinalizer(() =>
-              saved.pipe(
-                Effect.flatMap((state) => provider.stop(id, state.remote, state.save)),
-                Effect.ignore,
-              ),
-            )
-            const restored = yield* provider.deploy({
+            const state = yield* saved
+            yield* provider.stop(id, state.remote, state.save)
+          }).pipe(Effect.provide(fresh), Effect.ignore),
+        )
+        const written = yield* Deferred.make<void>()
+        yield* Effect.gen(function* () {
+          const provider = yield* ArtifactProvider.Service
+          const state = yield* saved
+          const cut = yield* provider
+            .deploy({
               artifactId: id,
               deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
               archive,
               config: { entry: "index.html" },
-              ...(yield* saved),
+              remote: state.remote,
+              save: (remote) => state.save(remote).pipe(Effect.andThen(Deferred.succeed(written, undefined))),
             })
-            expect(yield* Effect.promise(() => fetch(restored.url).then((response) => response.text()))).toBe(
-              "source retained after timeout",
-            )
-          }).pipe(
-            Effect.scoped,
-            Effect.provide(
-              ArtifactCloudflare.layer.pipe(
-                Layer.fresh,
-                Layer.provide(TestDrives.layer),
-                Layer.provide(TestCloudflare.layer),
-              ),
-            ),
-          )
-        }),
+            .pipe(Effect.forkScoped)
+          yield* Deferred.await(written)
+          yield* Fiber.interrupt(cut)
+        }).pipe(Effect.scoped, Effect.provide(fresh))
+        const pending = yield* saved
+        expect(Option.getOrNull(pending.remote)).toMatchObject({ pending: { ready: false } })
+        const restored = yield* Effect.gen(function* () {
+          const provider = yield* ArtifactProvider.Service
+          return yield* provider.deploy({
+            artifactId: id,
+            deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
+            archive,
+            config: { entry: "index.html" },
+            ...(yield* saved),
+          })
+        }).pipe(Effect.provide(fresh))
+        expect(yield* Effect.promise(() => fetch(restored.url).then((response) => response.text()))).toBe(
+          "source kept after the cut",
+        )
+      }),
     )
     it.live("serves the four sample flows, recovers failed uploads, and retains SQLite over update/stop/redeploy", () =>
       Effect.gen(function* () {
