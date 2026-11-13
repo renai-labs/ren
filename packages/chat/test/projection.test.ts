@@ -1335,6 +1335,144 @@ describe("createTimelineProjection", () => {
   })
 })
 
+describe("timeline detail levels", () => {
+  const levels = {
+    everything: TimelineDetail.presets[0].value,
+    detailed: TimelineDetail.presets[1].value,
+    compact: TimelineDetail.presets[2].value,
+    quiet: TimelineDetail.presets[3].value,
+    "text-only": TimelineDetail.presets[4].value,
+  }
+
+  const read = (id: string) => tool(id, "read", "completed", { filePath: "package.json" })
+
+  const turn = [
+    { type: "reasoning", text: "Plan", time: { created: at(1), completed: at(2) } },
+    tool("sh", "shell", "completed"),
+    tool("ed", "edit", "completed"),
+    read("rd"),
+    tool("sa", "subagent", "completed"),
+    { type: "text", text: "Done." },
+  ] satisfies ReadonlyArray<SessionMessage.Content>
+
+  test.each([
+    ["everything", ["part", "part", "file", "read", "part", "part"]],
+    ["detailed", ["context", "part", "file", "context", "part", "part"]],
+    ["compact", ["context", "part", "part"]],
+    ["quiet", ["context", "part", "part"]],
+    ["text-only", ["part"]],
+  ] as const)("%s lays out a turn's steps", (id, expected) => {
+    const result = Projection.project({
+      messages: story(turn),
+      busy: false,
+      detail: levels[id],
+    })
+
+    expect(groupTypes(result.rows)).toEqual([...expected])
+  })
+
+  test.each([
+    ["everything", ["msg_agent", "msg_shell"]],
+    ["detailed", ["msg_agent", "msg_shell"]],
+    ["compact", ["msg_agent", "msg_shell"]],
+    ["quiet", ["msg_agent"]],
+    ["text-only", []],
+  ] as const)("shows background outcomes as their own rows where they finished: %s", (id, notices) => {
+    const step = (id: string, created: number) =>
+      assistant(id, [tool(`${id}_read`, "read", "completed")], {
+        time: { created: at(created), completed: at(created) },
+      })
+    const outcome = (
+      id: string,
+      metadata: NonNullable<SessionMessage.Synthetic["metadata"]>,
+      created: number,
+    ): SessionMessage.Synthetic => ({
+      id: SessionMessage.ID.make(id),
+      type: "synthetic",
+      text: "done",
+      description: "Background work completed",
+      metadata,
+      time: { created: at(created) },
+    })
+
+    const result = Projection.project({
+      messages: [
+        user("msg_user"),
+        step("msg_before", 2),
+        outcome("msg_agent", { source: "subagent", childID: "ses_child", state: "completed" }, 3),
+        outcome("msg_shell", { source: "shell", shellID: "sh_1", state: "completed", exit: 0 }, 4),
+        step("msg_after", 5),
+      ],
+      busy: false,
+      detail: levels[id],
+    })
+
+    expect(keys(result.rows).filter((key) => key.startsWith("notice:"))).toEqual(
+      notices.map((notice) => `notice:${notice}`),
+    )
+    if (id === "compact")
+      expect(keys(result.rows)).toEqual([
+        "user-message:msg_user",
+        "assistant-part:context:context:msg_before:msg_before_read",
+        "notice:msg_agent",
+        "notice:msg_shell",
+        "assistant-part:context:context:msg_after:msg_after_read",
+      ])
+  })
+
+  test("shows a failed shell outcome even when notices are hidden", () => {
+    const result = Projection.project({
+      messages: [
+        user("msg_user"),
+        assistant("msg_a", [{ type: "text", text: "Done." }]),
+        {
+          id: SessionMessage.ID.make("msg_shell"),
+          type: "synthetic",
+          text: "failed",
+          description: "bun test",
+          metadata: { source: "shell", shellID: "sh_1", state: "completed", exit: 1 },
+          time: { created: at(4) },
+        },
+      ],
+      busy: false,
+      detail: levels["text-only"],
+    })
+
+    expect(keys(result.rows)).toContain("notice:msg_shell")
+  })
+
+  test.each([
+    ["grouped", "assistant-part:context:context:msg_a1:msg_a1:text:0"],
+    ["hidden", "assistant-part:context:context:msg_a1:tool_read"],
+  ] as const)("%s commentary keeps the answer of each turn", (placement, group) => {
+    const result = Projection.project({
+      messages: [
+        user("msg_user"),
+        assistant("msg_a1", [{ type: "text", text: "Checking." }, tool("tool_read", "read", "completed")]),
+        assistant("msg_a2", [
+          { type: "text", text: "Checks pass." },
+          tool("tool_grep", "grep", "completed"),
+          { type: "text", text: "Fixed." },
+        ]),
+        user("msg_stop", 4),
+        assistant("msg_a3", [{ type: "text", text: "Looking." }, tool("tool_grep3", "grep", "completed")]),
+      ],
+      busy: false,
+      detail: { ...levels.compact, commentary: { placement } },
+    })
+
+    expect(keys(result.rows)).toEqual([
+      "user-message:msg_user",
+      group,
+      "assistant-part:part:part:msg_a2:msg_a2:text:1",
+      "turn-gap:msg_stop",
+      "user-message:msg_stop",
+      "assistant-part:part:part:msg_a3:msg_a3:text:0",
+      "assistant-part:context:context:msg_a3:tool_grep3",
+    ])
+  })
+})
+
 describe("reasoningHeading", () => {
   test("returns the most recent thinking summary heading as sections stream in", () => {
     const sections = [

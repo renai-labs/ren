@@ -1,6 +1,8 @@
 import { DateTime, Option } from "effect"
 import { flushSync } from "react-dom"
 import {
+  createContext,
+  use,
   useRef,
   useState,
   type KeyboardEvent,
@@ -17,6 +19,8 @@ import {
   PatchFiles,
   Projection,
   ShownFile,
+  TimelineDetail,
+  TimelineOpen,
   TimelineRow,
   TimelineText,
   ToolDisplay,
@@ -39,9 +43,11 @@ import {
   IconClock,
   IconCopy,
   IconFile,
+  IconFolder,
   IconInfoCircle,
   IconPencil,
   IconChecklist,
+  IconTool,
   IconWebhook,
 } from "@tabler/icons-react"
 import { AsyncResult } from "effect/reactivity"
@@ -123,7 +129,8 @@ export interface TranscriptProps {
   readonly find?: FindBarProps | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
-  readonly expanded?: boolean | undefined
+  readonly fold: boolean
+  readonly detail: TimelineDetail.Detail
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
@@ -145,6 +152,12 @@ type Step =
   | { readonly kind: "shell"; readonly key: string; readonly message: SessionMessage.Shell }
   | { readonly kind: "notice"; readonly key: string; readonly message: SessionMessage.Info }
   | { readonly kind: "text"; readonly key: string; readonly text: string; readonly streaming: boolean }
+  | {
+      readonly kind: "group"
+      readonly key: string
+      readonly type: "context" | "file" | "read"
+      readonly steps: ReadonlyArray<Step>
+    }
 
 type Block =
   | { readonly kind: "user"; readonly key: string; readonly message: SessionMessage.User }
@@ -167,6 +180,24 @@ type Block =
 
 const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
 
+function contentStep(content: SessionMessage.Content, message: SessionMessage.Info | undefined, key: string): Step[] {
+  if (content.type === "reasoning")
+    return [{ kind: "reasoning", key, content, running: streaming(message) && !content.time?.completed }]
+  if (content.type === "tool") return ToolDisplay.hidden(content) ? [] : [{ kind: "tool", key, tool: content }]
+  return [{ kind: "text", key, text: content.text, streaming: streaming(message) }]
+}
+
+function refSteps(reference: TimelineRow.PartRef, byId: ReadonlyMap<string, SessionMessage.Info>): Step[] {
+  const message = byId.get(reference.messageID)
+  const key = `${reference.messageID}:${reference.partID}`
+  if (reference.partID === reference.messageID) {
+    if (message?.type === "shell") return [{ kind: "shell", key, message }]
+    return message ? [{ kind: "notice", key, message }] : []
+  }
+  const content = Projection.resolveContent(message, reference.partID)
+  return content ? contentStep(content, message, key) : []
+}
+
 function stepsOf(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): Step[] | undefined {
   if (row._tag === "Thinking") {
     const content = Projection.resolveContent(byId.get(row.ref.messageID), row.ref.partID)
@@ -181,19 +212,9 @@ function stepsOf(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.
   if (row._tag !== "AssistantPart") return undefined
   const group = row.group
   const refs = group.type === "part" ? [group.ref] : group.refs
-  return refs.flatMap((reference): Step[] => {
-    const message = byId.get(reference.messageID)
-    const key = `${reference.messageID}:${reference.partID}`
-    if (reference.partID === reference.messageID) {
-      if (message?.type === "shell") return [{ kind: "shell", key, message }]
-      return message ? [{ kind: "notice", key, message }] : []
-    }
-    const content = Projection.resolveContent(message, reference.partID)
-    if (content?.type === "reasoning")
-      return [{ kind: "reasoning", key, content, running: streaming(message) && !content.time?.completed }]
-    if (content?.type === "tool") return ToolDisplay.hidden(content) ? [] : [{ kind: "tool", key, tool: content }]
-    return []
-  })
+  const steps = refs.flatMap((reference) => refSteps(reference, byId))
+  if (group.type === "part") return steps
+  return steps.length > 0 ? [{ kind: "group", key: TimelineRow.key(row), type: group.type, steps }] : []
 }
 
 function partBlock(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): Block | undefined {
@@ -242,7 +263,9 @@ function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string
   }, [])
 }
 
-function groupTurns(blocks: ReadonlyArray<Block>, live: (turn: string) => boolean) {
+function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn: string) => boolean; fold: boolean }) {
+  if (!options.fold) return blocks
+  const live = options.live
   const lastSteps = new Map(
     blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
   )
@@ -644,10 +667,15 @@ const traceStatus = (state: { running?: boolean | undefined; failed?: boolean | 
   return state.failed ? "error" : undefined
 }
 
+const OpenContext = createContext(false)
+
+const DetailContext = createContext<TimelineDetail.Detail>(TimelineDetail.presets[2].value)
+
 function Expandable(props: { content: ReactNode; className?: string | undefined; children: ReactNode }) {
+  const open = use(OpenContext)
   if (!props.content) return props.children
   return (
-    <TraceCollapsible>
+    <TraceCollapsible defaultOpen={open}>
       <TraceCollapsibleTrigger>{props.children}</TraceCollapsibleTrigger>
       <TraceCollapsibleContent className={props.className}>{props.content}</TraceCollapsibleContent>
     </TraceCollapsible>
@@ -737,9 +765,10 @@ function FileDiff(props: { file: PatchFiles.File; titled: boolean }) {
 function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: ReadonlyArray<PatchFiles.File> }) {
   const additions = props.files.reduce((total, file) => total + file.additions, 0)
   const deletions = props.files.reduce((total, file) => total + file.deletions, 0)
+  const open = use(OpenContext)
   return (
     <Trace>
-      <TraceCollapsible>
+      <TraceCollapsible defaultOpen={open}>
         <TraceCollapsibleTrigger>
           <TraceLine>
             <TraceIcon>{props.icon}</TraceIcon>
@@ -941,13 +970,41 @@ function NoticeStep(props: { message: SessionMessage.Info }) {
   )
 }
 
-function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
+const leaves = (steps: ReadonlyArray<Step>): ReadonlyArray<Step> =>
+  steps.flatMap((step) => (step.kind === "group" ? leaves(step.steps) : [step]))
+
+const stepCount = (steps: ReadonlyArray<Step>) => leaves(steps).filter((step) => step.kind !== "text").length
+
+const stepsLabel = (count: number) => (count === 1 ? "1 step" : `${count} steps`)
+
+function stepOpen(step: Exclude<Step, { kind: "group" | "text" }>, detail: TimelineDetail.Detail) {
+  if (step.kind === "reasoning") return TimelineOpen.defaultOpen(step.content, detail)
+  if (step.kind === "tool") return TimelineOpen.defaultOpen(step.tool, detail)
+  return step.kind === "shell" && detail.shell.details === "expanded"
+}
+
+function StepBody(props: {
+  step: Exclude<Step, { kind: "group" | "text" }>
+  view: ChatAtoms.View
+  onOpenChild: (id: Session.ID) => void
+}) {
   const step = props.step
   if (step.kind === "reasoning") return <ReasoningStep step={step} />
   if (step.kind === "tool") return <ToolStep tool={step.tool} view={props.view} onOpenChild={props.onOpenChild} />
-  if (step.kind === "text") return null
   if (step.kind === "shell") return <ShellStep message={step.message} />
   return <NoticeStep message={step.message} />
+}
+
+function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
+  const step = props.step
+  const detail = use(DetailContext)
+  if (step.kind === "group") return <GroupStep step={step} view={props.view} onOpenChild={props.onOpenChild} />
+  if (step.kind === "text") return null
+  return (
+    <OpenContext value={stepOpen(step, detail)}>
+      <StepBody step={step} view={props.view} onOpenChild={props.onOpenChild} />
+    </OpenContext>
+  )
 }
 
 function workedLabel(props: { running: boolean; workedFor: string | undefined }) {
@@ -955,15 +1012,7 @@ function workedLabel(props: { running: boolean; workedFor: string | undefined })
   return props.workedFor ? `Worked for ${props.workedFor}` : "Worked"
 }
 
-function Steps(props: {
-  expanded?: boolean | undefined
-  steps: ReadonlyArray<Step>
-  workedFor: string | undefined
-  running: boolean
-  view: ChatAtoms.View
-  onOpenChild: (id: Session.ID) => void
-}) {
-  const count = props.steps.filter((step) => step.kind !== "text").length
+function StepRuns(props: { steps: ReadonlyArray<Step>; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
   const runs = props.steps.reduce<Array<{ key: string; text?: Extract<Step, { kind: "text" }>; steps: Step[] }>>(
     (all, step) => {
       const last = all.at(-1)
@@ -974,35 +1023,94 @@ function Steps(props: {
     },
     [],
   )
+  return runs.map((run) =>
+    run.text ? (
+      <SmoothMarkdown
+        key={run.key}
+        text={run.text.text}
+        streaming={run.text.streaming}
+        className="text-sm/relaxed text-foreground"
+      />
+    ) : (
+      <Trace key={run.key}>
+        {run.steps.map((step) => (
+          <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
+        ))}
+      </Trace>
+    ),
+  )
+}
+
+function groupTitle(step: Extract<Step, { kind: "group" }>) {
+  const items = leaves(step.steps)
+  const count = items.length
+  if (step.type === "read") return count === 1 ? "Explored 1 file" : `Explored ${count} files`
+  if (step.type === "file") return count === 1 ? "Edited 1 file" : `Edited ${count} files`
+  return ToolDisplay.group(
+    items.flatMap((item): ToolDisplay.GroupItem[] => {
+      if (item.kind === "reasoning") return [item.content]
+      if (item.kind === "tool") return [item.tool]
+      if (item.kind === "shell") return [{ type: "shell" }]
+      return item.kind === "notice" ? [{ type: "notice" }] : []
+    }),
+  ).title
+}
+
+const stepRunning = (step: Step) => {
+  if (step.kind === "reasoning") return step.running
+  if (step.kind === "tool") return ToolDisplay.status(step.tool) === "running"
+  return step.kind === "shell" && step.message.status === "running"
+}
+
+function GroupStep(props: {
+  step: Extract<Step, { kind: "group" }>
+  view: ChatAtoms.View
+  onOpenChild: (id: Session.ID) => void
+}) {
+  const count = stepCount(props.step.steps)
+  const Icon = { context: IconTool, read: IconFolder, file: IconPencil }[props.step.type]
   return (
     <Trace>
-      <TraceCollapsible defaultOpen={props.expanded === true}>
+      <TraceCollapsible>
+        <TraceCollapsibleTrigger>
+          <TraceLine status={leaves(props.step.steps).some(stepRunning) ? "running" : undefined}>
+            <TraceIcon>
+              <Icon />
+            </TraceIcon>
+            <TraceTitle className="shrink-0">{groupTitle(props.step)}</TraceTitle>
+            {count > 0 ? <TraceDescription>{stepsLabel(count)}</TraceDescription> : null}
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent className="flex flex-col gap-3">
+          <StepRuns steps={props.step.steps} view={props.view} onOpenChild={props.onOpenChild} />
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    </Trace>
+  )
+}
+
+function Steps(props: {
+  steps: ReadonlyArray<Step>
+  workedFor: string | undefined
+  running: boolean
+  view: ChatAtoms.View
+  onOpenChild: (id: Session.ID) => void
+}) {
+  const count = stepCount(props.steps)
+  return (
+    <Trace>
+      <TraceCollapsible>
         <TraceCollapsibleTrigger>
           <TraceLine status={props.running ? "running" : undefined}>
             <TraceIcon>
               <IconClock />
             </TraceIcon>
             <TraceTitle>{workedLabel(props)}</TraceTitle>
-            <TraceDescription>{count === 1 ? "1 step" : `${count} steps`}</TraceDescription>
+            <TraceDescription>{stepsLabel(count)}</TraceDescription>
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-3">
-          {runs.map((run) =>
-            run.text ? (
-              <SmoothMarkdown
-                key={run.key}
-                text={run.text.text}
-                streaming={run.text.streaming}
-                className="text-sm/relaxed text-foreground"
-              />
-            ) : (
-              <Trace key={run.key}>
-                {run.steps.map((step) => (
-                  <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
-                ))}
-              </Trace>
-            ),
-          )}
+          <StepRuns steps={props.steps} view={props.view} onOpenChild={props.onOpenChild} />
         </TraceCollapsibleContent>
       </TraceCollapsible>
     </Trace>
@@ -1247,14 +1355,19 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent>
-          <Steps
-            expanded={props.transcript.expanded}
-            steps={block.steps}
-            running={props.activeTurn === block.turn}
-            workedFor={props.workedFor(block.turn)}
-            view={props.transcript.view}
-            onOpenChild={props.transcript.onOpenChild}
-          />
+          {props.transcript.fold ? (
+            <Steps
+              steps={block.steps}
+              running={props.activeTurn === block.turn}
+              workedFor={props.workedFor(block.turn)}
+              view={props.transcript.view}
+              onOpenChild={props.transcript.onOpenChild}
+            />
+          ) : (
+            <div className="flex flex-col gap-3">
+              <StepRuns steps={block.steps} view={props.transcript.view} onOpenChild={props.transcript.onOpenChild} />
+            </div>
+          )}
         </MessageContent>
       </Message>
     )
@@ -1392,9 +1505,11 @@ export function Transcript(props: TranscriptProps) {
       </div>
     )
   return (
-    <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
-      <TranscriptScroller transcript={props} follow={follow} />
-    </MessageScrollerProvider>
+    <DetailContext value={props.detail}>
+      <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
+        <TranscriptScroller transcript={props} follow={follow} />
+      </MessageScrollerProvider>
+    </DetailContext>
   )
 }
 
@@ -1430,7 +1545,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const turns = context.turns
   const activeTurn = props.busy ? props.activeMessageID : undefined
   const watched = useWatchedTurns(activeTurn)
-  const blocks = groupTurns(blocksOf(props.rows, byId), watched.live)
+  const blocks = groupTurns(blocksOf(props.rows, byId), { live: watched.live, fold: props.fold })
   const easing = useEasedSend(blocks)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react"
-import { ChatState, Family, Working, type ChatAtoms, type TimelineRow } from "@ren/chat"
+import { ChatState, Family, Working, type ChatAtoms, type TimelineDetail, type TimelineRow } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -16,9 +16,9 @@ const workingRoot = (
   view: { readonly root: Session.ID; readonly child: Session.ID | undefined },
 ) => (view.child ? (state.info[view.child]?.parentID ?? view.root) : view.root)
 
-export function useView(root: Session.ID, child: Session.ID | undefined) {
-  const session = ChatReact.useSession(root)
-  const childResult = ChatReact.useChild(root, child ?? root)
+export function useView(root: Session.ID, child: Session.ID | undefined, detail: TimelineDetail.Detail) {
+  const session = ChatReact.useSession(root, detail)
+  const childResult = ChatReact.useChild(root, child ?? root, detail)
   const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
   const viewed = child ?? root
   const projection = AsyncResult.getOrElse(child ? childResult : session.timeline, () => undefined)
@@ -48,6 +48,6 @@ export function useSubagentCard(view: ChatAtoms.View, tool: SessionMessage.Tool)
 }
 
 export function useRunningAgent(root: Session.ID) {
-  const state = AsyncResult.getOrElse(ChatReact.useSession(root).state, () => ChatState.empty)
+  const state = AsyncResult.getOrElse(useAtomValue(ChatReact.useAtoms().state(root)), () => ChatState.empty)
   return ChatState.messages(state, root).findLast((message) => message.type === "assistant")?.agent
 }

@@ -23,6 +23,15 @@ export interface View {
   readonly sessionID: Session.ID
 }
 
+export interface TimelineView {
+  readonly root: Session.ID
+  readonly detail?: TimelineDetail.Detail | undefined
+}
+
+export interface ChildView extends View {
+  readonly detail?: TimelineDetail.Detail | undefined
+}
+
 export interface FileQuery {
   readonly root: Session.ID
   readonly query: string
@@ -53,7 +62,6 @@ export interface Options<R, ER> {
   readonly outbox?: (sessionID: Session.ID) => NonNullable<ChatSession.Options["outbox"]>
   readonly cache?: (sessionID: Session.ID) => ChatCache.Cache
   readonly sender?: SessionMessage.Sender
-  readonly detail?: TimelineDetail.Detail
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
 }
 
@@ -153,7 +161,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const boot = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.boot))
 
-  const project = (get: Atom.AtomContext, view: View) =>
+  const project = (get: Atom.AtomContext, view: View, detail: TimelineDetail.Detail | undefined) =>
     AsyncResult.map(get(state(view.root)), (current): Projection.Projection => {
       const previous = Option.flatMap(get.self<AsyncResult.AsyncResult<Projection.Projection>>(), AsyncResult.value)
       return Projection.project({
@@ -163,13 +171,13 @@ export const make = <R, ER>(options: Options<R, ER>) => {
         queuedCompactionIDs: ChatState.pending(current, view.sessionID).flatMap((item) =>
           item.type === "compaction" ? [item.id] : [],
         ),
-        ...(options.detail && { detail: options.detail }),
+        ...(detail && { detail }),
         ...(Option.isSome(previous) && { previous: previous.value.rows }),
       })
     })
 
-  const timeline = Atom.family((sessionID: Session.ID) =>
-    Atom.make((get) => project(get, { root: sessionID, sessionID })),
+  const timeline = Atom.family((view: TimelineView) =>
+    Atom.make((get) => project(get, { root: view.root, sessionID: view.root }, view.detail)),
   )
 
   const reader = Atom.family((view: View) =>
@@ -180,10 +188,10 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     ),
   )
 
-  const child = Atom.family((view: View) =>
+  const child = Atom.family((view: ChildView) =>
     Atom.make((get) => {
-      get.mount(reader(view))
-      return project(get, view)
+      get.mount(reader({ root: view.root, sessionID: view.sessionID }))
+      return project(get, view, view.detail)
     }),
   )
 

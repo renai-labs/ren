@@ -158,7 +158,15 @@ export type WebhookOriginInfo = { webhookId: string; name: string; requestId: st
 
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
-export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
+export type SessionMessageSyntheticMetadata = {
+  source?: string
+  childID?: string
+  shellID?: string
+  jobID?: string
+  state?: string
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  timeout?: boolean
+}
 
 export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
 

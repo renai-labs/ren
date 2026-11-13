@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type { TimelineDetail } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
@@ -11,16 +12,18 @@ import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
-import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../components/settings-shared.js"
+import { Choice, deliveries, PasswordDialog, ThemePicker } from "../../components/settings-shared.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
+import { TimelineDetailSetting } from "./timeline-detail-setting.js"
 
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
   const me = useMe()
-  const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
+  const [detail, setDetail] = useState(() => ChatPreferences.timelineDetail.read(platform.storage))
+  const [fold, setFold] = useState(() => ChatPreferences.foldTurns.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
@@ -56,10 +59,13 @@ export function PreferencesPage() {
     resetSession(queryClient)
     await navigate({ to: "/" })
   }
-  const chooseDetail = (value: string) => {
-    const next = value === "detailed" ? "detailed" : "compact"
-    ChatPreferences.detail.write(platform.storage, next)
+  const chooseDetail = (next: TimelineDetail.Detail) => {
+    ChatPreferences.timelineDetail.write(platform.storage, next)
     setDetail(next)
+  }
+  const chooseFold = (next: boolean) => {
+    ChatPreferences.foldTurns.write(platform.storage, next)
+    setFold(next)
   }
   const chooseFollowUp = (value: string) => {
     const next = value === "queue" ? "queue" : "steer"
@@ -122,7 +128,14 @@ export function PreferencesPage() {
         <Rows>
           {[
             <Row key="detail" title="Detail" description="How much of Ren’s work a chat shows.">
-              <Choice label="Detail" options={details} value={detail} onChange={chooseDetail} />
+              <TimelineDetailSetting value={detail} onChange={chooseDetail} />
+            </Row>,
+            <Row
+              key="fold"
+              title="Fold finished turns"
+              description="Collapse a finished turn’s steps into “Worked for…”."
+            >
+              <Switch checked={fold} onCheckedChange={chooseFold} aria-label="Fold finished turns" />
             </Row>,
             <Row key="delivery" title="Messages sent while Ren works">
               <Choice
