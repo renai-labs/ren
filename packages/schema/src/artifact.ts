@@ -5,6 +5,7 @@ import { Drive } from "./drive.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Session } from "./session.js"
 import { Space } from "./space.js"
 
 export const ID = Identifier.make("art", "Artifact.ID")
@@ -173,4 +174,14 @@ export const DeployInput = Schema.Struct({
     description:
       "The file a person opens first. Omit to keep the current entry while it is one of the files, or to use index.html, index.md or the only file.",
   }),
+  sessionId: Schema.optional(Session.ID).annotate({
+    description: "The chat that asks. Ren sends the result there when the deployment ends.",
+  }),
 }).annotate({ identifier: "Artifact.DeployInput" })
+
+export interface StopInput extends Schema.Schema.Type<typeof StopInput> {}
+export const StopInput = Schema.Struct({
+  sessionId: Schema.optional(Session.ID).annotate({
+    description: "The chat that asks. Ren sends the result there when the stop ends.",
+  }),
+}).annotate({ identifier: "Artifact.StopInput" })

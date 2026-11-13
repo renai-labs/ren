@@ -301,8 +301,9 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
   .add(
     HttpApiEndpoint.delete("artifacts.stop", "/host/artifacts/:id", {
       params: ArtifactParams,
+      query: Artifact.StopInput,
       success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
-      error: [ArtifactNotFoundError, ArtifactConflictError],
+      error: [ArtifactNotFoundError, ArtifactConflictError, ArtifactInvalidError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "artifacts.stop",

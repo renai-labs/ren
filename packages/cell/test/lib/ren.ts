@@ -99,6 +99,8 @@ export interface Published {
   readonly archive: Uint8Array
   readonly deployments: ReadonlyMap<Artifact.DeploymentID, Artifact.Deployment>
   readonly deployed: boolean
+  readonly sessionId: Session.ID | undefined
+  readonly baseDeploymentId: Artifact.DeploymentID | undefined
 }
 
 export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
@@ -111,8 +113,6 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
   const state = {
     origin: "",
     loseDeployAnswer: false,
-    artifactError: null as string | null,
-    artifactDeploying: false,
     refuseHosts: false,
     generation: 1,
     refreshGate: undefined as (() => Promise<void>) | undefined,
@@ -166,8 +166,8 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
                 spaceId: Space.ID.create(),
                 title: payload.title ?? "",
                 entry: config.entry,
-                pendingDeploymentId: payload.deploymentId,
-                publishedDeploymentId: null,
+                pendingDeploymentId: null,
+                publishedDeploymentId: payload.deploymentId,
                 url: `https://${request.params.id}.fake.ren/`,
                 createdAt: now,
                 updatedAt: now,
@@ -178,9 +178,9 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               const deployment = {
                 artifactId: request.params.id,
                 deploymentId: payload.deploymentId,
-                status: state.artifactError ? ("failed" as const) : ("ready" as const),
+                status: "ready" as const,
                 url: info.url,
-                error: state.artifactError,
+                error: null,
               }
               artifacts.set(request.params.id, {
                 info,
@@ -189,6 +189,8 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
                 config,
                 deployments: new Map([...(found?.deployments ?? []), [payload.deploymentId, deployment]]),
                 deployed: true,
+                sessionId: payload.sessionId,
+                baseDeploymentId: payload.baseDeploymentId,
               })
               return { ...deployment, status: "deploying" as const, url: null }
             }),
@@ -196,17 +198,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
           .handle("artifacts.status", (request) => {
             const found = artifacts.get(request.params.id)?.deployments.get(request.params.deploymentId)
             return found
-              ? Effect.succeed(
-                  state.artifactDeploying
-                    ? {
-                        artifactId: found.artifactId,
-                        deploymentId: found.deploymentId,
-                        status: "deploying" as const,
-                        url: null,
-                        error: null,
-                      }
-                    : found,
-                )
+              ? Effect.succeed(found)
               : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
           })
           .handle("artifacts.read", (request) => {
@@ -466,12 +458,6 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
   return {
     url: `http://127.0.0.1:${server.port ?? 0}`,
     artifacts,
-    artifactError: (error: string | null) => {
-      state.artifactError = error
-    },
-    artifactDeploying: (deploying: boolean) => {
-      state.artifactDeploying = deploying
-    },
     loseDeployAnswer: () => {
       state.loseDeployAnswer = true
     },
