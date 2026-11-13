@@ -59,9 +59,9 @@ const CreateToolInput = Schema.Struct({
 
 const UpdateToolInput = Schema.Struct({
   id: Artifact.ID.annotate({ description: "Artifact ID (art_…) to update." }),
-  baseDeploymentId: Artifact.DeploymentID.annotate({
+  baseDeploymentId: Schema.optional(Artifact.DeploymentID).annotate({
     description:
-      "The deploymentId your change starts from: from your last artifact_read (publishedDeploymentId), artifact_create or artifact_update of this artifact.",
+      "The deploymentId your change starts from: from your last artifact_read (publishedDeploymentId), artifact_create or artifact_update of this artifact. Omit it when publishedDeploymentId is null.",
   }),
   title: Schema.optional(Schema.String).annotate({ description: "Updated title, or omit to keep the current title." }),
   name: Schema.optional(Name).annotate({

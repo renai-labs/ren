@@ -2,6 +2,7 @@ export * as FakeRen from "./ren.js"
 
 import { BrainToken } from "@ren/host-api/brain-token"
 import {
+  ArtifactConflictError,
   ArtifactInvalidError,
   ArtifactNotFoundError,
   EnvironmentNotFoundError,
@@ -103,6 +104,18 @@ export interface Published {
   readonly baseDeploymentId: Artifact.DeploymentID | undefined
 }
 
+// oxlint-disable-next-line ren/no-comments -- Ren's rule for a deploy: once a deployment is published, the deploy must start from it.
+const checkBase = (found: Published | undefined, base: Artifact.DeploymentID | undefined) => {
+  const published = found?.info.publishedDeploymentId
+  return published && base !== published
+    ? Effect.fail(
+        new ArtifactConflictError({
+          message: `Artifact ${found.info.id} changed: deployment ${published} is published now. Read the artifact and apply your change to it again.`,
+        }),
+      )
+    : Effect.void
+}
+
 export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
   const artifacts = new Map<Artifact.ID, Published>()
   const uploads = new Map<string, Uint8Array>()
@@ -156,6 +169,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               const payload = request.payload
               const previous = found?.deployments.get(payload.deploymentId)
               if (previous) return previous
+              yield* checkBase(found, payload.baseDeploymentId)
               const archive = uploads.get(payload.uploadId)
               if (!archive) return yield* new ArtifactInvalidError({ message: "The upload has no archive" })
               const files = yield* Effect.promise(() => unpacked(archive))
