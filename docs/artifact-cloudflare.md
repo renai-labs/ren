@@ -1,10 +1,11 @@
 # Cloudflare artifact hosting
 
-Ren can publish artifacts as ordinary Cloudflare Workers. This works on the
-Workers Free plan, subject to its request, script, asset and SQLite limits. It
-does not require Workers for Platforms, a dispatch namespace, DNS changes or
-`artifacts.useren.ai`. Workers for Platforms dispatch remains separate pending
-work; setting `ARTIFACT_CLOUDFLARE_NAMESPACE` currently fails startup explicitly.
+Ren publishes each artifact as a Worker in a Workers for Platforms dispatch
+namespace. The artifact is served at `https://<label>.<domain>/`, where the label
+is `art-` and the lowercased ID suffix (`Artifact.label`). One dispatcher Worker
+sends each request to the Worker that has the label as its name. The
+`infra/cloudflare` stack makes the zone, the namespace, the dispatcher and its
+route. The design is in [specs/runtime/artifact-sites.md](../specs/runtime/artifact-sites.md).
 
 ## Production configuration
 
@@ -15,6 +16,8 @@ configuration. Add these server secrets/settings:
 ARTIFACT_PROVIDER=cloudflare
 CLOUDFLARE_ACCOUNT_ID=<account-id>
 CLOUDFLARE_API_TOKEN=<account-owned-token>
+ARTIFACT_CLOUDFLARE_NAMESPACE=ren-artifacts-production
+ARTIFACT_DOMAIN=useren.site
 ```
 
 `ARTIFACT_PROVIDER` defaults to `workerd`. Cloudflare credentials are read only
@@ -27,13 +30,11 @@ minutes, its recovery included; recovery alone is capped at 25 seconds, and
 
 Before using a new account:
 
-1. Register its free `workers.dev` subdomain under **Workers & Pages**. The
-   provider reads it through the API; it does not create or rename it.
-2. Create an account-owned API token scoped to that account. The current dashboard
-   role is product-level **Workers Admin**: artifacts need permission to create
-   Workers, not just edit an already-existing Worker. Legacy API documentation
-   calls this **Workers Scripts Write/Edit**. No billing, DNS or zone permissions
-   are needed for ordinary `workers.dev` hosting.
+1. Buy Workers for Platforms for the account, then apply `infra/cloudflare`
+   (see its README). It outputs the namespace of each environment.
+2. Create an account-owned API token scoped to that account, with **Workers
+   Scripts Write**. It writes scripts in the namespace. It needs no zone, DNS or
+   billing permission: the server never changes the zone.
 3. Store the token as a server secret, not in source control or artifact files.
 4. The provider keeps its state in Postgres (`artifact.remote`), not in the
    bucket. Source archives need `PutObject`, `GetObject` and `DeleteObject`
@@ -49,19 +50,14 @@ Before using a new account:
    an archive over the limits.
 
 Deploy the server with the configuration above. Each new artifact receives a
-stable `https://<worker>.<account-subdomain>.workers.dev/` origin; its configured
-entry selects the initial path. Ordinary Workers have an account script-count
-limit. Plan capacity before offering this at scale; it is not the unlimited
-script namespace supplied by paid Workers for Platforms.
+stable `https://<label>.<domain>/` origin; its configured entry selects the
+initial path. Workers for Platforms includes 1000 scripts, then charges for each
+more script.
 
-For this repository's AWS/ECS deployment, add the provider selection and account
-ID to `server_environment`, append `CLOUDFLARE_API_TOKEN` to `server_secret_keys`,
-and store that token in the existing `<name>/server` Secrets Manager JSON. Do not
-replace the existing environment map or secret-key list. Register/deploy the new
-task definition through the existing release flow; merely adding a JSON key does
-not inject it into a running ECS task. The existing server drive-bucket policy
-already covers the new metadata prefix. No infrastructure changes were applied
-during local verification.
+For this repository's AWS/ECS deployment, set `artifact_cloudflare` in
+`infra/aws` (see its README, "Artifacts on Cloudflare"). Register and deploy the
+new task definition through the existing release flow: a new Secrets Manager key
+does not reach a running ECS task.
 
 ## Switching a development server
 
@@ -73,10 +69,12 @@ stops require their original provider; the Core checks provider identity before
 performing a remote operation. Restoring the original configuration lets pending
 stop work finish on its original provider.
 
-The provider also records account and subdomain identity in the artifact row's
-provider state. Changing the account/subdomain does not migrate
-existing artifacts: operations fail closed rather than recreating their state
-in another account. Do not rename the account subdomain after publishing.
+The provider also records the account, the namespace and the domain in the
+artifact row's provider state. Changing one of them does not migrate existing
+artifacts: operations fail closed rather than recreating their state elsewhere.
+An artifact published as an ordinary Worker on `workers.dev` (state version 2)
+also fails closed, without a retry: Ren cannot update or stop it. A Durable
+Object's data belongs to its Worker, so it cannot move into the namespace.
 
 ## Deployment, recovery and retention
 
@@ -91,8 +89,8 @@ in another account. Do not rename the account subdomain after publishing.
   expected proof is not sent to the public Worker in a request header or query;
   an old deployment cannot impersonate a known future UUID by echoing it. No
   application path is reserved. Readiness also verifies a normal request to the
-  configured entry page, so a probe-only response cannot conceal an unpropagated
-  `workers.dev` route. Stop verifies its ordinary HTTP-410 response. Normal requests remain
+  configured entry page, so a probe-only response cannot conceal a route that
+  does not serve yet. Stop verifies its ordinary HTTP-410 response. Normal requests remain
   assets-first, and WebSocket upgrades/responses pass through unchanged.
 - Worker modules are uploaded without server-side bundling. The generated module
   directory is separate from public assets; an untrusted import cannot pull a
@@ -131,8 +129,10 @@ in another account. Do not rename the account subdomain after publishing.
   each bucket of assets that Cloudflare lacks, then one conditional multipart PUT
   of the metadata and the ES modules. An asset's hash is Wrangler's: blake3 of
   its base64 bytes and its extension, first 32 hex characters. The metadata has
-  the fields Wrangler sends, taken from a live deploy. Wrangler turns on the
-  `workers.dev` route with a separate call, as Ren does after the upload.
+  the fields Wrangler sends, taken from a live deploy. The metadata read, the
+  asset upload session and the PUT use the namespace's script endpoints
+  (`/workers/dispatch/namespaces/<namespace>/scripts/<label>`); the asset buckets
+  go to the account's `/workers/assets/upload`.
 - Existing successful binding/class mappings cannot be removed, renamed or
   rebound. A terminated process or failed request does not prove an upload was
   rejected. Recovery therefore keeps pending class intents and can provision
@@ -149,7 +149,7 @@ in another account. Do not rename the account subdomain after publishing.
 - Stop publishes a fenced, platform-owned HTTP-410 tombstone with neutral DO
   exports. It does not import application code or race an independent serving
   flag against an earlier upload. Its last archived assets remain attached, but
-  the tombstone prevents serving them. Preview URLs remain disabled. Stop never
+  the tombstone prevents serving them. Stop never
   deletes the Worker, DO class, namespace, archive or provider state. A later
   deployment restores the application at the same URL. Already-open connections
   can drain; stop does not forcibly delete live Durable Objects.
@@ -205,20 +205,25 @@ Ren data. The test object store must be running (`docker compose up -d` accordin
 to the development guide); these commands do not start or alter the user's dev
 server.
 
-After approval for ordinary Free Workers, run sequentially from `packages/core`:
+After approval, run sequentially from `packages/core`, on the staging namespace:
 
 ```sh
 REN_ARTIFACT_CLOUDFLARE_LIVE=1 bun test --env-file <private-env-file> ./test/artifacts-cloudflare.slow.test.ts
 REN_ARTIFACT_CLOUDFLARE_LIVE=1 bun test --env-file <private-env-file> ./test/artifacts-brain.slow.test.ts
 ```
 
-The private file contains the account ID and token. Use `bun test --env-file`,
+The private file contains the account ID, the token,
+`ARTIFACT_CLOUDFLARE_NAMESPACE` and `ARTIFACT_DOMAIN`. Set
+`REN_ARTIFACT_OTHER_DOMAIN` to the other environment's domain to check that it
+does not serve this namespace's artifacts. Use `bun test --env-file`,
 not `bun --env-file ... test`: the latter can select the package test script,
 whose credential isolation is intentionally unsuitable for a live provider run.
 The live tests create Workers and retain them, their recovery metadata and DO
-data. Finalizers disable serving; nothing is force-deleted. The first test
-exercises report/dashboard/guestbook/realtime, updates, invalid-source recovery,
-binding validation, stop and redeploy. The second verifies actual Ren chat tool
+data. Finalizers disable serving. Only the fencing test force-deletes its own
+script, which holds no data. The first file checks the fencing (a stale `If-Match`
+gets 412), the dispatcher (path and query, unknown labels, other hosts, the bare
+domain), a process lost at each save, and report/dashboard/guestbook/realtime,
+updates, invalid-source recovery, binding validation, stop and redeploy. The second verifies actual Ren chat tool
 execution, accepted results without OpenCode's fallback preview URL, completion
 with the real provider URL, public HTTP and an update at the same URL.
 
@@ -232,16 +237,15 @@ REN_ARTIFACT_SMOKE_APPROVED=1 \
 
 Dry-run checks that the Cloudflare credentials are set, without network calls. The approved mode runs the same two real Ren integration files above,
 sequentially; it has no second deployment implementation. Local and Cloudflare
-tests share report/dashboard and guestbook/SQLite/WebSocket scenarios. This
-still does not verify paid WFP dispatch.
+tests share report/dashboard and guestbook/SQLite/WebSocket scenarios.
 
 ## Still deferred
 
-- Paid Workers for Platforms dispatch namespaces and their live verification.
-- The optional `artifacts.useren.ai` domain, wildcard DNS and dispatch routing.
 - Provider/account migration and arbitrary provider registries.
+- Names that people choose, customer domains, and sign-in before an artifact
+  opens.
 
 Official references: [account tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/),
-[Worker serving toggle](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/subdomain/methods/create/),
+[dispatch namespace scripts](https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/),
 [DO lifecycle/rollback limits](https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/),
 [WFP limits](https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/limits/).
