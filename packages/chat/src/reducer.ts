@@ -120,7 +120,16 @@ const editContent = <C extends Content>(
     return { ...assistant, content: assistant.content.map((item, index) => (index === position ? edited : item)) }
   })
 
-const isText = (content: Content): content is SessionMessage.Text => content.type === "text"
+const editText = (
+  state: ChatState.State,
+  data: { sessionID: Session.ID; assistantMessageID: string; ordinal: number },
+  edit: (text: SessionMessage.Text) => SessionMessage.Text,
+) =>
+  editAssistant(state, data.sessionID, data.assistantMessageID, (assistant) => {
+    const found = assistant.content.filter((item) => item.type === "text")[data.ordinal]
+    if (found?.type !== "text" || found.time?.completed) return assistant
+    return { ...assistant, content: assistant.content.map((item) => (item === found ? edit(found) : item)) }
+  })
 
 const isOpenReasoning = (content: Content): content is SessionMessage.Reasoning =>
   content.type === "reasoning" && !content.time?.completed
@@ -635,17 +644,15 @@ const handlers: Handlers = {
   "session.text.started": (state, event) =>
     editAssistant(state, event.data.sessionID, event.data.assistantMessageID, (assistant) => ({
       ...assistant,
-      content: [...assistant.content, { type: "text", text: "" }],
+      content: [...assistant.content, { type: "text", text: "", time: { created: time(event.created) } }],
     })),
   "session.text.delta": (state, event) =>
-    editContent(state, event.data.sessionID, event.data.assistantMessageID, isText, (text) => ({
-      ...text,
-      text: text.text + event.data.delta,
-    })),
+    editText(state, event.data, (text) => ({ ...text, text: text.text + event.data.delta })),
   "session.text.ended": (state, event) =>
-    editContent(state, event.data.sessionID, event.data.assistantMessageID, isText, (text) => ({
+    editText(state, event.data, (text) => ({
       ...text,
       text: event.data.text,
+      time: { created: text.time?.created ?? time(event.created), completed: time(event.created) },
     })),
   "session.reasoning.started": (state, event) =>
     editAssistant(state, event.data.sessionID, event.data.assistantMessageID, (assistant) => ({

@@ -164,6 +164,31 @@ test.each([
   }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise),
 )
 
+effect("a failed attempt waits until its retryAt, and retryNow ends the wait at once", () =>
+  Effect.gen(function* () {
+    const fake = yield* setup()
+    const retryAt = (at: number) =>
+      SubscriptionRef.changes(fake.connection.retryAt).pipe(
+        Stream.filter((next) => next === at),
+        Stream.runHead,
+      )
+    const first = yield* Queue.take(fake.subscriptions)
+    yield* Queue.offer(first.queue, connected)
+    yield* fake.until("connected")
+
+    yield* Queue.end(first.queue)
+    yield* retryAt(1_000)
+    yield* TestClock.adjust("1 second")
+    const second = yield* Queue.take(fake.subscriptions)
+    expect(yield* SubscriptionRef.get(fake.connection.retryAt)).toBe(0)
+
+    yield* Queue.end(second.queue)
+    yield* retryAt(3_000)
+    yield* fake.connection.retryNow
+    yield* Queue.take(fake.subscriptions)
+  }),
+)
+
 effect("a stream that does not start with server.connected is replaced", () =>
   Effect.gen(function* () {
     const fake = yield* setup()

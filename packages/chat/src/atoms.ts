@@ -127,9 +127,13 @@ export const make = <R, ER>(options: Options<R, ER>) => {
               ),
             ).pipe(
               Stream.runForEach((event) =>
-                event === "online"
-                  ? opened.wake.pipe(Effect.andThen(opened.resync("The network connection is back")))
-                  : opened.foreground,
+                (event === "online"
+                  ? opened.wake.pipe(
+                      Effect.andThen(opened.retryNow),
+                      Effect.andThen(opened.resync("The network connection is back")),
+                    )
+                  : opened.foreground
+                ).pipe(Effect.andThen(opened.retryUnsent)),
               ),
               Effect.forkScoped,
             )
@@ -150,6 +154,8 @@ export const make = <R, ER>(options: Options<R, ER>) => {
   const state = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.state))
 
   const status = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.status))
+
+  const retryAt = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.retryAt))
 
   const boot = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.boot))
 
@@ -302,6 +308,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     session,
     state,
     status,
+    retryAt,
     boot,
     attention,
     timeline,

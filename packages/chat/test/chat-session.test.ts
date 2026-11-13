@@ -188,6 +188,26 @@ test("while access is starting the history comes from Ren, a page that is too la
     }),
   ))
 
+test("the boot is Checking until Ren answers access, then Starting", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      const answer = yield* Deferred.make<{ readonly status: "starting"; readonly phase: string }>()
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => Deferred.await(answer),
+      }).pipe(Effect.provide(http(brain)))
+      expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Checking" })
+      yield* chat.open(brain.id).pipe(Effect.forkChild)
+      expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Checking" })
+      yield* Deferred.succeed(answer, { status: "starting" as const, phase: "waking" })
+      expect(yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Starting")).toEqual({
+        _tag: "Starting",
+        phase: "waking",
+      })
+    }),
+  ))
+
 test("a saved page that holds only the newest messages makes the brain's read stop at its oldest message, not read the whole history (#253)", () =>
   ChatTest.live(
     Effect.gen(function* () {
@@ -770,7 +790,7 @@ test("a prompt that Ren cannot give access for stays in the chat as unsent, and 
     }),
   ))
 
-test("removing an unsent prompt takes it out of the chat and returns what it held, and retrying one sends the unsent before it first (E126)", () =>
+test("removing an unsent prompt takes it out of the chat and returns what it held, and a retry sends every unsent prompt in order, even one retried while Ren was unreachable (E126)", () =>
   ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
@@ -794,8 +814,9 @@ test("removing an unsent prompt takes it out of the chat and returns what it hel
       const left = yield* SubscriptionRef.get(chat.state)
       expect(ChatState.messages(left, brain.id).map((message) => message.id)).toEqual([one, three])
       expect(left.stalled.has(two)).toBe(false)
+      yield* chat.retryMessage(one)
       reachable.value = true
-      yield* chat.retryMessage(three)
+      yield* chat.retryUnsent
       yield* chat.open(brain.id)
       yield* ChatTest.until(chat.state, (state) => ChatState.pending(state, brain.id).length === 0)
       const ids = ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id)
@@ -840,6 +861,76 @@ test("a prompt to a chat whose space was shut down starts it again once, then is
       yield* chat.open(brain.id).pipe(Effect.ignore)
       expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe("Stopped")
       yield* chat.prompt({ text: stub.script({ reply: "started again" }).marker })
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
+      expect([
+        space.restarts,
+        ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
+      ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
+    }),
+  ))
+
+test("a prompt to a chat whose start failed starts it again once, then is delivered", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const space = { failed: true, restarts: 0 }
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => (space.failed ? Effect.succeed({ status: "failed" as const, reason: "no capacity" }) : access()),
+        restart: Effect.sync(() => {
+          space.restarts += 1
+          space.failed = false
+        }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* chat.open(brain.id).pipe(Effect.ignore)
+      expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe("Failed")
+      yield* chat.prompt({ text: stub.script({ reply: "started again" }).marker })
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
+      expect([
+        space.restarts,
+        ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
+      ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
+    }),
+  ))
+
+test("a chat whose start failed starts again on retry, without a new session, and sends the message kept while it failed", () =>
+  ChatTest.live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const space = { failed: true, armed: false, restarts: 0 }
+      const script = stub.script({ reply: "started again" })
+      const stored = {
+        items: [
+          { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+        ] as ReadonlyArray<Outbox.Kept>,
+      }
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () => (space.failed ? Effect.succeed({ status: "failed" as const, reason: "no capacity" }) : access()),
+        restart: Effect.suspend(() =>
+          space.armed
+            ? Effect.sync(() => {
+                space.restarts += 1
+                space.failed = false
+              })
+            : Effect.fail(new Error("no capacity")),
+        ),
+        outbox: {
+          load: Effect.sync(() => stored.items),
+          keep: (items) => Effect.sync(() => void (stored.items = items)),
+        },
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* ChatTest.until(chat.state, (state) => state.outbox.size === 1)
+      yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Failed")
+      expect(stored.items).toHaveLength(1)
+      space.armed = true
+      yield* chat.retry
+      yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Ready")
+      yield* chat.open(brain.id)
       const done = yield* ChatTest.until(chat.state, settled(brain.id))
       expect([
         space.restarts,

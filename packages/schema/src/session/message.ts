@@ -257,6 +257,7 @@ export interface Text extends Schema.Schema.Type<typeof Text> {}
 export const Text = Schema.Struct({
   type: Schema.tag("text"),
   text: Schema.String,
+  time: Schema.optionalKey(Schema.Struct({ created: Time, completed: Schema.optionalKey(Time) })),
 }).annotate({ identifier: "SessionMessage.Text" })
 
 export interface Reasoning extends Schema.Schema.Type<typeof Reasoning> {}

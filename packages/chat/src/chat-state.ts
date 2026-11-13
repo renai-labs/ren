@@ -10,7 +10,7 @@ import { DateTime } from "effect"
 
 export type Activity = "idle" | "running"
 
-export type PendingStatus = "starting" | "steering" | "stranded" | "queued" | "unsent"
+export type PendingStatus = "starting" | "steering" | "stranded" | "queued" | "unsent" | "unreachable"
 
 export type PendingUpdate = SessionInbox.Info | SessionInbox.Delivery | undefined
 
@@ -30,7 +30,7 @@ export interface State {
   readonly expired: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly shells: Readonly<Record<string, Shell.Info>> | undefined
   readonly outbox: ReadonlySet<string>
-  readonly stalled: ReadonlyMap<string, "unsent">
+  readonly stalled: ReadonlyMap<string, "unsent" | "unreachable">
   readonly compacting: Readonly<Record<string, Compacting>>
   readonly history: ReadonlySet<string>
   // oxlint-disable-next-line ren/no-comments -- Sessions that show a page of Ren's saved history with older messages behind it: the brain's read stops at its oldest message (#253).

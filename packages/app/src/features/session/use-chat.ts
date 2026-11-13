@@ -122,12 +122,14 @@ function useChatSuggestions(input: {
 }
 
 function bootStatusOf(
-  connection: string | undefined,
+  connection: { readonly status: string | undefined; readonly retryAt: number },
   boot: PromptInputBoot | { readonly _tag: "Ready" } | undefined,
 ): PromptInputBoot | undefined {
   if (boot && boot._tag !== "Ready") return boot
-  if (connection === "reconnecting") return { _tag: "Reconnecting" }
-  return
+  if (connection.status !== "reconnecting") return
+  return connection.retryAt - Date.now() >= 2_000
+    ? { _tag: "Waiting", retryAt: connection.retryAt }
+    : { _tag: "Reconnecting" }
 }
 
 const childOf = (
@@ -248,6 +250,7 @@ export function useChat(
   const retryMessage = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.retryMessage(id))
   const removeMessage = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.removeMessage(id))
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
+  const retryNow = ChatReact.useAction(root, (opened) => opened.retryNow)
   const cancelQueued = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.cancelInput(id))
   const steerQueued = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.steerInput(id))
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
@@ -263,7 +266,7 @@ export function useChat(
   const [appsOpen, setAppsOpen] = useState(false)
   const compact = ChatReact.useAction(root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
-  const restart = useMutation(api.chat.retry.mutationOptions())
+  const restart = ChatReact.useAction(root, (opened) => opened.retry)
   const archive = useMutation(api.session.archive.mutationOptions())
   const backgroundWork = useBackgroundWork(root, child, view.activity)
   const reverted = ChatState.revertMessageID(state, root) !== undefined
@@ -291,7 +294,10 @@ export function useChat(
     rename,
     apps: () => setAppsOpen(true),
   })
-  const bootStatus = bootStatusOf(connection, boot)
+  const bootStatus = bootStatusOf(
+    { status: connection, retryAt: AsyncResult.getOrElse(view.session.retryAt, () => 0) },
+    boot,
+  )
   return {
     root,
     child,
@@ -341,8 +347,6 @@ export function useChat(
     reverting,
     failed: AsyncResult.isFailure(view.session.state),
     boot,
-    reconnecting: connection === "reconnecting",
-    retrying: restart.isPending,
     draft,
     setDraft,
     files: { sessionId: root, spaceId, update: kept.update },
@@ -460,13 +464,11 @@ export function useChat(
       void redo().catch((error: unknown) =>
         toast.error("Could not restore messages", { description: errorMessage(error) }),
       ),
+    reopen,
+    retryNow: () => void retryNow(),
     retry: () =>
-      restart.mutate(
-        { id: root },
-        {
-          onSuccess: () => reopen(),
-          onError: (error) => toast.error("Could not start this chat again", { description: errorMessage(error) }),
-        },
+      void restart().catch((error: unknown) =>
+        toast.error("Could not start this chat again", { description: errorMessage(error) }),
       ),
     openChild: (id: Session.ID | undefined) => (options.onChild ? options.onChild(id) : setLocalChild(id)),
     archive: () =>
