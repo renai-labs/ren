@@ -107,7 +107,9 @@ test("a member renames a chat from its breadcrumb", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Final agenda", exact: true })).toBeVisible()
 })
 
-test("a member opens the model picker with its shortcut", async ({ page }) => {
+test("a member opens the model picker with its shortcut and undoes the last message with a slash command", async ({
+  page,
+}) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
   await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
@@ -120,6 +122,10 @@ test("a member opens the model picker with its shortcut", async ({ page }) => {
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menu")).toHaveCount(0)
   await expect(message).toBeFocused()
+
+  await message.pressSequentially("/und")
+  await page.getByRole("option", { name: /^\/undo/ }).click()
+  await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
 })
 
 test.fixme("a member undoes the last message with a command", async ({ page }) => {
@@ -164,6 +170,8 @@ test("a member queues a message while Ren works, steers with the other key, reca
   await message.press("Enter")
   expect((await queued).postData()).toContain('"delivery":"queue"')
   await expect(message).toHaveValue("")
+  const waiting = page.getByRole("list", { name: "Queued messages" })
+  await expect(waiting.getByText("Queue this")).toBeVisible()
 
   const steered = delivered("Steer this")
   await message.fill("Steer this")
@@ -177,6 +185,9 @@ test("a member queues a message while Ren works, steers with the other key, reca
   await message.press("ArrowDown")
   await message.press("ArrowDown")
   await expect(message).toHaveValue("")
+
+  await waiting.getByRole("button", { name: "Remove" }).click()
+  await expect(waiting).toHaveCount(0)
 
   const stopped = page.waitForRequest((request) => request.url().includes("interrupt"))
   await message.press("Escape")
