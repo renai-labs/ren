@@ -11,7 +11,7 @@ export function QueuedMessages(props: {
 }) {
   const count = props.items.length
   return (
-    <div className="relative -mb-5 rounded-xl border bg-muted/40 px-1.5 pt-1.5 pb-[18px]">
+    <div className="relative -mb-5 rounded-xl border bg-muted/40 px-1.5 pt-1.5 pb-4.5">
       {count > 3 ? (
         <div className="px-2 pt-0.5 pb-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase tabular-nums">
           {count} queued
@@ -21,8 +21,7 @@ export function QueuedMessages(props: {
         aria-label="Queued messages"
         className={cn(
           "flex flex-col gap-px",
-          count > 4 &&
-            "max-h-37 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent,black_8px,black_calc(100%-12px),transparent)]",
+          count > 4 && "max-h-37 overflow-y-auto overscroll-contain mask-t-from-95% mask-b-from-92%",
         )}
       >
         {props.items.map((item) => (
