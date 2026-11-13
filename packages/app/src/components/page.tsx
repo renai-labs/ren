@@ -1,6 +1,17 @@
 import { Loading } from "@ren/ui/loading"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
-import { createContext, Fragment, use, useState, type ComponentProps, type ReactElement, type ReactNode } from "react"
+import {
+  createContext,
+  Fragment,
+  use,
+  useLayoutEffect,
+  useState,
+  type Dispatch,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode,
+  type SetStateAction,
+} from "react"
 import { createPortal } from "react-dom"
 import {
   Item,
@@ -23,6 +34,15 @@ export const pageWidths = {
 
 export type PageWidth = keyof typeof pageWidths | "full"
 
+const columnHead = "mx-auto flex w-full shrink-0 flex-col gap-6 px-6 pt-22 pb-6"
+const columnBody = "mx-auto flex w-full flex-1 flex-col gap-6 px-6 pb-12"
+
+const pageFrames: Record<PageWidth, { readonly head: string; readonly body: string }> = {
+  column: { head: cn(columnHead, pageWidths.column), body: cn(columnBody, pageWidths.column) },
+  wide: { head: cn(columnHead, pageWidths.wide), body: cn(columnBody, pageWidths.wide) },
+  full: { head: "flex shrink-0 flex-col gap-4 px-8 pt-8 pb-4", body: "flex flex-1 flex-col gap-4 px-8 pb-3" },
+}
+
 type PageProps = {
   title: string
   description?: string | undefined
@@ -31,6 +51,7 @@ type PageProps = {
   menu?: ReactNode | undefined
   aside?: ReactNode | undefined
   leading?: ReactNode | undefined
+  tabs?: ReactNode | undefined
   actions?: ReactNode | undefined
   width?: PageWidth | undefined
   footer?: ReactNode | undefined
@@ -40,15 +61,21 @@ type PageProps = {
 }
 
 const PageActionsSlot = createContext<HTMLElement | null>(null)
-const PageLeadingSlot = createContext<HTMLElement | null>(null)
+const PageTabsSlot = createContext<HTMLElement | null>(null)
+const PageTabsCount = createContext<Dispatch<SetStateAction<number>> | null>(null)
 
 export function PageActions(props: { children: ReactNode }) {
   const slot = use(PageActionsSlot)
   return slot ? createPortal(props.children, slot) : null
 }
 
-export function PageLeading(props: { children: ReactNode }) {
-  const slot = use(PageLeadingSlot)
+export function PageTabs(props: { children: ReactNode }) {
+  const slot = use(PageTabsSlot)
+  const count = use(PageTabsCount)
+  useLayoutEffect(() => {
+    count?.((mounted) => mounted + 1)
+    return () => count?.((mounted) => mounted - 1)
+  }, [count])
   return slot ? createPortal(props.children, slot) : null
 }
 
@@ -59,6 +86,22 @@ function PageHeading(props: Pick<PageProps, "title" | "description">) {
       {props.description ? <p className="text-sm text-muted-foreground">{props.description}</p> : null}
     </>
   )
+}
+
+function PageTabsRow(props: { tabs: ReactNode; onSlot: (element: HTMLElement | null) => void; actions: ReactNode }) {
+  return (
+    <div className={cn("flex min-h-8 items-center justify-between gap-4", !props.actions && "hidden")}>
+      <div className="flex min-w-0 items-center">
+        {props.tabs}
+        <div ref={(node) => props.onSlot(node)} className="contents" />
+      </div>
+      {props.actions ? <PageToolbar>{props.actions}</PageToolbar> : null}
+    </div>
+  )
+}
+
+function PageToolbar(props: { children: ReactNode }) {
+  return <div className="flex min-h-8 shrink-0 items-center gap-2">{props.children}</div>
 }
 
 function PageHeader(props: PageProps) {
@@ -90,7 +133,7 @@ function PageHeader(props: PageProps) {
           </p>
         ) : null}
       </div>
-      <div className="flex min-h-8 shrink-0 items-center gap-1">{props.actions}</div>
+      {props.actions ? <PageToolbar>{props.actions}</PageToolbar> : null}
     </header>
   )
 }
@@ -98,43 +141,28 @@ function PageHeader(props: PageProps) {
 export function Page(props: PageProps) {
   const shapeId = useShapeId(props.shape ?? "page")
   const [slot, setSlot] = useState<HTMLElement | null>(null)
-  const [leadingSlot, setLeadingSlot] = useState<HTMLElement | null>(null)
+  const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null)
+  const [mountedTabs, setMountedTabs] = useState(0)
   const width = props.width ?? "column"
-  const header = (
-    <PageHeader
-      {...props}
-      actions={
-        <>
-          {props.actions}
-          <div ref={setSlot} className="contents" />
-        </>
-      }
-    />
-  )
-  const body = (
-    <PageActionsSlot value={slot}>
-      <PageLeadingSlot value={leadingSlot}>
-        <div className="flex flex-1 flex-col gap-8">{props.children}</div>
-      </PageLeadingSlot>
-    </PageActionsSlot>
+  const frame = pageFrames[width]
+  const tabbed = props.tabs !== undefined || mountedTabs > 0
+  const actions = (
+    <>
+      {props.actions}
+      <div ref={setSlot} className="contents" />
+    </>
   )
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      <div
-        className={
-          width === "full"
-            ? "flex shrink-0 flex-col gap-4 px-8 pt-8 pb-4"
-            : cn("mx-auto flex w-full shrink-0 flex-col gap-6 px-6 pt-22 pb-6", pageWidths[width])
-        }
-      >
+      <div className={frame.head}>
         {props.back ? <div className="flex">{props.back}</div> : null}
-        {header}
+        <PageHeader {...props} actions={tabbed ? undefined : actions} />
+        <PageTabsRow tabs={props.tabs} onSlot={setTabsSlot} actions={tabbed ? actions : undefined} />
         {props.leading && width !== "full" ? (
           <div className="flex min-h-8 items-center">{props.leading}</div>
         ) : (
           props.leading
         )}
-        <div ref={setLeadingSlot} className="contents" />
       </div>
       <Loading
         id={shapeId}
@@ -142,14 +170,14 @@ export function Page(props: PageProps) {
         label={`Loading ${props.title}`}
         className="flex min-h-0 flex-1 scrollbar-thin flex-col overflow-y-auto overscroll-contain"
       >
-        <div
-          className={
-            width === "full"
-              ? "flex flex-1 flex-col gap-4 px-8 pb-3"
-              : cn("mx-auto flex w-full flex-1 flex-col gap-6 px-6 pb-12", pageWidths[width])
-          }
-        >
-          {body}
+        <div className={frame.body}>
+          <PageActionsSlot value={slot}>
+            <PageTabsSlot value={tabsSlot}>
+              <PageTabsCount value={setMountedTabs}>
+                <div className="flex flex-1 flex-col gap-8">{props.children}</div>
+              </PageTabsCount>
+            </PageTabsSlot>
+          </PageActionsSlot>
           {props.footer ? <PageFooter>{props.footer}</PageFooter> : null}
         </div>
       </Loading>

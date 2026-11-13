@@ -69,7 +69,7 @@ export function BillingPage() {
     <Page
       title="Billing & plans"
       loading={billing.isPending}
-      leading={
+      tabs={
         <Tabs value={tab} onValueChange={(value: string) => openTab(value)}>
           <PageTabsList aria-label="Billing & plans">
             <PageTabsTrigger value="billing">Billing</PageTabsTrigger>

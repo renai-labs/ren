@@ -420,7 +420,7 @@ function SettingsPageSkeleton() {
           channels: "Invoke Ren from where your team already works.",
         }[section]
       }
-      leading={["members", "credentials"].includes(section) ? <div className="min-h-8" /> : undefined}
+      tabs={["members", "credentials"].includes(section) ? <div className="min-h-8" /> : undefined}
       loading
     >
       {body}

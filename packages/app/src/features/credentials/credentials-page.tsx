@@ -49,7 +49,7 @@ export function CredentialsSettingsPage() {
   const search = route.useSearch()
   if (search.tab === "keys") return <CredentialKeys />
   return (
-    <Page title="Credentials" description="App accounts and keys you can use." leading={<CredentialTabs tab="apps" />}>
+    <Page title="Credentials" description="App accounts and keys you can use." tabs={<CredentialTabs tab="apps" />}>
       <OrgApps />
     </Page>
   )
@@ -77,7 +77,7 @@ function CredentialKeys() {
     <Page
       title="Credentials"
       description="App accounts and keys you can use."
-      leading={<CredentialTabs tab="keys" keys={total} />}
+      tabs={<CredentialTabs tab="keys" keys={total} />}
       actions={
         <>
           <ToolbarSearch label="Search keys" value={query} onChange={setQuery} />

@@ -343,7 +343,7 @@ export function MembersSettingsPage() {
     <Page
       title="Members"
       description="Everyone in your organization."
-      leading={
+      tabs={
         <Tabs value={tab} onValueChange={(value: string) => openTab(value)}>
           <PageTabsList>
             <PageTabsTrigger value="members" count={memberCount}>

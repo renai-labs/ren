@@ -51,7 +51,7 @@ export function SpacesPage() {
     <Page
       title="Spaces"
       description="Each space gives a team its own credentials, apps and agents."
-      leading={
+      tabs={
         <Tabs
           value={tab}
           onValueChange={(value: string) =>
