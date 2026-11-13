@@ -3,6 +3,7 @@ import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import { IconArrowLeft, IconFile, IconFiles, IconFolder, IconRefresh } from "@tabler/icons-react"
+import { Cause } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
 import {
@@ -18,7 +19,9 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { cn } from "cn"
 import { formatBytes } from "../../lib/format.js"
+import { errorStatus } from "../../lib/errors.js"
 import { WorkspacePending } from "./workspace-state.js"
+import type { PanelRequest } from "./workspace-panel.js"
 
 const highlightLimit = 256 * 1024
 
@@ -142,6 +145,14 @@ function Preview(props: { file: SessionCatalog.FileContent }) {
 
 function OpenFile(props: { root: Session.ID; path: string }) {
   const read = ChatReact.useFile({ root: props.root, path: props.path })
+  if (AsyncResult.isFailure(read.result) && errorStatus(Cause.squash(read.result.cause)) === 404)
+    return (
+      <Empty className="flex-1">
+        <EmptyHeader>
+          <EmptyDescription>No file at {props.path}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
   if (!AsyncResult.isSuccess(read.result))
     return (
       <WorkspacePending
@@ -179,9 +190,16 @@ function OpenFile(props: { root: Session.ID; path: string }) {
   )
 }
 
-export function FilesTab(props: { root: Session.ID }) {
+export function FilesTab(props: { root: Session.ID; request: Extract<PanelRequest, { kind: "files" }> | undefined }) {
   const [folder, setFolder] = useState("")
   const [opened, setOpened] = useState<string>()
+  const [handled, setHandled] = useState<string>()
+  if (props.request && props.request.id !== handled) {
+    const path = props.request.path.trim().replace(/^\/+/u, "")
+    setHandled(props.request.id)
+    setOpened(path || undefined)
+    setFolder(path.replace(/[^/]+$/u, ""))
+  }
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-56 shrink-0 flex-col border-r">

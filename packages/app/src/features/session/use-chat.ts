@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, Composer, SessionTasks, type ChatSession, type Family } from "@ren/chat"
+import { ChatState, ClientCommand, Composer, SessionTasks, type ChatSession, type Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -41,6 +41,11 @@ const known = (state: ChatState.State, sessionID: Session.ID, id: SessionMessage
   ChatState.messages(state, sessionID).some((message) => message.id === id) ||
   ChatState.pending(state, sessionID).some((item) => item.id === id)
 
+export interface WorkspaceCommands {
+  readonly openTerminal: () => void
+  readonly openFile: (path: string) => void
+}
+
 function useChatSuggestions(input: {
   root: Session.ID
   capabilities: SessionInfo["capabilities"] | undefined
@@ -51,6 +56,11 @@ function useChatSuggestions(input: {
   mentions: ReadonlyArray<Composer.MentionedApp>
   canChooseModel: boolean
   onChooseModel: () => void
+  workspace: WorkspaceCommands | undefined
+  onRename: (() => void) | undefined
+  onNew: ((spaceId: string | undefined) => void) | undefined
+  rename: (title: string) => Promise<unknown>
+  apps: () => void
 }) {
   const compact = ChatReact.useAction(input.root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
   const revert = ChatReact.useAction(input.root, (opened, id: SessionMessage.ID) => opened.revert(id))
@@ -61,6 +71,18 @@ function useChatSuggestions(input: {
   const command = ChatReact.useAction(input.root, (opened, request: ChatSession.CommandInput) =>
     opened.command(request),
   )
+  const actions: Record<ClientCommand.ID, (text: string) => void> = {
+    "model.choose": () => input.onChooseModel(),
+    "session.compact": () => void compact(input.model).catch(fail("Could not compact the chat")),
+    "session.undo": () => lastUser && void revert(lastUser.id).catch(fail("Could not undo")),
+    "session.redo": () => void redo().catch(fail("Could not restore messages")),
+    "session.new": () => input.onNew?.(input.spaceId),
+    "panel.terminal": () => input.workspace?.openTerminal(),
+    "file.open": (text) => input.workspace?.openFile(text),
+    "session.rename": (text) => (text ? void input.rename(text) : input.onRename?.()),
+    "apps.open": () => input.apps(),
+  }
+  const runClient = (id: ClientCommand.ID, text: string) => actions[id](text)
   const suggestions = useComposerSuggestions({
     root: input.root,
     spaceId: input.spaceId,
@@ -71,13 +93,13 @@ function useChatSuggestions(input: {
       "session.compact": input.capabilities?.compact !== false && lastUser !== undefined,
       "session.undo": revertable && lastUser !== undefined,
       "session.redo": revertable && input.reverted,
+      "session.new": input.onNew !== undefined,
+      "panel.terminal": input.workspace !== undefined,
+      "file.open": input.workspace !== undefined,
+      "session.rename": input.onRename !== undefined && input.capabilities?.rename !== false,
+      "apps.open": input.spaceId !== undefined,
     },
-    onClient: (id) => {
-      if (id === "model.choose") input.onChooseModel()
-      if (id === "session.compact") void compact(input.model).catch(fail("Could not compact the chat"))
-      if (id === "session.undo" && lastUser) void revert(lastUser.id).catch(fail("Could not undo"))
-      if (id === "session.redo") void redo().catch(fail("Could not restore messages"))
-    },
+    onClient: runClient,
   })
   return {
     suggest: suggestions.suggest,
@@ -85,6 +107,8 @@ function useChatSuggestions(input: {
       request: ChatSession.PromptInput & { text: string },
       prompt: (request: ChatSession.PromptInput) => Promise<unknown>,
     ) => {
+      const client = suggestions.client(request.text)
+      if (client) return Promise.resolve(runClient(client.id, client.input))
       const slash = suggestions.slash(request.text)
       const selection = {
         ...(request.delivery && { delivery: request.delivery }),
@@ -173,6 +197,9 @@ export function useChat(
     readonly child?: string | undefined
     readonly onChild?: ((id: Session.ID | undefined) => void) | undefined
     readonly onArchived?: (() => void) | undefined
+    readonly workspace?: WorkspaceCommands | undefined
+    readonly onRename?: (() => void) | undefined
+    readonly onNew?: ((spaceId: string | undefined) => void) | undefined
   },
 ) {
   const { api, platform, queryClient } = RouterContext.useRouterContext()
@@ -226,7 +253,12 @@ export function useChat(
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
   const redo = ChatReact.useAction(root, (opened) => opened.redo)
   const undo = ChatReact.useAction(root, (opened) => opened.undo)
-  const rename = ChatReact.useAction(root, (opened, next: string) => opened.rename(next))
+  const renameAction = ChatReact.useAction(root, (opened, next: string) => opened.rename(next))
+  const rename = (next: string) =>
+    renameAction(next).catch((error: unknown) => {
+      toast.error("Couldn’t rename the chat", { description: errorMessage(error) })
+    })
+  const [appsOpen, setAppsOpen] = useState(false)
   const compact = ChatReact.useAction(root, (opened, next: SessionModel.Ref | undefined) => opened.compact(next))
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
   const restart = useMutation(api.chat.retry.mutationOptions())
@@ -251,6 +283,11 @@ export function useChat(
     mentions: Composer.mentions(draft),
     canChooseModel: abilities.canChooseModel,
     onChooseModel: () => setPicking(true),
+    workspace: options.workspace,
+    onRename: options.onRename,
+    onNew: options.onNew,
+    rename,
+    apps: () => setAppsOpen(true),
   })
   const bootStatus = bootStatusOf(connection, boot)
   return {
@@ -385,10 +422,8 @@ export function useChat(
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
         .finally(() => setReverting(false))
     },
-    rename: (next: string) =>
-      rename(next).catch((error: unknown) => {
-        toast.error("Couldn’t rename the chat", { description: errorMessage(error) })
-      }),
+    rename,
+    apps: { open: appsOpen, onOpenChange: setAppsOpen },
     prompted: ChatState.visibleUserMessages(state, root).length > 0,
     undo: () =>
       void undo().then(

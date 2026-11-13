@@ -41,7 +41,7 @@ export interface Suggest {
     value: string,
     text: string,
     cursor: number,
-  ) => { text: string; cursor: number; mention?: Composer.MentionedApp | undefined } | undefined
+  ) => { text: string; cursor: number; focus?: boolean; mention?: Composer.MentionedApp | undefined } | undefined
   readonly onClose: () => void
   readonly marks: (text: string) => ReadonlyArray<MentionMark>
   readonly mentioned: (text: string) => ReadonlyArray<Composer.MentionedApp>
@@ -60,18 +60,25 @@ export function useComposerSuggestions(input: {
   mentions: ReadonlyArray<Composer.MentionedApp>
   commands: boolean
   client: Readonly<Record<ClientCommand.ID, boolean>>
-  onClient: (id: ClientCommand.ID) => void
+  onClient: (id: ClientCommand.ID, text: string) => void
 }) {
   const offered = Composer.offeredCommands(listed(ChatReact.useCommands(input.root)))
   const brain = input.commands ? offered : []
+  const client = ClientCommand.offered(input.client).filter(
+    (item) => !brain.some((command) => command.name === item.trigger),
+  )
   const core = useSuggestions({
     root: input.root,
     spaceId: input.spaceId,
     mentions: input.mentions,
-    commands: (query) => ClientCommand.suggestions(ClientCommand.offered(input.client), brain, query),
+    commands: (query) => ClientCommand.suggestions(client, brain, query),
     onClient: input.onClient,
   })
-  return { ...core, slash: (text: string) => Composer.slash(text, brain) }
+  return {
+    ...core,
+    slash: (text: string) => Composer.slash(text, brain),
+    client: (text: string) => ClientCommand.parse(client, text),
+  }
 }
 
 export const useMentionSuggestions = (spaceId: string | undefined, mentions: ReadonlyArray<Composer.MentionedApp>) =>
@@ -188,7 +195,7 @@ function useSuggestions(input: {
   spaceId: string | undefined
   mentions: ReadonlyArray<Composer.MentionedApp>
   commands: (query: string) => ReadonlyArray<ClientCommand.Suggestion>
-  onClient: (id: ClientCommand.ID) => void
+  onClient: (id: ClientCommand.ID, text: string) => void
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
@@ -249,8 +256,8 @@ function useSuggestions(input: {
       if (trigger?.kind === "command") {
         const command = runnable.find((item) => item.value === value)
         if (command?.client) {
-          input.onClient(command.client)
-          return { text: "", cursor: 0 }
+          input.onClient(command.client, "")
+          return { text: "", cursor: 0, focus: !ClientCommand.leavesComposer(command.client) }
         }
         const next = `/${command?.trigger ?? value} `
         return { text: next, cursor: next.length }

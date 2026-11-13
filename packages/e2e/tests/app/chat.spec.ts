@@ -202,6 +202,36 @@ test("a member queues a message while Ren works, steers with the other key, reca
   await page.request.post(`${mailboxURL}/release?marker=${marker}`)
 })
 
+test("a member opens the terminal and a file and renames the chat with slash commands", async ({ page }) => {
+  await createOrganization(page.request, { name: "Mary Jackson" })
+  await page.goto("/app/")
+  const message = page.getByRole("textbox", { name: "Message", exact: true })
+  await message.fill("Draft the board memo")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  await message.pressSequentially("/term")
+  await page
+    .getByRole("listbox", { name: "Suggestions" })
+    .getByRole("option", { name: /^\/terminal/ })
+    .click()
+  await expect(message).toHaveValue("")
+  const panel = page.getByRole("complementary", { name: "Workspace" })
+  await expect(panel.getByRole("tab", { name: "Terminal", selected: true })).toBeVisible()
+  await expect(panel.getByRole("textbox", { name: "Command" })).toBeFocused()
+
+  await message.fill("/open nope.ts")
+  await message.press("Enter")
+  await expect(message).toHaveValue("")
+  await expect(panel.getByRole("tab", { name: "Files", selected: true })).toBeVisible()
+  await expect(panel.getByText("No file at nope.ts")).toBeVisible()
+
+  await message.fill("/rename Board memo")
+  await message.press("Enter")
+  await expect(message).toHaveValue("")
+  await expect(page.getByRole("link", { name: "Board memo" })).toBeVisible()
+})
+
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
   await page.goto("/app/")

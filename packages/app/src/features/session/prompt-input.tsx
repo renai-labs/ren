@@ -112,11 +112,26 @@ function AddMenu(props: {
   )
 }
 
-function AppsStrip(props: { spaceId: string }) {
+function useControlled(control: { value?: boolean | undefined; onChange?: ((value: boolean) => void) | undefined }) {
+  const [local, setLocal] = useState(false)
+  return [
+    control.value ?? local,
+    (next: boolean) => {
+      setLocal(next)
+      control.onChange?.(next)
+    },
+  ] as const
+}
+
+const addingApps = (state: { adding: boolean; empty: boolean; requested: boolean }) =>
+  state.adding || (state.empty && state.requested)
+
+function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const spaces = useSpaces()
   const space = useSpaceApps(props.spaceId)
   const [connecting, setConnecting] = useState<ProfileTarget & { fromAdding?: boolean }>()
-  const [open, setOpen] = useState(false)
+  const open = props.open
+  const setOpen = props.onOpenChange
   const [adding, setAdding] = useState(false)
   const from = space.from
   if (space.pending || !from) return null
@@ -132,8 +147,11 @@ function AppsStrip(props: { spaceId: string }) {
         space={{ id: props.spaceId, name: from.name }}
         added={new Set(apps.map((each) => each.app.id))}
         onPick={(app) => setConnecting({ appId: app.id, from, fromAdding: true })}
-        open={adding}
-        onOpenChange={setAdding}
+        open={addingApps({ adding, empty: apps.length === 0, requested: open })}
+        onOpenChange={(next) => {
+          setAdding(next)
+          if (!next) setOpen(false)
+        }}
       />
       {connecting ? (
         <ProfileDialog
@@ -633,9 +651,11 @@ function ComposerToolbar(props: {
   onRepositories: () => void
   shell: boolean
   model: ReactNode
+  apps: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void } | undefined
   children: ReactNode
 }) {
   const shell = props.shell
+  const [appsOpen, setAppsOpen] = useControlled({ value: props.apps?.open, onChange: props.apps?.onOpenChange })
   return (
     <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
       {shell ? null : (
@@ -645,7 +665,9 @@ function ComposerToolbar(props: {
           onRepositories={props.spaceId ? props.onRepositories : undefined}
         />
       )}
-      {props.spaceId && !shell ? <AppsStrip spaceId={props.spaceId} /> : null}
+      {props.spaceId && !shell ? (
+        <AppsStrip spaceId={props.spaceId} open={appsOpen} onOpenChange={setAppsOpen} />
+      ) : null}
       {shell ? (
         <span className="mr-auto pl-1 text-sm text-muted-foreground">Shell</span>
       ) : (
@@ -744,6 +766,7 @@ export function PromptInput(props: {
   files: Target
   header?: ReactNode
   queue?: ReactNode
+  apps?: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void } | undefined
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   const [repositories, setRepositories] = useState(false)
@@ -844,7 +867,7 @@ export function PromptInput(props: {
     if (!result) return
     const next = Composer.withText(draft, result.text)
     change(result.mention ? Composer.withMention(next, result.mention) : next)
-    place(result.text, result.cursor)
+    if (result.focus !== false) place(result.text, result.cursor)
   }
   const suggest = shellMode.suggest
   const root = useRef<HTMLDivElement | null>(null)
@@ -993,6 +1016,7 @@ export function PromptInput(props: {
           onRepositories={() => setRepositories(true)}
           shell={shell}
           model={props.model}
+          apps={props.apps}
         >
           {send}
         </ComposerToolbar>

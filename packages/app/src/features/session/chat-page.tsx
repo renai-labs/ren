@@ -8,7 +8,7 @@ import { Button } from "@ren/ui/button"
 import { ActivityPill } from "./activity-pill.js"
 import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
-import { WorkspacePanel } from "./workspace-panel.js"
+import { WorkspacePanel, type PanelRequest, type PanelTarget } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ContextUsage } from "./context-usage.js"
 import { ChatActions } from "./chat-actions.js"
@@ -131,6 +131,7 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
           suggest={chat.suggest}
           queue={<QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />}
           history={chat.shellHistory}
+          apps={chat.apps}
           model={
             chat.canChooseModel ? (
               <ModelPicker
@@ -156,9 +157,14 @@ function useCustomAgentName(root: Session.ID) {
   return agents.agents.find((each) => each.name === agent)?.name
 }
 
-function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => void }) {
+function ChatHeader(props: {
+  chat: Chat
+  panel: boolean
+  renaming: boolean
+  onRenamingChange: (renaming: boolean) => void
+  onTogglePanel: () => void
+}) {
   const chat = props.chat
-  const [renaming, setRenaming] = useState(false)
   const agent = useCustomAgentName(chat.root)
   return (
     <Breadcrumb.Header>
@@ -202,8 +208,8 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
               tooltip={false}
               required
               readOnly={!chat.canRename}
-              editing={renaming}
-              onEditingChange={setRenaming}
+              editing={props.renaming}
+              onEditingChange={props.onRenamingChange}
               onCommit={chat.rename}
             />
           </Breadcrumb.Root>
@@ -223,7 +229,7 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
       <ChatActions
         sessionId={chat.child ?? chat.root}
         archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
-        onRename={chat.child || !chat.canRename ? undefined : () => setRenaming(true)}
+        onRename={chat.child || !chat.canRename ? undefined : () => props.onRenamingChange(true)}
       />
       <Button
         variant="ghost"
@@ -248,8 +254,22 @@ export function ChatPage() {
   const params = route.useParams()
   const search = route.useSearch()
   const navigate = useNavigate()
+  const [panel, setPanel] = useState(false)
+  const [maximized, setMaximized] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [request, setRequest] = useState<PanelRequest>()
+  const requestPanel = (next: PanelTarget) => {
+    setPanel(true)
+    setRequest({ ...next, id: crypto.randomUUID() })
+  }
   const chat = useChat(params.sessionId, {
     child: search.child,
+    workspace: {
+      openTerminal: () => requestPanel({ kind: "terminal" }),
+      openFile: (path) => requestPanel({ kind: "files", path }),
+    },
+    onRename: () => setRenaming(true),
+    onNew: (spaceId) => void navigate({ to: "/", search: spaceId ? { spaceId } : {} }),
     onChild: (id) =>
       void navigate({
         to: "/sessions/$sessionId",
@@ -258,12 +278,16 @@ export function ChatPage() {
       }),
     onArchived: () => void navigate({ to: "/" }),
   })
-  const [panel, setPanel] = useState(false)
-  const [maximized, setMaximized] = useState(false)
   return (
     <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
-        <ChatHeader chat={chat} panel={panel} onTogglePanel={() => setPanel((current) => !current)} />
+        <ChatHeader
+          chat={chat}
+          panel={panel}
+          renaming={renaming}
+          onRenamingChange={setRenaming}
+          onTogglePanel={() => setPanel((current) => !current)}
+        />
         {chat.failed ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             Ren couldn’t open this chat.
@@ -287,6 +311,7 @@ export function ChatPage() {
           <WorkspacePanel
             root={chat.root}
             messages={chat.messages}
+            request={request}
             maximized={maximized}
             onMaximize={setMaximized}
             onClose={() => {
