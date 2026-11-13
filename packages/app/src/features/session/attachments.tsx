@@ -28,6 +28,7 @@ import {
 } from "@ren/ui/attachment"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
+import { FilePreview } from "../../components/file-preview/file-preview.js"
 import { ImageLightbox } from "../../components/image-lightbox.js"
 import { formatBytes } from "../../lib/format.js"
 import { useDriveFile } from "../../lib/use-drive-file.js"
@@ -89,6 +90,15 @@ function DriveFileCard(props: {
           </AttachmentAction>
         ) : null}
       </AttachmentActions>
+      {drive.preview.available ? (
+        <FilePreview
+          file={file}
+          open={drive.preview.open}
+          onOpenChange={drive.preview.setOpen}
+          bytes={drive.preview.bytes}
+          onDownload={drive.download}
+        />
+      ) : null}
     </Attachment>
   )
 }

@@ -16,6 +16,10 @@
   },
   "dependencies": {
     "@better-auth/oauth-provider": "catalog:",
+    "@betteroffice/docx": "0.4.3",
+    "@betteroffice/fonts": "0.4.0",
+    "@betteroffice/pptx": "0.2.0",
+    "@betteroffice/xlsx": "0.3.0",
     "@bufbuild/cel": "catalog:",
     "@effect/atom-react": "catalog:",
     "@heroicons/react": "2.2.0",
@@ -39,6 +43,7 @@
     "better-auth": "catalog:",
     "cn": "catalog:",
     "effect": "catalog:",
+    "pdfjs-dist": "6.5.438",
     "posthog-js": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
