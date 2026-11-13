@@ -31,6 +31,14 @@ import type {
   SpaceJoinRequestDeclineOutput,
   SpaceJoinRequestCancelInput,
   SpaceJoinRequestCancelOutput,
+  SpaceInviteLinkGetInput,
+  SpaceInviteLinkGetOutput,
+  SpaceInviteLinkResetInput,
+  SpaceInviteLinkResetOutput,
+  JoinLinkPreviewInput,
+  JoinLinkPreviewOutput,
+  JoinLinkAcceptInput,
+  JoinLinkAcceptOutput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateListOutput,
   EnvironmentTemplateGetInput,
@@ -623,6 +631,54 @@ export function make(options: ClientOptions) {
             body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-invite-link": {
+      get: (input: SpaceInviteLinkGetInput, requestOptions?: RequestOptions) =>
+        request<SpaceInviteLinkGetOutput>(
+          {
+            method: "GET",
+            path: `/spaces/${encodeURIComponent(input.id)}/invite-link`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      reset: (input: SpaceInviteLinkResetInput, requestOptions?: RequestOptions) =>
+        request<SpaceInviteLinkResetOutput>(
+          {
+            method: "POST",
+            path: `/spaces/${encodeURIComponent(input.id)}/invite-link/reset`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "join-link": {
+      preview: (input: JoinLinkPreviewInput, requestOptions?: RequestOptions) =>
+        request<JoinLinkPreviewOutput>(
+          {
+            method: "GET",
+            path: `/join-links/${encodeURIComponent(input.token)}/preview`,
+            successStatus: 200,
+            declaredStatuses: [401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      accept: (input: JoinLinkAcceptInput, requestOptions?: RequestOptions) =>
+        request<JoinLinkAcceptOutput>(
+          {
+            method: "POST",
+            path: `/join-links/${encodeURIComponent(input.token)}/accept`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

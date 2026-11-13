@@ -37,6 +37,7 @@ import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceJoinRequest } from "@ren/core/space/join-request"
+import { SpaceInviteLink } from "@ren/core/space/invite-link"
 import { SpaceMember } from "@ren/core/space/member"
 import { PullRequest } from "@ren/core/pull-request"
 import { ReferenceCheck } from "@ren/core/reference-check"
@@ -95,6 +96,7 @@ import { SessionHandler } from "./handlers/api/session.js"
 import { SpaceHandler } from "./handlers/api/space.js"
 import { SpaceJoinRequestHandler } from "./handlers/api/space-join-request.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
+import { JoinLinkHandler, SpaceInviteLinkHandler } from "./handlers/api/space-invite-link.js"
 import { SpaceSettingsHandler } from "./handlers/api/space-settings.js"
 import { TaskHandler } from "./handlers/api/task.js"
 import { LinkHandler } from "./handlers/api/link.js"
@@ -178,6 +180,8 @@ export const layer = Layer.mergeAll(
         SpaceHandler,
         SpaceMemberHandler,
         SpaceJoinRequestHandler,
+        SpaceInviteLinkHandler,
+        JoinLinkHandler,
         MachineTemplateHandler,
         MachineProviderHandler,
         SpaceSettingsHandler,
@@ -224,6 +228,7 @@ export const layer = Layer.mergeAll(
         Space.layer,
         SpaceMember.layer,
         SpaceJoinRequest.layer,
+        SpaceInviteLink.layer,
         MachineTemplates.layer,
         Memory.layer,
         Insights.layer,

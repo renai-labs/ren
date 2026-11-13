@@ -27,6 +27,7 @@ import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { StatusBadge } from "../../components/status-badge.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { InviteLinkDialog } from "./invite-link-dialog.js"
 import { useMe } from "../../lib/use-me.js"
 import { useOrganization } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -331,6 +332,7 @@ function SpaceMembers() {
     <>
       <PageActions>
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
+        {space.membershipId ? <InviteLinkDialog /> : null}
         {space.canAddMember ? (
           <AddSpaceMemberDialog
             open={adding}

@@ -1772,6 +1772,32 @@ export const SpaceProfiles = (input: Command.Command.Config.Infer<typeof Command
     (client, request) => client["app-profile-reach"]["space"]["profiles"]({ ...request.params }),
   )
 
+export const SpaceInviteLinkGet = (input: Command.Command.Config.Infer<typeof Commands.SpaceInviteLinkGet>) =>
+  Operation.run(
+    ClientApi.groups["space-invite-link"].endpoints["space-invite-link.get"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-invite-link"]["get"]({ ...request.params }),
+  )
+
+export const SpaceInviteLinkReset = (input: Command.Command.Config.Infer<typeof Commands.SpaceInviteLinkReset>) =>
+  Operation.run(
+    ClientApi.groups["space-invite-link"].endpoints["space-invite-link.reset"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-invite-link"]["reset"]({ ...request.params }),
+  )
+
 export const SessionProfiles = (input: Command.Command.Config.Infer<typeof Commands.SessionProfiles>) =>
   Operation.run(
     ClientApi.groups["app-profile-reach"].endpoints["session.profiles"],

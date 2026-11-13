@@ -24,6 +24,14 @@ const exceptions = new Map([
   ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],
   [
+    "space-invite-link",
+    "Reads and resets the one invite link of a space, made on first read: a part of a space, which no primitive operation addresses.",
+  ],
+  [
+    "join-link",
+    "Previews and accepts a space invite link by its token, for a person who may not be in the organization yet: the token names the space, which no primitive operation does.",
+  ],
+  [
     "environmentProvider",
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
   ],

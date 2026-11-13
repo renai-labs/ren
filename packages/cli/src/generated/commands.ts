@@ -838,6 +838,10 @@ export const ChannelMappingRemove = {
 
 export const SpaceProfiles = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
 
+export const SpaceInviteLinkGet = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
+
+export const SpaceInviteLinkReset = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
+
 export const SessionProfiles = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
 
 export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
@@ -1155,6 +1159,23 @@ export const commands = [
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.SpaceProfiles(input)),
         ),
+      ),
+      Command.make("invite-link").pipe(
+        Command.withDescription("Manage a space’s invite link"),
+        Command.withSubcommands([
+          Command.make("get", SpaceInviteLinkGet).pipe(
+            Command.withDescription("Show a space’s invite link, and make it the first time"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceInviteLinkGet(input)),
+            ),
+          ),
+          Command.make("reset", SpaceInviteLinkReset).pipe(
+            Command.withDescription("Stop a space’s invite link and make a new one"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceInviteLinkReset(input)),
+            ),
+          ),
+        ]),
       ),
     ]),
   ),

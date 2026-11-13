@@ -1291,6 +1291,258 @@
         }
       }
     },
+    "/spaces/{id}/invite-link": {
+      "get": {
+        "tags": ["space-invite-link"],
+        "operationId": "space-invite-link.get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceInviteLink.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceInviteLink.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the space’s invite link and make it the first time. Anyone in the organization who opens the link joins the space. Only members of a shared space can read it.",
+        "summary": "Get a space’s invite link"
+      }
+    },
+    "/spaces/{id}/invite-link/reset": {
+      "post": {
+        "tags": ["space-invite-link"],
+        "operationId": "space-invite-link.reset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceInviteLink.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceInviteLink.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Stop the space’s current invite link and return a new one. The old link no longer works.",
+        "summary": "Reset a space’s invite link"
+      }
+    },
+    "/join-links/{token}/preview": {
+      "get": {
+        "tags": ["join-link"],
+        "operationId": "join-link.preview",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceInviteLink.Token_1"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceInviteLink.Preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceInviteLink.Preview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return what the signed-in person sees when they open an invite link: whether they can join, are already in the space, or are outside its organization. Unknown and reset links return the `invalid` state.",
+        "summary": "Preview a space invite link"
+      }
+    },
+    "/join-links/{token}/accept": {
+      "post": {
+        "tags": ["join-link"],
+        "operationId": "join-link.accept",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceInviteLink.Token_1"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceInviteLink.Joined",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceInviteLink.Joined"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Add the signed-in person to the link’s space. Only people already in the space’s organization can join; anyone else gets a `ForbiddenError`. A person already in the space joins nothing and counts no use.",
+        "summary": "Join a space with its invite link"
+      }
+    },
     "/environment-templates": {
       "get": {
         "tags": ["environment-template"],
@@ -25407,6 +25659,114 @@
         },
         "additionalProperties": false
       },
+      "SpaceInviteLink.Info": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "token": {
+            "$ref": "#/components/schemas/SpaceInviteLink.Token"
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many people joined the space with this link."
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["spaceId", "token", "uses", "createdAt"],
+        "additionalProperties": false
+      },
+      "SpaceInviteLink.Joined": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": ["organizationId", "spaceId", "slug"],
+        "additionalProperties": false
+      },
+      "SpaceInviteLink.Preview": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/SpaceInviteLink.State"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.OrganizationID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "space": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Space.ID"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "slug", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the person is outside the organization or the link is invalid."
+          }
+        },
+        "required": ["state", "organization", "space"],
+        "additionalProperties": false
+      },
+      "SpaceInviteLink.State": {
+        "type": "string",
+        "enum": ["joinable", "member", "outside", "invalid"],
+        "description": "`joinable`: the person is in the organization and can join. `member`: already in the space. `outside`: not in the space’s organization. `invalid`: the link was reset, its space archived, or it never existed."
+      },
+      "SpaceInviteLink.Token": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "The secret in the link: `/join/<token>` on the app’s address."
+      },
+      "SpaceInviteLink.Token_1": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
       "SpaceJoinRequest.CreateInput": {
         "type": "object",
         "properties": {
@@ -28395,6 +28755,12 @@
     },
     {
       "name": "space-join-request"
+    },
+    {
+      "name": "space-invite-link"
+    },
+    {
+      "name": "join-link"
     },
     {
       "name": "environment-template"

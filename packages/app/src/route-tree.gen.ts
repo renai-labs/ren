@@ -18,6 +18,7 @@ import { Route as SignupRouteImport } from "./routes/signup"
 import { Route as VerifyEmailRouteImport } from "./routes/verify-email"
 import { Route as AuthedShellRouteImport } from "./routes/_authed/_shell"
 import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
+import { Route as JoinTokenRouteImport } from "./routes/join.$token"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
 import { Route as AuthedShellArtifactsRouteImport } from "./routes/_authed/_shell/artifacts"
@@ -108,6 +109,11 @@ const AuthedShellRoute = AuthedShellRouteImport.update({
 const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
   id: "/invites/accept",
   path: "/invites/accept",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: "/join/$token",
+  path: "/join/$token",
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedShellIndexRoute = AuthedShellIndexRouteImport.update({
@@ -408,6 +414,7 @@ export interface FileRoutesByFullPath {
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
+  "/join/$token": typeof JoinTokenRoute
   "/$": typeof AuthedShellSplatRoute
   "/artifacts": typeof AuthedShellArtifactsRoute
   "/automations": typeof AuthedShellAutomationsRoute
@@ -465,6 +472,7 @@ export interface FileRoutesByTo {
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
+  "/join/$token": typeof JoinTokenRoute
   "/$": typeof AuthedShellSplatRoute
   "/artifacts": typeof AuthedShellArtifactsRoute
   "/automations": typeof AuthedShellAutomationsRoute
@@ -522,6 +530,7 @@ export interface FileRoutesById {
   "/verify-email": typeof VerifyEmailRoute
   "/_authed/_shell": typeof AuthedShellRouteWithChildren
   "/invites/accept": typeof InvitesAcceptRoute
+  "/join/$token": typeof JoinTokenRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
   "/_authed/_shell/artifacts": typeof AuthedShellArtifactsRoute
   "/_authed/_shell/automations": typeof AuthedShellAutomationsRoute
@@ -582,6 +591,7 @@ export interface FileRouteTypes {
     | "/signup"
     | "/verify-email"
     | "/invites/accept"
+    | "/join/$token"
     | "/$"
     | "/artifacts"
     | "/automations"
@@ -639,6 +649,7 @@ export interface FileRouteTypes {
     | "/signup"
     | "/verify-email"
     | "/invites/accept"
+    | "/join/$token"
     | "/$"
     | "/artifacts"
     | "/automations"
@@ -695,6 +706,7 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/_authed/_shell"
     | "/invites/accept"
+    | "/join/$token"
     | "/_authed/_shell/$"
     | "/_authed/_shell/artifacts"
     | "/_authed/_shell/automations"
@@ -754,6 +766,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   InvitesAcceptRoute: typeof InvitesAcceptRoute
+  JoinTokenRoute: typeof JoinTokenRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -819,6 +832,13 @@ declare module "@tanstack/react-router" {
       path: "/invites/accept"
       fullPath: "/invites/accept"
       preLoaderRoute: typeof InvitesAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/join/$token": {
+      id: "/join/$token"
+      path: "/join/$token"
+      fullPath: "/join/$token"
+      preLoaderRoute: typeof JoinTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/_authed/_shell/": {
@@ -1331,6 +1351,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   InvitesAcceptRoute: InvitesAcceptRoute,
+  JoinTokenRoute: JoinTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -16,6 +16,10 @@ import type {
   SpaceJoinRequestApproveInput,
   SpaceJoinRequestDeclineInput,
   SpaceJoinRequestCancelInput,
+  SpaceInviteLinkGetInput,
+  SpaceInviteLinkResetInput,
+  JoinLinkPreviewInput,
+  JoinLinkAcceptInput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateGetInput,
   EnvironmentTemplateCreateInput,
@@ -315,6 +319,46 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["space-join-request", "cancel"] as const,
             mutationFn: (input: SpaceJoinRequestCancelInput) => client["space-join-request"]["cancel"](input),
+          }),
+      },
+    },
+    "space-invite-link": {
+      get: {
+        queryKey: (input?: SpaceInviteLinkGetInput) =>
+          input === undefined
+            ? (["space-invite-link", "get"] as const)
+            : (["space-invite-link", "get", input] as const),
+        queryOptions: (input: SpaceInviteLinkGetInput) =>
+          queryOptions({
+            queryKey: ["space-invite-link", "get", input] as const,
+            queryFn: (context) => client["space-invite-link"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      reset: {
+        mutationKey: () => ["space-invite-link", "reset"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-invite-link", "reset"] as const,
+            mutationFn: (input: SpaceInviteLinkResetInput) => client["space-invite-link"]["reset"](input),
+          }),
+      },
+    },
+    "join-link": {
+      preview: {
+        queryKey: (input?: JoinLinkPreviewInput) =>
+          input === undefined ? (["join-link", "preview"] as const) : (["join-link", "preview", input] as const),
+        queryOptions: (input: JoinLinkPreviewInput) =>
+          queryOptions({
+            queryKey: ["join-link", "preview", input] as const,
+            queryFn: (context) => client["join-link"]["preview"](input, { signal: context.signal }),
+          }),
+      },
+      accept: {
+        mutationKey: () => ["join-link", "accept"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["join-link", "accept"] as const,
+            mutationFn: (input: JoinLinkAcceptInput) => client["join-link"]["accept"](input),
           }),
       },
     },

@@ -29,6 +29,7 @@ export const actions = {
   update: Primitive.action(Space.definition, "update"),
   archive: Primitive.action(Space.definition, "archive"),
   join: `${Space.definition.name}.join`,
+  inviteLink: `${Space.definition.name}.invite-link`,
   reach: `${Space.definition.name}.reach`,
 } as const
 
@@ -63,6 +64,7 @@ export const documents = [
       { actions: [actions.archive], effect: "allow", roles: administratorRoles, when: [facts.private] },
       { actions: [actions.archive], effect: "deny", roles: organizationRoles, when: [facts.first] },
       { actions: [actions.archive], effect: "deny", roles: organizationRoles, when: [facts.owner] },
+      { actions: [actions.inviteLink], effect: "allow", roles: organizationRoles, when: [facts.member, facts.shared] },
       { actions: [actions.join], effect: "allow", roles: administratorRoles, when: [facts.shared] },
       { actions: [actions.join], effect: "deny", roles: organizationRoles, when: [facts.member] },
     ],
