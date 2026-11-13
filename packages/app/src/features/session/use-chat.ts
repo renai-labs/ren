@@ -11,6 +11,7 @@ import { Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { toast } from "@ren/ui/sonner"
 import type { PromptInputBoot } from "./prompt-input.js"
+import { quoteOf } from "./use-chat-quote.js"
 import { pickModel } from "../../components/model-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
@@ -107,16 +108,24 @@ function useChatSuggestions(input: {
       request: ChatSession.PromptInput & { text: string },
       prompt: (request: ChatSession.PromptInput) => Promise<unknown>,
     ) => {
-      const client = suggestions.client(request.text)
+      const client = request.presentation ? undefined : suggestions.client(request.text)
       if (client) return Promise.resolve(runClient(client.id, client.input))
-      const slash = suggestions.slash(request.text)
+      const slash = request.presentation ? undefined : suggestions.slash(request.text)
       const selection = {
         ...(request.delivery && { delivery: request.delivery }),
         ...(request.model && { model: request.model }),
       }
-      return slash
-        ? command({ name: slash.name, ...suggestions.resolve(slash.text), ...selection })
-        : prompt({ ...request, ...suggestions.resolve(request.text) })
+      if (slash) return command({ name: slash.name, ...suggestions.resolve(slash.text), ...selection })
+      const presentation = request.presentation
+      const resolved = suggestions.resolve(presentation?.displayText ?? request.text)
+      return prompt({
+        ...request,
+        ...resolved,
+        text: presentation
+          ? [resolved.text, ...presentation.comments.map(Composer.formatQuoteComment)].filter(Boolean).join("\n")
+          : resolved.text,
+        ...(presentation && { presentation: { displayText: resolved.text, comments: presentation.comments } }),
+      })
     },
   }
 }
@@ -362,6 +371,17 @@ export function useChat(
       ChatPreferences.model.write(platform.storage, next)
       setSaved(next)
     },
+    quote: quoteOf({
+      child,
+      blocked,
+      draft,
+      canQueue: abilities.canQueue,
+      running,
+      followUp: ChatPreferences.followUp.read(platform.storage),
+      model,
+      update: kept.update,
+      send: (request) => suggestions.run(request, prompt),
+    }),
     shellHistory,
     send: (options: { readonly alternative: boolean }) => {
       if (Composer.isShell(draft)) {
@@ -376,7 +396,8 @@ export function useChat(
         })
         return
       }
-      const text = Composer.message(draft).trim()
+      const request = Composer.request(draft)
+      const text = request.text.trim()
       if (!text) return
       const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
       const submission = Composer.submission(draft, {
@@ -391,13 +412,15 @@ export function useChat(
       history.prepend(submission.sent)
       setDraft(submission.next)
       const selection = { delivery: submission.delivery, ...(model && { model }) }
-      void suggestions.run({ id, text, ...selection, files: Composer.files(draft) }, prompt).catch((error: unknown) => {
-        history.remove(submission.sent)
-        kept.update((current) => Composer.restore(current, submission.sent, id))
-        toast.error("Could not send your message", {
-          description: `${errorMessage(error)} Your draft has been kept.`,
+      void suggestions
+        .run({ ...request, id, text, ...selection, files: Composer.files(draft) }, prompt)
+        .catch((error: unknown) => {
+          history.remove(submission.sent)
+          kept.update((current) => Composer.restore(current, submission.sent, id))
+          toast.error("Could not send your message", {
+            description: `${errorMessage(error)} Your draft has been kept.`,
+          })
         })
-      })
     },
     connected: (app: string) =>
       void prompt({
@@ -441,8 +464,9 @@ export function useChat(
       ),
     edit: (message: SessionMessage.User, text: string) => {
       setReverting(true)
+      const request = Composer.request({ ...Composer.fromMessage(message), text })
       void revert(message.id)
-        .then(() => prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }))
+        .then(() => prompt({ id: SessionMessage.ID.create(), ...request, delivery: "steer", ...(model && { model }) }))
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
         .finally(() => setReverting(false))
     },
@@ -453,7 +477,7 @@ export function useChat(
       void undo().then(
         (message) => {
           if (Option.isSome(message))
-            kept.update((current) => Composer.fromHistory(current, { text: message.value.text, pasted: [] }))
+            kept.update((current) => Composer.fromHistory(current, Composer.fromMessage(message.value)))
         },
         (error: unknown) => toast.error("Could not undo the last message", { description: errorMessage(error) }),
       ),

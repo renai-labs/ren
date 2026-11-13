@@ -23452,6 +23452,44 @@
         "required": ["items", "cursor"],
         "additionalProperties": false
       },
+      "SessionMessage.Presentation": {
+        "type": "object",
+        "properties": {
+          "displayText": {
+            "type": "string"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.Quote"
+            }
+          }
+        },
+        "required": ["displayText", "comments"],
+        "additionalProperties": false,
+        "description": "How a client shows the message: the words the person wrote and the quotes they added. The model gets `text`."
+      },
+      "SessionMessage.Quote": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["quote"]
+          },
+          "text": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "Where the quote came from, such as a reply or a message."
+          }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      },
       "SessionMessage.Reasoning": {
         "type": "object",
         "properties": {
@@ -24007,6 +24045,9 @@
           },
           "text": {
             "type": "string"
+          },
+          "presentation": {
+            "$ref": "#/components/schemas/SessionMessage.Presentation"
           },
           "files": {
             "type": "array",

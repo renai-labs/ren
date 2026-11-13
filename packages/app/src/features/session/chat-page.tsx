@@ -76,6 +76,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         onChangeModel={chat.child || !chat.canChooseModel ? undefined : () => chat.setPicking(true)}
         onStop={chat.stop}
         background={chat.background}
+        quote={chat.quote}
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
       <div className="px-6 pb-4">

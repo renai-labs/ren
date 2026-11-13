@@ -50,6 +50,7 @@ interface Prompt extends Mentions {
   readonly delivery: SessionInbox.Delivery
   readonly resume?: boolean | undefined
   readonly files?: ReadonlyArray<Session.DriveFile> | undefined
+  readonly presentation?: SessionMessage.Presentation | undefined
   readonly sender: Option.Option<Sender>
 }
 

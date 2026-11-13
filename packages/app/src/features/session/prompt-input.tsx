@@ -19,6 +19,7 @@ import {
   IconChevronRight,
   IconClipboardText,
   IconFile,
+  IconQuote,
   IconLoader2,
   IconPaperclip,
   IconPlayerPlay,
@@ -545,6 +546,37 @@ function PastedBlocks(props: {
   )
 }
 
+function QuoteChips(props: {
+  quotes: ReadonlyArray<Composer.Quote>
+  disabled: boolean | undefined
+  onRemove: (id: string) => void
+}) {
+  if (props.quotes.length === 0) return null
+  return (
+    <AttachmentGroup>
+      {props.quotes.map((quote) => (
+        <Attachment key={quote.id} size="sm" className="max-w-60">
+          <AttachmentMedia>
+            <IconQuote />
+          </AttachmentMedia>
+          <AttachmentContent>
+            <AttachmentTitle title={quote.text}>{quote.text}</AttachmentTitle>
+          </AttachmentContent>
+          <AttachmentActions>
+            <AttachmentAction
+              aria-label="Remove quote"
+              disabled={props.disabled}
+              onClick={() => props.onRemove(quote.id)}
+            >
+              <IconX />
+            </AttachmentAction>
+          </AttachmentActions>
+        </Attachment>
+      ))}
+    </AttachmentGroup>
+  )
+}
+
 function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (value: string) => void }) {
   const suggest = props.suggest
   const choose = props.onChoose
@@ -729,6 +761,7 @@ function startsShell(
     Composer.isBlank(draft) &&
     draft.pasted.length === 0 &&
     Composer.files(draft).length === 0 &&
+    Composer.quotes(draft).length === 0 &&
     Composer.mentions(draft).length === 0
   )
 }
@@ -759,7 +792,11 @@ function useShellMode(input: {
   const active = history !== undefined && Composer.isShell(input.draft)
   const toggle = () => {
     if (!history || input.locked) return
-    if (!active && (input.uploading || Composer.files(input.draft).length > 0)) return
+    if (
+      !active &&
+      (input.uploading || Composer.files(input.draft).length > 0 || Composer.quotes(input.draft).length > 0)
+    )
+      return
     input.onChange(Composer.withMode(input.draft, active ? "prompt" : "shell"))
     history.reset()
     input.suggest?.onClose()
@@ -954,6 +991,11 @@ export function PromptInput(props: {
         onRetry={uploads.retry}
         onCancel={uploads.cancel}
         onRemove={uploads.remove}
+      />
+      <QuoteChips
+        quotes={Composer.quotes(draft)}
+        disabled={props.sending}
+        onRemove={(id) => change(Composer.withoutQuote(draft, id))}
       />
       {draft.pasted.length > 0 ? (
         <PastedBlocks

@@ -53,6 +53,11 @@ const taskOf = (value: unknown) =>
     () => Option.flatMap(decodeUserText(value), (decoded) => TaskAssignment.parse(decoded.text)),
   )
 
+const FromPresentation = Schema.Struct({
+  metadata: Schema.Struct({ displayText: Schema.String, comments: Schema.Array(SessionMessage.Quote) }),
+})
+const decodePresentation = Schema.decodeUnknownOption(FromPresentation)
+
 const WithUploads = Schema.Struct({ metadata: Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }) })
 const decodeUploads = Schema.decodeUnknownOption(WithUploads)
 
@@ -69,6 +74,7 @@ const withMetadata = (value: unknown): unknown => {
   const webhook = decodeWebhook(value)
   const uploads = decodeUploads(value)
   const task = taskOf(value)
+  const presentation = decodePresentation(value)
   return {
     ...value,
     ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
@@ -76,6 +82,12 @@ const withMetadata = (value: unknown): unknown => {
     ...(Option.isSome(schedule) && { schedule: schedule.value.metadata.schedule }),
     ...(Option.isSome(webhook) && { webhook: webhook.value.metadata.webhook }),
     ...(Option.isSome(task) && { task: task.value }),
+    ...(Option.isSome(presentation) && {
+      presentation: {
+        displayText: presentation.value.metadata.displayText,
+        comments: presentation.value.metadata.comments,
+      },
+    }),
     ...(Option.isSome(uploads) && {
       uploads: uploads.value.metadata.files,
       ...(Predicate.hasProperty(value, "files") && {
@@ -227,7 +239,7 @@ export type MessageCompatibility = Checked<
     skill: "translated"
     synthetic: "translated"
     system: "translated"
-    user: "translated"
+    user: { reshaped: "presentation comes from metadata.displayText and metadata.comments" }
   }
 >
 

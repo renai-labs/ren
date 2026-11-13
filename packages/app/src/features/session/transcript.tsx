@@ -17,6 +17,7 @@ import {
   AppConnect,
   ChannelReply,
   ChatState,
+  Composer,
   PatchFiles,
   Projection,
   ShownFile,
@@ -90,6 +91,7 @@ import {
   TraceTitle,
 } from "@ren/ui/trace"
 import { DriveFileCards } from "./attachments.js"
+import { QuoteCards, QuoteSelection, type QuoteProps } from "./quote.js"
 import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
@@ -150,6 +152,7 @@ export interface TranscriptProps {
   readonly onChangeModel?: (() => void) | undefined
   readonly onStop?: (() => void) | undefined
   readonly background?: { readonly blocking: boolean; readonly onMove: () => void } | undefined
+  readonly quote?: QuoteProps | undefined
 }
 
 type Step =
@@ -523,20 +526,37 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   )
 }
 
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
+function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; subject: string }) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
   const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
   if (at >= 0)
     return (
       <>
-        <UserText message={props.message} text={props.message.text.slice(0, at)} spaceId={props.spaceId} />
+        <UserText
+          message={props.message}
+          text={props.message.text.slice(0, at)}
+          spaceId={props.spaceId}
+          subject={props.subject}
+        />
         <WebhookRequest request={props.message.text.slice(at + 2)} />
       </>
     )
-  return <UserText message={props.message} spaceId={props.spaceId} />
+  return (
+    <UserText
+      message={props.message}
+      text={props.message.presentation?.displayText}
+      spaceId={props.spaceId}
+      subject={props.subject}
+    />
+  )
 }
 
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined }) {
+function UserText(props: {
+  message: SessionMessage.User
+  text?: string | undefined
+  spaceId: string | undefined
+  subject: string
+}) {
   const parts = splitPasted(props.text ?? props.message.text)
   const apps = useMentionedApps(parts.typed)
   const files = props.message.files ?? []
@@ -547,11 +567,13 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
         <DriveFileCards spaceId={props.spaceId} files={uploads} className="max-w-full justify-end-safe" />
       ) : null}
       {files.length > 0 ? <FileChips files={files} /> : null}
+      {props.message.presentation ? <QuoteCards comments={props.message.presentation.comments} /> : null}
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
       {parts.typed ? (
         <Bubble variant="muted" align="end">
           <BubbleContent
             data-searchable=""
+            data-quotable={props.subject}
             className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
           >
             {withAppMentions(parts.typed, apps)}
@@ -640,12 +662,16 @@ function UserMessage(props: {
         {props.message.webhook ? <WebhookOrigin webhook={props.message.webhook} spaceId={props.spaceId} /> : null}
         {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}
         {props.editing ? (
-          <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
+          <EditPrompt
+            text={props.message.presentation?.displayText ?? props.message.text}
+            onCancel={props.onCancel}
+            onSave={props.onSave}
+          />
         ) : (
           <>
-            <UserBody message={props.message} spaceId={props.spaceId} />
+            <UserBody message={props.message} spaceId={props.spaceId} subject={`${props.person.name}'s message`} />
             <UserFooter
-              text={props.message.text}
+              text={Composer.copyText(props.message)}
               status={props.status}
               onEdit={props.onEdit}
               onRetry={props.onRetry}
@@ -683,10 +709,10 @@ function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
   )
 }
 
-function Output(props: { text: string; failed?: boolean | undefined }) {
+function Output(props: { text: string; failed?: boolean | undefined; quotable?: string | undefined }) {
   return (
     <CodeBlock size="sm" variant={props.failed ? "destructive" : "default"}>
-      <CodeBlockContent wrap className="max-h-64">
+      <CodeBlockContent wrap className="max-h-64" data-quotable={props.quotable}>
         {props.text}
       </CodeBlockContent>
     </CodeBlock>
@@ -709,6 +735,7 @@ function Expandable(props: { content: ReactNode; className?: string | undefined;
 }
 
 function StepDetail(props: {
+  quotable: string
   output: string | undefined
   failed: boolean | undefined
   images: ReadonlyArray<SessionMessage.ToolFileContent>
@@ -726,7 +753,7 @@ function StepDetail(props: {
         </ImageLightbox>
       ))}
       {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
-        <Output text={props.output} failed={props.failed} />
+        <Output text={props.output} failed={props.failed} quotable={props.quotable} />
       ) : null}
     </>
   )
@@ -744,7 +771,12 @@ function StepRow(props: {
   const images = props.images ?? []
   const detail =
     props.output || images.length > 0 ? (
-      <StepDetail output={props.output} failed={props.failed} images={images} />
+      <StepDetail
+        quotable={`the output of ${props.subject ?? props.verb}`}
+        output={props.output}
+        failed={props.failed}
+        images={images}
+      />
     ) : undefined
   return (
     <Trace>
@@ -1271,7 +1303,7 @@ function AnswerBlock(props: {
     <Message>
       <MessageContent>
         <Bubble variant="ghost">
-          <BubbleContent data-searchable="" className="text-base leading-[1.7]">
+          <BubbleContent data-searchable="" data-quotable="Ren's reply" className="text-base leading-[1.7]">
             <SmoothMarkdown
               text={props.text}
               root={props.root}
@@ -1556,6 +1588,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
     <MessageScroller className="@container flex-1">
+      <QuoteSelection quote={props.quote} root={viewport} />
       <MessageScrollerViewport
         ref={viewport}
         preserveScrollOnPrepend

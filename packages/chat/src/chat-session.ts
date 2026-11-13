@@ -26,6 +26,7 @@ import {
   Schedule,
   Semaphore,
   Stream,
+  Struct,
   SubscriptionRef,
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
@@ -144,6 +145,7 @@ export interface Mentions {
 
 export interface PromptInput extends Mentions {
   readonly text: string
+  readonly presentation?: SessionMessage.Presentation
   readonly files?: ReadonlyArray<SessionMessage.DriveFile>
   readonly delivery?: SessionInbox.Delivery
   readonly id?: SessionMessage.ID
@@ -664,6 +666,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     const id = input.id ?? SessionMessage.ID.create()
     const files = input.files?.length ? input.files : undefined
     const delivery = input.delivery ?? "steer"
+    const presentation = Struct.pick(input, ["presentation"])
     const now = yield* DateTime.now
     const fresh = Outbox.isFresh(yield* SubscriptionRef.get(state), root, id)
     yield* update((current) =>
@@ -674,6 +677,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           id,
           text: input.text,
           delivery,
+          ...presentation,
           ...(options.sender && { sender: options.sender }),
           ...(input.agents && { agents: input.agents }),
           ...(files && { uploads: files }),
@@ -685,6 +689,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       id,
       text: input.text,
       delivery,
+      ...presentation,
       ...(input.agents && { agents: input.agents }),
       ...(input.skills && { skills: input.skills }),
       ...(files && { files }),
@@ -710,6 +715,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           id,
           text: input.text,
           delivery,
+          ...presentation,
           ...(input.resume === false && { resume: false }),
           ...(input.agents && { agents: input.agents }),
           ...(input.skills && { skills: input.skills }),
@@ -865,6 +871,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                   text: item.payload.text,
                   delivery: "queue",
                   resume: false,
+                  ...(item.payload.presentation && { presentation: item.payload.presentation }),
                   ...(item.payload.agents && { agents: item.payload.agents }),
                   ...(item.payload.uploads && {
                     files: item.payload.uploads.map((file) => ({ path: file.path, name: file.name })),

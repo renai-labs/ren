@@ -7,12 +7,36 @@ const entry = (text: string, pasted: ReadonlyArray<string> = []): ComposerHistor
 })
 
 describe("Composer history", () => {
+  test("different comments or sources on the same quote remain distinct history entries", () => {
+    const quote = { id: "q1", text: "up 12%", comment: "Explain", source: "Ren" }
+    const original = {
+      text: "Why?",
+      pasted: [],
+      quotes: [quote],
+    }
+    const history = ComposerHistory.prepend([], original)
+    expect(
+      ComposerHistory.prepend(history, {
+        ...original,
+        quotes: [{ ...quote, id: "q2", comment: "Check" }],
+      }),
+    ).toHaveLength(2)
+    expect(ComposerHistory.prepend(history, { ...original, quotes: [{ ...quote, source: "Ada" }] })).toHaveLength(2)
+  })
   test("prependHistoryEntry skips empty prompt and deduplicates consecutive entries", () => {
     expect(ComposerHistory.prepend([], entry("  "))).toEqual([])
     const withOne = ComposerHistory.prepend([], entry("hello"))
     expect(withOne).toEqual([entry("hello")])
     expect(ComposerHistory.prepend(withOne, entry("hello"))).toBe(withOne)
     expect(ComposerHistory.prepend(withOne, entry("hello", ["block"]))).toHaveLength(2)
+  })
+
+  test("keeps the quotes of an entry, and an entry of quotes alone is not empty", () => {
+    const quoted = { text: "", pasted: [], quotes: [{ id: "q1", text: "up 12%" }] }
+    const kept = ComposerHistory.prepend([], quoted)
+    expect(kept).toEqual([quoted])
+    expect(ComposerHistory.decode(ComposerHistory.encode(kept))).toEqual(kept)
+    expect(ComposerHistory.prepend(kept, { ...quoted, quotes: [{ id: "q2", text: "other" }] })).toHaveLength(2)
   })
 
   test("keeps the newest 100 entries", () => {

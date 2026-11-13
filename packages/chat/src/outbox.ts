@@ -13,6 +13,7 @@ export interface Prompt {
   readonly sessionID: Session.ID
   readonly id: SessionMessage.ID
   readonly text: string
+  readonly presentation?: SessionMessage.Presentation
   readonly delivery: SessionInbox.Delivery
   readonly sender?: SessionMessage.Sender
   readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
@@ -24,6 +25,7 @@ export interface Kept extends Schema.Schema.Type<typeof Kept> {}
 export const Kept = Schema.Struct({
   id: SessionMessage.ID,
   text: Schema.String,
+  presentation: Schema.optionalKey(SessionMessage.Presentation),
   delivery: SessionInbox.Delivery,
   agents: Schema.optionalKey(Schema.Array(SessionMessage.AgentAttachment)),
   skills: Schema.optionalKey(
@@ -48,6 +50,7 @@ export const admit = (state: ChatState.State, prompt: Prompt, now: DateTime.Utc)
       delivery: prompt.delivery,
       payload: {
         text: prompt.text,
+        ...(prompt.presentation && { presentation: prompt.presentation }),
         ...(prompt.sender && { sender: prompt.sender }),
         ...(prompt.agents && { agents: prompt.agents }),
         ...(prompt.uploads && { uploads: prompt.uploads }),

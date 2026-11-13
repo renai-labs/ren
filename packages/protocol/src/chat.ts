@@ -48,6 +48,10 @@ export const PromptInput = Schema.Struct({
     description:
       "Files that the message attaches, uploaded to the space’s drive with `drive.startUpload`. A file that is not in the drive is refused.",
   }),
+  presentation: Schema.optional(SessionMessage.Presentation).annotate({
+    description:
+      "How clients show the message, with the quotes it adds. The brain keeps it with the message. `text` is what the model gets.",
+  }),
   ...mentions,
 }).annotate({ identifier: "Chat.PromptInput" })
 
