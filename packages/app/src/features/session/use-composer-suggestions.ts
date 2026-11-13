@@ -157,6 +157,7 @@ const suggestionLabel = (trigger: Composer.Trigger | undefined) =>
 const mentionItem = (
   entry: ReturnType<typeof groupMentions>[number],
   icon: string | null | undefined,
+  status: Status | undefined,
 ): SuggestionItem => ({
   value: Mentions.key(entry.item),
   kind: entry.item.kind,
@@ -164,6 +165,7 @@ const mentionItem = (
   label: entry.item.label,
   description: entry.item.description,
   icon,
+  status,
 })
 
 function useFileMentions(root: Session.ID | undefined, query: string | undefined) {
@@ -209,13 +211,15 @@ function useSuggestions(input: {
           label: `/${item.trigger}`,
           description: item.description,
         }))
-      : grouped.map((entry) => ({
-          ...mentionItem(entry, appById.get(entry.item.id)?.icon),
-          status:
+      : grouped.map((entry) =>
+          mentionItem(
+            entry,
+            appById.get(entry.item.id)?.icon,
             entry.item.kind === "app" && input.spaceId
               ? space.status(entry.item.id, { managed: apps.managed(entry.item.id) })
               : undefined,
-        }))
+          ),
+        )
   const ids = items.map((item) => item.value)
   const current = Composer.activeSuggestion(ids, active)
   const tokens = (text: string) => Mentions.tokens(text, [...connectors, ...filePills(text)])
