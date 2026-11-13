@@ -231,7 +231,7 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
     HttpApiEndpoint.post("artifacts.upload", "/host/artifacts/:id/uploads", {
       params: ArtifactParams,
       success: Artifact.Upload,
-      error: [ArtifactConflictError, ArtifactFailedError],
+      error: [ArtifactNotFoundError, ArtifactConflictError, ArtifactFailedError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "artifacts.upload",
@@ -246,7 +246,7 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
       params: ArtifactParams,
       payload: Artifact.DeployInput,
       success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
-      error: [ArtifactConflictError, ArtifactInvalidError],
+      error: [ArtifactNotFoundError, ArtifactConflictError, ArtifactInvalidError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "artifacts.deploy",

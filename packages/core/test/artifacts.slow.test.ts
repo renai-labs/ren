@@ -533,9 +533,15 @@ describe("Artifacts with durable workflows and workerd", () => {
         )
         expect((yield* artifacts.read(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
         expect((yield* artifacts.download(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-        expect((yield* ArtifactSamples.deploy(artifacts, elsewhere, id, first).pipe(Effect.flip))._tag).toBe(
-          "Primitive.Conflict",
-        )
+        expect((yield* artifacts.upload(elsewhere, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+        expect(
+          (yield* artifacts
+            .deploy(elsewhere, id, {
+              deploymentId: deployment(),
+              uploadId: Artifact.UploadID.make(crypto.randomUUID()),
+            })
+            .pipe(Effect.flip))._tag,
+        ).toBe("Primitive.NotFound")
         expect((yield* artifacts.status(owner, id, deployment()).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
         const before = (yield* database.db
           .select()
