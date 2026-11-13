@@ -77,3 +77,21 @@ export function GoogleMark(props: MarkProps) {
     </svg>
   )
 }
+
+export function NotionMark(props: MarkProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.333}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      {...props}
+    >
+      <rect x="1.667" y="1.667" width="12.667" height="12.667" rx="2.5" />
+      <path d="M5.5 11.5V4.5L10.5 11.5V4.5" />
+    </svg>
+  )
+}

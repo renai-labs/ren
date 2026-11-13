@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises"
 import { expect, test } from "@playwright/test"
 import { Schema } from "effect"
 import { createOrganization, serverURL } from "../lib/servers.js"
@@ -55,12 +54,6 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   await expect(attached.getByText("notes.md", { exact: true })).toBeVisible()
   const thumbnail = attached.getByRole("img", { name: "screenshot.png" })
   await expect(thumbnail).toHaveJSProperty("naturalWidth", 1)
-
-  const download = page.waitForEvent("download")
-  await attached.getByRole("button", { name: "Download plan.txt" }).click()
-  const saved = await download
-  expect(saved.suggestedFilename()).toBe("plan.txt")
-  expect(await readFile(await saved.path(), "utf8")).toBe("ship on friday")
 
   await page.reload()
   await expect(attached.getByText(/\.(txt|md|png)$/)).toHaveCount(4)

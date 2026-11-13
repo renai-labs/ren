@@ -34,6 +34,22 @@ describe("Composer request", () => {
     expect(Composer.restore({ text: "More", pasted: [] }, sent, id).quotes).toEqual([quote])
   })
 
+  test("a failed send restores the attached files and the mentioned apps", () => {
+    const file = { path: "chats/ses_1/uploads/msg_1/plan.txt", name: "plan.txt", mime: "text/plain", size: 14 }
+    const app = { id: "app_1", slug: "docs", name: "Docs", description: "", icon: null, brandColor: null }
+    const submission = Composer.submission(
+      { text: "Read these", pasted: [], files: [file], mentions: [app] },
+      { working: false, behavior: "steer", alternative: false, queue: false, current: undefined },
+    )
+    const restored = Composer.restore(
+      Composer.empty,
+      submission?.sent ?? Composer.empty,
+      SessionMessage.ID.make("msg_1"),
+    )
+    expect(restored.files).toEqual([file])
+    expect(restored.mentions).toEqual([app])
+  })
+
   test("a submission carries the presentation and keeps the quotes in the draft it can restore", () => {
     const submission = Composer.submission(
       { text: "Why?", pasted: [], quotes: [quote] },

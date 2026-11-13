@@ -6,7 +6,6 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconChevronDown,
   IconChevronRight,
-  IconClipboardText,
   IconClock,
   IconCopy,
   IconPencil,
@@ -25,15 +24,19 @@ import {
   AttachmentGroup,
   AttachmentMedia,
   AttachmentTitle,
-  AttachmentTrigger,
 } from "@ren/ui/attachment"
 import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
 import { DriveFileCards } from "./attachments.js"
-import { ImageLightbox } from "../../components/image-lightbox.js"
-import { withAppMentions } from "@ren/ui/app-mention"
+import { ImageTrigger } from "../../components/image-set.js"
+import { Markdown } from "../../components/markdown.js"
+import { PastedChip } from "./pasted-chip.js"
+import { TimeZone } from "../../lib/time-zone.js"
+import { Platform } from "../../platform/platform.js"
+import { formatInZone, formatTimeInZone } from "@ren/ui/time"
+import { DateTime } from "effect"
 import { ChannelOrigin } from "./channel-origin.js"
 import { useMentionedApps } from "../../lib/use-app.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
@@ -58,34 +61,6 @@ const foldAbove = 20
 
 const Fold = createContext({ enabled: false, reveal: false })
 
-function PastedChip(props: { text: string }) {
-  const [open, setOpen] = useState(false)
-  const lines = props.text.split("\n").length
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <Attachment size="sm">
-        <AttachmentMedia>
-          <IconClipboardText />
-        </AttachmentMedia>
-        <AttachmentContent>
-          <AttachmentTitle>Pasted text</AttachmentTitle>
-          <AttachmentDescription className="tabular-nums">
-            {lines === 1 ? "1 line" : `${lines} lines`}
-          </AttachmentDescription>
-        </AttachmentContent>
-        <AttachmentTrigger aria-label={open ? "Hide pasted text" : "Show pasted text"} onClick={() => setOpen(!open)} />
-      </Attachment>
-      {open ? (
-        <CodeBlock size="sm" className="w-full">
-          <CodeBlockContent wrap className="max-h-64">
-            {props.text}
-          </CodeBlockContent>
-        </CodeBlock>
-      ) : null}
-    </div>
-  )
-}
-
 function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> }) {
   return (
     <AttachmentGroup className="max-w-full justify-end-safe">
@@ -96,17 +71,17 @@ function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> 
           <Attachment key={`${file.name ?? file.mime}-${index}`} size="sm">
             {image ? (
               <AttachmentMedia variant="image">
-                <ImageLightbox
+                <ImageTrigger
                   src={`data:${file.mime};base64,${file.data}`}
-                  alt={file.name ?? "Image"}
+                  name={file.name ?? "Image"}
                   className="size-full cursor-zoom-in"
                 >
                   <img src={`data:${file.mime};base64,${file.data}`} alt={file.name ?? "Image"} />
-                </ImageLightbox>
+                </ImageTrigger>
               </AttachmentMedia>
             ) : (
               <AttachmentMedia>
-                <FileIcon name={file.name ?? ""} mime={file.mime} className="size-5" />
+                <FileIcon name={file.name ?? ""} mime={file.mime} />
               </AttachmentMedia>
             )}
             <AttachmentContent>
@@ -130,6 +105,7 @@ function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: 
     <div className="flex flex-col gap-1.5">
       <InputGroup className="rounded-xl bg-card dark:bg-card">
         <InputGroupTextarea
+          dir="auto"
           value={text}
           aria-label="Edit message"
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens because the person asked to edit
@@ -322,12 +298,11 @@ function TypedBubble(props: { text: string; foldable: boolean; subject: string }
   const long = props.foldable && tall
   return (
     <Bubble variant="muted" align="end">
-      <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6]">
+      <BubbleContent dir="auto" className="min-w-0 rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6]">
         <div className={cn(long && !open && "max-h-[12lh] overflow-clip mask-b-from-[calc(100%-(--spacing(10)))]")}>
           <div
             data-searchable=""
             data-quotable={props.subject}
-            className="whitespace-pre-wrap"
             ref={(node) => {
               if (!node || !props.foldable) return
               // ast-grep-ignore: no-manual-scroll -- measures a message to fold it, and scrolls nothing
@@ -341,7 +316,9 @@ function TypedBubble(props: { text: string; foldable: boolean; subject: string }
               return () => observer.disconnect()
             }}
           >
-            {withAppMentions(props.text, apps)}
+            <Markdown source="user" apps={apps} className="text-base leading-[1.6]">
+              {props.text}
+            </Markdown>
           </div>
         </div>
         {long ? (
@@ -404,11 +381,14 @@ const statusLabels: Partial<Record<ChatState.PendingStatus, string>> = {
 
 function UserFooter(props: {
   text: string
+  sentAt: string
   status: ChatState.PendingStatus | undefined
   onEdit?: (() => void) | undefined
   onRetry?: (() => void) | undefined
   onRemove?: (() => void) | undefined
 }) {
+  const platform = Platform.usePlatform()
+  const timeZone = TimeZone.current(platform.storage)
   const label = props.status && statusLabels[props.status]
   const unsent = props.status === "unsent"
   return (
@@ -426,18 +406,27 @@ function UserFooter(props: {
           Remove
         </Button>
       ) : null}
-      {props.onEdit ? (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Edit"
-          onClick={props.onEdit}
+      <span className="flex items-center gap-1 transition-opacity duration-150 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:group-focus-within/message:opacity-100 pointer-fine:group-hover/message:opacity-100">
+        <time
+          dateTime={props.sentAt}
+          title={formatInZone(props.sentAt, timeZone)}
+          className="px-1 font-normal tabular-nums"
         >
-          <IconPencil />
-        </Button>
-      ) : null}
-      <CopyButton text={props.text} />
+          {formatTimeInZone(props.sentAt, timeZone)}
+        </time>
+        {props.onEdit ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label="Edit"
+            onClick={props.onEdit}
+          >
+            <IconPencil />
+          </Button>
+        ) : null}
+        <CopyButton text={props.text} />
+      </span>
     </MessageFooter>
   )
 }
@@ -484,6 +473,7 @@ export function UserMessage(props: {
             <UserBody message={props.message} spaceId={props.spaceId} subject={`${props.person.name}'s message`} />
             <UserFooter
               text={Composer.copyText(props.message)}
+              sentAt={DateTime.formatIso(props.message.time.created)}
               status={props.status}
               onEdit={props.onEdit}
               onRetry={props.onRetry}

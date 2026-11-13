@@ -17,7 +17,6 @@ import {
   IconApps,
   IconArrowUp,
   IconChevronRight,
-  IconClipboardText,
   IconFile,
   IconQuote,
   IconLoader2,
@@ -34,11 +33,9 @@ import {
   AttachmentAction,
   AttachmentActions,
   AttachmentContent,
-  AttachmentDescription,
   AttachmentGroup,
   AttachmentMedia,
   AttachmentTitle,
-  AttachmentTrigger,
 } from "@ren/ui/attachment"
 import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
@@ -47,6 +44,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Spinner } from "@ren/ui/spinner"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { DropOverlay, UploadChips } from "./attachments.js"
+import { PastedChip } from "./pasted-chip.js"
+import { ImageSet } from "../../components/image-set.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
 import { Artifacts } from "../../lib/artifacts.js"
 import { AppAvatarFallback, AppAvatarImage, AppIcon } from "../../components/app-icon.js"
@@ -197,7 +196,7 @@ function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open:
             />
           }
         >
-          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
+          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:bg-card *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
             {shown.map((each) => (
               // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
               <Avatar key={each.app.id} size="sm" className="data-[size=sm]:size-5">
@@ -505,55 +504,13 @@ const placeholder = (input: { readonly status: PromptInputBoot | undefined; read
   return input.shell ? "e.g. git status" : "Ask anything, @ to mention"
 }
 
-const lineCount = (text: string) => text.split("\n").length
-
-function PastedBlocks(props: {
-  pasted: ReadonlyArray<Composer.Pasted>
-  disabled: boolean | undefined
-  onShow: (id: string) => void
-  onRemove: (id: string) => void
-}) {
-  return (
-    <AttachmentGroup>
-      {props.pasted.map((block) => (
-        <Attachment key={block.id} size="sm">
-          <AttachmentMedia>
-            <IconClipboardText />
-          </AttachmentMedia>
-          <AttachmentContent>
-            <AttachmentTitle>Pasted text</AttachmentTitle>
-            <AttachmentDescription className="tabular-nums">
-              {lineCount(block.text)} {lineCount(block.text) === 1 ? "line" : "lines"}
-            </AttachmentDescription>
-          </AttachmentContent>
-          <AttachmentTrigger
-            aria-label="Show pasted text in the message"
-            disabled={props.disabled}
-            onClick={() => props.onShow(block.id)}
-          />
-          <AttachmentActions>
-            <AttachmentAction
-              aria-label="Remove pasted text"
-              disabled={props.disabled}
-              onClick={() => props.onRemove(block.id)}
-            >
-              <IconX />
-            </AttachmentAction>
-          </AttachmentActions>
-        </Attachment>
-      ))}
-    </AttachmentGroup>
-  )
-}
-
 function QuoteChips(props: {
   quotes: ReadonlyArray<Composer.Quote>
   disabled: boolean | undefined
   onRemove: (id: string) => void
 }) {
-  if (props.quotes.length === 0) return null
   return (
-    <AttachmentGroup>
+    <>
       {props.quotes.map((quote) => (
         <Attachment key={quote.id} size="sm" className="max-w-60">
           <AttachmentMedia>
@@ -573,7 +530,7 @@ function QuoteChips(props: {
           </AttachmentActions>
         </Attachment>
       ))}
-    </AttachmentGroup>
+    </>
   )
 }
 
@@ -679,7 +636,7 @@ function SendButton(props: {
 const textareaClass = (layout: { home: boolean; marked: boolean; shell: boolean }) =>
   cn(
     "px-4 pt-4 leading-relaxed",
-    layout.home ? "min-h-24" : "max-h-60 min-h-16",
+    layout.home ? "max-h-80 min-h-24" : "max-h-60 min-h-16",
     layout.marked && "text-transparent caret-foreground",
     layout.shell && "pl-9 font-mono",
   )
@@ -965,6 +922,8 @@ export function PromptInput(props: {
       file: false,
     })),
   ].toSorted((a, b) => a.start - b.start)
+  const attachments =
+    Composer.files(draft).length + uploads.uploads.length + Composer.quotes(draft).length + draft.pasted.length > 0
   return (
     <div ref={root} className="relative flex flex-col gap-2">
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
@@ -983,28 +942,6 @@ export function PromptInput(props: {
         {props.header}
         <MentionChips space={mentions.space} statuses={mentions.statuses} />
       </div>
-      <UploadChips
-        spaceId={props.files.spaceId}
-        files={Composer.files(draft)}
-        uploads={uploads.uploads}
-        disabled={props.sending}
-        onRetry={uploads.retry}
-        onCancel={uploads.cancel}
-        onRemove={uploads.remove}
-      />
-      <QuoteChips
-        quotes={Composer.quotes(draft)}
-        disabled={props.sending}
-        onRemove={(id) => change(Composer.withoutQuote(draft, id))}
-      />
-      {draft.pasted.length > 0 ? (
-        <PastedBlocks
-          pasted={draft.pasted}
-          disabled={props.sending}
-          onShow={(id) => change(Composer.showPasted(draft, id, text.length).draft)}
-          onRemove={(id) => change(Composer.removePasted(draft, id))}
-        />
-      ) : null}
       {repositories && props.spaceId ? (
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
@@ -1024,9 +961,41 @@ export function PromptInput(props: {
           place(result.text, result.cursor)
         }}
       >
+        {attachments ? (
+          <InputGroupAddon align="block-start" className="px-3 pt-3">
+            <ImageSet>
+              <AttachmentGroup className="w-full py-0">
+                <UploadChips
+                  spaceId={props.files.spaceId}
+                  files={Composer.files(draft)}
+                  uploads={uploads.uploads}
+                  disabled={props.sending}
+                  onRetry={uploads.retry}
+                  onCancel={uploads.cancel}
+                  onRemove={uploads.remove}
+                />
+                <QuoteChips
+                  quotes={Composer.quotes(draft)}
+                  disabled={props.sending}
+                  onRemove={(id) => change(Composer.withoutQuote(draft, id))}
+                />
+                {draft.pasted.map((block) => (
+                  <PastedChip
+                    key={block.id}
+                    text={block.text}
+                    disabled={props.sending}
+                    onEdit={() => change(Composer.showPasted(draft, block.id, text.length).draft)}
+                    onRemove={() => change(Composer.removePasted(draft, block.id))}
+                  />
+                ))}
+              </AttachmentGroup>
+            </ImageSet>
+          </InputGroupAddon>
+        ) : null}
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
+          dir="auto"
           value={text}
           onChange={(event) => {
             const next = event.target.value

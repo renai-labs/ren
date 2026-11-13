@@ -55,6 +55,9 @@ export const formatInZone = (instant: string, timeZone: string) =>
     timeZoneName: "short",
   }).format(new Date(instant))
 
+export const formatTimeInZone = (instant: string, timeZone: string) =>
+  new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit", timeZone }).format(new Date(instant))
+
 const legacyZones: Readonly<Record<string, string>> = {
   "Asia/Calcutta": "Asia/Kolkata",
   "Asia/Katmandu": "Asia/Kathmandu",
