@@ -2,20 +2,17 @@ import { useState } from "react"
 import type { RenInferenceCreatedKey } from "@ren/client"
 import { RenInference } from "@ren/schema/ren-inference"
 import { useMutation } from "@tanstack/react-query"
-import { IconCopy } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Spinner } from "@ren/ui/spinner"
-import { toast } from "@ren/ui/sonner"
 import { Schema } from "effect"
+import { Copyable } from "../../components/copyable.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Platform } from "../../platform/platform.js"
 
 const expiries: ReadonlyArray<{ value: RenInference.Expiry; label: string }> = [
   { value: "never", label: "Never" },
@@ -25,28 +22,6 @@ const expiries: ReadonlyArray<{ value: RenInference.Expiry; label: string }> = [
 ]
 
 const isExpiry = Schema.is(RenInference.Expiry)
-
-function Copyable(props: { id: string; label: string; value: string }) {
-  const write = Platform.usePlatform().writeClipboardText
-  const copy = () =>
-    void write?.(props.value).then(
-      () => toast.success(`${props.label} copied`),
-      () => toast.error(`Couldn’t copy the ${props.label.toLowerCase()}`),
-    )
-  return (
-    <Field>
-      <FieldLabel htmlFor={props.id}>{props.label}</FieldLabel>
-      <InputGroup>
-        <InputGroupInput id={props.id} readOnly value={props.value} className="font-mono text-xs" />
-        <InputGroupAddon align="inline-end">
-          <InputGroupButton size="icon-xs" aria-label={`Copy ${props.label.toLowerCase()}`} onClick={copy}>
-            <IconCopy />
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
-    </Field>
-  )
-}
 
 function CopyStep(props: { created: RenInferenceCreatedKey; onDone: () => void }) {
   return (

@@ -186,6 +186,36 @@ const adaptGroupSpaceJoinRequest = (raw: RawClient["space-join-request"]) => ({
   cancel: EndpointSpaceJoinRequestCancel(raw),
 })
 
+type SpaceInviteLinkGetRequest = Parameters<RawClient["space-invite-link"]["space-invite-link.get"]>[0]
+type SpaceInviteLinkGetInput = { readonly id: SpaceInviteLinkGetRequest["params"]["id"] }
+const EndpointSpaceInviteLinkGet = (raw: RawClient["space-invite-link"]) => (input: SpaceInviteLinkGetInput) =>
+  raw["space-invite-link.get"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type SpaceInviteLinkResetRequest = Parameters<RawClient["space-invite-link"]["space-invite-link.reset"]>[0]
+type SpaceInviteLinkResetInput = { readonly id: SpaceInviteLinkResetRequest["params"]["id"] }
+const EndpointSpaceInviteLinkReset = (raw: RawClient["space-invite-link"]) => (input: SpaceInviteLinkResetInput) =>
+  raw["space-invite-link.reset"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceInviteLink = (raw: RawClient["space-invite-link"]) => ({
+  get: EndpointSpaceInviteLinkGet(raw),
+  reset: EndpointSpaceInviteLinkReset(raw),
+})
+
+type JoinLinkPreviewRequest = Parameters<RawClient["join-link"]["join-link.preview"]>[0]
+type JoinLinkPreviewInput = { readonly token: JoinLinkPreviewRequest["params"]["token"] }
+const EndpointJoinLinkPreview = (raw: RawClient["join-link"]) => (input: JoinLinkPreviewInput) =>
+  raw["join-link.preview"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+type JoinLinkAcceptRequest = Parameters<RawClient["join-link"]["join-link.accept"]>[0]
+type JoinLinkAcceptInput = { readonly token: JoinLinkAcceptRequest["params"]["token"] }
+const EndpointJoinLinkAccept = (raw: RawClient["join-link"]) => (input: JoinLinkAcceptInput) =>
+  raw["join-link.accept"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupJoinLink = (raw: RawClient["join-link"]) => ({
+  preview: EndpointJoinLinkPreview(raw),
+  accept: EndpointJoinLinkAccept(raw),
+})
+
 type EnvironmentTemplateListRequest = Parameters<RawClient["environment-template"]["environment-template.list"]>[0]
 type EnvironmentTemplateListInput = {
   readonly page: EnvironmentTemplateListRequest["query"]["page"]
@@ -2087,6 +2117,8 @@ const adaptClient = (raw: RawClient) => ({
   space: adaptGroupSpace(raw["space"]),
   "space-member": adaptGroupSpaceMember(raw["space-member"]),
   "space-join-request": adaptGroupSpaceJoinRequest(raw["space-join-request"]),
+  "space-invite-link": adaptGroupSpaceInviteLink(raw["space-invite-link"]),
+  "join-link": adaptGroupJoinLink(raw["join-link"]),
   "environment-template": adaptGroupEnvironmentTemplate(raw["environment-template"]),
   environmentProvider: adaptGroupEnvironmentProvider(raw["environmentProvider"]),
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),

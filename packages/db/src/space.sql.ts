@@ -5,6 +5,7 @@ import type { MachineProvider } from "@ren/schema/machine-provider"
 import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
+import type { SpaceInviteLink } from "@ren/schema/space-invite-link"
 import type { SpaceJoinRequest } from "@ren/schema/space-join-request"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -15,6 +16,8 @@ export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
 export const spacePendingMemberEmailConstraint = "space_pending_member_space_id_email_uidx"
 
 export const privateSpaceOwnerConstraint = "space_organization_id_owner_user_id_uidx"
+
+export const spaceInviteLinkLiveConstraint = "space_invite_link_space_id_uidx"
 
 export const spaceSlugConstraint = "space_organization_id_slug_uidx"
 
@@ -141,6 +144,26 @@ export const space_join_request = pgTable(
     index("space_join_request_user_id_idx").on(table.user_id),
     check("space_join_request_status_check", sql`${table.status} in ('pending', 'approved', 'declined', 'cancelled')`),
   ],
+)
+
+export const space_invite_link = pgTable(
+  "space_invite_link",
+  {
+    id: text().$type<SpaceInviteLink.ID>().primaryKey(),
+    space_id: text()
+      .$type<Space.ID>()
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    token: text().notNull().unique(),
+    created_by: text()
+      .$type<Auth.UserID>()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    uses: integer().notNull().default(0),
+    created_at: timestamp().defaultNow().notNull(),
+    archived_at: timestamp(),
+  },
+  (table) => [uniqueIndex(spaceInviteLinkLiveConstraint).on(table.space_id).where(isNull(table.archived_at))],
 )
 
 export const spaceRelations = defineRelationsPart(

@@ -32,6 +32,10 @@ export type SpaceAssignmentID = string
 
 export type SpaceJoinRequestStatus = "pending" | "approved" | "declined" | "cancelled"
 
+export type SpaceInviteLinkToken = string
+
+export type SpaceInviteLinkState = "joinable" | "member" | "outside" | "invalid"
+
 export type HostNamePattern = string
 
 export type EnvironmentTemplateBuildStatus = "queued" | "building" | "ready" | "failed"
@@ -431,6 +435,8 @@ export type InvitationPreview = {
   inviter: { name: string | null; email: string } | null
 }
 
+export type SpaceInviteLinkJoined = { organizationId: AuthOrganizationID; spaceId: SpaceID; slug: string }
+
 export type AppProfileSpaceRef = { id: SpaceID; name: string }
 
 export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string; also: PrimitiveSlug }
@@ -493,6 +499,14 @@ export type SpaceJoinRequestInfo = {
   decidedBy: AuthUserID | null
   createdAt: string
   decidedAt: string | null
+}
+
+export type SpaceInviteLinkInfo = { spaceId: SpaceID; token: SpaceInviteLinkToken; uses: number; createdAt: string }
+
+export type SpaceInviteLinkPreview = {
+  state: SpaceInviteLinkState
+  organization: { id: AuthOrganizationID; name: string } | null
+  space: { id: SpaceID; slug: string; name: string } | null
 }
 
 export type EnvironmentTemplateNetworking =
@@ -2136,6 +2150,22 @@ export type SpaceJoinRequestDeclineOutput = SpaceJoinRequestInfo
 export type SpaceJoinRequestCancelInput = { readonly id: { readonly id: string }["id"] }
 
 export type SpaceJoinRequestCancelOutput = SpaceJoinRequestInfo
+
+export type SpaceInviteLinkGetInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceInviteLinkGetOutput = SpaceInviteLinkInfo
+
+export type SpaceInviteLinkResetInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceInviteLinkResetOutput = SpaceInviteLinkInfo
+
+export type JoinLinkPreviewInput = { readonly token: { readonly token: string }["token"] }
+
+export type JoinLinkPreviewOutput = SpaceInviteLinkPreview
+
+export type JoinLinkAcceptInput = { readonly token: { readonly token: string }["token"] }
+
+export type JoinLinkAcceptOutput = SpaceInviteLinkJoined
 
 export type EnvironmentTemplateListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]
