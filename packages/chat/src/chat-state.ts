@@ -10,7 +10,7 @@ import { DateTime } from "effect"
 
 export type Activity = "idle" | "running"
 
-export type PendingStatus = "starting" | "steering" | "stranded" | "queued"
+export type PendingStatus = "starting" | "steering" | "stranded" | "queued" | "unsent"
 
 export type PendingUpdate = SessionInbox.Info | SessionInbox.Delivery | undefined
 
@@ -30,6 +30,7 @@ export interface State {
   readonly expired: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly shells: Readonly<Record<string, Shell.Info>> | undefined
   readonly outbox: ReadonlySet<string>
+  readonly stalled: ReadonlyMap<string, "unsent">
   readonly compacting: Readonly<Record<string, Compacting>>
   readonly history: ReadonlySet<string>
   // oxlint-disable-next-line ren/no-comments -- Sessions that show a page of Ren's saved history with older messages behind it: the brain's read stops at its oldest message (#253).
@@ -52,6 +53,7 @@ export const empty: State = {
   expired: {},
   shells: undefined,
   outbox: new Set(),
+  stalled: new Map(),
   compacting: {},
   history: new Set(),
   partial: new Set(),
@@ -89,6 +91,8 @@ export const pendingStatus = (state: State, sessionID: string, inboxID: string):
   const items = pending(state, sessionID)
   const item = items.find((entry) => entry.id === inboxID && entry.type === "user")
   if (!item) return undefined
+  const stalled = state.stalled.get(inboxID)
+  if (stalled) return stalled
   if (item.delivery === "queue") return "queued"
   const list = messages(state, sessionID)
   const boundary = list.findLastIndex((entry) => entry.type === "idle")

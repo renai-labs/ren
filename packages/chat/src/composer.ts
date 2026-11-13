@@ -111,6 +111,11 @@ export const append = (draft: Draft, text: string): Draft => {
   return { ...draft, text: `${draft.text}\n\n${text}` }
 }
 
+export const recall = (
+  draft: Draft,
+  entry: { readonly text: string; readonly files?: ReadonlyArray<SessionMessage.DriveFile> | undefined },
+): Draft => (entry.files ?? []).reduce(withFile, append(draft, entry.text))
+
 export const delivery = (
   behavior: SessionInbox.Delivery,
   session: { readonly working: boolean },
