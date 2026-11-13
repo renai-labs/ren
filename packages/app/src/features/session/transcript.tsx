@@ -58,7 +58,14 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@ren/ui/attachment"
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from "@ren/ui/code-block"
+import {
+  CodeBlock,
+  CodeBlockContent,
+  CodeBlockHeader,
+  CodeBlockLine,
+  CodeBlockTitle,
+  useHighlightedCode,
+} from "@ren/ui/code-block"
 import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
@@ -164,6 +171,7 @@ type Block =
       readonly connects: ReadonlyArray<{ readonly appId: string; readonly spaceId: string }>
     }
   | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
+  | { readonly kind: "empty"; readonly key: string; readonly turn: string }
 
 const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
 
@@ -266,6 +274,31 @@ function groupTurns(blocks: ReadonlyArray<Block>, live: (turn: string) => boolea
     else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
     return grouped
   }, [])
+}
+
+function withEmptyReplies(
+  blocks: ReadonlyArray<Block>,
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
+  activeTurn: string | undefined,
+) {
+  const spans = blocks.reduce<Block[][]>((all, block) => {
+    const last = all.at(-1)
+    if (block.kind === "user" || !last) all.push([block])
+    else last.push(block)
+    return all
+  }, [])
+  return spans.flatMap((span) => {
+    const user = span[0]
+    if (user?.kind !== "user" || user.message.id === activeTurn) return span
+    const assistants = turns.get(user.message.id) ?? []
+    if (assistants.length === 0 || assistants.some((message) => !message.time.completed)) return span
+    const silent = span.slice(1).every((block) => {
+      if (block.kind === "steps") return block.steps.every((step) => step.kind === "notice")
+      return block.kind === "row" && !["Error", "Retry", "TurnDivider"].includes(block.row._tag)
+    })
+    if (silent) span.push({ kind: "empty", key: `empty:${user.message.id}`, turn: user.message.id })
+    return span
+  })
 }
 
 const isPasteBlock = (text: string) => text.length >= 2000 || text.split("\n").length >= 20
@@ -654,12 +687,36 @@ function Expandable(props: { content: ReactNode; className?: string | undefined;
   )
 }
 
+function CommandOutput(props: { command: string; output: string | undefined; failed: boolean | undefined }) {
+  const lines = useHighlightedCode(props.command, "bash")
+  return (
+    <CodeBlock size="sm">
+      <CodeBlockContent wrap className="max-h-48 shrink-0">
+        {lines.map((line, index) => (
+          // oxlint-disable-next-line react/no-array-index-key -- a line's position is its identity in highlighted code
+          <CodeBlockLine key={index}>
+            {index === 0 ? <span className="text-muted-foreground select-none">$ </span> : null}
+            {line}
+          </CodeBlockLine>
+        ))}
+      </CodeBlockContent>
+      {props.output ? (
+        <CodeBlockContent wrap className={cn("max-h-64 border-t", props.failed && "text-destructive")}>
+          {props.output}
+        </CodeBlockContent>
+      ) : null}
+    </CodeBlock>
+  )
+}
+
 function StepDetail(props: {
+  command: string | undefined
   output: string | undefined
   failed: boolean | undefined
   images: ReadonlyArray<SessionMessage.ToolFileContent>
 }) {
   const images = props.images
+  if (props.command) return <CommandOutput command={props.command} output={props.output} failed={props.failed} />
   return (
     <>
       {images.map((image) => (
@@ -684,13 +741,14 @@ function StepRow(props: {
   subject?: string | undefined
   running?: boolean
   failed?: boolean
+  command?: string | undefined
   output?: string | undefined
   images?: ReadonlyArray<SessionMessage.ToolFileContent> | undefined
 }) {
   const images = props.images ?? []
   const detail =
-    props.output || images.length > 0 ? (
-      <StepDetail output={props.output} failed={props.failed} images={images} />
+    props.command || props.output || images.length > 0 ? (
+      <StepDetail command={props.command} output={props.output} failed={props.failed} images={images} />
     ) : undefined
   return (
     <Trace>
@@ -776,6 +834,7 @@ function LiveShell(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; she
       icon={<toolIcons.command />}
       verb={ToolDisplay.label(props.tool)}
       subject={ToolDisplay.subtitle(props.tool)}
+      command={ToolDisplay.command(props.tool)}
       running={running}
       failed={failed}
       output={streamed ? TimelineText.shellOutput(streamed) : ToolDisplay.output(props.tool)}
@@ -878,6 +937,7 @@ function ToolStep(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; onOp
       icon={<Icon />}
       verb={ToolDisplay.label(tool)}
       subject={[ToolDisplay.subtitle(tool), ToolDisplay.matches(tool)].filter(Boolean).join(" · ") || undefined}
+      command={ToolDisplay.command(tool)}
       running={status === "running"}
       failed={status === "failed"}
       output={error ?? ToolDisplay.output(tool)}
@@ -916,6 +976,7 @@ function ShellStep(props: { message: SessionMessage.Shell }) {
       icon={<toolIcons.command />}
       verb={message.status === "running" ? "Running" : "Ran"}
       subject={message.command}
+      command={message.command}
       running={message.status === "running"}
       failed={Boolean(error)}
       output={message.output?.output ? TimelineText.shellOutput(message.output.output) : (error ?? "No output")}
@@ -1269,6 +1330,16 @@ function BlockView(props: {
       />
     )
   if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
+  if (block.kind === "empty")
+    return (
+      <Message>
+        <MessageContent>
+          <Marker variant="default">
+            <MarkerContent>Ren sent an empty response.</MarkerContent>
+          </Marker>
+        </MessageContent>
+      </Message>
+    )
   if (block.kind === "connect")
     return (
       <Message>
@@ -1430,7 +1501,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const turns = context.turns
   const activeTurn = props.busy ? props.activeMessageID : undefined
   const watched = useWatchedTurns(activeTurn)
-  const blocks = groupTurns(blocksOf(props.rows, byId), watched.live)
+  const blocks = withEmptyReplies(groupTurns(blocksOf(props.rows, byId), watched.live), turns, activeTurn)
   const easing = useEasedSend(blocks)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(

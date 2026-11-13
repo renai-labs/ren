@@ -101,6 +101,12 @@ describe("tool display", () => {
     expect(ToolDisplay.subtitle(tool("shell", "streaming"))).toBeUndefined()
   })
 
+  test("gives the full command of shell tools only", () => {
+    expect(ToolDisplay.command(tool("bash", "completed", { command: "git log\n  | head" }))).toBe("git log\n  | head")
+    expect(ToolDisplay.command(tool("shell", "running", {}, { metadata: { command: "ls" } }))).toBe("ls")
+    expect(ToolDisplay.command(tool("execute", "completed", { code: "const a = 1" }))).toBeUndefined()
+  })
+
   test("cleans terminal escapes from command output only", () => {
     expect(ToolDisplay.output(tool("shell", "completed", {}, { output: "\u001b[31mred\u001b[0m\r\n" }))).toBe("red\n")
     expect(ToolDisplay.output(tool("read", "completed", {}, { output: "a\r\nb" }))).toBe("a\r\nb")

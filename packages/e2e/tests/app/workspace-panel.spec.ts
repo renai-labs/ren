@@ -20,6 +20,24 @@ const openTab = async (page: Page, label: string) => {
   await page.getByRole("option", { name: label, exact: true }).click()
 }
 
+test("a shell row in the transcript opens to the full command, highlighted, above its output", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Say hi [stub:bash echo hi]")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const transcript = page.getByRole("main")
+  await transcript.getByRole("button", { name: /^Worked/ }).click()
+  await transcript.getByRole("button", { name: /^Ran\b/ }).click()
+  const command = transcript.locator("[data-slot=code-block-content]").filter({ hasText: "$ echo hi" })
+  await expect(command).toBeVisible()
+  await expect(command.locator("[data-slot=code-block-line-content] span[style]").first()).toBeVisible()
+  await expect(transcript.locator("[data-slot=code-block-content]").filter({ hasText: /^hi/ })).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath("shell-command.png") })
+})
+
 test("a member runs commands in the chat's terminal, browses and opens its files, and reviews its repository's changes", async ({
   page,
 }) => {

@@ -123,6 +123,16 @@ const text = (content: typeof Content.Type | undefined) => {
 
 const markerPattern = /stub_[0-9a-f]{12}/
 
+export const emptyReply = "[stub:empty-reply]"
+
+const bashPattern = /\[stub:bash (.+?)\]/su
+
+const promptBehaviour = (prompt: string): Behaviour => {
+  if (prompt.includes(emptyReply)) return { reply: "" }
+  const command = bashPattern.exec(prompt)?.[1]
+  return command ? { tool: { name: "shell", input: { command } } } : {}
+}
+
 export const restarted =
   "The server restarted while you were working. Continue from where you left off without repeating completed work."
 
@@ -338,7 +348,7 @@ export const start = (): Server => {
     const behaviour: Behaviour = {
       title: { reply: "Stub title" },
       compaction: summary === undefined ? {} : { reply: summary },
-      turn: entry?.behaviour ?? {},
+      turn: entry?.behaviour ?? promptBehaviour(call.text),
     }[call.kind]
     const status = statusOf(behaviour, call)
     if (status)
