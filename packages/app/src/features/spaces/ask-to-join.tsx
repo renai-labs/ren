@@ -5,14 +5,13 @@ import type { SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Field, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { SpaceJoinRequest } from "@ren/schema/space-join-request"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/sonner"
 import { Textarea } from "@ren/ui/textarea"
 import { errorMessage } from "../../lib/errors.js"
 import { formText } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
-
-const maximumNoteLength = 500
 
 function AskToJoinDialog(props: { space: SpaceInfo; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { api } = RouterContext.useRouterContext()
@@ -49,7 +48,7 @@ function AskToJoinDialog(props: { space: SpaceInfo; open: boolean; onOpenChange:
               <Textarea
                 id="join-request-note"
                 name="note"
-                maxLength={maximumNoteLength}
+                maxLength={SpaceJoinRequest.maximumNoteLength}
                 placeholder="Why would you like to join?"
                 className="min-h-20"
               />
