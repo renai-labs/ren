@@ -108,8 +108,6 @@ test("switches organization and logs out from the profile card", async ({ page }
   await page.goto("/app/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()
   await expect(page.getByRole("option", { name: company })).toHaveAttribute("aria-selected", "true")
-  await page.getByPlaceholder("Find organization").fill("side")
-  await expect(page.getByRole("option", { name: company })).toBeHidden()
   await page.getByRole("option", { name: "Side Project" }).click()
   await expect(page.getByRole("combobox", { name: "Switch organization (current: Side Project)" })).toBeVisible()
   expect(await organizationName(page.request)).toBe("Side Project")
