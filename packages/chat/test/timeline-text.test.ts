@@ -32,6 +32,17 @@ describe("timeline text", () => {
     expect(TimelineText.retryStatus([retrying, assistant("msg_after", [])])).toBeUndefined()
   })
 
+  test("elapsed pads the trailing unit: 12s, 1m 05s, 1h 02m", () => {
+    expect(TimelineText.elapsed(0)).toBe("0s")
+    expect(TimelineText.elapsed(12_400)).toBe("12s")
+    expect(TimelineText.elapsed(59_999)).toBe("59s")
+    expect(TimelineText.elapsed(60_000)).toBe("1m 00s")
+    expect(TimelineText.elapsed(65_000)).toBe("1m 05s")
+    expect(TimelineText.elapsed(3_599_000)).toBe("59m 59s")
+    expect(TimelineText.elapsed(3_720_000)).toBe("1h 02m")
+    expect(TimelineText.elapsed(-5_000)).toBe("0s")
+  })
+
   test("formats a duration in seconds, then minutes and seconds", () => {
     expect(TimelineText.duration(4_400)).toBe("4s")
     expect(TimelineText.duration(59_600)).toBe("1m 0s")

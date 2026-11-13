@@ -26,6 +26,10 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
+const Script = Schema.Struct({
+  tools: Schema.Array(Schema.Struct({ name: Schema.String, input: Schema.Unknown })),
+})
+
 const held = new Map<string, ReturnType<ReturnType<typeof Shared.stub>["script"]>>()
 
 const stubRoute = (request: Request) => {
@@ -53,6 +57,10 @@ const mailbox = Bun.serve({
     }
     const stubbed = stubRoute(request)
     if (stubbed) return stubbed
+    if (request.method === "POST" && new URL(request.url).pathname === "/script") {
+      const script = Shared.stub().script(Schema.decodeUnknownSync(Script)(await request.json()))
+      return Response.json({ marker: script.marker })
+    }
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })

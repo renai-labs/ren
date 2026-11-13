@@ -78,6 +78,12 @@ export const deliveries = [
   { value: "steer", label: "Steer the current turn" },
   { value: "queue", label: "Queue for the next turn" },
 ]
+export const backgroundActivities = [
+  { value: "off", label: "Hidden" },
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+]
 
 export function PasswordDialog() {
   const { auth } = RouterContext.useRouterContext()

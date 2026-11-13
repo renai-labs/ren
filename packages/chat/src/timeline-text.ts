@@ -56,6 +56,14 @@ export const duration = (millis: number) => {
   return total < 60 ? `${total}s` : `${Math.floor(total / 60)}m ${total % 60}s`
 }
 
+export const elapsed = (millis: number) => {
+  const total = Math.max(0, Math.floor(millis / 1000))
+  const pad = (value: number) => String(value).padStart(2, "0")
+  if (total < 60) return `${total}s`
+  if (total < 3600) return `${Math.floor(total / 60)}m ${pad(total % 60)}s`
+  return `${Math.floor(total / 3600)}h ${pad(Math.floor(total / 60) % 60)}m`
+}
+
 export const turnDuration = (
   user: SessionMessage.User | undefined,
   assistants: ReadonlyArray<SessionMessage.Assistant>,

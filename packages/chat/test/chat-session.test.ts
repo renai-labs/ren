@@ -1238,7 +1238,7 @@ test("a running shell shows as background work, its output reads from a cursor, 
       const [sleeping] = ChatState.shells(running, brain.id)
       if (!sleeping) return yield* Effect.die(new Error("No running shell"))
       expect(Family.background(running, brain.id).tasks).toEqual([
-        { id: sleeping.id, type: "shell", label: "sleep 30" },
+        { id: sleeping.id, type: "shell", label: "sleep 30", started: sleeping.time.started, sessionID: brain.id },
       ])
       const fresh = yield* open(brain)
       yield* fresh.open(brain.id)

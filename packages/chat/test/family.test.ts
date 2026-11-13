@@ -139,7 +139,7 @@ test("walks the ancestors from the root, and stops at a cycle", () => {
   expect(Family.ancestors(cycle, "ses_a")).toEqual(["ses_b"])
 })
 
-const subagent = (id: string, status: "running" | "completed", metadata: object, input: object = {}) => ({
+const subagent = (id: string, status: "running" | "completed", metadata: object, input: object = {}, ran?: number) => ({
   type: "tool",
   id,
   name: "subagent",
@@ -147,7 +147,7 @@ const subagent = (id: string, status: "running" | "completed", metadata: object,
     status === "running"
       ? { status, input, metadata }
       : { status, input, metadata, content: [{ type: "text", text: "started" }] },
-  time: { created: 1 },
+  time: { created: 1, ...(ran && { ran }) },
 })
 
 const assistant = (id: string, content: ReadonlyArray<object>, completed?: number) =>
@@ -209,7 +209,7 @@ test("background work leaves out what a completion notice reports, and blocking 
       time: { created: 3 },
     }),
     assistant("msg_c", [
-      subagent("call_blocking", "running", { sessionID: "ses_child_blocking" }, { description: "Blocking" }),
+      subagent("call_blocking", "running", { sessionID: "ses_child_blocking" }, { description: "Blocking" }, 5),
     ]),
   ])
   const running: ChatState.State = {
@@ -218,12 +218,49 @@ test("background work leaves out what a completion notice reports, and blocking 
   }
   const work = Family.background(running, "ses_root")
   expect(work.blocking).toEqual([
-    { type: "subagent", partID: "call_blocking", id: "ses_child_blocking", label: "Blocking" },
+    { type: "subagent", partID: "call_blocking", id: "ses_child_blocking", label: "Blocking", started: 5 },
   ])
   expect(work.tasks).toEqual([
-    { id: "ses_child_bg", type: "subagent", label: "Background" },
-    { id: "ses_child_live", type: "subagent", label: "Live" },
+    { id: "ses_child_bg", type: "subagent", label: "Background", started: 1, sessionID: "ses_child_bg" },
+    { id: "ses_child_live", type: "subagent", label: "Live", started: 0, sessionID: "ses_child_live" },
   ])
+})
+
+test("a blocking subagent without child metadata takes its id from the child titled by its description", () => {
+  const family = sessions([
+    { id: "ses_root" },
+    { id: "ses_child", parentID: "ses_root", title: "Look around (@general subagent)" },
+  ])
+  const loaded = transcript(family, "ses_root", [
+    assistant("msg_a", [subagent("call_1", "running", {}, { description: "Look around", agent: "general" }, 5)]),
+  ])
+  const running: ChatState.State = { ...loaded, active: { ses_root: "running", ses_child: "running" } }
+  expect(Family.activity(running, "ses_root").map((item) => [item.key, item.id, item.sessionID])).toEqual([
+    ["call_1", "ses_child", "ses_child"],
+  ])
+})
+
+test("a subagent keeps its agent name once the turn ends and its child is the only record", () => {
+  const family = sessions([
+    { id: "ses_root" },
+    { id: "ses_child", parentID: "ses_root", title: "Look around (@general subagent)" },
+  ])
+  const loaded = transcript(family, "ses_root", [
+    assistant(
+      "msg_a",
+      [
+        subagent(
+          "call_1",
+          "completed",
+          { status: "running", sessionID: "ses_child" },
+          { description: "Look around", agent: "general" },
+        ),
+      ],
+      2,
+    ),
+  ])
+  const running: ChatState.State = { ...loaded, active: { ses_child: "running" } }
+  expect(Family.activity(running, "ses_root").map((item) => [item.id, item.agent])).toEqual([["ses_child", "general"]])
 })
 
 test("a running shell outside the transcript is background work, unless the open reply waits for it", () => {
@@ -245,7 +282,30 @@ test("a running shell outside the transcript is background work, unless the open
     shell("sh_dev", "bun dev"),
     shell("sh_other", "bun lint", "ses_other"),
   ])
-  expect(Family.background(live, "ses_root").tasks).toEqual([{ id: "sh_dev", type: "shell", label: "bun dev" }])
+  expect(Family.background(live, "ses_root").tasks).toEqual([
+    { id: "sh_dev", type: "shell", label: "bun dev", started: 1, sessionID: "ses_root" },
+  ])
+  const items = Family.activity(live, "ses_root")
+  expect(items.map((item) => [item.key, item.id, item.sessionID, item.started, item.blocking])).toEqual([
+    ["call_shell", "sh_blocking", "ses_root", 1, true],
+    ["sh_dev", "sh_dev", "ses_root", 1, false],
+  ])
+  expect(Family.counts(items)).toEqual({ subagents: 0, shells: 2 })
+  const unlinked = transcript(sessions([{ id: "ses_root" }]), "ses_root", [
+    assistant("msg_a", [
+      {
+        type: "tool",
+        id: "call_wait",
+        name: "shell",
+        state: { status: "running", input: { command: "sleep 30" }, metadata: {} },
+        time: { created: 1 },
+      },
+    ]),
+  ])
+  const waiting = Hydrate.shells(unlinked, [shell("sh_wait", "sleep 30")])
+  expect(Family.activity(waiting, "ses_root").map((item) => [item.id, item.sessionID])).toEqual([
+    ["sh_wait", "ses_root"],
+  ])
 })
 
 test("a subagent call finds its child by metadata, else the newest child titled by its description", () => {
@@ -330,13 +390,9 @@ test("a subagent card reads its child's state, tools and requests", () => {
     tools: 1,
     activity: "Grep revenue in src",
   })
-  const background = Family.subagent(
-    withChild,
-    "ses_root",
-    call("completed", { sessionID: "ses_child", status: "running" }),
-  )
-  expect(background.status).toBe("running")
-  expect(background.background).toBe(true)
+  const moved = call("completed", { sessionID: "ses_child", status: "running" })
+  expect(Family.subagent(live, "ses_root", moved)).toMatchObject({ status: "running", background: true })
+  expect(Family.subagent(withChild, "ses_root", moved)).toMatchObject({ status: "completed", background: true })
   const asking = { ...withChild, forms: { ses_child: [question("frm_1", "ses_child")] } }
   const waiting = Family.subagent(asking, "ses_root", call("completed", { sessionID: "ses_child" }))
   expect(waiting).toMatchObject({ status: "completed", needsInput: true })

@@ -11,7 +11,14 @@ import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
-import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../components/settings-shared.js"
+import {
+  backgroundActivities,
+  Choice,
+  deliveries,
+  details,
+  PasswordDialog,
+  ThemePicker,
+} from "../../components/settings-shared.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
@@ -22,6 +29,9 @@ export function PreferencesPage() {
   const me = useMe()
   const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
+  const [backgroundActivity, setBackgroundActivity] = useState(() =>
+    ChatPreferences.backgroundActivity.read(platform.storage),
+  )
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
   const rename = useMutation({
@@ -65,6 +75,11 @@ export function PreferencesPage() {
     const next = value === "queue" ? "queue" : "steer"
     ChatPreferences.followUp.write(platform.storage, next)
     setFollowUp(next)
+  }
+  const chooseBackgroundActivity = (value: string) => {
+    const next = value === "off" || value === "center" || value === "right" ? value : "left"
+    ChatPreferences.backgroundActivity.write(platform.storage, next)
+    setBackgroundActivity(next)
   }
   const chooseNotify = (enabled: boolean) => {
     if (enabled) void platform.requestNotifications?.()
@@ -130,6 +145,18 @@ export function PreferencesPage() {
                 options={deliveries}
                 value={followUp}
                 onChange={chooseFollowUp}
+              />
+            </Row>,
+            <Row
+              key="background"
+              title="Background activity"
+              description="Show running subagents and shells above the composer."
+            >
+              <Choice
+                label="Background activity"
+                options={backgroundActivities}
+                value={backgroundActivity}
+                onChange={chooseBackgroundActivity}
               />
             </Row>,
             <Row

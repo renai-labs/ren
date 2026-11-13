@@ -10,6 +10,7 @@ export function QueuedMessages(props: {
   onSendNow: (id: SessionMessage.ID) => void
 }) {
   const count = props.items.length
+  if (count === 0) return null
   return (
     <div className="relative -mb-5 rounded-xl border bg-muted/40 px-1.5 pt-1.5 pb-4.5">
       {count > 3 ? (

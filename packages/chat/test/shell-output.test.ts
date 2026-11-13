@@ -108,3 +108,10 @@ describe("followShellOutput", () => {
       }),
     ))
 })
+
+describe("tail", () => {
+  test("keeps the last lines, strips escape codes and reads carriage returns as line breaks", () => {
+    expect(ShellOutput.tail("\u001b[32mone\u001b[0m\ntwo\r\nthree\rfour\n\n", 3)).toBe("two\nthree\nfour")
+    expect(ShellOutput.tail("", 14)).toBe("")
+  })
+})

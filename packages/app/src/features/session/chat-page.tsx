@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
-import { IconArrowLeft, IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
+import { IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Badge } from "@ren/ui/badge"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { Button } from "@ren/ui/button"
+import { ActivityPill } from "./activity-pill.js"
 import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
 import { WorkspacePanel } from "./workspace-panel.js"
@@ -66,12 +67,11 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         onConnected={chat.connected}
         onChangeModel={chat.child || !chat.canChooseModel ? undefined : () => chat.setPicking(true)}
         onStop={chat.stop}
+        background={chat.background}
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
       <div className="px-6 pb-4">
-        <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          <ChatComposer chat={chat} dock={props.dock} />
-        </div>
+        <ChatComposer chat={chat} dock={props.dock} />
       </div>
     </>
   )
@@ -79,8 +79,19 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
 
 function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
+  const column = useRef<HTMLDivElement>(null)
   return (
-    <>
+    <div ref={column} className="mx-auto flex max-w-3xl flex-col gap-2">
+      {chat.backgroundActivity === "off" || chat.child ? null : (
+        <ActivityPill
+          key={chat.root}
+          root={chat.root}
+          items={chat.activity}
+          align={chat.backgroundActivity}
+          composer={column}
+          onOpenChild={chat.openChild}
+        />
+      )}
       {chat.tasks.length > 0 && !chat.child ? <Queue tasks={chat.tasks} running={chat.running} /> : null}
       {chat.reverted && !chat.child ? (
         <Alert>
@@ -118,11 +129,7 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
           running={chat.running}
           onStop={chat.stop}
           suggest={chat.suggest}
-          queue={
-            chat.queued.length > 0 ? (
-              <QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />
-            ) : null
-          }
+          queue={<QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />}
           model={
             chat.canChooseModel ? (
               <ModelPicker
@@ -137,7 +144,7 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
           }
         />
       )}
-    </>
+    </div>
   )
 }
 
@@ -155,10 +162,18 @@ function ChatHeader(props: { chat: Chat; panel: boolean; onTogglePanel: () => vo
   return (
     <Breadcrumb.Header>
       {chat.child ? (
-        <Button variant="ghost" className="mr-auto text-muted-foreground" onClick={() => chat.openChild(undefined)}>
-          <IconArrowLeft />
-          {chat.childTitle ?? "Subagent"}
-        </Button>
+        <div className="mr-auto flex min-w-0 items-center">
+          <Breadcrumb.Root
+            ancestors={[
+              {
+                key: "parent",
+                content: <Breadcrumb.Action onClick={() => chat.openChild(undefined)}>{chat.title}</Breadcrumb.Action>,
+              },
+            ]}
+          >
+            <span className="block truncate">{chat.childTitle ?? "Subagent"}</span>
+          </Breadcrumb.Root>
+        </div>
       ) : (
         <div className="mr-auto flex min-w-0 items-center gap-2 max-md:max-w-full max-md:flex-1">
           <Breadcrumb.Root
