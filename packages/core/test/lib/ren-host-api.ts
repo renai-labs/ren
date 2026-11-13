@@ -88,7 +88,6 @@ const handlers = (around: Around) =>
               Effect.catchTags({
                 "Primitive.Conflict": (error) => Effect.fail(new ArtifactConflictError({ message: error.message })),
                 "Primitive.Invalid": (error) => Effect.fail(new ArtifactInvalidError({ message: error.message })),
-                "Artifacts.Failed": (error) => Effect.fail(failed(error)),
               }),
             ),
           )
@@ -99,7 +98,10 @@ const handlers = (around: Around) =>
           )
           .handle("artifacts.stop", (request) =>
             Effect.flatMap(CurrentHost, (host) => artifacts.stop(host, request.params.id)).pipe(
-              Effect.mapError(failed),
+              Effect.catchTags({
+                "Primitive.NotFound": (error) => Effect.fail(new ArtifactNotFoundError({ message: error.message })),
+                "Primitive.Conflict": (error) => Effect.fail(new ArtifactConflictError({ message: error.message })),
+              }),
             ),
           )
       }),

@@ -27,6 +27,7 @@ import { SessionRunner } from "../src/session/runner.js"
 import { Signer } from "../src/signer.js"
 import { Configured } from "./lib/configured.js"
 import { TestDrives } from "./lib/drives.js"
+import { ArtifactSamples } from "./lib/artifact-samples.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/hand-provider.js"
 import { Host } from "./lib/host.js"
@@ -121,7 +122,9 @@ describe("artifacts from a chat", () => {
         .from(Database.Schema.artifact)
         .where(eq(Database.Schema.artifact.space_id, owner.spaceId))).at(0)
       if (!row) return yield* Effect.die(new Error(`No artifact was published: ${answered.text}`))
-      yield* Effect.addFinalizer(() => artifacts.stop(owner, row.id).pipe(Effect.ignore))
+      yield* Effect.addFinalizer(() =>
+        artifacts.stop(owner, row.id).pipe(Effect.andThen(ArtifactSamples.idle(row.id)), Effect.ignore),
+      )
       expect(JSON.stringify(answered.body)).toContain(row.id)
       expect(JSON.stringify(answered.body)).toContain("Deployment accepted")
       expect(JSON.stringify(answered.body)).not.toContain(`/api/experimental/artifacts/${row.id}/view/`)
@@ -220,7 +223,9 @@ describe("artifacts from a chat", () => {
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.space_id, owner.spaceId))).at(0)
         if (!row) return yield* Effect.die(new Error(`No artifact was published: ${answered}`))
-        yield* Effect.addFinalizer(() => artifacts.stop(owner, row.id).pipe(Effect.ignore))
+        yield* Effect.addFinalizer(() =>
+          artifacts.stop(owner, row.id).pipe(Effect.andThen(ArtifactSamples.idle(row.id)), Effect.ignore),
+        )
         const completed = yield* Effect.promise(() =>
           stub.waitFor((call) => call.text.includes("Artifact deployment result:") && call.text.includes(row.id)),
         )

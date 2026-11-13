@@ -15222,7 +15222,7 @@
         "type": "string",
         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|[fF]{8}-[fF]{4}-[fF]{4}-[fF]{4}-[fF]{12})$",
         "format": "uuid",
-        "description": "Names one deployment. Retrying it returns its workflow result without starting another deployment."
+        "description": "Names one deployment or stop. Retrying a deployment with it returns that deployment without starting another."
       },
       "Artifact.ID": {
         "type": "string",

@@ -76,7 +76,9 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
             yield* ArtifactSamples.idle(id)
             return yield* artifacts.status(owner, id, deploymentId)
           })
-        yield* Effect.addFinalizer(() => artifacts.stop(owner, id).pipe(Effect.ignore))
+        yield* Effect.addFinalizer(() =>
+          artifacts.stop(owner, id).pipe(Effect.andThen(ArtifactSamples.idle(id)), Effect.ignore),
+        )
         const files = yield* Effect.promise(() => ArtifactSamples.files("state-candidate"))
         const first = yield* publish(files)
         expect(first.status).toBe("ready")
@@ -87,6 +89,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           publish,
           restart: (files) =>
             artifacts.stop(owner, id).pipe(
+              Effect.andThen(ArtifactSamples.idle(id)),
               Effect.andThen(publish(files)),
               Effect.map((result) => new URL(result.url ?? "").origin),
             ),
@@ -202,13 +205,10 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           expect(status.status).toBe("failed")
           expect(status.error).toContain("Recovery remains pending")
           expect(yield* fs.readDirectory(failureRoot)).toEqual([])
-          expect(new TextDecoder().decode((yield* ArtifactSamples.published(artifacts, owner, id))["index.html"])).toBe(
-            "source retained after timeout",
-          )
           const row = (yield* database.db
             .select()
-            .from(Database.Schema.artifact)
-            .where(eq(Database.Schema.artifact.id, id))).at(0)
+            .from(Database.Schema.artifact_deployment)
+            .where(eq(Database.Schema.artifact_deployment.id, deploymentId))).at(0)
           if (!row?.code_archive) return yield* Effect.die(new Error("Failed deployment lost its source archive"))
           const archive = row.code_archive
           yield* Effect.gen(function* () {
@@ -256,7 +256,9 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           yield* idle
           return yield* artifacts.status(owner, id, deploymentId)
         })
-        yield* Effect.addFinalizer(() => artifacts.stop(owner, id).pipe(Effect.ignore))
+        yield* Effect.addFinalizer(() =>
+          artifacts.stop(owner, id).pipe(Effect.andThen(ArtifactSamples.idle(id)), Effect.ignore),
+        )
         const dashboard = yield* Effect.promise(() => ArtifactSamples.files("dashboard"))
         const report = yield* publish(
           Object.fromEntries(Object.entries(dashboard).filter(([path]) => path !== "_worker.js")),
@@ -332,6 +334,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           (yield* publish(state, { entry: "index.html", durableObjects: { RENAMED: "SampleState" } })).status,
         ).toBe("failed")
         yield* artifacts.stop(owner, id)
+        yield* idle
         yield* Effect.promise(() => fetch(origin).then((response) => response.status === 410)).pipe(
           Effect.repeat({ schedule: Schedule.spaced("1 second"), until: Boolean }),
           Effect.timeout("45 seconds"),

@@ -1,12 +1,12 @@
 export * as ArtifactSamples from "./artifact-samples.js"
 
 import { expect } from "bun:test"
-import { Effect, Schedule, Schema } from "effect"
+import { Effect, Option, Schedule } from "effect"
 import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
-import { SqlClient } from "effect/sql"
 import { eq } from "drizzle-orm"
 import { Artifacts } from "../../src/artifacts.js"
+import { DurableRunner } from "../../src/durable-runner.js"
 
 export const files = async (name: string) => {
   const root = new URL(`../fixtures/artifacts/${name}/`, import.meta.url).pathname
@@ -54,9 +54,13 @@ export const deploy = (
     readonly title: string
     readonly config: Artifact.Config
     readonly files: Readonly<Record<string, Uint8Array>>
+    readonly baseDeploymentId?: Artifact.DeploymentID
   },
 ) =>
   Effect.gen(function* () {
+    const base =
+      input.baseDeploymentId ??
+      Option.getOrNull(yield* artifacts.read(owner, id).pipe(Effect.option))?.publishedDeploymentId
     const upload = yield* artifacts.upload(owner, id)
     const files = Object.fromEntries(Object.entries(input.files).filter((entry) => entry[0] !== Artifact.manifestPath))
     const body = yield* Effect.promise(() =>
@@ -73,24 +77,27 @@ export const deploy = (
       title: input.title,
       entry: input.config.entry,
       uploadId: upload.uploadId,
+      ...(base && { baseDeploymentId: base }),
     })
   })
 
+// oxlint-disable-next-line ren/no-comments -- Waits for the end of the run that holds the artifact's claim, through the engine's own completion signal.
 export const idle = (id: Artifact.ID) =>
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const sql = yield* SqlClient.SqlClient
-    const before = (yield* database.db
-      .select()
+    const pending = (yield* database.db
+      .select({ id: Database.Schema.artifact_deployment.id, kind: Database.Schema.artifact_deployment.kind })
       .from(Database.Schema.artifact)
+      .innerJoin(
+        Database.Schema.artifact_deployment,
+        eq(Database.Schema.artifact_deployment.id, Database.Schema.artifact.pending_deployment_id),
+      )
       .where(eq(Database.Schema.artifact.id, id))).at(0)
-    if (before?.pending_deployment_id) {
-      const messages = yield* sql<{
-        readonly payload: unknown
-      }>`select payload::jsonb as payload from cluster_messages where entity_type = 'Workflow/ArtifactSettle' and payload::jsonb ->> 'id' = ${id} and payload::jsonb ->> 'claimId' = ${before.pending_deployment_id}`
-      const payload = yield* Schema.decodeUnknownEffect(Artifacts.SettleRun.payloadSchema)(messages.at(0)?.payload)
-      yield* Artifacts.SettleRun.execute(payload)
-    }
+    if (pending)
+      yield* DurableRunner.join(pending.kind === "stop" ? Artifacts.StopRun : Artifacts.DeployRun, {
+        id,
+        deploymentId: pending.id,
+      })
     const after = (yield* database.db
       .select()
       .from(Database.Schema.artifact)
