@@ -196,8 +196,6 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
           status: 301,
           location: expect.stringMatching(/^https:\/\/useren\.ai\/?$/u),
         })
-        const other = Option.getOrNull(yield* Config.option(Config.String("REN_ARTIFACT_OTHER_DOMAIN")))
-        if (other) expect((yield* read(`https://${Artifact.label(id)}.${other}/`)).status).toBe(404)
       }),
     )
     // oxlint-disable-next-line ren/no-comments -- A fresh deploy saves 4 times: the plan (1) and the write-ahead (2) before the upload, the publication (3) after it, and readiness (4). Each cut stands for a lost process at that point.

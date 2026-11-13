@@ -20,9 +20,7 @@ const program = Effect.gen(function* () {
   }
   if (process.env.REN_ARTIFACT_SMOKE_APPROVED !== "1")
     return yield* Effect.die(
-      new Error(
-        "Set REN_ARTIFACT_SMOKE_APPROVED=1 only after approval for live tests on the staging dispatch namespace",
-      ),
+      new Error("Set REN_ARTIFACT_SMOKE_APPROVED=1 only after approval for live tests on the dispatch namespace"),
     )
   const config = yield* Config.all({
     account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID"),
