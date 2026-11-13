@@ -146,7 +146,7 @@ interface DeployInput<Remote> {
 4. `stop(artifactId, remote, save)` has the same `save`.
 5. `Failed` adds `retryable: boolean`. Cloudflare: network errors, 5xx and 412 are retryable. A state of another account, an old state format and a missing Worker are not.
 6. Each provider has one budget for a whole call, including its own recovery. Cloudflare: 2 min. `workerd`: 70 s. Core's backstop is 5 min. A backstop hit ends the row as `failed`; the provider's write-ahead state lets the next call recover.
-7. If production has Cloudflare artifacts before this lands, a one-time script copies each `artifact-provider/cloudflare/<id>/state.json` into `artifact.remote`. Count them first; zero is expected.
+7. A one-time script copies each `artifact-provider/cloudflare/<id>/state.json` into `artifact.remote`, for artifacts published before this change.
 
 ## 8. Cloudflare upload
 
@@ -161,7 +161,7 @@ Replace `cloudflare-upload.ts` and the temporary folder with three calls, from t
 1. Before the change, run one live deploy with the current code and keep the `metadata` it captures (`cloudflare-upload.ts:40-44`). Build the new `metadata` from it: `main_module`, `compatibility_date`, `compatibility_flags`, `bindings` (Durable Objects and `ASSETS`), `assets` (`jwt`, `run_worker_first`), `exports`, `keep_bindings`, the Durable Object update strategy `immediate`. Wrangler sends no `workers_dev`: it turns on the route with a separate call, which Ren already makes.
 2. Compute the asset hash as Wrangler does. Check it against the same run.
 3. Remove `ARTIFACT_NODE`, `ARTIFACT_CLOUDFLARE_ROOT` and `ARTIFACT_CLOUDFLARE_UPLOAD_TIMEOUT` from the Cloudflare provider, and the `parent.mjs` stdin guard.
-4. The server image needs Node only for the `workerd` provider. Production uses Cloudflare; remove Node there if nothing else needs it.
+4. The server image needs Node only for the `workerd` provider. Remove it from an image that runs only the Cloudflare provider.
 
 ## 9. Cleanup
 

@@ -48,9 +48,6 @@ Before using a new account:
    there until then. Its link takes any size for 15 minutes; a deploy refuses
    an archive over the limits.
 
-The account-owned smoke token is temporary and expires on November 18, 2026;
-production needs its own appropriately managed credential.
-
 Deploy the server with the configuration above. Each new artifact receives a
 stable `https://<worker>.<account-subdomain>.workers.dev/` origin; its configured
 entry selects the initial path. Ordinary Workers have an account script-count
