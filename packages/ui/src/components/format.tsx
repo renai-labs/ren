@@ -1,5 +1,10 @@
 const usdFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const countFormat = new Intl.NumberFormat("en-US")
+const rateFormat = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 21, useGrouping: false })
+
+export function formatUsdRate(value: number): string {
+  return `$${rateFormat.format(value)}`
+}
 
 export function formatUsd(value: number): string {
   if (value >= 10_000) return `$${Math.round(value / 1000)}k`
