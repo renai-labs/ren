@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
@@ -34,33 +34,20 @@ export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string
   const found = ChatReact.useFiles({ root, query: useDebouncedValue(query, searchDelay), type: "file" })
   const diff = ChatReact.useVcsDiff(root, "working")
   const refreshFolder = folders.refresh
-  const results = useMemo(() => [...folders.results], [folders.results])
-  const hits = useMemo(
-    () => (query && AsyncResult.isSuccess(found) ? found.value.filter((entry) => entry.type === "file") : []),
-    [query, found],
-  )
-  const paths = useMemo(
-    () => [
-      ...new Set([
-        ...results.flatMap(([, result]) =>
-          listedOf(result).map((entry) => (entry.type === "directory" ? withSlash(entry.path) : entry.path)),
-        ),
-        ...hits.flatMap((entry) => lineageOf(entry.path)),
-      ]),
-    ],
-    [results, hits],
-  )
-  const loaded = useMemo(
-    () => results.flatMap(([path, result]) => (path && Option.isSome(AsyncResult.value(result)) ? [path] : [])),
-    [results],
-  )
-  const gitStatus = useMemo(
-    () =>
-      AsyncResult.isSuccess(diff.result)
-        ? diff.result.value.map((file) => ({ path: file.file, status: file.status }))
-        : [],
-    [diff.result],
-  )
+  const results = [...folders.results]
+  const hits = query && AsyncResult.isSuccess(found) ? found.value.filter((entry) => entry.type === "file") : []
+  const paths = [
+    ...new Set([
+      ...results.flatMap(([, result]) =>
+        listedOf(result).map((entry) => (entry.type === "directory" ? withSlash(entry.path) : entry.path)),
+      ),
+      ...hits.flatMap((entry) => lineageOf(entry.path)),
+    ]),
+  ]
+  const loaded = results.flatMap(([path, result]) => (path && Option.isSome(AsyncResult.value(result)) ? [path] : []))
+  const gitStatus = AsyncResult.isSuccess(diff.result)
+    ? diff.result.value.map((file) => ({ path: file.file, status: file.status }))
+    : []
   const failures = results.flatMap(([path, result]) => (path && AsyncResult.isFailure(result) ? [path] : [])).join("\n")
   useEffect(() => {
     for (const path of failures.split("\n").filter(Boolean))
