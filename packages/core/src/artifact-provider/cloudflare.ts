@@ -16,10 +16,11 @@ type Version = typeof Version.Type
 const Snapshot = Schema.Struct({ ...Version.fields, config: Artifact.Config, archive: Schema.NonEmptyString })
 type Snapshot = typeof Snapshot.Type
 export const State = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(3),
   account: Schema.String,
+  namespace: Schema.String,
+  domain: Schema.String,
   script: Schema.String,
-  subdomain: Schema.String,
   plan: ArtifactDurableObjects.State,
   active: Schema.NullOr(Snapshot),
   pending: Schema.NullOr(Schema.Struct({ ...Snapshot.fields, ready: Schema.Boolean })),
@@ -28,12 +29,9 @@ export const State = Schema.Struct({
   publication: Schema.optional(Schema.String),
 })
 type State = typeof State.Type
-const Metadata = Schema.Struct({
-  result: Schema.Struct({
-    default_environment: Schema.Struct({ script: Schema.Struct({ etag: Schema.NonEmptyString }) }),
-  }),
-})
-const Subdomain = Schema.Struct({ result: Schema.Struct({ subdomain: Schema.NonEmptyString }) })
+// oxlint-disable-next-line ren/no-comments -- The state of an artifact published as an ordinary Worker on workers.dev, before dispatch namespaces. Ren cannot move it into a namespace.
+const Retired = Schema.Struct({ version: Schema.Literal(2), subdomain: Schema.String })
+const Metadata = Schema.Struct({ result: Schema.Struct({ script: Schema.Struct({ etag: Schema.NonEmptyString }) }) })
 const UploadSession = Schema.Struct({
   result: Schema.Struct({ jwt: Schema.NonEmptyString, buckets: Schema.Array(Schema.Array(Schema.String)) }),
 })
@@ -65,10 +63,13 @@ const budgeted = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
   )
 const apiBase = (account: string) =>
   `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/workers`
+const scriptBase = (input: { readonly account: string; readonly namespace: string; readonly script: string }) =>
+  `${apiBase(input.account)}/dispatch/namespaces/${encodeURIComponent(input.namespace)}/scripts/${input.script}`
 
-// oxlint-disable-next-line ren/no-comments -- Uploads a Worker: one multipart PUT of its metadata and its ES modules. guard is the ETag of the upload it replaces, or none for a new Worker; Cloudflare refuses a stale guard with 412.
+// oxlint-disable-next-line ren/no-comments -- Uploads a Worker to a dispatch namespace: one multipart PUT of its metadata and its ES modules. guard is the ETag of the upload it replaces, or none for a new Worker; Cloudflare refuses a stale guard with 412.
 export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (input: {
   readonly account: string
+  readonly namespace: string
   readonly token: Redacted.Redacted
   readonly script: string
   readonly metadata: Readonly<Record<string, unknown>>
@@ -82,7 +83,7 @@ export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (in
     form.append(name, new File([input.modules[name] ?? ""], name, { type: "application/javascript+module" }))
   const response = yield* http
     .execute(
-      HttpClientRequest.put(`${apiBase(input.account)}/scripts/${input.script}`).pipe(
+      HttpClientRequest.put(scriptBase(input)).pipe(
         HttpClientRequest.bearerToken(input.token),
         HttpClientRequest.bodyFormData(form),
         HttpClientRequest.setHeader(
@@ -109,9 +110,10 @@ export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (in
   )).result.etag
 })
 
+const origin = (state: State) => `https://${state.script}.${state.domain}`
 const deployed = (state: State, snapshot: Snapshot) => ({
   remote: { ...state, active: snapshot, pending: null, stopped: false, stop: null },
-  url: `https://${state.script}.${state.subdomain}.workers.dev${ArtifactProvider.entryPath(snapshot.config)}`,
+  url: `${origin(state)}${ArtifactProvider.entryPath(snapshot.config)}`,
 })
 
 export const layer = Layer.effect(
@@ -120,15 +122,12 @@ export const layer = Layer.effect(
     const config = yield* Config.all({
       account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID"),
       token: Config.Redacted("CLOUDFLARE_API_TOKEN"),
-      namespace: Config.option(Config.String("ARTIFACT_CLOUDFLARE_NAMESPACE")),
+      namespace: Config.NonEmptyString("ARTIFACT_CLOUDFLARE_NAMESPACE"),
+      domain: Config.NonEmptyString("ARTIFACT_DOMAIN"),
       recoverWithin: Config.Duration("ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT").pipe(
         Config.withDefault(Duration.seconds(25)),
       ),
     })
-    if (Option.isSome(config.namespace))
-      return yield* failed(
-        "WFP dispatch is not implemented: omit ARTIFACT_CLOUDFLARE_NAMESPACE to use ordinary Workers",
-      )
     const storage = yield* ObjectStorage.Service
     const http = yield* HttpClient.HttpClient
     const base = apiBase(config.account)
@@ -138,34 +137,22 @@ export const layer = Layer.effect(
         Effect.timeout("5 seconds"),
         Effect.mapError((cause) => failed(`Cloudflare API request failed: ${cause.message}`, { retryable: true })),
       )
-    const subdomainResponse = yield* api(HttpClientRequest.get(`${base}/subdomain`))
-    if (subdomainResponse.status !== 200)
-      return yield* refused(
-        "Cannot read the Cloudflare workers.dev subdomain",
-        subdomainResponse.status,
-        subdomainResponse.body,
-      )
-    const subdomain = (yield* Schema.decodeUnknownEffect(Subdomain)(subdomainResponse.body).pipe(
-      Effect.mapError(failed),
-    )).result.subdomain
 
-    const workerEtag = Effect.fnUntraced(function* (script: string) {
+    const workerEtag = Effect.fnUntraced(function* (state: State) {
       const response = yield* api(
-        HttpClientRequest.get(`${base}/services/${script}`).pipe(
-          HttpClientRequest.setHeader("cache-control", "no-cache"),
-        ),
+        HttpClientRequest.get(scriptBase(state)).pipe(HttpClientRequest.setHeader("cache-control", "no-cache")),
       )
       if (response.status === 404) return Option.none<string>()
       if (response.status !== 200)
         return yield* refused("Cannot read the Cloudflare Worker metadata", response.status, response.body)
       const etag = (yield* Schema.decodeUnknownEffect(Metadata)(response.body).pipe(Effect.mapError(failed))).result
-        .default_environment.script.etag
+        .script.etag
       return Option.some(etag.startsWith('"') ? etag : JSON.stringify(etag))
     })
     const probe = (state: State, version: Version) =>
       http
         .execute(
-          HttpClientRequest.get(`https://${state.script}.${state.subdomain}.workers.dev/`).pipe(
+          HttpClientRequest.get(`${origin(state)}/`).pipe(
             HttpClientRequest.setHeader("x-ren-artifact-probe", "1"),
             HttpClientRequest.setHeader("cache-control", "no-cache"),
           ),
@@ -186,9 +173,7 @@ export const layer = Layer.effect(
         {
           marker: probe(state, version),
           route: http
-            .get(
-              `https://${state.script}.${state.subdomain}.workers.dev${Option.isSome(source) ? ArtifactProvider.entryPath(source.value.config) : "/"}`,
-            )
+            .get(`${origin(state)}${Option.isSome(source) ? ArtifactProvider.entryPath(source.value.config) : "/"}`)
             .pipe(
               Effect.map((response) =>
                 Option.isSome(source) ? response.status >= 200 && response.status < 400 : response.status === 410,
@@ -206,13 +191,13 @@ export const layer = Layer.effect(
       )
 
     // oxlint-disable-next-line ren/no-comments -- Direct upload: Cloudflare names the assets it lacks by hash in buckets, takes each bucket under the session's token, and answers the last one with the token the Worker upload attaches.
-    const uploadAssets = Effect.fnUntraced(function* (script: string, files: Readonly<Record<string, Uint8Array>>) {
+    const uploadAssets = Effect.fnUntraced(function* (state: State, files: Readonly<Record<string, Uint8Array>>) {
       const hashed = Object.keys(files).flatMap((path) => {
         const bytes = files[path]
         return bytes ? [{ path, bytes, hash: ArtifactCloudflareCode.assetHash(path, bytes) }] : []
       })
       const session = yield* api(
-        HttpClientRequest.post(`${base}/scripts/${script}/assets-upload-session`).pipe(
+        HttpClientRequest.post(`${scriptBase(state)}/assets-upload-session`).pipe(
           HttpClientRequest.bodyJsonUnsafe({
             manifest: Object.fromEntries(
               hashed.map((asset) => [`/${asset.path}`, { hash: asset.hash, size: asset.bytes.byteLength }]),
@@ -289,7 +274,7 @@ export const layer = Layer.effect(
       const assets = Option.isSome(archiveSource)
         ? Option.some(
             yield* uploadAssets(
-              state.script,
+              state,
               Object.fromEntries(Object.entries(files).filter((file) => file.at(0) !== Artifact.workerPath)),
             ),
           )
@@ -314,6 +299,7 @@ export const layer = Layer.effect(
       }
       return yield* putScript({
         account: config.account,
+        namespace: state.namespace,
         token: config.token,
         script: state.script,
         metadata,
@@ -325,19 +311,29 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- The artifact's state, which Ren keeps on its row. save writes it before each change to Cloudflare, so a call after a crash finds what the last one started.
     const access = Effect.fnUntraced(function* (
       artifactId: Artifact.ID,
-      remote: Option.Option<State>,
+      remote: Option.Option<State | typeof Retired.Type>,
       persist: (state: State) => Effect.Effect<void, ArtifactProvider.Failed>,
     ) {
       const initial = Option.getOrNull(remote)
-      if (initial && (initial.account !== config.account || initial.subdomain !== subdomain))
+      if (initial?.version === 2)
         return yield* failed(
-          "This artifact belongs to another Cloudflare account/subdomain; provider migration is not supported",
+          "This artifact was published as an ordinary Worker on workers.dev; Ren cannot update or stop it in a dispatch namespace",
+        )
+      if (
+        initial &&
+        (initial.account !== config.account ||
+          initial.namespace !== config.namespace ||
+          initial.domain !== config.domain)
+      )
+        return yield* failed(
+          "This artifact belongs to another Cloudflare account, namespace or domain; provider migration is not supported",
         )
       let current: State = initial ?? {
-        version: 2,
+        version: 3,
         account: config.account,
-        script: ArtifactCloudflareCode.name(artifactId),
-        subdomain,
+        namespace: config.namespace,
+        domain: config.domain,
+        script: Artifact.label(artifactId),
         plan: { objects: {} },
         active: null,
         pending: null,
@@ -350,7 +346,7 @@ export const layer = Layer.effect(
       })
 
       const publish = Effect.fnUntraced(function* (source: Option.Option<Snapshot>, version: Version) {
-        const guard = yield* workerEtag(current.script)
+        const guard = yield* workerEtag(current)
         if (Option.isNone(guard) && (current.active || current.publication))
           return yield* failed(
             "The previously published Cloudflare Worker is missing; refusing to recreate its namespaces",
@@ -358,22 +354,6 @@ export const layer = Layer.effect(
         yield* save({ ...current })
         const etag = yield* upload(current, source, version, guard)
         yield* save({ ...current, publication: etag })
-        const route = yield* api(HttpClientRequest.get(`${base}/scripts/${current.script}/subdomain`))
-        const serving =
-          route.status === 200
-            ? yield* Schema.decodeUnknownEffect(
-                Schema.Struct({ result: Schema.Struct({ enabled: Schema.Boolean, previews_enabled: Schema.Boolean }) }),
-              )(route.body).pipe(Effect.mapError(failed))
-            : null
-        if (!serving?.result.enabled || serving.result.previews_enabled) {
-          const enable = yield* HttpClientRequest.post(`${base}/scripts/${current.script}/subdomain`).pipe(
-            HttpClientRequest.bodyJson({ enabled: true, previews_enabled: false }),
-            Effect.mapError(failed),
-          )
-          const enabled = yield* api(enable)
-          if (enabled.status !== 200)
-            return yield* refused("Cannot enable the artifact public route", enabled.status, enabled.body)
-        }
         yield* ready(current, version, source)
       })
       const recover = Effect.fnUntraced(
@@ -398,7 +378,7 @@ export const layer = Layer.effect(
 
     return ArtifactProvider.make({
       id,
-      remote: State,
+      remote: Schema.Union([State, Retired]),
       deploy: Effect.fn("ArtifactCloudflare.deploy")(function* (input) {
         const stored = yield* access(input.artifactId, input.remote, input.save)
         if (

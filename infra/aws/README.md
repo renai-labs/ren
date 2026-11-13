@@ -52,22 +52,26 @@ The mTLS certificates: one CA signs a server certificate for `server.<name>.inte
 
 ## Artifacts on Cloudflare
 
-Register the account's `workers.dev` subdomain and create an account-owned token
-with Workers Admin permissions. Store it as `CLOUDFLARE_API_TOKEN` in the existing
-server secret, preserving its other keys. Terraform never reads the token value.
+Apply `infra/cloudflare` first: it makes the domain's zone, the dispatch
+namespace and the dispatcher. Create an account-owned token with Workers Scripts
+Write. Store it as `CLOUDFLARE_API_TOKEN` in the existing server secret,
+preserving its other keys. Terraform never reads the token value.
 
 Add this to the deployment's private `terraform.tfvars`:
 
 ```hcl
 artifact_cloudflare = {
   account_id = "<cloudflare-account-id>"
+  namespace  = "ren-artifacts-production"
+  domain     = "useren.site"
 }
 ```
 
-This selects `ARTIFACT_PROVIDER=cloudflare`, sets `CLOUDFLARE_ACCOUNT_ID`, and
-appends the token's Secrets Manager reference to the ECS task. Other environment
-values and secret references are preserved. These two environment settings take
-precedence over the same keys in `server_environment`. Leaving this variable
+This selects `ARTIFACT_PROVIDER=cloudflare`, sets `CLOUDFLARE_ACCOUNT_ID`,
+`ARTIFACT_CLOUDFLARE_NAMESPACE` and `ARTIFACT_DOMAIN`, and appends the token's
+Secrets Manager reference to the ECS task. Other environment values and secret
+references are preserved. These settings take precedence over the same keys in
+`server_environment`. Leaving this variable
 unset preserves the existing provider configuration.
 
 The drives bucket expires temporary `artifact-uploads/` objects after seven days.
@@ -81,10 +85,9 @@ image and updated task configuration. Applying Terraform does not move the ECS
 service to the new task revision. Verify the complete chat-to-public-artifact
 flow after deployment; see `docs/artifact-cloudflare.md`.
 
-This setup uses ordinary Workers and stable `workers.dev` URLs. A dedicated
-domain (`*.<website_url>`) is an optional follow-up, followed by Workers for
-Platforms and its dispatch infrastructure. Neither is required here. Switching
-configuration does not migrate existing artifacts between providers/accounts.
+Each artifact is served at `https://<label>.<domain>/`. Switching configuration
+does not migrate existing artifacts between providers, accounts, namespaces or
+domains.
 
 ## GitHub environment
 

@@ -10,17 +10,25 @@ const program = Effect.gen(function* () {
     yield* Config.all({
       account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID"),
       token: Config.Redacted("CLOUDFLARE_API_TOKEN"),
+      namespace: Config.NonEmptyString("ARTIFACT_CLOUDFLARE_NAMESPACE"),
+      domain: Config.NonEmptyString("ARTIFACT_DOMAIN"),
     })
-    yield* Effect.log("Cloudflare credentials are set. No Cloudflare calls or deployments performed.")
+    yield* Effect.log(
+      "Cloudflare credentials, namespace and domain are set. No Cloudflare calls or deployments performed.",
+    )
     return
   }
   if (process.env.REN_ARTIFACT_SMOKE_APPROVED !== "1")
     return yield* Effect.die(
-      new Error("Set REN_ARTIFACT_SMOKE_APPROVED=1 only after approval for ordinary Free Worker integration tests"),
+      new Error(
+        "Set REN_ARTIFACT_SMOKE_APPROVED=1 only after approval for live tests on the staging dispatch namespace",
+      ),
     )
   const config = yield* Config.all({
     account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID"),
     token: Config.Redacted("CLOUDFLARE_API_TOKEN"),
+    namespace: Config.NonEmptyString("ARTIFACT_CLOUDFLARE_NAMESPACE"),
+    domain: Config.NonEmptyString("ARTIFACT_DOMAIN"),
   })
   yield* Effect.forEach(["artifacts-cloudflare.slow.test.ts", "artifacts-brain.slow.test.ts"], (file) =>
     Effect.gen(function* () {
@@ -36,6 +44,8 @@ const program = Effect.gen(function* () {
               REN_ARTIFACT_CLOUDFLARE_LIVE: "1",
               CLOUDFLARE_ACCOUNT_ID: config.account,
               CLOUDFLARE_API_TOKEN: config.token,
+              ARTIFACT_CLOUDFLARE_NAMESPACE: config.namespace,
+              ARTIFACT_DOMAIN: config.domain,
             },
           }),
         )
@@ -44,7 +54,7 @@ const program = Effect.gen(function* () {
     }),
   )
   yield* Effect.log(
-    "Real Ren workflow/brain tests passed against ordinary Workers. No WFP, paid-plan or DNS changes. Test Workers/data remain retained behind stopped responses.",
+    "Real Ren workflow and brain tests passed through the dispatch namespace. Test Workers and their data remain behind stopped responses.",
   )
 })
 
