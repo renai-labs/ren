@@ -8,6 +8,8 @@ export const detail = Preference.make("chat.detail.v1", Schema.Literals(["compac
 
 export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "steer")
 
+export const foldMessages = Preference.make("chat.fold-messages.v1", Schema.Boolean, false)
+
 export const notify = Preference.make("chat.notify.v1", Schema.Boolean, true)
 
 export const model = Preference.make("chat.model.v1", Schema.NullOr(SessionModel.Ref), null)

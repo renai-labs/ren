@@ -202,6 +202,7 @@ export function useChat(
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
 
   const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
+  const foldMessages = ChatPreferences.foldMessages.read(platform.storage)
   const blocked = Boolean(view.permission ?? view.form)
   useAttentionNotification({ running, asking: blocked, title })
   useChatCacheBridge(root, bridgeOf(info, { running }))
@@ -225,6 +226,7 @@ export function useChat(
     spaceName,
     viewer: viewerOf(me.user),
     expanded,
+    foldMessages,
     bootStatus,
     blocked,
     view: { root, sessionID: view.viewed },

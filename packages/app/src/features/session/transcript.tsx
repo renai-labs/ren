@@ -34,6 +34,7 @@ import type { Shell } from "@ren/schema/shell"
 import {
   IconBrain,
   IconChevronDown,
+  IconChevronUp,
   IconChevronRight,
   IconClipboardText,
   IconClock,
@@ -124,6 +125,7 @@ export interface TranscriptProps {
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
   readonly expanded?: boolean | undefined
+  readonly foldMessages?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
@@ -270,13 +272,31 @@ function groupTurns(blocks: ReadonlyArray<Block>, live: (turn: string) => boolea
 
 const isPasteBlock = (text: string) => text.length >= 2000 || text.split("\n").length >= 20
 
-function splitPasted(text: string) {
+function splitPasted(text: string, options: { fold: boolean }) {
   const separator = text.indexOf("\n\n")
   const head = separator === -1 ? text : text.slice(0, separator)
   const tail = separator === -1 ? "" : text.slice(separator + 2)
-  if (tail && isPasteBlock(tail) && !isPasteBlock(head)) return { typed: head, pasted: tail }
+  if (tail && isPasteBlock(tail) && (options.fold || !isPasteBlock(head))) return { typed: head, pasted: tail }
   if (isPasteBlock(text)) return { typed: "", pasted: text }
   return { typed: text, pasted: undefined }
+}
+
+const foldAbove = 20
+const foldShown = 12
+
+function foundBelowFold(message: SessionMessage.User, find: FindBarProps | undefined, rowKey: string) {
+  const query = find?.value.trim().toLowerCase()
+  if (!find?.match || find.match.row !== rowKey || !query) return false
+  const text = splitPasted(message.text, { fold: true }).typed
+  const lower = text.toLowerCase()
+  const at = Array.from({ length: find.match.occurrence + 1 }).reduce<{ from: number; at: number }>(
+    (found) => {
+      const next = lower.indexOf(query, found.from)
+      return { from: next + query.length, at: next }
+    },
+    { from: 0, at: -1 },
+  ).at
+  return at >= 0 && text.slice(0, at).split("\n").length > foldShown
 }
 
 function PastedChip(props: { text: string }) {
@@ -505,22 +525,80 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   )
 }
 
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
+function UserBody(props: {
+  message: SessionMessage.User
+  spaceId: string | undefined
+  fold: boolean
+  reveal: boolean
+}) {
   if (props.message.task) return <TaskHandoff task={props.message.task} />
   const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
   if (at >= 0)
     return (
       <>
-        <UserText message={props.message} text={props.message.text.slice(0, at)} spaceId={props.spaceId} />
+        <UserText
+          message={props.message}
+          text={props.message.text.slice(0, at)}
+          spaceId={props.spaceId}
+          fold={props.fold}
+          reveal={props.reveal}
+        />
         <WebhookRequest request={props.message.text.slice(at + 2)} />
       </>
     )
-  return <UserText message={props.message} spaceId={props.spaceId} />
+  return <UserText message={props.message} spaceId={props.spaceId} fold={props.fold} reveal={props.reveal} />
 }
 
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined }) {
-  const parts = splitPasted(props.text ?? props.message.text)
-  const apps = useMentionedApps(parts.typed)
+function TypedBubble(props: { text: string; foldable: boolean; reveal: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+  if (props.reveal !== revealed) {
+    setRevealed(props.reveal)
+    if (props.reveal) setOpen(true)
+  }
+  const apps = useMentionedApps(props.text)
+  const folded = props.foldable && !open
+  const shown = folded ? props.text.split("\n").slice(0, foldShown).join("\n") : props.text
+  return (
+    <>
+      <Bubble variant="muted" align="end">
+        <BubbleContent
+          data-searchable=""
+          className={cn(
+            "rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap",
+            folded && "mask-b-from-50%",
+          )}
+        >
+          {withAppMentions(shown, apps)}
+        </BubbleContent>
+      </Bubble>
+      {props.foldable ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-end text-muted-foreground"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Show less" : "Read more"}
+          {open ? <IconChevronUp data-icon="inline-end" /> : <IconChevronDown data-icon="inline-end" />}
+        </Button>
+      ) : null}
+    </>
+  )
+}
+
+function UserText(props: {
+  message: SessionMessage.User
+  text?: string
+  spaceId: string | undefined
+  fold: boolean
+  reveal: boolean
+}) {
+  const parts = splitPasted(props.text ?? props.message.text, { fold: props.fold })
+  const message = props.message
+  const typed = !message.schedule && !message.webhook && !message.channel
+  const foldable = props.fold && typed && parts.typed.split("\n").length > foldAbove
   const files = props.message.files ?? []
   const uploads = props.message.uploads ?? []
   return (
@@ -530,16 +608,7 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
       ) : null}
       {files.length > 0 ? <FileChips files={files} /> : null}
       {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
-      {parts.typed ? (
-        <Bubble variant="muted" align="end">
-          <BubbleContent
-            data-searchable=""
-            className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
-          >
-            {withAppMentions(parts.typed, apps)}
-          </BubbleContent>
-        </Bubble>
-      ) : null}
+      {parts.typed ? <TypedBubble text={parts.typed} foldable={foldable} reveal={props.reveal} /> : null}
     </>
   )
 }
@@ -567,6 +636,8 @@ function UserFooter(props: { text: string; pending: boolean; onEdit?: (() => voi
 function UserMessage(props: {
   message: SessionMessage.User
   spaceId: string | undefined
+  fold: boolean
+  reveal: boolean
   person: Person
   pending: boolean
   editing: boolean
@@ -595,7 +666,7 @@ function UserMessage(props: {
           <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
         ) : (
           <>
-            <UserBody message={props.message} spaceId={props.spaceId} />
+            <UserBody message={props.message} spaceId={props.spaceId} fold={props.fold} reveal={props.reveal} />
             <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
           </>
         )}
@@ -1116,6 +1187,7 @@ interface Context {
 
 function UserBlock(props: {
   message: SessionMessage.User
+  rowKey: string
   transcript: TranscriptProps
   editing: boolean
   onEditing: (id: string | undefined) => void
@@ -1134,6 +1206,8 @@ function UserBlock(props: {
     <UserMessage
       message={message}
       spaceId={transcript.spaceId}
+      fold={transcript.foldMessages === true}
+      reveal={foundBelowFold(message, transcript.find, props.rowKey)}
       person={person}
       pending={pending}
       editing={props.editing}
@@ -1238,6 +1312,7 @@ function BlockView(props: {
     return (
       <UserBlock
         message={block.message}
+        rowKey={block.key}
         transcript={props.transcript}
         editing={props.editing === block.message.id}
         onEditing={props.onEditing}
