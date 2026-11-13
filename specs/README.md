@@ -30,6 +30,7 @@ Generated clients follow the protocol `HttpApi`.
 | [runtime/artifact-hosting.md](runtime/artifact-hosting.md)           | Artifacts in the app, user-supplied providers                                                                                   |
 | [runtime/artifact-refactor.md](runtime/artifact-refactor.md)         | Deployment table, async stop and archive, results to the chat, provider state in Postgres, Cloudflare direct upload             |
 | [runtime/artifact-sites.md](runtime/artifact-sites.md)               | Workers for Platforms and `<label>.useren.site`, stacked on the refactor                                                        |
+| [runtime/artifact-names.md](runtime/artifact-names.md)               | Names for artifacts (`<name>.useren.site`), stacked on artifact sites                                                           |
 | [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                                                                |
 | [runtime/opencode-upgrade.md](runtime/opencode-upgrade.md)           | The OpenCode boundary and bump command, then the 2.2.6 upgrade                                                                  |
 | [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                                                        |
