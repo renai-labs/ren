@@ -3,7 +3,7 @@
   "ignore": ["repos/**", "**/generated/**", "**/*.gen.ts"],
   "workspaces": {
     ".": {
-      "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts"],
+      "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts", "infra/cloudflare/dispatcher.js"],
       "ignoreDependencies": ["@opencode/plugin"]
     },
     "packages/*": {
