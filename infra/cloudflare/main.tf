@@ -69,6 +69,12 @@ resource "cloudflare_workers_for_platforms_dispatch_namespace" "artifacts" {
   name       = "ren-artifacts"
 }
 
+# Which label each artifact name serves. Ren writes it; the dispatcher reads it.
+resource "cloudflare_workers_kv_namespace" "names" {
+  account_id = var.account_id
+  title      = "ren-artifact-names"
+}
+
 resource "cloudflare_workers_script" "dispatcher" {
   account_id         = var.account_id
   script_name        = "ren-artifacts-dispatcher"
@@ -80,6 +86,11 @@ resource "cloudflare_workers_script" "dispatcher" {
       name      = "ARTIFACTS"
       type      = "dispatch_namespace"
       namespace = cloudflare_workers_for_platforms_dispatch_namespace.artifacts.name
+    },
+    {
+      name         = "NAMES"
+      type         = "kv_namespace"
+      namespace_id = cloudflare_workers_kv_namespace.names.id
     },
     {
       name = "DOMAIN"
