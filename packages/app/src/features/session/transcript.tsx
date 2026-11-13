@@ -343,12 +343,8 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent>
-          {props.transcript.fold ? (
-            <Steps
-              steps={block.steps}
-              running={props.activeTurn === block.turn}
-              workedFor={props.workedFor(block.turn)}
-            />
+          {props.transcript.fold && props.activeTurn !== block.turn ? (
+            <Steps steps={block.steps} workedFor={props.workedFor(block.turn)} />
           ) : (
             <div className="flex flex-col gap-3">
               <StepRuns steps={block.steps} />
@@ -585,7 +581,10 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const activeTurn = props.busy ? props.activeMessageID : undefined
   const watched = useWatchedTurns(activeTurn)
   const blocks = TranscriptBlocks.withEmptyReplies(
-    TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(props.rows, byId), { live: watched.live, fold: props.fold }),
+    TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(props.rows, byId), {
+      live: (turn) => turn === activeTurn,
+      fold: props.fold,
+    }),
     turns,
     activeTurn,
   )

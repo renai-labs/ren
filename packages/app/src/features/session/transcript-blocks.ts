@@ -129,16 +129,15 @@ export function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap
 
 export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn: string) => boolean; fold: boolean }) {
   if (!options.fold) return blocks
-  const live = options.live
   const lastSteps = new Map(
     blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
   )
   return blocks.reduce<Block[]>((grouped, block, index) => {
-    if (block.kind !== "steps" && block.kind !== "answer") {
-      grouped.push(block)
-      return grouped
-    }
-    if (block.kind === "answer" && (live(block.turn) || (lastSteps.get(block.turn) ?? -1) < index)) {
+    if (
+      (block.kind !== "steps" && block.kind !== "answer") ||
+      options.live(block.turn) ||
+      (block.kind === "answer" && (lastSteps.get(block.turn) ?? -1) < index)
+    ) {
       grouped.push(block)
       return grouped
     }
@@ -146,9 +145,7 @@ export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn:
       block.kind === "steps"
         ? block.steps
         : [{ kind: "text", key: block.key, text: block.text, streaming: block.streaming }]
-    const group = live(block.turn)
-      ? grouped.find((each) => each.kind === "steps" && each.turn === block.turn)
-      : grouped.at(-1)
+    const group = grouped.at(-1)
     if (group?.kind === "steps" && group.turn === block.turn) group.steps.push(...items)
     else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
     return grouped
