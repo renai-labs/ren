@@ -2014,26 +2014,37 @@ export type SpaceShutdownInput = { readonly id: { readonly id: string }["id"] }
 export type SpaceShutdownOutput = SpaceInfo
 
 export type SpaceMemberListInput = {
-  readonly spaceId: {
-    readonly spaceId: string
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
   }["spaceId"]
+  readonly userId?: {
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
+    readonly status?: ("active" | "pending") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["userId"]
   readonly status?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
   }["status"]
   readonly page: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
   readonly pageSize: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number

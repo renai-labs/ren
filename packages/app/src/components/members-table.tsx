@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { Confirmation } from "./confirm-dialog.js"
 import { TableCard, TableEmpty } from "./page.js"
 import { PersonAvatar } from "./person-avatar.js"
-import { RowMenu } from "./row-menu.js"
+import { RowMenu, type RowMenuItem } from "./row-menu.js"
 
 export type MemberRow = {
   id: string
@@ -18,6 +18,8 @@ export type MemberRow = {
 export function MembersTable<Row extends MemberRow>(props: {
   rows: Row[]
   column: { heading: string; cell: (row: Row) => ReactNode }
+  spaces?: ((row: Row) => ReactNode) | undefined
+  items?: ((row: Row) => ReadonlyArray<RowMenuItem>) | undefined
   remove: (row: Row) => Confirmation | undefined
   onRemove?: ((row: Row) => Promise<unknown>) | undefined
   empty: ReactNode
@@ -42,6 +44,7 @@ export function MembersTable<Row extends MemberRow>(props: {
             </TableHead>
             <TableHead className="w-1/3">Email</TableHead>
             <TableHead className="w-1/4">{props.column.heading}</TableHead>
+            {props.spaces ? <TableHead className="w-1/4">Spaces</TableHead> : null}
             <TableHead className="w-15" />
           </TableRow>
         </TableHeader>
@@ -64,20 +67,24 @@ export function MembersTable<Row extends MemberRow>(props: {
                     {row.email}
                   </TableCell>
                   <TableCell>{props.column.cell(row)}</TableCell>
+                  {props.spaces ? <TableCell>{props.spaces(row)}</TableCell> : null}
                   <TableCell>
-                    {confirmation ? (
-                      <RowMenu
-                        label={`${row.name} actions`}
-                        items={[
-                          {
-                            label: "Remove",
-                            icon: IconUserMinus,
-                            confirm: confirmation,
-                            onSelect: () => props.onRemove?.(row),
-                          },
-                        ]}
-                      />
-                    ) : null}
+                    <RowMenu
+                      label={`${row.name} actions`}
+                      items={[
+                        ...(props.items?.(row) ?? []),
+                        ...(confirmation
+                          ? [
+                              {
+                                label: "Remove",
+                                icon: IconUserMinus,
+                                confirm: confirmation,
+                                onSelect: () => props.onRemove?.(row),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               )

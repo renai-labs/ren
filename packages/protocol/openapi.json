@@ -605,7 +605,15 @@
             "schema": {
               "$ref": "#/components/schemas/Space.ID"
             },
-            "required": true
+            "required": false
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Auth.UserID"
+            },
+            "required": false
           },
           {
             "name": "status",

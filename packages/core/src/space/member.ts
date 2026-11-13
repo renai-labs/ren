@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
-import { and, asc, count, eq, isNull, sql } from "drizzle-orm"
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
 import { CredentialOffboarding } from "../credential/offboarding.js"
@@ -192,21 +192,64 @@ export const layer = Layer.effect(
       list: Effect.fn("SpaceMember.list")(function* (actor: Actor.Info, input: SpaceMember.ListInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const space = yield* lockSpace(transaction, actor, input.spaceId)
-            if (!space || !access.isAllowed({ actor, action: actions.list, resource: space.resource })) {
-              return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
+            const empty = { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
+            if (input.userId && !input.spaceId) {
+              const candidates = yield* transaction
+                .select({
+                  id: Database.Schema.space_member.id,
+                  kind: Database.Schema.space.kind,
+                  membershipId: SpaceQueries.membership.id,
+                })
+                .from(Database.Schema.space_member)
+                .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.space_member.space_id))
+                .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+                .where(
+                  and(
+                    eq(Database.Schema.space_member.user_id, input.userId),
+                    isNull(Database.Schema.space_member.archived_at),
+                    isNull(Database.Schema.space.archived_at),
+                    eq(Database.Schema.space.organization_id, actor.organizationId),
+                  ),
+                )
+              const visible = candidates
+                .filter((row) =>
+                  access.isAllowed({
+                    actor,
+                    action: actions.list,
+                    resource: SpacePolicy.resource({ membershipId: row.membershipId, kind: row.kind }),
+                  }),
+                )
+                .map((row) => row.id)
+              const rows =
+                visible.length === 0
+                  ? []
+                  : yield* selectMembers(transaction)
+                      .where(inArray(Database.Schema.space_member.id, visible))
+                      .orderBy(asc(Database.Schema.space_member.created_at), asc(Database.Schema.space_member.id))
+                      .limit(input.pageSize)
+                      .offset((input.page - 1) * input.pageSize)
+              return {
+                items: yield* Effect.forEach(rows, toInfo),
+                page: input.page,
+                pageSize: input.pageSize,
+                total: visible.length,
+              }
             }
+            if (!input.spaceId) return empty
+            const spaceId = input.spaceId
+            const space = yield* lockSpace(transaction, actor, spaceId)
+            if (!space || !access.isAllowed({ actor, action: actions.list, resource: space.resource })) return empty
             const members = selectMembers(transaction)
               .where(
                 and(
-                  eq(Database.Schema.space_member.space_id, input.spaceId),
+                  eq(Database.Schema.space_member.space_id, spaceId),
                   isNull(Database.Schema.space_member.archived_at),
                 ),
               )
               .unionAll(
                 selectPendingMembers(transaction).where(
                   and(
-                    eq(Database.Schema.space_pending_member.space_id, input.spaceId),
+                    eq(Database.Schema.space_pending_member.space_id, spaceId),
                     isNull(Database.Schema.space_pending_member.archived_at),
                   ),
                 ),

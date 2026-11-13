@@ -38,7 +38,8 @@ export type Info = typeof Info.Type
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Schema.optional(Space.ID),
+  userId: Schema.optional(Auth.UserID),
   status: Schema.optional(Status),
   ...Pagination.fields(50),
 }).annotate({ identifier: "SpaceMember.ListInput" })

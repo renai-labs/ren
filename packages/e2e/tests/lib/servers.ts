@@ -70,6 +70,19 @@ export async function inviteMember(request: APIRequestContext, email: string, ro
   return Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json()).id
 }
 
+export async function createSpace(request: APIRequestContext, name: string) {
+  const created = await request.post(`${serverURL}/spaces`, { headers: { origin: appOrigin }, data: { name } })
+  expect(created.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await created.json()).id
+}
+
+export async function spaceNames(request: APIRequestContext) {
+  const response = await request.get(`${serverURL}/spaces?page=1&pageSize=50`)
+  expect(response.ok()).toBe(true)
+  const page = Schema.Struct({ items: Schema.Array(Schema.Struct({ name: Schema.String })) })
+  return Schema.decodeUnknownSync(page)(await response.json()).items.map((space) => space.name)
+}
+
 export async function organizationName(request: APIRequestContext) {
   const me = Schema.Struct({ organization: Schema.Struct({ name: Schema.String }) })
   return Schema.decodeUnknownSync(me)(await (await request.get(`${serverURL}/me`)).json()).organization.name
