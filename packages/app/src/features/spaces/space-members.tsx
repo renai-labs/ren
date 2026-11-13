@@ -185,15 +185,17 @@ function RequestRow(props: { request: SpaceJoinRequestInfo; space: SpaceInfo }) 
           {formatRelative(request.createdAt)}
         </time>
       </TableCell>
-      <TableCell className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" disabled={deciding} onClick={() => decline.mutate({ id: request.id })}>
-          {decline.isPending ? <Spinner data-icon="inline-start" /> : null}
-          Decline
-        </Button>
-        <Button size="sm" disabled={deciding} onClick={() => approve.mutate({ id: request.id })}>
-          {approve.isPending ? <Spinner data-icon="inline-start" /> : null}
-          Approve
-        </Button>
+      <TableCell>
+        <span className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" disabled={deciding} onClick={() => decline.mutate({ id: request.id })}>
+            {decline.isPending ? <Spinner data-icon="inline-start" /> : null}
+            Decline
+          </Button>
+          <Button size="sm" disabled={deciding} onClick={() => approve.mutate({ id: request.id })}>
+            {approve.isPending ? <Spinner data-icon="inline-start" /> : null}
+            Approve
+          </Button>
+        </span>
       </TableCell>
     </TableRow>
   )
