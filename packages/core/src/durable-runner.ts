@@ -1,6 +1,6 @@
 export * as DurableRunner from "./durable-runner.js"
 
-import { Duration, Effect, Layer, Schedule, type Schema } from "effect"
+import { Cause, Duration, Effect, Layer, Schedule, type Schema } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import { Digest } from "effect/crypto"
 import { SqlClient } from "effect/sql"
@@ -31,6 +31,29 @@ export const supervise = <E>(key: string, run: Effect.Effect<void, E>) =>
     Effect.tapError((error) => Effect.logWarning(`Run ${key} failed; it retries`, error)),
     Effect.retry(retry),
     Effect.catchCause((cause) => Effect.logError(`Run ${key} stopped`, cause)),
+    Effect.annotateLogs({ run: key }),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- Runs a run to its final state. It retries a failure that retryable accepts, for within at most. Any other failure, a defect, or the end of within goes to fail, which writes the final state and retries until it succeeds. An interrupt ends the run with no final state: who interrupts it writes that.
+export const finish = <E, E2>(
+  key: string,
+  run: Effect.Effect<void, E>,
+  options: {
+    readonly retryable: (cause: Cause.Cause<E>) => boolean
+    readonly within?: Duration.Input
+    readonly fail: (cause: Cause.Cause<E>) => Effect.Effect<void, E2>
+  },
+) =>
+  run.pipe(
+    Effect.sandbox,
+    Effect.tapError((cause) =>
+      Cause.hasInterrupts(cause) ? Effect.void : Effect.logWarning(`Run ${key} failed`, cause),
+    ),
+    Effect.retry({
+      schedule: options.within ? retry.pipe(Schedule.upTo({ duration: options.within })) : retry,
+      while: (cause) => !Cause.hasInterrupts(cause) && options.retryable(cause),
+    }),
+    Effect.catch((cause) => (Cause.hasInterrupts(cause) ? Effect.interrupt : supervise(key, options.fail(cause)))),
     Effect.annotateLogs({ run: key }),
   )
 

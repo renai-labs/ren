@@ -227,6 +227,13 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
             Effect.sync(() => {
               const found = artifacts.get(request.params.id)
               if (found) artifacts.set(request.params.id, { ...found, deployed: false })
+              return {
+                artifactId: request.params.id,
+                deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
+                status: "stopping" as const,
+                url: null,
+                error: null,
+              }
             }),
           ),
       ),

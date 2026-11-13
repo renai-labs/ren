@@ -13,10 +13,23 @@ import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
+import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm"
-import { Cause, Context, DateTime, Duration, Effect, Exit, Layer, Option, Predicate, Schedule, Schema } from "effect"
-import { ClusterSchema, EntityAddress, EntityId, EntityType, MessageStorage, Sharding } from "effect/cluster"
-import { Workflow, WorkflowEngine } from "effect/workflow"
+import {
+  Cause,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  ErrorReporter,
+  Layer,
+  Option,
+  Predicate,
+  Result,
+  Schema,
+} from "effect"
+import { SqlError } from "effect/sql/SqlError"
+import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { ArtifactProvider } from "./artifact-provider.js"
@@ -39,7 +52,7 @@ export type Interface = Primitive.Interface<typeof Artifact.definition> & {
     owner: Owner,
     id: Artifact.ID,
     input: Artifact.DeployInput,
-  ) => Effect.Effect<Artifact.Deployment, Primitive.Conflict | Primitive.Invalid | Failed>
+  ) => Effect.Effect<Artifact.Deployment, Primitive.Conflict | Primitive.Invalid>
   readonly status: (
     owner: Owner,
     id: Artifact.ID,
@@ -47,42 +60,24 @@ export type Interface = Primitive.Interface<typeof Artifact.definition> & {
   ) => Effect.Effect<Artifact.Deployment, Primitive.NotFound>
   readonly read: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Info, Primitive.NotFound>
   readonly download: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Archive, Primitive.NotFound | Failed>
-  readonly stop: (owner: Owner, id: Artifact.ID) => Effect.Effect<void, Failed>
+  readonly stop: (
+    owner: Owner,
+    id: Artifact.ID,
+  ) => Effect.Effect<Artifact.Deployment, Primitive.NotFound | Primitive.Conflict>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Artifacts") {}
 
-export const DeployRun = Workflow.make("ArtifactDeploy", {
-  payload: {
-    id: Artifact.ID,
-    deploymentId: Artifact.DeploymentID,
-    organizationId: Auth.OrganizationID,
-    title: Artifact.Info.fields.title,
-    config: Artifact.Config,
-    codeArchive: Schema.String,
-  },
-  success: Schema.Struct({ deployment: Artifact.Deployment, binding: Schema.NullOr(Schema.Json) }),
+const RunPayload = { id: Artifact.ID, deploymentId: Artifact.DeploymentID }
+
+export const DeployRun = DurableRunner.make("ArtifactDeploy", {
+  payload: RunPayload,
   idempotencyKey: (payload) => `${payload.id}:${payload.deploymentId}`,
 })
 
 export const StopRun = DurableRunner.make("ArtifactStop", {
-  payload: {
-    id: Artifact.ID,
-    deploymentId: Artifact.DeploymentID,
-    stopId: Schema.optional(Artifact.DeploymentID),
-    targetDeploymentId: Schema.optional(Artifact.DeploymentID),
-  },
+  payload: RunPayload,
   idempotencyKey: (payload) => `${payload.id}:${payload.deploymentId}`,
-})
-
-export const SettleRun = DurableRunner.make("ArtifactSettle", {
-  payload: {
-    id: Artifact.ID,
-    claimId: Artifact.DeploymentID,
-    executionId: Schema.String,
-    kind: Schema.Literals(["deploy", "stop"]),
-  },
-  idempotencyKey: (payload) => `${payload.id}:${payload.claimId}`,
 })
 
 const Manifest = Schema.fromJsonString(Schema.Struct({ durableObjects: Schema.optional(Artifact.DurableObjects) }))
@@ -124,19 +119,23 @@ const configOf = Effect.fnUntraced(function* (
   return { entry: chosen, ...(durableObjects && { durableObjects }) } satisfies Artifact.Config
 })
 
-export const deployWithin = Duration.minutes(2)
+// oxlint-disable-next-line ren/no-comments -- Longer than any provider's own budget for one call, so it ends only a provider that hangs.
+export const backstop = Duration.minutes(5)
+
+export const stopWithin = Duration.hours(24)
 
 export const linkLifetime = Duration.minutes(15)
 
 const uploadsPrefix = "artifact-uploads/"
 const artifacts = Database.Schema.artifact
+const deployments = Database.Schema.artifact_deployment
 
 type Row = typeof artifacts.$inferSelect
 
+type DeploymentRow = typeof deployments.$inferSelect
+
 const ownedBy = (row: Row, owner: Owner) =>
   row.space_id === owner.spaceId && row.organization_id === owner.organizationId
-
-const storedConfig = (row: Row): Artifact.Config => row.config ?? { entry: "index.html" }
 
 const notFound = new Primitive.NotFound({ message: "Artifact not found." })
 
@@ -179,6 +178,46 @@ const toInfo = (row: Row): Artifact.Info => ({
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
 })
 
+const toDeployment = (row: DeploymentRow): Artifact.Deployment => ({
+  artifactId: row.artifact_id,
+  deploymentId: row.id,
+  status: row.status,
+  url: row.url,
+  error: row.error,
+})
+
+const uploadKey = (organizationId: Auth.OrganizationID, id: Artifact.ID, uploadId: Artifact.UploadID) =>
+  `${uploadsPrefix}${organizationId}/${id}/${uploadId}.tar.gz`
+
+// oxlint-disable-next-line ren/no-comments -- Storage and the database can fail for a moment; a run tries them again. Database.transaction turns a database failure into a defect, so the defect is checked too.
+const transient = (cause: Cause.Cause<unknown>) => {
+  const defect = Cause.findDefect(cause)
+  return (
+    Option.exists(Cause.findErrorOption(cause), Schema.is(Failed)) ||
+    (Result.isSuccess(defect) &&
+      (defect.success instanceof SqlError || defect.success instanceof EffectDrizzleQueryError))
+  )
+}
+
+const reasonOf = (cause: Cause.Cause<{ readonly message: string }>) =>
+  Option.match(Cause.findErrorOption(cause), {
+    onNone: () => "Ren failed while it ran this work. Try again.",
+    onSome: (error) => error.message,
+  })
+
+const bounded = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
+  call.pipe(
+    Effect.timeoutOrElse({
+      duration: backstop,
+      orElse: () =>
+        Effect.fail(
+          new ArtifactProvider.Failed({
+            message: `The artifact provider did not answer within ${Duration.format(backstop)}`,
+          }),
+        ),
+    }),
+  )
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -198,8 +237,6 @@ export const layer = Layer.effect(
       (client) => Effect.sync(() => client.destroy()),
     )
     const engine = yield* WorkflowEngine.WorkflowEngine
-    const messages = yield* MessageStorage.MessageStorage
-    const sharding = yield* Sharding.Sharding
 
     const store = <A>(run: (signal: AbortSignal) => Promise<A>) =>
       Effect.tryPromise({
@@ -207,153 +244,222 @@ export const layer = Layer.effect(
         catch: (cause) => new Failed({ message: `Ren could not reach its storage: ${String(cause)}` }),
       })
 
-    const requested = Effect.fnUntraced(function* (run: Workflow.Any, executionId: string) {
-      const entityId = EntityId.make(executionId)
-      const group = Context.get(run.annotations, ClusterSchema.ShardGroup)(entityId)
-      const address = EntityAddress.make({
-        entityType: EntityType.make(`Workflow/${run._tag}`),
-        entityId,
-        shardId: sharding.getShardId(entityId, group),
-      })
-      return Option.isSome(yield* messages.requestIdForPrimaryKey({ address, tag: "run", id: "" }).pipe(Effect.orDie))
+    const deploymentOf = (deploymentId: Artifact.DeploymentID) =>
+      database.db
+        .select({ deployment: deployments, artifact: artifacts })
+        .from(deployments)
+        .innerJoin(artifacts, eq(artifacts.id, deployments.artifact_id))
+        .where(eq(deployments.id, deploymentId))
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => rows.at(0)),
+        )
+
+    // oxlint-disable-next-line ren/no-comments -- Checks the upload, keeps the version it checked as the deployment's immutable code archive, and saves both on the deployment row before it deletes the upload, so a retry after any step finds its input.
+    const check = Effect.fnUntraced(function* (deployment: DeploymentRow, artifact: Row) {
+      if (deployment.config && deployment.code_archive)
+        return { config: deployment.config, codeArchive: deployment.code_archive }
+      if (!deployment.upload_id) return yield* Effect.die(new Error(`Deployment ${deployment.id} has no upload`))
+      const uploaded = uploadKey(artifact.organization_id, artifact.id, deployment.upload_id)
+      const source = yield* ArtifactArchive.read(storage, uploaded).pipe(
+        Effect.catchTags({
+          "ArtifactArchive.Invalid": (error) =>
+            Effect.fail(new Primitive.Invalid({ message: error.message, field: "uploadId" })),
+          "ArtifactArchive.Failed": (error) => Effect.fail(new Failed({ message: error.message })),
+        }),
+      )
+      const config = yield* configOf(source.files, deployment.entry ?? undefined, artifact.config?.entry)
+      const codeArchive = `${artifact.organization_id}/artifacts/${artifact.id}/deployments/${deployment.id}/${deployment.upload_id}.tar.gz`
+      yield* Effect.tryPromise({
+        try: (signal) =>
+          storage.s3.send(
+            new CopyObjectCommand({
+              Bucket: storage.bucket,
+              Key: codeArchive,
+              CopySource: `${storage.bucket}/${uploaded.split("/").map(encodeURIComponent).join("/")}`,
+              CopySourceIfMatch: source.version,
+            }),
+            { abortSignal: signal },
+          ),
+        catch: (cause) => cause,
+      }).pipe(
+        Effect.catch((cause) =>
+          Effect.gen(function* () {
+            if (cause instanceof S3ServiceException && ["NoSuchKey", "PreconditionFailed"].includes(cause.name))
+              return yield* new Primitive.Invalid({
+                message: "The upload changed while Ren checked it. Upload the archive again.",
+                field: "uploadId",
+              })
+            yield* Effect.logWarning("Ren could not copy an artifact upload", cause)
+            return yield* new Failed({ message: "Ren could not copy the upload" })
+          }),
+        ),
+      )
+      yield* database.db
+        .update(deployments)
+        .set({ config, code_archive: codeArchive })
+        .where(eq(deployments.id, deployment.id))
+        .pipe(Effect.orDie)
+      yield* store((signal) =>
+        storage.s3.send(new DeleteObjectCommand({ Bucket: storage.bucket, Key: uploaded }), { abortSignal: signal }),
+      ).pipe(Effect.ignore)
+      return { config, codeArchive }
     })
 
-    yield* DurableRunner.register(SettleRun, (payload) =>
-      Effect.gen(function* () {
-        yield* (
-          payload.kind === "deploy"
-            ? engine
-                .poll(DeployRun, payload.executionId)
-                .pipe(Effect.map((result) => Option.isSome(result) && result.value._tag === "Complete"))
-            : engine
-                .poll(StopRun, payload.executionId)
-                .pipe(Effect.map((result) => Option.isSome(result) && result.value._tag === "Complete"))
-        ).pipe(Effect.repeat({ schedule: Schedule.spaced("50 millis"), until: (complete) => complete }))
-        yield* database.db
-          .update(artifacts)
-          .set({ pending_deployment_id: null, updated_at: sql`now()` })
-          .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.claimId)))
-          .pipe(Effect.orDie)
-      }).pipe(
-        Effect.sandbox,
-        Effect.retry({ schedule: DurableRunner.retry, while: (cause) => !Cause.hasInterrupts(cause) }),
-        Effect.catch(Effect.failCause),
-      ),
-    )
-
-    yield* engine.register(DeployRun, (payload) =>
-      Effect.gen(function* () {
-        const result = (status: Artifact.Status, url: string | null, error: string | null): Artifact.Deployment => ({
-          artifactId: payload.id,
-          deploymentId: payload.deploymentId,
-          status,
-          url,
-          error,
-        })
-        const row = (yield* database.db
-          .select()
-          .from(artifacts)
-          .where(eq(artifacts.id, payload.id))
-          .pipe(Effect.orDie)).at(0)
-        if (!row || row.pending_deployment_id !== payload.deploymentId)
-          return { deployment: result("stopped", null, null), binding: null }
-        if (row.provider !== provider.id)
-          return {
-            deployment: result("failed", row.url, "This deployment belongs to another artifact provider"),
-            binding: null,
-          }
-        const current = and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.deploymentId))
-        return yield* Effect.gen(function* () {
-          const deployed = yield* provider
-            .deploy({
-              artifactId: payload.id,
-              deploymentId: payload.deploymentId,
-              config: payload.config,
-              archive: payload.codeArchive,
-              previous: Option.fromNullishOr(row.remote),
-            })
-            .pipe(
-              Effect.timeoutOrElse({
-                duration: deployWithin,
-                orElse: () => Effect.fail(new ArtifactProvider.Failed({ message: "The deployment timed out" })),
+    yield* DurableRunner.register(DeployRun, (payload) =>
+      DurableRunner.finish(
+        DeployRun.idempotencyKey(payload),
+        Effect.gen(function* () {
+          const found = yield* deploymentOf(payload.deploymentId)
+          if (found?.deployment.status !== "deploying") return
+          if (found.artifact.pending_deployment_id === payload.deploymentId) {
+            const checked = yield* check(found.deployment, found.artifact)
+            const deployed = yield* bounded(
+              provider.deploy({
+                artifactId: payload.id,
+                deploymentId: payload.deploymentId,
+                config: checked.config,
+                archive: checked.codeArchive,
+                previous: Option.fromNullishOr(found.artifact.remote),
               }),
             )
+            yield* database.transaction((transaction) =>
+              Effect.gen(function* () {
+                const artifact = (yield* transaction
+                  .select()
+                  .from(artifacts)
+                  .where(eq(artifacts.id, payload.id))
+                  .for("update")).at(0)
+                if (artifact?.pending_deployment_id !== payload.deploymentId) {
+                  yield* transaction
+                    .update(deployments)
+                    .set({ status: "stopped", finished_at: sql`now()` })
+                    .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "deploying")))
+                  return
+                }
+                yield* transaction
+                  .update(deployments)
+                  .set({ status: "ready", url: deployed.url, finished_at: sql`now()` })
+                  .where(eq(deployments.id, payload.deploymentId))
+                yield* transaction
+                  .update(artifacts)
+                  .set({
+                    title: found.deployment.title ?? artifact.title,
+                    config: checked.config,
+                    code_archive: checked.codeArchive,
+                    remote: deployed.binding,
+                    url: deployed.url,
+                    published_deployment_id: payload.deploymentId,
+                    pending_deployment_id: null,
+                    updated_at: sql`now()`,
+                  })
+                  .where(eq(artifacts.id, payload.id))
+              }),
+            )
+            return
+          }
           yield* database.db
-            .update(artifacts)
-            .set({
-              title: payload.title,
-              config: payload.config,
-              code_archive: payload.codeArchive,
-              remote: deployed.binding,
-              url: deployed.url,
-              published_deployment_id: payload.deploymentId,
-              updated_at: sql`now()`,
-            })
-            .where(current)
+            .update(deployments)
+            .set({ status: "stopped", finished_at: sql`now()` })
+            .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "deploying")))
             .pipe(Effect.orDie)
-          return { deployment: result("ready", deployed.url, null), binding: deployed.binding }
-        }).pipe(
-          Effect.catch((error) =>
-            Effect.succeed({ deployment: result("failed", row.url, error.message), binding: null }),
-          ),
-        )
-      }).pipe(
-        Effect.sandbox,
-        Effect.retry({ schedule: DurableRunner.retry, while: (cause) => !Cause.hasInterrupts(cause) }),
-        Effect.catch(Effect.failCause),
+        }),
+        {
+          retryable: transient,
+          fail: (cause) =>
+            database.transaction((transaction) =>
+              Effect.gen(function* () {
+                yield* transaction
+                  .update(deployments)
+                  .set({ status: "failed", error: reasonOf(cause), finished_at: sql`now()` })
+                  .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "deploying")))
+                yield* transaction
+                  .update(artifacts)
+                  .set({ pending_deployment_id: null, updated_at: sql`now()` })
+                  .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.deploymentId)))
+              }),
+            ),
+        },
       ),
     )
 
     yield* DurableRunner.register(StopRun, (payload) =>
-      Effect.gen(function* () {
-        const initial = (yield* database.db
-          .select()
-          .from(artifacts)
-          .where(eq(artifacts.id, payload.id))
-          .pipe(Effect.orDie)).at(0)
-        const claimId = payload.stopId ?? payload.deploymentId
-        if (!initial || initial.pending_deployment_id !== claimId) return
-        const completed = yield* Effect.gen(function* () {
-          if (!payload.targetDeploymentId) return Option.none()
-          const executionId = yield* DeployRun.executionId({
-            id: payload.id,
-            deploymentId: payload.targetDeploymentId,
-            organizationId: initial.organization_id,
-            title: initial.title,
-            config: storedConfig(initial),
-            codeArchive: initial.code_archive ?? "",
-          })
-          yield* engine.interruptUnsafe(DeployRun, executionId)
-          return yield* engine.poll(DeployRun, executionId).pipe(
-            Effect.repeat({
-              schedule: Schedule.spaced("50 millis"),
-              until: (result) => Option.isSome(result) && result.value._tag === "Complete",
+      DurableRunner.finish(
+        StopRun.idempotencyKey(payload),
+        Effect.gen(function* () {
+          const found = yield* deploymentOf(payload.deploymentId)
+          if (found?.deployment.status !== "stopping") return
+          const held = yield* database.db
+            .select({ id: deployments.id })
+            .from(deployments)
+            .where(
+              and(
+                eq(deployments.artifact_id, payload.id),
+                eq(deployments.kind, "deploy"),
+                eq(deployments.status, "deploying"),
+              ),
+            )
+            .pipe(Effect.orDie)
+          yield* Effect.forEach(
+            held,
+            (deployment) =>
+              Effect.gen(function* () {
+                const run = { id: payload.id, deploymentId: deployment.id }
+                yield* engine.interruptUnsafe(DeployRun, yield* DeployRun.executionId(run))
+                yield* DurableRunner.join(DeployRun, run).pipe(
+                  Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+                  Effect.exit,
+                )
+                yield* database.db
+                  .update(deployments)
+                  .set({ status: "stopped", finished_at: sql`now()` })
+                  .where(and(eq(deployments.id, deployment.id), eq(deployments.status, "deploying")))
+                  .pipe(Effect.orDie)
+              }),
+            { discard: true },
+          )
+          if (found.artifact.provider !== provider.id)
+            return yield* new ArtifactProvider.Failed({
+              message: "This artifact runs on another provider. Restore that provider to stop it.",
+            })
+          yield* bounded(provider.stop(payload.id, Option.fromNullishOr(found.artifact.remote)))
+          yield* database.transaction((transaction) =>
+            Effect.gen(function* () {
+              yield* transaction
+                .update(deployments)
+                .set({ status: "stopped", finished_at: sql`now()` })
+                .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "stopping")))
+              yield* transaction
+                .update(artifacts)
+                .set({ url: null, pending_deployment_id: null, updated_at: sql`now()` })
+                .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.deploymentId)))
             }),
           )
-        })
-        const row = (yield* database.db
-          .select()
-          .from(artifacts)
-          .where(eq(artifacts.id, payload.id))
-          .pipe(Effect.orDie)).at(0)
-        if (!row || row.pending_deployment_id !== claimId) return
-        if (row.provider !== provider.id)
-          return yield* Effect.die(new Error("Restore this artifact's original provider to finish stopping it"))
-        const binding =
-          Option.isSome(completed) && completed.value._tag === "Complete" && Exit.isSuccess(completed.value.exit)
-            ? (completed.value.exit.value.binding ?? row.remote)
-            : row.remote
-        yield* provider.stop(payload.id, Option.fromNullishOr(binding))
-        yield* database.db
-          .update(artifacts)
-          .set({ remote: null, url: null, updated_at: sql`now()` })
-          .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, claimId)))
-          .pipe(Effect.orDie)
-      }).pipe(
-        Effect.sandbox,
-        Effect.retry({ schedule: DurableRunner.retry, while: (cause) => !Cause.hasInterrupts(cause) }),
-        Effect.catch(Effect.failCause),
-        Effect.orDie,
+        }),
+        {
+          retryable: transient,
+          within: stopWithin,
+          fail: (cause) =>
+            Effect.gen(function* () {
+              const archived = yield* database.transaction((transaction) =>
+                Effect.gen(function* () {
+                  yield* transaction
+                    .update(deployments)
+                    .set({ status: "failed", error: reasonOf(cause), finished_at: sql`now()` })
+                    .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "stopping")))
+                  const released = yield* transaction
+                    .update(artifacts)
+                    .set({ pending_deployment_id: null, updated_at: sql`now()` })
+                    .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.deploymentId)))
+                    .returning({ archivedAt: artifacts.archived_at })
+                  return released.some((row) => row.archivedAt)
+                }),
+              )
+              // oxlint-disable-next-line ren/no-comments -- Nobody can ask to stop an archived artifact again, and its link may still serve.
+              if (archived)
+                yield* ErrorReporter.report(cause).pipe(Effect.annotateLogs({ "ren.artifact.id": payload.id }))
+            }),
+        },
       ),
     )
 
@@ -362,52 +468,11 @@ export const layer = Layer.effect(
       id: Artifact.ID,
       deploymentId: Artifact.DeploymentID,
     ) {
-      const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-      if (!row || !ownedBy(row, owner))
-        return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
-      const executionId = yield* DeployRun.executionId({
-        id,
-        deploymentId,
-        organizationId: owner.organizationId,
-        title: row.title,
-        config: storedConfig(row),
-        codeArchive: row.code_archive ?? "",
-      })
-      const completed = Option.filter(
-        yield* engine.poll(DeployRun, executionId),
-        (result) => result._tag === "Complete",
-      )
-      const stopId = yield* StopRun.executionId({ id, deploymentId })
-      if (yield* requested(StopRun, stopId)) {
-        const cleanup = yield* engine.poll(StopRun, stopId)
-        return {
-          artifactId: id,
-          deploymentId,
-          status:
-            Option.isSome(cleanup) && cleanup.value._tag === "Complete" && Exit.isSuccess(cleanup.value.exit)
-              ? ("stopped" as const)
-              : ("deploying" as const),
-          url: null,
-          error: null,
-        }
-      }
-      if (Option.isSome(completed) && row.pending_deployment_id !== deploymentId) {
-        if (Exit.isSuccess(completed.value.exit)) return completed.value.exit.value.deployment
-        return {
-          artifactId: id,
-          deploymentId,
-          status: "failed" as const,
-          url: row.url,
-          error: "The deployment workflow failed",
-        }
-      }
-      if (!(yield* requested(DeployRun, executionId)))
+      const found = yield* deploymentOf(deploymentId)
+      if (!found || found.artifact.id !== id || !ownedBy(found.artifact, owner))
         return yield* new Primitive.NotFound({ message: `Deployment ${deploymentId} does not exist` })
-      return { artifactId: id, deploymentId, status: "deploying" as const, url: row.url, error: null }
+      return toDeployment(found.deployment)
     })
-
-    const uploadKey = (owner: Owner, id: Artifact.ID, uploadId: Artifact.UploadID) =>
-      `${uploadsPrefix}${owner.organizationId}/${id}/${uploadId}.tar.gz`
 
     const link = Effect.fnUntraced(function* (command: PutObjectCommand | GetObjectCommand) {
       const expiresAt = DateTime.addDuration(yield* DateTime.now, linkLifetime)
@@ -422,64 +487,81 @@ export const layer = Layer.effect(
         Access.where(access.plan(actor, actions.get), ArtifactPolicy.where),
       )
 
-    const claimStop = Effect.fnUntraced(function* (transaction: Database.Transaction, row: Row) {
-      if (row.provider !== provider.id)
-        return yield* new Failed({
-          message: `Artifact ${row.id} runs on another provider; stop it using its original provider`,
-        })
-      if (row.pending_deployment_id) {
-        const executionId = yield* DeployRun.executionId({
-          id: row.id,
-          deploymentId: row.pending_deployment_id,
-          organizationId: row.organization_id,
-          title: row.title,
-          config: storedConfig(row),
-          codeArchive: row.code_archive ?? "",
-        })
-        if (!(yield* requested(DeployRun, executionId))) return { claimId: row.pending_deployment_id, settlement: null }
-      } else if (!row.remote && !row.url) return
-      const stopId = Artifact.DeploymentID.make(crypto.randomUUID())
-      const payload = {
-        id: row.id,
-        deploymentId: row.pending_deployment_id ?? stopId,
-        stopId,
-        ...(row.pending_deployment_id ? { targetDeploymentId: row.pending_deployment_id } : {}),
+    // oxlint-disable-next-line ren/no-comments -- Locks the artifact row of a deploy, and inserts it first when the artifact is new.
+    const lockOrCreate = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      owner: Owner,
+      id: Artifact.ID,
+      title: string | undefined,
+    ) {
+      const locked = () => transaction.select().from(artifacts).where(eq(artifacts.id, id)).for("update")
+      if (!(yield* locked()).at(0)) {
+        if (!title) return yield* new Primitive.Invalid({ message: "A new artifact needs a title.", field: "title" })
+        yield* transaction
+          .insert(artifacts)
+          .values({ id, organization_id: owner.organizationId, space_id: owner.spaceId, title, provider: provider.id })
+          .onConflictDoNothing()
       }
-      const executionId = yield* StopRun.executionId(payload)
-      yield* transaction
-        .update(artifacts)
-        .set({ pending_deployment_id: stopId, updated_at: sql`now()` })
-        .where(eq(artifacts.id, row.id))
-      yield* StopRun.execute(payload, { discard: true }).pipe(
-        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-      )
-      const settlement = { id: row.id, claimId: stopId, executionId, kind: "stop" as const }
-      yield* SettleRun.execute(settlement, { discard: true }).pipe(
-        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-      )
-      return { claimId: stopId, settlement }
+      const row = (yield* locked()).at(0)
+      if (!row || !ownedBy(row, owner))
+        return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+      return row
     })
 
-    const stopped = Effect.fnUntraced(function* (
-      id: Artifact.ID,
-      pending: Effect.Success<ReturnType<typeof claimStop>>,
+    // oxlint-disable-next-line ren/no-comments -- A deploy must start from the published deployment. A deployment that failed changed nothing, so a caller that started from it started from its base.
+    const checkBase = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      row: Row,
+      baseDeploymentId: Artifact.DeploymentID | undefined,
     ) {
-      if (!pending) return
-      if (pending.settlement) {
-        yield* SettleRun.execute(pending.settlement).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
-        return
-      }
-      yield* database.db
-        .select({ active: artifacts.pending_deployment_id })
-        .from(artifacts)
-        .where(eq(artifacts.id, id))
-        .pipe(
-          Effect.orDie,
-          Effect.repeat({
-            schedule: Schedule.spaced("50 millis"),
-            until: (rows) => rows.at(0)?.active !== pending.claimId,
-          }),
+      if (!row.published_deployment_id) return
+      const named = baseDeploymentId
+        ? (yield* transaction
+            .select()
+            .from(deployments)
+            .where(and(eq(deployments.id, baseDeploymentId), eq(deployments.artifact_id, row.id)))).at(0)
+        : undefined
+      const base = named?.kind === "deploy" && named.status === "failed" ? named.base_deployment_id : baseDeploymentId
+      if (base !== row.published_deployment_id)
+        return yield* new Primitive.Conflict({
+          message: `Artifact ${row.id} changed: deployment ${row.published_deployment_id} is published now. Read the artifact and apply your change to it again.`,
+        })
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- Takes the claim for a stop on the locked row and starts its run, or returns the stop that runs. An artifact that never served gets a stop that is already stopped.
+    const claimStop = Effect.fnUntraced(function* (transaction: Database.Transaction, row: Row) {
+      if (row.provider !== provider.id)
+        return yield* new Primitive.Conflict({
+          message: `Artifact ${row.id} runs on another provider; stop it using its original provider`,
+        })
+      const pending = row.pending_deployment_id
+        ? (yield* transaction.select().from(deployments).where(eq(deployments.id, row.pending_deployment_id))).at(0)
+        : undefined
+      if (pending?.kind === "stop") return toDeployment(pending)
+      const idle = !pending && !row.published_deployment_id && !row.remote
+      const stopId = Artifact.DeploymentID.make(crypto.randomUUID())
+      const inserted = yield* transaction
+        .insert(deployments)
+        .values({
+          id: stopId,
+          artifact_id: row.id,
+          kind: "stop",
+          status: idle ? "stopped" : "stopping",
+          finished_at: idle ? sql`now()` : null,
+        })
+        .returning()
+      if (!idle) {
+        yield* transaction
+          .update(artifacts)
+          .set({ pending_deployment_id: stopId, updated_at: sql`now()` })
+          .where(eq(artifacts.id, row.id))
+        yield* DurableRunner.ensure(StopRun, { id: row.id, deploymentId: stopId }).pipe(
+          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         )
+      }
+      const stop = inserted.at(0)
+      if (!stop) return yield* Effect.die(new Error(`Ren did not record the stop of artifact ${row.id}`))
+      return toDeployment(stop)
     })
 
     return Service.of({
@@ -521,40 +603,34 @@ export const layer = Layer.effect(
         return toInfo(found.artifact)
       }),
       archive: Effect.fn("Artifacts.archive")(function* (actor: Actor.Info, id: Artifact.ID) {
-        const pending = yield* database
-          .transaction((transaction) =>
-            Effect.gen(function* () {
-              const found = (yield* transaction
-                .select({ artifact: artifacts, membershipId: ArtifactPolicy.membership.id })
-                .from(artifacts)
-                .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
-                .where(and(eq(artifacts.id, id), visibleTo(actor)))
-                .for("update", { of: artifacts })).at(0)
-              if (!found) return yield* notFound
-              if (
-                !access.isAllowed({
-                  actor,
-                  action: actions.archive,
-                  resource: ArtifactPolicy.resource(found.membershipId),
-                })
-              )
-                return yield* new Primitive.Forbidden({ message: "You cannot archive this artifact." })
-              yield* transaction
-                .update(artifacts)
-                .set({ archived_at: sql`now()`, updated_at: sql`now()` })
-                .where(eq(artifacts.id, id))
-              return yield* claimStop(transaction, found.artifact)
-            }),
-          )
-          .pipe(
-            Effect.catchTag("Artifacts.Failed", (error) =>
-              Effect.fail(new Primitive.Conflict({ message: error.message })),
-            ),
-          )
-        yield* stopped(id, pending).pipe(Effect.orDie)
-        const row = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        if (!row) return yield* notFound
-        return toInfo(row)
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const found = (yield* transaction
+              .select({ artifact: artifacts, membershipId: ArtifactPolicy.membership.id })
+              .from(artifacts)
+              .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
+              .where(and(eq(artifacts.id, id), visibleTo(actor)))
+              .for("update", { of: artifacts })).at(0)
+            if (!found) return yield* notFound
+            if (
+              !access.isAllowed({
+                actor,
+                action: actions.archive,
+                resource: ArtifactPolicy.resource(found.membershipId),
+              })
+            )
+              return yield* new Primitive.Forbidden({ message: "You cannot archive this artifact." })
+            yield* claimStop(transaction, found.artifact)
+            const archived = yield* transaction
+              .update(artifacts)
+              .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+              .where(eq(artifacts.id, id))
+              .returning()
+            const row = archived.at(0)
+            if (!row) return yield* notFound
+            return toInfo(row)
+          }),
+        )
       }),
       upload: Effect.fn("Artifacts.upload")(function* (owner, id) {
         const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
@@ -562,7 +638,7 @@ export const layer = Layer.effect(
         yield* unarchived(found)
         const uploadId = Artifact.UploadID.make(crypto.randomUUID())
         const signed = yield* link(
-          new PutObjectCommand({ Bucket: storage.bucket, Key: uploadKey(owner, id, uploadId) }),
+          new PutObjectCommand({ Bucket: storage.bucket, Key: uploadKey(owner.organizationId, id, uploadId) }),
         )
         return { uploadId, ...signed }
       }),
@@ -573,113 +649,49 @@ export const layer = Layer.effect(
         return yield* link(new GetObjectCommand({ Bucket: storage.bucket, Key: row.code_archive }))
       }),
       deploy: Effect.fn("Artifacts.deploy")(function* (owner, id, input) {
-        const codeArchive = `${owner.organizationId}/artifacts/${id}/deployments/${input.deploymentId}/${input.uploadId}.tar.gz`
-        const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        yield* owned(found, owner)
-        const title = input.title ?? found?.title
-        if (!title) return yield* new Primitive.Invalid({ message: "A new artifact needs a title.", field: "title" })
-        if (
-          found &&
-          (yield* requested(
-            DeployRun,
-            yield* DeployRun.executionId({
-              id,
-              deploymentId: input.deploymentId,
-              organizationId: owner.organizationId,
-              title: found.title,
-              config: storedConfig(found),
-              codeArchive,
-            }),
-          ))
-        )
-          return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
-        if (found?.pending_deployment_id === input.deploymentId)
-          return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
-        yield* unarchived(found)
-        const uploaded = uploadKey(owner, id, input.uploadId)
-        const source = yield* ArtifactArchive.read(storage, uploaded).pipe(
-          Effect.catchTags({
-            "ArtifactArchive.Invalid": (error) =>
-              Effect.fail(new Primitive.Invalid({ message: error.message, field: "uploadId" })),
-            "ArtifactArchive.Failed": (error) => Effect.fail(new Failed({ message: error.message })),
-          }),
-        )
-        const config = yield* configOf(source.files, input.entry, found?.config?.entry)
-        yield* Effect.tryPromise({
-          try: (signal) =>
-            storage.s3.send(
-              new CopyObjectCommand({
-                Bucket: storage.bucket,
-                Key: codeArchive,
-                CopySource: `${storage.bucket}/${uploaded.split("/").map(encodeURIComponent).join("/")}`,
-                CopySourceIfMatch: source.version,
-              }),
-              { abortSignal: signal },
-            ),
-          catch: (cause) => cause,
-        }).pipe(
-          Effect.catch((cause) =>
-            Effect.gen(function* () {
-              if (cause instanceof S3ServiceException && ["NoSuchKey", "PreconditionFailed"].includes(cause.name))
-                return yield* new Primitive.Invalid({
-                  message: "The upload changed while Ren checked it. Upload the archive again.",
-                  field: "uploadId",
-                })
-              yield* Effect.logWarning("Ren could not copy an artifact upload", cause)
-              return yield* new Failed({ message: "Ren could not copy the upload" })
-            }),
-          ),
-        )
-        const payload = {
-          id,
-          deploymentId: input.deploymentId,
-          organizationId: owner.organizationId,
-          title,
-          config,
-          codeArchive,
-        }
-        const executionId = yield* DeployRun.executionId(payload)
-        yield* database.transaction((transaction) =>
+        return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            yield* transaction
-              .insert(artifacts)
-              .values({
-                id,
-                organization_id: owner.organizationId,
-                space_id: owner.spaceId,
-                title,
-                config,
-                provider: provider.id,
-                code_archive: codeArchive,
+            const row = yield* lockOrCreate(transaction, owner, id, input.title)
+            const existing = (yield* transaction
+              .select()
+              .from(deployments)
+              .where(eq(deployments.id, input.deploymentId))).at(0)
+            if (existing?.artifact_id === id) return toDeployment(existing)
+            if (existing)
+              return yield* new Primitive.Conflict({
+                message: `Deployment ${input.deploymentId} belongs to another artifact`,
               })
-              .onConflictDoNothing()
-            const row = (yield* transaction.select().from(artifacts).where(eq(artifacts.id, id)).for("update")).at(0)
-            if (!row || !ownedBy(row, owner))
-              return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+            if (row.archived_at) return yield* archivedConflict(id)
             if (row.provider !== provider.id)
               return yield* new Primitive.Conflict({ message: `Artifact ${id} runs on another provider` })
-            if (yield* requested(DeployRun, executionId)) return
-            if (row.pending_deployment_id === input.deploymentId) return
-            if (row.archived_at) return yield* archivedConflict(id)
+            yield* checkBase(transaction, row, input.baseDeploymentId)
             if (row.pending_deployment_id)
               return yield* new Primitive.Conflict({ message: `Artifact ${id} has active deployment work` })
+            const inserted = yield* transaction
+              .insert(deployments)
+              .values({
+                id: input.deploymentId,
+                artifact_id: id,
+                kind: "deploy",
+                status: "deploying",
+                base_deployment_id: row.published_deployment_id,
+                upload_id: input.uploadId,
+                title: input.title ?? null,
+                entry: input.entry ?? null,
+              })
+              .returning()
             yield* transaction
               .update(artifacts)
               .set({ pending_deployment_id: input.deploymentId, updated_at: sql`now()` })
               .where(eq(artifacts.id, id))
-            yield* DeployRun.execute(payload, { discard: true }).pipe(
+            yield* DurableRunner.ensure(DeployRun, { id, deploymentId: input.deploymentId }).pipe(
               Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
             )
-            yield* SettleRun.execute(
-              { id, claimId: input.deploymentId, executionId, kind: "deploy" },
-              { discard: true },
-            ).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine))
+            const deployment = inserted.at(0)
+            if (!deployment) return yield* Effect.die(new Error(`Ren did not record deployment ${input.deploymentId}`))
+            return toDeployment(deployment)
           }),
         )
-        yield* store((signal) =>
-          storage.s3.send(new DeleteObjectCommand({ Bucket: storage.bucket, Key: uploaded }), { abortSignal: signal }),
-        ).pipe(Effect.ignore)
-        return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
       }),
       status,
       read: Effect.fn("Artifacts.read")(function* (owner, id) {
@@ -689,14 +701,14 @@ export const layer = Layer.effect(
         return toInfo(row)
       }),
       stop: Effect.fn("Artifacts.stop")(function* (owner, id) {
-        const pending = yield* database.transaction((transaction) =>
+        return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = (yield* transaction.select().from(artifacts).where(eq(artifacts.id, id)).for("update")).at(0)
-            if (!row || !ownedBy(row, owner)) return
+            if (!row || !ownedBy(row, owner))
+              return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
             return yield* claimStop(transaction, row)
           }),
         )
-        yield* stopped(id, pending)
       }),
     })
   }),
