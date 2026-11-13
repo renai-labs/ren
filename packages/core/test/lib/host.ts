@@ -273,10 +273,12 @@ const root = Effect.acquireRelease(
   (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
 )
 
-export const layerWith = <E, R>(
+// oxlint-disable-next-line ren/no-comments -- services are built on the stack, and the Ren Host API answers with them, as a service that sends to brains, such as Artifacts.
+export const layerServing = <E, R, A, AE, AR>(
   config: Record<string, string>,
   models: Layer.Layer<Models.Service>,
   environments: Layer.Layer<Hands.Service, E, R>,
+  services: Layer.Layer<A, AE, AR>,
   around?: RenHostApiTest.Around,
   options: { readonly synced?: boolean } = {},
 ) =>
@@ -286,9 +288,20 @@ export const layerWith = <E, R>(
       return Layer.mergeAll(
         options.synced ? serveSynced(found) : serve(found, around),
         Layer.effectDiscard(Seed.ren()),
-      ).pipe(Layer.provideMerge(stack({ port: found, root: yield* root, config, models, environments })))
+      ).pipe(
+        Layer.provideMerge(services),
+        Layer.provideMerge(stack({ port: found, root: yield* root, config, models, environments })),
+      )
     }),
   )
+
+export const layerWith = <E, R>(
+  config: Record<string, string>,
+  models: Layer.Layer<Models.Service>,
+  environments: Layer.Layer<Hands.Service, E, R>,
+  around?: RenHostApiTest.Around,
+  options: { readonly synced?: boolean } = {},
+) => layerServing(config, models, environments, Layer.empty, around, options)
 
 export const layer = (config: Record<string, string>, models: Layer.Layer<Models.Service>) =>
   layerWith(config, models, noTemplates)

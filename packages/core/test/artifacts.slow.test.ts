@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Artifact } from "@ren/schema/artifact"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Predicate, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { chmod } from "node:fs/promises"
@@ -13,17 +13,26 @@ import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
 import { Access } from "../src/access.js"
 import { Artifacts } from "../src/artifacts.js"
 import { DurableRunner } from "../src/durable-runner.js"
+import { Models } from "../src/models.js"
+import { Host } from "./lib/host.js"
 import { ObjectStorage } from "../src/object-storage.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 import { ArtifactSamples } from "./lib/artifact-samples.js"
 
-const runtime = Artifacts.layer.pipe(
-  Layer.provide([ArtifactWorkerd.layer, Access.layer]),
-  Layer.provideMerge(DurableRunner.layerEffect),
-  Layer.provide(TestDrives.layer),
-)
+// oxlint-disable-next-line ren/no-comments -- Ren sends a run's result to its chat on the brain at cellUrl; nothing answers on port 9 unless a test names a server.
+const runtimeWith = (cellUrl: string) =>
+  Artifacts.layer.pipe(
+    Layer.provide([ArtifactWorkerd.layer, Access.layer]),
+    Layer.provideMerge(
+      Host.cellLayerWith(DurableRunner.layerEffect)({ CELL_URL: cellUrl }, Models.layerNone, Host.noTemplates),
+    ),
+    Layer.provideMerge(DurableRunner.layerEffect),
+    Layer.provide(TestDrives.layer),
+  )
+
+const runtime = runtimeWith("http://127.0.0.1:9")
 
 const base = Layer.mergeAll(Testing.layer, FetchHttpClient.layer)
 const it = testEffect(runtime.pipe(Layer.provideMerge(base)))
@@ -89,7 +98,7 @@ describe("Artifacts with durable workflows and workerd", () => {
   it.live("an upload link names no checksum, which S3 and R2 would hold the archive to", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service
-      const owner = yield* Seed.owner()
+      const owner = yield* ArtifactSamples.owner()
       const upload = yield* artifacts.upload(owner, artifactId())
       expect([...new URL(upload.url).searchParams.keys()].filter((key) => key.includes("checksum"))).toEqual([])
     }),
@@ -99,7 +108,7 @@ describe("Artifacts with durable workflows and workerd", () => {
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service
       const storage = yield* ObjectStorage.Service
-      const owner = yield* Seed.owner()
+      const owner = yield* ArtifactSamples.owner()
       const id = artifactId()
       const deploymentId = deployment()
       yield* ArtifactSamples.deploy(artifacts, owner, id, {
@@ -121,7 +130,7 @@ describe("Artifacts with durable workflows and workerd", () => {
   it.live("a deployment checks its archive in its run, and an archive with no entry fails there with the reason", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service
-      const owner = yield* Seed.owner()
+      const owner = yield* ArtifactSamples.owner()
       const id = artifactId()
       const deploymentId = deployment()
       const upload = yield* artifacts.upload(owner, id)
@@ -144,7 +153,7 @@ describe("Artifacts with durable workflows and workerd", () => {
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const sql = yield* SqlClient.SqlClient
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const deploymentId = deployment()
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
@@ -170,7 +179,7 @@ describe("Artifacts with durable workflows and workerd", () => {
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
         const input = { title: "Base", config: { entry: "index.html" }, files: { "index.html": text("v1") } }
@@ -214,7 +223,7 @@ describe("Artifacts with durable workflows and workerd", () => {
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const input = { title: "Stuck", config: { entry: "index.html" }, files: { "index.html": text("v1") } }
         const first = deployment()
@@ -244,7 +253,7 @@ describe("Artifacts with durable workflows and workerd", () => {
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const input = { title: "Defect", config: { entry: "index.html" }, files: { "index.html": text("v1") } }
         const first = deployment()
@@ -276,7 +285,7 @@ describe("Artifacts with durable workflows and workerd", () => {
     () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const files = yield* Effect.promise(() => ArtifactSamples.files("state-candidate"))
         const config = { entry: "index.html", durableObjects: { STATE: "SampleState" } }
@@ -313,7 +322,7 @@ describe("Artifacts with durable workflows and workerd", () => {
     () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
         const samples = yield* Effect.promise(() => ArtifactSamples.files("dashboard"))
@@ -355,7 +364,7 @@ describe("Artifacts with durable workflows and workerd", () => {
     () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
         const source = yield* Effect.promise(() =>
@@ -419,7 +428,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
         const sql = yield* SqlClient.SqlClient
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const deploymentId = deployment()
         const messages = () =>
@@ -456,7 +465,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
         const sql = yield* SqlClient.SqlClient
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const deploymentId = deployment()
         const hold = yield* held
@@ -503,7 +512,7 @@ describe("Artifacts with durable workflows and workerd", () => {
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const first = {
           deploymentId: deployment(),
@@ -518,7 +527,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect(ready.status).toBe("ready")
         const url = yield* Schema.decodeUnknownEffect(Schema.String)(ready.url)
         expect((yield* read(url)).body).toBe("<h1>v1</h1>")
-        const elsewhere = yield* Seed.owner()
+        const elsewhere = yield* ArtifactSamples.owner()
         expect((yield* artifacts.status(elsewhere, id, first.deploymentId).pipe(Effect.flip))._tag).toBe(
           "Primitive.NotFound",
         )
@@ -577,9 +586,54 @@ describe("Artifacts with durable workflows and workerd", () => {
     120_000,
   )
 
+  recovery.live(
+    "a result whose send fails with BrainUnavailable reaches the chat once, after a retry, under one message id",
+    () =>
+      Effect.gen(function* () {
+        const sends: Array<{ readonly messageId: unknown; readonly status: number }> = []
+        const refused = Promise.withResolvers<void>()
+        const brain = Bun.serve({
+          hostname: "127.0.0.1",
+          port: 0,
+          fetch: async (request) => {
+            const body: unknown = await request.json().catch(() => null)
+            const messageId = Predicate.hasProperty(body, "messageId") ? body.messageId : undefined
+            if (messageId === undefined) return new Response(null, { status: 404 })
+            const status = sends.filter((send) => send.status === 503).length < 5 ? 503 : 200
+            sends.push({ messageId, status })
+            if (sends.length === 5) refused.resolve()
+            return status === 200 ? Response.json({ messageId }) : new Response(null, { status })
+          },
+        })
+        yield* Effect.addFinalizer(() => Effect.promise(() => brain.stop(true)))
+        const owner = yield* ArtifactSamples.owner()
+        const sessionId = yield* Seed.session(owner)
+        const id = artifactId()
+        const deploymentId = deployment()
+        yield* Effect.gen(function* () {
+          const artifacts = yield* Artifacts.Service
+          yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+          yield* ArtifactSamples.deploy(artifacts, owner, id, {
+            deploymentId,
+            sessionId,
+            title: "Told",
+            config: { entry: "index.html" },
+            files: { "index.html": text("told") },
+          })
+          yield* Effect.promise(() => refused.promise)
+          yield* idle(id)
+        }).pipe(Effect.scoped, Effect.provide(Layer.fresh(runtimeWith(brain.url.origin))))
+        expect(new Set(sends.map((send) => send.messageId))).toEqual(
+          new Set([`msg_${deploymentId.replaceAll("-", "")}`]),
+        )
+        expect(sends.map((send) => send.status)).toEqual([503, 503, 503, 503, 503, 200])
+      }),
+    120_000,
+  )
+
   recovery.live("a deployment whose runtime cannot start fails, and Ren keeps running", () =>
     Effect.gen(function* () {
-      const owner = yield* Seed.owner()
+      const owner = yield* ArtifactSamples.owner()
       const id = artifactId()
       const deploymentId = deployment()
       const missing = ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ ARTIFACT_NODE: "/nonexistent/node" }), {
@@ -603,7 +657,7 @@ describe("Artifacts with durable workflows and workerd", () => {
     "recovers the durable input after the runner exits during deployment",
     () =>
       Effect.gen(function* () {
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const deploymentId = deployment()
         const first = Promise.withResolvers<void>()
@@ -677,7 +731,7 @@ describe("artifacts for people", () => {
   it.live("members list a space's artifacts newest first and get each; a member of another space sees none", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service
-      const owner = yield* Seed.owner()
+      const owner = yield* ArtifactSamples.owner()
       const older = artifactId()
       const newer = artifactId()
       yield* deploy(owner, older)
@@ -707,7 +761,7 @@ describe("artifacts for people", () => {
     () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = artifactId()
         const hold = yield* held
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
@@ -735,7 +789,7 @@ describe("artifacts for people", () => {
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const member = memberOf(owner)
         const id = artifactId()
         const upload = yield* artifacts.upload(owner, id)
