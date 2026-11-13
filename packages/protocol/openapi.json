@@ -9490,6 +9490,102 @@
       }
     },
     "/artifacts/{id}": {
+      "patch": {
+        "tags": ["artifact"],
+        "operationId": "artifact.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Artifact.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one artifact.",
+        "summary": "Update artifact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Artifact.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
       "delete": {
         "tags": ["artifact"],
         "operationId": "artifact.archive",
@@ -15249,6 +15345,17 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The artifact’s own host name. Null when it has none."
+          },
           "entry": {
             "anyOf": [
               {
@@ -15314,6 +15421,7 @@
           "id",
           "spaceId",
           "title",
+          "name",
           "entry",
           "url",
           "pendingDeploymentId",
@@ -15323,6 +15431,10 @@
           "archivedAt"
         ],
         "additionalProperties": false
+      },
+      "Artifact.Name": {
+        "type": "string",
+        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
       },
       "Artifact.Page": {
         "type": "object",
@@ -15350,6 +15462,24 @@
           }
         },
         "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Artifact.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Artifact.Name"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new name. Null removes the name. The old name is free at once."
+          }
+        },
+        "required": ["name"],
         "additionalProperties": false
       },
       "Auth.Me": {

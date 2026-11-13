@@ -109,6 +109,7 @@ const samples: ReadonlyArray<ArtifactInfo> = Array.from({ length: 6 }, (_, index
   id: `art_sample${index}`,
   spaceId: "sample",
   title: "Artifact title",
+  name: null,
   entry: "index.html",
   url: "https://artifact.example",
   pendingDeploymentId: null,

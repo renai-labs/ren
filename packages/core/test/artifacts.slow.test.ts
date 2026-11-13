@@ -744,6 +744,41 @@ const memberOf = (owner: Effect.Success<ReturnType<typeof Seed.owner>>) => ({
 })
 
 describe("artifacts for people", () => {
+  it.live(
+    "a new artifact gets a free name from its title; a taken name is a conflict; archive frees the name",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* ArtifactSamples.owner()
+        const title = `Menu ${crypto.randomUUID().slice(0, 8)}`
+        const base = Artifact.nameOf(title) ?? ""
+        const publish = (id: Artifact.ID) =>
+          ArtifactSamples.deploy(artifacts, owner, id, {
+            deploymentId: deployment(),
+            title,
+            config: { entry: "index.html" },
+            files: orders,
+          }).pipe(Effect.andThen(idle(id)))
+        const first = artifactId()
+        const second = artifactId()
+        yield* publish(first)
+        yield* publish(second)
+        const member = memberOf(owner)
+        expect([(yield* artifacts.get(member, first)).name, (yield* artifacts.get(member, second)).name]).toEqual([
+          base,
+          `${base}-2`,
+        ])
+        expect((yield* artifacts.update(member, second, { name: base }).pipe(Effect.flip))._tag).toBe(
+          "Primitive.Conflict",
+        )
+        yield* artifacts.archive(member, first)
+        yield* idle(first)
+        expect((yield* artifacts.update(member, second, { name: base })).name).toBe(base)
+        yield* stop(artifacts, owner, second)
+      }),
+    60_000,
+  )
+
   it.live("members list a space's artifacts newest first and get each; a member of another space sees none", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service

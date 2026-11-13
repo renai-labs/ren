@@ -26,6 +26,7 @@ interface Deployed<Remote> {
 
 interface Definition<Remote> {
   readonly id: Artifact.ProviderID
+  readonly names?: Names
   readonly remote: Schema.Codec<Remote, unknown>
   readonly deploy: (input: DeployInput<Remote>) => Effect.Effect<Deployed<Remote>, Failed>
   readonly stop: (
@@ -35,8 +36,16 @@ interface Definition<Remote> {
   ) => Effect.Effect<void, Failed>
 }
 
+// oxlint-disable-next-line ren/no-comments -- A provider that serves artifacts by name: origin gives the origin of an artifact, by its name when it has one; put and remove make the provider's copy of one name equal to its owner in Ren.
+export interface Names {
+  readonly origin: (artifactId: Artifact.ID, name: Artifact.Name | null) => string
+  readonly put: (name: Artifact.Name, artifactId: Artifact.ID) => Effect.Effect<void, Failed>
+  readonly remove: (name: Artifact.Name) => Effect.Effect<void, Failed>
+}
+
 export interface Interface {
   readonly id: Artifact.ProviderID
+  readonly names?: Names
   readonly deploy: (input: DeployInput<Schema.Json>) => Effect.Effect<Deployed<Schema.Json>, Failed>
   readonly stop: (
     artifactId: Artifact.ID,
@@ -59,6 +68,7 @@ export const make = <Remote>(definition: Definition<Remote>): Interface => {
     encoded(remote).pipe(Effect.flatMap(save))
   return {
     id: definition.id,
+    ...(definition.names && { names: definition.names }),
     deploy: Effect.fnUntraced(function* (input) {
       const deployed = yield* definition.deploy({
         ...input,

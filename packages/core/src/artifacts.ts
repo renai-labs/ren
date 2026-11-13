@@ -16,7 +16,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import { and, count, desc, eq, gte, isNull, sql } from "drizzle-orm"
+import { and, count, desc, eq, gte, isNull, like, ne, or, sql } from "drizzle-orm"
 import {
   Cause,
   Context,
@@ -87,6 +87,12 @@ export const DeployRun = DurableRunner.make("ArtifactDeploy", {
 export const StopRun = DurableRunner.make("ArtifactStop", {
   payload: RunPayload,
   idempotencyKey: (payload) => `${payload.id}:${payload.deploymentId}`,
+})
+
+// oxlint-disable-next-line ren/no-comments -- Copies the owner of one name to the provider. Each change of owner moves the name's epoch on and starts the run of that epoch.
+export const NameRun = DurableRunner.make("ArtifactName", {
+  payload: { name: Artifact.Name, epoch: Schema.Int },
+  idempotencyKey: (payload) => `${payload.name}:${payload.epoch}`,
 })
 
 const Manifest = Schema.fromJsonString(Schema.Struct({ durableObjects: Schema.optional(Artifact.DurableObjects) }))
@@ -164,6 +170,7 @@ const assertActive = (found: Row | undefined) =>
 
 const actions = {
   get: Primitive.action(Artifact.definition, "get"),
+  update: Primitive.action(Artifact.definition, "update"),
   archive: Primitive.action(Artifact.definition, "archive"),
 }
 
@@ -179,6 +186,7 @@ const toInfo = (row: Row): Artifact.Info => ({
   id: row.id,
   spaceId: row.space_id,
   title: row.title,
+  name: row.name,
   entry: row.config?.entry ?? null,
   url: row.url,
   pendingDeploymentId: row.pending_deployment_id,
@@ -437,9 +445,12 @@ export const layer = Layer.effect(
                     .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "deploying")))
                   return
                 }
+                const url = names
+                  ? `${names.origin(payload.id, artifact.name)}${ArtifactProvider.entryPath(checked.config)}`
+                  : deployed.url
                 yield* transaction
                   .update(deployments)
-                  .set({ status: "ready", url: deployed.url, finished_at: sql`now()` })
+                  .set({ status: "ready", url, finished_at: sql`now()` })
                   .where(eq(deployments.id, payload.deploymentId))
                 yield* transaction
                   .update(artifacts)
@@ -449,7 +460,7 @@ export const layer = Layer.effect(
                     code_archive: checked.codeArchive,
                     remote: deployed.remote,
                     remote_version: version + 1,
-                    url: deployed.url,
+                    url,
                     published_deployment_id: payload.deploymentId,
                     pending_deployment_id: null,
                     updated_at: sql`now()`,
@@ -617,6 +628,116 @@ export const layer = Layer.effect(
         Access.where(access.plan(actor, actions.get), ArtifactPolicy.where),
       )
 
+    const nameSync = Database.Schema.artifact_name_sync
+    const names = provider.names
+    if (names)
+      yield* DurableRunner.register(NameRun, (payload) =>
+        DurableRunner.finish(
+          NameRun.idempotencyKey(payload),
+          Effect.gen(function* () {
+            if (payload.epoch > 1)
+              yield* DurableRunner.join(NameRun, { ...payload, epoch: payload.epoch - 1 }).pipe(
+                Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+              )
+            const current = (yield* database.db
+              .select({ epoch: nameSync.epoch })
+              .from(nameSync)
+              .where(eq(nameSync.name, payload.name))
+              .pipe(Effect.orDie)).at(0)
+            if (current?.epoch !== payload.epoch) return
+            const owner = (yield* database.db
+              .select({ id: artifacts.id })
+              .from(artifacts)
+              .where(and(eq(artifacts.name, payload.name), isNull(artifacts.archived_at)))
+              .pipe(Effect.orDie)).at(0)
+            yield* owner ? names.put(payload.name, owner.id) : names.remove(payload.name)
+          }),
+          {
+            retryable: transient,
+            fail: (cause) => Effect.logError(`Ren could not copy the owner of artifact name ${payload.name}`, cause),
+          },
+        ),
+      )
+
+    // oxlint-disable-next-line ren/no-comments -- Moves the epoch of each name whose owner changed and starts its run, in the transaction that changes the owner.
+    const claim = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      changed: ReadonlyArray<Artifact.Name | null>,
+    ) {
+      if (!names) return
+      yield* Effect.forEach(
+        [...new Set(changed)].filter(Predicate.isNotNull),
+        Effect.fnUntraced(function* (name) {
+          const moved = (yield* transaction
+            .insert(nameSync)
+            .values({ name, epoch: 1 })
+            .onConflictDoUpdate({ target: nameSync.name, set: { epoch: sql`${nameSync.epoch} + 1` } })
+            .returning({ epoch: nameSync.epoch })).at(0)
+          if (!moved) return yield* Effect.die(new Error(`Ren did not move the epoch of artifact name ${name}`))
+          yield* DurableRunner.ensure(NameRun, { name, epoch: moved.epoch }).pipe(
+            Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+          )
+        }),
+      )
+    })
+
+    const urlOf = (row: Pick<Row, "id" | "name" | "url" | "config">, name: Artifact.Name | null) =>
+      names && row.url && row.config
+        ? `${names.origin(row.id, name)}${ArtifactProvider.entryPath(row.config)}`
+        : row.url
+
+    // oxlint-disable-next-line ren/no-comments -- Gives the locked row a new name, or none. The old name is free at once.
+    const rename = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      row: Row,
+      name: Artifact.Name | null,
+    ) {
+      if (name === row.name) return row
+      if (name) {
+        const taken = (yield* transaction
+          .select({ id: artifacts.id })
+          .from(artifacts)
+          .where(and(eq(artifacts.name, name), ne(artifacts.id, row.id)))).at(0)
+        if (taken) return yield* new Primitive.Conflict({ message: `The name ${name} is taken.` })
+      }
+      const renamed = (yield* transaction
+        .update(artifacts)
+        .set({ name, url: urlOf(row, name), updated_at: sql`now()` })
+        .where(eq(artifacts.id, row.id))
+        .returning()).at(0)
+      if (!renamed) return yield* Effect.die(new Error(`Ren did not rename artifact ${row.id}`))
+      yield* claim(transaction, [row.name, name])
+      return renamed
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- The name a new artifact gets from its title: the title's name, else the first free one of name-2, name-3 and so on.
+    const defaultName = Effect.fnUntraced(function* (transaction: Database.Transaction, title: string) {
+      const base = Artifact.nameOf(title)
+      if (!base) return null
+      const used = new Set(
+        (yield* transaction
+          .select({ name: artifacts.name })
+          .from(artifacts)
+          .where(or(eq(artifacts.name, base), like(artifacts.name, `${base}-%`)))).map((row) => row.name),
+      )
+      return (
+        [base, ...Array.from({ length: used.size }, (_, index) => `${base}-${index + 2}`)].find(
+          (name) => !used.has(name),
+        ) ?? null
+      )
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- The name a deploy gives: the one it names, else a name from the title for an artifact that never served, else the current one.
+    const nameOnDeploy = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      row: Row,
+      input: Artifact.DeployInput,
+    ) {
+      if (input.name) return input.name
+      if (row.name || row.published_deployment_id) return row.name
+      return yield* defaultName(transaction, input.title ?? row.title)
+    })
+
     // oxlint-disable-next-line ren/no-comments -- Locks the artifact row of a deploy, and inserts it first when the artifact is new.
     const lockOrCreate = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
@@ -737,6 +858,32 @@ export const layer = Layer.effect(
         if (!found) return yield* notFound
         return toInfo(found.artifact)
       }),
+      update: Effect.fn("Artifacts.update")(function* (
+        actor: Actor.Info,
+        id: Artifact.ID,
+        input: Artifact.UpdateInput,
+      ) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const found = (yield* transaction
+              .select({ artifact: artifacts, membershipId: ArtifactPolicy.membership.id })
+              .from(artifacts)
+              .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
+              .where(and(eq(artifacts.id, id), visibleTo(actor)))
+              .for("update", { of: artifacts })).at(0)
+            if (!found) return yield* notFound
+            if (
+              !access.isAllowed({
+                actor,
+                action: actions.update,
+                resource: ArtifactPolicy.resource(found.membershipId),
+              })
+            )
+              return yield* new Primitive.Forbidden({ message: "You cannot change this artifact." })
+            return toInfo(yield* rename(transaction, found.artifact, input.name))
+          }),
+        )
+      }),
       archive: Effect.fn("Artifacts.archive")(function* (actor: Actor.Info, id: Artifact.ID) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -758,9 +905,10 @@ export const layer = Layer.effect(
             yield* claimStop(transaction, found.artifact, null)
             const archived = yield* transaction
               .update(artifacts)
-              .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+              .set({ archived_at: sql`now()`, name: null, updated_at: sql`now()` })
               .where(eq(artifacts.id, id))
               .returning()
+            yield* claim(transaction, [found.artifact.name])
             const row = archived.at(0)
             if (!row) return yield* notFound
             return toInfo(row)
@@ -803,6 +951,7 @@ export const layer = Layer.effect(
             const sessionId = yield* chatOf(transaction, owner, input.sessionId)
             if (row.pending_deployment_id)
               return yield* new Primitive.Conflict({ message: `Artifact ${id} has active deployment work` })
+            yield* rename(transaction, row, yield* nameOnDeploy(transaction, row, input))
             const inserted = yield* transaction
               .insert(deployments)
               .values({

@@ -112,6 +112,7 @@ import type {
   WebhookRequestGetInput,
   ArtifactListInput,
   ArtifactGetInput,
+  ArtifactUpdateInput,
   ArtifactArchiveInput,
   CredentialListInput,
   CredentialGetInput,
@@ -1214,6 +1215,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["artifact", "get", input] as const,
             queryFn: (context) => client["artifact"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      update: {
+        mutationKey: () => ["artifact", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["artifact", "update"] as const,
+            mutationFn: (input: ArtifactUpdateInput) => client["artifact"]["update"](input),
           }),
       },
       archive: {
