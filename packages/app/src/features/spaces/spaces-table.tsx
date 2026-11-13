@@ -57,6 +57,17 @@ function Members(props: { space: SpaceInfo }) {
   )
 }
 
+function Membership(props: { space: SpaceInfo; browsing: boolean }) {
+  if (props.space.membershipId === null) return props.space.canJoin ? <JoinButton space={props.space} /> : null
+  if (!props.browsing) return null
+  return (
+    <span className="flex items-center gap-1 text-xs">
+      <IconCheck className="size-3.5" />
+      Joined
+    </span>
+  )
+}
+
 function JoinButton(props: { space: SpaceInfo }) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
@@ -127,53 +138,42 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean; pinned: boolean;
       </TableCell>
       <TableCell onClick={(event) => event.stopPropagation()}>
         <span className="flex items-center justify-end gap-2">
-          {space.membershipId === null ? (
-            space.canJoin ? (
-              <JoinButton space={space} />
-            ) : null
-          ) : (
-            <>
-              {props.browsing ? (
-                <span className="flex items-center gap-1 text-xs">
-                  <IconCheck className="size-3.5" />
-                  Joined
-                </span>
-              ) : null}
-              <RowMenu
-                label={`${space.name} actions`}
-                items={[
-                  ...(isPersonal(space)
-                    ? []
-                    : [
-                        props.pinned
-                          ? { label: "Unpin", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
-                          : { label: "Pin", icon: IconPin, onSelect: () => props.onPin(true) },
-                      ]),
-                  ...(space.canArchive
-                    ? [
-                        {
-                          label: "Archive space",
-                          icon: IconArchive,
-                          onSelect: () =>
-                            archive.mutateAsync(
-                              { id: space.id },
-                              {
-                                onSuccess: () => toast.success(`${space.name} archived`),
-                                onError: (error) =>
-                                  toast.error("Could not archive the space", { description: errorMessage(error) }),
-                              },
-                            ),
-                          confirm: {
-                            title: `Archive “${space.name}”?`,
-                            description: "Its members lose access. Only the API can bring it back.",
-                            action: "Archive",
-                          },
+          <Membership space={space} browsing={props.browsing} />
+          {space.membershipId === null ? null : (
+            <RowMenu
+              label={`${space.name} actions`}
+              items={[
+                ...(isPersonal(space)
+                  ? []
+                  : [
+                      props.pinned
+                        ? { label: "Unpin", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
+                        : { label: "Pin", icon: IconPin, onSelect: () => props.onPin(true) },
+                    ]),
+                ...(space.canArchive
+                  ? [
+                      {
+                        label: "Archive space",
+                        icon: IconArchive,
+                        onSelect: () =>
+                          archive.mutateAsync(
+                            { id: space.id },
+                            {
+                              onSuccess: () => toast.success(`${space.name} archived`),
+                              onError: (error) =>
+                                toast.error("Could not archive the space", { description: errorMessage(error) }),
+                            },
+                          ),
+                        confirm: {
+                          title: `Archive “${space.name}”?`,
+                          description: "Its members lose access. Only the API can bring it back.",
+                          action: "Archive",
                         },
-                      ]
-                    : []),
-                ]}
-              />
-            </>
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           )}
         </span>
       </TableCell>
