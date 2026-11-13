@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "artifact_label_idx" ON "artifact" (lower("id"));
