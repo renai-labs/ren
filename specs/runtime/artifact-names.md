@@ -32,11 +32,12 @@ An artifact can have a name, and then it is also served at `https://<name>.usere
 
 A KV write is a remote write, and KV has no compare-and-set. Two artifacts can want one name in a short time: A frees `hello`, B takes it. If A's delete lands after B's put, B loses its name.
 
-1. Ren reconciles one **name** at a time, not one artifact: a durable run `ArtifactName`, keyed by the name.
-2. The run reads the owner of the name from the database, then makes KV equal to it: a put of the owner's label, or a delete when there is no owner.
-3. A rename starts two runs: one for the old name and one for the new name.
-4. A run that starts while one for the same name runs waits for it, then reads the database again. The last run always reads the latest owner.
-5. KV is eventually consistent. A change can take up to 60 seconds to reach every Cloudflare location. In that time a freed name can still serve its old artifact.
+1. Each change of a name's owner moves the name's epoch on (`artifact_name_sync`), in the transaction of the change, and starts the durable run `ArtifactName` for that name and epoch.
+2. A run of an epoch that is no longer current does nothing.
+3. A run reads the owner, writes KV (a put of the owner's label, or a delete), then reads the epoch again. If the epoch moved, it repeats. So a run ends only when no change happened across its own write, and the last write is the latest owner.
+4. A run that ends sets `synced_epoch`. When Ren starts, it moves the epoch of each name with `synced_epoch` below `epoch` and copies it again. That covers a run that failed for good or was cut off.
+5. Ren gives names only when its provider serves them. Without a names-capable provider, a name in a request is `Invalid`, and a new artifact gets no name.
+6. KV is eventually consistent. A change can take up to 60 seconds to reach every Cloudflare location. In that time a freed name can still serve its old artifact.
 
 ## 5. Changes
 

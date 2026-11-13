@@ -16,7 +16,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import { and, count, desc, eq, gte, isNull, like, ne, or, sql } from "drizzle-orm"
+import { and, count, desc, eq, gte, isNull, like, lt, or, sql } from "drizzle-orm"
 import {
   Cause,
   Context,
@@ -89,7 +89,7 @@ export const StopRun = DurableRunner.make("ArtifactStop", {
   idempotencyKey: (payload) => `${payload.id}:${payload.deploymentId}`,
 })
 
-// oxlint-disable-next-line ren/no-comments -- Copies the owner of one name to the provider. Each change of owner moves the name's epoch on and starts the run of that epoch.
+// oxlint-disable-next-line ren/no-comments -- Copies the owner of one name to the provider. Each change of owner moves the name's epoch on and starts the run of that epoch; a run of an older epoch does nothing.
 export const NameRun = DurableRunner.make("ArtifactName", {
   payload: { name: Artifact.Name, epoch: Schema.Int },
   idempotencyKey: (payload) => `${payload.name}:${payload.epoch}`,
@@ -635,22 +635,32 @@ export const layer = Layer.effect(
         DurableRunner.finish(
           NameRun.idempotencyKey(payload),
           Effect.gen(function* () {
-            if (payload.epoch > 1)
-              yield* DurableRunner.join(NameRun, { ...payload, epoch: payload.epoch - 1 }).pipe(
-                Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
-              )
-            const current = (yield* database.db
+            const epochOf = database.db
               .select({ epoch: nameSync.epoch })
               .from(nameSync)
               .where(eq(nameSync.name, payload.name))
-              .pipe(Effect.orDie)).at(0)
-            if (current?.epoch !== payload.epoch) return
-            const owner = (yield* database.db
-              .select({ id: artifacts.id })
-              .from(artifacts)
-              .where(and(eq(artifacts.name, payload.name), isNull(artifacts.archived_at)))
-              .pipe(Effect.orDie)).at(0)
-            yield* owner ? names.put(payload.name, owner.id) : names.remove(payload.name)
+              .pipe(
+                Effect.orDie,
+                Effect.map((rows) => rows.at(0)?.epoch),
+              )
+            // oxlint-disable-next-line ren/no-comments -- Two runs of one name can overlap, so a write of an older owner can land after a newer one. A run ends only when the epoch did not move across its own write: the last write is then the latest owner.
+            const copy = (seen: number): Effect.Effect<void, ArtifactProvider.Failed> =>
+              Effect.gen(function* () {
+                const owner = (yield* database.db
+                  .select({ id: artifacts.id })
+                  .from(artifacts)
+                  .where(and(eq(artifacts.name, payload.name), isNull(artifacts.archived_at)))
+                  .pipe(Effect.orDie)).at(0)
+                yield* owner ? names.put(payload.name, owner.id) : names.remove(payload.name)
+                const after = yield* epochOf
+                if (after && after !== seen) return yield* copy(after)
+                yield* database.db
+                  .update(nameSync)
+                  .set({ synced_epoch: sql`greatest(${nameSync.synced_epoch}, ${seen})` })
+                  .where(eq(nameSync.name, payload.name))
+                  .pipe(Effect.orDie)
+              })
+            if ((yield* epochOf) === payload.epoch) yield* copy(payload.epoch)
           }),
           {
             retryable: transient,
@@ -660,7 +670,7 @@ export const layer = Layer.effect(
       )
 
     // oxlint-disable-next-line ren/no-comments -- Moves the epoch of each name whose owner changed and starts its run, in the transaction that changes the owner.
-    const claim = Effect.fnUntraced(function* (
+    const moveNames = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       changed: ReadonlyArray<Artifact.Name | null>,
     ) {
@@ -681,6 +691,22 @@ export const layer = Layer.effect(
       )
     })
 
+    // oxlint-disable-next-line ren/no-comments -- A name whose last copy failed for good, or was cut off, is copied again when Ren starts.
+    yield* database
+      .transaction((transaction) =>
+        Effect.gen(function* () {
+          const behind = yield* transaction
+            .select({ name: nameSync.name })
+            .from(nameSync)
+            .where(lt(nameSync.synced_epoch, nameSync.epoch))
+          yield* moveNames(
+            transaction,
+            behind.map((row) => row.name),
+          )
+        }),
+      )
+      .pipe(Effect.withErrorReporting, Effect.forkScoped)
+
     const urlOf = (row: Pick<Row, "id" | "name" | "url" | "config">, name: Artifact.Name | null) =>
       names && row.url && row.config
         ? `${names.origin(row.id, name)}${ArtifactProvider.entryPath(row.config)}`
@@ -693,20 +719,21 @@ export const layer = Layer.effect(
       name: Artifact.Name | null,
     ) {
       if (name === row.name) return row
-      if (name) {
-        const taken = (yield* transaction
-          .select({ id: artifacts.id })
-          .from(artifacts)
-          .where(and(eq(artifacts.name, name), ne(artifacts.id, row.id)))).at(0)
-        if (taken) return yield* new Primitive.Conflict({ message: `The name ${name} is taken.` })
-      }
+      if (name && !names)
+        return yield* new Primitive.Invalid({ message: "This Ren does not serve artifacts by name.", field: "name" })
       const renamed = (yield* transaction
         .update(artifacts)
         .set({ name, url: urlOf(row, name), updated_at: sql`now()` })
         .where(eq(artifacts.id, row.id))
-        .returning()).at(0)
+        .returning()
+        .pipe(
+          Effect.catchTag(
+            "EffectDrizzleQueryError",
+            Primitive.uniqueConflict(Database.Schema.artifactNameConstraint, `The name ${name} is taken.`),
+          ),
+        )).at(0)
       if (!renamed) return yield* Effect.die(new Error(`Ren did not rename artifact ${row.id}`))
-      yield* claim(transaction, [row.name, name])
+      yield* moveNames(transaction, [row.name, name])
       return renamed
     })
 
@@ -727,14 +754,14 @@ export const layer = Layer.effect(
       )
     })
 
-    // oxlint-disable-next-line ren/no-comments -- The name a deploy gives: the one it names, else a name from the title for an artifact that never served, else the current one.
+    // oxlint-disable-next-line ren/no-comments -- The name a deploy gives: the one it names, else a name from the title for an artifact that never served when this Ren serves names, else the current one.
     const nameOnDeploy = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       row: Row,
       input: Artifact.DeployInput,
     ) {
       if (input.name) return input.name
-      if (row.name || row.published_deployment_id) return row.name
+      if (!names || row.name || row.published_deployment_id) return row.name
       return yield* defaultName(transaction, input.title ?? row.title)
     })
 
@@ -908,7 +935,7 @@ export const layer = Layer.effect(
               .set({ archived_at: sql`now()`, name: null, updated_at: sql`now()` })
               .where(eq(artifacts.id, id))
               .returning()
-            yield* claim(transaction, [found.artifact.name])
+            yield* moveNames(transaction, [found.artifact.name])
             const row = archived.at(0)
             if (!row) return yield* notFound
             return toInfo(row)

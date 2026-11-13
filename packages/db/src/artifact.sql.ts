@@ -9,6 +9,8 @@ import { organization } from "./auth.sql.js"
 import { agent_session } from "./session.sql.js"
 import { space } from "./space.sql.js"
 
+export const artifactNameConstraint = "artifact_name_idx"
+
 export const artifact = pgTable(
   "artifact",
   {
@@ -38,14 +40,15 @@ export const artifact = pgTable(
   (table) => [
     index("artifact_space_id_idx").on(table.space_id),
     uniqueIndex("artifact_label_idx").on(sql`lower(${table.id})`),
-    uniqueIndex("artifact_name_idx").on(table.name),
+    uniqueIndex(artifactNameConstraint).on(table.name),
   ],
 )
 
-// oxlint-disable-next-line ren/no-comments -- Each change of who owns a name moves its epoch on. The run of an epoch copies the owner to the provider after the run of the epoch before it, so the copy of the latest owner lands last.
+// oxlint-disable-next-line ren/no-comments -- Each change of who owns a name moves its epoch on. synced_epoch is the last epoch whose owner the provider has; a name with synced_epoch below epoch is not copied yet.
 export const artifact_name_sync = pgTable("artifact_name_sync", {
   name: text().$type<Artifact.Name>().primaryKey(),
   epoch: integer().notNull(),
+  synced_epoch: integer().default(0).notNull(),
 })
 
 export const artifact_deployment = pgTable(
