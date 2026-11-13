@@ -182,11 +182,13 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-::highlight(ren-find-hit) {
+::highlight(ren-find-hit),
+::highlight(ren-file-hit) {
   background-color: var(--find-hit);
 }
 
-::highlight(ren-find-active) {
+::highlight(ren-find-active),
+::highlight(ren-file-active) {
   background-color: var(--find-active);
   color: var(--background);
 }
