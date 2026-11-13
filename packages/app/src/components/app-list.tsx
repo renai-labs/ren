@@ -205,12 +205,12 @@ function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
                   <span className="truncate text-sm">{slug}</span>
                   <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
                     {tools > 0 ? `${plural(tools, "tool")} · ` : null}
-                    {mcp.transport.type === "managed" ? (
-                      <IconCoin aria-hidden data-icon="inline-start" className="size-3" />
-                    ) : null}
                     {mcp.transport.type === "managed"
                       ? "Ren managed"
                       : usageOf(props.mcps, mcp) || transportLabel(mcp.transport)}
+                    {mcp.transport.type === "managed" ? (
+                      <IconCoin aria-hidden data-icon="inline-end" className="size-3" />
+                    ) : null}
                   </span>
                 </span>
               </TooltipTrigger>
@@ -444,8 +444,8 @@ function McpDialog(props: {
               </DialogTitle>
               {props.mcp.transport.type === "managed" ? (
                 <DialogDescription className="flex flex-wrap items-center gap-x-1 text-xs">
-                  <IconCoin aria-hidden data-icon="inline-start" className="size-3" />
-                  Ren managed · Uses Ren credits
+                  Ren managed
+                  <IconCoin aria-hidden data-icon="inline-end" className="size-3" />· Uses Ren credits
                 </DialogDescription>
               ) : null}
             </div>
