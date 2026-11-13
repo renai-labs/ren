@@ -29,8 +29,6 @@ export const State = Schema.Struct({
   publication: Schema.optional(Schema.String),
 })
 type State = typeof State.Type
-// oxlint-disable-next-line ren/no-comments -- The state of an artifact published as an ordinary Worker on workers.dev, before dispatch namespaces. Ren cannot move it into a namespace.
-const Retired = Schema.Struct({ version: Schema.Literal(2), subdomain: Schema.String })
 const Metadata = Schema.Struct({ result: Schema.Struct({ script: Schema.Struct({ etag: Schema.NonEmptyString }) }) })
 const UploadSession = Schema.Struct({
   result: Schema.Struct({ jwt: Schema.NonEmptyString, buckets: Schema.Array(Schema.Array(Schema.String)) }),
@@ -311,14 +309,10 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- The artifact's state, which Ren keeps on its row. save writes it before each change to Cloudflare, so a call after a crash finds what the last one started.
     const access = Effect.fnUntraced(function* (
       artifactId: Artifact.ID,
-      remote: Option.Option<State | typeof Retired.Type>,
+      remote: Option.Option<State>,
       persist: (state: State) => Effect.Effect<void, ArtifactProvider.Failed>,
     ) {
       const initial = Option.getOrNull(remote)
-      if (initial?.version === 2)
-        return yield* failed(
-          "This artifact was published as an ordinary Worker on workers.dev; Ren cannot update or stop it in a dispatch namespace",
-        )
       if (
         initial &&
         (initial.account !== config.account ||
@@ -378,7 +372,7 @@ export const layer = Layer.effect(
 
     return ArtifactProvider.make({
       id,
-      remote: Schema.Union([State, Retired]),
+      remote: State,
       deploy: Effect.fn("ArtifactCloudflare.deploy")(function* (input) {
         const stored = yield* access(input.artifactId, input.remote, input.save)
         if (

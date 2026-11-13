@@ -16,7 +16,7 @@ configuration. Add these server secrets/settings:
 ARTIFACT_PROVIDER=cloudflare
 CLOUDFLARE_ACCOUNT_ID=<account-id>
 CLOUDFLARE_API_TOKEN=<account-owned-token>
-ARTIFACT_CLOUDFLARE_NAMESPACE=ren-artifacts-production
+ARTIFACT_CLOUDFLARE_NAMESPACE=ren-artifacts
 ARTIFACT_DOMAIN=useren.site
 ```
 
@@ -72,9 +72,8 @@ stop work finish on its original provider.
 The provider also records the account, the namespace and the domain in the
 artifact row's provider state. Changing one of them does not migrate existing
 artifacts: operations fail closed rather than recreating their state elsewhere.
-An artifact published as an ordinary Worker on `workers.dev` (state version 2)
-also fails closed, without a retry: Ren cannot update or stop it. A Durable
-Object's data belongs to its Worker, so it cannot move into the namespace.
+An artifact published as an ordinary Worker on `workers.dev` starts again in
+the namespace (see "Upgrading from ordinary Workers").
 
 ## Deployment, recovery and retention
 
@@ -161,34 +160,13 @@ Object's data belongs to its Worker, so it cannot move into the namespace.
   in the provider state, and another version cannot publish until that state is
   reconciled. A following stop or run performs the reconciliation.
 
-## Upgrading from S3 provider state
+## Upgrading from ordinary Workers
 
-Before this release, the provider kept its state in the drive bucket at
-`artifact-provider/cloudflare/<artifact>/state.json`. Drain artifact work first.
-After the migration, run the copy once with the server's environment, as a
-one-off task:
-
-```sh
-bun /repo/packages/core/script/artifact-cloudflare-state.ts          # lists what it copies
-bun /repo/packages/core/script/artifact-cloudflare-state.ts --write  # copies
-```
-
-It writes only a row whose `remote` is empty or still the old binding, so a
-second run changes nothing. Leave the bucket objects in place as a backup.
-
-The archive-reference metadata format is version 2. Earlier local experimental
-state containing file maps is rejected explicitly, without modifying its Worker
-or SQLite data. Do not delete that metadata to force migration. Use a fresh
-artifact for new development tests or migrate the old references deliberately.
-
-Existing format-2 Workers with the old imperative namespace migration history
-can transition on their next update, recovery or stop. The retained binding/class
-map supplies all live SQLite exports; old history fields are ignored and removed
-on the next metadata write. No source archive or namespace is deleted. Cloudflare
-documents this as a **one-way** transition: after it succeeds, do not run an older
-Ren build that sends a `migrations` array. Roll forward with this implementation
-instead. A conditional-write conflict keeps recovery pending rather than trying
-an unconditional upload. Format-1 file-map records still need explicit migration.
+Before dispatch namespaces, the provider published each artifact as an ordinary
+Worker on `workers.dev`. The release migration clears the provider state of
+those artifacts. The next deploy of each one publishes it into the namespace, at
+its new URL. The old Worker stays; delete it by hand. Its Durable Object data
+does not move into the namespace, because the data belongs to its Worker.
 
 Application table changes are separate: see [per-object SQL migrations](artifact-sql-migrations.md).
 
@@ -205,7 +183,7 @@ Ren data. The test object store must be running (`docker compose up -d` accordin
 to the development guide); these commands do not start or alter the user's dev
 server.
 
-After approval, run sequentially from `packages/core`, on the staging namespace:
+After approval, run sequentially from `packages/core`, on the namespace, before launch:
 
 ```sh
 REN_ARTIFACT_CLOUDFLARE_LIVE=1 bun test --env-file <private-env-file> ./test/artifacts-cloudflare.slow.test.ts
@@ -213,9 +191,7 @@ REN_ARTIFACT_CLOUDFLARE_LIVE=1 bun test --env-file <private-env-file> ./test/art
 ```
 
 The private file contains the account ID, the token,
-`ARTIFACT_CLOUDFLARE_NAMESPACE` and `ARTIFACT_DOMAIN`. Set
-`REN_ARTIFACT_OTHER_DOMAIN` to the other environment's domain to check that it
-does not serve this namespace's artifacts. Use `bun test --env-file`,
+`ARTIFACT_CLOUDFLARE_NAMESPACE` and `ARTIFACT_DOMAIN`. Use `bun test --env-file`,
 not `bun --env-file ... test`: the latter can select the package test script,
 whose credential isolation is intentionally unsuitable for a live provider run.
 The live tests create Workers and retain them, their recovery metadata and DO
