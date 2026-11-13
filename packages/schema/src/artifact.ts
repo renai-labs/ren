@@ -19,6 +19,55 @@ export type ID = typeof ID.Type
 // oxlint-disable-next-line ren/no-comments -- The artifact's host name label and its script name on Cloudflare. A host name has no capitals or `_`; at most 59 characters after `art_` keep it within 63.
 export const label = (id: ID) => `art-${Identifier.suffix(id).toLowerCase()}`
 
+// oxlint-disable-next-line ren/no-comments -- Names that would look like a page of Ren or of the platform.
+export const reservedNames: ReadonlySet<string> = new Set([
+  "www",
+  "api",
+  "app",
+  "admin",
+  "auth",
+  "login",
+  "signin",
+  "signup",
+  "account",
+  "billing",
+  "mail",
+  "email",
+  "support",
+  "help",
+  "status",
+  "docs",
+  "blog",
+  "static",
+  "assets",
+  "cdn",
+  "ren",
+  "useren",
+])
+
+export const Name = Schema.String.check(
+  Schema.isPattern(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u, {
+    message: "Use 1 to 63 lowercase letters, digits and hyphens, with no hyphen at the start or the end.",
+  }),
+  Schema.makeFilter((name) => !name.startsWith("art-") || "A name cannot start with art-."),
+  Schema.makeFilter((name) => !reservedNames.has(name) || `${name} is reserved.`),
+).annotate({
+  identifier: "Artifact.Name",
+  description: "The artifact’s own host name: https://<name>.<artifact domain>/. Unique across Ren.",
+})
+export type Name = typeof Name.Type
+
+// oxlint-disable-next-line ren/no-comments -- The name an artifact gets from its title when nobody picks one: none when the title has no letter or digit, or when the result is not a valid name.
+export const nameOf = (title: string) => {
+  const base = title
+    .normalize("NFKD")
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .slice(0, 40)
+    .replaceAll(/^-+|-+$/gu, "")
+  return Schema.is(Name)(base) ? base : undefined
+}
+
 export const ProviderID = Schema.NonEmptyString.pipe(
   Schema.brand("Artifact.ProviderID"),
   Schema.annotate({ identifier: "Artifact.ProviderID" }),
@@ -71,6 +120,7 @@ export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   title: Primitive.Name,
+  name: Schema.NullOr(Schema.String).annotate({ description: "The artifact’s own host name. Null when it has none." }),
   entry: Schema.NullOr(Schema.String).annotate({
     description: "The file a person opens first, such as index.html. Null until the first deployment is ready.",
   }),
@@ -96,6 +146,13 @@ export const ListInput = Schema.Struct({
 
 const Page = Pagination.Page(Info).annotate({ identifier: "Artifact.Page" })
 
+export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
+export const UpdateInput = Schema.Struct({
+  name: Schema.NullOr(Name).annotate({
+    description: "The new name. Null removes the name. The old name is free at once.",
+  }),
+}).annotate({ identifier: "Artifact.UpdateInput" })
+
 export const definition = Primitive.define({
   name: "artifact",
   plural: "artifacts",
@@ -103,6 +160,7 @@ export const definition = Primitive.define({
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,
+  update: { input: UpdateInput, result: Info },
   archive: true,
 })
 
@@ -172,6 +230,10 @@ export const DeployInput = Schema.Struct({
   }),
   title: Schema.optional(Primitive.Name).annotate({
     description: "Omit to keep the artifact’s title. A new artifact needs one.",
+  }),
+  name: Schema.optional(Name).annotate({
+    description:
+      "The artifact’s own host name. Omit to keep the current name. A new artifact without one gets a name from its title.",
   }),
   entry: Schema.optional(Drive.Path).annotate({
     description:

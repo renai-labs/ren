@@ -1450,6 +1450,16 @@ type ArtifactGetInput = { readonly idOrSlug: ArtifactGetRequest["params"]["idOrS
 const EndpointArtifactGet = (raw: RawClient["artifact"]) => (input: ArtifactGetInput) =>
   raw["artifact.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
 
+type ArtifactUpdateRequest = Parameters<RawClient["artifact"]["artifact.update"]>[0]
+type ArtifactUpdateInput = {
+  readonly id: ArtifactUpdateRequest["params"]["id"]
+  readonly name: ArtifactUpdateRequest["payload"]["name"]
+}
+const EndpointArtifactUpdate = (raw: RawClient["artifact"]) => (input: ArtifactUpdateInput) =>
+  raw["artifact.update"]({ params: { id: input["id"] }, payload: { name: input["name"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
 type ArtifactArchiveRequest = Parameters<RawClient["artifact"]["artifact.archive"]>[0]
 type ArtifactArchiveInput = { readonly id: ArtifactArchiveRequest["params"]["id"] }
 const EndpointArtifactArchive = (raw: RawClient["artifact"]) => (input: ArtifactArchiveInput) =>
@@ -1458,6 +1468,7 @@ const EndpointArtifactArchive = (raw: RawClient["artifact"]) => (input: Artifact
 const adaptGroupArtifact = (raw: RawClient["artifact"]) => ({
   list: EndpointArtifactList(raw),
   get: EndpointArtifactGet(raw),
+  update: EndpointArtifactUpdate(raw),
   archive: EndpointArtifactArchive(raw),
 })
 

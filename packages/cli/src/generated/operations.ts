@@ -1242,6 +1242,21 @@ export const ArtifactGet = (input: Command.Command.Config.Infer<typeof Commands.
     (client, request) => client["artifact"]["get"]({ ...request.params }),
   )
 
+export const ArtifactUpdate = (input: Command.Command.Config.Infer<typeof Commands.ArtifactUpdate>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.update"],
+    {
+      params: { id: input["id"] },
+      payload: { name: input["name"] },
+      input: input["input"],
+      labels: { id: "<artifact>", name: "--name" },
+      lookups: {
+        id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["artifact"]["update"]({ ...request.params, ...request.payload }),
+  )
+
 export const ArtifactArchive = (input: Command.Command.Config.Infer<typeof Commands.ArtifactArchive>) =>
   Operation.run(
     ClientApi.groups["artifact"].endpoints["artifact.archive"],

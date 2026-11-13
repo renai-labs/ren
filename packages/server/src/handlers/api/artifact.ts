@@ -10,6 +10,7 @@ export const ArtifactHandler = HttpApiBuilder.group(Api, "artifact", (handlers) 
     return handlers
       .handle("artifact.list", Primitive.list(artifacts.list))
       .handle("artifact.get", Primitive.get(artifacts.get))
+      .handle("artifact.update", Primitive.update(artifacts.update))
       .handle("artifact.archive", Primitive.archive(artifacts.archive))
   }),
 )

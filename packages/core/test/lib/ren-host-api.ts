@@ -55,6 +55,7 @@ const handlers = (around: Around) =>
             stop: () => none,
             list: () => none,
             get: () => none,
+            update: () => none,
             archive: () => none,
           }
         })

@@ -826,6 +826,7 @@ export type ArtifactInfo = {
   id: ArtifactID
   spaceId: SpaceID
   title: string
+  name: string | null
   entry: string | null
   url: string | null
   pendingDeploymentId: ArtifactDeploymentID | null
@@ -8501,6 +8502,13 @@ export type ArtifactListOutput = ArtifactPage
 export type ArtifactGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
 export type ArtifactGetOutput = ArtifactInfo
+
+export type ArtifactUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name: { readonly name: string | null }["name"]
+}
+
+export type ArtifactUpdateOutput = ArtifactInfo
 
 export type ArtifactArchiveInput = { readonly id: { readonly id: string }["id"] }
 
