@@ -200,7 +200,7 @@ describe("MachineTemplates", () => {
         expect(setup.space.hand).toEqual({ placement: "colocated" })
         const remote = { placement: "remote", environmentTemplateId: made.id } as const
         expect((yield* spaces.update(grace, setup.space.id, { hand: remote }).pipe(Effect.flip))._tag).toBe(
-          "Primitive.NotFound",
+          "Primitive.Forbidden",
         )
         const database = yield* Database.Service
         const revision = database.db

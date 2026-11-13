@@ -6,11 +6,12 @@ export function SpaceCardFrame(props: {
   title: ReactNode
   description: string
   private?: boolean | undefined
-  chats: ReactNode
-  menu: ReactNode
+  chats?: ReactNode
+  menu?: ReactNode
   members: ReactNode
-  apps: ReactNode
+  apps?: ReactNode
   channels?: ReactNode
+  action?: ReactNode
 }) {
   const Icon = props.private ? IconLock : IconCube
   return (
@@ -20,10 +21,12 @@ export function SpaceCardFrame(props: {
           <Icon className="size-5" strokeWidth={1.5} />
         </span>
         <div className="flex items-center gap-2">
-          <div className="flex h-6 shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums [&_svg]:size-3.5">
-            <IconMessage />
-            {props.chats}
-          </div>
+          {props.chats ? (
+            <div className="flex h-6 shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums [&_svg]:size-3.5">
+              <IconMessage />
+              {props.chats}
+            </div>
+          ) : null}
           {props.menu}
         </div>
       </div>
@@ -36,6 +39,7 @@ export function SpaceCardFrame(props: {
         <div className="ml-auto flex min-w-0 items-center gap-3">
           {props.channels}
           {props.apps}
+          {props.action}
         </div>
       </div>
     </Card>

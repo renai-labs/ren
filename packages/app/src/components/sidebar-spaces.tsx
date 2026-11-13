@@ -11,7 +11,7 @@ import { useSpaces } from "../lib/use-spaces.js"
 const shownSpaces = 3
 
 export function SpacesList(props: { path: string }) {
-  const spaces = useSpaces().spaces
+  const spaces = useSpaces().joined
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(false)
   const pinned = Preference.usePreference(SidebarPreferences.pinned)

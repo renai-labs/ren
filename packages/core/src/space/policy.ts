@@ -39,6 +39,7 @@ export const documents = [
     rules: [
       { actions: [actions.list, actions.create], effect: "allow", roles: organizationRoles, when: [] },
       { actions: [actions.get], effect: "allow", roles: administratorRoles, when: [] },
+      { actions: [actions.get], effect: "allow", roles: organizationRoles, when: [facts.shared] },
       {
         actions: [actions.get, actions.read, actions.update],
         effect: "allow",

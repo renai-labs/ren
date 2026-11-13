@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { addMember, appOrigin, createOrganization, uniqueEmail } from "../lib/servers.js"
+import { addMember, appOrigin, createOrganization, serverURL, uniqueEmail } from "../lib/servers.js"
 
 const shots = process.env.E2E_SCREENSHOTS
 
@@ -17,21 +17,23 @@ test("an admin sees another person's private space as its list entry only, and j
   const create = alan.getByRole("dialog", { name: "New space" })
   await create.getByRole("textbox", { name: "Name" }).fill("Research")
   await create.getByRole("button", { name: "Create space" }).click()
-  await expect(alan.getByRole("heading", { level: 1, name: "Research" })).toBeVisible()
+  await expect(alan.getByRole("button", { name: "Switch space (current: Research)" })).toBeVisible()
 
-  await page.goto("/app/spaces")
-  const theirs = page.getByRole("link", { name: "Open Alan Turing's Personal Space" })
-  await expect(theirs).toContainText("Private")
+  await page.goto("/app/spaces?tab=all")
+  await expect(page.getByRole("link", { name: "Research" })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Alan Turing's Personal Space" })).toHaveCount(0)
   if (shots) await page.screenshot({ path: `${shots}/1-spaces-list.png`, fullPage: true })
-  await theirs.click()
+  const spaces = await (await page.request.get(`${serverURL}/spaces?page=1&pageSize=50`)).json()
+  const theirs = spaces.items.find((space: { name: string }) => space.name === "Alan Turing's Personal Space")
+  await page.goto(`/app/spaces/${theirs.id}`)
   await expect(page.getByText("This is a private space")).toBeVisible()
   await expect(page.getByRole("button", { name: "Join space" })).toHaveCount(0)
   await expect(page.getByRole("tab", { name: "Members" })).toHaveCount(0)
   if (shots) await page.screenshot({ path: `${shots}/2-private-space-admin.png`, fullPage: true })
 
-  await page.goto("/app/spaces")
-  await page.getByRole("link", { name: "Open Research" }).click()
-  await expect(page.getByText("You are not a member of this space")).toBeVisible()
+  await page.goto("/app/spaces?tab=all")
+  await page.getByRole("link", { name: "Research" }).click()
+  await expect(page.getByText("You’re not in this space")).toBeVisible()
   if (shots) await page.screenshot({ path: `${shots}/3-shared-space-not-joined.png`, fullPage: true })
   await page.getByRole("button", { name: "Join space" }).click()
   await expect(page.getByRole("link", { name: "Members" })).toBeVisible()
@@ -47,6 +49,6 @@ test("an admin sees another person's private space as its list entry only, and j
   await expect(alan.getByText(/You left/)).toBeVisible()
 
   await page.goto("/app/spaces")
-  await expect(page.getByRole("link", { name: "Open Alan Turing's Personal Space" })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "Alan Turing's Personal Space" })).toHaveCount(0)
   await member.close()
 })

@@ -186,7 +186,7 @@ export const layer = Layer.effect(
         isFirst: row.isFirstOrganizationSpace,
       })
 
-    // oxlint-disable-next-line ren/no-comments -- private-spaces rule 7: no `read`, list entry only.
+    // oxlint-disable-next-line ren/no-comments -- private-spaces rule 7: no `read`, list entry only. A shared space shows its description to every member of the organization; its factory needs `read`.
     const toInfo =
       (actor: Actor.Info) =>
       (row: Row): Space.Info => {
@@ -200,7 +200,7 @@ export const layer = Layer.effect(
           ownerUserId: row.space.owner_user_id,
           slug: row.space.slug,
           name: row.space.name,
-          description: canRead ? row.space.description : null,
+          description: canRead || row.space.kind === "shared" ? row.space.description : null,
           brainScope: row.space.brain_scope,
           brain: SpaceQueries.brainMachine(row.space, deploymentProvider),
           hand: SpaceQueries.hand(row.space),

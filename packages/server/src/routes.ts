@@ -222,7 +222,7 @@ export const layer = Layer.mergeAll(
         SpaceMember.layer,
         MachineTemplates.layer,
         Memory.layer,
-        Insights.layer.pipe(Layer.provide(Space.layer)),
+        Insights.layer,
         settingsAndAgents,
         InfraSpecs.layer.pipe(
           Layer.provide([

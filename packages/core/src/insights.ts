@@ -6,12 +6,14 @@ import { Insights } from "@ren/schema/insights"
 import { Models } from "@ren/schema/models"
 import type { Space as SpaceSchema } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
-import { and, count, countDistinct, eq, gte, inArray, lt, type SQL, type SQLWrapper, sql } from "drizzle-orm"
+import { and, count, countDistinct, eq, gte, inArray, isNull, lt, type SQL, type SQLWrapper, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Context, DateTime, Effect, Layer, Order, Predicate } from "effect"
 import type { Actor } from "./actor.js"
-import type { Primitive } from "./primitive.js"
-import { Space } from "./space.js"
+import { Access } from "./access.js"
+import { Primitive } from "./primitive.js"
+import { SpacePolicy } from "./space/policy.js"
+import { SpaceQueries } from "./space/queries.js"
 
 export interface Interface {
   readonly query: (actor: Actor.Info, query: Insights.Query) => Effect.Effect<Insights.Result, Primitive.NotFound>
@@ -214,12 +216,28 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const spaces = yield* Space.Service
+    const access = yield* Access.Service
 
     return Service.of({
       query: Effect.fn("Insights.query")(function* (actor: Actor.Info, query: Insights.Query) {
-        const space = yield* spaces.get(actor, query.spaceId)
-        const scope = { organizationId: space.organizationId, spaceId: space.id, query }
+        const found = (yield* database.db
+          .select({ kind: Database.Schema.space.kind, membershipId: SpaceQueries.membership.id })
+          .from(Database.Schema.space)
+          .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+          .where(
+            and(
+              eq(Database.Schema.space.id, query.spaceId),
+              eq(Database.Schema.space.organization_id, actor.organizationId),
+              isNull(Database.Schema.space.archived_at),
+            ),
+          )
+          .pipe(Effect.orDie)).at(0)
+        if (
+          !found ||
+          !access.isAllowed({ actor, action: SpacePolicy.actions.read, resource: SpacePolicy.resource(found) })
+        )
+          return yield* new Primitive.NotFound({ message: "Space not found." })
+        const scope = { organizationId: actor.organizationId, spaceId: query.spaceId, query }
         const unit = unitOf(query.groupBy)
         const withTasks = hasTasks(query.groupBy)
         const results = yield* Effect.all(
