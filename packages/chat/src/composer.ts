@@ -33,9 +33,12 @@ export const Draft = Schema.Struct({
   files: Schema.optionalKey(Schema.Array(SessionMessage.DriveFile)),
   chat: Schema.optionalKey(Schema.Struct({ sessionId: Session.ID, spaceId: Schema.String })),
   mentions: Schema.optionalKey(Schema.Array(MentionedApp)),
+  mode: Schema.optionalKey(Schema.Literals(["prompt", "shell"])),
 })
 
 export const empty: Draft = { text: "", pasted: [] }
+
+export const emptyShell: Draft = { ...empty, mode: "shell" }
 
 const stored = Schema.fromJsonString(Draft)
 const decodeStored = Schema.decodeUnknownOption(stored)
@@ -57,8 +60,13 @@ export const withMention = (draft: Draft, app: MentionedApp): Draft => ({
 
 export const decode = (raw: string | undefined): Draft => Option.getOrElse(decodeStored(raw), () => empty)
 
+export const isShell = (draft: Draft) => draft.mode === "shell"
+
+export const withMode = (draft: Draft, mode: "prompt" | "shell"): Draft =>
+  mode === "shell" ? { ...draft, mode } : Struct.omit(draft, ["mode"])
+
 export const encode = (draft: Draft) =>
-  isBlank(draft) && !draft.model && files(draft).length === 0 ? undefined : encodeStored(draft)
+  isBlank(draft) && !draft.model && !isShell(draft) && files(draft).length === 0 ? undefined : encodeStored(draft)
 
 export const retryID = (draft: Draft) =>
   draft.retry && draft.retry.text === message(draft) ? draft.retry.id : undefined
@@ -198,6 +206,7 @@ export const fromHistory = (draft: Draft, entry: Pick<Draft, "text" | "pasted">)
   text: entry.text,
   pasted: entry.pasted,
   ...(draft.model && { model: draft.model }),
+  ...(draft.mode && { mode: draft.mode }),
 })
 
 export interface Submission {

@@ -130,6 +130,7 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
           onStop={chat.stop}
           suggest={chat.suggest}
           queue={<QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />}
+          history={chat.shellHistory}
           model={
             chat.canChooseModel ? (
               <ModelPicker

@@ -627,7 +627,7 @@ it.live("a client runs a command on the session's sandbox, follows its output an
       Effect.forkScoped,
     )
     const started = yield* chat.createShell(session.sessionId, { command: "echo hi; pwd; exit 3" })
-    expect(started).toMatchObject({ sessionID: session.sessionId, status: "running", command: "echo hi; pwd; exit 3" })
+    expect(started).toMatchObject({ sessionID: session.sessionId, command: "echo hi; pwd; exit 3" })
     expect((yield* Fiber.join(events)).map((event) => event.type)).toEqual(["shell.created", "shell.exited"])
     expect(yield* chat.shell(session.sessionId, started.id)).toMatchObject({
       id: started.id,
@@ -638,6 +638,34 @@ it.live("a client runs a command on the session's sandbox, follows its output an
     expect((yield* chat.shellOutput(session.sessionId, started.id, {})).output).toBe(
       `hi\n${folder(session.sessionId)}\n`,
     )
+  }),
+)
+
+it.live("a command that runs long does not hold up shell.create", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const chat = opened.harness.chat
+    const started = yield* chat.createShell(session.sessionId, { command: "sleep 30" })
+    expect(started).toMatchObject({ sessionID: session.sessionId, status: "running", command: "sleep 30" })
+    yield* chat.removeShell(session.sessionId, started.id)
+  }),
+)
+
+it.live("shell.create stops a command after its timeout", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const chat = opened.harness.chat
+    const started = yield* chat.createShell(session.sessionId, { command: "sleep 30", timeout: 300 })
+    yield* chat.shell(session.sessionId, started.id).pipe(
+      Effect.repeat({
+        until: (shell) => shell.status === "timeout",
+        schedule: Schedule.spaced("50 millis"),
+        times: 100,
+      }),
+    )
+    expect(yield* chat.shell(session.sessionId, started.id)).toMatchObject({ status: "timeout" })
   }),
 )
 

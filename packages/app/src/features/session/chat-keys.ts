@@ -51,3 +51,6 @@ export function intent(
   if (found === "chooseModel" && press.repeat) return undefined
   return found
 }
+
+export const toggleShell = (event: KeyboardEvent) =>
+  event.key.toLowerCase() === "x" && event.shiftKey && (event.metaKey || event.ctrlKey) && !event.altKey
