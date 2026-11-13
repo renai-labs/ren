@@ -1,5 +1,6 @@
 @import "@ren/ui/styles";
 @import "streamdown/styles.css";
+@import "@wterm/react/css";
 @source "./**/*.{ts,tsx}";
 @source "../node_modules/streamdown/dist/*.js";
 
@@ -8,4 +9,51 @@
   [data-sd-animate-marker]::marker {
     animation: none;
   }
+}
+
+[data-slot="terminal"] .wterm {
+  --term-bg: transparent;
+  --term-fg: var(--foreground);
+  --term-font-family: var(--font-mono);
+  --term-font-size: 12px;
+  --term-line-height: 20px;
+  --term-row-height: 20px;
+  --term-color-0: #383a42;
+  --term-color-1: #e45649;
+  --term-color-2: #50a14f;
+  --term-color-3: #c18401;
+  --term-color-4: #4078f2;
+  --term-color-5: #a626a4;
+  --term-color-6: #0184bc;
+  --term-color-7: #6b6d76;
+  --term-color-8: #a0a1a7;
+  --term-color-9: #e45649;
+  --term-color-10: #50a14f;
+  --term-color-11: #c18401;
+  --term-color-12: #4078f2;
+  --term-color-13: #a626a4;
+  --term-color-14: #0184bc;
+  --term-color-15: #1b1b1b;
+  padding: 12px 16px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dark [data-slot="terminal"] .wterm {
+  --term-color-0: #1e1e1e;
+  --term-color-1: #f44747;
+  --term-color-2: #6a9955;
+  --term-color-3: #d7ba7d;
+  --term-color-4: #569cd6;
+  --term-color-5: #c586c0;
+  --term-color-6: #4ec9b0;
+  --term-color-7: #d4d4d4;
+  --term-color-8: #808080;
+  --term-color-9: #f44747;
+  --term-color-10: #6a9955;
+  --term-color-11: #d7ba7d;
+  --term-color-12: #569cd6;
+  --term-color-13: #c586c0;
+  --term-color-14: #4ec9b0;
+  --term-color-15: #ffffff;
 }

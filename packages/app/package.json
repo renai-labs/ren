@@ -36,6 +36,8 @@
     "@tiptap/pm": "3.32.0",
     "@tiptap/react": "3.32.0",
     "@tiptap/starter-kit": "3.32.0",
+    "@wterm/dom": "0.5.10",
+    "@wterm/react": "0.5.10",
     "better-auth": "catalog:",
     "cn": "catalog:",
     "effect": "catalog:",
