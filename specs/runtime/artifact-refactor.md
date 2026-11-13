@@ -158,24 +158,23 @@ Replace `cloudflare-upload.ts` and the temporary folder with three calls, from t
 | `POST …/workers/assets/upload?base64=true`, once for each bucket, `Bearer <jwt>` | multipart, the files of the bucket                                              | the completion `jwt` after the last bucket |
 | `PUT …/workers/scripts/<name>`, `If-Match` or `If-None-Match: *`                 | multipart: `metadata` and the modules (`main.js`, `active.js`, `retained-*.js`) | `200 { etag }` or `412`                    |
 
-1. Before the change, run one live deploy with the current code and keep the `metadata` it captures (`cloudflare-upload.ts:40-44`). Build the new `metadata` from it: `main_module`, `compatibility_date`, `bindings` (Durable Objects and `ASSETS`), `assets` (`jwt`, `run_worker_first`), `exports`, the Durable Object update strategy `immediate`, `workers_dev`.
+1. Before the change, run one live deploy with the current code and keep the `metadata` it captures (`cloudflare-upload.ts:40-44`). Build the new `metadata` from it: `main_module`, `compatibility_date`, `compatibility_flags`, `bindings` (Durable Objects and `ASSETS`), `assets` (`jwt`, `run_worker_first`), `exports`, `keep_bindings`, the Durable Object update strategy `immediate`. Wrangler sends no `workers_dev`: it turns on the route with a separate call, which Ren already makes.
 2. Compute the asset hash as Wrangler does. Check it against the same run.
 3. Remove `ARTIFACT_NODE`, `ARTIFACT_CLOUDFLARE_ROOT` and `ARTIFACT_CLOUDFLARE_UPLOAD_TIMEOUT` from the Cloudflare provider, and the `parent.mjs` stdin guard.
 4. The server image needs Node only for the `workerd` provider. Production uses Cloudflare; remove Node there if nothing else needs it.
 
 ## 9. Cleanup
 
-| Change                                                                                                                                            | Where                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Check "Durable Objects need `_worker.js`" once, at the deploy check. Providers trust `Artifact.Config`.                                           | `artifacts.ts:119`, `workerd.ts:163`, `cloudflare.ts:159` |
-| Both providers use one module for the Durable Object rename rule and the `exports` builder. Rename `cloudflare-plan.ts`: it is not Cloudflare's.  | `workerd.ts:174-177`, `:237-242`; `cloudflare-plan.ts`    |
-| One function for entry file → URL path.                                                                                                           | `cloudflare.ts:51`, `:133`; `workerd.ts:197`              |
-| Keep the HTTP status and body in provider errors.                                                                                                 | `cloudflare.ts:47`, `:85`; `workerd.ts:43`                |
-| `DurableRunner.ensure` for `execute(…, { discard: true })`.                                                                                       | `artifacts.ts:449-455`, `:666-672`                        |
-| `NotFound` for an artifact of another space, also in `upload` and `deploy`.                                                                       | `artifacts.ts:146-149`                                    |
-| Rename `owned` → `assertOwner`, `unarchived` → `assertActive`, `get(actor, idOrSlug)` → `get(actor, id)`.                                         | `artifacts.ts:146`, `:151`, `:508`                        |
-| Move the Durable Object and SQL migration guidance out of the `artifact_create` description (about 3k characters). Keep publish and status there. | `cell/…/artifacts.ts:26-33`                               |
-| Update [docs/artifact-cloudflare.md](../../docs/artifact-cloudflare.md): state in Postgres, direct upload, async stop.                            |                                                           |
+| Change                                                                                                                                           | Where                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Check "Durable Objects need `_worker.js`" once, at the deploy check. Providers trust `Artifact.Config`.                                          | `artifacts.ts:119`, `workerd.ts:163`, `cloudflare.ts:159` |
+| Both providers use one module for the Durable Object rename rule and the `exports` builder. Rename `cloudflare-plan.ts`: it is not Cloudflare's. | `workerd.ts:174-177`, `:237-242`; `cloudflare-plan.ts`    |
+| One function for entry file → URL path.                                                                                                          | `cloudflare.ts:51`, `:133`; `workerd.ts:197`              |
+| Keep the HTTP status and body in provider errors.                                                                                                | `cloudflare.ts:47`, `:85`; `workerd.ts:43`                |
+| `DurableRunner.ensure` for `execute(…, { discard: true })`.                                                                                      | `artifacts.ts:449-455`, `:666-672`                        |
+| `NotFound` for an artifact of another space, also in `upload` and `deploy`.                                                                      | `artifacts.ts:146-149`                                    |
+| Rename `owned` → `assertOwner`, `unarchived` → `assertActive`, `get(actor, idOrSlug)` → `get(actor, id)`.                                        | `artifacts.ts:146`, `:151`, `:508`                        |
+| Update [docs/artifact-cloudflare.md](../../docs/artifact-cloudflare.md): state in Postgres, direct upload, async stop.                           |                                                           |
 
 ## 10. Tests
 
@@ -211,5 +210,5 @@ The live Cloudflare tests (`artifacts-cloudflare.slow.test.ts`, `artifacts-brain
 ## 12. Open
 
 1. **A model retry after an interrupted `artifact_create` makes a second artifact.** The tool makes a new ID on each call (`cell/…/artifacts.ts:279`), and a retried tool call has a new call ID. With section 6, both results arrive in the chat, so the agent sees both. No fix in this change.
-2. **Where the Durable Object and SQL guidance goes.** Ren has no built-in skill for brains today. Choose when building section 9.
+2. **Where the Durable Object and SQL guidance goes.** Resolved: it stays. The artifact tools use OpenCode's code mode, which sends only the first 120 characters of a description each turn; the model reads the rest when it searches for the tool.
 3. **An operator retry for a `failed` stop of an archived artifact.** `archive` refuses an archived artifact, so nobody can ask again.

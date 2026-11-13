@@ -52,12 +52,15 @@ export interface Owner {
 }
 
 export type Interface = Primitive.Interface<typeof Artifact.definition> & {
-  readonly upload: (owner: Owner, id: Artifact.ID) => Effect.Effect<Artifact.Upload, Primitive.Conflict | Failed>
+  readonly upload: (
+    owner: Owner,
+    id: Artifact.ID,
+  ) => Effect.Effect<Artifact.Upload, Primitive.NotFound | Primitive.Conflict | Failed>
   readonly deploy: (
     owner: Owner,
     id: Artifact.ID,
     input: Artifact.DeployInput,
-  ) => Effect.Effect<Artifact.Deployment, Primitive.Conflict | Primitive.Invalid>
+  ) => Effect.Effect<Artifact.Deployment, Primitive.NotFound | Primitive.Conflict | Primitive.Invalid>
   readonly status: (
     owner: Owner,
     id: Artifact.ID,
@@ -151,12 +154,12 @@ const isID = Schema.is(Artifact.ID)
 const archivedConflict = (id: Artifact.ID) =>
   new Primitive.Conflict({ message: `Artifact ${id} is archived. Publish a new artifact instead.` })
 
-const owned = (found: Row | undefined, owner: Owner) =>
+const assertOwner = (found: Row | undefined, owner: Owner) =>
   found && !ownedBy(found, owner)
-    ? Effect.fail(new Primitive.Conflict({ message: `Artifact ${found.id} belongs to another space` }))
+    ? Effect.fail(new Primitive.NotFound({ message: `Artifact ${found.id} does not exist` }))
     : Effect.void
 
-const unarchived = (found: Row | undefined) =>
+const assertActive = (found: Row | undefined) =>
   found?.archived_at ? Effect.fail(archivedConflict(found.id)) : Effect.void
 
 const actions = {
@@ -631,7 +634,7 @@ export const layer = Layer.effect(
       }
       const row = (yield* locked()).at(0)
       if (!row || !ownedBy(row, owner))
-        return yield* new Primitive.Conflict({ message: `Artifact ${id} belongs to another space` })
+        return yield* new Primitive.NotFound({ message: `Artifact ${id} does not exist` })
       return row
     })
 
@@ -723,13 +726,13 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      get: Effect.fn("Artifacts.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (!isID(idOrSlug)) return yield* notFound
+      get: Effect.fn("Artifacts.get")(function* (actor: Actor.Info, id: string) {
+        if (!isID(id)) return yield* notFound
         const found = (yield* database.db
           .select({ artifact: artifacts })
           .from(artifacts)
           .leftJoin(ArtifactPolicy.membership, membershipOf(actor))
-          .where(and(eq(artifacts.id, idOrSlug), visibleTo(actor)))
+          .where(and(eq(artifacts.id, id), visibleTo(actor)))
           .pipe(Effect.orDie)).at(0)
         if (!found) return yield* notFound
         return toInfo(found.artifact)
@@ -766,8 +769,8 @@ export const layer = Layer.effect(
       }),
       upload: Effect.fn("Artifacts.upload")(function* (owner, id) {
         const found = (yield* database.db.select().from(artifacts).where(eq(artifacts.id, id)).pipe(Effect.orDie)).at(0)
-        yield* owned(found, owner)
-        yield* unarchived(found)
+        yield* assertOwner(found, owner)
+        yield* assertActive(found)
         const uploadId = Artifact.UploadID.make(crypto.randomUUID())
         const signed = yield* link(
           new PutObjectCommand({ Bucket: storage.bucket, Key: uploadKey(owner.organizationId, id, uploadId) }),

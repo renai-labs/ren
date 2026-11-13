@@ -7,7 +7,7 @@ import { ArtifactArchive } from "../artifact-archive.js"
 import { ArtifactProvider } from "../artifact-provider.js"
 import { ObjectStorage } from "../object-storage.js"
 import { ArtifactCloudflareCode } from "./cloudflare-code.js"
-import { ArtifactCloudflarePlan } from "./cloudflare-plan.js"
+import { ArtifactDurableObjects } from "./durable-objects.js"
 
 export const id = Artifact.ProviderID.make("cloudflare")
 
@@ -20,7 +20,7 @@ export const State = Schema.Struct({
   account: Schema.String,
   script: Schema.String,
   subdomain: Schema.String,
-  plan: ArtifactCloudflarePlan.State,
+  plan: ArtifactDurableObjects.State,
   active: Schema.NullOr(Snapshot),
   pending: Schema.NullOr(Schema.Struct({ ...Snapshot.fields, ready: Schema.Boolean })),
   stopped: Schema.Boolean,
@@ -48,6 +48,12 @@ const failed = (error: unknown, options: { readonly retryable: boolean } = { ret
       })
 // oxlint-disable-next-line ren/no-comments -- Cloudflare answers 5xx while it has a problem, and 412 when another upload changed the Worker; the same call can succeed later.
 const retryableStatus = (status: number) => ({ retryable: status === 412 || status >= 500 })
+// oxlint-disable-next-line ren/no-comments -- A refusal keeps Cloudflare's status and its own error text, so the deployment's error says what Cloudflare said.
+const refused = (what: string, status: number, body: unknown) =>
+  failed(
+    `${what} (HTTP ${status}): ${(Predicate.isString(body) ? body : JSON.stringify(Predicate.hasProperty(body, "errors") ? body.errors : body)).slice(0, 1000)}`,
+    retryableStatus(status),
+  )
 // oxlint-disable-next-line ren/no-comments -- The whole budget of one call, its recovery included.
 const budget = Duration.minutes(2)
 const budgeted = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
@@ -92,9 +98,10 @@ export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (in
   if (response.status === 412)
     return yield* failed("Cloudflare publication was fenced by a newer upload (HTTP 412)", { retryable: true })
   if (response.status !== 200)
-    return yield* failed(
-      `Cloudflare refused the Worker upload (${response.status}): ${(yield* response.text.pipe(Effect.orElseSucceed(() => ""))).slice(-1500)}`,
-      retryableStatus(response.status),
+    return yield* refused(
+      "Cloudflare refused the Worker upload",
+      response.status,
+      yield* response.text.pipe(Effect.orElseSucceed(() => "")),
     )
   return (yield* response.json.pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Uploaded)),
@@ -104,7 +111,7 @@ export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (in
 
 const deployed = (state: State, snapshot: Snapshot) => ({
   remote: { ...state, active: snapshot, pending: null, stopped: false, stop: null },
-  url: `https://${state.script}.${state.subdomain}.workers.dev${snapshot.config.entry === "index.html" ? "/" : `/${snapshot.config.entry}`}`,
+  url: `https://${state.script}.${state.subdomain}.workers.dev${ArtifactProvider.entryPath(snapshot.config)}`,
 })
 
 export const layer = Layer.effect(
@@ -129,13 +136,14 @@ export const layer = Layer.effect(
       http.execute(request.pipe(HttpClientRequest.bearerToken(config.token))).pipe(
         Effect.flatMap((response) => response.json.pipe(Effect.map((body) => ({ status: response.status, body })))),
         Effect.timeout("5 seconds"),
-        Effect.mapError(() => failed("Cloudflare API request failed", { retryable: true })),
+        Effect.mapError((cause) => failed(`Cloudflare API request failed: ${cause.message}`, { retryable: true })),
       )
     const subdomainResponse = yield* api(HttpClientRequest.get(`${base}/subdomain`))
     if (subdomainResponse.status !== 200)
-      return yield* failed(
-        `Cannot read Cloudflare workers.dev subdomain (${subdomainResponse.status})`,
-        retryableStatus(subdomainResponse.status),
+      return yield* refused(
+        "Cannot read the Cloudflare workers.dev subdomain",
+        subdomainResponse.status,
+        subdomainResponse.body,
       )
     const subdomain = (yield* Schema.decodeUnknownEffect(Subdomain)(subdomainResponse.body).pipe(
       Effect.mapError(failed),
@@ -149,10 +157,7 @@ export const layer = Layer.effect(
       )
       if (response.status === 404) return Option.none<string>()
       if (response.status !== 200)
-        return yield* failed(
-          `Cannot read Cloudflare Worker metadata (${response.status})`,
-          retryableStatus(response.status),
-        )
+        return yield* refused("Cannot read the Cloudflare Worker metadata", response.status, response.body)
       const etag = (yield* Schema.decodeUnknownEffect(Metadata)(response.body).pipe(Effect.mapError(failed))).result
         .default_environment.script.etag
       return Option.some(etag.startsWith('"') ? etag : JSON.stringify(etag))
@@ -182,7 +187,7 @@ export const layer = Layer.effect(
           marker: probe(state, version),
           route: http
             .get(
-              `https://${state.script}.${state.subdomain}.workers.dev${Option.isSome(source) && source.value.config.entry !== "index.html" ? `/${source.value.config.entry}` : "/"}`,
+              `https://${state.script}.${state.subdomain}.workers.dev${Option.isSome(source) ? ArtifactProvider.entryPath(source.value.config) : "/"}`,
             )
             .pipe(
               Effect.map((response) =>
@@ -216,10 +221,7 @@ export const layer = Layer.effect(
         ),
       )
       if (session.status !== 200)
-        return yield* failed(
-          `Cloudflare did not start the asset upload (${session.status})`,
-          retryableStatus(session.status),
-        )
+        return yield* refused("Cloudflare did not start the asset upload", session.status, session.body)
       const started = (yield* Schema.decodeUnknownEffect(UploadSession)(session.body).pipe(Effect.mapError(failed)))
         .result
       if (started.buckets.length === 0) return started.jwt
@@ -245,7 +247,11 @@ export const layer = Layer.effect(
               Effect.mapError(() => failed("Cloudflare did not take the assets", { retryable: true })),
             )
           if (![200, 201, 202].includes(response.status))
-            return yield* failed(`Cloudflare refused the assets (${response.status})`, retryableStatus(response.status))
+            return yield* refused(
+              "Cloudflare refused the assets",
+              response.status,
+              yield* response.text.pipe(Effect.orElseSucceed(() => "")),
+            )
           return (yield* response.json.pipe(
             Effect.flatMap(Schema.decodeUnknownEffect(UploadAnswer)),
             Effect.mapError(failed),
@@ -271,8 +277,6 @@ export const layer = Layer.effect(
           )).files
         : {}
       const objects = Option.isSome(source) ? (source.value.config.durableObjects ?? {}) : {}
-      if (Object.keys(objects).length && !files[Artifact.workerPath])
-        return yield* failed("Durable Objects require _worker.js with exported classes")
       const modules = ArtifactCloudflareCode.modules({
         ...version,
         objects: state.plan.objects,
@@ -304,7 +308,7 @@ export const layer = Layer.effect(
         compatibility_date: "2026-06-01",
         compatibility_flags: [],
         code_update_strategy: { mode: "immediate" },
-        exports: ArtifactCloudflarePlan.exports(state.plan.objects),
+        exports: ArtifactDurableObjects.exports(state.plan.objects),
         keep_bindings: ["secret_text", "secret_key"],
         ...(Option.isSome(assets) && { assets: { jwt: assets.value, config: { run_worker_first: true } } }),
       }
@@ -368,10 +372,7 @@ export const layer = Layer.effect(
           )
           const enabled = yield* api(enable)
           if (enabled.status !== 200)
-            return yield* failed(
-              `Cannot enable the artifact public route (${enabled.status})`,
-              retryableStatus(enabled.status),
-            )
+            return yield* refused("Cannot enable the artifact public route", enabled.status, enabled.body)
         }
         yield* ready(current, version, source)
       })
@@ -412,7 +413,7 @@ export const layer = Layer.effect(
           Option.filter((snapshot) => snapshot.deploymentId === input.deploymentId && !before.stopped),
         )
         if (Option.isSome(reusable) && (yield* probe(before, reusable.value))) return deployed(before, reusable.value)
-        const bindings = ArtifactCloudflarePlan.bindings({
+        const bindings = ArtifactDurableObjects.bindings({
           active: before.active?.config.durableObjects ?? {},
           retained: before.plan.objects,
           desired: input.config.durableObjects ?? {},

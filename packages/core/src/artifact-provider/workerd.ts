@@ -1,7 +1,7 @@
 export * as ArtifactWorkerd from "./workerd.js"
 
 import { Artifact } from "@ren/schema/artifact"
-import { Config, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import { Config, Duration, Effect, Layer, Option, Result, Schedule, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { spawn } from "node:child_process"
 import { closeSync, openSync } from "node:fs"
@@ -11,6 +11,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ArtifactProvider } from "../artifact-provider.js"
 import { ArtifactArchive } from "../artifact-archive.js"
+import { ArtifactDurableObjects } from "./durable-objects.js"
 import { ObjectStorage } from "../object-storage.js"
 
 export const id = Artifact.ProviderID.make("workerd")
@@ -41,7 +42,9 @@ const readServing = (directory: string) =>
   ).pipe(Effect.map(Schema.decodeUnknownOption(Serving)))
 
 const failed = (error: unknown) =>
-  new ArtifactProvider.Failed({ message: error instanceof Error ? error.message : String(error), retryable: false })
+  error instanceof ArtifactProvider.Failed
+    ? error
+    : new ArtifactProvider.Failed({ message: error instanceof Error ? error.message : String(error), retryable: false })
 
 const write = (path: string, text: string) =>
   Effect.tryPromise({ try: () => Bun.write(path, text), catch: failed }).pipe(Effect.asVoid)
@@ -185,12 +188,7 @@ export const layer = Layer.effect(
       deploy: Effect.fn("ArtifactWorkerd.deploy")(function* (input) {
         const files = (yield* ArtifactArchive.read(storage, input.archive).pipe(Effect.mapError(failed))).files
         const directory = join(config.root, input.artifactId)
-        const objects = input.config.durableObjects ?? {}
-        if (Object.keys(objects).length && !Object.hasOwn(files, Artifact.workerPath))
-          return yield* new ArtifactProvider.Failed({
-            message: "Durable Objects require _worker.js with exported classes",
-            retryable: false,
-          })
+        const desired = input.config.durableObjects ?? {}
         const savedObjects = Bun.file(join(directory, "durable-objects.json"))
         const previousObjects = (yield* Effect.tryPromise({ try: () => savedObjects.exists(), catch: failed }))
           ? yield* Effect.tryPromise({ try: () => savedObjects.text(), catch: failed }).pipe(
@@ -198,11 +196,14 @@ export const layer = Layer.effect(
               Effect.mapError(failed),
             )
           : {}
-        if (Object.entries(previousObjects).some(([name, className]) => objects[name] !== className))
-          return yield* new ArtifactProvider.Failed({
-            message: "Keep existing Durable Object binding and class names; removal and renaming are not supported",
-            retryable: false,
-          })
+        const allowed = ArtifactDurableObjects.bindings({
+          active: previousObjects,
+          retained: previousObjects,
+          desired,
+        })
+        if (Result.isFailure(allowed))
+          return yield* new ArtifactProvider.Failed({ message: allowed.failure, retryable: false })
+        const objects = allowed.success
         const before = yield* readServing(directory)
         const kept = yield* Effect.promise(() =>
           Bun.file(portFile(directory))
@@ -222,7 +223,7 @@ export const layer = Layer.effect(
               },
             )
         yield* write(portFile(directory), String(port))
-        const remote = { directory, port, path: input.config.entry === "index.html" ? "/" : `/${input.config.entry}` }
+        const remote = { directory, port, path: ArtifactProvider.entryPath(input.config) }
         const url = `http://${config.host}:${port}${remote.path}`
         const saveObjects = Effect.tryPromise({
           try: async () => {
@@ -262,12 +263,7 @@ export const layer = Layer.effect(
                   code_update_strategy: { mode: "immediate" },
                   bindings: Object.entries(objects).map(([name, className]) => ({ name, class_name: className })),
                 },
-                exports: Object.fromEntries(
-                  [...new Set(Object.values(objects))].map((name) => [
-                    name,
-                    { type: "durable-object", storage: "sqlite" },
-                  ]),
-                ),
+                exports: ArtifactDurableObjects.exports(objects),
               }),
             )
           },
