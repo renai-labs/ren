@@ -42,9 +42,9 @@ export function MembersTable<Row extends MemberRow>(props: {
                 {descending ? <IconArrowDown /> : <IconArrowUp />}
               </Button>
             </TableHead>
-            <TableHead className="w-1/3">Email</TableHead>
-            <TableHead className="w-1/4">{props.column.heading}</TableHead>
-            {props.spaces ? <TableHead className="w-1/4">Spaces</TableHead> : null}
+            <TableHead className={props.spaces ? "w-1/4" : "w-1/3"}>Email</TableHead>
+            <TableHead className={props.spaces ? "w-36" : "w-1/4"}>{props.column.heading}</TableHead>
+            {props.spaces ? <TableHead className="w-1/5">Spaces</TableHead> : null}
             <TableHead className="w-15" />
           </TableRow>
         </TableHeader>
