@@ -4,6 +4,23 @@ import { Effect, Schema } from "effect"
 import { Credential } from "./credential.js"
 import { Primitive } from "./primitive.js"
 
+export const priceMetadata = "ai.useren/price"
+export const costHeaders = { usd: "ren-cost-usd", callId: "ren-call-id" } as const
+
+export interface ToolPrice extends Schema.Schema.Type<typeof ToolPrice> {}
+export const ToolPrice = Schema.Struct({
+  usd: Schema.Number.check(Schema.isFinite(), Schema.isGreaterThanOrEqualTo(0)).annotate({
+    description:
+      "Advertised USD per unit. Actual cost is reported in ren-cost-usd; rates may include fractional micro-dollars.",
+  }),
+  unit: Schema.NonEmptyString.annotate({
+    description: "The billed unit, such as call, row, page, target, keyword, domain, second or gib-second.",
+  }),
+  note: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "Price variations or charging conditions, when needed.",
+  }),
+}).annotate({ identifier: "Mcp.ToolPrice" })
+
 const Remote = Schema.Struct({ type: Schema.Literal("remote"), url: Primitive.HttpsUrl })
 const Local = Schema.Struct({
   type: Schema.Literal("local"),
