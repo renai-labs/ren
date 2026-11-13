@@ -208,10 +208,14 @@ export function Row(props: {
   description?: ReactNode | undefined
   media?: ReactNode | undefined
   render?: ReactElement | undefined
+  indent?: boolean | undefined
   children?: ReactNode | undefined
 }) {
   return (
-    <Item render={props.render} className="min-h-14 gap-x-4 gap-y-2 px-4 py-3">
+    <Item
+      render={props.render}
+      className={cn("min-h-14 gap-x-4 gap-y-2 px-4 py-3", props.indent && "min-h-10 py-2 pl-8")}
+    >
       {props.media ? (
         <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
           {props.media}

@@ -24,6 +24,13 @@ import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
 
+const notificationRows = [
+  { kind: "finished", title: "Ren finishes", description: "When Ren is done." },
+  { kind: "permissions", title: "Permissions", description: "When Ren needs a permission." },
+  { kind: "questions", title: "Questions", description: "When Ren asks a question." },
+  { kind: "errors", title: "Errors", description: "When a turn fails." },
+] as const satisfies ReadonlyArray<{ kind: ChatPreferences.NotificationKind; title: string; description: string }>
+
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
   const me = useMe()
@@ -32,7 +39,8 @@ export function PreferencesPage() {
   const [backgroundActivity, setBackgroundActivity] = useState(() =>
     ChatPreferences.backgroundActivity.read(platform.storage),
   )
-  const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
+  const [notifications, setNotifications] = useState(() => ChatPreferences.notifications.read(platform.storage))
+  const [permission, setPermission] = useState(() => platform.notificationPermission?.())
   const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
   const rename = useMutation({
     mutationFn: async (name: string) => {
@@ -81,10 +89,18 @@ export function PreferencesPage() {
     ChatPreferences.backgroundActivity.write(platform.storage, next)
     setBackgroundActivity(next)
   }
-  const chooseNotify = (enabled: boolean) => {
-    if (enabled) void platform.requestNotifications?.()
-    ChatPreferences.notify.write(platform.storage, enabled)
-    setNotify(enabled)
+  const changeNotification = async (
+    key: ChatPreferences.NotificationKind | "sound",
+    change: { readonly enabled: boolean },
+  ) => {
+    if (change.enabled && key !== "sound") {
+      const granted = await platform.requestNotifications?.()
+      setPermission(platform.notificationPermission?.())
+      if (granted === false) return
+    }
+    const next = { ...notifications, [key]: change.enabled }
+    ChatPreferences.notifications.write(platform.storage, next)
+    setNotifications(next)
   }
   return (
     <Page title="Preferences">
@@ -159,15 +175,33 @@ export function PreferencesPage() {
                 onChange={chooseBackgroundActivity}
               />
             </Row>,
-            <Row
-              key="notify"
-              title="Notify me when Ren finishes or needs input"
-              description="Only while Ren’s tab is in the background."
-            >
+          ]}
+        </Rows>
+      </Section>
+      <Section title="Notifications">
+        {permission === "denied" ? (
+          <p className="text-xs text-muted-foreground">
+            Your browser blocks notifications from Ren. Allow them in its site settings.
+          </p>
+        ) : null}
+        <Rows>
+          {[
+            ...notificationRows.map((row) => (
+              <Row key={row.kind} title={row.title} description={row.description}>
+                <Switch
+                  checked={notifications[row.kind]}
+                  disabled={permission === "denied"}
+                  onCheckedChange={(enabled) => void changeNotification(row.kind, { enabled })}
+                  aria-label={row.title}
+                />
+              </Row>
+            )),
+            <Row key="sound" title="Play a sound" description="With every notification.">
               <Switch
-                checked={notify}
-                onCheckedChange={chooseNotify}
-                aria-label="Notify me when Ren finishes or needs input"
+                checked={notifications.sound}
+                disabled={permission === "denied" || notificationRows.every((row) => !notifications[row.kind])}
+                onCheckedChange={(enabled) => void changeNotification("sound", { enabled })}
+                aria-label="Play a sound"
               />
             </Row>,
           ]}

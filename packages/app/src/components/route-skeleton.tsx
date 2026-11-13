@@ -349,14 +349,16 @@ function SettingsPageSkeleton() {
               >
                 <Button variant="outline">Left</Button>
               </Row>,
-              <Row
-                key="notify"
-                title="Notify me when Ren finishes or needs input"
-                description="Only while Ren’s tab is in the background."
-              >
-                <Switch aria-label="Notify me" />
-              </Row>,
             ]}
+          </Rows>
+        </Section>
+        <Section title="Notifications">
+          <Rows>
+            {["Ren finishes", "Permissions", "Questions", "Errors", "Play a sound"].map((title) => (
+              <Row key={title} title={title} description="When Ren is done.">
+                <Switch aria-label={title} />
+              </Row>
+            ))}
           </Rows>
         </Section>
         <Section title="Organization">

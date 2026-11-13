@@ -25,6 +25,13 @@ export interface ChatCache {
   readonly forget: (keep?: string) => Promise<void>
 }
 
+export interface NotifyOptions {
+  readonly id: string
+  readonly silent: boolean
+  readonly active?: () => boolean
+  readonly onClick: () => void
+}
+
 interface Base {
   readonly serverUrl: string
   readonly appUrl: string
@@ -35,7 +42,8 @@ interface Base {
   readonly redirect?: (url: string) => void
   readonly blankTab?: () => Window | null
   readonly blankPopup?: () => Window | null
-  readonly notify: (title: string, body?: string) => Promise<void>
+  readonly notify: (title: string, body: string, options: NotifyOptions) => Promise<void>
+  readonly notificationPermission?: () => NotificationPermission | "unsupported"
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
   readonly upload?: (
