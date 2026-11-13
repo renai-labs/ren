@@ -534,7 +534,6 @@ function UserRow() {
   const { auth, platform, queryClient } = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const me = useMe()
-  const [organizationQuery, setOrganizationQuery] = useState("")
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -543,9 +542,6 @@ function UserRow() {
   const allOrganizations = listed.some((organization) => organization.id === me.organization.id)
     ? listed
     : [me.organization, ...listed]
-  const matchingOrganizations = allOrganizations.filter((organization) =>
-    organization.name.toLowerCase().includes(organizationQuery.trim().toLowerCase()),
-  )
   const userName = me.user.name || me.user.email
   const switchTo = async (organizationId: string) => {
     if (organizationId === me.organization.id) return
@@ -564,7 +560,7 @@ function UserRow() {
           render={
             <SidebarMenuButton
               size="lg"
-              className="h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
+              className="group/user h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
               tooltip={`${userName} · ${me.organization.name}`}
               aria-label={`Switch organization (current: ${me.organization.name})`}
             />
@@ -578,26 +574,13 @@ function UserRow() {
             <span className="truncate text-sm font-medium tracking-tight text-sidebar-foreground">{userName}</span>
             <span className="truncate text-xs text-sidebar-foreground/80">{me.organization.name}</span>
           </span>
-          <IconSelector className="text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+          <IconSelector className="text-sidebar-foreground opacity-0 transition-opacity group-hover/user:opacity-100 group-focus-visible/user:opacity-100 group-data-popup-open/user:opacity-100 group-data-[collapsible=icon]:hidden" />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-60">
-          <div className="relative p-1">
-            <IconSearch className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={organizationQuery}
-              onChange={(event) => setOrganizationQuery(event.currentTarget.value)}
-              placeholder="Find organization"
-              aria-label="Find organization"
-              onKeyDown={(event) => {
-                if (event.key.length === 1) event.stopPropagation()
-              }}
-              className="h-7 pl-7 text-xs md:text-xs"
-            />
-          </div>
           <DropdownMenuGroup>
             <DropdownMenuLabel>Organizations</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={me.organization.id} onValueChange={(value: string) => void switchTo(value)}>
-              {matchingOrganizations.map((organization) => (
+              {allOrganizations.map((organization) => (
                 <DropdownMenuRadioItem key={organization.id} value={organization.id}>
                   <PersonAvatar name={organization.name} image={organization.logo ?? undefined} />
                   {organization.name}
