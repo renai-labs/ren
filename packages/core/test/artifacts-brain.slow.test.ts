@@ -3,6 +3,7 @@ import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { TestHand } from "@ren/executor/testing"
+import { Artifact } from "@ren/schema/artifact"
 import { Brain } from "@ren/schema/brain"
 import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
@@ -147,7 +148,7 @@ describe("artifacts from a chat", () => {
       const url = deployed?.url ?? ""
       if (process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1") {
         expect(deployed?.provider).toBe(ArtifactCloudflare.id)
-        expect(url).toMatch(/^https:\/\/.*\.workers\.dev\//u)
+        expect(url).toBe(`https://${Artifact.label(row.id)}.${process.env.ARTIFACT_DOMAIN}/`)
         expect(completed.text).toContain(url)
         yield* Effect.log(`Ren chat Cloudflare artifact: ${row.id} ${url}`)
       }

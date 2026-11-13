@@ -62,9 +62,11 @@ variable "server_environment" {
 variable "artifact_cloudflare" {
   type = object({
     account_id = string
+    namespace  = string
+    domain     = string
   })
   default     = null
-  description = "Enable ordinary Cloudflare Workers for artifacts. Store CLOUDFLARE_API_TOKEN in the existing server secret before deploying. No custom domain or Workers for Platforms is required."
+  description = "Serve artifacts on Cloudflare Workers for Platforms at https://<label>.<domain>/. infra/cloudflare makes the namespace and the domain. Store CLOUDFLARE_API_TOKEN in the existing server secret before deploying."
 
   validation {
     condition     = var.artifact_cloudflare == null ? true : can(regex("^[a-f0-9]{32}$", var.artifact_cloudflare.account_id))

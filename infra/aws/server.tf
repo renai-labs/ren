@@ -160,8 +160,10 @@ resource "aws_ecs_task_definition" "server" {
         BUNDLE_BUCKET  = aws_s3_bucket.artifacts.id
         BUNDLE_REGION  = var.region
         }, var.artifact_cloudflare == null ? {} : {
-        ARTIFACT_PROVIDER     = "cloudflare"
-        CLOUDFLARE_ACCOUNT_ID = var.artifact_cloudflare.account_id
+        ARTIFACT_PROVIDER             = "cloudflare"
+        CLOUDFLARE_ACCOUNT_ID         = var.artifact_cloudflare.account_id
+        ARTIFACT_CLOUDFLARE_NAMESPACE = var.artifact_cloudflare.namespace
+        ARTIFACT_DOMAIN               = var.artifact_cloudflare.domain
       }) : { name = key, value = value }
     ]
     secrets = [
