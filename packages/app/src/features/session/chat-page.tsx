@@ -15,6 +15,7 @@ import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
 import { Transcript } from "./transcript.js"
 import { PromptInput } from "./prompt-input.js"
+import { useChatKeys } from "./use-chat-keys.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { cn } from "cn"
@@ -30,6 +31,7 @@ type Chat = ReturnType<typeof useChat>
 
 function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
+  const keys = useChatKeys()
   const admin = useCanAdminister()
   const find = useFind({
     messages: chat.messages,
@@ -41,6 +43,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   return (
     <>
       <Transcript
+        handle={keys.transcript}
         key={chat.view.sessionID}
         view={chat.view}
         spaceId={chat.spaceId}
@@ -71,13 +74,18 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
       <div className="px-6 pb-4">
-        <ChatComposer chat={chat} dock={props.dock} />
+        <ChatComposer chat={chat} dock={props.dock} onComposer={keys.composer} onDock={keys.dock} />
       </div>
     </>
   )
 }
 
-function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
+function ChatComposer(props: {
+  chat: Chat
+  dock?: ReactNode
+  onComposer: (node: HTMLTextAreaElement | null) => void
+  onDock: (node: HTMLDivElement | null) => void
+}) {
   const chat = props.chat
   const column = useRef<HTMLDivElement>(null)
   return (
@@ -105,18 +113,21 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
         </Alert>
       ) : null}
       {chat.child ? null : props.dock}
-      <ChatRequests
-        root={chat.root}
-        sessionID={chat.view.sessionID}
-        permission={chat.requests.permission}
-        permissionTitle={chat.requests.permissionTitle}
-        form={chat.requests.form}
-        formTitle={chat.requests.formTitle}
-        formExpired={chat.requests.formExpired}
-        onOpen={(id) => chat.openChild(id)}
-      />
+      <div ref={(node) => props.onDock(node)} className="contents">
+        <ChatRequests
+          root={chat.root}
+          sessionID={chat.view.sessionID}
+          permission={chat.requests.permission}
+          permissionTitle={chat.requests.permissionTitle}
+          form={chat.requests.form}
+          formTitle={chat.requests.formTitle}
+          formExpired={chat.requests.formExpired}
+          onOpen={(id) => chat.openChild(id)}
+        />
+      </div>
       {chat.blocked || chat.child ? null : (
         <PromptInput
+          textareaRef={props.onComposer}
           placement="chat"
           spaceId={chat.spaceId}
           value={chat.draft}
