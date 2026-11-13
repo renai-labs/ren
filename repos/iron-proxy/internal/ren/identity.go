@@ -25,6 +25,12 @@ type IdentityConfig struct {
 	// is a public certificate for the egress host name.
 	Cert string `yaml:"cert"`
 	Key  string `yaml:"key"`
+	// ACMEHost, when set, replaces Cert and Key: the entry gets a certificate
+	// for this host from Let's Encrypt, renews it, and keeps it in ACMECache.
+	// Let's Encrypt checks the host on this entry (TLS-ALPN-01), so Listen
+	// is port 443.
+	ACMEHost  string `yaml:"acme_host"`
+	ACMECache string `yaml:"acme_cache"`
 	// Issuer is E2B's token issuer (default https://id.e2b.dev). The SPIFFE
 	// trust domain in `sub` is its host.
 	Issuer string `yaml:"issuer"`
@@ -43,13 +49,20 @@ func (c IdentityConfig) issuer() string {
 }
 
 // Validate refuses an entry that would accept tokens of any audience or
-// project.
+// project, or that has no certificate.
 func (c IdentityConfig) Validate() error {
 	if c.Listen == "" {
 		return nil
 	}
+	type field struct{ name, value string }
+	fields := []field{{"audience", c.Audience}, {"project", c.Project}}
+	if c.ACMEHost == "" {
+		fields = append(fields, field{"cert", c.Cert}, field{"key", c.Key})
+	} else {
+		fields = append(fields, field{"acme_cache", c.ACMECache})
+	}
 	missing := []string{}
-	for _, field := range []struct{ name, value string }{{"audience", c.Audience}, {"cert", c.Cert}, {"key", c.Key}, {"project", c.Project}} {
+	for _, field := range fields {
 		if field.value == "" {
 			missing = append(missing, "identity."+field.name)
 		}

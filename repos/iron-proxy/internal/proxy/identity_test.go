@@ -37,7 +37,7 @@ func startIdentityEntry(t *testing.T, issuer *rentest.Issuer) (string, *http.Cli
 		Pipeline:     transform.NewPipelineHolder(transform.NewPipeline(nil, transform.BodyLimits{}, testLogger())),
 		Logger:       testLogger(),
 		IdentityAddr: "127.0.0.1:0",
-		IdentityCert: *cert,
+		IdentityTLS:  &tls.Config{Certificates: []tls.Certificate{*cert}},
 		Verifier:     ren.NewVerifier(ren.IdentityConfig{Issuer: issuer.Server.URL, Audience: rentest.Audience, Project: rentest.Project}, issuer.Server.Client()),
 	})
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

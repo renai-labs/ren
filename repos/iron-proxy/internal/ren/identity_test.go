@@ -28,6 +28,23 @@ func TestVerifierAcceptsAnE2BToken(t *testing.T) {
 	require.Equal(t, Identity{SandboxID: "sbx1", ExecutionID: "exec1"}, identity)
 }
 
+// The entry needs a certificate: files, or one that it gets from Let's
+// Encrypt for its host and keeps in a cache folder.
+func TestIdentityConfigNeedsACertificate(t *testing.T) {
+	entry := IdentityConfig{Listen: ":443", Audience: rentest.Audience, Project: rentest.Project}
+	files := entry
+	files.Cert, files.Key = "/etc/ren-egress/certs/cert.pem", "/etc/ren-egress/certs/key.pem"
+	acme := entry
+	acme.ACMEHost, acme.ACMECache = "egress.ren.example.com", "/var/lib/ren-egress/acme"
+	noCache := acme
+	noCache.ACMECache = ""
+
+	require.NoError(t, files.Validate())
+	require.NoError(t, acme.Validate())
+	require.ErrorContains(t, entry.Validate(), "identity.cert, identity.key required")
+	require.ErrorContains(t, noCache.Validate(), "identity.acme_cache required")
+}
+
 func TestVerifierRefuses(t *testing.T) {
 	key := rentest.NewKey(t, "k1")
 	i := rentest.NewIssuer(t, key)

@@ -112,9 +112,9 @@ type Options struct {
 	// Ren: fork change 12.
 	PassthroughHosts []string
 	// Ren: fork change 14. IdentityAddr, when set, serves the identity entry
-	// with IdentityCert, and Verifier checks its tokens.
+	// with IdentityTLS, and Verifier checks its tokens.
 	IdentityAddr string
-	IdentityCert tls.Certificate
+	IdentityTLS  *tls.Config
 	Verifier     *ren.Verifier
 }
 
@@ -176,7 +176,7 @@ func New(opts Options) *Proxy {
 			Addr:              opts.IdentityAddr,
 			Handler:           http.HandlerFunc(p.handleIdentity),
 			ReadHeaderTimeout: 10 * time.Second,
-			TLSConfig:         &tls.Config{Certificates: []tls.Certificate{opts.IdentityCert}, MinVersion: tls.VersionTLS12},
+			TLSConfig:         opts.IdentityTLS,
 		}
 		_ = http2.ConfigureServer(p.identityServer, &http2.Server{}) // zero config never errors
 	}
