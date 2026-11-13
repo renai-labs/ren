@@ -1,16 +1,7 @@
 import { Preference } from "../../lib/preference.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { Link, getRouteApi } from "@tanstack/react-router"
-import {
-  IconHandStop,
-  IconChevronDown,
-  IconCube,
-  IconArchive,
-  IconLink,
-  IconX,
-  IconPlus,
-  IconGhostFilled,
-} from "@tabler/icons-react"
+import { IconHandStop, IconCube, IconArchive, IconLink, IconX, IconPlus, IconGhostFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
 import {
@@ -22,7 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Button } from "@ren/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
+import { Collapsible, CollapsibleContent } from "@ren/ui/collapsible"
+import { GroupHeader } from "../../components/group-header.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { TasksSample } from "../../components/route-skeleton.js"
@@ -284,36 +276,26 @@ function TaskGroups(props: {
     <div className={cn("flex flex-col transition-opacity", props.stale && "opacity-60")}>
       {groups.map((group) => (
         <Collapsible key={group.id} defaultOpen>
-          <div className="flex h-9 items-center gap-2 rounded-lg bg-muted pr-2 pl-1 text-sm">
-            <CollapsibleTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted aria-expanded:hover:text-foreground [&_svg]:-rotate-90 aria-expanded:[&_svg]:rotate-0"
-                  aria-label={`Toggle ${group.label}`}
-                />
-              }
-            >
-              <IconChevronDown className="size-3.5" />
-            </CollapsibleTrigger>
-            <group.icon className="size-4 text-muted-foreground" />
-            <h2 className="truncate font-medium">{group.label}</h2>
-            <span className="text-xs text-muted-foreground tabular-nums">{group.tasks.length}</span>
-            <NewTaskDialog
-              spaceId={group.spaceId}
-              trigger={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="ml-auto text-muted-foreground"
-                  aria-label={`New task in ${group.label}`}
-                />
-              }
-            >
-              <IconPlus className="size-3.5" />
-            </NewTaskDialog>
-          </div>
+          <GroupHeader
+            label={group.label}
+            icon={group.icon}
+            count={group.tasks.length}
+            action={
+              <NewTaskDialog
+                spaceId={group.spaceId}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    aria-label={`New task in ${group.label}`}
+                  />
+                }
+              >
+                <IconPlus className="size-3.5" />
+              </NewTaskDialog>
+            }
+          />
           <CollapsibleContent>
             {group.tasks.map((task) => (
               <TaskRow

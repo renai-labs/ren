@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import { cn } from "cn"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation } from "@tanstack/react-router"
 import {
@@ -24,7 +25,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@ren/ui/sidebar"
-import { Footer, Header, Section, sidebarRow } from "./sidebar-parts.js"
+import { Footer, Header, Section, sidebarMenu, sidebarRow } from "./sidebar-parts.js"
 import { canAdministerOptions } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Keyboard } from "../platform/keyboard.js"
@@ -60,7 +61,7 @@ function SettingsMenu(props: {
   section: string | undefined
 }) {
   return (
-    <SidebarMenu className="gap-1">
+    <SidebarMenu className={sidebarMenu}>
       {props.items.map((item) => (
         <SidebarMenuItem key={item.id}>
           <SidebarMenuButton
@@ -104,7 +105,7 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="gap-0 p-0">
         <Header onSearch={props.onSearch} />
-        <SidebarMenu className="gap-1 px-0.5">
+        <SidebarMenu className={cn(sidebarMenu, "px-0.5")}>
           <SidebarMenuItem>
             <SidebarMenuButton className={sidebarRow} tooltip="Back to app" render={<Link to="/" />}>
               <IconArrowLeft />

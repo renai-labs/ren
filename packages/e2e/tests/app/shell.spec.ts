@@ -45,14 +45,14 @@ test("space navigation keeps cached metadata visible", async ({ page }) => {
     await page.getByRole("button", { name: "Research actions", exact: true }).click()
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click()
     await expect(page.getByRole("button", { name: "Switch space (current: Research)", exact: true })).toBeVisible()
-    await expect(page.getByRole("link", { name: "Overview", exact: true })).toBeVisible()
-    await expect(page.getByRole("link", { name: "Members", exact: true })).toBeVisible()
+    await expect(page.getByRole("link", { name: "Inbox", exact: true })).toBeVisible()
+    await expect(page.getByRole("list", { name: "Space" }).getByRole("link", { name: "Settings" })).toBeVisible()
     await expect(page.getByRole("status", { name: "Loading navigation", exact: true })).toHaveCount(0)
     await page.screenshot({ path: test.info().outputPath("cached-space-navigation-light.png") })
   } finally {
     held.resolve()
   }
-  await expect(page.getByRole("heading", { name: "Overview", exact: true, level: 1 })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Settings", exact: true, level: 1 })).toBeVisible()
 })
 
 test("expanding chats keeps the sidebar visible without navigation placeholders", async ({ page }) => {

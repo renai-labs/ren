@@ -1,20 +1,18 @@
 import { Suspense } from "react"
 import { SpaceSectionSkeleton, spaceSections } from "../../components/route-skeleton.js"
 import { useMutation } from "@tanstack/react-query"
-import { Outlet, useNavigate } from "@tanstack/react-router"
-import { IconArchive } from "@tabler/icons-react"
+import { Outlet } from "@tanstack/react-router"
 import type { SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/sonner"
 import { EmptyState } from "../../components/empty-state.js"
-import { useMe } from "../../lib/use-me.js"
 import { Page } from "../../components/page.js"
-import { RowMenu } from "../../components/row-menu.js"
-import { isSoftwareFactory } from "../../lib/factory.js"
 import { errorMessage } from "../../lib/errors.js"
-import { useSpace } from "./use-space.js"
+import { isSoftwareFactory } from "../../lib/factory.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { useMe } from "../../lib/use-me.js"
+import { useSpace } from "./use-space.js"
 import { Routing } from "../../lib/routing.js"
 
 const sharedReason = (space: SpaceInfo) =>
@@ -59,16 +57,13 @@ function NotJoined(props: { space: SpaceInfo }) {
 }
 
 export function SpaceLayout() {
-  const { api } = RouterContext.useRouterContext()
   const space = useSpace()
-  const navigate = useNavigate()
-  const archive = useMutation(api.space.archive.mutationOptions())
   const path = Routing.useRenderedPath().split("/")
-  const tab = path.at(3) ?? "overview"
-  const factory = (tab === "overview" || tab === "kanban") && isSoftwareFactory(space)
-  const section = spaceSections[tab] ?? spaceSections.overview
+  const tab = path.at(3) ?? "inbox"
+  const factory = (tab === "overview" || tab === "tasks") && isSoftwareFactory(space)
+  const section = spaceSections[tab] ?? spaceSections.inbox
   if (space.membershipId === null) return <NotJoined space={space} />
-  if ((tab === "webhooks" && path.at(4)) || tab === "artifacts")
+  if ((tab === "automations" && path.at(4)) || tab === "artifacts")
     return (
       <Suspense fallback={<SpaceSectionSkeleton />}>
         <Outlet />
@@ -83,40 +78,7 @@ export function SpaceLayout() {
       </div>
     )
   return (
-    <Page
-      title={section.title}
-      description={section.description(space.name)}
-      menu={
-        space.canArchive ? (
-          <RowMenu
-            label="Space actions"
-            items={[
-              {
-                label: "Archive space",
-                icon: IconArchive,
-                onSelect: () =>
-                  archive.mutateAsync(
-                    { id: space.id },
-                    {
-                      onSuccess: () => {
-                        toast.success(`${space.name} archived`)
-                        void navigate({ to: "/spaces" })
-                      },
-                      onError: (error) =>
-                        toast.error("Could not archive the space", { description: errorMessage(error) }),
-                    },
-                  ),
-                confirm: {
-                  title: `Archive “${space.name}”?`,
-                  description: "Its members lose access. Only the API can bring it back.",
-                  action: "Archive",
-                },
-              },
-            ]}
-          />
-        ) : undefined
-      }
-    >
+    <Page title={section.title} description={section.description?.(space.name)} width={section.width}>
       <Suspense fallback={<SpaceSectionSkeleton />}>
         <Outlet />
       </Suspense>

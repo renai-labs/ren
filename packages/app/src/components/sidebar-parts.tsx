@@ -70,7 +70,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { CreateOrganizationDialog } from "./create-organization-dialog.js"
-import { FilterMenu, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
+import { FilterMenu, sameFilters, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
 import { RowMenu } from "./row-menu.js"
 import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
@@ -81,13 +81,17 @@ import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
 import { ownChats, sessionTitle, sidebarSessionsOptions, type SessionFilter } from "../lib/sessions.js"
+import { Preference } from "../lib/preference.js"
+import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
 export const sidebarRow =
-  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-9 gap-1 rounded-md p-1.5 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.75 [&_svg]:size-4.5"
+  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-8 gap-1 rounded-md p-1 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:mx-1.25 [&>svg]:my-0.75 [&_svg]:size-4.5"
+
+export const sidebarMenu = "gap-px group-data-[collapsible=icon]:gap-1"
 
 const iconButton =
   "size-8 text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
@@ -168,22 +172,17 @@ export function NavRow(props: {
 
 export function Section(props: {
   label: string
-  to?: "/spaces"
   actions?: ReactNode | undefined
   open?: boolean | undefined
   onToggle?: (() => void) | undefined
   className?: string | undefined
+  closed?: ReactNode
   children: ReactNode
 }) {
   return (
     <SidebarGroup className={cn("px-0.5 pt-5 pb-0 group-data-[collapsible=icon]:pt-3", props.className)}>
       <div className="group/section flex h-6 shrink-0 items-center pr-1 pb-1 pl-2.25 group-data-[collapsible=icon]:hidden">
-        {props.to ? (
-          <Link to={props.to} className="text-sm font-medium text-sidebar-foreground/80 hover:text-sidebar-foreground">
-            {props.label}
-          </Link>
-        ) : null}
-        {!props.to && props.onToggle ? (
+        {props.onToggle ? (
           <Button
             variant="ghost"
             size="sm"
@@ -201,13 +200,11 @@ export function Section(props: {
             />
           </Button>
         ) : null}
-        {!props.to && !props.onToggle ? (
-          <span className="text-sm font-medium text-sidebar-foreground/80">{props.label}</span>
-        ) : null}
+        {!props.onToggle ? <span className="text-sm font-medium text-sidebar-foreground/80">{props.label}</span> : null}
         <span className="flex-1" />
         <span className="flex items-center">{props.actions}</span>
       </div>
-      {props.open === false ? null : props.children}
+      {props.open === false ? props.closed : props.children}
     </SidebarGroup>
   )
 }
@@ -270,7 +267,7 @@ export function SpaceEntry(props: {
         <SidebarMenuButton
           className={cn(
             sidebarRow,
-            "min-w-0 flex-1 gap-2 py-1.5 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
+            "min-w-0 flex-1 gap-2 py-1 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
             props.space.membershipId === null
               ? "pr-8 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-8 pointer-fine:group-hover/space:pr-8 pointer-fine:group-has-data-popup-open/space:pr-8"
               : "pr-15 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-15 pointer-fine:group-hover/space:pr-15 pointer-fine:group-has-data-popup-open/space:pr-15",
@@ -462,10 +459,13 @@ function LoadMore(props: { onVisible: () => void }) {
 }
 
 export function useChatFilters() {
-  const spaces = useSpaces().spaces
-  const [filters, setFilters] = useState<Filters>({})
+  const spaces = useSpaces().joined
+  const defaults = Preference.usePreference(SidebarPreferences.chatFilters)
+  const setPreference = Preference.useSetPreference()
+  const [filters, setFilters] = useState<Filters>(defaults)
   return {
     filters,
+    filtered: !sameFilters(filters, defaults),
     actions: (
       <FilterMenu
         label="Filter chats"
@@ -473,15 +473,16 @@ export function useChatFilters() {
         properties={chatProperties(spaces)}
         value={filters}
         onChange={setFilters}
+        defaults={defaults}
+        onSaveDefaults={() => setPreference(SidebarPreferences.chatFilters, filters)}
       />
     ),
   }
 }
 
-export function ChatsList(props: { path: string; filters: Filters }) {
+export function ChatsList(props: { path: string; filters: Filters; filtered: boolean }) {
   const { client } = RouterContext.useRouterContext()
   const me = useMe()
-  const filtered = Object.values(props.filters).some((values) => values.length > 0)
   const chatPages = useInfiniteQuery({
     ...sidebarSessionsOptions(client, chatFilter(props.filters, me.user.id)),
     placeholderData: keepPreviousData,
@@ -489,10 +490,10 @@ export function ChatsList(props: { path: string; filters: Filters }) {
   const chats = chatPages.data?.pages.flatMap((page) => page.items) ?? []
   return (
     <SidebarGroupContent className="pb-2">
-      <SidebarMenu className="gap-px">
+      <SidebarMenu className={sidebarMenu}>
         {chatPages.isSuccess && chats.length === 0 ? (
-          <li className="flex h-9 items-center pl-2.25 text-sm text-sidebar-foreground">
-            {filtered ? "No chats match these filters" : "No chats yet"}
+          <li className="flex h-8 items-center pl-2.25 text-sm text-sidebar-foreground">
+            {props.filtered ? "No chats match these filters" : "No chats yet"}
           </li>
         ) : null}
         {chats.map((chat) => (
@@ -668,7 +669,7 @@ function HelpAndSettings() {
 export function Footer() {
   return (
     <SidebarFooter className="gap-1 px-0.5 pt-2 pb-0">
-      <SidebarMenu className="group-data-[collapsible=icon]:gap-1">
+      <SidebarMenu className={sidebarMenu}>
         <NavRow
           to="/settings/preferences"
           label="Settings"

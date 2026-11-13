@@ -12,12 +12,23 @@ import { IconCircle, IconChevronDown } from "@tabler/icons-react"
 import { ChatSkeleton, ComposerFrame } from "./chat-skeleton.js"
 import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
-import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId } from "./page.js"
+import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId, type PageWidth } from "./page.js"
 
-type SpaceSection = { title: string; description: (space: string) => string }
+type SpaceSection = { title: string; description?: (space: string) => string; width?: PageWidth }
 
-export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly overview: SpaceSection } = {
-  overview: { title: "Overview", description: (space) => `The name and description of ${space}.` },
+export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly inbox: SpaceSection } = {
+  inbox: { title: "Inbox", width: "full" },
+  overview: { title: "Overview", width: "full" },
+  tasks: { title: "Tasks", width: "full" },
+  drive: { title: "Drive", width: "full" },
+  automations: { title: "Automations", width: "full" },
+  agents: { title: "Agents", description: (space) => `Agents that work in ${space}.` },
+  instructions: { title: "Instructions", description: (space) => `Guidance every agent follows in ${space}.` },
+  memory: { title: "Memory", description: (space) => `What agents remember between chats in ${space}.` },
+  permissions: {
+    title: "Permissions",
+    description: (space) => `Tools agents in ${space} can use, and which ones ask first.`,
+  },
   settings: {
     title: "Settings",
     description: (space) => `The name, instructions and default model of ${space}.`,
@@ -28,13 +39,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
   channels: { title: "Channels", description: (space) => `Where people mention @Ren to work in ${space}.` },
   credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
-  schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
-  webhooks: { title: "Webhooks", description: (space) => `URLs other apps call to start sessions in ${space}.` },
-  factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
-  artifacts: {
-    title: "Artifacts",
-    description: (space) => `Sites and apps Ren published in ${space}, each at a link anyone can open.`,
-  },
+  artifacts: { title: "Artifacts" },
 }
 
 function ArtifactsSkeleton() {
@@ -123,10 +128,10 @@ function SpaceSectionSample(props: { section: string }) {
   if (props.section === "credentials") return table(["Key", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
-  if (props.section === "schedules") return table(["Name", "Frequency", "Next run", "Status", ""])
+  if (props.section === "automations") return table(["Name", "Frequency", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
-  if (props.section === "factory") return <RowsSample count={3} />
-  if (props.section === "kanban")
+  if (props.section === "agents") return <RowsSample count={3} />
+  if (props.section === "tasks")
     return (
       <div className="flex gap-4 overflow-hidden">
         {["Backlog", "Plan", "Build", "Review"].map((title) => (
@@ -153,7 +158,7 @@ export function SpaceSectionSkeleton() {
     <Loading id={shapeId} label="Loading space">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-8">
-          <SpaceSectionSample section={path.split("/").at(3) ?? "overview"} />
+          <SpaceSectionSample section={path.split("/").at(3) ?? "inbox"} />
         </div>
       </div>
     </Loading>
@@ -162,9 +167,9 @@ export function SpaceSectionSkeleton() {
 
 function SpaceRouteSkeleton(props: { tab: string }) {
   if (props.tab === "artifacts") return <ArtifactsSkeleton />
-  const section = spaceSections[props.tab] ?? spaceSections.overview
+  const section = spaceSections[props.tab] ?? spaceSections.inbox
   return (
-    <Page title={section.title} description={section.description("this space")} loading>
+    <Page title={section.title} description={section.description?.("this space")} width={section.width} loading>
       <SpaceSectionSample section={props.tab} />
     </Page>
   )
@@ -195,14 +200,12 @@ export function RouteSkeleton() {
       </Loading>
     )
   if (path === "/artifacts") return <ArtifactsSkeleton />
-  if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton tab={path.split("/").at(3) ?? "overview"} />
+  if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton tab={path.split("/").at(3) ?? "inbox"} />
   if (path === "/spaces")
     return (
-      <PageSkeleton
-        title="Spaces"
-        description="Each space gives a team its own credentials, apps and agents."
-        body="cards"
-      />
+      <PageSkeleton title="Spaces" description="Each space gives a team its own credentials, apps and agents.">
+        <TableSample columns={["Space", "Description", "Members", ""]} />
+      </PageSkeleton>
     )
   if (path === "/tasks")
     return (
@@ -210,9 +213,9 @@ export function RouteSkeleton() {
         <TasksSample />
       </PageSkeleton>
     )
-  if (path === "/schedules")
+  if (path === "/automations")
     return (
-      <PageSkeleton title="Scheduled" description="Work that starts on a schedule instead of a message.">
+      <PageSkeleton title="Automations" width="full">
         <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
       </PageSkeleton>
     )

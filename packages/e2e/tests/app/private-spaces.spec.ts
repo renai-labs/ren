@@ -17,7 +17,7 @@ test("an admin sees another person's private space as its list entry only, and j
   const create = alan.getByRole("dialog", { name: "New space" })
   await create.getByRole("textbox", { name: "Name" }).fill("Research")
   await create.getByRole("button", { name: "Create space" }).click()
-  await expect(alan.getByRole("button", { name: "Switch space (current: Research)" })).toBeVisible()
+  await expect(alan.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible()
 
   await page.goto("/app/spaces?tab=all")
   await expect(page.getByRole("link", { name: "Research" })).toBeVisible()
@@ -36,6 +36,7 @@ test("an admin sees another person's private space as its list entry only, and j
   await expect(page.getByText("You’re not in this space")).toBeVisible()
   if (shots) await page.screenshot({ path: `${shots}/3-shared-space-not-joined.png`, fullPage: true })
   await page.getByRole("button", { name: "Join space" }).click()
+  await page.getByRole("button", { name: "Space", exact: true }).click()
   await expect(page.getByRole("link", { name: "Members" })).toBeVisible()
   await page.getByRole("link", { name: "Members" }).click()
   await expect(page.getByText("Grace Hopper")).toBeVisible()

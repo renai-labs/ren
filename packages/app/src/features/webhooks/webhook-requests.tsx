@@ -24,7 +24,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { Webhooks } from "../../lib/webhooks.js"
 import { useWebhookForm } from "./use-webhook-form.js"
 
-const route = getRouteApi("/_authed/_shell/spaces/$spaceId/webhooks/$webhookId/")
+const route = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/")
 
 const any = "any"
 

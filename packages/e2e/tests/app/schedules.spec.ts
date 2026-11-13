@@ -9,7 +9,7 @@ test("a member creates a daily schedule, runs it now and finds the scheduled mes
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/schedules")
+  await page.goto("/app/automations")
   await expect(page.getByText("No schedules yet")).toBeVisible()
 
   await page.getByRole("button", { name: "Create schedule" }).first().click()
