@@ -582,6 +582,30 @@ export const make = (
                 ),
             })
           })
+          yield* tool.transform((editor) => {
+            if (!hasWorkspace || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
+              return
+            editor.add({
+              name: SessionMessage.htmlRenderTool,
+              description:
+                "Publish an HTML page to the chat, shown above your reply in a sandboxed frame. Use it for a visual answer: a chart, a table, a layout. The page must be one file. Local images, stylesheets and scripts that it names by relative path are inlined; the page is at most 5 MB. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. Style it with the CSS variables of the app (`--background`, `--foreground`, `--muted`, `--muted-foreground`, `--border`, `--primary`, `--radius`, `--font-sans`, `--font-mono`) so that it fits light and dark themes. Each call adds a new page.",
+              input: Schema.Struct({
+                path: Schema.NonEmptyString.annotate({ description: "The path of the HTML file on the environment." }),
+                title: Schema.optionalKey(Schema.NonEmptyString).annotate({
+                  description: "The page’s title. Defaults to its <title>, else its file name.",
+                }),
+              }),
+              output: SessionMessage.RenderedPage.fields.page,
+              options: { codemode: false },
+              execute: (args) =>
+                onSpaceDrive((client) =>
+                  DriveFiles.publishPage(client, spaceDrive, sessionId, resolve(folder, args.path), args.title),
+                ).pipe(
+                  Effect.map((page) => ({ output: page, metadata: { page } })),
+                  Effect.mapError((error) => new Tool.Error({ message: error.message })),
+                ),
+            })
+          })
           yield* context.session.hook("context", (event) =>
             Effect.gen(function* () {
               const metadata = yield* metadataOf(context.session, event.sessionID)

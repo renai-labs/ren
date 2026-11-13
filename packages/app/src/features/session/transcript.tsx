@@ -16,7 +16,9 @@ import {
   ChatState,
   PatchFiles,
   Projection,
+  RenderedPage,
   ShownFile,
+  WorkspacePage,
   TimelineRow,
   TimelineText,
   ToolDisplay,
@@ -98,6 +100,9 @@ import { useMentionedApps } from "../../lib/use-app.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { Platform } from "../../platform/platform.js"
+import { VisualReply } from "./visual-reply.js"
 import { WorkspaceImage } from "./workspace-image.js"
 
 interface Person {
@@ -158,6 +163,14 @@ type Block =
     }
   | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
   | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
+  | {
+      readonly kind: "page"
+      readonly key: string
+      readonly turn: string
+      readonly source:
+        | { readonly kind: "workspace"; readonly path: string }
+        | { readonly kind: "drive"; readonly page: SessionMessage.RenderedPage["page"] }
+    }
   | {
       readonly kind: "connect"
       readonly key: string
@@ -225,6 +238,37 @@ function pushSteps(blocks: Block[], key: string, turn: string, steps: Step[]) {
   else if (steps.length > 0) blocks.push({ kind: "steps", key, turn, steps })
 }
 
+function pagesOf(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): PageBlock[] {
+  if (row._tag !== "AssistantPart") return []
+  const refs = row.group.type === "part" ? [row.group.ref] : row.group.refs
+  return refs.flatMap((reference): PageBlock[] => {
+    const content = Projection.resolveContent(byId.get(reference.messageID), reference.partID)
+    const key = `${reference.messageID}:${reference.partID}`
+    const path = content?.type === "tool" ? Option.getOrUndefined(WorkspacePage.of(content)) : undefined
+    const page = content?.type === "tool" ? Option.getOrUndefined(RenderedPage.of(content)) : undefined
+    if (path) return [{ kind: "page", key, turn: row.userMessageID, source: { kind: "workspace", path } }]
+    return page ? [{ kind: "page", key, turn: row.userMessageID, source: { kind: "drive", page } }] : []
+  })
+}
+
+type PageBlock = Extract<Block, { readonly kind: "page" }>
+
+function placePages(blocks: ReadonlyArray<Block>, pages: ReadonlyArray<PageBlock>) {
+  const anchors = new Map<string, { index: number; answer: boolean }>()
+  for (const [index, block] of blocks.entries()) {
+    if (block.kind === "answer") anchors.set(block.turn, { index, answer: true })
+    else if (block.kind === "steps" && !anchors.get(block.turn)?.answer)
+      anchors.set(block.turn, { index, answer: false })
+  }
+  const pagesOfTurn = (turn: string) => pages.filter((page) => page.turn === turn)
+  return blocks.flatMap((block, index): Block[] => {
+    const turn = block.kind === "answer" || block.kind === "steps" ? block.turn : undefined
+    const anchor = turn === undefined ? undefined : anchors.get(turn)
+    if (turn === undefined || anchor?.index !== index) return [block]
+    return anchor.answer ? [...pagesOfTurn(turn), block] : [block, ...pagesOfTurn(turn)]
+  })
+}
+
 function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string, SessionMessage.Info>) {
   return rows.reduce<Block[]>((blocks, row) => {
     if (row._tag === "TurnGap") return blocks
@@ -238,6 +282,7 @@ function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string
     if (part) blocks.push(part)
     else if (steps) pushSteps(blocks, TimelineRow.key(row), row.userMessageID, steps)
     else blocks.push({ kind: "row", key: TimelineRow.key(row), row })
+    blocks.push(...pagesOf(row, byId))
     return blocks
   }, [])
 }
@@ -1284,6 +1329,19 @@ function BlockView(props: {
         </MessageContent>
       </Message>
     )
+  if (block.kind === "page")
+    return (
+      <Message>
+        <MessageContent>
+          <VisualReply
+            root={props.transcript.view.root}
+            spaceId={props.transcript.spaceId}
+            source={block.source}
+            version={block.key}
+          />
+        </MessageContent>
+      </Message>
+    )
   if (block.kind === "file")
     return (
       <Message>
@@ -1430,7 +1488,23 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const turns = context.turns
   const activeTurn = props.busy ? props.activeMessageID : undefined
   const watched = useWatchedTurns(activeTurn)
-  const blocks = groupTurns(blocksOf(props.rows, byId), watched.live)
+  const platform = Platform.usePlatform()
+  const visualReplies = ChatPreferences.visualReplies.read(platform.storage)
+  const built = blocksOf(props.rows, byId)
+  const blocks = placePages(
+    groupTurns(
+      built.filter((block) => block.kind !== "page"),
+      watched.live,
+    ),
+    [
+      ...new Map(
+        built
+          .filter((block) => block.kind === "page")
+          .filter((page) => page.source.kind === "drive" || visualReplies)
+          .map((page) => [page.source.kind === "drive" ? page.key : `${page.turn} ${page.source.path}`, page]),
+      ).values(),
+    ],
+  )
   const easing = useEasedSend(blocks)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(

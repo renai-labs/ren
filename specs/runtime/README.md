@@ -30,6 +30,6 @@ Done when a flag targets one space through local evaluation.
 
 ## Flags
 
-| Key  | Type | Default | What it switches | Issue | Remove when |
-| ---- | ---- | ------- | ---------------- | ----- | ----------- |
-| None |      |         |                  |       |             |
+| Key               | Type                                                                                          | Default | What it switches                                                                                      | Issue     | Remove when                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------- |
+| `chat.html-pages` | boolean, a client preference (`ChatPreferences.visualReplies`, until the flag service exists) | `false` | Shows a completed `write` or `edit` of `.ren/pages/*.html` as a sandboxed page above the turn's reply | RENAI-136 | The user-content origin serves `html_render` pages (step B) |
