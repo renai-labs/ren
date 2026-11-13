@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authed/_shell/apps/")({
     Schema.Struct({
       app: Schema.optional(Schema.String),
       category: Schema.optional(Schema.String),
-      tab: Schema.optional(Schema.Literals(["organization", "installed"])),
+      tab: Schema.optional(Schema.Literals(["managed", "organization", "installed"])),
     }),
   ),
   beforeLoad: (options) => {
@@ -24,6 +24,8 @@ export const Route = createFileRoute("/_authed/_shell/apps/")({
     const featured = category ? AppCategories.find(category).apps : AppCategories.featured
     if (category)
       Loader.start(context.queryClient.infiniteQuery(AppRegistryPages.options(context.client, "", category)))
+    if (options.deps.tab === "managed" && !category)
+      Loader.start(context.queryClient.query(AppRegistryPages.all(context.api)))
     if (featured.length > 0 && (category || !options.deps.tab))
       Loader.start(context.queryClient.query(AppRegistryPages.bySlugs(context.api, featured)))
   },

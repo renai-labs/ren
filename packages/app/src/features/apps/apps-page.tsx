@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { IconChevronRight } from "@tabler/icons-react"
-import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
 import { Loading } from "@ren/ui/loading"
 import { Tabs } from "@ren/ui/tabs"
@@ -73,6 +73,35 @@ function OwnApps(props: {
           more={own.more}
           onMore={own.onMore}
           fetching={own.fetching}
+          onAdd={props.onAdd}
+        />
+      )}
+    </Loading>
+  )
+}
+
+function ManagedApps(props: { query: string; onAdd: (app: CatalogApp) => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const shapeId = useShapeId("managed")
+  const registry = useQuery(AppRegistryPages.all(api))
+  const apps = (registry.data?.items ?? [])
+    .filter((app) => app.managed)
+    .map(fromRegistry)
+    .filter((app) => Search.matches(props.query, app.name, app.description))
+  return (
+    <Loading id={shapeId} loading={registry.isPending} label="Loading apps">
+      {registry.isPending ? (
+        <AppListingSample title="Managed by Ren" />
+      ) : (
+        <CatalogList
+          label="Managed by Ren"
+          heading
+          apps={apps}
+          query={props.query}
+          empty="No managed apps yet"
+          more={false}
+          onMore={() => {}}
+          fetching={false}
           onAdd={props.onAdd}
         />
       )}
@@ -180,19 +209,21 @@ function AppsHome() {
         value={tab}
         onValueChange={(value: string) =>
           void navigate({
-            search: value === "organization" || value === "installed" ? { tab: value } : {},
+            search: value === "managed" || value === "organization" || value === "installed" ? { tab: value } : {},
             replace: true,
           })
         }
       >
         <PageTabsList>
           <PageTabsTrigger value="all">All</PageTabsTrigger>
+          <PageTabsTrigger value="managed">Managed</PageTabsTrigger>
           <PageTabsTrigger value="organization">Organization</PageTabsTrigger>
           <PageTabsTrigger value="installed">Installed</PageTabsTrigger>
         </PageTabsList>
       </Tabs>
       {tab === "all" && needle ? <AppResults title="All apps" query={query} needle={needle} onAdd={sheet.add} /> : null}
       {tab === "all" && !needle ? <FeaturedApps onAdd={sheet.add} /> : null}
+      {tab === "managed" ? <ManagedApps query={query} onAdd={sheet.add} /> : null}
       {tab === "organization" ? (
         <OwnApps
           connected={false}
