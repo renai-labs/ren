@@ -1,11 +1,13 @@
 import { DateTime, Option } from "effect"
 import { flushSync } from "react-dom"
 import {
+  useImperativeHandle,
   useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  type Ref,
   type TouchEvent,
   type UIEvent,
   type WheelEvent,
@@ -106,7 +108,13 @@ interface Person {
   readonly image: string | undefined
 }
 
+export interface TranscriptHandle {
+  readonly page: (direction: -1 | 1) => void
+  readonly toEnd: () => void
+}
+
 export interface TranscriptProps {
+  readonly handle?: Ref<TranscriptHandle> | undefined
   readonly view: ChatAtoms.View
   readonly spaceId?: string | undefined
   readonly messages: ReadonlyArray<SessionMessage.Info>
@@ -1385,6 +1393,8 @@ const scrollUpKeys = new Set(["ArrowUp", "PageUp", "Home"])
 
 const bottomSlack = 8
 
+const pageStep = 0.9
+
 const atBottom = (viewport: HTMLElement) =>
   viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= bottomSlack
 
@@ -1466,6 +1476,16 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     flushSync(follow.resume)
     scroller.scrollToEnd()
   }
+  const viewport = useRef<HTMLDivElement>(null)
+  useImperativeHandle(props.handle, () => ({
+    page: (direction) => {
+      const element = viewport.current
+      if (!element) return
+      if (direction < 0) pause(element)
+      element.scrollBy({ top: direction * element.clientHeight * pageStep })
+    },
+    toEnd,
+  }))
   const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
   const context = contextOf(props, byId)
   const turns = context.turns
@@ -1489,6 +1509,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   return (
     <MessageScroller className="@container flex-1">
       <MessageScrollerViewport
+        ref={viewport}
         preserveScrollOnPrepend
         pinEnd={follow.following && props.find === undefined}
         data-easing={easing}
