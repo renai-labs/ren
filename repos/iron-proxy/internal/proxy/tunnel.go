@@ -493,6 +493,7 @@ func cloneTunnelInfo(info *transform.TunnelInfo) *transform.TunnelInfo {
 		Target:            info.Target,
 		RequestTransforms: traces,
 		ProxyLogin:        info.ProxyLogin,
+		MachineID:         info.MachineID,
 	}
 }
 

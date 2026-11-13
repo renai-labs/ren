@@ -152,13 +152,15 @@ resource "aws_ecs_task_definition" "server" {
     portMappings = [{ containerPort = 4100, protocol = "tcp" }, { containerPort = 4443, protocol = "tcp" }]
     environment = [
       for key, value in merge(var.server_environment, {
-        PORT           = "4100"
-        EGRESS_PORT    = "4443"
-        DRIVE_BUCKET   = aws_s3_bucket.drives.id
-        DRIVE_REGION   = var.region
-        DRIVE_ROLE_ARN = aws_iam_role.drive_access.arn
-        BUNDLE_BUCKET  = aws_s3_bucket.artifacts.id
-        BUNDLE_REGION  = var.region
+        PORT                = "4100"
+        EGRESS_PORT         = "4443"
+        EGRESS_MODE         = var.egress_mode
+        EGRESS_IDENTITY_URL = "https://egress.${var.domain}"
+        DRIVE_BUCKET        = aws_s3_bucket.drives.id
+        DRIVE_REGION        = var.region
+        DRIVE_ROLE_ARN      = aws_iam_role.drive_access.arn
+        BUNDLE_BUCKET       = aws_s3_bucket.artifacts.id
+        BUNDLE_REGION       = var.region
         }, var.artifact_cloudflare == null ? {} : {
         ARTIFACT_PROVIDER     = "cloudflare"
         CLOUDFLARE_ACCOUNT_ID = var.artifact_cloudflare.account_id

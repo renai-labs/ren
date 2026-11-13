@@ -208,6 +208,84 @@ const trustEgress = async (home: string): Promise<Readonly<Record<string, string
   return Object.fromEntries(caVariables.map((name) => [name, bundle]))
 }
 
+// oxlint-disable-next-line ren/no-comments -- In split mode (REN_EGRESS_FORWARD) the machine's forwarder takes all its outbound TCP and sends only credential requests to the egress (egress-split.md §3.1). It runs as ren-forward, whose own traffic the rules let through. Its CA is made once and goes where Ren puts the egress CA in proxy mode, so trustEgress trusts it. When the forwarder cannot start, start.js stops: the machine does not boot, and Ren replaces it.
+const forward = { port: "15001", user: "ren-forward", dir: "/etc/ren-forward" }
+
+// oxlint-disable-next-line ren/no-comments -- One nf_tables table, loaded at once by `nft -f`: the redirect is in only with its exceptions. E2B's kernel has no xt_owner, so the forwarder's user is matched natively (meta skuid). Declaring and deleting the table first makes a second start replace it.
+const forwardRules = `
+table ip ren_forward
+delete table ip ren_forward
+table ip ren_forward {
+  chain output {
+    type nat hook output priority -100; policy accept;
+    ip daddr 127.0.0.0/8 return
+    meta skuid "${forward.user}" return
+    meta l4proto tcp redirect to :${forward.port}
+  }
+  chain prerouting {
+    type nat hook prerouting priority -100; policy accept;
+    iifname "docker0" meta l4proto tcp redirect to :${forward.port}
+  }
+}
+`
+
+const forwardCA = `
+if [ ! -s ${forward.dir}/ca.crt ]; then
+  rm -rf ${forward.dir} && mkdir -p ${forward.dir}
+  /opt/ren/iron-proxy generate-ca --outdir ${forward.dir} --name "Ren sandbox forwarder" --alg rsa4096 >/dev/null
+  chown -R ${forward.user} ${forward.dir} && chmod 0700 ${forward.dir} && chmod 0644 ${forward.dir}/ca.crt
+fi
+cat ${forward.dir}/ca.crt
+`
+
+const isListening = (port: string) =>
+  Bun.connect({ hostname: "127.0.0.1", port: Number(port), socket: { data: () => {} } }).then(
+    (socket) => {
+      socket.end()
+      return true
+    },
+    () => false,
+  )
+
+const waitForPort = async (port: string, tries: number): Promise<boolean> => {
+  if (await isListening(port)) return true
+  if (tries <= 0) return false
+  await Bun.sleep(100)
+  return waitForPort(port, tries - 1)
+}
+
+const startForwarder = async (home: string, egress: string) => {
+  if ((await Bun.$`sudo -n true`.nothrow().quiet()).exitCode !== 0)
+    throw new Error("Split mode needs sudo for the forwarder")
+  const ca = await Bun.$`sudo -n sh -c ${forwardCA}`.nothrow().quiet()
+  if (ca.exitCode !== 0) throw new Error(`Making the forwarder's CA failed: ${ca.stderr.toString()}`)
+  await Bun.write(join(home, ".ren", "egress-ca.pem"), ca.stdout)
+  const command = [
+    "sudo",
+    "-n",
+    "-u",
+    forward.user,
+    "/opt/ren/iron-proxy",
+    "forward",
+    "--listen",
+    `0.0.0.0:${forward.port}`,
+    "--egress",
+    egress,
+    "--ca-cert",
+    `${forward.dir}/ca.crt`,
+    "--ca-key",
+    `${forward.dir}/ca.key`,
+  ]
+  void supervise(
+    "forwarder",
+    async () => spawnLogged(command, { log: join(home, ".ren", "forwarder.log"), env: { PATH: process.env.PATH } }),
+    home,
+  )
+  if (!(await waitForPort(forward.port, 100))) throw new Error("The forwarder did not listen within 10 s")
+  const rules = await Bun.$`sudo -n nft -f - < ${new Response(forwardRules)}`.nothrow().quiet()
+  if (rules.exitCode !== 0) throw new Error(`Sending outbound TCP to the forwarder failed: ${rules.stderr.toString()}`)
+}
+
 // oxlint-disable-next-line ren/no-comments -- The executor runs in the ren-tools slice when the machine has systemd, so the tools' memory has its own limit (75%) and the brain survives a tool that fills memory. OOMPolicy=continue: an out-of-memory kill stops one process, not the whole scope. setpriv gives the user's groups (docker); systemd-run --uid gives root's.
 const toolsOf = async (home: string) => {
   const slice = ["systemd-run", "--quiet", "--scope", "--slice=ren-tools.slice", "-p", "OOMPolicy=continue"]
@@ -288,6 +366,7 @@ const main = async (env: Readonly<Record<string, string | undefined>>) => {
   const home = env.HOME ?? "/home/user"
   const ren = join(home, ".ren")
   await mkdir(join(home, "workspace"), { recursive: true })
+  if (env.REN_EGRESS_FORWARD) await startForwarder(home, env.REN_EGRESS_FORWARD)
   const trusted = await trustEgress(home)
   await prepareUntilReady(home, Schema.decodeUnknownSync(Bundle.Downloads)(env.REN_BUNDLES))
   // oxlint-disable-next-line ren/no-comments -- The download links are for this start only. An update brings its own, so the brain, the executor and the agent's commands do not get them.

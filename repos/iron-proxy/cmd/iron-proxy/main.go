@@ -3,12 +3,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -32,6 +34,7 @@ import (
 	"github.com/ironsh/iron-proxy/internal/responseretry"
 	"github.com/ironsh/iron-proxy/internal/transform"
 	"github.com/ironsh/iron-proxy/internal/version"
+	"golang.org/x/crypto/acme/autocert"
 
 	// Register built-in transforms.
 	_ "github.com/ironsh/iron-proxy/internal/transform/allowlist"
@@ -53,6 +56,9 @@ func main() {
 		switch os.Args[1] {
 		case "generate-ca":
 			runGenerateCA(os.Args[2:])
+			return
+		case "forward":
+			runForward(os.Args[2:])
 			return
 		case "version", "--version", "-v":
 			fmt.Println(version.Version)
@@ -242,9 +248,40 @@ func main() {
 		logger.Info("ren enabled", slog.String("hook", cfg.Ren.Hook), slog.String("control_listen", cfg.Ren.ControlListen))
 	}
 
+	// Ren: the identity entry for requests that E2B names (fork change 14).
+	var identityAddr string
+	var identityTLS *tls.Config
+	var verifier *ren.Verifier
+	if renClient != nil && cfg.Ren.Identity.Listen != "" {
+		if cfg.Ren.Identity.ACMEHost != "" {
+			// Gets the certificate at the first request and renews it 30 days
+			// before it expires, without a restart.
+			manager := &autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: autocert.HostWhitelist(cfg.Ren.Identity.ACMEHost),
+				Cache:      autocert.DirCache(cfg.Ren.Identity.ACMECache),
+			}
+			identityTLS = manager.TLSConfig()
+		} else {
+			identityCert, err := tls.LoadX509KeyPair(cfg.Ren.Identity.Cert, cfg.Ren.Identity.Key)
+			if err != nil {
+				logger.Error("ren identity certificate", slog.String("error", err.Error()))
+				os.Exit(1)
+			}
+			identityTLS = &tls.Config{Certificates: []tls.Certificate{identityCert}}
+		}
+		identityTLS.MinVersion = tls.VersionTLS12
+		identityAddr = cfg.Ren.Identity.Listen
+		verifier = ren.NewVerifier(cfg.Ren.Identity, &http.Client{Timeout: 5 * time.Second})
+		logger.Info("ren identity entry enabled", slog.String("listen", cfg.Ren.Identity.Listen), slog.String("audience", cfg.Ren.Identity.Audience))
+	}
+
 	// Initialize proxy.
 	p := proxy.New(proxy.Options{
 		Ren:                           renClient,
+		IdentityAddr:                  identityAddr,
+		IdentityTLS:                   identityTLS,
+		Verifier:                      verifier,
 		HTTPAddr:                      cfg.Proxy.HTTPListen,
 		HTTPSAddr:                     cfg.Proxy.HTTPSListen,
 		TunnelAddr:                    cfg.Proxy.TunnelListen,

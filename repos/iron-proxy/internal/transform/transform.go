@@ -108,6 +108,10 @@ type TunnelInfo struct {
 	// ProxyLogin is the proxy login that the tunnel authenticated with, when
 	// the proxy delegates logins to Ren. The password is not kept.
 	ProxyLogin string
+
+	// MachineID names the machine whose provider-signed identity Ren's
+	// identity entry verified (Ren fork change 14).
+	MachineID string
 }
 
 // Annotate attaches audit metadata to the current transform's trace.

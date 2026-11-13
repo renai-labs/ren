@@ -300,21 +300,31 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     yield* update(row.id, { phase: row.phase }, { phase: "capacity", generation: row.generation })
   })
 
-  const proxyOf = (row: R, provider: MachineProvider.Provider) =>
-    isBehindEgress(provider)
-      ? egress.proxyFor({
-          workload: definition.workload(row),
-          organizationId: row.organization_id,
-        })
-      : Effect.succeed(Option.none<MachineProvider.Proxy>())
+  const machineOf = (row: R) => ({ workload: definition.workload(row), organizationId: row.organization_id })
+
+  // oxlint-disable-next-line ren/no-comments -- Behind an egress, a machine of a provider that can name it sends only its credential requests to the identity entry in split mode (egress-split.md); any other machine sends all its traffic through the proxy.
+  const egressOf = Effect.fnUntraced(function* (row: R, provider: MachineProvider.Provider) {
+    if (!isBehindEgress(provider)) return { proxy: Option.none<MachineProvider.Proxy>(), identity: Option.none() }
+    const identity = provider.canIdentify ? yield* egress.identityFor(machineOf(row)) : Option.none()
+    if (Option.isSome(identity)) return { proxy: Option.none<MachineProvider.Proxy>(), identity }
+    return { proxy: yield* egress.proxyFor(machineOf(row)), identity }
+  })
 
   const create = Effect.fnUntraced(function* (row: R) {
     const provider = yield* definition.providerOf(row)
-    const proxy = yield* proxyOf(row, provider)
+    const routes = yield* egressOf(row, provider)
+    const hasEgress = Option.isSome(routes.proxy) || Option.isSome(routes.identity)
     const desired = yield* definition.desiredSetup(row)
     const startup = yield* definition.startup(row)
-    // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
-    const variables = { ...startup.variables, ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) }
+    // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49). In split mode the machine starts its forwarder for the identity entry (egress-split.md §3.1).
+    const variables = {
+      ...startup.variables,
+      ...(hasEgress && { REN_EGRESS: "1" }),
+      ...Option.match(routes.identity, {
+        onNone: () => ({}),
+        onSome: (identity) => ({ REN_EGRESS_FORWARD: identity.url }),
+      }),
+    }
     const created = yield* provider
       .create({
         labels: {
@@ -327,7 +337,10 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         config: desired.config,
         image: Option.map(desired.image, (image) => image.name),
         variables: { ...variables, ...ExecutorVariables.hiding(Object.keys(variables)) },
-        network: { proxy, hosts: desired.hosts },
+        network: { ...routes, hosts: desired.hosts },
+        ...(Option.isSome(routes.identity) && {
+          beforeStart: (machineId: string) => egress.bind(machineOf(row), machineId),
+        }),
       })
       .pipe(
         Effect.map(Option.some),
@@ -343,7 +356,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       binding: created.value.binding,
       image: desiredImage(desired, provider),
       image_template: Option.match(desired.image, { onNone: () => null, onSome: (image) => image.template }),
-      egress: Option.isSome(proxy),
+      egress: hasEgress,
       network_hosts: Option.getOrNull(desired.hosts),
       url: created.value.url,
       phase: "booting",
@@ -388,7 +401,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
     }
     const connected = yield* provider
-      .connect(row.binding, { proxy: yield* proxyOf(row, provider), hosts: desired.hosts })
+      .connect(row.binding, { ...(yield* egressOf(row, provider)), hosts: desired.hosts })
       .pipe(
         Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
         Effect.catchTag("MachineProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
@@ -669,7 +682,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
     if (sameHosts(applied, Option.fromNullishOr(row.network_hosts))) return
     const provider = yield* definition.providerOf(row)
     if (Option.isNone(provider.updateNetwork)) return
-    yield* provider.updateNetwork.value(row.binding, { proxy: yield* proxyOf(row, provider), hosts: applied }).pipe(
+    yield* provider.updateNetwork.value(row.binding, { ...(yield* egressOf(row, provider)), hosts: applied }).pipe(
       Effect.andThen(update(row.id, { network_hosts: hosts })),
       Effect.catch((error) => Effect.logWarning(`${noun} ${row.id} did not get its new host list`, error)),
       annotate(row),

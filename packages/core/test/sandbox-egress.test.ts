@@ -24,10 +24,11 @@ afterAll(() => egress.stop(true))
 
 const key = await Effect.runPromise(Signature.generate("brain"))
 
-const config = (envelope: boolean) =>
+const config = (options: { readonly envelope: boolean; readonly split?: boolean }) =>
   ConfigProvider.layer(
     ConfigProvider.fromUnknown({
-      ...(envelope && {
+      ...(options.split && { EGRESS_MODE: "split", EGRESS_IDENTITY_URL: "https://egress.ren.dev" }),
+      ...(options.envelope && {
         ENVELOPE_KEYS: JSON.stringify([
           { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
         ]),
@@ -40,13 +41,13 @@ const config = (envelope: boolean) =>
     }),
   )
 
-const layer = (options: { readonly envelope: boolean }) =>
+const layer = (options: { readonly envelope: boolean; readonly split?: boolean }) =>
   SandboxEgress.layer.pipe(
     Layer.provideMerge(CredentialCallers.layer),
     Layer.provideMerge(Layer.mergeAll(Signer.layerLocal, Envelope.layerLocal, EgressControl.layerHttp)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
-    Layer.provide(config(options.envelope)),
+    Layer.provide(config(options)),
   )
 
 const it = testEffect(layer({ envelope: true }))
@@ -79,7 +80,32 @@ describe("SandboxEgress", () => {
       expect(
         yield* callers.verify({ kind: "ProxyLogin", username: proxy.value.username, password: proxy.value.password }),
       ).toEqual({ ok: false, reason: "generation_retired" })
-      expect(invalidations).toEqual([{ login: proxy.value.username }])
+      expect(invalidations).toEqual([{ login: proxy.value.username }, { workload: `brain:${brainId}:` }])
     }),
+  )
+})
+
+describe("SandboxEgress in split mode", () => {
+  const split = testEffect(layer({ envelope: true, split: true }))
+
+  split.live(
+    "a machine gets the identity entry once per generation; retire drops the egress's answers by workload",
+    () =>
+      Effect.gen(function* () {
+        const sandboxEgress = yield* SandboxEgress.Service
+        const owner = yield* Seed.owner()
+        const brainId = Brain.ID.create()
+        yield* Seed.session({ ...owner, brainId })
+        const machine = {
+          workload: { kind: "brain" as const, id: brainId, generation: 1 },
+          organizationId: owner.organizationId,
+        }
+        expect(yield* sandboxEgress.identityFor(machine)).toEqual(Option.some({ url: "https://egress.ren.dev" }))
+        invalidations.length = 0
+        expect(yield* sandboxEgress.identityFor(machine)).toEqual(Option.some({ url: "https://egress.ren.dev" }))
+        expect(invalidations).toEqual([])
+        yield* sandboxEgress.retire({ kind: "brain", id: brainId })
+        expect(invalidations).toEqual([{ workload: `brain:${brainId}:` }])
+      }),
   )
 })

@@ -96,6 +96,13 @@ func findPlaceholders(req *http.Request) []string {
 	return found
 }
 
+// HasPlaceholder says whether a request is a credential request: one with a
+// placeholder in its headers, path or query. The forwarder and the identity
+// entry use it, so they decide as the egress does (fork change 14).
+func HasPlaceholder(req *http.Request) bool {
+	return len(findPlaceholders(req)) > 0
+}
+
 // stripRenHeaders removes the x-ren-* headers that Ren's plugin adds for
 // its own bookkeeping, so they never reach an upstream (README C52).
 func stripRenHeaders(req *http.Request) {

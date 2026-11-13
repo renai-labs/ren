@@ -117,6 +117,27 @@ variable "egress_drain" {
   description = "How long a stopping egress keeps open tunnels. With one copy, new tunnels wait this long during a deploy."
 }
 
+variable "e2b_project_id" {
+  type        = string
+  description = "Ren's E2B project id. The identity entry accepts tokens of this project only."
+
+  validation {
+    condition     = length(var.e2b_project_id) > 0
+    error_message = "The egress does not start without the E2B project id."
+  }
+}
+
+variable "egress_mode" {
+  type        = string
+  default     = "proxy"
+  description = "proxy: all traffic of an E2B sandbox goes through the egress. split: only its credential requests do, through the identity entry. A change applies at the next deploy, to new sandboxes only; destroy the E2B sandboxes of the other mode after it."
+
+  validation {
+    condition     = contains(["proxy", "split"], var.egress_mode)
+    error_message = "egress_mode is proxy or split."
+  }
+}
+
 variable "posthog_proxy" {
   type = object({
     name   = string

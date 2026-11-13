@@ -91,3 +91,8 @@ func (c *recordingConn) Read(p []byte) (int, error) {
 func (c *recordingConn) Write(p []byte) (int, error) {
 	return len(p), nil
 }
+
+// PeekSNI is peekSNI for Ren's forwarder (Ren fork change 15).
+func PeekSNI(conn net.Conn, timeout time.Duration) (sni string, peeked []byte, err error) {
+	return peekSNI(conn, timeout)
+}

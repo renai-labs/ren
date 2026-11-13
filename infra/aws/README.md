@@ -9,7 +9,8 @@ browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
 browser ──HTTPS <posthog_proxy.name>.<domain>──▶ PostHog's managed reverse proxy ──▶ PostHog
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
 browser ──HTTPS POST (form the server signed)──▶ S3 (drives)
-server ──E2B API──▶ sandbox (brain + hand) ──every connection, egress.<domain>:1080──▶ egress (EC2) ──▶ internet
+server ──E2B API──▶ sandbox (brain + hand) ──every connection, egress.<domain>:1080──▶ egress (EC2) ──▶ internet   (egress_mode = proxy)
+sandbox ──credential requests only, HTTPS egress.<domain>:443 (Let's Encrypt certificate)──▶ egress ──▶ internet   (egress_mode = split)
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
 ```
 
@@ -49,6 +50,14 @@ terraform plan -out=plan && terraform apply plan
 | `<name>/deploy` | `E2B_API_KEY`, for the template build; `POSTHOG_CLI_API_KEY`, for the app's source maps (optional)                                                                                                  |
 
 The mTLS certificates: one CA signs a server certificate for `server.<name>.internal` and an egress certificate for `egress.<name>.internal`, both with `serverAuth` and `clientAuth`. The sandbox CA is separate. `repos/iron-proxy/script/certificates.ts` shows the commands.
+
+## Egress mode
+
+`e2b_project_id` is required: the egress serves the identity entry on port 443 in both modes. At its first request, the egress gets a certificate for `egress.<domain>` from Let's Encrypt and keeps it in `/var/lib/ren-egress/acme`. To change `egress_mode`:
+
+1. Set `egress_mode` in `terraform.tfvars`, then apply.
+2. Deploy. The server reads the mode at start.
+3. Destroy every E2B sandbox with the metadata `owner=<E2B_OWNER>`. A sandbox of the other mode fails its credential requests. Ren replaces each sandbox at its next wake.
 
 ## Artifacts on Cloudflare
 

@@ -53,6 +53,15 @@ const smoke = async (tag: string, seeded: Option.Option<string>) => {
   return checked
 }
 
+// oxlint-disable-next-line ren/no-comments -- The egress fork's binary, for the forwarder of split mode (egress-split.md §3.1). E2B runs amd64 machines. Without VCS stamps the same code gives the same bytes, so the tag changes only with the code.
+export const forwarderProgram = async (out: string) => {
+  await Bun.$`bun script/go.ts build -trimpath -buildvcs=false -o ${out} ./cmd/iron-proxy`
+    .cwd(join(root, "repos", "iron-proxy"))
+    .env({ ...Bun.env, GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0" })
+    .quiet()
+  return Bun.file(out).bytes()
+}
+
 // oxlint-disable-next-line ren/no-comments -- start.js is start.ts with everything it imports, in one file: the machine runs it before any of Ren's code is there.
 export const startProgram = async () => {
   const built = await Bun.build({ entrypoints: [join(import.meta.dir, "../machine/start.ts")], target: "bun" })
@@ -64,6 +73,7 @@ export const startProgram = async () => {
 if (import.meta.main) {
   const context = await mkdtemp(join(tmpdir(), "ren-image-"))
   const start = await startProgram()
+  const forwarder = await forwarderProgram(join(context, "iron-proxy"))
   const entries = [
     ...(await Promise.all(
       [...dockerfiles.map((file) => join(import.meta.dir, file)), join(import.meta.dir, "../machine/start.sh")].map(
@@ -71,6 +81,7 @@ if (import.meta.main) {
       ),
     )),
     { path: "start.js", content: start },
+    { path: "iron-proxy", content: forwarder },
   ]
   const bun = Schema.decodeUnknownSync(Root)(await Bun.file(join(root, "package.json")).json()).packageManager.replace(
     /^bun@/,

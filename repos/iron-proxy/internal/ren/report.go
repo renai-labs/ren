@@ -25,11 +25,11 @@ const reportEvery = 60 * time.Second
 var scopePattern = regexp.MustCompile(`scope="([^"]*)"`)
 
 type report struct {
-	Login  string        `json:"login"`
-	Host   string        `json:"host"`
-	Status int           `json:"status"`
-	Scope  string        `json:"scope,omitempty"`
-	Labels []Refreshable `json:"labels"`
+	Proof  map[string]string `json:"proof"`
+	Host   string            `json:"host"`
+	Status int               `json:"status"`
+	Scope  string            `json:"scope,omitempty"`
+	Labels []Refreshable     `json:"labels"`
 }
 
 // Observe looks at the upstream's answer to a request with refreshable
@@ -61,7 +61,7 @@ func (c *Client) Observe(applied *Applied, resp *http.Response) {
 	if len(labels) == 0 {
 		return
 	}
-	body := report{Login: applied.login, Host: applied.host, Status: resp.StatusCode, Scope: scope, Labels: labels}
+	body := report{Proof: applied.caller.proof(), Host: applied.host, Status: resp.StatusCode, Scope: scope, Labels: labels}
 	c.reporting.Add(1)
 	go func() {
 		defer c.reporting.Done()

@@ -28,7 +28,7 @@ func TestMaskHidesAnInjectedValueThatComesBack(t *testing.T) {
 	req.Host = "api.stripe.com"
 	req.Header.Set("X-Key", "ren:STRIPE_API_KEY")
 	req.Header.Set("Accept-Encoding", "gzip")
-	denied, applied := client.Handle(t.Context(), req, "ren-a")
+	denied, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.Nil(t, denied)
 	require.Empty(t, req.Header.Get("Accept-Encoding"), "an upstream answers in plain text, so the egress can read what comes back")
 
@@ -52,7 +52,7 @@ func TestMaskLeavesAStreamUnread(t *testing.T) {
 	req := newRequest(t, "POST", "https://api.anthropic.com/v1/messages", nil, "")
 	req.Host = "api.anthropic.com"
 	req.Header.Set("X-Api-Key", "ren:MODELS")
-	_, applied := client.Handle(t.Context(), req, "ren-a")
+	_, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	resp := response("data: sk-ant-secret\n\n", "text/event-stream")
 	applied.Mask(resp)
 	body, err := io.ReadAll(resp.Body)
@@ -67,7 +67,7 @@ func TestMaskKeepsTheLengthOfAHeadAnswer(t *testing.T) {
 	}})
 	req := newRequest(t, "HEAD", "https://drive.example.com/bucket/report.md", nil, "")
 	req.Host = "drive.example.com"
-	_, applied := client.Handle(t.Context(), req, "ren-a")
+	_, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	resp := &http.Response{
 		StatusCode:    http.StatusOK,
 		Header:        http.Header{"Content-Length": {"43"}},
@@ -89,7 +89,7 @@ func TestMaskHidesTheAWSKeysThatComeBack(t *testing.T) {
 	req.Host = "ren-drives.s3.us-east-1.amazonaws.com"
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=ren:DRIVE/20261028/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=0")
 	req.Header.Set("X-Amz-Content-Sha256", emptySHA256)
-	denied, applied := client.Handle(t.Context(), req, "ren-a")
+	denied, applied := client.Handle(t.Context(), req, Caller{Login: "ren-a"})
 	require.Nil(t, denied)
 
 	resp := response(`<Error><Code>InvalidToken</Code><Token-0>real-session-token</Token-0><Key>real-secret-access-key</Key></Error>`, "application/xml")

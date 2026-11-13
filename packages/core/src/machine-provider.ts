@@ -37,13 +37,19 @@ export interface Labels {
   readonly spaceId: Space.ID
 }
 
-// oxlint-disable-next-line ren/no-comments -- Where a machine's traffic may go: through the egress with a proxy login, and to these hosts only (none: to any host). A provider without updateNetwork gets no hosts.
+// oxlint-disable-next-line ren/no-comments -- Where a machine's traffic may go: through the egress with a proxy login, or only its credential requests to the egress's identity entry (egress-split.md); and to these hosts only (none: to any host). A provider without updateNetwork gets no hosts.
 export interface Network {
   readonly proxy: Option.Option<Proxy>
+  readonly identity: Option.Option<Identity>
   readonly hosts: Option.Option<ReadonlyArray<string>>
 }
 
-export const unrestricted: Network = { proxy: Option.none(), hosts: Option.none() }
+export const unrestricted: Network = { proxy: Option.none(), identity: Option.none(), hosts: Option.none() }
+
+// oxlint-disable-next-line ren/no-comments -- The egress's identity entry. The provider names the machine to it with a token it signs outside the machine, for this URL as the audience.
+export interface Identity {
+  readonly url: string
+}
 
 interface CreateInput<Config> {
   readonly labels: Labels
@@ -52,6 +58,8 @@ interface CreateInput<Config> {
   readonly image: Option.Option<string>
   readonly variables: Readonly<Record<string, string>>
   readonly network: Network
+  // oxlint-disable-next-line ren/no-comments -- Called with the provider's id of the machine once the provider knows it and before the machine starts, so its first request to the identity entry finds its workload.
+  readonly beforeStart?: (machineId: string) => Effect.Effect<void>
 }
 
 export type Step = BrainApiStep
@@ -122,6 +130,8 @@ interface Definition<Config, Binding> {
   readonly description: string
   // oxlint-disable-next-line ren/no-comments -- Whether this provider can send a machine's traffic through the egress with a proxy login (E2B BYOP, HTTPS_PROXY locally), which replaces ren:<LABEL> placeholders (R19, R57).
   readonly canEgress: boolean
+  // oxlint-disable-next-line ren/no-comments -- Whether this provider can name its machines to the egress's identity entry, so only their credential requests go through the egress (egress-split.md).
+  readonly canIdentify?: boolean
   readonly canMount: boolean
   // oxlint-disable-next-line ren/no-comments -- The hosts its machines answer on, such as `*.e2b.app`: a brain with a host list reaches its remote hands there.
   readonly machineHosts?: ReadonlyArray<string>
@@ -156,6 +166,7 @@ interface Definition<Config, Binding> {
 export interface Provider {
   readonly info: Info
   readonly canEgress: boolean
+  readonly canIdentify: boolean
   readonly canMount: boolean
   readonly machineHosts: ReadonlyArray<string>
   readonly systemImage: string | null
@@ -218,6 +229,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
       canColocate: Boolean(definition.hand),
     },
     canEgress: definition.canEgress,
+    canIdentify: definition.canIdentify ?? false,
     canMount: definition.canMount,
     machineHosts: definition.machineHosts ?? [],
     systemImage: definition.systemImage ?? null,

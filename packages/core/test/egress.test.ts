@@ -496,6 +496,28 @@ describe("Egress.resolve", () => {
     }),
   )
 
+  it.live("only Ren's own egress may name a caller by its E2B sandbox", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const callers = yield* CredentialCallers.Service
+      const found = yield* setup()
+      const caller = {
+        workload: { kind: "brain" as const, id: found.brainId, generation: 1 },
+        organizationId: found.organizationId,
+      }
+      yield* callers.issue(caller, "MachineIdentity")
+      yield* callers.bind(caller, "sbx-egress")
+      const proof = { kind: "MachineIdentity" as const, machineId: "sbx-egress" }
+      expect(yield* resolver.resolve(all, request(proof, "api.stripe.com", []))).toMatchObject({ allow: true })
+      expect(
+        yield* resolver.resolve(
+          { kind: "registered", orgs: [found.organizationId] },
+          request(proof, "api.stripe.com", []),
+        ),
+      ).toEqual({ allow: false, reason: "unknown_workload" })
+    }),
+  )
+
   it.live(
     "the allow reply lists sign-in labels as refreshable with their revision and no key; reconnect is denied",
     () =>
@@ -631,7 +653,7 @@ describe("Egress.unauthorized", () => {
         yield* Ref.set(refreshed, [])
         invalidations.length = 0
         const report = (revision: number) => ({
-          login: found.login,
+          proof: { kind: "Login" as const, username: found.login },
           host: "mcp.linear.app",
           status: 401 as const,
           labels: [{ label: "MCP_LINEAR", revision }],
@@ -658,7 +680,7 @@ describe("Egress.unauthorized", () => {
       yield* callers.revoke({ kind: "brain", id: found.brainId })
       invalidations.length = 0
       yield* resolver.unauthorized(all, {
-        login: found.login,
+        proof: { kind: "Login" as const, username: found.login },
         host: "mcp.linear.app",
         status: 401,
         labels: [{ label: "MCP_LINEAR", revision: 1 }],
@@ -678,7 +700,7 @@ describe("Egress.unauthorized", () => {
       yield* Ref.set(refreshed, [])
       invalidations.length = 0
       yield* resolver.unauthorized(all, {
-        login: found.login,
+        proof: { kind: "Login" as const, username: found.login },
         host: "api.ren.test",
         status: 401,
         labels: [{ label: "REN", revision: 0 }],
@@ -695,7 +717,7 @@ describe("Egress.unauthorized", () => {
       const id = yield* signIn(found.organizationId)
       yield* Ref.set(refreshed, [])
       const report = {
-        login: found.login,
+        proof: { kind: "Login" as const, username: found.login },
         host: "mcp.linear.app",
         status: 403 as const,
         scope: "read write admin",
@@ -1027,7 +1049,7 @@ describe("GitHub through the egress", () => {
           label: "GITHUB",
         })
         yield* resolver.unauthorized(all, {
-          login: found.login,
+          proof: { kind: "Login" as const, username: found.login },
           host: "api.github.com",
           status: 401,
           labels: [{ label: "GITHUB", revision: 0 }],

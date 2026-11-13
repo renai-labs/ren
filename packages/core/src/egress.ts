@@ -13,7 +13,7 @@ import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
 import { Injection } from "./injection.js"
 
-// oxlint-disable-next-line ren/no-comments -- Ren's own egress authenticates with mTLS and may name a connection by the login it checked (`Login` proof). Another proxy is limited to its orgs (README §6.6).
+// oxlint-disable-next-line ren/no-comments -- Ren's own egress authenticates with mTLS and may name a connection by the login it checked (`Login` proof) or a machine whose provider-signed identity it verified (`MachineIdentity`). Another proxy is limited to its orgs (README §6.6).
 export interface Principal {
   readonly kind: "ren" | "registered"
   readonly orgs: "all" | ReadonlyArray<Auth.OrganizationID>
@@ -35,7 +35,7 @@ export type Authenticated =
 
 // oxlint-disable-next-line ren/no-comments -- What an egress reports after an upstream answered 401, or 403 with `insufficient_scope`, to a request with refreshable labels (§6.3, K44).
 export interface Report {
-  readonly login: string
+  readonly proof: CredentialCallers.Proof
   readonly host: string
   readonly status: 401 | 403
   readonly scope?: string
@@ -80,7 +80,8 @@ export const layer = Layer.effect(
     })
 
     const caller = Effect.fnUntraced(function* (principal: Principal, proof: CredentialCallers.Proof) {
-      if (proof.kind === "Login" && principal.kind !== "ren") return Result.fail("unknown_workload" as const)
+      if ((proof.kind === "Login" || proof.kind === "MachineIdentity") && principal.kind !== "ren")
+        return Result.fail("unknown_workload" as const)
       const verified = yield* callers.verify(proof)
       if (!verified.ok) return Result.fail(verified.reason)
       if (principal.orgs !== "all" && !principal.orgs.includes(verified.caller.organizationId))
@@ -202,9 +203,9 @@ export const layer = Layer.effect(
 
       // oxlint-disable-next-line ren/no-comments -- §9: Ren finds each label as a resolve would. A newer stored revision means the 401 belongs to a value that is gone, so only the caches clear (U1). The same revision refreshes once per 5 minutes; a 401 never changes the status (K18). A 403 on a sign-in records the wanted scopes (K47).
       unauthorized: Effect.fn("Egress.unauthorized")(function* (principal: Principal, report: Report) {
-        const found = yield* caller(principal, { kind: "Login", username: report.login })
+        const found = yield* caller(principal, report.proof)
         if (Result.isFailure(found)) {
-          yield* Effect.logInfo("Egress reported a 401 for an unknown login").pipe(
+          yield* Effect.logInfo("Egress reported a 401 for an unknown caller").pipe(
             Effect.annotateLogs({ reason: found.failure }),
           )
           return

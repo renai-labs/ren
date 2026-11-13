@@ -10,22 +10,25 @@ import { Random } from "@ren/util/random"
 import { Envelope } from "./envelope.js"
 import { Signer } from "./signer.js"
 
-export type ProofKind = "ProxyLogin" | "Token"
+export type ProofKind = "ProxyLogin" | "Token" | "MachineIdentity"
 
 export interface Caller {
   readonly workload: Workload.Info
   readonly organizationId: Auth.OrganizationID
 }
 
+// oxlint-disable-next-line ren/no-comments -- A machine named by its provider gets nothing: the provider names it to the egress outside the machine, and Ren binds its machine id with `bind` (egress-split.md §3.4).
 export type Placement =
   | { readonly kind: "ProxyLogin"; readonly username: string; readonly password: Redacted.Redacted }
   | { readonly kind: "Token"; readonly token: Redacted.Redacted; readonly exp: number }
+  | { readonly kind: "MachineIdentity" }
 
-// oxlint-disable-next-line ren/no-comments -- `Login` is a proxy login that the egress already checked with `ProxyLogin` when the connection opened; the password is not sent again (iron-proxy fork change 2). Only Ren's own egress may send it.
+// oxlint-disable-next-line ren/no-comments -- `Login` is a proxy login that the egress already checked with `ProxyLogin` when the connection opened; the password is not sent again (iron-proxy fork change 2). `MachineIdentity` is a machine whose provider-signed identity the egress verified (fork change 14). Only Ren's own egress may send either.
 export type Proof =
   | { readonly kind: "ProxyLogin"; readonly username: string; readonly password: Redacted.Redacted }
   | { readonly kind: "Login"; readonly username: string }
   | { readonly kind: "Token"; readonly token: string }
+  | { readonly kind: "MachineIdentity"; readonly machineId: string }
 
 export type Verified =
   | { readonly ok: true; readonly caller: Caller }
@@ -33,6 +36,7 @@ export type Verified =
 
 export interface Interface {
   readonly issue: (caller: Caller, kind: ProofKind) => Effect.Effect<Placement>
+  readonly bind: (caller: Caller, machineId: string) => Effect.Effect<void>
   readonly verify: (proof: Proof) => Effect.Effect<Verified>
   readonly placement: (caller: Caller) => Effect.Effect<Option.Option<Placement>>
   readonly revoke: (workload: {
@@ -135,6 +139,7 @@ export const layer = Layer.effect(
           }),
         )
         if (login) return { kind: "ProxyLogin", username: login.username, password: Redacted.make(login.password) }
+        if (kind === "MachineIdentity") return { kind: "MachineIdentity" }
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + tokenLifetimeSeconds
         const token = yield* signer
           .sign("brain", {
@@ -147,6 +152,22 @@ export const layer = Layer.effect(
           })
           .pipe(Effect.orDie)
         return { kind: "Token", token: Redacted.make(token), exp }
+      }),
+
+      // oxlint-disable-next-line ren/no-comments -- The provider binds the machine id after its create and before the machine starts, so the machine's first request finds it (egress-split.md §3.4).
+      bind: Effect.fn("CredentialCallers.bind")(function* (caller: Caller, machineId: string) {
+        yield* database.db
+          .update(table)
+          .set({ machine_id: machineId })
+          .where(
+            and(
+              eq(table.workload_kind, caller.workload.kind),
+              eq(table.workload_id, caller.workload.id),
+              eq(table.generation, caller.workload.generation),
+              isNull(table.revoked_at),
+            ),
+          )
+          .pipe(Effect.orDie)
       }),
 
       verify: Effect.fn("CredentialCallers.verify")(function* (proof: Proof) {
@@ -164,10 +185,17 @@ export const layer = Layer.effect(
           if (yield* retired(workload.value)) return { ok: false, reason: "generation_retired" } as const
           return { ok: true, caller: { workload: workload.value, organizationId: claims.value.org } } as const
         }
+        // oxlint-disable-next-line ren/no-comments -- A replace revokes the old generation and keeps its machine id, so its machine gets generation_retired; a retire clears the machine id.
         const rows = yield* database.db
           .select()
           .from(table)
-          .where(eq(table.username, proof.username))
+          .where(
+            proof.kind === "MachineIdentity"
+              ? eq(table.machine_id, proof.machineId)
+              : eq(table.username, proof.username),
+          )
+          .orderBy(desc(table.generation))
+          .limit(1)
           .pipe(Effect.orDie)
         const row = rows.at(0)
         if (!row) return unknown
@@ -193,6 +221,7 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.orDie)
         const row = rows.at(0)
+        if (row?.proof_kind === "MachineIdentity") return Option.some({ kind: "MachineIdentity" } satisfies Placement)
         if (!row?.username || !row.password_sealed) return Option.none()
         const password = yield* envelope.open(row.password_sealed, contextOf(caller)).pipe(Effect.orDie)
         return Option.some({ kind: "ProxyLogin", username: row.username, password } satisfies Placement)
@@ -201,7 +230,7 @@ export const layer = Layer.effect(
       revoke: Effect.fn("CredentialCallers.revoke")(function* (workload) {
         const rows = yield* database.db
           .update(table)
-          .set({ revoked_at: sql`now()`, address: null })
+          .set({ revoked_at: sql`now()`, machine_id: null })
           .where(
             and(eq(table.workload_kind, workload.kind), eq(table.workload_id, workload.id), isNull(table.revoked_at)),
           )
