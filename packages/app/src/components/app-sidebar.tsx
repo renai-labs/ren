@@ -1,13 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router"
-import {
-  IconArrowRight,
-  IconBrowser,
-  IconChecklist,
-  IconCube,
-  IconEdit,
-  IconLayoutGridFilled,
-  IconWebhook,
-} from "@tabler/icons-react"
+import { IconBrowser, IconChecklist, IconCube, IconEdit, IconLayoutGridFilled, IconWebhook } from "@tabler/icons-react"
 import { buttonVariants } from "@ren/ui/button"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -74,7 +66,7 @@ function CollapsibleLayout(props: { path: string }) {
                   />
                 }
               >
-                <IconArrowRight />
+                <IconCube />
               </TooltipTrigger>
               <TooltipContent>All spaces</TooltipContent>
             </Tooltip>
