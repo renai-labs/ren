@@ -71,6 +71,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
 import { useStep } from "../../lib/use-step.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
+import { useCountdown } from "../../lib/use-countdown.js"
 import { Drafts } from "../../lib/drafts.js"
 import type { ShellHistory } from "../../lib/use-shell-history.js"
 import { Keyboard } from "../../platform/keyboard.js"
@@ -389,9 +390,30 @@ function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, 
   }
 }
 
-export type PromptInputBoot = Exclude<ChatSession.Boot, { readonly _tag: "Ready" }> | { readonly _tag: "Reconnecting" }
+export type PromptInputBoot =
+  | Exclude<ChatSession.Boot, { readonly _tag: "Ready" }>
+  | { readonly _tag: "Reconnecting" }
+  | { readonly _tag: "Waiting"; readonly retryAt: number }
 
-function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void) | undefined }) {
+function RetryCountdown(props: { retryAt: number }) {
+  return <span className="mr-auto">Reconnecting in {useCountdown(props.retryAt)}s…</span>
+}
+
+function PromptInputStatus(props: {
+  boot: PromptInputBoot
+  onRetry?: (() => void) | undefined
+  onRetryNow?: (() => void) | undefined
+}) {
+  if (props.boot._tag === "Waiting")
+    return (
+      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <IconLoader2 className="size-3.5 animate-spin" />
+        <RetryCountdown retryAt={props.boot.retryAt} />
+        <Button variant="outline" size="sm" onClick={props.onRetryNow}>
+          Try now
+        </Button>
+      </div>
+    )
   if (props.boot._tag === "Failed")
     return (
       <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
@@ -420,6 +442,13 @@ function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void
           Retry
         </Button>
       </div>
+    )
+  if (props.boot._tag === "Checking")
+    return (
+      <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 animate-in items-center gap-2 text-xs text-muted-foreground delay-1000 duration-200 fade-in-0 fill-mode-backwards">
+        <IconLoader2 className="size-3.5 animate-spin" />
+        Connecting…
+      </span>
     )
   if (props.boot._tag === "Reconnecting")
     return (
@@ -767,6 +796,7 @@ export function PromptInput(props: {
   model: ReactNode
   boot?: PromptInputBoot | undefined
   onRetry?: (() => void) | undefined
+  onRetryNow?: (() => void) | undefined
   running?: boolean | undefined
   onStop?: (() => void) | undefined
   sending?: boolean | undefined
@@ -940,7 +970,7 @@ export function PromptInput(props: {
         data-shell={shell}
         className="rounded-xl bg-card shadow-soft data-[shell=true]:border-primary data-[shell=true]:ring-3 data-[shell=true]:ring-primary/15 dark:bg-card"
       >
-        {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
+        {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
           value={text}

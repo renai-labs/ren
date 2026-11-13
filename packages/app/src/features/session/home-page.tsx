@@ -41,8 +41,7 @@ export function HomePage(props: {
   const setDraft = kept.set
   const spaceId =
     draft.chat?.spaceId ?? spaces.find((space) => space.id === (search.spaceId ?? remembered))?.id ?? spaces.at(0)?.id
-  const [createdId, setCreatedId] = useState(() => Session.ID.create())
-  const sessionId = draft.chat?.sessionId ?? createdId
+  const [sessionId, setSessionId] = useState(() => draft.chat?.sessionId ?? Session.ID.create())
   const [sent, setSent] = useState<Composer.Draft>()
   const [picking, setPicking] = useState(false)
   const history = Drafts.useHistory()
@@ -100,7 +99,7 @@ export function HomePage(props: {
           history.remove(draft)
           setSent(undefined)
           const next = Session.ID.create()
-          setCreatedId(next)
+          setSessionId(next)
           kept.update((current) =>
             current.chat ? Composer.withChat(current, { spaceId: current.chat.spaceId, sessionId: next }) : current,
           )

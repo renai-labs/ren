@@ -556,24 +556,34 @@ function UserText(props: { message: SessionMessage.User; text?: string; spaceId:
   )
 }
 
+const statusLabels: Partial<Record<ChatState.PendingStatus, string>> = {
+  starting: "Pending",
+  steering: "Pending",
+  stranded: "Pending",
+  unreachable: "Can’t reach Ren. Trying again…",
+  unsent: "Not sent",
+}
+
 function UserFooter(props: {
   text: string
-  pending: boolean
-  unsent: boolean
+  status: ChatState.PendingStatus | undefined
   onEdit?: (() => void) | undefined
   onRetry?: (() => void) | undefined
   onRemove?: (() => void) | undefined
 }) {
+  const label = props.status && statusLabels[props.status]
+  const unsent = props.status === "unsent"
   return (
     <MessageFooter className="justify-end gap-1">
-      {props.pending ? <span className="px-1 text-xs text-muted-foreground">Pending</span> : null}
-      {props.unsent ? <span className="px-1 text-xs text-destructive">Not sent</span> : null}
-      {props.unsent && props.onRetry ? (
+      {label ? (
+        <span className={cn("px-1 text-xs", unsent ? "text-destructive" : "text-muted-foreground")}>{label}</span>
+      ) : null}
+      {unsent && props.onRetry ? (
         <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRetry}>
           Retry
         </Button>
       ) : null}
-      {props.unsent && props.onRemove ? (
+      {unsent && props.onRemove ? (
         <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRemove}>
           Remove
         </Button>
@@ -598,8 +608,7 @@ function UserMessage(props: {
   message: SessionMessage.User
   spaceId: string | undefined
   person: Person
-  pending: boolean
-  unsent: boolean
+  status: ChatState.PendingStatus | undefined
   editing: boolean
   onEdit?: (() => void) | undefined
   onRetry?: (() => void) | undefined
@@ -631,8 +640,7 @@ function UserMessage(props: {
             <UserBody message={props.message} spaceId={props.spaceId} />
             <UserFooter
               text={props.message.text}
-              pending={props.pending}
-              unsent={props.unsent}
+              status={props.status}
               onEdit={props.onEdit}
               onRetry={props.onRetry}
               onRemove={props.onRemove}
@@ -1177,8 +1185,6 @@ function UserBlock(props: {
   const transcript = props.transcript
   const message = props.message
   const status = transcript.statuses.get(message.id)
-  const pending = status === "starting" || status === "steering" || status === "stranded"
-  const unsent = status === "unsent"
   const senderId = message.sender?.userId
   const person =
     senderId && senderId !== transcript.viewer.id
@@ -1190,10 +1196,9 @@ function UserBlock(props: {
       message={message}
       spaceId={transcript.spaceId}
       person={person}
-      pending={pending}
-      unsent={unsent}
+      status={status}
       editing={props.editing}
-      onEdit={edit && !pending && !unsent ? () => props.onEditing(message.id) : undefined}
+      onEdit={edit && (status === undefined || status === "queued") ? () => props.onEditing(message.id) : undefined}
       onRetry={transcript.onRetry && (() => transcript.onRetry?.(message.id))}
       onRemove={transcript.onRemove && (() => transcript.onRemove?.(message.id))}
       onCancel={() => props.onEditing(undefined)}

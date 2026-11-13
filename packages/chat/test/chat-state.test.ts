@@ -214,7 +214,7 @@ test("an unsent prompt is unsent, not starting", () => {
   const id = SessionMessage.ID.make("msg_unsent")
   const sent = Outbox.admit(ChatState.empty, { sessionID, id, text: "hello", delivery: "steer" }, Fixture.at(1))
   expect(ChatState.pendingStatus(sent, sessionID, id)).toBe("starting")
-  const stalled = Outbox.stall(sent, id)
+  const stalled = Outbox.stall(sent, id, "unsent")
   expect(ChatState.pendingStatus(stalled, sessionID, id)).toBe("unsent")
   expect(ChatState.pendingStatus(Outbox.acknowledge(stalled, id), sessionID, id)).toBe("starting")
   expect(ChatState.pending(Outbox.rollback(stalled, sessionID, id), sessionID)).toEqual([])

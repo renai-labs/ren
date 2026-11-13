@@ -82,6 +82,22 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   )
 }
 
+function UndoneAlert(props: { chat: Chat }) {
+  const chat = props.chat
+  if (!chat.reverted || chat.reverting) return null
+  return (
+    <Alert>
+      <IconRestore />
+      <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
+      <AlertAction>
+        <Button size="sm" variant="outline" onClick={chat.restore}>
+          Restore messages
+        </Button>
+      </AlertAction>
+    </Alert>
+  )
+}
+
 function ChatComposer(props: {
   chat: Chat
   dock?: ReactNode
@@ -103,17 +119,7 @@ function ChatComposer(props: {
         />
       )}
       {chat.tasks.length > 0 && !chat.child ? <Queue tasks={chat.tasks} running={chat.running} /> : null}
-      {chat.reverted && !chat.child ? (
-        <Alert>
-          <IconRestore />
-          <AlertDescription>Later messages are undone. Sending a message discards them.</AlertDescription>
-          <AlertAction>
-            <Button size="sm" variant="outline" onClick={chat.restore}>
-              Restore messages
-            </Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
+      {chat.child ? null : <UndoneAlert chat={chat} />}
       {chat.child ? null : props.dock}
       <div ref={(node) => props.onDock(node)} className="contents">
         <ChatRequests
@@ -139,6 +145,7 @@ function ChatComposer(props: {
           onChooseModel={chat.canChooseModel ? () => chat.setPicking(true) : undefined}
           boot={chat.bootStatus}
           onRetry={chat.retry}
+          onRetryNow={chat.retryNow}
           running={chat.running}
           onStop={chat.stop}
           suggest={chat.suggest}
@@ -304,7 +311,7 @@ export function ChatPage() {
         {chat.failed ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             Ren couldn’t open this chat.
-            <Button variant="outline" disabled={chat.retrying} onClick={chat.retry}>
+            <Button variant="outline" onClick={chat.reopen}>
               Try again
             </Button>
           </div>

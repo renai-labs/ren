@@ -44,7 +44,9 @@ export interface Options {
 
 export interface Connection {
   readonly status: SubscriptionRef.SubscriptionRef<Status>
+  readonly retryAt: SubscriptionRef.SubscriptionRef<number>
   readonly wake: Effect.Effect<void>
+  readonly retryNow: Effect.Effect<void>
   readonly resync: (reason: string) => Effect.Effect<void>
   readonly foreground: Effect.Effect<void>
 }
@@ -69,6 +71,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const flushing = yield* Ref.make(false)
   const applying = yield* Semaphore.make(1)
   const awake = yield* Latch.make(true)
+  const retryAt = yield* SubscriptionRef.make(0)
+  const skip = yield* Latch.make(false)
   const forced = yield* Ref.make(false)
   const attempt = yield* Ref.make(0)
   const timeouts = yield* Ref.make(0)
@@ -100,6 +104,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const connect = (first: boolean) =>
     Effect.gen(function* () {
+      yield* SubscriptionRef.set(retryAt, 0)
       yield* setStatus(first ? "connecting" : "reconnecting")
       const pull = yield* options.subscribe.pipe(
         Effect.mapError((cause) => new Lost({ message: "Could not open the event stream", cause })),
@@ -158,12 +163,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     } else yield* Ref.set(timeouts, 0)
     yield* setStatus("reconnecting")
     if (yield* Ref.getAndSet(forced, false)) return
-    yield* Effect.sleep(Math.min(settings.reconnectDelay * 2 ** (failures - 1), settings.maxReconnectDelay))
+    const delay = Math.min(settings.reconnectDelay * 2 ** (failures - 1), settings.maxReconnectDelay)
+    yield* skip.close
+    yield* SubscriptionRef.set(retryAt, (yield* Clock.currentTimeMillis) + delay)
+    yield* Effect.race(Effect.sleep(delay), skip.await)
   })
 
   yield* Effect.forkIn(Effect.forever(cycle), scope)
 
   const wake = awake.open.pipe(Effect.asVoid)
+
+  const retryNow = skip.open.pipe(Effect.asVoid)
 
   const resync = (reason: string) =>
     Effect.gen(function* () {
@@ -175,10 +185,13 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   return {
     status,
+    retryAt,
     wake,
+    retryNow,
     resync,
     foreground: Effect.gen(function* () {
       yield* wake
+      yield* retryNow
       if ((yield* Clock.currentTimeMillis) - (yield* Ref.get(activity)) < foregroundIdleThreshold) return
       yield* resync("The page returned to the foreground after the event stream went quiet")
     }),
