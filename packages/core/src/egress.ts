@@ -13,7 +13,7 @@ import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
 import { Injection } from "./injection.js"
 
-// oxlint-disable-next-line ren/no-comments -- Ren's own egress authenticates with mTLS and may name a connection by the login it checked (`Login` proof) or a sandbox whose E2B token it verified (`E2BIdentity`). Another proxy is limited to its orgs (README §6.6).
+// oxlint-disable-next-line ren/no-comments -- Ren's own egress authenticates with mTLS and may name a connection by the login it checked (`Login` proof) or a machine whose provider-signed identity it verified (`MachineIdentity`). Another proxy is limited to its orgs (README §6.6).
 export interface Principal {
   readonly kind: "ren" | "registered"
   readonly orgs: "all" | ReadonlyArray<Auth.OrganizationID>
@@ -80,7 +80,7 @@ export const layer = Layer.effect(
     })
 
     const caller = Effect.fnUntraced(function* (principal: Principal, proof: CredentialCallers.Proof) {
-      if ((proof.kind === "Login" || proof.kind === "E2BIdentity") && principal.kind !== "ren")
+      if ((proof.kind === "Login" || proof.kind === "MachineIdentity") && principal.kind !== "ren")
         return Result.fail("unknown_workload" as const)
       const verified = yield* callers.verify(proof)
       if (!verified.ok) return Result.fail(verified.reason)

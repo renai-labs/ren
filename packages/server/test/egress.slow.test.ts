@@ -802,7 +802,7 @@ describe.skipIf(Object.values(split).some((value) => !value))("egress split on E
           workload: { kind: "brain" as const, id: found.brainId, generation: 1 },
           organizationId: found.organizationId,
         }
-        yield* callers.issue(caller, "E2BIdentity")
+        yield* callers.issue(caller, "MachineIdentity")
         const port = EgressHarness.freePort()
         const tunnel = yield* Effect.acquireRelease(
           Effect.promise(() => quickTunnel(port)),
@@ -831,7 +831,7 @@ describe.skipIf(Object.values(split).some((value) => !value))("egress split on E
               image: Option.none(),
               variables: { REN_EGRESS_FORWARD: tunnel.url, REN_BUNDLES: "[]", REN_HAND: "1" },
               network: { proxy: Option.none(), identity: Option.some({ url: tunnel.url }), hosts: Option.none() },
-              onAddress: (address) => callers.bind(caller, address),
+              beforeStart: (machineId) => callers.bind(caller, machineId),
             })
             .pipe(live, Effect.orDie),
           (made) => provider.destroy(made.binding).pipe(live, Effect.ignore),

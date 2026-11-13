@@ -485,34 +485,34 @@ func TestObserveReportsOneUpstream401AndDropsTheKeptAnswer(t *testing.T) {
 	wg.Wait()
 	client.reporting.Wait()
 	require.Len(t, h.reports, 1, "10 parallel 401s for one revision send one report")
-	require.JSONEq(t, `{"login":"ren-a","host":"mcp.linear.app","status":401,"labels":[{"label":"MCP_LINEAR","revision":3}]}`, <-h.reports)
+	require.JSONEq(t, `{"proof":{"kind":"Login","username":"ren-a"},"host":"mcp.linear.app","status":401,"labels":[{"label":"MCP_LINEAR","revision":3}]}`, <-h.reports)
 	calls := h.calls.Load()
 	linear(t, client)
 	require.Equal(t, calls+1, h.calls.Load(), "the kept answer was dropped, so Ren is asked again")
 }
 
-// An E2B caller sends its sandbox and execution as the proof, keeps its
-// answers per sandbox, and reports a 401 with the same proof (fork change 14).
-func TestHandleNamesAnE2BCallerBySandbox(t *testing.T) {
+// A machine caller sends its machine id as the proof, keeps its answers per
+// machine, and reports a 401 with the same proof (fork change 14).
+func TestHandleNamesAMachineCallerByItsID(t *testing.T) {
 	client, h, _ := newClient(t)
 	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 30, Labels: []string{"MCP_LINEAR"},
 		Refreshable: []Refreshable{{Label: "MCP_LINEAR", Revision: 3}},
 		Inject:      []Op{{Op: "replace", Placeholder: "ren:MCP_LINEAR", Value: "tok", In: []string{"header"}}}})
-	call := func(execution string) *Applied {
+	call := func() *Applied {
 		req := newRequest(t, "POST", "https://mcp.linear.app/mcp", nil, "")
 		req.Host = "mcp.linear.app"
 		req.Header.Set("Authorization", "Bearer ren:MCP_LINEAR")
-		denied, applied := client.Handle(t.Context(), req, Caller{Identity: Identity{SandboxID: "sbx1", ExecutionID: execution}})
+		denied, applied := client.Handle(t.Context(), req, Caller{MachineID: "sbx1"})
 		require.Nil(t, denied)
 		return applied
 	}
-	applied := call("exec1")
-	require.Contains(t, h.lastBody.Load(), `"proof":{"executionId":"exec1","kind":"E2BIdentity","sandboxId":"sbx1"}`)
-	call("exec2")
-	require.Equal(t, int32(1), h.calls.Load(), "a resumed sandbox keeps its answers")
+	applied := call()
+	require.Contains(t, h.lastBody.Load(), `"proof":{"kind":"MachineIdentity","machineId":"sbx1"}`)
+	call()
+	require.Equal(t, int32(1), h.calls.Load(), "the machine keeps its answers")
 	client.Observe(applied, upstreamAnswer(http.StatusUnauthorized, `Bearer error="invalid_token"`))
 	client.reporting.Wait()
-	require.JSONEq(t, `{"proof":{"kind":"E2BIdentity","sandboxId":"sbx1","executionId":"exec1"},"host":"mcp.linear.app","status":401,"labels":[{"label":"MCP_LINEAR","revision":3}]}`, <-h.reports)
+	require.JSONEq(t, `{"proof":{"kind":"MachineIdentity","machineId":"sbx1"},"host":"mcp.linear.app","status":401,"labels":[{"label":"MCP_LINEAR","revision":3}]}`, <-h.reports)
 }
 
 func TestObserveReportsAScopeChallengeAndKeepsTheAnswer(t *testing.T) {
@@ -525,7 +525,7 @@ func TestObserveReportsAScopeChallengeAndKeepsTheAnswer(t *testing.T) {
 	client.Observe(applied, upstreamAnswer(http.StatusForbidden, `Bearer error="insufficient_scope", scope="issues:write admin"`))
 	client.reporting.Wait()
 	require.Len(t, h.reports, 1, "only an insufficient_scope 403 is reported")
-	require.JSONEq(t, `{"login":"ren-a","host":"mcp.linear.app","status":403,"scope":"issues:write admin","labels":[{"label":"MCP_LINEAR","revision":1}]}`, <-h.reports)
+	require.JSONEq(t, `{"proof":{"kind":"Login","username":"ren-a"},"host":"mcp.linear.app","status":403,"scope":"issues:write admin","labels":[{"label":"MCP_LINEAR","revision":1}]}`, <-h.reports)
 	calls := h.calls.Load()
 	linear(t, client)
 	require.Equal(t, calls, h.calls.Load(), "a 403 keeps the answer")

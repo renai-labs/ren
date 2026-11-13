@@ -23,9 +23,9 @@ func TestVerifierAcceptsAnE2BToken(t *testing.T) {
 	now := time.Now()
 	v := newVerifier(i, &now)
 
-	identity, err := v.Verify(context.Background(), rentest.Sign(t, key, jose.ES256, i.Claims(now)))
+	sandboxID, err := v.Verify(context.Background(), rentest.Sign(t, key, jose.ES256, i.Claims(now)))
 	require.NoError(t, err)
-	require.Equal(t, Identity{SandboxID: "sbx1", ExecutionID: "exec1"}, identity)
+	require.Equal(t, "sbx1", sandboxID)
 }
 
 // The entry needs a certificate: files, or one that it gets from Let's

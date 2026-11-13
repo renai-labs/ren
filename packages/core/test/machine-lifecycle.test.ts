@@ -91,7 +91,7 @@ const kindWith = (options: {
         }
         made.count += 1
         const number = made.count
-        return (input.onAddress ? input.onAddress(`sbx-${number}`) : Effect.void).pipe(
+        return (input.beforeStart ? input.beforeStart(`sbx-${number}`) : Effect.void).pipe(
           Effect.as({ binding: { number }, url: `http://machine-${number}.test` }),
         )
       },
@@ -129,8 +129,8 @@ const kindWith = (options: {
         enabled: Boolean(options.split),
         proxyFor: () => Effect.succeedNone,
         identityFor: () => Effect.succeed(Option.some({ url: "https://egress.ren.test" })),
-        bind: (machine, address) =>
-          Effect.sync(() => void bound.push(`${machine.workload.id}:${machine.workload.generation} ${address}`)),
+        bind: (machine, machineId) =>
+          Effect.sync(() => void bound.push(`${machine.workload.id}:${machine.workload.generation} ${machineId}`)),
         retire: () => Effect.void,
       },
       workload: (row) => ({ kind: "hand", id: row.id, generation: row.generation }),
@@ -263,7 +263,7 @@ describe("MachineLifecycle", () => {
   )
 
   it.effect(
-    "in split mode a new machine gets the identity entry and the forwarder's URL, and its address is bound before it starts",
+    "in split mode a new machine gets the identity entry and the forwarder's URL, and its machine id is bound before it starts",
     () =>
       Effect.gen(function* () {
         const memory = yield* kindWith({ canUpdateInPlace: true, split: true })

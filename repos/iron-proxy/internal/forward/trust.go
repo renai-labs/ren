@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// trust reads the trust bundle again when the file changes: E2B writes a new
-// CA into the system bundle when a sandbox resumes on another node, and Go
-// reads its system roots only once.
+// trust reads the trust bundle again when the file changes: a provider can
+// write a new CA into the system bundle when a sandbox resumes (E2B does, on
+// another node), and Go reads its system roots only once.
 type trust struct {
 	path string
 

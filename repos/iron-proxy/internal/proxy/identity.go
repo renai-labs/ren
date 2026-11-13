@@ -34,7 +34,7 @@ func (p *Proxy) handleIdentity(w http.ResponseWriter, r *http.Request) {
 		p.writeResponse(w, ren.Deny("unknown_workload", ""))
 		return
 	}
-	identity, err := p.verifier.Verify(r.Context(), strings.TrimPrefix(identities[0], "Bearer "))
+	machineID, err := p.verifier.Verify(r.Context(), strings.TrimPrefix(identities[0], "Bearer "))
 	if err != nil {
 		p.logger.Warn("ren identity refused", slog.String("remote_addr", r.RemoteAddr), slog.String("error", err.Error()))
 		p.writeResponse(w, ren.Deny("unknown_workload", ""))
@@ -71,8 +71,7 @@ func (p *Proxy) handleIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.handleHTTP(w, r, &transform.TunnelInfo{
-		Target:      net.JoinHostPort(target.Hostname(), port),
-		SandboxID:   identity.SandboxID,
-		ExecutionID: identity.ExecutionID,
+		Target:    net.JoinHostPort(target.Hostname(), port),
+		MachineID: machineID,
 	})
 }

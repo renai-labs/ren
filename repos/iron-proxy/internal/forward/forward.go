@@ -1,5 +1,5 @@
-// Package forward is the forwarder that runs in an E2B sandbox (Ren fork
-// change 15). iptables sends the sandbox's outbound TCP to it. It sends each
+// Package forward is the forwarder that runs in a sandbox (Ren fork
+// change 15). nf_tables sends the sandbox's outbound TCP to it. It sends each
 // credential request (one with a ren: placeholder) to the egress's identity
 // entry, and every other request and connection to its target
 // (specs/runtime/credentials/egress-split.md §3.1).
@@ -29,14 +29,14 @@ import (
 
 // Config configures a forwarder.
 type Config struct {
-	// Egress is the URL of the egress's identity entry. E2B adds the
-	// sandbox's identity token to the requests to its host.
+	// Egress is the URL of the egress's identity entry. The sandbox's
+	// provider adds the sandbox's identity to the requests to its host.
 	Egress *url.URL
 	// Certs signs the certificates the forwarder shows to programs, with a CA
 	// that only this sandbox trusts.
 	Certs *certcache.Cache
-	// Bundle is the trust bundle for targets and the egress. E2B adds its CA
-	// to it at a start and at each resume.
+	// Bundle is the trust bundle for targets and the egress. The provider can
+	// add its own CA to it at a start and at each resume.
 	Bundle string
 	// Target says where a redirected connection was going (SO_ORIGINAL_DST).
 	Target func(net.Conn) (string, error)

@@ -222,19 +222,19 @@ export const credential_caller = pgTable(
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    proof_kind: text().$type<"ProxyLogin" | "Address" | "HostStamp" | "Token" | "E2BIdentity">().notNull(),
+    proof_kind: text().$type<"ProxyLogin" | "Token" | "MachineIdentity">().notNull(),
     username: text(),
     password_hash: text(),
     password_sealed: jsonb().$type<Envelope.Sealed>(),
-    address: text(),
+    machine_id: text(),
     revoked_at: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.workload_kind, table.workload_id, table.generation] }),
     uniqueIndex("credential_caller_username_uidx").on(table.username),
-    uniqueIndex("credential_caller_address_uidx")
-      .on(table.address)
+    uniqueIndex("credential_caller_machine_id_uidx")
+      .on(table.machine_id)
       .where(sql`${table.revoked_at} is null`),
     check("credential_caller_generation_check", sql`${table.generation} >= 1`),
   ],

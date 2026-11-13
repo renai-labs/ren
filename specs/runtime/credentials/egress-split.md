@@ -83,17 +83,17 @@ The deployment setting `EGRESS_MODE=split` and `EGRESS_IDENTITY_URL` turn the sp
 7. A request without a valid token gets `403` with `x-ren-egress: unknown_workload`. A request with no placeholder gets `403` with `x-ren-egress: no_placeholder`: the forwarder sends plain requests to their targets, so such a request comes from a program that called the entry itself. The egress forwards neither.
 8. The SOCKS5 entry stays until phase 5, so both modes work at the same time.
 
-### 3.4 Ren: the E2B identity proof
+### 3.4 Ren: the machine identity proof
 
-`core/src/credential-callers.ts` gets a new `Proof` kind:
+`core/src/credential-callers.ts` gets a new `Proof` kind. It names no provider: the egress checks the provider's token, and sends Ren only the machine id.
 
 ```ts
-{ readonly kind: "E2BIdentity"; readonly sandboxId: string; readonly executionId: string }
+{ readonly kind: "MachineIdentity"; readonly machineId: string }
 ```
 
 1. Only Ren's own egress may send it, as with `Login`.
-2. Before the create, Ren issues a `credential_caller` row of kind `E2BIdentity` for the workload and generation, as it issues a proxy login today. The E2B provider calls `onAddress(sandboxId)` after `POST /sandboxes` and before it uploads `brain.env`. Ren writes the sandbox id into `credential_caller.address`. The machine starts only after `brain.env` is there, so its first request finds its workload.
-3. Ren finds the row by `address` and checks that its generation is the newest. A replaced generation keeps its address and gets `generation_retired`. A retire clears the address, so the sandbox gets `unknown_workload`.
+2. Before the create, Ren issues a `credential_caller` row of kind `MachineIdentity` for the workload and generation, as it issues a proxy login today. The provider calls `beforeStart(machineId)` after it creates the machine and before the machine starts; the E2B provider calls it after `POST /sandboxes` and before it uploads `brain.env`. Ren writes the machine id into `credential_caller.machine_id`. The machine starts only after `brain.env` is there, so its first request finds its workload.
+3. Ren finds the row by `machine_id` and checks that its generation is the newest. A replaced generation keeps its machine id and gets `generation_retired`. A retire clears the machine id, so the machine gets `unknown_workload`.
 4. A retire also invalidates the egress's answers by workload, because a machine in split mode has no login.
 5. The egress verifies the token, so Ren does not see it.
 

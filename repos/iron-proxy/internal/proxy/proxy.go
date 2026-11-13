@@ -385,7 +385,7 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 	// A request from the identity entry has its target as the tunnel target
 	// (fork change 14).
 	if p.ren != nil {
-		if tunnelInfo == nil || (tunnelInfo.ProxyLogin == "" && tunnelInfo.SandboxID == "") {
+		if tunnelInfo == nil || (tunnelInfo.ProxyLogin == "" && tunnelInfo.MachineID == "") {
 			p.writeResponse(w, ren.Deny("unknown_workload", ""))
 			return
 		}
@@ -468,7 +468,7 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 	// or a placeholder left after the ops, is never forwarded.
 	var renApplied *ren.Applied
 	if p.ren != nil {
-		caller := ren.Caller{Login: tctx.Tunnel.ProxyLogin, Identity: ren.Identity{SandboxID: tctx.Tunnel.SandboxID, ExecutionID: tctx.Tunnel.ExecutionID}}
+		caller := ren.Caller{Login: tctx.Tunnel.ProxyLogin, MachineID: tctx.Tunnel.MachineID}
 		denied, applied := p.ren.Handle(r.Context(), r, caller)
 		if denied != nil {
 			result.Action = transform.ActionReject

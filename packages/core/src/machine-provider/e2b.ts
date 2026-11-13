@@ -19,6 +19,10 @@ const envFile = "/home/user/.ren/brain.env"
 
 export const caFile = "/home/user/.ren/egress-ca.pem"
 
+const identityHeader = "X-Ren-Identity"
+
+const identityTokenName = "ren"
+
 // oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). A host list allows only its hosts, and `*.x.com` also allows `x.com`. An update replaces the whole config, so each one repeats the proxy and the rule. None: E2B's default, any host.
 const networkOf = (network: MachineProvider.Network) => {
   if (Option.isNone(network.proxy) && Option.isNone(network.identity) && Option.isNone(network.hosts))
@@ -49,15 +53,15 @@ const networkOf = (network: MachineProvider.Network) => {
       onNone: () => ({}),
       // oxlint-disable-next-line ren/no-comments -- E2B fills the token outside the sandbox and replaces a header of this name that the sandbox sent (egress-split.md, phase 0).
       onSome: (host) => ({
-        rules: { [host]: [{ transform: { headers: { [identityHeader]: `Bearer ${identityToken}` } } }] },
+        rules: {
+          [host]: [
+            { transform: { headers: { [identityHeader]: `Bearer \${e2b.identity.tokens.${identityTokenName}}` } } },
+          ],
+        },
       }),
     }),
   })
 }
-
-const identityHeader = "X-Ren-Identity"
-
-const identityToken = "${e2b.identity.tokens.ren}"
 
 const createTimeout = Duration.minutes(10)
 
@@ -364,7 +368,7 @@ export const provider = Effect.gen(function* () {
       const existing = (yield* list(metadata, "running,paused")).at(0)
       if (existing) {
         const binding = { sandboxId: existing.sandboxID, domain: config.domain, port }
-        if (input.onAddress) yield* input.onAddress(binding.sandboxId)
+        if (input.beforeStart) yield* input.beforeStart(binding.sandboxId)
         // oxlint-disable-next-line ren/no-comments -- E2B refuses a network update of a paused sandbox, so a sandbox that paused after an earlier create resumes first.
         if (existing.state === "paused")
           yield* body(
@@ -393,7 +397,9 @@ export const provider = Effect.gen(function* () {
             ...Option.match(networkOf(input.network), { onNone: () => ({}), onSome: (network) => ({ network }) }),
             ...Option.match(input.network.identity, {
               onNone: () => ({}),
-              onSome: (identity) => ({ iam: { tokens: { ren: { audience: identity.url, tokenType: "JWT-SVID" } } } }),
+              onSome: (identity) => ({
+                iam: { tokens: { [identityTokenName]: { audience: identity.url, tokenType: "JWT-SVID" } } },
+              }),
             }),
           }),
         ),
@@ -404,7 +410,7 @@ export const provider = Effect.gen(function* () {
         ),
       )
       const binding = { sandboxId: created.sandboxID, domain: created.domain ?? config.domain, port }
-      if (input.onAddress) yield* input.onAddress(binding.sandboxId)
+      if (input.beforeStart) yield* input.beforeStart(binding.sandboxId)
       yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.variables, input.network.proxy)
       return { binding, url: urlOf(binding) }
     }),

@@ -12,7 +12,7 @@ import (
 // soOriginalDst is SO_ORIGINAL_DST from linux/netfilter_ipv4.h.
 const soOriginalDst = 80
 
-// OriginalDst says where a connection that iptables redirected was going.
+// OriginalDst says where a connection that nf_tables redirected was going.
 // It reads the IPv4 address that netfilter kept for the connection.
 func OriginalDst(conn net.Conn) (string, error) {
 	tcp, ok := conn.(*net.TCPConn)

@@ -505,9 +505,9 @@ describe("Egress.resolve", () => {
         workload: { kind: "brain" as const, id: found.brainId, generation: 1 },
         organizationId: found.organizationId,
       }
-      yield* callers.issue(caller, "E2BIdentity")
+      yield* callers.issue(caller, "MachineIdentity")
       yield* callers.bind(caller, "sbx-egress")
-      const proof = { kind: "E2BIdentity" as const, sandboxId: "sbx-egress", executionId: "exec-1" }
+      const proof = { kind: "MachineIdentity" as const, machineId: "sbx-egress" }
       expect(yield* resolver.resolve(all, request(proof, "api.stripe.com", []))).toMatchObject({ allow: true })
       expect(
         yield* resolver.resolve(

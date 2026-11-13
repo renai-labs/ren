@@ -377,9 +377,9 @@ describe("E2BSandbox with the egress split", () => {
           variables: { REN_BRAIN_ID: "brn_split" },
           image: Option.none(),
           network: { proxy: Option.none(), identity: Option.some(identity), hosts: Option.none() },
-          onAddress: (address) =>
+          beforeStart: (machineId) =>
             Effect.sync(() => {
-              bound.push(`${address} after ${seen.filter((request) => request.path === "/files").length} uploads`)
+              bound.push(`${machineId} after ${seen.filter((request) => request.path === "/files").length} uploads`)
             }),
         })
         const create = JSON.parse(

@@ -18,12 +18,7 @@ const EgressHandler = HttpApiBuilder.group(EgressApi.Api, "egress", (handlers) =
       .handle("authenticate", (request) => egress.authenticate(ren, request.payload.proof))
       .handle("resolve", (request) => egress.resolve(ren, request.payload))
       .handle("unauthorized", (request) =>
-        egress
-          .unauthorized(ren, {
-            ...request.payload,
-            proof: request.payload.proof ?? { kind: "Login", username: request.payload.login ?? "" },
-          })
-          .pipe(Effect.withErrorReporting, Effect.forkIn(scope), Effect.asVoid),
+        egress.unauthorized(ren, request.payload).pipe(Effect.withErrorReporting, Effect.forkIn(scope), Effect.asVoid),
       )
   }),
 )

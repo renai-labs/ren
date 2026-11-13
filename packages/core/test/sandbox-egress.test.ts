@@ -89,11 +89,10 @@ describe("SandboxEgress in split mode", () => {
   const split = testEffect(layer({ envelope: true, split: true }))
 
   split.live(
-    "a machine gets the identity entry once per generation; its bound sandbox verifies; retire drops the egress's answers by workload",
+    "a machine gets the identity entry once per generation; retire drops the egress's answers by workload",
     () =>
       Effect.gen(function* () {
         const sandboxEgress = yield* SandboxEgress.Service
-        const callers = yield* CredentialCallers.Service
         const owner = yield* Seed.owner()
         const brainId = Brain.ID.create()
         yield* Seed.session({ ...owner, brainId })
@@ -102,13 +101,10 @@ describe("SandboxEgress in split mode", () => {
           organizationId: owner.organizationId,
         }
         expect(yield* sandboxEgress.identityFor(machine)).toEqual(Option.some({ url: "https://egress.ren.dev" }))
-        yield* sandboxEgress.bind(machine, "sbx-split")
-        expect(yield* sandboxEgress.identityFor(machine)).toEqual(Option.some({ url: "https://egress.ren.dev" }))
-        const proof = { kind: "E2BIdentity" as const, sandboxId: "sbx-split", executionId: "exec-1" }
-        expect(yield* callers.verify(proof)).toEqual({ ok: true, caller: machine })
         invalidations.length = 0
+        expect(yield* sandboxEgress.identityFor(machine)).toEqual(Option.some({ url: "https://egress.ren.dev" }))
+        expect(invalidations).toEqual([])
         yield* sandboxEgress.retire({ kind: "brain", id: brainId })
-        expect(yield* callers.verify(proof)).toEqual({ ok: false, reason: "unknown_workload" })
         expect(invalidations).toEqual([{ workload: `brain:${brainId}:` }])
       }),
   )

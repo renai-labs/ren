@@ -73,24 +73,18 @@ func (c IdentityConfig) Validate() error {
 	return nil
 }
 
-// Identity is the sandbox execution that a verified token names.
-type Identity struct {
-	SandboxID   string
-	ExecutionID string
-}
-
 // Caller is who sent a request: a proxy login that Ren checked (fork
-// change 1), or a sandbox execution that E2B named (fork change 14).
+// change 1), or a machine that its provider named (fork change 14).
 type Caller struct {
-	Login    string
-	Identity Identity
+	Login     string
+	MachineID string
 }
 
-// key keeps the answers of each caller apart. A sandbox keeps its answers
-// across executions, because a resume names the same workload.
+// key keeps the answers of each caller apart. A machine keeps its answers
+// across resumes, because a resume names the same workload.
 func (c Caller) key() string {
-	if c.Identity.SandboxID != "" {
-		return "e2b:" + c.Identity.SandboxID
+	if c.MachineID != "" {
+		return "machine:" + c.MachineID
 	}
 	return c.Login
 }
@@ -98,8 +92,8 @@ func (c Caller) key() string {
 // proof names the caller to Ren. A login was checked when its connection
 // opened, so only the name goes (fork change 2).
 func (c Caller) proof() map[string]string {
-	if c.Identity.SandboxID != "" {
-		return map[string]string{"kind": "E2BIdentity", "sandboxId": c.Identity.SandboxID, "executionId": c.Identity.ExecutionID}
+	if c.MachineID != "" {
+		return map[string]string{"kind": "MachineIdentity", "machineId": c.MachineID}
 	}
 	return map[string]string{"kind": "Login", "username": c.Login}
 }
@@ -129,14 +123,15 @@ func NewVerifier(cfg IdentityConfig, client *http.Client) *Verifier {
 
 // Verify checks a token: ES256 with a published key, issuer, audience, time,
 // and a `sub` of Ren's project that names the token's sandbox and execution.
-func (v *Verifier) Verify(ctx context.Context, raw string) (Identity, error) {
+// It returns the sandbox id.
+func (v *Verifier) Verify(ctx context.Context, raw string) (string, error) {
 	token, err := jwt.ParseSigned(raw, []jose.SignatureAlgorithm{jose.ES256})
 	if err != nil {
-		return Identity{}, fmt.Errorf("parse: %w", err)
+		return "", fmt.Errorf("parse: %w", err)
 	}
 	key, err := v.key(ctx, token.Headers[0].KeyID)
 	if err != nil {
-		return Identity{}, err
+		return "", err
 	}
 	var claims jwt.Claims
 	var named struct {
@@ -144,19 +139,19 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (Identity, error) {
 		ExecutionID string `json:"execution_id"`
 	}
 	if err := token.Claims(key.Key, &claims, &named); err != nil {
-		return Identity{}, fmt.Errorf("signature: %w", err)
+		return "", fmt.Errorf("signature: %w", err)
 	}
 	if err := claims.ValidateWithLeeway(jwt.Expected{Issuer: v.cfg.issuer(), AnyAudience: jwt.Audience{v.cfg.Audience}, Time: v.now()}, leeway); err != nil {
-		return Identity{}, err
+		return "", err
 	}
 	if named.SandboxID == "" || named.ExecutionID == "" || strings.Contains(named.SandboxID+named.ExecutionID, "/") {
-		return Identity{}, errors.New("no sandbox or execution id")
+		return "", errors.New("no sandbox or execution id")
 	}
 	issuer, _ := url.Parse(v.cfg.issuer()) // a parse error leaves an empty host, which no sub matches
 	if claims.Subject != "spiffe://"+issuer.Host+"/"+v.cfg.Project+"/"+named.SandboxID+"/"+named.ExecutionID {
-		return Identity{}, errors.New("sub is not this project's sandbox")
+		return "", errors.New("sub is not this project's sandbox")
 	}
-	return Identity{SandboxID: named.SandboxID, ExecutionID: named.ExecutionID}, nil
+	return named.SandboxID, nil
 }
 
 // key finds the key with this id, and loads the keys again when it is

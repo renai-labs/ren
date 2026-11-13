@@ -58,8 +58,8 @@ interface CreateInput<Config> {
   readonly image: Option.Option<string>
   readonly variables: Readonly<Record<string, string>>
   readonly network: Network
-  // oxlint-disable-next-line ren/no-comments -- Called with the machine's address once the provider knows it and before the machine starts, so its first request to the identity entry finds its workload.
-  readonly onAddress?: (address: string) => Effect.Effect<void>
+  // oxlint-disable-next-line ren/no-comments -- Called with the provider's id of the machine once the provider knows it and before the machine starts, so its first request to the identity entry finds its workload.
+  readonly beforeStart?: (machineId: string) => Effect.Effect<void>
 }
 
 export type Step = BrainApiStep

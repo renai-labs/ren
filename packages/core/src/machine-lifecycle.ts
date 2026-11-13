@@ -313,13 +313,13 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
   const create = Effect.fnUntraced(function* (row: R) {
     const provider = yield* definition.providerOf(row)
     const routes = yield* egressOf(row, provider)
-    const isEgress = Option.isSome(routes.proxy) || Option.isSome(routes.identity)
+    const hasEgress = Option.isSome(routes.proxy) || Option.isSome(routes.identity)
     const desired = yield* definition.desiredSetup(row)
     const startup = yield* definition.startup(row)
     // oxlint-disable-next-line ren/no-comments -- Behind an egress, the machine calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49). In split mode the machine starts its forwarder for the identity entry (egress-split.md §3.1).
     const variables = {
       ...startup.variables,
-      ...(isEgress && { REN_EGRESS: "1" }),
+      ...(hasEgress && { REN_EGRESS: "1" }),
       ...Option.match(routes.identity, {
         onNone: () => ({}),
         onSome: (identity) => ({ REN_EGRESS_FORWARD: identity.url }),
@@ -339,7 +339,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
         variables: { ...variables, ...ExecutorVariables.hiding(Object.keys(variables)) },
         network: { ...routes, hosts: desired.hosts },
         ...(Option.isSome(routes.identity) && {
-          onAddress: (address: string) => egress.bind(machineOf(row), address),
+          beforeStart: (machineId: string) => egress.bind(machineOf(row), machineId),
         }),
       })
       .pipe(
@@ -356,7 +356,7 @@ export const make = <Id extends string, R extends Row<Id>, Target, E>(definition
       binding: created.value.binding,
       image: desiredImage(desired, provider),
       image_template: Option.match(desired.image, { onNone: () => null, onSome: (image) => image.template }),
-      egress: isEgress,
+      egress: hasEgress,
       network_hosts: Option.getOrNull(desired.hosts),
       url: created.value.url,
       phase: "booting",

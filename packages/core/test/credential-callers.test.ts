@@ -134,26 +134,28 @@ describe("CredentialCallers", () => {
     }),
   )
 
-  it.live("an E2B sandbox verifies as the workload bound to its id; a replaced or retired one does not", () =>
-    Effect.gen(function* () {
-      const callers = yield* CredentialCallers.Service
-      const seeded = yield* brain()
-      const caller = (generation: number) => ({
-        workload: { kind: "brain" as const, id: seeded.brainId, generation },
-        organizationId: seeded.organizationId,
-      })
-      const proof = (sandboxId: string) => ({ kind: "E2BIdentity" as const, sandboxId, executionId: "exec-1" })
-      expect(yield* callers.issue(caller(1), "E2BIdentity")).toEqual({ kind: "E2BIdentity" })
-      expect(yield* callers.verify(proof("sbx-1"))).toEqual({ ok: false, reason: "unknown_workload" })
-      yield* callers.bind(caller(1), "sbx-1")
-      expect(yield* callers.verify(proof("sbx-1"))).toEqual({ ok: true, caller: caller(1) })
-      yield* callers.issue(caller(2), "E2BIdentity")
-      yield* callers.bind(caller(2), "sbx-2")
-      expect(yield* callers.verify(proof("sbx-1"))).toEqual({ ok: false, reason: "generation_retired" })
-      expect(yield* callers.verify(proof("sbx-2"))).toEqual({ ok: true, caller: caller(2) })
-      yield* callers.revoke({ kind: "brain", id: seeded.brainId })
-      expect(yield* callers.verify(proof("sbx-2"))).toEqual({ ok: false, reason: "unknown_workload" })
-    }),
+  it.live(
+    "a machine named by its provider verifies as the workload bound to its id; a replaced or retired one does not",
+    () =>
+      Effect.gen(function* () {
+        const callers = yield* CredentialCallers.Service
+        const seeded = yield* brain()
+        const caller = (generation: number) => ({
+          workload: { kind: "brain" as const, id: seeded.brainId, generation },
+          organizationId: seeded.organizationId,
+        })
+        const proof = (machineId: string) => ({ kind: "MachineIdentity" as const, machineId })
+        expect(yield* callers.issue(caller(1), "MachineIdentity")).toEqual({ kind: "MachineIdentity" })
+        expect(yield* callers.verify(proof("sbx-1"))).toEqual({ ok: false, reason: "unknown_workload" })
+        yield* callers.bind(caller(1), "sbx-1")
+        expect(yield* callers.verify(proof("sbx-1"))).toEqual({ ok: true, caller: caller(1) })
+        yield* callers.issue(caller(2), "MachineIdentity")
+        yield* callers.bind(caller(2), "sbx-2")
+        expect(yield* callers.verify(proof("sbx-1"))).toEqual({ ok: false, reason: "generation_retired" })
+        expect(yield* callers.verify(proof("sbx-2"))).toEqual({ ok: true, caller: caller(2) })
+        yield* callers.revoke({ kind: "brain", id: seeded.brainId })
+        expect(yield* callers.verify(proof("sbx-2"))).toEqual({ ok: false, reason: "unknown_workload" })
+      }),
   )
 
   it.live("a resumed sandbox gets the same proxy login again; a replaced generation has none", () =>

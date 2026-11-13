@@ -109,10 +109,9 @@ type TunnelInfo struct {
 	// the proxy delegates logins to Ren. The password is not kept.
 	ProxyLogin string
 
-	// SandboxID and ExecutionID name the E2B sandbox execution that sent a
-	// request to Ren's identity entry (Ren fork change 14).
-	SandboxID   string
-	ExecutionID string
+	// MachineID names the machine whose provider-signed identity Ren's
+	// identity entry verified (Ren fork change 14).
+	MachineID string
 }
 
 // Annotate attaches audit metadata to the current transform's trace.

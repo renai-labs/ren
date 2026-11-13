@@ -13,10 +13,10 @@ import (
 	"github.com/ironsh/iron-proxy/internal/forward"
 )
 
-// runForward runs the forwarder in an E2B sandbox (Ren fork change 15).
+// runForward runs the forwarder in a sandbox (Ren fork change 15).
 func runForward(args []string) {
 	fs := flag.NewFlagSet("forward", flag.ExitOnError)
-	listen := fs.String("listen", "0.0.0.0:15001", "address that iptables redirects outbound TCP to")
+	listen := fs.String("listen", "0.0.0.0:15001", "address that nf_tables redirects outbound TCP to")
 	egress := fs.String("egress", "", "URL of the egress's identity entry, for example https://egress.example.com")
 	caCert := fs.String("ca-cert", "", "CA certificate that the sandbox's programs trust")
 	caKey := fs.String("ca-key", "", "key of that CA")

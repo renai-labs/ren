@@ -24,11 +24,8 @@ const reportEvery = 60 * time.Second
 
 var scopePattern = regexp.MustCompile(`scope="([^"]*)"`)
 
-// report names a login caller by its login, as before fork change 14, and
-// an E2B caller by its proof.
 type report struct {
-	Login  string            `json:"login,omitempty"`
-	Proof  map[string]string `json:"proof,omitempty"`
+	Proof  map[string]string `json:"proof"`
 	Host   string            `json:"host"`
 	Status int               `json:"status"`
 	Scope  string            `json:"scope,omitempty"`
@@ -64,10 +61,7 @@ func (c *Client) Observe(applied *Applied, resp *http.Response) {
 	if len(labels) == 0 {
 		return
 	}
-	body := report{Login: applied.caller.Login, Host: applied.host, Status: resp.StatusCode, Scope: scope, Labels: labels}
-	if applied.caller.Identity.SandboxID != "" {
-		body.Proof = applied.caller.proof()
-	}
+	body := report{Proof: applied.caller.proof(), Host: applied.host, Status: resp.StatusCode, Scope: scope, Labels: labels}
 	c.reporting.Add(1)
 	go func() {
 		defer c.reporting.Done()
