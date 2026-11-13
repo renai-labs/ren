@@ -37,11 +37,9 @@ export function InviteLinkDialog() {
             <DialogDescription>Anyone who opens this link joins {space.name}.</DialogDescription>
           </DialogHeader>
           <Loading loading={link.isPending} label="Loading invite link">
-            <Copyable
-              id="space-invite-link"
-              label="Link"
-              value={`${platform.appUrl}/join/${link.data?.token ?? "sil_loading-placeholder-token"}`}
-            />
+            {link.data ? (
+              <Copyable id="space-invite-link" label="Link" value={`${platform.appUrl}/join/${link.data.token}`} />
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <FieldDescription>
                 Only for people in {me.organization.name} · Used {uses} {uses === 1 ? "time" : "times"}
