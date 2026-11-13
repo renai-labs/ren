@@ -567,7 +567,7 @@ export const make = (
             editor.add({
               name: SessionMessage.showFileTool,
               description:
-                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced.",
+                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced. An .html file of at most 5 MB is shown as a page in a sandboxed frame, for a visual answer such as a chart, a table or a layout. Write it as one self-contained file: CSS and scripts inline, images as data URIs. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. Style it with the CSS variables of the app (`--background`, `--foreground`, `--muted`, `--muted-foreground`, `--border`, `--primary`, `--radius`, `--font-sans`, `--font-mono`) so that it fits light and dark themes.",
               input: Schema.Struct({
                 path: Schema.NonEmptyString.annotate({ description: "The path of the file on the environment." }),
               }),

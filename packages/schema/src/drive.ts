@@ -162,4 +162,5 @@ export const uploadsOf = (sessionId: string, messageId: string) => `chats/${sess
 
 export const outputsOf = (sessionId: string) => `chats/${sessionId}/outputs`
 
-export const typeOf = (name: string) => Option.getOrElse(Mime.getType(name), () => "application/octet-stream")
+export const typeOf = (name: string) =>
+  /\.[cm]?ts$/iu.test(name) ? "text/typescript" : Option.getOrElse(Mime.getType(name), () => "application/octet-stream")

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import {
@@ -28,22 +29,27 @@ import {
 } from "@ren/ui/attachment"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
+import { FilePreview } from "../../components/file-preview/file-preview.js"
+import { kindOf } from "../../components/file-preview/preview.js"
 import { ImageLightbox } from "../../components/image-lightbox.js"
+import { MediaPlayer } from "../../components/media-player.js"
 import { formatBytes } from "../../lib/format.js"
-import { useDriveFile } from "../../lib/use-drive-file.js"
+import { playableKind, useDriveFile } from "../../lib/use-drive-file.js"
 import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
 import { FileDrop } from "../../platform/file-drop.js"
+import { HtmlPage } from "./html-page.js"
+import { HtmlPageBridge } from "./html-page-bridge.js"
 
 const code = /\.(ts|tsx|js|jsx|py|go|rs|rb|java|c|cpp|h|sh|sql|yaml|yml|toml)$/iu
 
 function FileIcon(props: { name: string; mime: string }) {
   if (props.mime.startsWith("image/")) return <IconPhoto />
   if (props.mime === "application/pdf") return <IconFileTypePdf />
+  if (code.test(props.name) || props.mime === "application/json") return <IconFileCode />
   if (props.mime.startsWith("audio/")) return <IconMusic />
   if (props.mime.startsWith("video/")) return <IconVideo />
   if (/zip|compressed|tar|gzip/u.test(props.mime)) return <IconFileZip />
   if (/csv|spreadsheet|excel/u.test(props.mime)) return <IconFileSpreadsheet />
-  if (code.test(props.name) || props.mime === "application/json") return <IconFileCode />
   if (props.mime.startsWith("text/")) return <IconFileText />
   return <IconFile />
 }
@@ -56,7 +62,9 @@ function DriveFileCard(props: {
 }) {
   const file = props.file
   const drive = useDriveFile(props.spaceId, file)
-  const thumbnail = drive.image && !drive.deleted ? drive.thumbnail : undefined
+  const thumbnail = drive.image && !drive.deleted ? drive.url : undefined
+  const kind = kindOf(file)
+  const [previewing, setPreviewing] = useState(false)
   return (
     <Attachment size="sm" state={drive.deleted ? "error" : "done"}>
       {thumbnail ? (
@@ -76,7 +84,9 @@ function DriveFileCard(props: {
           {drive.deleted ? "Not in the drive" : formatBytes(file.size)}
         </AttachmentDescription>
       </AttachmentContent>
-      {drive.deleted || thumbnail ? null : <AttachmentTrigger aria-label={`Open ${file.name}`} onClick={drive.open} />}
+      {drive.deleted || thumbnail ? null : (
+        <AttachmentTrigger aria-label={`Open ${file.name}`} onClick={kind ? () => setPreviewing(true) : drive.open} />
+      )}
       <AttachmentActions>
         {drive.deleted || props.onRemove ? null : (
           <AttachmentAction aria-label={`Download ${file.name}`} onClick={drive.download}>
@@ -89,21 +99,42 @@ function DriveFileCard(props: {
           </AttachmentAction>
         ) : null}
       </AttachmentActions>
+      <FilePreview
+        kind={kind}
+        file={file}
+        open={previewing}
+        onOpenChange={setPreviewing}
+        bytes={drive.bytes}
+        onDownload={drive.download}
+      />
     </Attachment>
   )
 }
+
+const inlineKind = (file: SessionMessage.DriveFile) =>
+  file.mime === "text/html" && file.size <= HtmlPageBridge.maxPageBytes ? "page" : playableKind(file.mime)
 
 export function DriveFileCards(props: {
   spaceId: string | undefined
   files: ReadonlyArray<SessionMessage.DriveFile>
   className?: string | undefined
 }) {
+  const cards = props.files.filter((file) => inlineKind(file) === undefined)
   return (
-    <AttachmentGroup className={props.className}>
-      {props.files.map((file) => (
-        <DriveFileCard key={file.path} spaceId={props.spaceId} file={file} />
-      ))}
-    </AttachmentGroup>
+    <>
+      {props.files.map((file) => {
+        const kind = inlineKind(file)
+        if (kind === "page") return <HtmlPage key={file.path} spaceId={props.spaceId} file={file} />
+        return kind ? <MediaPlayer key={file.path} spaceId={props.spaceId} file={file} kind={kind} /> : null
+      })}
+      {cards.length > 0 ? (
+        <AttachmentGroup className={props.className}>
+          {cards.map((file) => (
+            <DriveFileCard key={file.path} spaceId={props.spaceId} file={file} />
+          ))}
+        </AttachmentGroup>
+      ) : null}
+    </>
   )
 }
 

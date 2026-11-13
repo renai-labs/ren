@@ -42,3 +42,14 @@ describe("Drive.Path", () => {
     expect(accepts([name, name, name, name].join("/"))).toBe(false)
   })
 })
+
+describe("Drive.typeOf", () => {
+  test("a TypeScript file is text, not an MPEG transport stream video", () => {
+    expect(["hello.ts", "worker.mts", "config.cts"].map(Drive.typeOf)).toEqual([
+      "text/typescript",
+      "text/typescript",
+      "text/typescript",
+    ])
+    expect(Drive.typeOf("clip.mp4")).toBe("video/mp4")
+  })
+})
