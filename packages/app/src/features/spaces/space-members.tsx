@@ -332,7 +332,7 @@ function SpaceMembers() {
     <>
       <PageActions>
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
-        {space.membershipId ? <InviteLinkDialog /> : null}
+        {space.membershipId && space.kind === "shared" ? <InviteLinkDialog /> : null}
         {space.canAddMember ? (
           <AddSpaceMemberDialog
             open={adding}
