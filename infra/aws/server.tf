@@ -164,6 +164,8 @@ resource "aws_ecs_task_definition" "server" {
         CLOUDFLARE_ACCOUNT_ID         = var.artifact_cloudflare.account_id
         ARTIFACT_CLOUDFLARE_NAMESPACE = var.artifact_cloudflare.namespace
         ARTIFACT_DOMAIN               = var.artifact_cloudflare.domain
+        }, try(var.artifact_cloudflare.names, null) == null ? {} : {
+        ARTIFACT_CLOUDFLARE_NAMES = var.artifact_cloudflare.names
       }) : { name = key, value = value }
     ]
     secrets = [

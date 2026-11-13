@@ -64,6 +64,7 @@ artifact_cloudflare = {
   account_id = "<cloudflare-account-id>"
   namespace  = "ren-artifacts"
   domain     = "useren.site"
+  names      = "<names_namespace output of infra/cloudflare>"
 }
 ```
 

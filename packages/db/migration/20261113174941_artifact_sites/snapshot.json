@@ -1,10 +1,10 @@
 {
-  "id": "0551a135-fe7d-4c54-960a-840a90259c22",
-  "prevIds": [
-    "31078a6d-6867-4c1a-ba12-6cf0a5178801"
-  ],
   "version": "8",
   "dialect": "postgres",
+  "id": "af3e79aa-6ed1-4c98-b0c5-b9c2df8e7ed7",
+  "prevIds": [
+    "56245b5c-3d23-41f0-a751-bdab2b23f8b2"
+  ],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -63,6 +63,12 @@
     {
       "isRlsEnabled": false,
       "name": "artifact_deployment",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "artifact_name_sync",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1136,6 +1142,19 @@
     {
       "type": "text",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "artifact"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -1470,6 +1489,45 @@
       "entityType": "columns",
       "schema": "public",
       "table": "artifact_deployment"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "artifact_name_sync"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "epoch",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "artifact_name_sync"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "synced_epoch",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "artifact_name_sync"
     },
     {
       "type": "text",
@@ -9952,6 +10010,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "name",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "artifact_name_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "artifact"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "artifact_id",
           "isExpression": false,
           "asc": true,
@@ -12254,6 +12333,27 @@
       "method": "btree",
       "concurrently": false,
       "name": "usage_event_workload_time_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "usage_event"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "root_session",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "usage_event_root_session_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "usage_event"
@@ -14892,6 +14992,16 @@
     },
     {
       "columns": [
+        "name"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_name_sync_pkey",
+      "schema": "public",
+      "table": "artifact_name_sync",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -15670,5 +15780,7 @@
       "table": "webhook_request"
     }
   ],
-  "renames": []
+  "renames": [
+    "public.artifact.binding->public.artifact.remote"
+  ]
 }
