@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
+import { chmod } from "node:fs/promises"
 import { join } from "node:path"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
 import { Access } from "../src/access.js"
@@ -203,6 +204,36 @@ describe("Artifacts with durable workflows and workerd", () => {
           baseDeploymentId: first,
         }).pipe(Effect.flip)
         expect([stale._tag, stale.message]).toEqual(["Primitive.Conflict", expect.stringContaining(second)])
+      }),
+    120_000,
+  )
+
+  it.live(
+    "a stop that fails for good ends as failed and releases the claim for the next deployment",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        const input = { title: "Stuck", config: { entry: "index.html" }, files: { "index.html": text("v1") } }
+        const first = deployment()
+        yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: first })
+        expect((yield* settle(artifacts, owner, id, first)).status).toBe("ready")
+        const table = Database.Schema.artifact
+        const row = (yield* database.db.select().from(table).where(eq(table.id, id))).at(0)
+        const remote = yield* Schema.decodeUnknownEffect(Schema.Struct({ directory: Schema.String }))(row?.remote)
+        const writable = Effect.promise(() => chmod(remote.directory, 0o755))
+        yield* Effect.addFinalizer(() => writable.pipe(Effect.andThen(stop(artifacts, owner, id)), Effect.ignore))
+        yield* Effect.promise(() => chmod(remote.directory, 0o555))
+        const stopping = yield* artifacts.stop(owner, id)
+        yield* idle(id)
+        expect((yield* artifacts.status(owner, id, stopping.deploymentId)).status).toBe("failed")
+        yield* writable
+        expect(
+          (yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: deployment() })).status,
+        ).toBe("deploying")
+        yield* idle(id)
       }),
     120_000,
   )
