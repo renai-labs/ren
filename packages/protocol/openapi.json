@@ -15300,7 +15300,7 @@
         "pattern": "^art_",
         "allOf": [
           {
-            "pattern": "^art_[0-9A-Za-z]{1,64}$",
+            "pattern": "^art_[0-9A-Za-z]{1,59}$",
             "description": "The harness names a new artifact, and Ren keeps that id. It is unique across Ren."
           }
         ]

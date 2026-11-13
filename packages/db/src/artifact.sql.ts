@@ -3,7 +3,8 @@ import type { Auth } from "@ren/schema/auth"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import type { Schema } from "effect"
-import { index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization } from "./auth.sql.js"
 import { agent_session } from "./session.sql.js"
 import { space } from "./space.sql.js"
@@ -33,7 +34,10 @@ export const artifact = pgTable(
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
   },
-  (table) => [index("artifact_space_id_idx").on(table.space_id)],
+  (table) => [
+    index("artifact_space_id_idx").on(table.space_id),
+    uniqueIndex("artifact_label_idx").on(sql`lower(${table.id})`),
+  ],
 )
 
 export const artifact_deployment = pgTable(

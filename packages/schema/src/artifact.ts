@@ -9,12 +9,15 @@ import { Session } from "./session.js"
 import { Space } from "./space.js"
 
 export const ID = Identifier.make("art", "Artifact.ID")
-  .check(Schema.isPattern(/^art_[0-9A-Za-z]{1,64}$/u))
+  .check(Schema.isPattern(/^art_[0-9A-Za-z]{1,59}$/u))
   .annotate({
     identifier: "Artifact.ID",
     description: "The harness names a new artifact, and Ren keeps that id. It is unique across Ren.",
   })
 export type ID = typeof ID.Type
+
+// oxlint-disable-next-line ren/no-comments -- The artifact's host name label and its script name on Cloudflare. A host name has no capitals or `_`; at most 59 characters after `art_` keep it within 63.
+export const label = (id: ID) => `art-${Identifier.suffix(id).toLowerCase()}`
 
 export const ProviderID = Schema.NonEmptyString.pipe(
   Schema.brand("Artifact.ProviderID"),

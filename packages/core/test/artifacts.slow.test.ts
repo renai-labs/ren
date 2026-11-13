@@ -3,6 +3,7 @@ import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Artifact } from "@ren/schema/artifact"
+import { Identifier } from "@ren/schema/identifier"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Predicate, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
@@ -538,6 +539,15 @@ describe("Artifacts with durable workflows and workerd", () => {
           (yield* artifacts
             .deploy(elsewhere, id, {
               deploymentId: deployment(),
+              uploadId: Artifact.UploadID.make(crypto.randomUUID()),
+            })
+            .pipe(Effect.flip))._tag,
+        ).toBe("Primitive.NotFound")
+        expect(
+          (yield* artifacts
+            .deploy(elsewhere, Artifact.ID.make(`art_${Identifier.suffix(id).toUpperCase()}`), {
+              deploymentId: deployment(),
+              title: "Same label",
               uploadId: Artifact.UploadID.make(crypto.randomUUID()),
             })
             .pipe(Effect.flip))._tag,
