@@ -12,7 +12,7 @@ import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Result, Schema, Stream } from "effect"
+import { Clock, Effect, Exit, Fiber, Option, Predicate, Result, Schedule, Schema, Stream } from "effect"
 import { Base64 } from "effect/encoding"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
@@ -404,21 +404,45 @@ export const make = (
     shells: (sessionId) =>
       host.shells(sessionId, (shell) => shell.list()).pipe(Effect.flatMap((all) => readAll(all, Translate.shell))),
     createShell: (sessionId, input) =>
-      host
-        .environment(sessionId, (environment) =>
-          environment.shell
-            .create({
-              command: input.command,
-              ...(input.timeout && { timeout: input.timeout }),
-              metadata: { sessionID: sessionId },
-            })
-            .pipe(
-              Effect.catchTag("AppProcessError", (error) =>
-                Effect.fail(new Harness.Rejected({ message: error.message })),
-              ),
+      Effect.gen(function* () {
+        yield* host.environment(sessionId, () => Effect.void)
+        const sessionID = SessionID.make(sessionId)
+        const id = SessionMessage.ID.create()
+        const run = yield* api.session.shell({ sessionID, id, command: input.command }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("The shell command could not run", cause).pipe(
+              Effect.andThen(Effect.fail(new Harness.Rejected({ message: "The command did not start" }))),
             ),
+          ),
+          Effect.forkDetach,
         )
-        .pipe(Effect.flatMap((info) => readOne(info, Translate.shell))),
+        const poll = api.session.message.get({ sessionID, messageID: id }).pipe(
+          Effect.catchTags(
+            { SessionNotFoundError: missing, MessageNotFoundError: () => Effect.succeed(undefined) },
+            Effect.die,
+          ),
+          Effect.repeat({
+            until: Boolean,
+            schedule: Schedule.spaced("50 millis"),
+            times: 200,
+          }),
+        )
+        const started = yield* Effect.raceFirst(
+          poll,
+          Fiber.await(run).pipe(
+            Effect.flatMap((exit) => (Exit.isFailure(exit) ? Effect.failCause(exit.cause) : Effect.never)),
+          ),
+        )
+        if (started?.type !== "shell") return yield* new Harness.Rejected({ message: "The command did not start" })
+        return yield* host
+          .shells(sessionId, (shell) =>
+            Effect.gen(function* () {
+              if (input.timeout) yield* shell.timeout(started.shellID, input.timeout)
+              return yield* shell.get(started.shellID)
+            }).pipe(Effect.catchTag("Shell.NotFoundError", () => shellMissing(started.shellID))),
+          )
+          .pipe(Effect.flatMap((info) => readOne(info, Translate.shell)))
+      }),
     shell: (sessionId, shellId) =>
       host
         .shells(sessionId, (shell) =>

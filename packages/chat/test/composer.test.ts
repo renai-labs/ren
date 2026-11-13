@@ -36,6 +36,15 @@ describe("Composer draft", () => {
     expect(Composer.decode(JSON.stringify({ text: 4 }))).toEqual(Composer.empty)
   })
 
+  test("keeps the shell mode and its text through storage, and a draft without a mode is a prompt", () => {
+    const shell = Composer.withMode(draft("git status"), "shell")
+    expect(Composer.decode(Composer.encode(shell))).toEqual(shell)
+    expect(Composer.isShell(Composer.decode(Composer.encode(shell)))).toBe(true)
+    expect(Composer.encode(Composer.emptyShell)).toBeDefined()
+    expect(Composer.isShell(Composer.decode(Composer.encode(draft("hello"))))).toBe(false)
+    expect(Composer.withMode(shell, "prompt")).toEqual(draft("git status"))
+  })
+
   test("stores nothing for a blank draft so the key can be removed", () => {
     expect(Composer.encode(draft("  \n"))).toBeUndefined()
     expect(Composer.encode({ ...draft(""), model: { id: "gpt", providerID: "openai" } })).toBeDefined()

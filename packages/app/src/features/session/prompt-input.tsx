@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react"
 import { Composer, ComposerHistory, type ChatSession } from "@ren/chat"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
@@ -12,6 +12,7 @@ import {
   IconFile,
   IconLoader2,
   IconPaperclip,
+  IconPlayerPlay,
   IconPlayerStopFilled,
   IconPlus,
   IconTerminal2,
@@ -62,6 +63,8 @@ import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
 import { useStep } from "../../lib/use-step.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { Drafts } from "../../lib/drafts.js"
+import type { ShellHistory } from "../../lib/use-shell-history.js"
+import { Keyboard } from "../../platform/keyboard.js"
 import { ChatKeys } from "./chat-keys.js"
 
 function AddMenu(props: {
@@ -83,7 +86,7 @@ function AddMenu(props: {
       >
         <IconPlus />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-52">
+      <DropdownMenuContent side="top" align="start" className="w-64">
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={props.onAttach}>
             <IconPaperclip />
@@ -428,6 +431,23 @@ function BootLine() {
   )
 }
 
+function ShellPrefix(props: { active: boolean }) {
+  if (!props.active) return null
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute top-4 left-4 font-mono leading-relaxed text-muted-foreground"
+    >
+      $
+    </span>
+  )
+}
+
+const placeholder = (input: { readonly status: PromptInputBoot | undefined; readonly shell: boolean }) => {
+  if (input.status) return ""
+  return input.shell ? "e.g. git status" : "Ask anything, @ to mention"
+}
+
 const lineCount = (text: string) => text.split("\n").length
 
 function PastedBlocks(props: {
@@ -534,32 +554,46 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
   )
 }
 
-function SendIcon(props: { sending: boolean; stop: boolean }) {
+function SendIcon(props: { sending: boolean; stop: boolean; shell: boolean }) {
   if (props.sending) return <IconLoader2 className="animate-spin" />
   if (props.stop) return <IconPlayerStopFilled />
+  if (props.shell) return <IconPlayerPlay />
   return <IconArrowUp />
 }
 
-function SendButton(props: { blank: boolean; stop: boolean; sending: boolean; booting: boolean; onClick: () => void }) {
+const sendLabel = (props: { stop: boolean; shell: boolean }) => {
+  if (props.stop) return "Stop"
+  return props.shell ? "Run command" : "Send"
+}
+
+function SendButton(props: {
+  blank: boolean
+  stop: boolean
+  shell: boolean
+  sending: boolean
+  booting: boolean
+  onClick: () => void
+}) {
   return (
     <InputGroupButton
       variant={!props.blank || props.stop ? "default" : "secondary"}
       size="icon-sm"
       className={cn("rounded-full", props.booting && "pointer-events-none opacity-50")}
       aria-disabled={props.booting || undefined}
-      aria-label={props.stop ? "Stop" : "Send"}
+      aria-label={sendLabel(props)}
       onClick={props.onClick}
     >
-      <SendIcon sending={props.sending} stop={props.stop} />
+      <SendIcon sending={props.sending} stop={props.stop} shell={props.shell} />
     </InputGroupButton>
   )
 }
 
-const textareaClass = (layout: { home: boolean; marked: boolean }) =>
+const textareaClass = (layout: { home: boolean; marked: boolean; shell: boolean }) =>
   cn(
     "px-4 pt-4 leading-relaxed",
     layout.home ? "min-h-24" : "max-h-60 min-h-16",
     layout.marked && "text-transparent caret-foreground",
+    layout.shell && "pl-9 font-mono",
   )
 
 function composerState(
@@ -569,14 +603,14 @@ function composerState(
     readonly sending?: boolean | undefined
     readonly onStop?: (() => void) | undefined
   },
-  draft: { readonly blank: boolean; readonly adding: boolean },
+  draft: { readonly blank: boolean; readonly adding: boolean; readonly shell: boolean },
 ) {
   const booting = props.boot?._tag === "Starting"
   return {
     booting,
     sending: props.sending === true || draft.adding,
     status: props.boot && (draft.blank || booting) ? props.boot : undefined,
-    stop: Boolean(props.running && draft.blank && props.onStop),
+    stop: Boolean(props.running && draft.blank && props.onStop && !draft.shell),
   }
 }
 
@@ -597,19 +631,97 @@ function ComposerToolbar(props: {
   onInsert: (character: string) => void
   onAttach: () => void
   onRepositories: () => void
+  shell: boolean
+  model: ReactNode
   children: ReactNode
 }) {
+  const shell = props.shell
   return (
     <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-      <AddMenu
-        onInsert={props.onInsert}
-        onAttach={props.onAttach}
-        onRepositories={props.spaceId ? props.onRepositories : undefined}
-      />
-      {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
-      <span aria-hidden className="ml-auto" />
+      {shell ? null : (
+        <AddMenu
+          onInsert={props.onInsert}
+          onAttach={props.onAttach}
+          onRepositories={props.spaceId ? props.onRepositories : undefined}
+        />
+      )}
+      {props.spaceId && !shell ? <AppsStrip spaceId={props.spaceId} /> : null}
+      {shell ? (
+        <span className="mr-auto pl-1 text-sm text-muted-foreground">Shell</span>
+      ) : (
+        <span aria-hidden className="ml-auto" />
+      )}
+      {shell ? null : props.model}
       {props.children}
     </InputGroupAddon>
+  )
+}
+
+function startsShell(
+  draft: Composer.Draft,
+  next: string,
+  input: { readonly history: ShellHistory | undefined; readonly suggestOpen: boolean },
+) {
+  return (
+    next === "!" &&
+    input.history !== undefined &&
+    !input.suggestOpen &&
+    Composer.isBlank(draft) &&
+    draft.pasted.length === 0 &&
+    Composer.files(draft).length === 0 &&
+    Composer.mentions(draft).length === 0
+  )
+}
+
+function shellKey(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  input: { readonly running: boolean; readonly text: string; readonly leave: () => void },
+) {
+  if (event.nativeEvent.isComposing) return false
+  const leaves =
+    (event.key === "Escape" && !input.running) ||
+    (event.key === "Backspace" && input.text === "" && event.currentTarget.selectionStart === 0)
+  if (leaves) event.preventDefault()
+  if (leaves) input.leave()
+  return leaves
+}
+
+function useShellMode(input: {
+  history: ShellHistory | undefined
+  draft: Composer.Draft
+  locked: boolean
+  uploading: boolean
+  onChange: (draft: Composer.Draft) => void
+  textarea: RefObject<HTMLTextAreaElement | null>
+  suggest: Suggest | undefined
+}) {
+  const history = input.history
+  const active = history !== undefined && Composer.isShell(input.draft)
+  const toggle = () => {
+    if (!history || input.locked) return
+    if (!active && (input.uploading || Composer.files(input.draft).length > 0)) return
+    input.onChange(Composer.withMode(input.draft, active ? "prompt" : "shell"))
+    history.reset()
+    input.suggest?.onClose()
+    input.textarea.current?.focus()
+  }
+  Keyboard.useKeyDown((event) => {
+    if (!ChatKeys.toggleShell(event)) return
+    event.preventDefault()
+    toggle()
+  })
+  return {
+    active,
+    toggle,
+    suggest: active ? undefined : input.suggest,
+  }
+}
+
+function pasteKind(event: ClipboardEvent<HTMLTextAreaElement>) {
+  const data = event.clipboardData
+  return Composer.paste(
+    { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: data.getData("text/plain") },
+    { readClipboardImage: false },
   )
 }
 
@@ -628,6 +740,7 @@ export function PromptInput(props: {
   sending?: boolean | undefined
   suggest?: Suggest | undefined
   artifact?: Artifacts.Mention | undefined
+  history?: ShellHistory | undefined
   files: Target
   header?: ReactNode
   queue?: ReactNode
@@ -640,12 +753,23 @@ export function PromptInput(props: {
   const text = draft.text
   const blank = Composer.isBlank(draft)
   const mentions = useMentions(props.spaceId, props.suggest, text)
-  const state = composerState(props, { blank, adding: mentions.adding })
-  const booting = state.booting
   const uploading = uploads.uploads.length > 0
+  const shellMode = useShellMode({
+    history: props.history,
+    draft,
+    locked: props.sending === true,
+    uploading,
+    onChange: props.onChange,
+    textarea,
+    suggest: props.suggest,
+  })
+  const shell = shellMode.active
+  const toggleShell = shellMode.toggle
+  const state = composerState(props, { blank, adding: mentions.adding, shell })
+  const booting = state.booting
   const change = (next: Composer.Draft) => props.onChange(next)
   const attach = (files: ReadonlyArray<File>) => {
-    if (!props.sending) uploads.add(files)
+    if (!props.sending && !shell) uploads.add(files)
   }
   const history = Drafts.useHistory()
   const [browsing, setBrowsing] = useState(ComposerHistory.idle)
@@ -658,7 +782,7 @@ export function PromptInput(props: {
       return
     }
     if (blank) {
-      if (props.running) props.onStop?.()
+      if (state.stop) props.onStop?.()
       return
     }
     setBrowsing(ComposerHistory.idle)
@@ -670,6 +794,7 @@ export function PromptInput(props: {
     <SendButton
       blank={blank}
       stop={state.stop}
+      shell={shell}
       sending={state.sending}
       booting={booting || uploading}
       onClick={() => submit({ alternative: false })}
@@ -701,6 +826,13 @@ export function PromptInput(props: {
     if (action === "chooseModel") props.onChooseModel?.()
     return action !== "editQueued"
   }
+  const recall = (direction: "up" | "down", event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const entry = props.history?.step(direction, text, event.currentTarget.selectionStart)
+    if (!entry) return
+    event.preventDefault()
+    change(Composer.withText(draft, entry.text))
+    place(entry.text, entry.cursor === "start" ? 0 : entry.text.length)
+  }
   const insert = (character: string) => {
     const next = character === "/" && !text ? "/" : `${text}${text && !text.endsWith(" ") ? " " : ""}${character}`
     change(Composer.withText(draft, next))
@@ -714,7 +846,7 @@ export function PromptInput(props: {
     change(result.mention ? Composer.withMention(next, result.mention) : next)
     place(result.text, result.cursor)
   }
-  const suggest = props.suggest
+  const suggest = shellMode.suggest
   const root = useRef<HTMLDivElement | null>(null)
   ComposerMotion.useComposer(root, { placement: props.placement })
   const artifact = props.artifact
@@ -770,7 +902,10 @@ export function PromptInput(props: {
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
       {props.queue}
-      <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
+      <InputGroup
+        data-shell={shell}
+        className="rounded-xl bg-card shadow-soft data-[shell=true]:border-primary data-[shell=true]:ring-3 data-[shell=true]:ring-primary/15 dark:bg-card"
+      >
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
@@ -778,6 +913,15 @@ export function PromptInput(props: {
           onChange={(event) => {
             const next = event.target.value
             setBrowsing(ComposerHistory.idle)
+            if (shell) {
+              props.history?.reset()
+              change(Composer.withText(draft, next))
+              return
+            }
+            if (startsShell(draft, next, { history: props.history, suggestOpen: props.suggest?.open === true })) {
+              change(Composer.withMode(draft, "shell"))
+              return
+            }
             change(Composer.withText(draft, next))
             props.suggest?.onCursor(next, event.target.selectionStart)
           }}
@@ -785,12 +929,10 @@ export function PromptInput(props: {
           onPaste={(event) => {
             const data = event.clipboardData
             const pasted = data.getData("text/plain")
-            const kind = Composer.paste(
-              { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: pasted },
-              { readClipboardImage: false },
-            )
-            if (kind === "text") return
+            const kind = pasteKind(event)
+            if (kind === "text" || (shell && kind === "block")) return
             event.preventDefault()
+            if (shell) return
             if (kind === "attachment")
               attach(
                 data.files.length > 0
@@ -801,6 +943,13 @@ export function PromptInput(props: {
           }}
           ref={textarea}
           onKeyDown={(event) => {
+            if (shell) {
+              if (shellKey(event, { running: props.running === true, text, leave: toggleShell })) return
+              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                recall(event.key === "ArrowUp" ? "up" : "down", event)
+                return
+              }
+            }
             if (suggest && suggestionKey(suggest, event, choose)) return
             const removed = suggest?.unmention(text, {
               key: event.key,
@@ -827,22 +976,24 @@ export function PromptInput(props: {
             )
             if (action && act(action, event.currentTarget)) event.preventDefault()
           }}
-          placeholder={status ? "" : "Ask anything, @ to mention"}
-          aria-label="Message"
+          placeholder={placeholder({ status, shell })}
+          aria-label={shell ? "Command" : "Message"}
           readOnly={state.sending || booting}
           aria-busy={booting || undefined}
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
           autoFocus
           rows={1}
-          className={textareaClass({ home, marked: marks.length > 0 })}
+          className={textareaClass({ home, marked: marks.length > 0, shell })}
         />
+        <ShellPrefix active={shell} />
         <ComposerToolbar
           spaceId={props.spaceId}
           onInsert={insert}
           onAttach={() => picker.current?.click()}
           onRepositories={() => setRepositories(true)}
+          shell={shell}
+          model={props.model}
         >
-          {props.model}
           {send}
         </ComposerToolbar>
       </InputGroup>
