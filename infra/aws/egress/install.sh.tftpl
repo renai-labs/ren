@@ -74,6 +74,12 @@ ren:
   key: "/etc/ren-egress/certs/key.pem"
   control_listen: "0.0.0.0:9443"
   drain: "${drain}"
+  identity:
+    listen: "0.0.0.0:443"
+    acme_host: "${identity.host}"
+    acme_cache: "/var/lib/ren-egress/acme"
+    audience: "https://${identity.host}"
+    project: "${identity.project}"
 YAML
 chown root:ren-egress /etc/ren-egress/config.yaml
 chmod 0640 /etc/ren-egress/config.yaml
@@ -88,6 +94,8 @@ Wants=network-online.target
 User=ren-egress
 Group=ren-egress
 ExecStart=/opt/ren-egress/iron-proxy --config /etc/ren-egress/config.yaml
+# The identity entry listens on port 443.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
 RestartSec=2
 KillSignal=SIGTERM

@@ -30,6 +30,10 @@ resource "aws_s3_object" "egress_install" {
     secret = aws_secretsmanager_secret.egress.arn
     hook   = "https://server.${aws_service_discovery_private_dns_namespace.this.name}:4443"
     drain  = var.egress_drain
+    identity = {
+      host    = "egress.${var.domain}"
+      project = var.e2b_project_id
+    }
   })
 }
 
@@ -57,6 +61,18 @@ resource "aws_vpc_security_group_ingress_rule" "egress_tunnel" {
   from_port         = 1080
   to_port           = 1080
   description       = "Sandbox tunnels"
+}
+
+# The identity entry (split mode, specs/runtime/credentials/egress-split.md). E2B sends the credential
+# requests of a sandbox here, and Let's Encrypt checks the host here; the egress accepts a request
+# only with an identity token of Ren's E2B project.
+resource "aws_vpc_security_group_ingress_rule" "egress_identity" {
+  security_group_id = aws_security_group.egress.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  description       = "Identity entry"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "egress_control" {
