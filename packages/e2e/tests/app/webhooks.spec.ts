@@ -18,7 +18,7 @@ test("a member creates a webhook with the form, sees its first request recorded,
     await (await page.request.get(`${serverURL}/spaces?page=1&pageSize=50`)).json(),
   )
   const spaceId = spaces.items.at(0)?.id ?? ""
-  await page.goto(`/app/spaces/${spaceId}/webhooks`)
+  await page.goto(`/app/spaces/${spaceId}/automations?kind=webhooks`)
   await expect(page.getByText("No webhooks yet")).toBeVisible()
 
   await page.getByRole("button", { name: "Create webhook" }).click()

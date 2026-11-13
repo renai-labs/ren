@@ -4,7 +4,7 @@ import { cn } from "cn"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@ren/ui/sidebar"
 import { Preference } from "../lib/preference.js"
 import { NewSpaceDialog } from "./new-space-dialog.js"
-import { SpaceEntry, sidebarRow } from "./sidebar-parts.js"
+import { SpaceEntry, sidebarMenu, sidebarRow } from "./sidebar-parts.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useSpaces } from "../lib/use-spaces.js"
 
@@ -28,7 +28,7 @@ export function SpacesList(props: { path: string }) {
   const rest = ordered.length - visible
   return (
     <section aria-label="Sidebar spaces">
-      <SidebarMenu className="gap-px">
+      <SidebarMenu className={sidebarMenu}>
         {ordered.slice(0, open ? undefined : visible).map((space) => (
           <SpaceEntry
             key={space.id}

@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceOverviewTab } from "../../../../../features/spaces/space-overview.js"
+import { PagePlaceholder } from "../../../../../components/page-placeholder.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/")({
-  head: () => ({ meta: [{ title: "Overview · Space · Ren" }] }),
+  head: () => ({ meta: [{ title: "Inbox · Space · Ren" }] }),
   wrapInSuspense: false,
-  component: SpaceOverviewTab,
+  component: PagePlaceholder,
 })

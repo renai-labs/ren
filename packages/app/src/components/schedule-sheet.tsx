@@ -38,6 +38,7 @@ import {
 } from "../lib/schedules.js"
 import { RouterContext } from "../lib/router-context.js"
 import { TimeZone } from "../lib/time-zone.js"
+import { SpaceField } from "./space-field.js"
 import { TimeZonePicker } from "./time-zone-picker.js"
 
 const defaultAgent = "default"
@@ -106,6 +107,7 @@ export function ScheduleSheet(props: {
 }
 
 const initialForm = (schedule: ScheduleInfo | undefined, spaceId: string) => ({
+  name: schedule?.name ?? "",
   message: schedule?.message ?? "",
   spaceId: schedule?.spaceId ?? spaceId,
   agentId: schedule?.agentId ?? defaultAgent,
@@ -121,6 +123,7 @@ function ScheduleForm(props: {
   const schedule = props.schedule
   const spaces = useSpaces()
   const initial = initialForm(schedule, props.spaceId ?? spaces.joined.at(0)?.id ?? "")
+  const [name, setName] = useState(initial.name)
   const [message, setMessage] = useState(initial.message)
   const [spaceId, setSpaceId] = useState(initial.spaceId)
   const [agentId, setAgentId] = useState(initial.agentId)
@@ -143,7 +146,7 @@ function ScheduleForm(props: {
     const problem = problemOf({ message, spaceId, when, cadence, next })
     setError(problem)
     if (problem || Option.isNone(when)) return
-    const fields = { name: nameOf(message), message: message.trim(), when: when.value }
+    const fields = { name: name.trim() || nameOf(message), message: message.trim(), when: when.value }
     const done = {
       onSuccess: () => {
         props.onClose()
@@ -167,6 +170,15 @@ function ScheduleForm(props: {
       }}
     >
       <FieldGroup className="flex-1 gap-6 overflow-y-auto overscroll-contain px-4 pb-4">
+        <Field>
+          <FieldLabel htmlFor="schedule-name">Name</FieldLabel>
+          <Input
+            id="schedule-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Uses the prompt’s first line"
+          />
+        </Field>
         <Field>
           <FieldLabel htmlFor="schedule-prompt">Prompt</FieldLabel>
           <Textarea
@@ -216,36 +228,6 @@ function problemOf(input: {
   if (Option.isNone(input.when)) return input.cadence.frequency === "once" ? "Pick a date and a time." : "Pick a time."
   if (input.next.kind === "invalid") return 'Use a cron expression with five fields, for example "0 9 * * *".'
   return ""
-}
-
-function SpaceField(props: {
-  spaces: ReadonlyArray<{ id: string; name: string }>
-  value: string
-  onChange: (spaceId: string) => void
-}) {
-  return (
-    <Field>
-      <FieldLabel>Space</FieldLabel>
-      <Select
-        items={props.spaces.map((space) => ({ value: space.id, label: space.name }))}
-        value={props.value}
-        onValueChange={(value) => props.onChange(String(value))}
-      >
-        <SelectTrigger aria-label="Space" className="w-full">
-          <SelectValue placeholder="Choose a space" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {props.spaces.map((space) => (
-              <SelectItem key={space.id} value={space.id}>
-                {space.name}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </Field>
-  )
 }
 
 function CadenceFields(props: {

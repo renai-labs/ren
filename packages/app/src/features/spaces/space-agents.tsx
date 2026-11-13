@@ -76,7 +76,7 @@ function FactoryGraph(props: { entries: ReadonlyArray<FactoryAgent>; name: (id: 
   )
 }
 
-export function SpaceFactoryTab() {
+export function SpaceAgentsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
   const queryClient = useQueryClient()

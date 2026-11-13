@@ -5,17 +5,20 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
   IconApps,
   IconArrowLeft,
+  IconBrain,
   IconMessagesFilled,
-  IconBrowser,
-  IconBuildingFactory2,
-  IconClock,
+  IconChecklist,
   IconCube,
+  IconFileText,
+  IconFolder,
+  IconInbox,
   IconKey,
   IconLayoutDashboard,
-  IconLayoutKanban,
   IconLock,
   IconSelector,
   IconSettings,
+  IconShield,
+  IconSparkles,
   IconCpu,
   IconUsers,
   IconWebhook,
@@ -33,8 +36,6 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
@@ -42,32 +43,59 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@ren/ui/sidebar"
-import { Footer, Header, sidebarRow } from "./sidebar-parts.js"
-import { isSoftwareFactory } from "../lib/factory.js"
+import { Footer, Header, Section, sidebarMenu, sidebarRow } from "./sidebar-parts.js"
+import { Preference } from "../lib/preference.js"
+import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Seed } from "../lib/seed.js"
 
-const spaceSections = [
-  { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId" },
-  { value: "kanban", label: "Kanban", icon: IconLayoutKanban, to: "/spaces/$spaceId/kanban" },
-  { value: "artifacts", label: "Artifacts", icon: IconBrowser, to: "/spaces/$spaceId/artifacts" },
-  { value: "settings", label: "Settings", icon: IconSettings, to: "/spaces/$spaceId/settings" },
-  { value: "compute", label: "Compute", icon: IconCpu, to: "/spaces/$spaceId/compute" },
-  { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
-  { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
-  { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },
-  { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
-  { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
-  { value: "schedules", label: "Scheduled", icon: IconClock, to: "/spaces/$spaceId/schedules" },
-  { value: "webhooks", label: "Webhooks", icon: IconWebhook, to: "/spaces/$spaceId/webhooks" },
-  { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
+const spaceGroups = [
+  {
+    id: "work",
+    label: "Work",
+    items: [
+      { value: "inbox", label: "Inbox", icon: IconInbox, to: "/spaces/$spaceId" },
+      { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId/overview" },
+      { value: "tasks", label: "Tasks", icon: IconChecklist, to: "/spaces/$spaceId/tasks" },
+      { value: "drive", label: "Drive", icon: IconFolder, to: "/spaces/$spaceId/drive" },
+      { value: "automations", label: "Automations", icon: IconWebhook, to: "/spaces/$spaceId/automations" },
+    ],
+  },
+  {
+    id: "agents",
+    label: "Agents",
+    items: [
+      { value: "agents", label: "Agents", icon: IconSparkles, to: "/spaces/$spaceId/agents" },
+      { value: "instructions", label: "Instructions", icon: IconFileText, to: "/spaces/$spaceId/instructions" },
+      { value: "memory", label: "Memory", icon: IconBrain, to: "/spaces/$spaceId/memory" },
+      { value: "permissions", label: "Permissions", icon: IconShield, to: "/spaces/$spaceId/permissions" },
+    ],
+  },
+  {
+    id: "connections",
+    label: "Connections",
+    items: [
+      { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },
+      { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
+      { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
+      { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
+    ],
+  },
+  {
+    id: "space",
+    label: "Space",
+    items: [
+      { value: "compute", label: "Compute", icon: IconCpu, to: "/spaces/$spaceId/compute" },
+      { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
+      { value: "settings", label: "Settings", icon: IconSettings, to: "/spaces/$spaceId/settings" },
+    ],
+  },
 ] as const
 
-type SpaceSection = (typeof spaceSections)[number]["value"]
+type SpaceItem = (typeof spaceGroups)[number]["items"][number]
 
-const spaceSectionOf = (path: string): SpaceSection =>
-  spaceSections.find((section) => section.value === path.split("/").at(3))?.value ?? "overview"
+const shows = (item: SpaceItem, space: SpaceInfo | undefined) => item.value !== "members" || space?.kind !== "private"
 
 function SpaceIcon(props: { kind: string; className?: string | undefined }) {
   return props.kind === "private" ? <IconLock className={props.className} /> : <IconCube className={props.className} />
@@ -76,7 +104,8 @@ function SpaceIcon(props: { kind: string; className?: string | undefined }) {
 function SpaceSwitcher(props: {
   spaceId: string
   space: SpaceInfo | undefined
-  section: (typeof spaceSections)[number]
+  current: SpaceItem
+  to: SpaceItem["to"] | "/spaces/$spaceId/artifacts"
 }) {
   const navigate = useNavigate()
   const spaces = useSpaces().joined
@@ -105,10 +134,10 @@ function SpaceSwitcher(props: {
             value={props.spaceId}
             onValueChange={(spaceId: string) => {
               const target = spaces.find((each) => each.id === spaceId)
-              const factoryOnly =
-                (props.section.value === "kanban" || props.section.value === "overview") &&
-                !(target && isSoftwareFactory(target))
-              void navigate({ to: factoryOnly ? "/spaces/$spaceId" : props.section.to, params: { spaceId } })
+              void navigate({
+                to: shows(props.current, target) ? props.to : "/spaces/$spaceId",
+                params: { spaceId },
+              })
             }}
           >
             {spaces.map((each) => (
@@ -124,18 +153,28 @@ function SpaceSwitcher(props: {
   )
 }
 
-function SpaceNav(props: { spaceId: string; space: SpaceInfo | undefined; current: SpaceSection }) {
-  const factory = props.space !== undefined && isSoftwareFactory(props.space)
+function SpaceNav(props: {
+  label: string
+  spaceId: string
+  space: SpaceInfo | undefined
+  items: ReadonlyArray<SpaceItem>
+  current: SpaceItem
+  closed?: boolean
+}) {
   return (
-    <SidebarMenu className="gap-1">
-      {spaceSections
-        .filter((each) => each.value !== "members" || props.space?.kind !== "private")
-        .filter((each) => factory || (each.value !== "kanban" && each.value !== "overview"))
+    <SidebarMenu className={sidebarMenu} aria-label={props.label}>
+      {props.items
+        .filter((each) => shows(each, props.space))
         .map((each) => (
-          <SidebarMenuItem key={each.value}>
+          <SidebarMenuItem
+            key={each.value}
+            className={cn(
+              props.closed && props.current.value !== each.value && "hidden group-data-[collapsible=icon]:block",
+            )}
+          >
             <SidebarMenuButton
               className={sidebarRow}
-              isActive={props.current === each.value}
+              isActive={props.current.value === each.value}
               tooltip={each.label}
               render={<Link to={each.to} params={{ spaceId: props.spaceId }} />}
             >
@@ -160,13 +199,18 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
     ...api.space.get.queryOptions({ idOrSlug: props.spaceId }),
     ...Seed.fromList<SpaceInfo>(queryClient, [api.space.list.queryKey()], props.spaceId),
   }).data
-  const current = spaceSectionOf(path)
-  const section = spaceSections.find((each) => each.value === current) ?? spaceSections[0]
+  const segment = path.split("/").at(3)
+  const value = segment === "artifacts" ? "drive" : segment
+  const current =
+    spaceGroups.flatMap((group): ReadonlyArray<SpaceItem> => group.items).find((item) => item.value === value) ??
+    spaceGroups[0].items[0]
+  const open = Preference.usePreference(SidebarPreferences.spaceGroups)
+  const setPreference = Preference.useSetPreference()
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="gap-0 p-0">
         <Header onSearch={props.onSearch} />
-        <SidebarMenu className="gap-1 px-0.5">
+        <SidebarMenu className={cn(sidebarMenu, "px-0.5")}>
           <SidebarMenuItem>
             <SidebarMenuButton className={sidebarRow} tooltip="All spaces" render={<Link to="/spaces" />}>
               <IconArrowLeft />
@@ -174,16 +218,37 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-            <SpaceSwitcher spaceId={props.spaceId} space={space} section={section} />
+            <SpaceSwitcher
+              spaceId={props.spaceId}
+              space={space}
+              current={current}
+              to={segment === "artifacts" ? "/spaces/$spaceId/artifacts" : current.to}
+            />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="px-0.5 pt-5 group-data-[collapsible=icon]:pt-3">
-          <SidebarGroupContent>
-            <SpaceNav spaceId={props.spaceId} space={space} current={current} />
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <SidebarContent className="scrollbar-thin overflow-y-auto overscroll-contain">
+        {spaceGroups.map((group) => (
+          <Section
+            key={group.id}
+            label={group.label}
+            open={open[group.id]}
+            onToggle={() => setPreference(SidebarPreferences.spaceGroups, { ...open, [group.id]: !open[group.id] })}
+            closed={
+              <SpaceNav
+                label={group.label}
+                spaceId={props.spaceId}
+                space={space}
+                items={group.items}
+                current={current}
+                closed
+              />
+            }
+            className="shrink-0 pt-4"
+          >
+            <SpaceNav label={group.label} spaceId={props.spaceId} space={space} items={group.items} current={current} />
+          </Section>
+        ))}
       </SidebarContent>
       <Footer />
       <SidebarRail />

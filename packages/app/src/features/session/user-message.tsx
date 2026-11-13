@@ -157,7 +157,7 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
       </MarkerIcon>
       <MarkerContent>
         Scheduled ·{" "}
-        <Link to="/schedules" search={{ schedule: props.schedule.scheduleId }}>
+        <Link to="/automations" search={{ schedule: props.schedule.scheduleId }}>
           {props.schedule.name}
         </Link>{" "}
         · {formatRun(props.schedule.scheduledAt, localTimeZone())}
@@ -178,7 +178,7 @@ function WebhookOrigin(props: { webhook: NonNullable<SessionMessage.User["webhoo
           <>
             {" · "}
             <Link
-              to="/spaces/$spaceId/webhooks/$webhookId"
+              to="/spaces/$spaceId/automations/webhooks/$webhookId"
               params={{ spaceId: props.spaceId, webhookId: props.webhook.webhookId }}
               search={{ tab: "requests", request: props.webhook.requestId }}
             >

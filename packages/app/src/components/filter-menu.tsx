@@ -1,6 +1,15 @@
 import { useState, type ComponentType } from "react"
-import { IconCircleDashed, IconCube, IconFilter2, IconLock, IconRestore, IconX } from "@tabler/icons-react"
+import {
+  IconCircleDashed,
+  IconCube,
+  IconDeviceFloppyFilled,
+  IconFilter2,
+  IconLock,
+  IconRestore,
+  IconX,
+} from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
+import { cn } from "cn"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -41,6 +50,16 @@ export const spaceOptions = (spaces: ReadonlyArray<{ id: string; name: string; k
     icon: space.kind === "private" ? IconLock : IconCube,
   }))
 
+export const sameFilters = (left: Filters, right: Filters) =>
+  [...new Set([...Object.keys(left), ...Object.keys(right)])].every((key) => {
+    const a = left[key] ?? []
+    const b = right[key] ?? []
+    return a.length === b.length && a.every((value) => b.includes(value))
+  })
+
+export const sidebarAction =
+  "size-5 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
+
 const row = "h-9 gap-3 px-3 data-highlighted:[&_svg]:text-foreground! data-popup-open:[&_svg]:text-foreground!"
 const marked = "h-9 gap-2 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"
 
@@ -49,11 +68,14 @@ export function FilterMenu(props: {
   properties: FilterProperty[]
   value: Filters
   onChange: (value: Filters) => void
+  defaults?: Filters | undefined
+  onSaveDefaults?: (() => void) | undefined
   noun?: string | undefined
   trigger?: "toolbar" | "sidebar" | undefined
 }) {
   const sidebar = props.trigger === "sidebar"
-  const active = Object.values(props.value).some((values) => values.length > 0)
+  const defaults = props.defaults ?? {}
+  const active = !sameFilters(props.value, defaults)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -61,11 +83,7 @@ export function FilterMenu(props: {
           <Button
             variant="ghost"
             size={sidebar ? "icon-sm" : "icon"}
-            className={
-              sidebar
-                ? "relative size-5 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
-                : "relative text-muted-foreground"
-            }
+            className={sidebar ? cn("relative", sidebarAction) : "relative text-muted-foreground"}
             aria-label={active ? `${props.label}, filters on` : props.label}
           />
         }
@@ -105,12 +123,22 @@ export function FilterMenu(props: {
             )
           })}
         </DropdownMenuGroup>
-        <DropdownMenuSeparator className="mx-0 my-2" />
-        <DropdownMenuGroup>
-          <DropdownMenuItem className={row} disabled={!active} onClick={() => props.onChange({})}>
+        <DropdownMenuSeparator className="mx-0 my-1" />
+        <DropdownMenuGroup className="flex gap-1">
+          <DropdownMenuItem
+            className="h-8 flex-1 justify-center text-muted-foreground"
+            disabled={!active}
+            onClick={() => props.onChange(defaults)}
+          >
             <IconRestore />
-            Reset to default
+            Reset
           </DropdownMenuItem>
+          {props.onSaveDefaults ? (
+            <DropdownMenuItem className="h-8 flex-1 justify-center" disabled={!active} onClick={props.onSaveDefaults}>
+              <IconDeviceFloppyFilled />
+              Save
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

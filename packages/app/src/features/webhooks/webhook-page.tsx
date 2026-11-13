@@ -37,7 +37,7 @@ import { useWebhookActions } from "./use-webhook-actions.js"
 import { AgentSelect } from "./webhooks-tab.js"
 import { Equal } from "effect"
 
-const route = getRouteApi("/_authed/_shell/spaces/$spaceId/webhooks/$webhookId/")
+const route = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/")
 
 const masked = (url: string) => `${url.slice(0, url.lastIndexOf("/") + 1)}••••••••`
 
@@ -81,6 +81,10 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
         id: webhook.id,
         ...((agentId !== webhook.agentId || draft.runAsMe) && { agentId }),
         ...(!webhook.preset && {
+          ...(draft.name.trim() !== "" &&
+            draft.name.trim() !== webhook.name && {
+              name: draft.name.trim(),
+            }),
           ...(draft.message.trim() !== webhook.message && {
             message: draft.message.trim(),
           }),
@@ -107,8 +111,9 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
       description={webhook.modeReason ? Webhooks.modeReasons[webhook.modeReason] : undefined}
       back={
         <Link
-          to="/spaces/$spaceId/webhooks"
+          to="/spaces/$spaceId/automations"
           params={{ spaceId: props.spaceId }}
+          search={{ kind: "webhooks" }}
           className={buttonVariants({
             variant: "ghost",
             size: "sm",
@@ -173,6 +178,16 @@ function WebhookSetup(props: { webhook: WebhookInfo; spaceId: string }) {
   const preset = webhook.preset
   return (
     <div className="flex flex-col gap-10">
+      {preset ? null : (
+        <Section title="Name" description="How this webhook shows in lists and in the chats it starts.">
+          <Input
+            aria-label="Name"
+            value={draft.name}
+            onChange={(event) => form.actions.set({ name: event.target.value })}
+            className="max-w-md"
+          />
+        </Section>
+      )}
       <UrlSection webhook={webhook} />
       {preset ? (
         <Section

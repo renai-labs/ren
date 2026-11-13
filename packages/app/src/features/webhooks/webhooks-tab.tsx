@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@ren/ui/textarea"
 import { formatRelative } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
+import { SpaceField } from "../../components/space-field.js"
 import { PageActions, TableCard, TableSample, useShapeId } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
@@ -24,6 +25,7 @@ import { pickerPageSize } from "../../lib/pagination.js"
 import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMembers } from "../../lib/use-members.js"
+import { useSpaces } from "../../lib/use-spaces.js"
 import { useNow } from "../../lib/use-now.js"
 import { Webhooks } from "../../lib/webhooks.js"
 import { useWebhookActions } from "./use-webhook-actions.js"
@@ -41,7 +43,7 @@ function LastRequest(props: { webhook: WebhookInfo; now: number }) {
   )
 }
 
-function WebhookRow(props: { webhook: WebhookInfo; spaceId: string; owner: string; now: number }) {
+function WebhookRow(props: { webhook: WebhookInfo; owner: string; now: number }) {
   const actions = useWebhookActions()
   const webhook = props.webhook
   const live = webhook.mode === "live"
@@ -57,8 +59,8 @@ function WebhookRow(props: { webhook: WebhookInfo; spaceId: string; owner: strin
           )}
           <span className="flex min-w-0 flex-col gap-0.5">
             <Link
-              to="/spaces/$spaceId/webhooks/$webhookId"
-              params={{ spaceId: props.spaceId, webhookId: webhook.id }}
+              to="/spaces/$spaceId/automations/webhooks/$webhookId"
+              params={{ spaceId: webhook.spaceId, webhookId: webhook.id }}
               className="truncate outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
             >
               {name}
@@ -132,7 +134,7 @@ function PresetRow(props: { app: AppInfo; preset: string; turnedOn: WebhookInfo 
       {
         onSuccess: (created) =>
           void navigate({
-            to: "/spaces/$spaceId/webhooks/$webhookId",
+            to: "/spaces/$spaceId/automations/webhooks/$webhookId",
             params: { spaceId: props.spaceId, webhookId: created.id },
           }),
         onError: (error) => toast.error(`Couldn’t turn on ${label}`, { description: errorMessage(error) }),
@@ -143,7 +145,7 @@ function PresetRow(props: { app: AppInfo; preset: string; turnedOn: WebhookInfo 
       <TableCell className="max-w-64 truncate">
         {props.turnedOn ? (
           <Link
-            to="/spaces/$spaceId/webhooks/$webhookId"
+            to="/spaces/$spaceId/automations/webhooks/$webhookId"
             params={{ spaceId: props.spaceId, webhookId: props.turnedOn.id }}
             className="outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
           >
@@ -211,7 +213,7 @@ function FromApps(props: { spaceId: string; webhooks: ReadonlyArray<WebhookInfo>
   )
 }
 
-function WebhookTable(props: { webhooks: ReadonlyArray<WebhookInfo>; spaceId: string }) {
+function WebhookTable(props: { webhooks: ReadonlyArray<WebhookInfo> }) {
   const members = useMembers()
   const now = useNow()
   return (
@@ -231,7 +233,6 @@ function WebhookTable(props: { webhooks: ReadonlyArray<WebhookInfo>; spaceId: st
             <WebhookRow
               key={webhook.id}
               webhook={webhook}
-              spaceId={props.spaceId}
               owner={members.member(webhook.ownerId)?.name ?? "Someone"}
               now={now}
             />
@@ -242,7 +243,7 @@ function WebhookTable(props: { webhooks: ReadonlyArray<WebhookInfo>; spaceId: st
   )
 }
 
-export function WebhooksTab(props: { spaceId: string }) {
+export function WebhooksTab(props: { spaceId?: string | undefined }) {
   const { api } = RouterContext.useRouterContext()
   const webhooks = useQuery({
     ...api.webhook.list.queryOptions(Webhooks.listInput(props.spaceId)),
@@ -268,10 +269,10 @@ export function WebhooksTab(props: { spaceId: string }) {
           {items && shown.length === 0 ? (
             <EmptyState>{Search.empty(query, "No webhooks yet. Create one, or ask Ren to connect an app.")}</EmptyState>
           ) : null}
-          {shown.length > 0 ? <WebhookTable webhooks={shown} spaceId={props.spaceId} /> : null}
+          {shown.length > 0 ? <WebhookTable webhooks={shown} /> : null}
         </Loading>
       </div>
-      {items ? <FromApps spaceId={props.spaceId} webhooks={items} query={query} /> : null}
+      {items && props.spaceId ? <FromApps spaceId={props.spaceId} webhooks={items} query={query} /> : null}
       <CreateSheet key={creating} open={creating > 0} spaceId={props.spaceId} onClose={() => setCreating(0)} />
     </div>
   )
@@ -311,22 +312,25 @@ export function AgentSelect(props: {
   )
 }
 
-function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => void }) {
+function CreateSheet(props: { open: boolean; spaceId?: string | undefined; onClose: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
+  const spaces = useSpaces()
   const create = useMutation(api.webhook.create.mutationOptions())
+  const [spaceId, setSpaceId] = useState(props.spaceId ?? spaces.joined.at(0)?.id ?? "")
   const [name, setName] = useState("")
   const [message, setMessage] = useState("")
   const [agent, setAgent] = useState(Webhooks.defaultAgent)
   const [error, setError] = useState("")
   const save = () => {
+    if (spaceId === "") return setError("Choose a space.")
     if (name.trim() === "") return setError("Name the webhook.")
     if (message.trim() === "") return setError("Write what the agent must do with each request.")
     setError("")
     const agentId = Webhooks.agentIdOf(agent)
     create.mutate(
       {
-        spaceId: props.spaceId,
+        spaceId,
         source: { _tag: "custom", name: name.trim(), message: message.trim() },
         ...(agentId && { agentId }),
       },
@@ -335,8 +339,8 @@ function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => voi
           props.onClose()
           toast.success("Webhook created. It records requests until you turn it on.")
           void navigate({
-            to: "/spaces/$spaceId/webhooks/$webhookId",
-            params: { spaceId: props.spaceId, webhookId: created.id },
+            to: "/spaces/$spaceId/automations/webhooks/$webhookId",
+            params: { spaceId, webhookId: created.id },
           })
         },
         onError: (failure) => setError(errorMessage(failure)),
@@ -354,7 +358,7 @@ function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => voi
         <SheetHeader>
           <SheetTitle>Create webhook</SheetTitle>
           <SheetDescription>
-            A URL that starts sessions in this space when another app sends a request.
+            A URL that starts sessions in {props.spaceId ? "this space" : "a space"} when another app sends a request.
           </SheetDescription>
         </SheetHeader>
         <form
@@ -365,6 +369,16 @@ function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => voi
           }}
         >
           <FieldGroup className="flex-1 gap-6 overflow-y-auto overscroll-contain px-4 pb-4">
+            {props.spaceId ? null : (
+              <SpaceField
+                spaces={spaces.joined}
+                value={spaceId}
+                onChange={(value) => {
+                  setSpaceId(value)
+                  setAgent(Webhooks.defaultAgent)
+                }}
+              />
+            )}
             <Field>
               <FieldLabel htmlFor="webhook-name">Name</FieldLabel>
               <Input
@@ -386,7 +400,7 @@ function CreateSheet(props: { open: boolean; spaceId: string; onClose: () => voi
             </Field>
             <Field>
               <FieldLabel>Agent</FieldLabel>
-              <AgentSelect spaceId={props.spaceId} value={agent} onChange={setAgent} />
+              <AgentSelect spaceId={spaceId} value={agent} onChange={setAgent} />
             </Field>
             {error ? <FieldError>{error}</FieldError> : null}
           </FieldGroup>

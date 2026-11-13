@@ -9,7 +9,7 @@ const ScheduleSearchSchema = Schema.Struct({
 
 export type ScheduleSearch = typeof ScheduleSearchSchema.Type
 
-export const ScheduleSearch = Schema.toStandardSchemaV1(ScheduleSearchSchema)
+export const scheduleSearchFields = ScheduleSearchSchema.fields
 
 export function scheduleListInput(
   search: ScheduleSearch,

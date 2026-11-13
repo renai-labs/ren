@@ -23,13 +23,13 @@ test("space placeholders stay inaccessible until the real list arrives", async (
   try {
     await page.getByRole("link", { name: "All spaces", exact: true }).click()
     await expect(page.getByRole("status", { name: "Loading spaces" })).toBeVisible()
-    await expect(page.getByRole("link", { name: "General Space", exact: true })).toHaveCount(0)
+    await expect(page.getByRole("table").getByRole("link", { name: "General Space", exact: true })).toHaveCount(0)
     await page.screenshot({ path: test.info().outputPath("spaces-loading-light.png") })
   } finally {
     held.resolve()
   }
   await expect(page.getByRole("status", { name: "Loading spaces" })).toHaveCount(0)
-  await expect(page.getByRole("link", { name: "General Space", exact: true })).toBeVisible()
+  await expect(page.getByRole("table").getByRole("link", { name: "General Space", exact: true })).toBeVisible()
 })
 
 test("a new organization starts with a protected shared space and a personal space", async ({ page }) => {
@@ -37,12 +37,12 @@ test("a new organization starts with a protected shared space and a personal spa
   await page.goto("/app/")
   await page.getByRole("link", { name: "Spaces" }).click()
   await expect(page.getByRole("heading", { level: 1, name: "Spaces" })).toBeVisible()
-  await expect(page.getByRole("link", { name: "Open General Space" })).toContainText("1 member")
-  await expect(page.getByRole("link", { name: "Open Grace Hopper's Personal Space" })).toBeVisible()
+  const spaces = page.getByRole("table")
+  await expect(spaces.getByRole("link", { name: "General Space", exact: true })).toBeVisible()
+  await expect(spaces.getByRole("link", { name: "Grace Hopper's Personal Space", exact: true })).toBeVisible()
 
-  await page.getByRole("link", { name: "Open General Space" }).click()
-  await expect(page.getByRole("heading", { level: 1, name: "General Space" })).toBeVisible()
-  await expect(page.getByRole("button", { name: "Space actions" })).toBeHidden()
+  await spaces.getByRole("link", { name: "General Space", exact: true }).click()
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible()
 })
 
 test("a member creates a space, manages its people and archives it", async ({ page, request }) => {
@@ -57,7 +57,9 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await create.getByRole("textbox", { name: "Name" }).fill("Research")
   await create.getByRole("textbox", { name: "Description" }).fill("Papers and experiments")
   await create.getByRole("button", { name: "Create space" }).click()
-  await expect(page.getByRole("heading", { level: 1, name: "Research" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible()
+  await page.getByRole("button", { name: "Space", exact: true }).click()
+  await page.getByRole("list", { name: "Space" }).getByRole("link", { name: "Settings" }).click()
   await expect(page.getByRole("button", { name: "Edit Space description" })).toContainText("Papers and experiments")
 
   await page.getByRole("link", { name: /Members/ }).click()
@@ -86,18 +88,19 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await expect(page.getByText("Alan Turing removed")).toBeVisible()
   await expect(page.getByRole("row", { name: /Alan Turing/ })).toBeHidden()
 
-  await page.getByRole("link", { name: "Overview" }).click()
+  await page.getByRole("list", { name: "Space" }).getByRole("link", { name: "Settings" }).click()
   await page.getByRole("button", { name: "Edit Space name" }).click()
   await page.getByRole("textbox", { name: "Name" }).fill("Lab")
   await page.keyboard.press("Enter")
-  await expect(page.getByRole("heading", { level: 1, name: "Lab" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Switch space (current: Lab)" })).toBeVisible()
 
-  await page.getByRole("button", { name: "Space actions" }).click()
+  await page.getByRole("link", { name: "All spaces", exact: true }).click()
+  await page.getByRole("table").getByRole("button", { name: "Lab actions", exact: true }).click()
   await page.getByRole("menuitem", { name: "Archive space" }).click()
   await page.getByRole("alertdialog", { name: "Archive “Lab”?" }).getByRole("button", { name: "Archive" }).click()
   await expect(page).toHaveURL(`${appURL}/spaces`)
   await expect(page.getByText("Lab archived")).toBeVisible()
-  await expect(page.getByRole("link", { name: "Open Lab" })).toBeHidden()
+  await expect(page.getByRole("table").getByRole("link", { name: "Lab", exact: true })).toBeHidden()
 })
 
 test("a member browses shared spaces they are not in, and an admin joins one", async ({ page, request, browser }) => {
@@ -116,27 +119,23 @@ test("a member browses shared spaces they are not in, and an admin joins one", a
   await expect(ada.getByRole("link", { name: "Cryptography" })).toHaveCount(0)
   await ada.getByRole("tab", { name: "All spaces" }).click()
   await expect(ada).toHaveURL(/tab=all/)
-  const card = ada.locator("[data-slot=card]").filter({ hasText: "Cryptography" })
-  await expect(card).toContainText("Ciphers and codes")
-  await expect(card).toContainText("1 member")
-  await expect(card.getByRole("button", { name: "Join" })).toHaveCount(0)
+  const row = ada.getByRole("row").filter({ hasText: "Cryptography" })
+  await expect(row).toContainText("Ciphers and codes")
+  await expect(row).toContainText("1 member")
+  await expect(row.getByRole("button", { name: "Join" })).toHaveCount(0)
   await expect(
     ada.getByRole("region", { name: "Sidebar spaces" }).getByRole("link", { name: /Cryptography/ }),
   ).toHaveCount(0)
-  await card.getByRole("link", { name: "Cryptography" }).click()
+  await row.getByRole("link", { name: "Cryptography" }).click()
   await expect(ada.getByText("You’re not in this space")).toBeVisible()
   await expect(ada.getByRole("button", { name: "Join space" })).toHaveCount(0)
   await other.close()
 
   await page.goto("/app/spaces?tab=all")
-  await page
-    .locator("[data-slot=card]")
-    .filter({ hasText: "Cryptography" })
-    .getByRole("button", { name: "Join" })
-    .click()
+  await page.getByRole("row").filter({ hasText: "Cryptography" }).getByRole("button", { name: "Join" }).click()
   await expect(page.getByText("Joined Cryptography")).toBeVisible()
   await expect(page.getByRole("button", { name: "Switch space (current: Cryptography)" })).toBeVisible()
-  await expect(page.getByRole("link", { name: /Members/ })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible()
 })
 
 test("a member adds two people to a space in one go", async ({ page, request }) => {

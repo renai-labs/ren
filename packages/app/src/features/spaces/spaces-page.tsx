@@ -4,15 +4,14 @@ import { Button } from "@ren/ui/button"
 import { Tabs } from "@ren/ui/tabs"
 import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { CardsSample, Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
-import { EmptyState } from "../../components/empty-state.js"
+import { Page, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
 import { Loading } from "@ren/ui/loading"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { Pages } from "../../lib/pages.js"
 import { Search } from "../../lib/search.js"
 import { NewSpaceDialog } from "../../components/new-space-dialog.js"
-import { SpaceCard } from "./space-card.js"
+import { SpacesTable } from "./spaces-table.js"
 import { useState } from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
@@ -95,17 +94,15 @@ export function SpacesPage() {
       }
     >
       <Loading id={shapeId} loading={!spaces} label="Loading spaces">
-        {spaces ? null : <CardsSample />}
-        <div className={spaces ? "mt-4 grid gap-5 sm:grid-cols-2" : "hidden"}>
-          {shown.map((space) => (
-            <SpaceCard key={space.id} space={space} browsing={tab === "all"} />
-          ))}
-        </div>
-        {spaces && shown.length === 0 && !list.hasNextPage ? (
-          <EmptyState>
-            {Search.empty(query, tab === "all" ? "No shared spaces yet." : "You’re not in any space yet.")}
-          </EmptyState>
-        ) : null}
+        {spaces ? (
+          <SpacesTable
+            spaces={shown}
+            browsing={tab === "all"}
+            empty={Search.empty(query, tab === "all" ? "No shared spaces yet." : "You’re not in any space yet.")}
+          />
+        ) : (
+          <TableSample columns={["Space", "Description", "Members", ""]} />
+        )}
       </Loading>
       <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
     </Page>

@@ -75,6 +75,7 @@ import {
   GlobeAltIcon,
   HandRaisedIcon,
   HashtagIcon,
+  InboxIcon,
   InformationCircleIcon,
   KeyIcon,
   LanguageIcon,
@@ -237,6 +238,7 @@ export const IconHandStop = wrap(HandRaisedIcon)
 export const IconHash = wrap(HashtagIcon)
 export const IconHelpCircle = wrap(QuestionMarkCircleIcon)
 export const IconHistory = wrap(ClockIcon)
+export const IconInbox = wrap(InboxIcon)
 export const IconInfoCircle = wrap(InformationCircleIcon)
 export const IconKey = wrap(KeyIcon)
 export const IconLanguage = wrap(LanguageIcon)

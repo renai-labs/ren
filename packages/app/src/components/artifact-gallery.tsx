@@ -20,7 +20,8 @@ import {
 } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
+import { Collapsible, CollapsibleContent } from "@ren/ui/collapsible"
+import { GroupHeader } from "./group-header.js"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -536,49 +537,36 @@ function Groups(props: { groups: ReadonlyArray<Group> }) {
           onOpenChange={(open) => context.actions.setOpen(group.spaceId, { open })}
           className="flex flex-col gap-4"
         >
-          <div className="flex h-9 items-center gap-2 rounded-lg bg-muted pr-2 pl-1 text-sm">
-            <CollapsibleTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted aria-expanded:hover:text-foreground [&_svg]:-rotate-90 aria-expanded:[&_svg]:rotate-0"
-                  aria-label={`Toggle ${group.name}`}
-                />
-              }
-            >
-              <IconChevronDown className="size-3.5" />
-            </CollapsibleTrigger>
-            {group.kind === "private" ? (
-              <IconLock className="size-4 text-muted-foreground" />
-            ) : (
-              <IconCube className="size-4 text-muted-foreground" />
-            )}
-            <h2 className="min-w-0 truncate font-medium">
+          <GroupHeader
+            label={group.name}
+            icon={group.kind === "private" ? IconLock : IconCube}
+            count={group.artifacts.length}
+            title={
               <Link to="/spaces/$spaceId/artifacts" params={{ spaceId: group.spaceId }}>
                 {group.name}
               </Link>
-            </h2>
-            <span className="text-xs text-muted-foreground tabular-nums">{group.artifacts.length}</span>
-            {context.meta.joined.some((space) => space.id === group.spaceId) ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="ml-auto text-muted-foreground"
-                      aria-label={`Build with Ren in ${group.name}`}
-                      onClick={() => context.actions.build(group.spaceId)}
-                    />
-                  }
-                >
-                  <IconPlus className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent>Build with Ren in {group.name}</TooltipContent>
-              </Tooltip>
-            ) : null}
-          </div>
+            }
+            action={
+              context.meta.joined.some((space) => space.id === group.spaceId) ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground"
+                        aria-label={`Build with Ren in ${group.name}`}
+                        onClick={() => context.actions.build(group.spaceId)}
+                      />
+                    }
+                  >
+                    <IconPlus className="size-3.5" />
+                  </TooltipTrigger>
+                  <TooltipContent>Build with Ren in {group.name}</TooltipContent>
+                </Tooltip>
+              ) : undefined
+            }
+          />
           <CollapsibleContent>
             <Items artifacts={group.artifacts} />
           </CollapsibleContent>

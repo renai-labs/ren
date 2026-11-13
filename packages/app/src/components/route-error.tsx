@@ -21,7 +21,7 @@ const places = [
   { prefix: "/tasks/", thing: "task", home: { to: "/tasks", label: "Go to tasks" } },
   { prefix: "/sessions/", thing: "chat", home: { to: "/", label: "Start a new chat" } },
   { prefix: "/spaces/", thing: "space", home: { to: "/spaces", label: "Go to spaces" } },
-  { prefix: "/schedules", thing: "schedule", home: { to: "/schedules", label: "Go to scheduled" } },
+  { prefix: "/automations", thing: "page", home: { to: "/automations", label: "Go to automations" } },
   { prefix: "/settings", thing: "page", home: { to: "/settings/preferences", label: "Go to settings" } },
 ] as const
 
