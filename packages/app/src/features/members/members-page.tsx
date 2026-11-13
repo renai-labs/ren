@@ -57,7 +57,7 @@ function InviteDialog(props: {
     emails: ReadonlyArray<string>,
     role: Role,
     spaceIds: ReadonlyArray<string>,
-  ) => Promise<ReadonlyArray<string>>
+  ) => Promise<{ failures: ReadonlyArray<string>; retry: ReadonlyArray<string> }>
 }) {
   const { spaces, general } = useAddableSpaces()
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set())
@@ -94,13 +94,13 @@ function InviteDialog(props: {
                 role,
                 [...picked].filter((id) => id !== general?.id),
               )
-              .then((failures) => {
+              .then((outcome) => {
                 setPending(false)
-                if (failures.length === 0) {
-                  setText("")
+                setText(outcome.retry.join("\n"))
+                if (outcome.failures.length === 0) {
                   setPicked(new Set())
                   setOpen(false)
-                } else setError(failures.join("\n"))
+                } else setError(outcome.failures.join("\n"))
               })
           }}
         >
@@ -295,6 +295,7 @@ export function MembersSettingsPage() {
   const spaces = useSpaces()
   const invite = async (emails: ReadonlyArray<string>, role: Role, spaceIds: ReadonlyArray<string>) => {
     const failures: string[] = []
+    const retry: string[] = []
     for (const email of emails) {
       // oxlint-disable-next-line eslint/no-await-in-loop -- invitations go one at a time so a failure names its email
       const result = await auth.organization.inviteMember({
@@ -305,18 +306,21 @@ export function MembersSettingsPage() {
       })
       if (result.error !== null) {
         failures.push(`${email}: ${result.error.message ?? "failed"}`)
+        retry.push(email)
         continue
       }
       for (const spaceId of spaceIds) {
         // oxlint-disable-next-line eslint/no-await-in-loop -- spaces go one at a time so a failure names its space
         await createSpaceMember.mutateAsync({ payload: { spaceId, email } }).catch((error: unknown) => {
-          failures.push(`${email}: could not add to ${spaces.spaceName(spaceId)}: ${errorMessage(error)}`)
+          failures.push(
+            `${email}: could not add to ${spaces.spaceName(spaceId)}: ${errorMessage(error)}. Invited; add them from the space’s Add member dialog.`,
+          )
         })
       }
     }
     await refresh()
     if (failures.length === 0) toast.success(emails.length === 1 ? "Invitation sent" : "Invitations sent")
-    return failures
+    return { failures, retry }
   }
   const resend = async (email: string, role: string) => {
     const result = await auth.organization.inviteMember({
