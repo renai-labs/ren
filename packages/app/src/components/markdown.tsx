@@ -51,7 +51,7 @@ function MarkdownCode({ node: _node, className, children, ...props }: ComponentP
   const reference = use(FileReferences)
   if (!("data-block" in props)) {
     const code = (
-      <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[90%]" {...props}>
+      <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-(length:--ren-code-inline-size)" {...props}>
         {children}
       </code>
     )

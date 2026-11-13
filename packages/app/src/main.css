@@ -9,3 +9,11 @@
     animation: none;
   }
 }
+
+:root {
+  --container-chat: 48rem;
+}
+
+[data-timeline-width="wide"] {
+  --container-chat: 1000px;
+}

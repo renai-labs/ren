@@ -21,6 +21,15 @@ export function createWebPlatform(stores: {
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   const posthogKey = import.meta.env.VITE_POSTHOG_KEY
   const posthogUiHost = import.meta.env.VITE_POSTHOG_UI_HOST
+  const listeners = new Set<(key: string | null) => void>()
+  const notify = (key: string | null) => {
+    for (const listener of listeners) listener(key)
+  }
+  window.addEventListener("storage", (event) => {
+    if (event.storageArea !== localStorage) return
+    if (event.key === null) notify(null)
+    else if (event.key.startsWith(prefix)) notify(event.key.slice(prefix.length))
+  })
   const serverUrl = import.meta.env.VITE_REN_API_URL ?? window.location.origin
   return {
     ...(posthogKey && {
@@ -52,8 +61,18 @@ export function createWebPlatform(stores: {
     },
     storage: {
       get: (key) => localStorage.getItem(prefix + key) ?? undefined,
-      set: (key, value) => localStorage.setItem(prefix + key, value),
-      remove: (key) => localStorage.removeItem(prefix + key),
+      set: (key, value) => {
+        localStorage.setItem(prefix + key, value)
+        notify(key)
+      },
+      remove: (key) => {
+        localStorage.removeItem(prefix + key)
+        notify(key)
+      },
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
     },
     ...(stores.chatCache && { chatCache: stores.chatCache }),
     drafts: DraftStore.make({

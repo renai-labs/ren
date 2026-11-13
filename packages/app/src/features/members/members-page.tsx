@@ -34,7 +34,7 @@ import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { formatDate } from "@ren/ui/time"
 import { isRole, roleLabel, type Role } from "../../lib/format.js"
-import { Choice, roles } from "../../components/settings-shared.js"
+import { Choice, roleOptions, roles } from "../../components/settings-shared.js"
 
 const route = getRouteApi("/_authed/_shell/settings/_admin/members")
 
@@ -102,7 +102,7 @@ function InviteDialog(props: {
               <FieldLabel>Role</FieldLabel>
               <Choice
                 label="Invite role"
-                options={roles}
+                options={roleOptions}
                 value={role}
                 onChange={(value) => setRole(isRole(value) ? value : "member")}
                 className="w-full"
@@ -243,7 +243,7 @@ export function MembersSettingsPage() {
             cell: (row) => (
               <Choice
                 label="Role"
-                options={roles}
+                options={roleOptions}
                 value={row.role}
                 size="sm"
                 className="w-28 justify-between border-transparent bg-muted px-2 text-xs dark:bg-muted"

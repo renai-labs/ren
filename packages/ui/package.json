@@ -33,6 +33,10 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
+    "@fontsource-variable/jetbrains-mono": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
     "@pierre/diffs": "catalog:",
     "@pierre/trees": "catalog:",

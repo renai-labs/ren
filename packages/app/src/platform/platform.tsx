@@ -8,9 +8,10 @@ export interface Storage {
   readonly get: (key: string) => string | undefined
   readonly set: (key: string, value: string) => void
   readonly remove: (key: string) => void
+  readonly subscribe: (listener: (key: string | null) => void) => () => void
 }
 
-export interface Drafts extends Storage {
+export interface Drafts extends Omit<Storage, "subscribe"> {
   readonly subscribe?: (listener: (key: string) => void) => () => void
 }
 

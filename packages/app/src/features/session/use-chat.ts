@@ -10,6 +10,7 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { toast } from "@ren/ui/sonner"
+import { Preference } from "../../lib/preference.js"
 import type { PromptInputBoot } from "./prompt-input.js"
 import { quoteOf } from "./use-chat-quote.js"
 import { pickModel } from "../../components/model-picker.js"
@@ -224,7 +225,10 @@ export function useChat(
     ...api.session.get.queryOptions({ idOrSlug: params.sessionId }),
     ...Seed.fromList<SessionInfo>(queryClient, [api.session.list.queryKey(), sessionKeys.infinite()], params.sessionId),
   })
-  const view = useView(root, child)
+  const detail = Preference.usePreference(ChatPreferences.timelineDetail)
+  const fold = Preference.usePreference(ChatPreferences.foldTurns)
+  const backgroundActivity = Preference.usePreference(ChatPreferences.backgroundActivity)
+  const view = useView(root, child, detail)
   const state = view.state
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
@@ -235,7 +239,8 @@ export function useChat(
   const models = ChatReact.useModels(root)
   const catalog = useModels(root)
   const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
-  const [saved, setSaved] = useState(() => ChatPreferences.model.read(platform.storage))
+  const saved = Preference.usePreference(ChatPreferences.model)
+  const setPreference = Preference.useSetPreference()
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
   const history = Drafts.useHistory()
@@ -282,7 +287,7 @@ export function useChat(
   const reverted = ChatState.revertMessageID(state, root) !== undefined
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
 
-  const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
+  const foldMessages = Preference.usePreference(ChatPreferences.foldMessages)
   const blocked = Boolean(view.permission ?? view.form)
   Notify.useChatNotifications({ root, title, running, ...notificationsOf(state, root) })
   useChatCacheBridge(root, bridgeOf(info, { running }))
@@ -315,7 +320,9 @@ export function useChat(
     spaceId,
     spaceName,
     viewer: viewerOf(me.user),
-    expanded,
+    fold,
+    detail,
+    foldMessages,
     bootStatus,
     blocked,
     view: { root, sessionID: view.viewed },
@@ -326,7 +333,7 @@ export function useChat(
     busy: view.running,
     activity: view.activity,
     background: backgroundWork,
-    backgroundActivity: ChatPreferences.backgroundActivity.read(platform.storage),
+    backgroundActivity,
     working: view.working,
     statuses: statusesOf(state, view.viewed),
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
@@ -368,8 +375,7 @@ export function useChat(
     picking,
     setPicking,
     chooseModel: (next: SessionModel.Ref) => {
-      ChatPreferences.model.write(platform.storage, next)
-      setSaved(next)
+      setPreference(ChatPreferences.model, next)
     },
     quote: quoteOf({
       child,

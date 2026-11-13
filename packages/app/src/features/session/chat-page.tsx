@@ -67,7 +67,9 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         onRetry={chat.retryUnsent}
         onRemove={chat.removeUnsent}
         onEdit={chat.canRevert && !chat.child && !chat.reverting ? chat.edit : undefined}
-        expanded={chat.expanded}
+        fold={chat.fold}
+        detail={chat.detail}
+        foldMessages={chat.foldMessages}
         modelNames={chat.modelNames}
         admin={admin}
         onTryAgain={chat.child ? undefined : chat.resend}
@@ -111,7 +113,10 @@ function ChatComposer(props: {
   const chat = props.chat
   const column = useRef<HTMLDivElement>(null)
   return (
-    <div ref={column} className="mx-auto flex max-w-3xl flex-col gap-2">
+    <div
+      ref={column}
+      className="mx-auto flex w-full max-w-[calc(var(--container-chat)-(--spacing(12)))] flex-col gap-2"
+    >
       {chat.backgroundActivity === "off" || chat.child ? null : (
         <ActivityPill
           key={chat.root}

@@ -2,26 +2,25 @@ import { useState } from "react"
 import { IconChevronDown, IconPlus } from "@tabler/icons-react"
 import { cn } from "cn"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@ren/ui/sidebar"
+import { Preference } from "../lib/preference.js"
 import { NewSpaceDialog } from "./new-space-dialog.js"
 import { SpaceEntry, sidebarRow } from "./sidebar-parts.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useSpaces } from "../lib/use-spaces.js"
-import { RouterContext } from "../lib/router-context.js"
 
 const shownSpaces = 3
 
 export function SpacesList(props: { path: string }) {
-  const { platform } = RouterContext.useRouterContext()
   const spaces = useSpaces().spaces
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(false)
-  const [pinned, setPinned] = useState(() => SidebarPreferences.pinned.read(platform.storage))
+  const pinned = Preference.usePreference(SidebarPreferences.pinned)
+  const setPreference = Preference.useSetPreference()
   const pin = (spaceId: string, options: { on: boolean }) => {
     const next = options.on
       ? [...pinned.filter((id) => id !== spaceId), spaceId]
       : pinned.filter((id) => id !== spaceId)
-    SidebarPreferences.pinned.write(platform.storage, next)
-    setPinned(next)
+    setPreference(SidebarPreferences.pinned, next)
   }
   const pinnedSpaces = pinned.flatMap((id) => spaces.filter((space) => space.id === id))
   const ordered = [...pinnedSpaces, ...spaces.filter((space) => !pinned.includes(space.id))]

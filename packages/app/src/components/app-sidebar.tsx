@@ -1,10 +1,9 @@
-import { useState } from "react"
 import { useLocation } from "@tanstack/react-router"
 import { IconBrowser, IconChecklist, IconClock, IconCube, IconEdit, IconLayoutGridFilled } from "@tabler/icons-react"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
+import { Preference } from "../lib/preference.js"
 import { ChatsList, Footer, Header, NavRow, Section, useChatFilters } from "./sidebar-parts.js"
 import { SpacesList } from "./sidebar-spaces.js"
-import { RouterContext } from "../lib/router-context.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 
 const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
@@ -40,13 +39,12 @@ function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
 }
 
 function CollapsibleLayout(props: { path: string }) {
-  const { platform } = RouterContext.useRouterContext()
   const chats = useChatFilters()
-  const [sections, setSections] = useState(() => SidebarPreferences.sections.read(platform.storage))
+  const sections = Preference.usePreference(SidebarPreferences.sections)
+  const setPreference = Preference.useSetPreference()
   const toggle = (section: "spaces" | "chats") => {
     const next = { ...sections, [section]: !sections[section] }
-    SidebarPreferences.sections.write(platform.storage, next)
-    setSections(next)
+    setPreference(SidebarPreferences.sections, next)
   }
   return (
     <>

@@ -97,5 +97,6 @@ export async function script(
   },
 ) {
   const response = await request.post(`${mailboxURL}/script`, { data: input })
+  expect(response.ok()).toBe(true)
   return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
 }

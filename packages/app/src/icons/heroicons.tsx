@@ -12,6 +12,7 @@ import {
   ArrowRightIcon,
   ArrowRightStartOnRectangleIcon,
   ArrowTopRightOnSquareIcon,
+  ArrowTurnUpRightIcon,
   ArrowUpIcon,
   ArrowUpLeftIcon,
   ArrowUpRightIcon,
@@ -103,6 +104,7 @@ import {
   PuzzlePieceIcon,
   QuestionMarkCircleIcon,
   QueueListIcon,
+  RectangleStackIcon,
   ServerIcon,
   ShieldCheckIcon,
   ShieldExclamationIcon,
@@ -204,6 +206,7 @@ export const IconClipboardText = wrap(ClipboardDocumentListIcon)
 export const IconClock = wrap(ClockIcon)
 export const IconCode = wrap(CodeBracketIcon)
 export const IconCopy = wrap(DocumentDuplicateIcon)
+export const IconCornerUpRight = wrap(ArrowTurnUpRightIcon)
 export const IconCpu = wrap(CpuChipIcon)
 export const IconCreditCard = wrap(CreditCardIcon)
 export const IconCube = wrap(CubeIcon)
@@ -290,6 +293,7 @@ export const IconShield = wrap(ShieldCheckIcon)
 export const IconShieldLock = wrap(ShieldCheckIcon)
 export const IconShieldQuestion = wrap(ShieldExclamationIcon)
 export const IconSparkles = wrap(SparklesIcon)
+export const IconStack2 = wrap(RectangleStackIcon)
 export const IconSubtask = wrap(QueueListIcon)
 export const IconSun = wrap(SunIcon)
 export const IconTag = wrap(TagIcon)

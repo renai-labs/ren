@@ -316,11 +316,11 @@ function SettingsPageSkeleton() {
       <div className="flex flex-col gap-8">
         <Rows>
           {[
-            <Row key="email" title="Email" description="Contact support to change.">
-              <span className="text-sm">name@company.com</span>
-            </Row>,
             <Row key="name" title="Name">
               <span className="text-sm">Team member</span>
+            </Row>,
+            <Row key="email" title="Email" description="Contact support to change.">
+              <span className="text-sm">name@company.com</span>
             </Row>,
           ]}
         </Rows>
@@ -333,21 +333,42 @@ function SettingsPageSkeleton() {
             ]}
           </Rows>
         </Section>
-        <Section title="Chats">
+        <Section title="Typography">
           <Rows>
             {[
-              <Row key="detail" title="Detail" description="How much of Ren’s work a chat shows.">
+              <Row key="ui-font" title="Interface font">
+                <Button variant="outline">SF Pro</Button>
+              </Row>,
+              <Row key="code-font" title="Code font">
+                <Button variant="outline">IBM Plex Mono</Button>
+              </Row>,
+            ]}
+          </Rows>
+        </Section>
+        <Section title="Timeline">
+          <Rows>
+            {[
+              <Row key="detail" title="Timeline detail">
                 <Button variant="outline">Compact</Button>
               </Row>,
-              <Row key="delivery" title="Messages sent while Ren works">
-                <Button variant="outline">Steer</Button>
+              <Row key="width" title="Timeline width">
+                <Button variant="outline">Comfortable</Button>
               </Row>,
               <Row
                 key="background"
                 title="Background activity"
-                description="Show running subagents and shells above the composer."
+                description="Running subagents and shells, above the composer."
               >
                 <Button variant="outline">Left</Button>
+              </Row>,
+            ]}
+          </Rows>
+        </Section>
+        <Section title="Chats">
+          <Rows>
+            {[
+              <Row key="delivery" title="Messages sent while Ren works">
+                <Button variant="outline">Steer</Button>
               </Row>,
             ]}
           </Rows>
@@ -361,27 +382,23 @@ function SettingsPageSkeleton() {
             ))}
           </Rows>
         </Section>
-        <Section title="Organization">
-          <Rows>
-            {[
-              <Row
-                key="organization"
-                title="Organization"
-                description="Leaving archives your private space and deletes your personal credentials here."
-              >
-                <Button variant="outline" size="sm">
-                  Leave organization
-                </Button>
-              </Row>,
-            ]}
-          </Rows>
-        </Section>
         <Section title="Security">
           <Rows>
             {[
               <Row key="password" title="Password">
                 <Button variant="outline" size="sm">
                   Change password
+                </Button>
+              </Row>,
+            ]}
+          </Rows>
+        </Section>
+        <Section title="Organization">
+          <Rows>
+            {[
+              <Row key="organization" title="Organization">
+                <Button variant="outline" size="sm">
+                  Leave organization
                 </Button>
               </Row>,
             ]}
