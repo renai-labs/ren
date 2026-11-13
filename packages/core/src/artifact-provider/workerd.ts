@@ -21,7 +21,7 @@ const servesWithin = Duration.seconds(60)
 
 const stopsWithin = Duration.seconds(10)
 
-const Binding = Schema.Struct({ directory: Schema.String, port: Schema.Int, path: Schema.String })
+const Remote = Schema.Struct({ directory: Schema.String, port: Schema.Int, path: Schema.String })
 
 const Serving = Schema.fromJsonString(
   Schema.Struct({ pid: Schema.Int, port: Schema.Int, deploymentId: Artifact.DeploymentID }),
@@ -41,7 +41,7 @@ const readServing = (directory: string) =>
   ).pipe(Effect.map(Schema.decodeUnknownOption(Serving)))
 
 const failed = (error: unknown) =>
-  new ArtifactProvider.Failed({ message: error instanceof Error ? error.message : String(error) })
+  new ArtifactProvider.Failed({ message: error instanceof Error ? error.message : String(error), retryable: false })
 
 const write = (path: string, text: string) =>
   Effect.tryPromise({ try: () => Bun.write(path, text), catch: failed }).pipe(Effect.asVoid)
@@ -58,6 +58,23 @@ const stop = Effect.fnUntraced(function* (pid: number) {
   )
   if (Option.isNone(exited)) yield* signal(pid, "SIGKILL")
 })
+
+// oxlint-disable-next-line ren/no-comments -- The whole budget of one call: a start that does not serve, and the stop that follows it.
+const budget = Duration.sum(servesWithin, stopsWithin)
+
+const budgeted = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
+  call.pipe(
+    Effect.timeoutOrElse({
+      duration: budget,
+      orElse: () =>
+        Effect.fail(
+          new ArtifactProvider.Failed({
+            message: `The deployment did not finish within ${Duration.format(budget)}`,
+            retryable: false,
+          }),
+        ),
+    }),
+  )
 
 const freePort = Effect.sync(() => {
   const listener = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data: () => undefined } })
@@ -120,17 +137,25 @@ export const layer = Layer.effect(
               },
             },
           ),
-        catch: (error) => new ArtifactProvider.Failed({ message: `wrangler did not start: ${failed(error).message}` }),
+        catch: (error) =>
+          new ArtifactProvider.Failed({
+            message: `wrangler did not start: ${failed(error).message}`,
+            retryable: false,
+          }),
       }).pipe(Effect.ensuring(Effect.sync(() => closeSync(output))))
       const pid = yield* Effect.callback<number, ArtifactProvider.Failed>((resume) => {
         child.on("error", (error) =>
-          resume(Effect.fail(new ArtifactProvider.Failed({ message: `wrangler did not start: ${error.message}` }))),
+          resume(
+            Effect.fail(
+              new ArtifactProvider.Failed({ message: `wrangler did not start: ${error.message}`, retryable: false }),
+            ),
+          ),
         )
         child.once("spawn", () =>
           resume(
             child.pid
               ? Effect.succeed(child.pid)
-              : Effect.fail(new ArtifactProvider.Failed({ message: "wrangler did not start" })),
+              : Effect.fail(new ArtifactProvider.Failed({ message: "wrangler did not start", retryable: false })),
           ),
         )
       })
@@ -150,12 +175,13 @@ export const layer = Layer.effect(
       const written = yield* Effect.tryPromise({ try: () => Bun.file(log).text(), catch: failed })
       return yield* new ArtifactProvider.Failed({
         message: `The deployment did not serve on port ${port}:\n${written.slice(-2000)}`,
+        retryable: false,
       })
     })
 
     return ArtifactProvider.make({
       id,
-      binding: Binding,
+      remote: Remote,
       deploy: Effect.fn("ArtifactWorkerd.deploy")(function* (input) {
         const files = (yield* ArtifactArchive.read(storage, input.archive).pipe(Effect.mapError(failed))).files
         const directory = join(config.root, input.artifactId)
@@ -163,6 +189,7 @@ export const layer = Layer.effect(
         if (Object.keys(objects).length && !Object.hasOwn(files, Artifact.workerPath))
           return yield* new ArtifactProvider.Failed({
             message: "Durable Objects require _worker.js with exported classes",
+            retryable: false,
           })
         const savedObjects = Bun.file(join(directory, "durable-objects.json"))
         const previousObjects = (yield* Effect.tryPromise({ try: () => savedObjects.exists(), catch: failed }))
@@ -174,6 +201,7 @@ export const layer = Layer.effect(
         if (Object.entries(previousObjects).some(([name, className]) => objects[name] !== className))
           return yield* new ArtifactProvider.Failed({
             message: "Keep existing Durable Object binding and class names; removal and renaming are not supported",
+            retryable: false,
           })
         const before = yield* readServing(directory)
         const kept = yield* Effect.promise(() =>
@@ -181,8 +209,8 @@ export const layer = Layer.effect(
             .text()
             .catch(() => ""),
         ).pipe(Effect.map(Schema.decodeUnknownOption(Port)))
-        const port = Option.isSome(input.previous)
-          ? input.previous.value.port
+        const port = Option.isSome(input.remote)
+          ? input.remote.value.port
           : yield* Option.match(
               Option.orElse(
                 Option.map(before, (serving) => serving.port),
@@ -194,8 +222,8 @@ export const layer = Layer.effect(
               },
             )
         yield* write(portFile(directory), String(port))
-        const binding = { directory, port, path: input.config.entry === "index.html" ? "/" : `/${input.config.entry}` }
-        const url = `http://${config.host}:${port}${binding.path}`
+        const remote = { directory, port, path: input.config.entry === "index.html" ? "/" : `/${input.config.entry}` }
+        const url = `http://${config.host}:${port}${remote.path}`
         const saveObjects = Effect.tryPromise({
           try: async () => {
             const temporary = join(directory, `${input.deploymentId}.objects.json`)
@@ -206,7 +234,7 @@ export const layer = Layer.effect(
         })
         if (Option.exists(before, (serving) => serving.deploymentId === input.deploymentId) && (yield* answers(port))) {
           yield* saveObjects
-          return { binding, url }
+          return { remote, url }
         }
         const deploymentDirectory = join(directory, "deployments", input.deploymentId)
         const worker = Object.hasOwn(files, Artifact.workerPath)
@@ -261,8 +289,8 @@ export const layer = Layer.effect(
             }),
           ),
         )
-        return { binding, url }
-      }),
+        return { remote, url }
+      }, budgeted),
       stop: Effect.fn("ArtifactWorkerd.stop")(function* (artifactId) {
         const directory = join(config.root, artifactId)
         const serving = yield* readServing(directory)
@@ -271,7 +299,7 @@ export const layer = Layer.effect(
           try: () => rm(servingFile(directory), { force: true }),
           catch: failed,
         })
-      }),
+      }, budgeted),
     })
   }),
 ).pipe(Layer.provide(ObjectStorage.layer))

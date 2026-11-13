@@ -211,15 +211,28 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
             .where(eq(Database.Schema.artifact_deployment.id, deploymentId))).at(0)
           if (!row?.code_archive) return yield* Effect.die(new Error("Failed deployment lost its source archive"))
           const archive = row.code_archive
+          const saved = Effect.gen(function* () {
+            const artifact = (yield* database.db
+              .select()
+              .from(Database.Schema.artifact)
+              .where(eq(Database.Schema.artifact.id, id))).at(0)
+            const store = yield* Artifacts.remoteStore(database, id, artifact?.remote_version ?? 0)
+            return { remote: Option.fromNullishOr(artifact?.remote), save: store.save }
+          })
           yield* Effect.gen(function* () {
             const provider = yield* ArtifactProvider.Service
-            yield* Effect.addFinalizer(() => provider.stop(id, Option.none()).pipe(Effect.ignore))
+            yield* Effect.addFinalizer(() =>
+              saved.pipe(
+                Effect.flatMap((state) => provider.stop(id, state.remote, state.save)),
+                Effect.ignore,
+              ),
+            )
             const restored = yield* provider.deploy({
               artifactId: id,
               deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
               archive,
               config: { entry: "index.html" },
-              previous: Option.none(),
+              ...(yield* saved),
             })
             expect(yield* Effect.promise(() => fetch(restored.url).then((response) => response.text()))).toBe(
               "source retained after timeout",
@@ -299,7 +312,8 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
             deploymentId: update.deploymentId,
             archive: saved?.code_archive ?? "",
             config,
-            previous: Option.fromNullishOr(saved?.remote),
+            remote: Option.fromNullishOr(saved?.remote),
+            save: () => Effect.void,
           })
         }).pipe(
           Effect.provide(

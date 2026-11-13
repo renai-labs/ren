@@ -25,6 +25,7 @@ import {
   Layer,
   Option,
   Predicate,
+  Ref,
   Result,
   Schema,
 } from "effect"
@@ -189,11 +190,14 @@ const toDeployment = (row: DeploymentRow): Artifact.Deployment => ({
 const uploadKey = (organizationId: Auth.OrganizationID, id: Artifact.ID, uploadId: Artifact.UploadID) =>
   `${uploadsPrefix}${organizationId}/${id}/${uploadId}.tar.gz`
 
-// oxlint-disable-next-line ren/no-comments -- Storage and the database can fail for a moment; a run tries them again. Database.transaction turns a database failure into a defect, so the defect is checked too.
+// oxlint-disable-next-line ren/no-comments -- Storage, the database and a provider that says so can fail for a moment; a run tries them again. Database.transaction turns a database failure into a defect, so the defect is checked too.
 const transient = (cause: Cause.Cause<unknown>) => {
   const defect = Cause.findDefect(cause)
   return (
-    Option.exists(Cause.findErrorOption(cause), Schema.is(Failed)) ||
+    Option.exists(
+      Cause.findErrorOption(cause),
+      (error) => Schema.is(Failed)(error) || (Schema.is(ArtifactProvider.Failed)(error) && error.retryable),
+    ) ||
     (Result.isSuccess(defect) &&
       (defect.success instanceof SqlError || defect.success instanceof EffectDrizzleQueryError))
   )
@@ -205,6 +209,34 @@ const reasonOf = (cause: Cause.Cause<{ readonly message: string }>) =>
     onSome: (error) => error.message,
   })
 
+const lostRace = new ArtifactProvider.Failed({
+  message: "Another run changed this artifact’s provider state",
+  retryable: true,
+})
+
+// oxlint-disable-next-line ren/no-comments -- The provider's compare-and-swap save of its state on the artifact row. Each save expects the version the last one left; a save that finds another version lost a race to another run, and changes nothing.
+export const remoteStore = Effect.fnUntraced(function* (
+  database: Database.Interface,
+  id: Artifact.ID,
+  version: number,
+) {
+  const current = yield* Ref.make(version)
+  return {
+    version: Ref.get(current),
+    save: Effect.fnUntraced(function* (remote: Schema.Json) {
+      const expected = yield* Ref.get(current)
+      const saved = yield* database.db
+        .update(artifacts)
+        .set({ remote, remote_version: expected + 1, updated_at: sql`now()` })
+        .where(and(eq(artifacts.id, id), eq(artifacts.remote_version, expected)))
+        .returning({ id: artifacts.id })
+        .pipe(Effect.orDie)
+      if (saved.length === 0) return yield* lostRace
+      yield* Ref.set(current, expected + 1)
+    }),
+  }
+})
+
 const bounded = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
   call.pipe(
     Effect.timeoutOrElse({
@@ -213,6 +245,7 @@ const bounded = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
         Effect.fail(
           new ArtifactProvider.Failed({
             message: `The artifact provider did not answer within ${Duration.format(backstop)}`,
+            retryable: false,
           }),
         ),
     }),
@@ -314,15 +347,18 @@ export const layer = Layer.effect(
           if (found?.deployment.status !== "deploying") return
           if (found.artifact.pending_deployment_id === payload.deploymentId) {
             const checked = yield* check(found.deployment, found.artifact)
+            const store = yield* remoteStore(database, payload.id, found.artifact.remote_version)
             const deployed = yield* bounded(
               provider.deploy({
                 artifactId: payload.id,
                 deploymentId: payload.deploymentId,
                 config: checked.config,
                 archive: checked.codeArchive,
-                previous: Option.fromNullishOr(found.artifact.remote),
+                remote: Option.fromNullishOr(found.artifact.remote),
+                save: store.save,
               }),
             )
+            const version = yield* store.version
             yield* database.transaction((transaction) =>
               Effect.gen(function* () {
                 const artifact = (yield* transaction
@@ -330,6 +366,8 @@ export const layer = Layer.effect(
                   .from(artifacts)
                   .where(eq(artifacts.id, payload.id))
                   .for("update")).at(0)
+                if (artifact?.pending_deployment_id === payload.deploymentId && artifact.remote_version !== version)
+                  return yield* lostRace
                 if (artifact?.pending_deployment_id !== payload.deploymentId) {
                   yield* transaction
                     .update(deployments)
@@ -347,7 +385,8 @@ export const layer = Layer.effect(
                     title: found.deployment.title ?? artifact.title,
                     config: checked.config,
                     code_archive: checked.codeArchive,
-                    remote: deployed.binding,
+                    remote: deployed.remote,
+                    remote_version: version + 1,
                     url: deployed.url,
                     published_deployment_id: payload.deploymentId,
                     pending_deployment_id: null,
@@ -421,8 +460,10 @@ export const layer = Layer.effect(
           if (found.artifact.provider !== provider.id)
             return yield* new ArtifactProvider.Failed({
               message: "This artifact runs on another provider. Restore that provider to stop it.",
+              retryable: false,
             })
-          yield* bounded(provider.stop(payload.id, Option.fromNullishOr(found.artifact.remote)))
+          const store = yield* remoteStore(database, payload.id, found.artifact.remote_version)
+          yield* bounded(provider.stop(payload.id, Option.fromNullishOr(found.artifact.remote), store.save))
           yield* database.transaction((transaction) =>
             Effect.gen(function* () {
               yield* transaction
