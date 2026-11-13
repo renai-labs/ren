@@ -1,7 +1,7 @@
 export * as Drafts from "./drafts.js"
 
 import { Composer, ComposerHistory } from "@ren/chat"
-import { useCallback, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { Platform } from "../platform/platform.js"
 import { useMe } from "./use-me.js"
 
@@ -24,28 +24,22 @@ export function useWrite() {
 export function useDraft(key: string, initial?: Composer.Draft) {
   const platform = Platform.usePlatform()
   const drafts = platform.drafts ?? platform.storage
-  const read = useCallback(() => {
+  const read = () => {
     const stored = drafts.get(key)
     return stored === undefined && initial ? initial : Composer.decode(stored)
-  }, [drafts, key, initial])
+  }
   const [kept, setKept] = useState(() => ({ key, draft: read() }))
   const latest = useRef(kept)
   const draft = kept.key === key ? kept.draft : read()
-  const set = useCallback(
-    (next: Composer.Draft) => {
-      latest.current = { key, draft: next }
-      setKept(latest.current)
-      const encoded = Composer.encode(next)
-      if (encoded === undefined) drafts.remove(key)
-      else drafts.set(key, encoded)
-    },
-    [key, drafts],
-  )
-  const update = useCallback(
-    (change: (current: Composer.Draft) => Composer.Draft) =>
-      set(change(latest.current.key === key ? latest.current.draft : read())),
-    [key, read, set],
-  )
+  const set = (next: Composer.Draft) => {
+    latest.current = { key, draft: next }
+    setKept(latest.current)
+    const encoded = Composer.encode(next)
+    if (encoded === undefined) drafts.remove(key)
+    else drafts.set(key, encoded)
+  }
+  const update = (change: (current: Composer.Draft) => Composer.Draft) =>
+    set(change(latest.current.key === key ? latest.current.draft : read()))
   return { draft, set, update }
 }
 

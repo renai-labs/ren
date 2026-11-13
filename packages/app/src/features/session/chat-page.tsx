@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { Composer, Mentions } from "@ren/chat"
@@ -302,11 +302,8 @@ export function ChatPage() {
     onArchived: () => void navigate({ to: "/" }),
   })
   const updateDraft = chat.files.update
-  const mentionFile = useCallback(
-    (path: string) =>
-      updateDraft((draft) => Composer.withText(draft, Mentions.insertFile(draft.text, path, draft.text.length).text)),
-    [updateDraft],
-  )
+  const mentionFile = (path: string) =>
+    updateDraft((draft) => Composer.withText(draft, Mentions.insertFile(draft.text, path, draft.text.length).text))
   return (
     <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
