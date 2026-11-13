@@ -261,7 +261,10 @@ describe("artifacts from a chat", () => {
         )
       }),
   )
+})
 
+// oxlint-disable-next-line ren/no-comments -- The deployment holds on a server on this machine, which only a local workerd Worker can reach.
+describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1")("artifacts from a chat on a local provider", () => {
   it.live(
     "a deployment that ends while its chat's brain is asleep wakes the brain, and the chat gets its result once",
     () =>
