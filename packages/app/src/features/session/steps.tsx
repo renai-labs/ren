@@ -39,7 +39,7 @@ import {
 import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
 import { useSubagentCard } from "./chat-view.js"
-import { ImageLightbox } from "../../components/image-lightbox.js"
+import { ImageThumbnail } from "../../components/image-set.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { WorkspaceImage } from "./workspace-image.js"
@@ -152,13 +152,12 @@ function StepDetail(props: {
   return (
     <>
       {images.map((image) => (
-        <ImageLightbox key={image.uri} src={image.uri} alt={image.name?.split("/").at(-1) ?? "Image"}>
-          <img
-            src={image.uri}
-            alt={image.name ?? "Image"}
-            className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
-          />
-        </ImageLightbox>
+        <ImageThumbnail
+          key={image.uri}
+          src={image.uri}
+          name={image.name?.split("/").at(-1) ?? "Image"}
+          className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
+        />
       ))}
       {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
         <Output text={props.output} failed={props.failed} quotable={props.quotable} />
@@ -600,7 +599,9 @@ export function SmoothMarkdown(props: {
       className={props.className}
       workspaceImage={
         root
-          ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
+          ? (path, alt, options) => (
+              <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} inline={options.inline} />
+            )
           : undefined
       }
       fileReference={

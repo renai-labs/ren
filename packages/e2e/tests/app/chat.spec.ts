@@ -223,7 +223,7 @@ test("a member opens the terminal and a file and renames the chat with slash com
 
   await message.pressSequentially("/term")
   await page
-    .getByRole("listbox", { name: "Suggestions" })
+    .getByRole("listbox", { name: "Commands" })
     .getByRole("option", { name: /^\/terminal/ })
     .click()
   await expect(message).toHaveValue("")

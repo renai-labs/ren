@@ -1,0 +1,50 @@
+import { expect, test } from "@playwright/test"
+import { createOrganization } from "../lib/servers.js"
+
+const brainStart = 30_000
+
+const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
+
+test.describe.configure({ timeout: 90_000 })
+
+test("a member opens one of three attached images in the viewer, steps to the next, copies it and closes it", async ({
+  page,
+}) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"])
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Plan the launch")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const files = ["first.png", "second.png", "third.png"].map((name) => ({
+    name,
+    mimeType: "image/png",
+    buffer: Buffer.from(pixel, "base64"),
+  }))
+  await page.getByRole("main").locator("input[type=file]").setInputFiles(files)
+  await expect(page.getByRole("main").getByText(/^Uploading/)).toHaveCount(0)
+
+  const thumbnails = page.getByRole("button", { name: /^Open \w+\.png$/ })
+  await expect(thumbnails).toHaveCount(3)
+  const second = await thumbnails.nth(1).getAttribute("aria-label")
+  expect(second).toMatch(/^Open \w+\.png$/)
+  await thumbnails.nth(1).click()
+  const viewer = page.getByRole("dialog")
+  await expect(viewer).toHaveAccessibleName(`${second?.replace("Open ", "")} · 2 of 3`)
+  await expect(viewer.getByRole("button", { name: "Previous image" })).toBeEnabled()
+
+  await page.keyboard.press("ArrowRight")
+  await expect(viewer).toHaveAccessibleName(/ · 3 of 3$/)
+  await expect(viewer.getByRole("button", { name: "Next image" })).toBeDisabled()
+
+  await page.keyboard.press("ControlOrMeta+c")
+  await expect(page.getByText("Image copied")).toBeVisible()
+  expect(
+    await page.evaluate("navigator.clipboard.read().then((items) => items.flatMap((item) => item.types))"),
+  ).toContain("image/png")
+
+  await page.keyboard.press("Escape")
+  await expect(viewer).toHaveCount(0)
+})

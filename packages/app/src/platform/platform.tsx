@@ -53,6 +53,8 @@ interface Base {
     signal: AbortSignal,
   ) => Promise<void>
   readonly writeClipboardText?: (text: string) => Promise<void>
+  readonly copyImage?: (src: string) => Promise<void>
+  readonly saveFile?: (url: string, name: string) => void
   readonly authorizationQuery?: string | undefined
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
   readonly analytics?: Analytics.Interface

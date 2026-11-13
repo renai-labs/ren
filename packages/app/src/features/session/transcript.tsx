@@ -45,6 +45,8 @@ import { Spinner } from "@ren/ui/spinner"
 import { DriveFileCards } from "./attachments.js"
 import { QuoteSelection, type QuoteProps } from "./quote.js"
 import { Markdown } from "../../components/markdown.js"
+import { MarkdownScroll } from "../../components/markdown-link.js"
+import { ImageSet } from "../../components/image-set.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSkeleton } from "../../components/chat-skeleton.js"
@@ -525,11 +527,18 @@ export function Transcript(props: TranscriptProps) {
       </div>
     )
   return (
-    <StepsProvider view={props.view} detail={props.detail} files={props.files === true} onOpenChild={props.onOpenChild}>
-      <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
-        <TranscriptScroller transcript={props} follow={follow} />
-      </MessageScrollerProvider>
-    </StepsProvider>
+    <ImageSet>
+      <StepsProvider
+        view={props.view}
+        detail={props.detail}
+        files={props.files === true}
+        onOpenChild={props.onOpenChild}
+      >
+        <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
+          <TranscriptScroller transcript={props} follow={follow} />
+        </MessageScrollerProvider>
+      </StepsProvider>
+    </ImageSet>
   )
 }
 
@@ -595,78 +604,80 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const empty =
     props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
-    <MessageScroller className="@container flex-1">
-      <QuoteSelection quote={props.quote} root={viewport} />
-      <MessageScrollerViewport
-        ref={viewport}
-        preserveScrollOnPrepend
-        pinEnd={follow.following && props.find === undefined}
-        data-easing={easing}
-        className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
-        onWheel={(event: WheelEvent<HTMLDivElement>) => {
-          if (event.deltaY < 0) pause(event.currentTarget)
-          else if (atBottom(event.currentTarget)) toEnd()
-        }}
-        onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
-          touchY.current = event.touches[0]?.clientY ?? 0
-        }}
-        onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
-          if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
-        }}
-        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-          if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
-        }}
-        onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
-          const viewport = event.currentTarget
-          if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
-            pause(event.currentTarget)
-        }}
-        onScroll={(event: UIEvent<HTMLDivElement>) => {
-          const viewport = event.currentTarget
-          const down = viewport.scrollTop > lastTop.current
-          lastTop.current = viewport.scrollTop
-          if (!follow.following && down && atBottom(viewport)) toEnd()
-        }}
-      >
-        {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
-        <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
-          {blocks.map((block, index) => (
-            <MessageScrollerItem
-              key={block.key}
-              messageId={block.key}
-              data-row-key={block.key}
-              scrollAnchor={block.kind === "user"}
-              className={cn(
-                block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
-                index >= blocks.length - liveItems && "[content-visibility:visible]",
-              )}
-            >
-              <BlockView
-                block={block}
-                transcript={props}
-                context={context}
-                editing={editing}
-                onEditing={setEditing}
-                activeTurn={activeTurn}
-                copyOf={copyOf}
-                workedFor={workedFor}
-              />
-            </MessageScrollerItem>
-          ))}
-          {empty ? (
-            <MessageScrollerItem messageId="empty">
-              <EmptyState>{props.empty}</EmptyState>
-            </MessageScrollerItem>
-          ) : null}
-          <WorkingMarker
-            busy={props.busy || watched.live(props.activeMessageID)}
-            working={props.working}
-            background={props.background}
-          />
-        </MessageScrollerContent>
-      </MessageScrollerViewport>
-      {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
-      <MessageScrollerButton />
-    </MessageScroller>
+    <MarkdownScroll value={pause}>
+      <MessageScroller className="@container flex-1">
+        <QuoteSelection quote={props.quote} root={viewport} />
+        <MessageScrollerViewport
+          ref={viewport}
+          preserveScrollOnPrepend
+          pinEnd={follow.following && props.find === undefined}
+          data-easing={easing}
+          className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
+          onWheel={(event: WheelEvent<HTMLDivElement>) => {
+            if (event.deltaY < 0) pause(event.currentTarget)
+            else if (atBottom(event.currentTarget)) toEnd()
+          }}
+          onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
+            touchY.current = event.touches[0]?.clientY ?? 0
+          }}
+          onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
+            if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
+          }}
+          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+            if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
+          }}
+          onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
+            const viewport = event.currentTarget
+            if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
+              pause(event.currentTarget)
+          }}
+          onScroll={(event: UIEvent<HTMLDivElement>) => {
+            const viewport = event.currentTarget
+            const down = viewport.scrollTop > lastTop.current
+            lastTop.current = viewport.scrollTop
+            if (!follow.following && down && atBottom(viewport)) toEnd()
+          }}
+        >
+          {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
+          <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
+            {blocks.map((block, index) => (
+              <MessageScrollerItem
+                key={block.key}
+                messageId={block.key}
+                data-row-key={block.key}
+                scrollAnchor={block.kind === "user"}
+                className={cn(
+                  block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
+                  index >= blocks.length - liveItems && "[content-visibility:visible]",
+                )}
+              >
+                <BlockView
+                  block={block}
+                  transcript={props}
+                  context={context}
+                  editing={editing}
+                  onEditing={setEditing}
+                  activeTurn={activeTurn}
+                  copyOf={copyOf}
+                  workedFor={workedFor}
+                />
+              </MessageScrollerItem>
+            ))}
+            {empty ? (
+              <MessageScrollerItem messageId="empty">
+                <EmptyState>{props.empty}</EmptyState>
+              </MessageScrollerItem>
+            ) : null}
+            <WorkingMarker
+              busy={props.busy || watched.live(props.activeMessageID)}
+              working={props.working}
+              background={props.background}
+            />
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
+        <MessageScrollerButton />
+      </MessageScroller>
+    </MarkdownScroll>
   )
 }

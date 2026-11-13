@@ -14,12 +14,12 @@ import {
   AttachmentTrigger,
 } from "@ren/ui/attachment"
 import { FileIcon } from "@ren/ui/file-icon"
-import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
 import { FilePreview } from "../../components/file-preview/file-preview.js"
 import { kindOf } from "../../components/file-preview/preview.js"
-import { ImageLightbox } from "../../components/image-lightbox.js"
 import { MediaPlayer } from "../../components/media-player.js"
+import { ImageTrigger } from "../../components/image-set.js"
+import { MediaUnavailable } from "../../components/media-unavailable.js"
 import { formatBytes } from "../../lib/format.js"
 import { playableKind, useDriveFile } from "../../lib/use-drive-file.js"
 import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
@@ -27,30 +27,58 @@ import { FileDrop } from "../../platform/file-drop.js"
 import { HtmlPage } from "./html-page.js"
 import { HtmlPageBridge } from "./html-page-bridge.js"
 
+function DriveFileThumbnail(props: {
+  file: SessionMessage.DriveFile
+  thumbnail: string | undefined
+  onError: () => void
+  onDownload: () => void
+}) {
+  if (!props.thumbnail)
+    return (
+      <AttachmentMedia>
+        <FileIcon name={props.file.name} mime={props.file.mime} />
+      </AttachmentMedia>
+    )
+  return (
+    <AttachmentMedia variant="image">
+      <ImageTrigger
+        src={props.thumbnail}
+        name={props.file.name}
+        download={props.onDownload}
+        className="size-full cursor-zoom-in"
+      >
+        <img src={props.thumbnail} alt={props.file.name} onError={props.onError} />
+      </ImageTrigger>
+    </AttachmentMedia>
+  )
+}
+
 function DriveFileCard(props: {
   spaceId: string | undefined
   file: SessionMessage.DriveFile
   disabled?: boolean | undefined
   onRemove?: (() => void) | undefined
 }) {
+  const drive = useDriveFile(props.spaceId, props.file)
+  if (drive.image && drive.deleted && !props.onRemove)
+    return <MediaUnavailable reason="Not in the drive" title={props.file.name} />
+  return <DriveFileChip file={props.file} drive={drive} disabled={props.disabled} onRemove={props.onRemove} />
+}
+
+function DriveFileChip(props: {
+  file: SessionMessage.DriveFile
+  drive: ReturnType<typeof useDriveFile>
+  disabled?: boolean | undefined
+  onRemove?: (() => void) | undefined
+}) {
   const file = props.file
-  const drive = useDriveFile(props.spaceId, file)
+  const drive = props.drive
   const thumbnail = drive.image && !drive.deleted ? drive.url : undefined
   const kind = kindOf(file)
   const [previewing, setPreviewing] = useState(false)
   return (
     <Attachment size="sm" state={drive.deleted ? "error" : "done"}>
-      {thumbnail ? (
-        <AttachmentMedia variant="image">
-          <ImageLightbox src={thumbnail} alt={file.name} className="size-full cursor-zoom-in">
-            <img src={thumbnail} alt={file.name} onError={drive.reload} />
-          </ImageLightbox>
-        </AttachmentMedia>
-      ) : (
-        <AttachmentMedia>
-          <FileIcon name={file.name} mime={file.mime} className="size-5" />
-        </AttachmentMedia>
-      )}
+      <DriveFileThumbnail file={file} thumbnail={thumbnail} onError={drive.reload} onDownload={drive.download} />
       <AttachmentContent>
         <AttachmentTitle>{file.name}</AttachmentTitle>
         <AttachmentDescription className="tabular-nums">
@@ -122,7 +150,7 @@ function UploadChip(props: {
   return (
     <Attachment size="sm" state={failed ? "error" : "uploading"}>
       <AttachmentMedia>
-        {failed ? <FileIcon name={upload.name} mime={upload.mime} className="size-5" /> : <Spinner />}
+        <FileIcon name={upload.name} mime={upload.mime} />
       </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle>{upload.name}</AttachmentTitle>
@@ -153,9 +181,8 @@ export function UploadChips(props: {
   onCancel: (upload: Upload) => void
   onRemove: (path: string) => void
 }) {
-  if (props.files.length === 0 && props.uploads.length === 0) return null
   return (
-    <AttachmentGroup>
+    <>
       {props.files.map((file) => (
         <DriveFileCard
           key={file.path}
@@ -174,7 +201,7 @@ export function UploadChips(props: {
           onCancel={() => props.onCancel(upload)}
         />
       ))}
-    </AttachmentGroup>
+    </>
   )
 }
 

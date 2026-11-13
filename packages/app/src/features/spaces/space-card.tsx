@@ -38,7 +38,7 @@ function Stack(props: {
   if (shown.length === 0) return null
   return (
     <span className="flex items-center gap-1.5" aria-label={props.label}>
-      <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:ring-card">
+      <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:bg-card *:data-[slot=avatar]:ring-card">
         {shown.map((item) => (
           <Avatar key={item.id} size="sm" title={item.name} className="data-[size=sm]:size-6">
             {item.image && props.tile ? <AppAvatarImage src={item.image} /> : null}

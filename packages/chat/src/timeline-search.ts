@@ -1,6 +1,7 @@
 export * as TimelineSearch from "./timeline-search.js"
 
 import type { SessionMessage } from "@ren/schema/session/message"
+import { Fences } from "./fences.js"
 import { Projection } from "./projection.js"
 
 export interface Match {
@@ -10,6 +11,20 @@ export interface Match {
   readonly partID: string
   readonly occurrence: number
 }
+
+const math = /(`+)[\s\S]*?\1|\$\$([\s\S]+?)\$\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/gu
+
+const visibleText = (text: string) =>
+  Fences.split(text)
+    .filter((part) => !(part.closed && part.info === "mermaid"))
+    .map((part) =>
+      part.code
+        ? part.text
+        : part.text.replaceAll(math, (all, ticks, dollars, paren, bracket) =>
+            ticks ? all : String(dollars ?? paren ?? bracket).replaceAll(/\\[a-zA-Z]+|[\s^_{}]/gu, ""),
+          ),
+    )
+    .join("\n")
 
 const occurrences = (text: string, query: string): number => {
   const count = (from: number, found: number): number => {
@@ -35,7 +50,7 @@ export const matches = (messages: ReadonlyArray<SessionMessage.Info>, query: str
             entry.content.type === "text" ? [{ id: entry.id, text: entry.content.text }] : [],
           )
     return parts.flatMap((part) =>
-      Array.from({ length: occurrences(part.text.toLowerCase(), value) }, (_, occurrence) => ({
+      Array.from({ length: occurrences(visibleText(part.text).toLowerCase(), value) }, (_, occurrence) => ({
         messageID: message.id,
         role: message.type,
         revealID: reveals[index] ?? "",

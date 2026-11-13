@@ -1,5 +1,6 @@
 export { ChatAtoms } from "./atoms.js"
 export { ChatCache } from "./chat-cache.js"
+export { ChatLink } from "./chat-link.js"
 export { ChatSession } from "./chat-session.js"
 export { ChatState } from "./chat-state.js"
 export { Composer } from "./composer.js"

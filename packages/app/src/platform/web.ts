@@ -123,6 +123,33 @@ export function createWebPlatform(stores: {
       return (await Notification.requestPermission().catch(() => "denied")) === "granted"
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
+    copyImage: (src) =>
+      navigator.clipboard.write([
+        new ClipboardItem({
+          "image/png": new Promise<Blob>((resolve, reject) => {
+            const image = new Image()
+            image.crossOrigin = "anonymous"
+            image.onerror = () => reject(new Error("The image failed to load"))
+            image.onload = () => {
+              const canvas = document.createElement("canvas")
+              canvas.width = image.naturalWidth
+              canvas.height = image.naturalHeight
+              canvas.getContext("2d")?.drawImage(image, 0, 0)
+              canvas.toBlob(
+                (png) => (png ? resolve(png) : reject(new Error("The image failed to encode"))),
+                "image/png",
+              )
+            }
+            image.src = src
+          }),
+        }),
+      ]),
+    saveFile: (url, name) => {
+      const link = document.createElement("a")
+      link.href = url
+      link.download = name
+      link.click()
+    },
     onLifecycle: (listener) => {
       const visibility = () => {
         if (document.visibilityState === "visible") listener("foreground")

@@ -333,19 +333,13 @@ export const submission = (
   if (isBlank(draft)) return undefined
   const other = input.queue ? alternate(input.behavior, input) : undefined
   const chosen = input.alternative && other ? other : delivery(input.behavior, input)
-  const sent = {
-    text: draft.text,
-    pasted: draft.pasted,
-    ...(draft.quotes && { quotes: draft.quotes }),
-    ...(draft.model && { model: draft.model }),
-  }
   const model = chosen === "steer" ? switching(draft, input.current) : undefined
   return {
     ...request(draft),
     delivery: chosen,
     retry: retryID(draft),
     ...(model && { model }),
-    sent,
+    sent: Struct.omit(draft, ["retry", "messageId", "chat", "mode"]),
     next: chosen === "queue" && draft.model ? { ...empty, model: draft.model } : empty,
   }
 }
