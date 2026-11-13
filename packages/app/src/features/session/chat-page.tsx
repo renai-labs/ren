@@ -81,9 +81,6 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
   return (
     <>
       {chat.tasks.length > 0 && !chat.child ? <Queue tasks={chat.tasks} running={chat.running} /> : null}
-      {chat.queued.length > 0 && !chat.child ? (
-        <QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />
-      ) : null}
       {chat.reverted && !chat.child ? (
         <Alert>
           <IconRestore />
@@ -120,6 +117,11 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
           running={chat.running}
           onStop={chat.stop}
           suggest={chat.suggest}
+          queue={
+            chat.queued.length > 0 ? (
+              <QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />
+            ) : null
+          }
           model={
             chat.canChooseModel ? (
               <ModelPicker

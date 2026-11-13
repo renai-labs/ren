@@ -621,6 +621,7 @@ export function PromptInput(props: {
   artifact?: Artifacts.Mention | undefined
   files: Target
   header?: ReactNode
+  queue?: ReactNode
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   const [repositories, setRepositories] = useState(false)
@@ -759,6 +760,7 @@ export function PromptInput(props: {
       {repositories && props.spaceId ? (
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
+      {props.queue}
       <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
