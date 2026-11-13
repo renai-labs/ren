@@ -3,6 +3,7 @@ import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Message, MessageContent } from "@ren/ui/message"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { IconArrowUp, IconChevronDown, IconCube, IconPlus } from "@tabler/icons-react"
+import { Breadcrumb } from "./breadcrumb.js"
 
 export function ComposerFrame() {
   return (
@@ -53,12 +54,12 @@ export function MessagesSkeleton(props: { label?: string | undefined }) {
 export function ChatSkeleton() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-12 shrink-0 items-center px-3 pt-2">
+      <Breadcrumb.Header>
         <span className="flex h-8 items-center gap-1.5 rounded-lg border bg-sidebar px-3 text-sm">
           <IconCube className="size-4" />
           Chat
         </span>
-      </header>
+      </Breadcrumb.Header>
       <div className="mx-auto w-full max-w-3xl flex-1 p-6">
         <MessagesSkeleton />
       </div>

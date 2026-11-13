@@ -1,11 +1,11 @@
 import type { TaskCreateInput } from "@ren/client"
+import { Breadcrumb } from "./breadcrumb.js"
 import { useState, type ReactElement, type ReactNode } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import {
   IconCalendarDue,
   IconChevronDown,
-  IconChevronRight,
   IconCube,
   IconGhostFilled,
   IconMaximize,
@@ -333,13 +333,20 @@ export function NewTaskDialog(props: {
         className={cn("top-[12%] translate-y-0 gap-0 p-0", expanded ? "sm:max-w-5xl" : "sm:max-w-3xl")}
       >
         <div className="flex items-center gap-2 p-4 pb-2">
-          {props.parent ? (
-            <span className="font-mono text-xs text-muted-foreground">{props.parent.identifier}</span>
-          ) : (
-            <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next })} />
-          )}
-          <IconChevronRight className="size-4 text-muted-foreground" />
-          <DialogTitle>{props.parent ? "New sub-task" : "New task"}</DialogTitle>
+          <Breadcrumb.Root
+            ancestors={[
+              {
+                key: "parent",
+                content: props.parent ? (
+                  props.parent.identifier
+                ) : (
+                  <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next })} />
+                ),
+              },
+            ]}
+          >
+            <DialogTitle>{props.parent ? "New sub-task" : "New task"}</DialogTitle>
+          </Breadcrumb.Root>
           <DialogDescription className="sr-only">Add a task to a space.</DialogDescription>
           <Button
             variant="ghost"

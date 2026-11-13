@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { Loading } from "@ren/ui/loading"
-import { AppsBreadcrumb } from "../../components/app-detail.js"
+import { Link } from "@tanstack/react-router"
+import { Breadcrumb } from "../../components/breadcrumb.js"
 import { Page, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
@@ -38,7 +39,11 @@ export function CategoryPage(props: { slug: string }) {
   return (
     <div className="relative flex flex-1 flex-col">
       <div className="absolute top-0 left-0 z-30">
-        <AppsBreadcrumb name={category.title} />
+        <Breadcrumb.Header>
+          <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>
+            {category.title}
+          </Breadcrumb.Root>
+        </Breadcrumb.Header>
       </div>
       <Page
         title={category.title}

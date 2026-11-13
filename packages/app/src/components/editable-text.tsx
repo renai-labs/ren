@@ -14,6 +14,8 @@ function TextView(props: {
   multiline: boolean | undefined
   className: string | undefined
   saving: boolean
+  showIcon: boolean | undefined
+  tooltip: string | false
   onEdit: () => void
 }) {
   const text = props.multiline ? "line-clamp-3 break-words whitespace-pre-wrap" : "truncate"
@@ -23,6 +25,7 @@ function TextView(props: {
     >
       <Tooltip>
         <TooltipTrigger
+          onClick={props.onEdit}
           render={
             <Button
               variant="ghost"
@@ -32,23 +35,25 @@ function TextView(props: {
                 props.multiline && "py-1",
                 !props.value && "text-muted-foreground",
               )}
-              onClick={props.onEdit}
             />
           }
         >
           {props.value || props.placeholder}
         </TooltipTrigger>
-        {props.value ? <TooltipContent>{props.value}</TooltipContent> : null}
+        {props.tooltip ? <TooltipContent>{props.tooltip}</TooltipContent> : null}
       </Tooltip>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="shrink-0 text-muted-foreground"
-        aria-label={`Edit ${props.label}`}
-        onClick={props.onEdit}
-      >
-        {props.saving ? <Spinner /> : <IconPencil />}
-      </Button>
+      {props.showIcon === false && props.saving ? <Spinner /> : null}
+      {props.showIcon !== false ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 text-muted-foreground"
+          aria-label={`Edit ${props.label}`}
+          onClick={props.onEdit}
+        >
+          {props.saving ? <Spinner /> : <IconPencil />}
+        </Button>
+      ) : null}
     </span>
   )
 }
@@ -62,6 +67,8 @@ export function EditableText(props: {
   multiline?: boolean | undefined
   className?: string | undefined
   editing?: boolean | undefined
+  showIcon?: boolean | undefined
+  tooltip?: string | false | undefined
   onEditingChange?: ((editing: boolean) => void) | undefined
   onCommit: (value: string) => Promise<unknown>
 }) {
@@ -90,6 +97,8 @@ export function EditableText(props: {
         multiline={props.multiline}
         className={props.className}
         saving={saving}
+        showIcon={props.showIcon}
+        tooltip={props.tooltip ?? props.value}
         onEdit={() => setEditing(true)}
       />
     )
