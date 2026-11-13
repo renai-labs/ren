@@ -297,7 +297,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
             deploymentId: update.deploymentId,
             archive: saved?.code_archive ?? "",
             config,
-            previous: Option.fromNullishOr(saved?.binding),
+            previous: Option.fromNullishOr(saved?.remote),
           })
         }).pipe(
           Effect.provide(

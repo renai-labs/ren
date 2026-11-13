@@ -38,20 +38,20 @@ describe("artifacts", () => {
     expect(first.config.durableObjects).toEqual({ STATE: "SampleState" })
     const accepted = await created.called(2)
     expect(JSON.stringify(accepted.body)).toContain("Deployment accepted")
-    expect(JSON.stringify(accepted.body)).toContain(first.info.activeDeploymentId ?? "missing deployment")
+    expect(JSON.stringify(accepted.body)).toContain(first.info.pendingDeploymentId ?? "missing deployment")
     celld.ren.artifactDeploying(false)
     const notification = await stub.waitFor(
       (call) => call.text.includes("Artifact deployment result:") && call.text.includes(id),
     )
     expect(notification.text).toContain('"status":"ready"')
-    expect(notification.text).toContain(first.info.activeDeploymentId ?? "missing deployment")
+    expect(notification.text).toContain(first.info.pendingDeploymentId ?? "missing deployment")
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
 
     const updated = stub.script({
       tools: [
         run(`return await tools.opencode.artifact_read({ id: "${id}" })`),
         run(
-          `return await tools.opencode.artifact_status({ id: "${id}", deploymentId: "${first.info.activeDeploymentId}" })`,
+          `return await tools.opencode.artifact_status({ id: "${id}", deploymentId: "${first.info.pendingDeploymentId}" })`,
         ),
         run(
           `return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
@@ -69,7 +69,7 @@ describe("artifacts", () => {
     )
     expect(JSON.parse(status)).toMatchObject({
       artifactId: id,
-      deploymentId: first.info.activeDeploymentId,
+      deploymentId: first.info.pendingDeploymentId,
       status: "ready",
     })
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
@@ -83,7 +83,7 @@ describe("artifacts", () => {
     expect(outputs).toContain("Deployment accepted")
     expect(outputs).toContain("deploymentId")
     expect(outputs).toContain("does not mean the app is live")
-    expect(outputs).toContain(first.info.activeDeploymentId ?? "missing deployment")
+    expect(outputs).toContain(first.info.pendingDeploymentId ?? "missing deployment")
 
     const deleted = stub.script({ tool: run(`return await tools.opencode.artifact_delete({ id: "${id}" })`) })
     await opened.prompt(deleted.marker)

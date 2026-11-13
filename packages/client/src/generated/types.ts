@@ -826,9 +826,10 @@ export type ArtifactInfo = {
   id: ArtifactID
   spaceId: SpaceID
   title: string
-  entry: string
+  entry: string | null
   url: string | null
-  activeDeploymentId: ArtifactDeploymentID | null
+  pendingDeploymentId: ArtifactDeploymentID | null
+  publishedDeploymentId: ArtifactDeploymentID | null
   createdAt: string
   updatedAt: string
   archivedAt: string | null

@@ -111,7 +111,8 @@ const samples: ReadonlyArray<ArtifactInfo> = Array.from({ length: 6 }, (_, index
   title: "Artifact title",
   entry: "index.html",
   url: "https://artifact.example",
-  activeDeploymentId: null,
+  pendingDeploymentId: null,
+  publishedDeploymentId: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   archivedAt: null,
@@ -395,7 +396,7 @@ function ArtifactMenu(props: { artifact: ArtifactInfo; className?: string | unde
 }
 
 function ServingBadge(props: { artifact: ArtifactInfo }) {
-  if (props.artifact.activeDeploymentId !== null)
+  if (props.artifact.pendingDeploymentId !== null)
     return (
       <Badge variant="secondary" className="h-6">
         <Spinner data-icon="inline-start" />
@@ -490,7 +491,7 @@ function ListName(props: { artifact: ArtifactInfo }) {
           {Artifacts.host(artifact.url) ?? "Not served"}
         </span>
       </span>
-      {artifact.activeDeploymentId === null ? null : <ServingBadge artifact={artifact} />}
+      {artifact.pendingDeploymentId === null ? null : <ServingBadge artifact={artifact} />}
     </span>
   )
 }
