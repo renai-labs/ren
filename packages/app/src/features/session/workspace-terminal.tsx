@@ -76,7 +76,9 @@ function Starting(props: { command: string; error: string | undefined }) {
   )
 }
 
-export function TerminalTab(props: { root: Session.ID }) {
+const focusOnMount = (node: HTMLInputElement | null) => node?.focus()
+
+export function TerminalTab(props: { root: Session.ID; focus: string | undefined }) {
   const [runs, setRuns] = useState<ReadonlyArray<Run>>([])
   const [command, setCommand] = useState("")
   const runShell = ChatReact.useAction(props.root, (opened, text: string) => opened.runShell(text))
@@ -140,6 +142,8 @@ export function TerminalTab(props: { root: Session.ID }) {
         <InputGroup className="font-mono">
           <InputGroupAddon className="text-muted-foreground">$</InputGroupAddon>
           <InputGroupInput
+            key={props.focus}
+            ref={focusOnMount}
             aria-label="Command"
             placeholder="ls -la"
             value={command}

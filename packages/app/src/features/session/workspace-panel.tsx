@@ -44,10 +44,48 @@ const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; ico
 
 const byKind = new Map(kinds.map((each) => [each.kind, each]))
 
+export type PanelTarget = { readonly kind: "terminal" } | { readonly kind: "files"; readonly path: string }
+
+export type PanelRequest = PanelTarget & { readonly id: string }
+
 interface OpenTab {
   readonly id: string
   readonly kind: Kind
   readonly label: string
+  readonly request?: PanelRequest
+}
+
+const reusable = (
+  tabs: ReadonlyArray<OpenTab>,
+  current: OpenTab | undefined,
+  kind: Kind,
+  request: PanelRequest | undefined,
+) => {
+  if (!request && byKind.get(kind)?.many) return
+  return current?.kind === kind ? current : tabs.find((tab) => tab.kind === kind)
+}
+
+const openTab = (
+  tabs: ReadonlyArray<OpenTab>,
+  current: OpenTab | undefined,
+  kind: Kind,
+  request: PanelRequest | undefined,
+) => {
+  const existing = reusable(tabs, current, kind, request)
+  if (existing)
+    return {
+      tabs: tabs.map((tab) => (tab.id === existing.id && request ? { ...tab, request } : tab)),
+      active: existing.id,
+    }
+  const meta = byKind.get(kind)
+  const count = tabs.filter((tab) => tab.kind === kind).length
+  const tab = {
+    id: crypto.randomUUID(),
+    kind,
+    label: count > 0 ? `${meta?.label} ${count + 1}` : (meta?.label ?? kind),
+    ...(request && { request }),
+  }
+  return { tabs: [...tabs, tab], active: tab.id }
 }
 
 function AddMenu(props: { onPick: (kind: Kind) => void }) {
@@ -116,6 +154,7 @@ function Launcher(props: { onPick: (kind: Kind) => void }) {
 
 export function WorkspacePanel(props: {
   root: Session.ID
+  request: PanelRequest | undefined
   messages: ReadonlyArray<SessionMessage.Info>
   maximized: boolean
   onMaximize: (maximized: boolean) => void
@@ -124,21 +163,15 @@ export function WorkspacePanel(props: {
   const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
   const [active, setActive] = useState<string>()
   const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
-  const pick = (kind: Kind) => {
-    const meta = byKind.get(kind)
-    const existing = meta?.many ? undefined : tabs.find((tab) => tab.kind === kind)
-    if (existing) {
-      setActive(existing.id)
-      return
-    }
-    const count = tabs.filter((tab) => tab.kind === kind).length
-    const tab = {
-      id: crypto.randomUUID(),
-      kind,
-      label: count > 0 ? `${meta?.label} ${count + 1}` : (meta?.label ?? kind),
-    }
-    setTabs([...tabs, tab])
-    setActive(tab.id)
+  const [handled, setHandled] = useState<string>()
+  const pick = (kind: Kind, request?: PanelRequest) => {
+    const next = openTab(tabs, current, kind, request)
+    setTabs(next.tabs)
+    setActive(next.active)
+  }
+  if (props.request && props.request.id !== handled) {
+    setHandled(props.request.id)
+    pick(props.request.kind, props.request)
   }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
@@ -206,8 +239,10 @@ export function WorkspacePanel(props: {
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
             {tab.kind === "browser" ? <BrowserTab /> : null}
-            {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
-            {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
+            {tab.kind === "files" ? (
+              <FilesTab root={props.root} request={tab.request?.kind === "files" ? tab.request : undefined} />
+            ) : null}
+            {tab.kind === "terminal" ? <TerminalTab root={props.root} focus={tab.request?.id} /> : null}
           </TabsContent>
         ))}
       </Tabs>

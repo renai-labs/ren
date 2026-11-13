@@ -20,23 +20,39 @@ test.each([
 })
 
 describe("client commands in the / list", () => {
-  const all = { "model.choose": true, "session.compact": true, "session.undo": true, "session.redo": true }
+  const all = {
+    "model.choose": true,
+    "session.compact": true,
+    "session.undo": true,
+    "session.redo": true,
+    "session.new": true,
+    "panel.terminal": true,
+    "file.open": true,
+    "session.rename": true,
+    "apps.open": true,
+  }
 
-  test("lists the brain’s commands first and hides a client command the brain also names", () => {
+  test("lists the client commands first and hides one the brain also names", () => {
     const listed = ClientCommand.suggestions(
       ClientCommand.offered(all),
       [
         { name: "compact", description: "The brain’s compaction" },
+        { name: "open", description: "The brain’s open" },
         { name: "review", description: "Review the change" },
       ],
       "",
     )
     expect(listed.map((item) => [item.trigger, item.client])).toEqual([
-      ["compact", undefined],
-      ["review", undefined],
       ["model", "model.choose"],
       ["undo", "session.undo"],
       ["redo", "session.redo"],
+      ["clear", "session.new"],
+      ["terminal", "panel.terminal"],
+      ["rename", "session.rename"],
+      ["apps", "apps.open"],
+      ["compact", undefined],
+      ["open", undefined],
+      ["review", undefined],
     ])
     expect(new Set(listed.map((item) => item.value)).size).toBe(listed.length)
   })
@@ -44,6 +60,36 @@ describe("client commands in the / list", () => {
   test("filters both lists by the typed query", () => {
     expect(
       ClientCommand.suggestions(ClientCommand.offered(all), [{ name: "review" }], "RE").map((item) => item.trigger),
-    ).toEqual(["review", "redo"])
+    ).toEqual(["redo", "rename", "review"])
+  })
+
+  test("lists only the client commands that are available", () => {
+    const available = { ...all, "panel.terminal": false, "file.open": false, "apps.open": false }
+    expect(ClientCommand.suggestions(ClientCommand.offered(available), [], "").map((item) => item.trigger)).toEqual([
+      "model",
+      "compact",
+      "undo",
+      "redo",
+      "clear",
+      "rename",
+    ])
+  })
+
+  test("/new finds /clear", () => {
+    expect(
+      ClientCommand.suggestions(ClientCommand.offered(all), [], "new").map((item) => [item.trigger, item.client]),
+    ).toEqual([["clear", "session.new"]])
+  })
+
+  test("/open and /rename take the text after them", () => {
+    expect(ClientCommand.parse(ClientCommand.offered(all), "/open src/app.tsx")).toEqual({
+      id: "file.open",
+      input: "src/app.tsx",
+    })
+    expect(ClientCommand.parse(ClientCommand.offered(all), "/rename Board memo")).toEqual({
+      id: "session.rename",
+      input: "Board memo",
+    })
+    expect(ClientCommand.parse(ClientCommand.offered(all), "/terminal now")).toBeUndefined()
   })
 })
