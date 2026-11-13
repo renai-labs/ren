@@ -1,13 +1,15 @@
 import { useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { IconChevronRight, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Loading } from "@ren/ui/loading"
+import { formatUsdRate } from "@ren/ui/format"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
 import { Markdown } from "./markdown.js"
@@ -187,23 +189,33 @@ function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
         {Object.entries(props.mcps).map(([slug, mcp]) => {
           const tools = app.listing?.toolCounts[slug] ?? 0
           return (
-            <Button
-              key={slug}
-              variant="ghost"
-              aria-haspopup="dialog"
-              onClick={() => setOpened(slug)}
-              className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
-            >
-              {mcpIcon(slug)}
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm">{slug}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {[tools > 0 ? plural(tools, "tool") : undefined, usageOf(props.mcps, mcp)]
-                    .filter(Boolean)
-                    .join(" · ") || transportLabel(mcp.transport)}
+            <Tooltip key={slug} disabled={mcp.transport.type !== "managed"}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    aria-haspopup="dialog"
+                    onClick={() => setOpened(slug)}
+                    className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
+                  />
+                }
+              >
+                {mcpIcon(slug)}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm">{slug}</span>
+                  <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+                    {tools > 0 ? `${plural(tools, "tool")} · ` : null}
+                    {mcp.transport.type === "managed" ? (
+                      <IconCoin aria-hidden data-icon="inline-start" className="size-3" />
+                    ) : null}
+                    {mcp.transport.type === "managed"
+                      ? "Ren managed"
+                      : usageOf(props.mcps, mcp) || transportLabel(mcp.transport)}
+                  </span>
                 </span>
-              </span>
-            </Button>
+              </TooltipTrigger>
+              <TooltipContent>Uses Ren credits</TooltipContent>
+            </Tooltip>
           )
         })}
       </div>
@@ -367,10 +379,18 @@ function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> 
         <ul className="divide-y px-2 pb-2">
           {props.tools.map((tool) => (
             <li key={tool.name} className="flex flex-col gap-1 py-3">
-              <span className="font-mono text-sm break-all">{tool.name}</span>
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                <span className="min-w-0 font-mono text-sm break-all">{tool.name}</span>
+                {tool.price ? (
+                  <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                    {tool.price.usd === 0 ? "Free" : `${formatUsdRate(tool.price.usd)} / ${tool.price.unit}`}
+                  </span>
+                ) : null}
+              </div>
               {tool.description ? (
                 <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
               ) : null}
+              {tool.price?.note ? <p className="text-xs/5 text-muted-foreground">{tool.price.note}</p> : null}
             </li>
           ))}
         </ul>
@@ -417,10 +437,18 @@ function McpDialog(props: {
         <DialogHeader className="flex-row items-center justify-between gap-4 border-b py-4 pr-14 pl-6">
           <div className="flex min-w-0 items-center gap-3">
             {props.icon}
-            <DialogTitle className="flex min-w-0 items-baseline gap-2">
-              <span className="truncate">{props.mcp.name}</span>
-              <span className="text-sm font-normal text-muted-foreground">MCP</span>
-            </DialogTitle>
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle className="flex min-w-0 items-baseline gap-2">
+                <span className="truncate">{props.mcp.name}</span>
+                <span className="text-sm font-normal text-muted-foreground">MCP</span>
+              </DialogTitle>
+              {props.mcp.transport.type === "managed" ? (
+                <DialogDescription className="flex flex-wrap items-center gap-x-1 text-xs">
+                  <IconCoin aria-hidden data-icon="inline-start" className="size-3" />
+                  Ren managed · Uses Ren credits
+                </DialogDescription>
+              ) : null}
+            </div>
           </div>
           {props.count > 0 ? (
             <ToolbarSearch label={`Search ${plural(props.count, "tool")}`} value={query} onChange={setQuery} />
