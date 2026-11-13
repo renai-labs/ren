@@ -6,6 +6,7 @@ import { Badge } from "@ren/ui/badge"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { Button } from "@ren/ui/button"
 import { Queue } from "./queue.js"
+import { QueuedMessages } from "./queued-messages.js"
 import { WorkspacePanel } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ChatActions } from "./chat-actions.js"
@@ -80,6 +81,9 @@ function ChatComposer(props: { chat: Chat; dock?: ReactNode }) {
   return (
     <>
       {chat.tasks.length > 0 && !chat.child ? <Queue tasks={chat.tasks} running={chat.running} /> : null}
+      {chat.queued.length > 0 && !chat.child ? (
+        <QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />
+      ) : null}
       {chat.reverted && !chat.child ? (
         <Alert>
           <IconRestore />
