@@ -46,8 +46,8 @@ This is the usual layout for sites on one shared domain: one Cloudflare zone, on
 
 ## 3. Decisions
 
-1. **Label.** `Artifact.label(id)` in `@ren/schema/artifact`: `"art-" + Identifier.suffix(id).toLowerCase()`. An ID is `art_` and 26 characters (`schema/src/identifier.ts:21-30`), so a label has 30 characters. An ID has `_` and capital letters, which a hostname cannot keep. The label is also the script name in the namespace, so the dispatcher needs no lookup.
-2. **Label collision.** Two IDs that differ only in letter case give one label. The create upload sends `If-None-Match: *`, so the second one fails with a final `failed`, not an overwrite.
+1. **Label.** `Artifact.label(id)` in `@ren/schema/artifact`: `"art-" + Identifier.suffix(id).toLowerCase()`. The harness names the ID: `art_` and 1 to 59 letters and digits (`Artifact.ID`). The cell makes 26 (`Identifier.ascending`). So a label has at most 63 characters, the limit of a host name label. An ID has `_` and capital letters, which a hostname cannot keep. The label is also the script name in the namespace, so the dispatcher needs no lookup.
+2. **Label collision.** Two IDs that differ only in letter case give one label. The provider reads the script's ETag and uploads with `If-Match`, so the second ID would replace the first artifact and get its Durable Object data. A unique index on `lower(id)` in the `artifact` table refuses the second ID: its deploy gets `NotFound`.
 3. **The Cloudflare provider changes to Workers for Platforms.** It keeps the provider ID `cloudflare`. Its state changes from `{ account, subdomain }` to `{ account, namespace, domain }`. A state with `subdomain` fails with a `Failed` that is not retryable. No code keeps ordinary Workers.
 4. **No reserved path.** The dispatcher passes every path to the artifact. Readiness uses the `x-ren-artifact-probe` header, which the artifact's platform-owned `main.js` answers (`cloudflare-code.ts:47`).
 5. **Separate staging.** Staging uses its own domain, its own zone and the namespace `ren-artifacts-staging`. Universal SSL covers only one level, so `*.staging.useren.site` cannot get a certificate without Advanced Certificate Manager.
@@ -55,14 +55,14 @@ This is the usual layout for sites on one shared domain: one Cloudflare zone, on
 
 ## 4. Dispatcher
 
-`infra/cloudflare/dispatcher.js`, about 20 lines. Terraform uploads it.
+`infra/cloudflare/dispatcher.js`, 14 lines. Terraform uploads it.
 
 ```js
 export default {
   async fetch(request, env) {
     const host = new URL(request.url).hostname
     const label = host.endsWith(`.${env.DOMAIN}`) ? host.slice(0, -env.DOMAIN.length - 1) : ""
-    if (!/^art-[0-9a-z]{26}$/.test(label)) return new Response("No artifact here", { status: 404 })
+    if (!/^art-[0-9a-z]{1,59}$/.test(label)) return new Response("No artifact here", { status: 404 })
     try {
       return await env.ARTIFACTS.get(label).fetch(request)
     } catch (error) {
@@ -112,7 +112,7 @@ Without it, `art-a….useren.site` can set a cookie for `useren.site` that `art-
 
 | Change                                                                                                                                  | Where                                         |
 | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Script name `Artifact.label(id)`, not `ArtifactCloudflareCode.name`                                                                     | `cloudflare-code.ts:5`, `cloudflare.ts`       |
+| Script name `Artifact.label(id)`, not `ArtifactCloudflareCode.name`. Unique index on `lower(artifact.id)`                               | `cloudflare-code.ts:5`, `cloudflare.ts`       |
 | Endpoints under `/accounts/<id>/workers/dispatch/namespaces/<ns>/scripts/<label>`: metadata read, `assets-upload-session`, script `PUT` | `cloudflare.ts`                               |
 | Remove the `workers.dev` subdomain read, `workers_dev`, `preview_urls` and the per-script subdomain enable                              | `cloudflare.ts:87-92`, `:201-202`, `:317-332` |
 | URL and probe at `https://<label>.<domain>/`                                                                                            | `cloudflare.ts:51`, `:111`, `:133`            |
@@ -148,7 +148,7 @@ Run the live scenarios of `artifacts-cloudflare.slow.test.ts` and `artifacts-bra
 | `GET /a/b/c?x=1` on an artifact whose `_worker.js` echoes the URL | The artifact receives `/a/b/c?x=1`                                             |
 | WebSocket to the realtime room                                    | Messages pass in both directions                                               |
 | A label that is valid but not published                           | 404 "No artifact here"                                                         |
-| `a.b.<domain>`, and a host that is not a label                    | 404                                                                            |
+| `a.b.<domain>`, and a host that is not a label                    | 404. `a.b.<domain>` can fail TLS first: the certificate covers one level       |
 | The bare domain                                                   | 301 to `https://useren.ai`                                                     |
 | Stop, then the URL                                                | 410; after a redeploy, the same URL serves, and the SQLite data is still there |
 | Two deploys race                                                  | The stale upload gets 412 on the namespace endpoint; one version serves        |
