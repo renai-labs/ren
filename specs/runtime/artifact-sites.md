@@ -2,13 +2,13 @@
 
 Every artifact is served at `https://<label>.useren.site/`, where `<label>` comes from the artifact's ID. One dispatcher Worker on Workers for Platforms sends each request to the artifact's own Worker. This change is a PR stacked on [artifact-refactor.md](artifact-refactor.md): it uses that change's direct upload, deployment table and provider contract.
 
-ChatGPT Sites works the same way (`chatgpt.site`, checked on 2026-11-13): one Cloudflare zone, one proxied wildcard record, one `*.chatgpt.site` certificate, one dispatcher for all hosts, the bare domain redirects, and the domain is on the Public Suffix List. Their hostnames are names that people choose; ours come from the ID. Names are out of scope (section 9).
+This is the usual layout for sites on one shared domain: one Cloudflare zone, one proxied wildcard record, one wildcard certificate, one dispatcher for all hosts, a redirect on the bare domain, and the domain on the Public Suffix List. Hostnames come from the ID. Names that people choose are out of scope (section 9).
 
 ## 1. Situation
 
 1. The Cloudflare provider publishes each artifact as an ordinary Worker named `a-<56 hex of sha256(id)>`, at `https://<name>.<account>.workers.dev/` (`core/src/artifact-provider/cloudflare-code.ts:5`, `cloudflare.ts:51`).
-2. An account holds at most 100 Workers on the Free plan and 500 on Workers Paid. v1 has 116 artifacts.
-3. Ordinary Workers cannot send a request to another Worker chosen at request time. One dispatcher for all artifacts needs a dispatch namespace, which only Workers for Platforms has: $25 a month, with 1000 scripts and 20 million requests included, then $0.02 for each more script.
+2. An account holds a limited number of ordinary Workers. Ren needs one Worker for each artifact, with no fixed limit.
+3. Ordinary Workers cannot send a request to another Worker chosen at request time. One dispatcher for all artifacts needs a dispatch namespace, which only Workers for Platforms has.
 4. Setting `ARTIFACT_CLOUDFLARE_NAMESPACE` stops the server at startup (`cloudflare.ts:72-75`).
 5. A Durable Object's data belongs to its Worker. An ordinary Worker cannot move into a namespace and keep its data.
 
@@ -103,10 +103,10 @@ Check the resource names against the Cloudflare provider version that the stack 
 
 Without it, `art-a….useren.site` can set a cookie for `useren.site` that `art-b….useren.site` receives, and browsers treat both as the same site.
 
-1. The list asks for a minimum time left before the domain expires. Check the current rule before the purchase, and register `useren.site` for longer than it.
+1. The list asks for a minimum registration term. Register the domain for longer than it.
 2. Open a pull request to `publicsuffix/list` that adds `useren.site` to the private section.
 3. Add the `_psl` TXT record with the pull request's URL (Terraform, section 5).
-4. Inclusion takes weeks. Start it on the day of the purchase. The service works before inclusion, with the cookie risk above.
+4. Inclusion takes weeks. The service works before inclusion, with the cookie risk above.
 
 ## 7. Provider changes
 
@@ -124,7 +124,7 @@ Without it, `art-a….useren.site` can set a cookie for `useren.site` that `art-
 
 | Step | Work                                                                                                                                                                                                                                                                        | Gate                                                                                                                    |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 0    | Buy `useren.site` and the staging domain. Buy Workers for Platforms. Open the Public Suffix List pull request.                                                                                                                                                              | Approval of the purchases and the account                                                                               |
+| 0    | Set up the domains and Workers for Platforms on the account. Open the Public Suffix List pull request.                                                                                                                                                                      | Approval                                                                                                                |
 | 1    | On the staging namespace, with a script: create a namespace script with `If-None-Match: *`, read its ETag, update it with `If-Match`, and send a stale `If-Match`. Upload a script with a SQLite Durable Object, declarative `exports` and the `immediate` update strategy. | The stale update returns 412, and the Durable Object script uploads. Else stop: publication fencing needs a new design. |
 | 2    | `infra/cloudflare`: plan and apply staging.                                                                                                                                                                                                                                 | Approval of the apply                                                                                                   |
 | 3    | Provider changes (section 7), dispatcher, label.                                                                                                                                                                                                                            |                                                                                                                         |
