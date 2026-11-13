@@ -160,16 +160,16 @@ describe("artifacts from a chat", () => {
         .select()
         .from(Database.Schema.artifact)
         .where(eq(Database.Schema.artifact.id, row.id))).at(0)
-      if (!updateRow?.active_deployment_id)
+      if (!updateRow?.pending_deployment_id)
         return yield* Effect.die(new Error("Update did not retain its deployment claim"))
       const updateCompleted = yield* Effect.promise(() =>
         stub.waitFor((call) =>
           call.text.includes(
-            `Artifact deployment result: {"artifactId":"${row.id}","deploymentId":"${updateRow.active_deployment_id}"`,
+            `Artifact deployment result: {"artifactId":"${row.id}","deploymentId":"${updateRow.pending_deployment_id}"`,
           ),
         ),
       )
-      expect(updateCompleted.text).toContain(`"deploymentId":"${updateRow.active_deployment_id}","status":"ready"`)
+      expect(updateCompleted.text).toContain(`"deploymentId":"${updateRow.pending_deployment_id}","status":"ready"`)
       expect(yield* http.get(url).pipe(Effect.flatMap((response) => response.text))).toBe("<h1>updated</h1>")
     }),
   )

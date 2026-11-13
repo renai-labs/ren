@@ -136,6 +136,8 @@ type Row = typeof artifacts.$inferSelect
 const ownedBy = (row: Row, owner: Owner) =>
   row.space_id === owner.spaceId && row.organization_id === owner.organizationId
 
+const storedConfig = (row: Row): Artifact.Config => row.config ?? { entry: "index.html" }
+
 const notFound = new Primitive.NotFound({ message: "Artifact not found." })
 
 const isID = Schema.is(Artifact.ID)
@@ -168,9 +170,10 @@ const toInfo = (row: Row): Artifact.Info => ({
   id: row.id,
   spaceId: row.space_id,
   title: row.title,
-  entry: row.config.entry,
+  entry: row.config?.entry ?? null,
   url: row.url,
-  activeDeploymentId: row.active_deployment_id,
+  pendingDeploymentId: row.pending_deployment_id,
+  publishedDeploymentId: row.published_deployment_id,
   createdAt: DateTime.fromDateUnsafe(row.created_at),
   updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
@@ -228,8 +231,8 @@ export const layer = Layer.effect(
         ).pipe(Effect.repeat({ schedule: Schedule.spaced("50 millis"), until: (complete) => complete }))
         yield* database.db
           .update(artifacts)
-          .set({ active_deployment_id: null, updated_at: sql`now()` })
-          .where(and(eq(artifacts.id, payload.id), eq(artifacts.active_deployment_id, payload.claimId)))
+          .set({ pending_deployment_id: null, updated_at: sql`now()` })
+          .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.claimId)))
           .pipe(Effect.orDie)
       }).pipe(
         Effect.sandbox,
@@ -252,14 +255,14 @@ export const layer = Layer.effect(
           .from(artifacts)
           .where(eq(artifacts.id, payload.id))
           .pipe(Effect.orDie)).at(0)
-        if (!row || row.active_deployment_id !== payload.deploymentId)
+        if (!row || row.pending_deployment_id !== payload.deploymentId)
           return { deployment: result("stopped", null, null), binding: null }
         if (row.provider !== provider.id)
           return {
             deployment: result("failed", row.url, "This deployment belongs to another artifact provider"),
             binding: null,
           }
-        const current = and(eq(artifacts.id, payload.id), eq(artifacts.active_deployment_id, payload.deploymentId))
+        const current = and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, payload.deploymentId))
         return yield* Effect.gen(function* () {
           const deployed = yield* provider
             .deploy({
@@ -267,7 +270,7 @@ export const layer = Layer.effect(
               deploymentId: payload.deploymentId,
               config: payload.config,
               archive: payload.codeArchive,
-              previous: Option.fromNullishOr(row.binding),
+              previous: Option.fromNullishOr(row.remote),
             })
             .pipe(
               Effect.timeoutOrElse({
@@ -281,8 +284,9 @@ export const layer = Layer.effect(
               title: payload.title,
               config: payload.config,
               code_archive: payload.codeArchive,
-              binding: deployed.binding,
+              remote: deployed.binding,
               url: deployed.url,
+              published_deployment_id: payload.deploymentId,
               updated_at: sql`now()`,
             })
             .where(current)
@@ -308,7 +312,7 @@ export const layer = Layer.effect(
           .where(eq(artifacts.id, payload.id))
           .pipe(Effect.orDie)).at(0)
         const claimId = payload.stopId ?? payload.deploymentId
-        if (!initial || initial.active_deployment_id !== claimId) return
+        if (!initial || initial.pending_deployment_id !== claimId) return
         const completed = yield* Effect.gen(function* () {
           if (!payload.targetDeploymentId) return Option.none()
           const executionId = yield* DeployRun.executionId({
@@ -316,7 +320,7 @@ export const layer = Layer.effect(
             deploymentId: payload.targetDeploymentId,
             organizationId: initial.organization_id,
             title: initial.title,
-            config: initial.config,
+            config: storedConfig(initial),
             codeArchive: initial.code_archive ?? "",
           })
           yield* engine.interruptUnsafe(DeployRun, executionId)
@@ -332,18 +336,18 @@ export const layer = Layer.effect(
           .from(artifacts)
           .where(eq(artifacts.id, payload.id))
           .pipe(Effect.orDie)).at(0)
-        if (!row || row.active_deployment_id !== claimId) return
+        if (!row || row.pending_deployment_id !== claimId) return
         if (row.provider !== provider.id)
           return yield* Effect.die(new Error("Restore this artifact's original provider to finish stopping it"))
         const binding =
           Option.isSome(completed) && completed.value._tag === "Complete" && Exit.isSuccess(completed.value.exit)
-            ? (completed.value.exit.value.binding ?? row.binding)
-            : row.binding
+            ? (completed.value.exit.value.binding ?? row.remote)
+            : row.remote
         yield* provider.stop(payload.id, Option.fromNullishOr(binding))
         yield* database.db
           .update(artifacts)
-          .set({ binding: null, url: null, updated_at: sql`now()` })
-          .where(and(eq(artifacts.id, payload.id), eq(artifacts.active_deployment_id, claimId)))
+          .set({ remote: null, url: null, updated_at: sql`now()` })
+          .where(and(eq(artifacts.id, payload.id), eq(artifacts.pending_deployment_id, claimId)))
           .pipe(Effect.orDie)
       }).pipe(
         Effect.sandbox,
@@ -366,7 +370,7 @@ export const layer = Layer.effect(
         deploymentId,
         organizationId: owner.organizationId,
         title: row.title,
-        config: row.config,
+        config: storedConfig(row),
         codeArchive: row.code_archive ?? "",
       })
       const completed = Option.filter(
@@ -387,7 +391,7 @@ export const layer = Layer.effect(
           error: null,
         }
       }
-      if (Option.isSome(completed) && row.active_deployment_id !== deploymentId) {
+      if (Option.isSome(completed) && row.pending_deployment_id !== deploymentId) {
         if (Exit.isSuccess(completed.value.exit)) return completed.value.exit.value.deployment
         return {
           artifactId: id,
@@ -423,28 +427,28 @@ export const layer = Layer.effect(
         return yield* new Failed({
           message: `Artifact ${row.id} runs on another provider; stop it using its original provider`,
         })
-      if (row.active_deployment_id) {
+      if (row.pending_deployment_id) {
         const executionId = yield* DeployRun.executionId({
           id: row.id,
-          deploymentId: row.active_deployment_id,
+          deploymentId: row.pending_deployment_id,
           organizationId: row.organization_id,
           title: row.title,
-          config: row.config,
+          config: storedConfig(row),
           codeArchive: row.code_archive ?? "",
         })
-        if (!(yield* requested(DeployRun, executionId))) return { claimId: row.active_deployment_id, settlement: null }
-      } else if (!row.binding && !row.url) return
+        if (!(yield* requested(DeployRun, executionId))) return { claimId: row.pending_deployment_id, settlement: null }
+      } else if (!row.remote && !row.url) return
       const stopId = Artifact.DeploymentID.make(crypto.randomUUID())
       const payload = {
         id: row.id,
-        deploymentId: row.active_deployment_id ?? stopId,
+        deploymentId: row.pending_deployment_id ?? stopId,
         stopId,
-        ...(row.active_deployment_id ? { targetDeploymentId: row.active_deployment_id } : {}),
+        ...(row.pending_deployment_id ? { targetDeploymentId: row.pending_deployment_id } : {}),
       }
       const executionId = yield* StopRun.executionId(payload)
       yield* transaction
         .update(artifacts)
-        .set({ active_deployment_id: stopId, updated_at: sql`now()` })
+        .set({ pending_deployment_id: stopId, updated_at: sql`now()` })
         .where(eq(artifacts.id, row.id))
       yield* StopRun.execute(payload, { discard: true }).pipe(
         Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
@@ -466,7 +470,7 @@ export const layer = Layer.effect(
         return
       }
       yield* database.db
-        .select({ active: artifacts.active_deployment_id })
+        .select({ active: artifacts.pending_deployment_id })
         .from(artifacts)
         .where(eq(artifacts.id, id))
         .pipe(
@@ -583,13 +587,13 @@ export const layer = Layer.effect(
               deploymentId: input.deploymentId,
               organizationId: owner.organizationId,
               title: found.title,
-              config: found.config,
+              config: storedConfig(found),
               codeArchive,
             }),
           ))
         )
           return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
-        if (found?.active_deployment_id === input.deploymentId)
+        if (found?.pending_deployment_id === input.deploymentId)
           return yield* status(owner, id, input.deploymentId).pipe(Effect.orDie)
         yield* unarchived(found)
         const uploaded = uploadKey(owner, id, input.uploadId)
@@ -600,7 +604,7 @@ export const layer = Layer.effect(
             "ArtifactArchive.Failed": (error) => Effect.fail(new Failed({ message: error.message })),
           }),
         )
-        const config = yield* configOf(source.files, input.entry, found?.config.entry)
+        const config = yield* configOf(source.files, input.entry, found?.config?.entry)
         yield* Effect.tryPromise({
           try: (signal) =>
             storage.s3.send(
@@ -655,13 +659,13 @@ export const layer = Layer.effect(
             if (row.provider !== provider.id)
               return yield* new Primitive.Conflict({ message: `Artifact ${id} runs on another provider` })
             if (yield* requested(DeployRun, executionId)) return
-            if (row.active_deployment_id === input.deploymentId) return
+            if (row.pending_deployment_id === input.deploymentId) return
             if (row.archived_at) return yield* archivedConflict(id)
-            if (row.active_deployment_id)
+            if (row.pending_deployment_id)
               return yield* new Primitive.Conflict({ message: `Artifact ${id} has active deployment work` })
             yield* transaction
               .update(artifacts)
-              .set({ active_deployment_id: input.deploymentId, updated_at: sql`now()` })
+              .set({ pending_deployment_id: input.deploymentId, updated_at: sql`now()` })
               .where(eq(artifacts.id, id))
             yield* DeployRun.execute(payload, { discard: true }).pipe(
               Effect.provideService(WorkflowEngine.WorkflowEngine, engine),

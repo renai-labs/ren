@@ -315,7 +315,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         yield* connection.execute("LOCK TABLE cluster_replies IN SHARE MODE", [], undefined)
         const stopping = yield* artifacts.stop(owner, id).pipe(Effect.forkScoped)
         yield* database.db
-          .select({ active: Database.Schema.artifact.active_deployment_id })
+          .select({ active: Database.Schema.artifact.pending_deployment_id })
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))
           .pipe(Effect.repeat({ until: (rows) => rows.at(0)?.active !== deploymentId }))
@@ -335,7 +335,7 @@ describe("Artifacts with durable workflows and workerd", () => {
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
-        expect(row?.active_deployment_id).toBeNull()
+        expect(row?.pending_deployment_id).toBeNull()
         expect(row?.url).toBeNull()
       }),
     120_000,
@@ -376,7 +376,7 @@ describe("Artifacts with durable workflows and workerd", () => {
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
-        const binding = yield* Schema.decodeUnknownEffect(Schema.Struct({ directory: Schema.String }))(before?.binding)
+        const binding = yield* Schema.decodeUnknownEffect(Schema.Struct({ directory: Schema.String }))(before?.remote)
         yield* Effect.promise(() => Bun.write(join(binding.directory, "state", "keep.txt"), "application data"))
         latest = deployment()
         yield* ArtifactSamples.deploy(artifacts, owner, id, {
@@ -407,7 +407,7 @@ describe("Artifacts with durable workflows and workerd", () => {
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
-        expect(stopped?.binding).toBeNull()
+        expect(stopped?.remote).toBeNull()
         expect(stopped?.url).toBeNull()
         expect(yield* read(url).pipe(Effect.isFailure)).toBe(true)
         latest = deployment()
@@ -565,12 +565,12 @@ describe("artifacts for people", () => {
         }
         yield* artifacts.deploy(owner, id, first)
         const archived = yield* artifacts.archive(member, id)
-        expect([archived.url, archived.activeDeploymentId, archived.archivedAt === null]).toEqual([null, null, false])
+        expect([archived.url, archived.pendingDeploymentId, archived.archivedAt === null]).toEqual([null, null, false])
         const row = (yield* database.db
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
-        expect([row?.binding, row?.url]).toEqual([null, null])
+        expect([row?.remote, row?.url]).toEqual([null, null])
         expect((yield* artifacts.list(member, { spaceId: owner.spaceId, ...page })).total).toBe(0)
         expect((yield* artifacts.get(member, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
         expect((yield* artifacts.archive(member, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")

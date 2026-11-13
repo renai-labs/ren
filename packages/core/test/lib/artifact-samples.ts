@@ -84,10 +84,10 @@ export const idle = (id: Artifact.ID) =>
       .select()
       .from(Database.Schema.artifact)
       .where(eq(Database.Schema.artifact.id, id))).at(0)
-    if (before?.active_deployment_id) {
+    if (before?.pending_deployment_id) {
       const messages = yield* sql<{
         readonly payload: unknown
-      }>`select payload::jsonb as payload from cluster_messages where entity_type = 'Workflow/ArtifactSettle' and payload::jsonb ->> 'id' = ${id} and payload::jsonb ->> 'claimId' = ${before.active_deployment_id}`
+      }>`select payload::jsonb as payload from cluster_messages where entity_type = 'Workflow/ArtifactSettle' and payload::jsonb ->> 'id' = ${id} and payload::jsonb ->> 'claimId' = ${before.pending_deployment_id}`
       const payload = yield* Schema.decodeUnknownEffect(Artifacts.SettleRun.payloadSchema)(messages.at(0)?.payload)
       yield* Artifacts.SettleRun.execute(payload)
     }
@@ -95,7 +95,7 @@ export const idle = (id: Artifact.ID) =>
       .select()
       .from(Database.Schema.artifact)
       .where(eq(Database.Schema.artifact.id, id))).at(0)
-    expect(after?.active_deployment_id).toBeNull()
+    expect(after?.pending_deployment_id).toBeNull()
   })
 
 export const pages = (origin: string) =>

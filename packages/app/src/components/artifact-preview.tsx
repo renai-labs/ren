@@ -86,8 +86,8 @@ function DocumentLayout(props: { title: string; tone: Tone }) {
   )
 }
 
-function Layout(props: { entry: string; seed: number; title: string; tone: Tone }) {
-  if (props.entry.endsWith(".md")) return <DocumentLayout title={props.title} tone={props.tone} />
+function Layout(props: { entry: string | null; seed: number; title: string; tone: Tone }) {
+  if (props.entry?.endsWith(".md")) return <DocumentLayout title={props.title} tone={props.tone} />
   if (props.seed % 2 === 0) return <PageLayout title={props.title} tone={props.tone} />
   return <AppLayout title={props.title} tone={props.tone} />
 }
