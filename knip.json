@@ -46,6 +46,7 @@
         "script/**/*.ts",
         "playwright.config.ts"
       ],
+      "ignoreBinaries": ["ngrok"],
       "ignoreDependencies": ["@ren/server"]
     },
     "packages/site": {

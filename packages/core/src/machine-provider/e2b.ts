@@ -202,6 +202,9 @@ export const provider = Effect.gen(function* () {
     domain: Config.String("E2B_DOMAIN").pipe(Config.withDefault("e2b.app")),
     port: Config.Int("BRAIN_PORT").pipe(Config.withDefault(4800)),
     owner: Config.String("E2B_OWNER").pipe(Config.withDefault(defaultOwner)),
+    labels: Config.schema(Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)), "E2B_LABELS").pipe(
+      Config.withDefault({}),
+    ),
     vcpuSecond: Config.Number("E2B_VCPU_SECOND_MICRO_USD"),
     gibSecond: Config.Number("E2B_GIB_SECOND_MICRO_USD"),
   })
@@ -366,7 +369,13 @@ export const provider = Effect.gen(function* () {
             timeout: Duration.toSeconds(createTimeout),
             autoPause: true,
             secure: true,
-            metadata: { owner, ...metadata, organization: input.labels.organizationId, space: input.labels.spaceId },
+            metadata: {
+              ...config.labels,
+              owner,
+              ...metadata,
+              organization: input.labels.organizationId,
+              space: input.labels.spaceId,
+            },
             ...Option.match(networkOf(input.network), { onNone: () => ({}), onSome: (network) => ({ network }) }),
           }),
         ),
