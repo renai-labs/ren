@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Artifact } from "@ren/schema/artifact"
-import { ManagedRuntime, Schema } from "effect"
+import { ManagedRuntime, Schema, Struct } from "effect"
 import { Shared } from "./lib/shared.js"
 import { TestCell } from "./lib/test-cell.js"
 
@@ -107,7 +107,35 @@ describe("artifacts", () => {
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
   })
 
-  test("artifact_update refuses an update that does not name the deployment it starts from", async () => {
+  test("artifact_update needs no base for an artifact that has no published deployment", async () => {
+    const opened = await TestCell.make(celld)
+    await opened.models()
+    await opened.start()
+    const created = stub.script({
+      tool: run('return await tools.opencode.artifact_create({ title: "Reset", files: { "index.html": "v1" } })'),
+    })
+    await opened.prompt(created.marker)
+    await created.called(2)
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
+    const id = Artifact.ID.make(
+      [...celld.ren.artifacts.entries()].find((entry) => entry[1].info.title === "Reset")?.[0] ?? "art_missing",
+    )
+    const stored = celld.ren.artifacts.get(id)
+    if (!stored) throw new Error("Artifact was not stored")
+    celld.ren.artifacts.set(id, { ...stored, info: Struct.assign(stored.info, { publishedDeploymentId: null }) })
+    const updated = stub.script({
+      tool: run(`return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "v2" } })`),
+    })
+    await opened.prompt(updated.marker)
+    const answer = JSON.stringify(
+      (await updated.called(2)).body.messages.findLast((message) => message.role === "tool"),
+    )
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
+    expect(answer).toContain("Deployment accepted")
+    expect(celld.ren.artifacts.get(id)?.deployments.size).toBe(stored.deployments.size + 1)
+  })
+
+  test("Ren refuses an update that does not name the published deployment it starts from", async () => {
     const opened = await TestCell.make(celld)
     await opened.models()
     await opened.start()
@@ -127,7 +155,7 @@ describe("artifacts", () => {
       (await updated.called(2)).body.messages.findLast((message) => message.role === "tool"),
     )
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
-    expect(answer).toContain("baseDeploymentId")
+    expect(answer).toContain("Read the artifact and apply your change to it again")
     expect(celld.ren.artifacts.get(Artifact.ID.make(id))?.deployments.size).toBe(before)
   })
 })
