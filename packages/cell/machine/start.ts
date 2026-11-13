@@ -208,7 +208,7 @@ const trustEgress = async (home: string): Promise<Readonly<Record<string, string
   return Object.fromEntries(caVariables.map((name) => [name, bundle]))
 }
 
-// oxlint-disable-next-line ren/no-comments -- In split mode (REN_EGRESS_FORWARD) the machine's forwarder takes all its outbound TCP and sends only credential requests to the egress (egress-split.md §3.1). It runs as ren-forward, whose own traffic the rules let through. Its CA is made once and goes where Ren puts the egress CA in proxy mode, so trustEgress trusts it. Without sudo the machine goes on without it, and its credential requests fail with their placeholders.
+// oxlint-disable-next-line ren/no-comments -- In split mode (REN_EGRESS_FORWARD) the machine's forwarder takes all its outbound TCP and sends only credential requests to the egress (egress-split.md §3.1). It runs as ren-forward, whose own traffic the rules let through. Its CA is made once and goes where Ren puts the egress CA in proxy mode, so trustEgress trusts it. When the forwarder cannot start, start.js stops: the machine does not boot, and Ren replaces it.
 const forward = { port: "15001", user: "ren-forward", dir: "/etc/ren-forward" }
 
 // oxlint-disable-next-line ren/no-comments -- One nf_tables table, loaded at once by `nft -f`: the redirect is in only with its exceptions. E2B's kernel has no xt_owner, so the forwarder's user is matched natively (meta skuid). Declaring and deleting the table first makes a second start replace it.
@@ -255,15 +255,10 @@ const waitForPort = async (port: string, tries: number): Promise<boolean> => {
 }
 
 const startForwarder = async (home: string, egress: string) => {
-  if ((await Bun.$`sudo -n true`.nothrow().quiet()).exitCode !== 0) {
-    process.stderr.write("Split mode needs sudo for the forwarder; the machine goes on without it\n")
-    return
-  }
+  if ((await Bun.$`sudo -n true`.nothrow().quiet()).exitCode !== 0)
+    throw new Error("Split mode needs sudo for the forwarder")
   const ca = await Bun.$`sudo -n sh -c ${forwardCA}`.nothrow().quiet()
-  if (ca.exitCode !== 0) {
-    process.stderr.write(`Making the forwarder's CA failed: ${ca.stderr.toString()}\n`)
-    return
-  }
+  if (ca.exitCode !== 0) throw new Error(`Making the forwarder's CA failed: ${ca.stderr.toString()}`)
   await Bun.write(join(home, ".ren", "egress-ca.pem"), ca.stdout)
   const command = [
     "sudo",
@@ -286,14 +281,9 @@ const startForwarder = async (home: string, egress: string) => {
     async () => spawnLogged(command, { log: join(home, ".ren", "forwarder.log"), env: { PATH: process.env.PATH } }),
     home,
   )
-  if (!(await waitForPort(forward.port, 100))) {
-    process.stderr.write("The forwarder did not listen within 10 s; the machine goes on without it\n")
-    return
-  }
-  await attempt(
-    "Sending outbound TCP to the forwarder",
-    Bun.$`sudo -n nft -f - < ${new Response(forwardRules)}`.nothrow().quiet(),
-  )
+  if (!(await waitForPort(forward.port, 100))) throw new Error("The forwarder did not listen within 10 s")
+  const rules = await Bun.$`sudo -n nft -f - < ${new Response(forwardRules)}`.nothrow().quiet()
+  if (rules.exitCode !== 0) throw new Error(`Sending outbound TCP to the forwarder failed: ${rules.stderr.toString()}`)
 }
 
 // oxlint-disable-next-line ren/no-comments -- The executor runs in the ren-tools slice when the machine has systemd, so the tools' memory has its own limit (75%) and the brain survives a tool that fills memory. OOMPolicy=continue: an out-of-memory kill stops one process, not the whole scope. setpriv gives the user's groups (docker); systemd-run --uid gives root's.
