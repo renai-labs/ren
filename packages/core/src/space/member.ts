@@ -90,6 +90,13 @@ const addMember = Effect.fnUntraced(function* (
         ),
       ),
     )
+  yield* SpaceQueries.cancelJoinRequests(
+    transaction,
+    and(
+      eq(Database.Schema.space_join_request.space_id, spaceId),
+      eq(Database.Schema.space_join_request.user_id, userId),
+    ),
+  )
   return yield* findMember(transaction, id)
 })
 

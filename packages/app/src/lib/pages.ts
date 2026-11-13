@@ -28,6 +28,11 @@ export const spaceMembers = (client: Client, spaceId: string) =>
     client["space-member"].list({ spaceId, ...paging }, { signal }),
   )
 
+export const spaceJoinRequests = (client: Client, spaceId: string) =>
+  paged(["space-join-request", "list", { spaceId, status: "pending" }], (paging, signal) =>
+    client["space-join-request"].list({ spaceId, status: "pending", ...paging }, { signal }),
+  )
+
 export const credentials = (client: Client, input: Omit<CredentialListInput, keyof Paging>) =>
   paged(["credential", "list", input], (paging, signal) => client.credential.list({ ...input, ...paging }, { signal }))
 

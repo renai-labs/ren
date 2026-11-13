@@ -20,6 +20,9 @@ export type MembershipID = typeof MembershipID.Type
 export const AssignmentID = Identifier.make("spp", "Space.AssignmentID")
 export type AssignmentID = typeof AssignmentID.Type
 
+export const JoinRequestID = Identifier.make("sjr", "Space.JoinRequestID")
+export type JoinRequestID = typeof JoinRequestID.Type
+
 export const Kind = Schema.Literals(["shared", "private"]).annotate({
   identifier: "Space.Kind",
   description:
@@ -113,6 +116,13 @@ export const Info = Schema.Struct({
   factory: Factory.Info,
   canUpdate: Schema.Boolean,
   canJoin: Schema.Boolean.annotate({ description: "An admin who is not a member can join this shared space." }),
+  canRequestJoin: Schema.Boolean.annotate({
+    description:
+      "A member of the organization who is not in this shared space and has no pending request can ask to join.",
+  }),
+  joinRequestId: Schema.NullOr(JoinRequestID).annotate({
+    description: "The caller’s pending request to join this space. Null when there is none.",
+  }),
   canAddMember: Schema.Boolean,
   canRemoveMember: Schema.Boolean,
   canArchive: Schema.Boolean,

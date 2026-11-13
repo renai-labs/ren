@@ -42,6 +42,21 @@ const resources: ReadonlyArray<Resource> = [
     descriptions: { create: "Add a member to a space", archive: "Remove a member from a space" },
   },
   {
+    group: "space-join-request",
+    about: "Manage requests to join a space",
+    path: ["space", "join-request"],
+    name: "request",
+    one: "a join request",
+    many: "requests to join a space",
+    descriptions: {
+      list: "List the requests to join a space, or your own requests without --space",
+      create: "Ask to join a shared space",
+      approve: "Add the person who asked to the space",
+      decline: "Decline a request to join a space",
+      cancel: "Cancel your request to join a space",
+    },
+  },
+  {
     group: "agent-membership",
     about: "Manage the agents in a space",
     path: ["space", "agent"],

@@ -66,6 +66,12 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       membershipId: SpaceQueries.membership.id,
       isFirstOrganizationSpace,
       memberCount,
+      joinRequestId: sql<Space.JoinRequestID | null>`(
+        select ${Database.Schema.space_join_request.id} from ${Database.Schema.space_join_request}
+        where ${Database.Schema.space_join_request.space_id} = ${Database.Schema.space.id}
+          and ${Database.Schema.space_join_request.user_id} = ${actor.userId}
+          and ${Database.Schema.space_join_request.status} = 'pending'
+      )`,
       isComputePending,
       usable: AgentQueries.factoryOrder,
     })
@@ -78,6 +84,7 @@ const actions = {
   ...SpacePolicy.actions,
   addMember: Primitive.action(SpaceMember.definition, "create"),
   removeMember: Primitive.action(SpaceMember.definition, "archive"),
+  requestJoin: SpacePolicy.joinRequestActions.create,
 }
 
 // oxlint-disable-next-line ren/no-comments -- A space runs only machines that can run: a built template of its organization, for its brain one of its brain provider. The template read waits for an archive of it.
@@ -217,6 +224,8 @@ export const layer = Layer.effect(
           factory: canRead ? TaskFactory.keep(row.space.factory, row.usable) : Factory.empty,
           canUpdate: isAllowed(actions.update),
           canJoin: isAllowed(actions.join),
+          canRequestJoin: !row.joinRequestId && isAllowed(actions.requestJoin),
+          joinRequestId: row.joinRequestId,
           canAddMember: isAllowed(actions.addMember),
           canRemoveMember: isAllowed(actions.removeMember),
           canArchive: isAllowed(actions.archive),
@@ -442,6 +451,7 @@ export const layer = Layer.effect(
                   isNull(Database.Schema.space_pending_member.archived_at),
                 ),
               )
+            yield* SpaceQueries.cancelJoinRequests(transaction, eq(Database.Schema.space_join_request.space_id, id))
             yield* transaction
               .delete(Database.Schema.channel_mapping)
               .where(eq(Database.Schema.channel_mapping.space_id, id))

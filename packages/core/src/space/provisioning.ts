@@ -142,6 +142,16 @@ export const layer = Layer.effect(
                 })),
               )
               .onConflictDoNothing()
+            yield* SpaceQueries.cancelJoinRequests(
+              transaction,
+              and(
+                eq(Database.Schema.space_join_request.user_id, user.id),
+                inArray(
+                  Database.Schema.space_join_request.space_id,
+                  pendingMemberships.map((pendingMembership) => pendingMembership.spaceId),
+                ),
+              ),
+            )
             yield* transaction
               .update(Database.Schema.space_pending_member)
               .set({ archived_at: sql`now()` })
@@ -176,6 +186,19 @@ export const layer = Layer.effect(
                   ),
                 ),
               )
+            yield* SpaceQueries.cancelJoinRequests(
+              transaction,
+              and(
+                eq(Database.Schema.space_join_request.user_id, userId),
+                inArray(
+                  Database.Schema.space_join_request.space_id,
+                  transaction
+                    .select({ id: Database.Schema.space.id })
+                    .from(Database.Schema.space)
+                    .where(eq(Database.Schema.space.organization_id, organizationId)),
+                ),
+              ),
+            )
             // oxlint-disable-next-line ren/no-comments -- private-spaces rule 16: the private space leaves with its person.
             const own = yield* transaction
               .update(Database.Schema.space)

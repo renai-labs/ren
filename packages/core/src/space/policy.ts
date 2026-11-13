@@ -4,6 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
+import { SpaceJoinRequest } from "@ren/schema/space-join-request"
 import { SpaceMember } from "@ren/schema/space-member"
 import type { Access } from "../access.js"
 
@@ -13,6 +14,7 @@ export const facts = {
   private: "space.private",
   owner: "space.owner",
   first: "space.first",
+  requester: "space.requester",
 } as const
 
 export const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
@@ -31,6 +33,15 @@ export const actions = {
 } as const
 
 const member = Primitive.actions(SpaceMember.definition)
+
+export const joinRequestActions = {
+  create: Primitive.action(SpaceJoinRequest.definition, "create"),
+  list: Primitive.action(SpaceJoinRequest.definition, "list"),
+  listOwn: `${SpaceJoinRequest.definition.name}.listOwn`,
+  approve: Primitive.action(SpaceJoinRequest.definition, "approve"),
+  decline: Primitive.action(SpaceJoinRequest.definition, "decline"),
+  cancel: Primitive.action(SpaceJoinRequest.definition, "cancel"),
+} as const
 
 // oxlint-disable-next-line ren/no-comments -- access §4: `get` is the list entry, `read` is what is inside.
 export const documents = [
@@ -74,6 +85,21 @@ export const documents = [
       },
     ],
   },
+  {
+    resource: SpaceJoinRequest.definition.name,
+    rules: [
+      { actions: [joinRequestActions.create], effect: "allow", roles: organizationRoles, when: [facts.shared] },
+      { actions: [joinRequestActions.create], effect: "deny", roles: organizationRoles, when: [facts.member] },
+      {
+        actions: [joinRequestActions.list, joinRequestActions.approve, joinRequestActions.decline],
+        effect: "allow",
+        roles: organizationRoles,
+        when: [facts.member, facts.shared],
+      },
+      { actions: [joinRequestActions.listOwn], effect: "allow", roles: organizationRoles, when: [] },
+      { actions: [joinRequestActions.cancel], effect: "allow", roles: organizationRoles, when: [facts.requester] },
+    ],
+  },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
 export const organization: Access.Resource = { facts: [] }
@@ -83,6 +109,7 @@ export interface Holds {
   readonly kind: Space.Kind
   readonly isOwner?: boolean
   readonly isFirst?: boolean
+  readonly isRequester?: boolean
 }
 
 export const resource = (holds: Holds): Access.Resource => ({
@@ -91,5 +118,6 @@ export const resource = (holds: Holds): Access.Resource => ({
     holds.kind === "private" ? facts.private : facts.shared,
     ...(holds.isOwner ? [facts.owner] : []),
     ...(holds.isFirst ? [facts.first] : []),
+    ...(holds.isRequester ? [facts.requester] : []),
   ],
 })

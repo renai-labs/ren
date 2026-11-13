@@ -851,6 +851,446 @@
         "summary": "Archive space-member"
       }
     },
+    "/space-join-requests": {
+      "get": {
+        "tags": ["space-join-request"],
+        "operationId": "space-join-request.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              ],
+              "description": "The space whose requests to list; its members only. Without it, the caller’s own requests."
+            },
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceJoinRequest.Status"
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceJoinRequest.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceJoinRequest.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the space-join-requests that the caller can see.",
+        "summary": "List space-join-requests"
+      },
+      "post": {
+        "tags": ["space-join-request"],
+        "operationId": "space-join-request.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceJoinRequest.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceJoinRequest.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one space-join-request.",
+        "summary": "Create space-join-request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceJoinRequest.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/space-join-requests/{id}/approve": {
+      "post": {
+        "tags": ["space-join-request"],
+        "operationId": "space-join-request.approve",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.JoinRequestID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceJoinRequest.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceJoinRequest.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the approve action on one space-join-request.",
+        "summary": "approve space-join-request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceJoinRequest.DecisionInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/space-join-requests/{id}/decline": {
+      "post": {
+        "tags": ["space-join-request"],
+        "operationId": "space-join-request.decline",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.JoinRequestID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceJoinRequest.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceJoinRequest.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the decline action on one space-join-request.",
+        "summary": "decline space-join-request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceJoinRequest.DecisionInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/space-join-requests/{id}/cancel": {
+      "post": {
+        "tags": ["space-join-request"],
+        "operationId": "space-join-request.cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.JoinRequestID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceJoinRequest.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceJoinRequest.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the cancel action on one space-join-request.",
+        "summary": "cancel space-join-request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceJoinRequest.DecisionInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/environment-templates": {
       "get": {
         "tags": ["environment-template"],
@@ -24762,6 +25202,21 @@
             "type": "boolean",
             "description": "An admin who is not a member can join this shared space."
           },
+          "canRequestJoin": {
+            "type": "boolean",
+            "description": "A member of the organization who is not in this shared space and has no pending request can ask to join."
+          },
+          "joinRequestId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.JoinRequestID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller’s pending request to join this space. Null when there is none."
+          },
           "canAddMember": {
             "type": "boolean"
           },
@@ -24805,6 +25260,8 @@
           "factory",
           "canUpdate",
           "canJoin",
+          "canRequestJoin",
+          "joinRequestId",
           "canAddMember",
           "canRemoveMember",
           "canArchive",
@@ -24813,6 +25270,10 @@
           "archivedAt"
         ],
         "additionalProperties": false
+      },
+      "Space.JoinRequestID": {
+        "type": "string",
+        "pattern": "^sjr_"
       },
       "Space.Kind": {
         "type": "string",
@@ -24945,6 +25406,145 @@
           }
         },
         "additionalProperties": false
+      },
+      "SpaceJoinRequest.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["spaceId"],
+        "additionalProperties": false
+      },
+      "SpaceJoinRequest.DecisionInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "SpaceJoinRequest.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Space.JoinRequestID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/Auth.UserID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SpaceJoinRequest.Status"
+          },
+          "decidedBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spaceId",
+          "userId",
+          "name",
+          "email",
+          "image",
+          "note",
+          "status",
+          "decidedBy",
+          "createdAt",
+          "decidedAt"
+        ],
+        "additionalProperties": false
+      },
+      "SpaceJoinRequest.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpaceJoinRequest.Info"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "SpaceJoinRequest.Status": {
+        "type": "string",
+        "enum": ["pending", "approved", "declined", "cancelled"],
+        "description": "A pending request waits for a member of the space. It ends as approved or declined, or cancelled by the person who asked. Ren also cancels it when the person joins another way, the space is archived or the person leaves the organization."
       },
       "SpaceMember.Active": {
         "type": "object",
@@ -27792,6 +28392,9 @@
     },
     {
       "name": "space-member"
+    },
+    {
+      "name": "space-join-request"
     },
     {
       "name": "environment-template"

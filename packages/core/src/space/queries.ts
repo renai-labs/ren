@@ -151,3 +151,10 @@ export const actsIn = Effect.fnUntraced(function* (
     }),
   )
 })
+
+// oxlint-disable-next-line ren/no-comments -- Cancels the pending requests that match `where`. Used when a request is moot: the person joined another way, the space was archived, or the person left the organization.
+export const cancelJoinRequests = (transaction: Database.Transaction, where: SQL | undefined) =>
+  transaction
+    .update(Database.Schema.space_join_request)
+    .set({ status: "cancelled", decided_at: sql`now()` })
+    .where(and(eq(Database.Schema.space_join_request.status, "pending"), where))

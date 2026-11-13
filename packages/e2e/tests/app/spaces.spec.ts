@@ -122,7 +122,7 @@ test("a member browses shared spaces they are not in, and an admin joins one", a
   const row = ada.getByRole("row").filter({ hasText: "Cryptography" })
   await expect(row).toContainText("Ciphers and codes")
   await expect(row).toContainText("1 member")
-  await expect(row.getByRole("button", { name: "Join" })).toHaveCount(0)
+  await expect(row.getByRole("button", { name: "Join", exact: true })).toHaveCount(0)
   await expect(
     ada.getByRole("region", { name: "Sidebar spaces" }).getByRole("link", { name: /Cryptography/ }),
   ).toHaveCount(0)

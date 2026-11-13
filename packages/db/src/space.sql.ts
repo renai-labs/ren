@@ -5,6 +5,7 @@ import type { MachineProvider } from "@ren/schema/machine-provider"
 import type { MachineTemplate } from "@ren/schema/machine-template"
 import { Factory } from "@ren/schema/factory"
 import type { Space } from "@ren/schema/space"
+import type { SpaceJoinRequest } from "@ren/schema/space-join-request"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
@@ -108,6 +109,37 @@ export const space_pending_member = pgTable(
   (table) => [
     uniqueIndex(spacePendingMemberEmailConstraint).on(table.space_id, table.email).where(isNull(table.archived_at)),
     index("space_pending_member_email_idx").on(table.email),
+  ],
+)
+
+export const spaceJoinRequestPendingConstraint = "space_join_request_space_id_user_id_pending_uidx"
+
+export const space_join_request = pgTable(
+  "space_join_request",
+  {
+    id: text().$type<Space.JoinRequestID>().primaryKey(),
+    space_id: text()
+      .$type<Space.ID>()
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    user_id: text()
+      .$type<Auth.UserID>()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    note: text(),
+    status: text().$type<SpaceJoinRequest.Status>().notNull().default("pending"),
+    decided_by: text()
+      .$type<Auth.UserID>()
+      .references(() => user.id, { onDelete: "set null" }),
+    created_at: timestamp().defaultNow().notNull(),
+    decided_at: timestamp(),
+  },
+  (table) => [
+    uniqueIndex(spaceJoinRequestPendingConstraint)
+      .on(table.space_id, table.user_id)
+      .where(sql`${table.status} = 'pending'`),
+    index("space_join_request_user_id_idx").on(table.user_id),
+    check("space_join_request_status_check", sql`${table.status} in ('pending', 'approved', 'declined', 'cancelled')`),
   ],
 )
 

@@ -27,6 +27,7 @@ const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
   task: ["task", "task-activity", "label", "link"],
   "task-comment": ["task-activity"],
   "space-member": ["space-member", "space"],
+  "space-join-request": ["space-join-request", "space-member", "space"],
   "app-profile": ["app-profile", "app-profile-reach", "app"],
   "app-profile-reach": ["app-profile", "app-profile-reach", "app"],
   credential: ["credential", "app-profile", "app-profile-reach"],
