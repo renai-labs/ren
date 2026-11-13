@@ -118,6 +118,7 @@ export const layer = Layer.effect(
       token: Config.Redacted("CLOUDFLARE_API_TOKEN"),
       namespace: Config.NonEmptyString("ARTIFACT_CLOUDFLARE_NAMESPACE"),
       domain: Config.NonEmptyString("ARTIFACT_DOMAIN"),
+      names: Config.option(Config.NonEmptyString("ARTIFACT_CLOUDFLARE_NAMES")),
       recoverWithin: Config.Duration("ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT").pipe(
         Config.withDefault(Duration.seconds(25)),
       ),
@@ -369,8 +370,32 @@ export const layer = Layer.effect(
       return { initial, state: () => current, save, publish, recover }
     })
 
+    // oxlint-disable-next-line ren/no-comments -- The Workers KV namespace where the dispatcher reads which label a name serves.
+    const names = Option.map(config.names, (namespace) => {
+      const value = (name: Artifact.Name) =>
+        `${base.replace(/\/workers$/u, "")}/storage/kv/namespaces/${encodeURIComponent(namespace)}/values/${name}`
+      const write = (what: string, request: HttpClientRequest.HttpClientRequest) =>
+        api(request).pipe(
+          Effect.flatMap((response) =>
+            response.status === 200 ? Effect.void : Effect.fail(refused(what, response.status, response.body)),
+          ),
+        )
+      return {
+        origin: (artifactId: Artifact.ID, name: Artifact.Name | null) =>
+          `https://${name ?? Artifact.label(artifactId)}.${config.domain}`,
+        put: (name: Artifact.Name, artifactId: Artifact.ID) =>
+          write(
+            "Cloudflare refused the artifact name",
+            HttpClientRequest.put(value(name)).pipe(HttpClientRequest.bodyText(Artifact.label(artifactId))),
+          ),
+        remove: (name: Artifact.Name) =>
+          write("Cloudflare did not remove the artifact name", HttpClientRequest.delete(value(name))),
+      } satisfies ArtifactProvider.Names
+    })
+
     return ArtifactProvider.make({
       id,
+      ...(Option.isSome(names) && { names: names.value }),
       remote: State,
       deploy: Effect.fn("ArtifactCloudflare.deploy")(function* (input) {
         const stored = yield* access(input.artifactId, input.remote, input.save)

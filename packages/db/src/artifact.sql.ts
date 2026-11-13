@@ -22,6 +22,7 @@ export const artifact = pgTable(
       .notNull()
       .references(() => space.id, { onDelete: "cascade" }),
     title: text().notNull(),
+    name: text().$type<Artifact.Name>(),
     provider: text().$type<Artifact.ProviderID>().notNull(),
     code_archive: text(),
     config: jsonb().$type<Artifact.Config>(),
@@ -37,8 +38,15 @@ export const artifact = pgTable(
   (table) => [
     index("artifact_space_id_idx").on(table.space_id),
     uniqueIndex("artifact_label_idx").on(sql`lower(${table.id})`),
+    uniqueIndex("artifact_name_idx").on(table.name),
   ],
 )
+
+// oxlint-disable-next-line ren/no-comments -- Each change of who owns a name moves its epoch on. The run of an epoch copies the owner to the provider after the run of the epoch before it, so the copy of the latest owner lands last.
+export const artifact_name_sync = pgTable("artifact_name_sync", {
+  name: text().$type<Artifact.Name>().primaryKey(),
+  epoch: integer().notNull(),
+})
 
 export const artifact_deployment = pgTable(
   "artifact_deployment",

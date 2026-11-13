@@ -165,6 +165,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
                 id: request.params.id,
                 spaceId: Space.ID.create(),
                 title: payload.title ?? "",
+                name: null,
                 entry: config.entry,
                 pendingDeploymentId: null,
                 publishedDeploymentId: payload.deploymentId,

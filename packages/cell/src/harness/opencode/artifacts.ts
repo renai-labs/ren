@@ -44,8 +44,14 @@ const Entry = Schema.String.annotate({
   description: "Entry file path relative to the artifact root. Defaults to index.html, index.md, or the sole file.",
 })
 
+const Name = Artifact.Name.annotate({
+  description:
+    "Its own address: https://<name>.<artifact domain>/. 1 to 63 lowercase letters, digits and hyphens; unique across Ren.",
+})
+
 const CreateToolInput = Schema.Struct({
   title: Schema.String.annotate({ description: "Human-readable artifact title." }),
+  name: Schema.optional(Name).annotate({ description: "Omit to get a name from the title." }),
   files: Schema.optional(Files),
   directory: Schema.optional(Directory),
   entry: Schema.optional(Entry),
@@ -58,6 +64,9 @@ const UpdateToolInput = Schema.Struct({
       "The deploymentId your change starts from: from your last artifact_read (publishedDeploymentId), artifact_create or artifact_update of this artifact.",
   }),
   title: Schema.optional(Schema.String).annotate({ description: "Updated title, or omit to keep the current title." }),
+  name: Schema.optional(Name).annotate({
+    description: "A new name, or omit to keep the current one. The old name is free at once.",
+  }),
   files: Schema.optional(Files.annotate({ description: "Replacement UTF-8 file map keyed by relative path." })),
   directory: Schema.optional(Directory),
   entry: Schema.optional(Entry.annotate({ description: "Updated entry file path." })),
@@ -153,6 +162,7 @@ export const make = (input: {
           id: Artifact.ID,
           source: {
             readonly title?: string | undefined
+            readonly name?: Artifact.Name | undefined
             readonly entry?: string | undefined
             readonly baseDeploymentId?: Artifact.DeploymentID | undefined
             readonly files?: Readonly<Record<string, string>> | undefined
@@ -199,6 +209,7 @@ export const make = (input: {
                   deploymentId,
                   uploadId: upload.uploadId,
                   ...(Predicate.isNotUndefined(source.title) && { title: source.title.trim() }),
+                  ...(Predicate.isNotUndefined(source.name) && { name: source.name }),
                   ...(Predicate.isNotUndefined(source.entry) && { entry: source.entry.replace(/^(?:\.\/)+/u, "") }),
                   ...(source.baseDeploymentId && { baseDeploymentId: source.baseDeploymentId }),
                   sessionId: Session.ID.make(sessionId),

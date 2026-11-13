@@ -227,6 +227,8 @@ import type {
   ArtifactListOutput,
   ArtifactGetInput,
   ArtifactGetOutput,
+  ArtifactUpdateInput,
+  ArtifactUpdateOutput,
   ArtifactArchiveInput,
   ArtifactArchiveOutput,
   CredentialListInput,
@@ -1996,6 +1998,18 @@ export function make(options: ClientOptions) {
             path: `/artifacts/${encodeURIComponent(input.idOrSlug)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ArtifactUpdateInput, requestOptions?: RequestOptions) =>
+        request<ArtifactUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/artifacts/${encodeURIComponent(input.id)}`,
+            body: { name: input["name"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

@@ -605,6 +605,12 @@ export const ArtifactGet = {
   idOrSlug: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
 }
 
+export const ArtifactUpdate = {
+  id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
+  name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("The new name.")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const ArtifactArchive = { id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")) }
 
 export const CredentialList = {
@@ -1584,6 +1590,12 @@ export const commands = [
         Command.withDescription("Show an artifact"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.ArtifactGet(input)),
+        ),
+      ),
+      Command.make("update", ArtifactUpdate).pipe(
+        Command.withDescription("Update an artifact"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ArtifactUpdate(input)),
         ),
       ),
       Command.make("archive", ArtifactArchive).pipe(
