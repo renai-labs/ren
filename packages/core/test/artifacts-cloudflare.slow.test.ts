@@ -11,10 +11,11 @@ import { Artifacts } from "../src/artifacts.js"
 import { ArtifactProvider } from "../src/artifact-provider.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { ObjectStorage } from "../src/object-storage.js"
+import { Models } from "../src/models.js"
 import { ArtifactSamples } from "./lib/artifact-samples.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
-import { Seed } from "./lib/seed.js"
+import { Host } from "./lib/host.js"
 import { TestCloudflare } from "./lib/cloudflare.js"
 import { Config, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
@@ -26,6 +27,13 @@ setDefaultTimeout(600_000)
 const it = testEffect(
   Artifacts.layer.pipe(
     Layer.provide([ArtifactCloudflare.layer, Access.layer]),
+    Layer.provideMerge(
+      Host.cellLayerWith(DurableRunner.layerEffect)(
+        { CELL_URL: "http://127.0.0.1:9" },
+        Models.layerNone,
+        Host.noTemplates,
+      ),
+    ),
     Layer.provideMerge(DurableRunner.layerEffect),
     Layer.provide(TestDrives.layer),
     Layer.provideMerge(Layer.mergeAll(Testing.layer, TestCloudflare.layer)),
@@ -45,7 +53,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
     it.live("migrates application SQLite on object initialization across update and redeploy", () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
         const config = { entry: "index.html", durableObjects: { STATE: "SampleState" } }
         const publish = (files: Artifact.Files) =>
@@ -147,7 +155,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
       Effect.gen(function* () {
         const database = yield* Database.Service
         const storage = yield* ObjectStorage.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
         yield* database.db.insert(Database.Schema.artifact).values({
           id,
@@ -219,7 +227,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE !== "1")(
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
-        const owner = yield* Seed.owner()
+        const owner = yield* ArtifactSamples.owner()
         const id = Artifact.ID.make(`art_${crypto.randomUUID().replaceAll("-", "")}`)
         const idle = ArtifactSamples.idle(id)
         const publish = Effect.fnUntraced(function* (files: Artifact.Files, config: Artifact.Config) {

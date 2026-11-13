@@ -3,10 +3,11 @@ import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { TestHand } from "@ren/executor/testing"
+import { Brain } from "@ren/schema/brain"
 import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
-import { Cache, Effect, Layer } from "effect"
+import { Cache, Duration, Effect, Layer, Schedule } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -17,6 +18,7 @@ import { ArtifactCloudflare } from "../src/artifact-provider/cloudflare.js"
 import { Artifacts } from "../src/artifacts.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
+import { BrainProvider } from "../src/brain-provider.js"
 import { HandProvider } from "../src/hand-provider.js"
 import { Hands } from "../src/hands.js"
 import { DurableRunner } from "../src/durable-runner.js"
@@ -68,18 +70,22 @@ const it = testEffect(
   Layer.mergeAll(
     SessionRunner.layer.pipe(
       Layer.provideMerge(BrainRegistry.layer),
-      Layer.provideMerge(Host.layerWith({ ENVIRONMENT_DIRECTORY: remote }, Configured.models, environments)),
       Layer.provideMerge(
-        Artifacts.layer.pipe(
-          Layer.provide([
-            process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer,
-            Access.layer,
-          ]),
-          Layer.provideMerge(
-            process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? TestCloudflare.layer : FetchHttpClient.layer,
+        Host.layerServing(
+          { ENVIRONMENT_DIRECTORY: remote },
+          Configured.models,
+          environments,
+          Artifacts.layer.pipe(
+            Layer.provide([
+              process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer,
+              Access.layer,
+            ]),
+            Layer.provide(TestDrives.layer),
           ),
-          Layer.provide(TestDrives.layer),
         ),
+      ),
+      Layer.provideMerge(
+        process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? TestCloudflare.layer : FetchHttpClient.layer,
       ),
       Layer.provideMerge(Host.runner),
     ),
@@ -123,7 +129,9 @@ describe("artifacts from a chat", () => {
         .where(eq(Database.Schema.artifact.space_id, owner.spaceId))).at(0)
       if (!row) return yield* Effect.die(new Error(`No artifact was published: ${answered.text}`))
       yield* Effect.addFinalizer(() =>
-        artifacts.stop(owner, row.id).pipe(Effect.andThen(ArtifactSamples.idle(row.id)), Effect.ignore),
+        artifacts
+          .stop({ ...owner, brainId: Brain.ofSession(sessionId) }, row.id)
+          .pipe(Effect.andThen(ArtifactSamples.idle(row.id)), Effect.ignore),
       )
       expect(JSON.stringify(answered.body)).toContain(row.id)
       expect(JSON.stringify(answered.body)).toContain("Deployment accepted")
@@ -147,7 +155,7 @@ describe("artifacts from a chat", () => {
 
       const updated = stub.script(
         create(
-          `return await tools.opencode.artifact_update({ id: "${row.id}", files: { "index.html": "<h1>updated</h1>" } })`,
+          `return await tools.opencode.artifact_update({ id: "${row.id}", baseDeploymentId: "${deployed?.published_deployment_id}", files: { "index.html": "<h1>updated</h1>" } })`,
         ),
       )
       const brains = yield* Brains.Service
@@ -158,21 +166,13 @@ describe("artifacts from a chat", () => {
         delivery: "steer",
         sender: { userId: owner.createdBy },
       })
-      yield* Effect.promise(() => updated.called(2))
-      const updateRow = (yield* database.db
-        .select()
-        .from(Database.Schema.artifact)
-        .where(eq(Database.Schema.artifact.id, row.id))).at(0)
-      if (!updateRow?.pending_deployment_id)
-        return yield* Effect.die(new Error("Update did not retain its deployment claim"))
-      const updateCompleted = yield* Effect.promise(() =>
-        stub.waitFor((call) =>
-          call.text.includes(
-            `Artifact deployment result: {"artifactId":"${row.id}","deploymentId":"${updateRow.pending_deployment_id}"`,
-          ),
-        ),
+      const update = /deploymentId\\?":\s*\\?"([0-9a-f-]{36})/u
+        .exec(lastToolResult(yield* Effect.promise(() => updated.called(2))))
+        ?.at(1)
+      if (!update) return yield* Effect.die(new Error("The update returned no deploymentId"))
+      yield* Effect.promise(() =>
+        stub.waitFor((call) => call.text.includes(`"deploymentId":"${update}","status":"ready"`)),
       )
-      expect(updateCompleted.text).toContain(`"deploymentId":"${updateRow.pending_deployment_id}","status":"ready"`)
       expect(yield* http.get(url).pipe(Effect.flatMap((response) => response.text))).toBe("<h1>updated</h1>")
     }),
   )
@@ -224,7 +224,9 @@ describe("artifacts from a chat", () => {
           .where(eq(Database.Schema.artifact.space_id, owner.spaceId))).at(0)
         if (!row) return yield* Effect.die(new Error(`No artifact was published: ${answered}`))
         yield* Effect.addFinalizer(() =>
-          artifacts.stop(owner, row.id).pipe(Effect.andThen(ArtifactSamples.idle(row.id)), Effect.ignore),
+          artifacts
+            .stop({ ...owner, brainId: Brain.ofSession(sessionId) }, row.id)
+            .pipe(Effect.andThen(ArtifactSamples.idle(row.id)), Effect.ignore),
         )
         const completed = yield* Effect.promise(() =>
           stub.waitFor((call) => call.text.includes("Artifact deployment result:") && call.text.includes(row.id)),
@@ -257,6 +259,89 @@ describe("artifacts from a chat", () => {
         expect(yield* Effect.promise(() => Bun.file(join(folder, "copy/index.html")).text())).toBe(
           '<img src="logo.png">',
         )
+      }),
+  )
+
+  it.live(
+    "a deployment that ends while its chat's brain is asleep wakes the brain, and the chat gets its result once",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* SessionRunner.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const sessionId = Session.ID.create()
+        const entered = Promise.withResolvers<void>()
+        const released = Promise.withResolvers<void>()
+        const held = Bun.serve({
+          hostname: "127.0.0.1",
+          port: 0,
+          idleTimeout: 0,
+          fetch: async () => {
+            entered.resolve()
+            await released.promise
+            return new Response("woken")
+          },
+        })
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(async () => {
+            released.resolve()
+            await held.stop(true)
+          }),
+        )
+        const worker = `export default { fetch: () => fetch("http://127.0.0.1:${held.port}/") }`
+        const published = stub.script(
+          create(
+            `return await tools.opencode.artifact_create({ title: "Asleep", entry: "_worker.js", files: { "_worker.js": ${JSON.stringify(worker)} } })`,
+          ),
+        )
+        yield* sessions.create(owner, {
+          sessionId,
+          harness: "opencode",
+          interactive: true,
+          initialMessage: {
+            messageId: Session.MessageID.create(),
+            prompt: { text: `publish ${published.marker}` },
+            sender: { userId: owner.createdBy },
+          },
+        })
+        yield* Effect.promise(() => published.called(2))
+        const row = (yield* database.db
+          .select()
+          .from(Database.Schema.artifact)
+          .where(eq(Database.Schema.artifact.space_id, owner.spaceId))).at(0)
+        if (!row) return yield* Effect.die(new Error("No artifact was published"))
+        const chat = (yield* database.db
+          .select({ brainId: Database.Schema.agent_session.brain_id })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, sessionId))).at(0)
+        if (!chat) return yield* Effect.die(new Error("The chat has no brain"))
+        const brainId = chat.brainId
+        yield* Effect.addFinalizer(() =>
+          Effect.flatMap(Artifacts.Service, (artifacts) => artifacts.stop({ ...owner, brainId }, row.id)).pipe(
+            Effect.andThen(ArtifactSamples.idle(row.id)),
+            Effect.ignore,
+          ),
+        )
+        yield* Effect.promise(() => entered.promise)
+        const brain = (yield* database.db
+          .select({ binding: Database.Schema.brain.binding })
+          .from(Database.Schema.brain)
+          .where(eq(Database.Schema.brain.id, brainId))).at(0)
+        if (!brain?.binding) return yield* Effect.die(new Error("The chat's brain has no sandbox"))
+        const sandbox = brain.binding
+        const provider = yield* BrainProvider.first
+        yield* provider.keepAlive(sandbox, Duration.millis(1)).pipe(Effect.orDie)
+        yield* provider
+          .status(sandbox)
+          .pipe(
+            Effect.orDie,
+            Effect.repeat({ until: (status) => status === "paused", schedule: Schedule.spaced("20 millis") }),
+          )
+        released.resolve()
+        const result = `Artifact deployment result: {"artifactId":"${row.id}"`
+        const told = yield* Effect.promise(() => stub.waitFor((call) => call.text.includes(result)))
+        expect(told.text).toContain('"status":"ready"')
+        expect(told.text.split(result).length - 1).toBe(1)
       }),
   )
 })

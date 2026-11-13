@@ -4,9 +4,12 @@ import { expect } from "bun:test"
 import { Effect, Option, Schedule } from "effect"
 import { Database } from "@ren/db/database"
 import { Artifact } from "@ren/schema/artifact"
+import { Brain } from "@ren/schema/brain"
+import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
 import { Artifacts } from "../../src/artifacts.js"
 import { DurableRunner } from "../../src/durable-runner.js"
+import { Seed } from "./seed.js"
 
 export const files = async (name: string) => {
   const root = new URL(`../fixtures/artifacts/${name}/`, import.meta.url).pathname
@@ -45,6 +48,11 @@ export const published = Effect.fnUntraced(function* (
   )
 })
 
+// oxlint-disable-next-line ren/no-comments -- The owner of a brain's host token: a space, and the brain that calls.
+export const owner = Effect.fnUntraced(function* () {
+  return { ...(yield* Seed.owner()), brainId: Brain.ID.create() }
+})
+
 export const deploy = (
   artifacts: Artifacts.Interface,
   owner: Artifacts.Owner,
@@ -55,6 +63,7 @@ export const deploy = (
     readonly config: Artifact.Config
     readonly files: Readonly<Record<string, Uint8Array>>
     readonly baseDeploymentId?: Artifact.DeploymentID
+    readonly sessionId?: Session.ID
   },
 ) =>
   Effect.gen(function* () {
@@ -78,6 +87,7 @@ export const deploy = (
       entry: input.config.entry,
       uploadId: upload.uploadId,
       ...(base && { baseDeploymentId: base }),
+      ...(input.sessionId && { sessionId: input.sessionId }),
     })
   })
 

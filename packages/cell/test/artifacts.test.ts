@@ -21,7 +21,6 @@ describe("artifacts", () => {
     const opened = await TestCell.make(celld)
     await opened.models()
     await opened.start()
-    celld.ren.artifactDeploying(true)
     const created = stub.script({
       tool: run(
         'return await tools.opencode.artifact_create({ title: "Report", files: { "index.html": "<h1>v1</h1>", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })',
@@ -38,23 +37,16 @@ describe("artifacts", () => {
     expect(first.config.durableObjects).toEqual({ STATE: "SampleState" })
     const accepted = await created.called(2)
     expect(JSON.stringify(accepted.body)).toContain("Deployment accepted")
-    expect(JSON.stringify(accepted.body)).toContain(first.info.pendingDeploymentId ?? "missing deployment")
-    celld.ren.artifactDeploying(false)
-    const notification = await stub.waitFor(
-      (call) => call.text.includes("Artifact deployment result:") && call.text.includes(id),
-    )
-    expect(notification.text).toContain('"status":"ready"')
-    expect(notification.text).toContain(first.info.pendingDeploymentId ?? "missing deployment")
-    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
+    const deploymentId = first.info.publishedDeploymentId ?? "missing deployment"
+    expect(JSON.stringify(accepted.body)).toContain(deploymentId)
+    expect<string | undefined>(first.sessionId).toBe(opened.id)
 
     const updated = stub.script({
       tools: [
         run(`return await tools.opencode.artifact_read({ id: "${id}" })`),
+        run(`return await tools.opencode.artifact_status({ id: "${id}", deploymentId: "${deploymentId}" })`),
         run(
-          `return await tools.opencode.artifact_status({ id: "${id}", deploymentId: "${first.info.pendingDeploymentId}" })`,
-        ),
-        run(
-          `return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
+          `return await tools.opencode.artifact_update({ id: "${id}", baseDeploymentId: "${deploymentId}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
         ),
       ],
     })
@@ -62,14 +54,16 @@ describe("artifacts", () => {
     const read = Schema.decodeUnknownSync(Schema.String)(
       (await updated.called(2)).body.messages.findLast((message) => message.role === "tool")?.content,
     )
-    expect(JSON.parse(read)).toMatchObject({ info: { id, title: "Report", entry: "index.html", url: first.info.url } })
+    expect(JSON.parse(read)).toMatchObject({
+      info: { id, title: "Report", entry: "index.html", url: first.info.url, publishedDeploymentId: deploymentId },
+    })
     expect(read).not.toContain("<h1>v1</h1>")
     const status = Schema.decodeUnknownSync(Schema.String)(
       (await updated.called(3)).body.messages.findLast((message) => message.role === "tool")?.content,
     )
     expect(JSON.parse(status)).toMatchObject({
       artifactId: id,
-      deploymentId: first.info.pendingDeploymentId,
+      deploymentId,
       status: "ready",
     })
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
@@ -79,20 +73,25 @@ describe("artifacts", () => {
     expect(second.config.durableObjects).toEqual(first.config.durableObjects)
     expect(second.info.url).toBe(first.info.url)
     expect(celld.ren.artifacts.size).toBe(1)
+    expect<string | undefined>(second.baseDeploymentId).toBe(deploymentId)
     const outputs = JSON.stringify(await opened.messages())
     expect(outputs).toContain("Deployment accepted")
     expect(outputs).toContain("deploymentId")
     expect(outputs).toContain("does not mean the app is live")
-    expect(outputs).toContain(first.info.pendingDeploymentId ?? "missing deployment")
+    expect(outputs).toContain(deploymentId)
 
     const deleted = stub.script({ tool: run(`return await tools.opencode.artifact_delete({ id: "${id}" })`) })
     await opened.prompt(deleted.marker)
+    const stopped = Schema.decodeUnknownSync(Schema.String)(
+      (await deleted.called(2)).body.messages.findLast((message) => message.role === "tool")?.content,
+    )
+    expect(JSON.parse(stopped)).toEqual({ id, status: "stopping" })
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
     expect(celld.ren.artifacts.get(id)?.deployed).toBe(false)
     expect(celld.ren.artifacts.get(id)?.files).toEqual(second.files)
   })
 
-  test("a deploy whose answer is lost is sent again as the same deployment, and its completion still reaches the chat", async () => {
+  test("a deploy whose answer is lost is sent again as the same deployment", async () => {
     const opened = await TestCell.make(celld)
     await opened.models()
     await opened.start()
@@ -105,33 +104,30 @@ describe("artifacts", () => {
     const published = [...celld.ren.artifacts.values()].find((artifact) => artifact.info.title === "Retried")
     const deployments = [...(published?.deployments.keys() ?? [])]
     expect(deployments).toHaveLength(1)
-    const notification = await stub.waitFor(
-      (call) => call.text.includes("Artifact deployment result:") && call.text.includes(deployments.at(0) ?? "none"),
-    )
-    expect(notification.text).toContain('"status":"ready"')
     await opened.opencode.experimental.session.wait({ sessionID: opened.id })
   })
 
-  test("an accepted deployment reports its background failure in the chat", async () => {
+  test("artifact_update refuses an update that does not name the deployment it starts from", async () => {
     const opened = await TestCell.make(celld)
     await opened.models()
     await opened.start()
-    celld.ren.artifactError("Worker failed to start")
-    try {
-      const created = stub.script({
-        tool: run(
-          'return await tools.opencode.artifact_create({ title: "Broken", files: { "index.html": "broken" } })',
-        ),
-      })
-      await opened.prompt(created.marker)
-      const notification = await stub.waitFor(
-        (call) => call.text.includes("Artifact deployment result:") && call.text.includes("Worker failed to start"),
-      )
-      expect(notification.text).toContain('"status":"failed"')
-      await opened.opencode.experimental.session.wait({ sessionID: opened.id })
-      expect(JSON.stringify(await opened.messages())).toContain("Deployment accepted")
-    } finally {
-      celld.ren.artifactError(null)
-    }
+    const created = stub.script({
+      tool: run('return await tools.opencode.artifact_create({ title: "Based", files: { "index.html": "v1" } })'),
+    })
+    await opened.prompt(created.marker)
+    await created.called(2)
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
+    const id = [...celld.ren.artifacts.entries()].find((entry) => entry[1].info.title === "Based")?.[0] ?? "art_missing"
+    const before = celld.ren.artifacts.get(Artifact.ID.make(id))?.deployments.size
+    const updated = stub.script({
+      tool: run(`return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "v2" } })`),
+    })
+    await opened.prompt(updated.marker)
+    const answer = JSON.stringify(
+      (await updated.called(2)).body.messages.findLast((message) => message.role === "tool"),
+    )
+    await opened.opencode.experimental.session.wait({ sessionID: opened.id })
+    expect(answer).toContain("baseDeploymentId")
+    expect(celld.ren.artifacts.get(Artifact.ID.make(id))?.deployments.size).toBe(before)
   })
 })
