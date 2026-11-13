@@ -83,8 +83,29 @@ export const SkillAttachment = Schema.Struct({
   mention: Schema.optionalKey(Mention),
 }).annotate({ identifier: "SessionMessage.SkillAttachment" })
 
+export interface Quote extends Schema.Schema.Type<typeof Quote> {}
+export const Quote = Schema.Struct({
+  type: Schema.Literal("quote"),
+  text: Schema.String,
+  comment: Schema.optionalKey(Schema.String),
+  source: Schema.optionalKey(
+    Schema.String.annotate({ description: "Where the quote came from, such as a reply or a message." }),
+  ),
+}).annotate({ identifier: "SessionMessage.Quote" })
+
+export interface Presentation extends Schema.Schema.Type<typeof Presentation> {}
+export const Presentation = Schema.Struct({
+  displayText: Schema.String,
+  comments: Schema.Array(Quote),
+}).annotate({
+  identifier: "SessionMessage.Presentation",
+  description:
+    "How a client shows the message: the words the person wrote and the quotes they added. The model gets `text`.",
+})
+
 export const promptFields = {
   text: Schema.String,
+  presentation: Schema.optionalKey(Presentation),
   files: Schema.optionalKey(Schema.Array(FileAttachment)),
   uploads: Schema.optionalKey(Schema.Array(DriveFile)).annotate({
     description: "Files of the space’s drive that the message attached. Get a link to each with `drive.download`.",

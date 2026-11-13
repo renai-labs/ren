@@ -307,3 +307,58 @@ test("a member sees the context in the chat header after a reply and compacts th
 
   await expect(page.getByText(/^Session compact/)).toBeVisible({ timeout: brainStart })
 })
+
+test("a member quotes a reply with a comment, and the message shows the quote card after a reload", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the budget")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  await page.getByRole("region", { name: "Messages" }).getByText("stub reply").click({ clickCount: 3 })
+  await page.getByRole("button", { name: "Quote and comment" }).click()
+  const box = page.getByRole("dialog", { name: "Quote and comment" })
+  await box.getByRole("textbox", { name: "Comment on the quote" }).fill("Why this reply?")
+  await box.getByRole("button", { name: "Send quote" }).click()
+  await expect(box).toHaveCount(0, { timeout: brainStart })
+
+  const messages = page.getByRole("region", { name: "Messages" })
+  await expect(messages.getByText("Why this reply?")).toBeVisible()
+  await page.reload()
+  await expect(messages.getByText("Why this reply?")).toBeVisible({ timeout: brainStart })
+  await expect(messages.getByText("Ren's reply", { exact: true })).toBeVisible()
+  await expect(page.getByText("The user quoted the following")).toHaveCount(0)
+})
+
+test("a member quotes a reply into the composer, removes a chip and sends the other with their words", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const select = (text: string) =>
+    page.getByRole("region", { name: "Messages" }).getByText(text).first().click({ clickCount: 3 })
+
+  await select("stub reply")
+  await page.getByRole("button", { name: "Quote", exact: true }).click()
+  await select("stub reply")
+  await page.getByRole("button", { name: "Quote", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(2)
+  await page.getByRole("button", { name: "Remove quote" }).first().click()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(1)
+
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(1)
+  const message = page.getByRole("textbox", { name: "Message" })
+  await message.fill("Why this reply?")
+  await message.press("Enter")
+  const messages = page.getByRole("region", { name: "Messages" })
+  await expect(messages.getByText("Why this reply?")).toBeVisible()
+  await expect(messages.getByText("Ren's reply", { exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(0)
+})

@@ -197,6 +197,10 @@ export const make = (
           Effect.flatMap((attachments) => {
             const metadata = {
               ...attachments.metadata,
+              ...(prompt.presentation && {
+                displayText: prompt.presentation.displayText,
+                comments: prompt.presentation.comments,
+              }),
               ...Option.match(prompt.sender, {
                 onNone: () => ({}),
                 onSome: (sender) => ({

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { SessionMessage } from "@opencode/schema/session-message"
-import { Cause, Effect, Exit, Logger, Schema } from "effect"
+import { Cause, Effect, Exit, Logger, Option, Schema } from "effect"
 import { OpenCodeRows } from "../src/opencode-rows.js"
+import { Translate } from "../src/translate.js"
 import { OpenCodeTranscript } from "../src/transcript.js"
 import { OpenCodeFixtures } from "./lib/fixtures.js"
 
@@ -63,4 +64,25 @@ test("a stand-in for a message too large to sync decodes on restore, in the plac
     "synthetic",
     OpenCodeRows.tooLarge,
   ])
+})
+
+test("a user message keeps the quotes it was sent with as presentation, and one without them shows no presentation", () => {
+  const row = OpenCodeFixtures.recordings
+    .flatMap((recording) => recording.chats)
+    .flatMap((chat) => chat.messages)
+    .find((each) => each.type === "user")
+  if (!row) throw new Error("No recorded user message")
+  const decoded = OpenCodeRows.message(row)
+  if (Exit.isFailure(decoded) || decoded.value.type !== "user") throw new Error("The user row does not decode")
+  const comments = [{ type: "quote" as const, text: "revenue is up 12%", comment: "Why?", source: "Ren's reply" }]
+  const presentation = { displayText: "Why did enterprise grow?", comments }
+  const sent = Translate.message({
+    ...decoded.value,
+    metadata: { ...decoded.value.metadata, displayText: presentation.displayText, comments },
+  })
+  const plain = Translate.message({ ...decoded.value, metadata: { userID: "usr_1" } })
+  expect([
+    Option.map(sent, (message) => message.type === "user" && message.presentation),
+    Option.map(plain, (message) => message.type === "user" && message.presentation),
+  ]).toEqual([Option.some(presentation), Option.some(undefined)])
 })

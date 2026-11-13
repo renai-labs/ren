@@ -384,6 +384,7 @@ export function make(options: ClientOptions) {
               delivery: input["delivery"],
               resume: input["resume"],
               files: input["files"],
+              presentation: input["presentation"],
               agents: input["agents"],
               skills: input["skills"],
             },

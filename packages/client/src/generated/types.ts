@@ -142,6 +142,8 @@ export type SessionMessageID = string
 
 export type SessionModelRef = { id: string; providerID: string; variant?: string }
 
+export type SessionMessageQuote = { type: "quote"; text: string; comment?: string; source?: string }
+
 export type SessionMessageFileSource = { type: "inline" } | { type: "uri"; uri: string }
 
 export type SessionMessageMention = { start: number; end: number; text: string }
@@ -615,6 +617,8 @@ export type SessionMessageModelSwitched = {
   model: SessionModelRef
   previous?: SessionModelRef
 }
+
+export type SessionMessagePresentation = { displayText: string; comments: Array<SessionMessageQuote> }
 
 export type SessionMessageFileAttachment = {
   data: string
@@ -1181,6 +1185,7 @@ export type SessionMessageUser = {
   id: SessionMessageID
   time: { created: number }
   text: string
+  presentation?: SessionMessagePresentation
   files?: Array<SessionMessageFileAttachment>
   uploads?: Array<SessionMessageDriveFile>
   agents?: Array<SessionMessageAgentAttachment>
