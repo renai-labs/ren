@@ -1,7 +1,7 @@
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { IconArchive, IconCheck, IconCube, IconLock } from "@tabler/icons-react"
+import { IconArchive, IconCheck, IconCube, IconLock, IconPin, IconPinnedOff } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
@@ -14,6 +14,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { initials, plural } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMe } from "../../lib/use-me.js"
+import { isPersonal, usePinnedSpaces } from "../../lib/use-pinned-spaces.js"
 
 function Members(props: { space: SpaceInfo }) {
   const { api } = RouterContext.useRouterContext()
@@ -86,7 +87,7 @@ function JoinButton(props: { space: SpaceInfo }) {
   )
 }
 
-function SpaceRow(props: { space: SpaceInfo; browsing: boolean }) {
+function SpaceRow(props: { space: SpaceInfo; browsing: boolean; pinned: boolean; onPin: (on: boolean) => void }) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const archive = useMutation(api.space.archive.mutationOptions())
@@ -113,6 +114,9 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean }) {
           >
             {space.name}
           </Link>
+          {props.pinned && !isPersonal(space) ? (
+            <IconPin aria-label="Pinned" className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : null}
         </span>
       </TableCell>
       <TableCell className="truncate text-muted-foreground" title={space.description || undefined}>
@@ -137,8 +141,15 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean }) {
               ) : null}
               <RowMenu
                 label={`${space.name} actions`}
-                items={
-                  space.canArchive
+                items={[
+                  ...(isPersonal(space)
+                    ? []
+                    : [
+                        props.pinned
+                          ? { label: "Unpin", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
+                          : { label: "Pin", icon: IconPin, onSelect: () => props.onPin(true) },
+                      ]),
+                  ...(space.canArchive
                     ? [
                         {
                           label: "Archive space",
@@ -159,8 +170,8 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean }) {
                           },
                         },
                       ]
-                    : []
-                }
+                    : []),
+                ]}
               />
             </>
           )}
@@ -171,6 +182,7 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean }) {
 }
 
 export function SpacesTable(props: { spaces: ReadonlyArray<SpaceInfo>; browsing: boolean; empty: string }) {
+  const pins = usePinnedSpaces()
   return (
     <TableCard>
       <Table className="table-fixed">
@@ -184,8 +196,14 @@ export function SpacesTable(props: { spaces: ReadonlyArray<SpaceInfo>; browsing:
         </TableHeader>
         <TableBody>
           {props.spaces.length === 0 ? <TableEmpty columns={4}>{props.empty}</TableEmpty> : null}
-          {props.spaces.map((space) => (
-            <SpaceRow key={space.id} space={space} browsing={props.browsing} />
+          {pins.order(props.spaces).map((space) => (
+            <SpaceRow
+              key={space.id}
+              space={space}
+              browsing={props.browsing}
+              pinned={pins.isPinned(space.id)}
+              onPin={(on) => pins.pin(space, { on })}
+            />
           ))}
         </TableBody>
       </Table>

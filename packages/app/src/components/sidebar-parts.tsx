@@ -84,6 +84,7 @@ import { ownChats, sessionTitle, sidebarSessionsOptions, type SessionFilter } fr
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
+import { isPersonal } from "../lib/use-pinned-spaces.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
@@ -301,9 +302,13 @@ export function SpaceEntry(props: {
             className="text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
             label={`${props.space.name} actions`}
             items={[
-              props.pinned
-                ? { label: "Unpin from sidebar", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
-                : { label: "Pin to sidebar", icon: IconPin, onSelect: () => props.onPin(true) },
+              ...(isPersonal(props.space)
+                ? []
+                : [
+                    props.pinned
+                      ? { label: "Unpin", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
+                      : { label: "Pin", icon: IconPin, onSelect: () => props.onPin(true) },
+                  ]),
               ...(props.space.canUpdate
                 ? [{ label: "Rename", icon: IconPencil, onSelect: () => setRenaming(true) }]
                 : []),
