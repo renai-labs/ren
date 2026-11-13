@@ -53,7 +53,7 @@ export const allOptions = (client: Runtime.Context["client"], spaceId?: string) 
       }
     },
     refetchInterval: (query) =>
-      query.state.data?.some((artifact) => artifact.activeDeploymentId !== null) ? refreshEvery : false,
+      query.state.data?.some((artifact) => artifact.pendingDeploymentId !== null) ? refreshEvery : false,
   })
 
 export const host = (url: string | null) => (url === null ? undefined : URL.parse(url)?.host)

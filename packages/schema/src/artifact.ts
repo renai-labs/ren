@@ -56,7 +56,7 @@ export const Files = Schema.Record(Drive.Path, Schema.Uint8ArrayFromBase64.check
   })
 export type Files = typeof Files.Type
 
-export const Status = Schema.Literals(["deploying", "ready", "failed", "stopped"]).annotate({
+export const Status = Schema.Literals(["deploying", "stopping", "ready", "failed", "stopped"]).annotate({
   identifier: "Artifact.Status",
 })
 export type Status = typeof Status.Type
@@ -66,12 +66,17 @@ export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   title: Primitive.Name,
-  entry: Schema.String.annotate({ description: "The file a person opens first, such as index.html." }),
+  entry: Schema.NullOr(Schema.String).annotate({
+    description: "The file a person opens first, such as index.html. Null until the first deployment is ready.",
+  }),
   url: Schema.NullOr(Schema.String).annotate({
     description: "The link anyone can open without signing in. Null while the artifact is not served.",
   }),
-  activeDeploymentId: Schema.NullOr(DeploymentID).annotate({
+  pendingDeploymentId: Schema.NullOr(DeploymentID).annotate({
     description: "The deployment or stop in progress. Null when none is.",
+  }),
+  publishedDeploymentId: Schema.NullOr(DeploymentID).annotate({
+    description: "The last deployment that became ready. A stop does not change it.",
   }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,

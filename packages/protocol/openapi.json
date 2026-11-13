@@ -15321,8 +15321,15 @@
             "maxLength": 256
           },
           "entry": {
-            "type": "string",
-            "description": "The file a person opens first, such as index.html."
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The file a person opens first, such as index.html. Null until the first deployment is ready."
           },
           "url": {
             "anyOf": [
@@ -15335,7 +15342,7 @@
             ],
             "description": "The link anyone can open without signing in. Null while the artifact is not served."
           },
-          "activeDeploymentId": {
+          "pendingDeploymentId": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Artifact.DeploymentID"
@@ -15345,6 +15352,17 @@
               }
             ],
             "description": "The deployment or stop in progress. Null when none is."
+          },
+          "publishedDeploymentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Artifact.DeploymentID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last deployment that became ready. A stop does not change it."
           },
           "createdAt": {
             "type": "string"
@@ -15369,7 +15387,8 @@
           "title",
           "entry",
           "url",
-          "activeDeploymentId",
+          "pendingDeploymentId",
+          "publishedDeploymentId",
           "createdAt",
           "updatedAt",
           "archivedAt"
