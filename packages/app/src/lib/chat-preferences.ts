@@ -14,7 +14,19 @@ export const backgroundActivity = Preference.make(
   "left",
 )
 
-export const notify = Preference.make("chat.notify.v1", Schema.Boolean, true)
+export const notifications = Preference.make(
+  "chat.notifications.v1",
+  Schema.Struct({
+    finished: Schema.Boolean,
+    permissions: Schema.Boolean,
+    questions: Schema.Boolean,
+    errors: Schema.Boolean,
+    sound: Schema.Boolean,
+  }),
+  { finished: false, permissions: true, questions: true, errors: false, sound: true },
+)
+
+export type NotificationKind = "finished" | "permissions" | "questions" | "errors"
 
 export const model = Preference.make("chat.model.v1", Schema.NullOr(SessionModel.Ref), null)
 

@@ -34,12 +34,14 @@ export interface ContextUsage {
 const contextUsageOf = (
   state: ChatState.State,
   sessionID: string,
-  models: ReadonlyArray<SessionModel.Info>,
+  models: AsyncResult.AsyncResult<ReadonlyArray<SessionModel.Info>, unknown>,
 ): ContextUsage | undefined => {
   const step = ChatState.contextStep(state, sessionID)
   if (!step) return undefined
   const tokens = ChatState.contextTokens(step.tokens)
-  const limit = models.find((each) => SessionModel.key(each) === SessionModel.key(step.model))?.limit.context
+  const limit = AsyncResult.getOrElse(models, () => []).find(
+    (each) => SessionModel.key(each) === SessionModel.key(step.model),
+  )?.limit.context
   return {
     tokens,
     input: step.tokens.input,
@@ -68,7 +70,7 @@ export function useView(root: Session.ID, child: Session.ID | undefined) {
     projection,
     loading: state.messages[viewed] === undefined && !AsyncResult.isFailure(session.state),
     messages: ChatState.messages(state, viewed),
-    contextUsage: contextUsageOf(state, viewed, AsyncResult.isSuccess(models) ? models.value : []),
+    contextUsage: contextUsageOf(state, viewed, models),
     rows: projection?.rows ?? noRows,
     running: ChatState.activity(state, viewed) === "running",
     activity: child ? noActivity : Family.activity(state, root),
@@ -89,4 +91,28 @@ export function useSubagentCard(view: ChatAtoms.View, tool: SessionMessage.Tool)
 export function useRunningAgent(root: Session.ID) {
   const state = AsyncResult.getOrElse(ChatReact.useSession(root).state, () => ChatState.empty)
   return ChatState.messages(state, root).findLast((message) => message.type === "assistant")?.agent
+}
+
+export function notificationsOf(state: ChatState.State, root: Session.ID) {
+  const family = Family.tree(state, root)
+  const last = ChatState.messages(state, root).at(-1)
+  const failed = last?.type === "idle" ? last.outcome === "failed" : false
+  const interrupted = last?.type === "idle" ? last.outcome === "interrupted" : false
+  const permissions = family.flatMap((sessionID) =>
+    (state.permissions[sessionID] ?? []).map((request) => ({
+      kind: "permissions" as const,
+      id: request.id,
+      sessionID,
+    })),
+  )
+  const questions = family.flatMap((sessionID) =>
+    (state.forms[sessionID] ?? [])
+      .filter((form) => form.kind === "question" || form.kind === "websearch.provider")
+      .map((form) => ({ kind: "questions" as const, id: form.id, sessionID })),
+  )
+  return {
+    delegated: family.some((id) => id !== root && ChatState.activity(state, id) === "running"),
+    outcome: last?.type === "idle" && !interrupted ? { id: last.id, failed } : undefined,
+    requests: [...permissions, ...questions],
+  }
 }

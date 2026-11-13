@@ -18,11 +18,11 @@ import { useModels } from "../../lib/use-models.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useComposerSuggestions } from "./use-composer-suggestions.js"
-import { childTitle, useView } from "./chat-view.js"
+import { childTitle, notificationsOf, useView } from "./chat-view.js"
 import { Seed } from "../../lib/seed.js"
 import { sessionKeys, useChatCacheBridge } from "../../lib/chat.js"
 import { sessionTitle } from "../../lib/sessions.js"
-import { useAttentionNotification } from "../../lib/notify.js"
+import { Notify } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -234,7 +234,7 @@ export function useChat(
 
   const expanded = ChatPreferences.detail.read(platform.storage) === "detailed"
   const blocked = Boolean(view.permission ?? view.form)
-  useAttentionNotification({ running, asking: blocked, title })
+  Notify.useChatNotifications({ root, title, running, ...notificationsOf(state, root) })
   useChatCacheBridge(root, bridgeOf(info, { running }))
 
   const model = pickModel(modelList, [saved, info?.model])

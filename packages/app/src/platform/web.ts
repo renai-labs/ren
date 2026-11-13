@@ -2,6 +2,7 @@ import { Option, Result, Schema } from "effect"
 import { ProductEvents } from "../lib/product-events.js"
 import { Analytics } from "./analytics.js"
 import { DraftStore } from "./draft-store.js"
+import { Notifications } from "./notifications.js"
 import type { Platform } from "./platform.js"
 
 const prefix = "ren."
@@ -16,6 +17,7 @@ export function createWebPlatform(stores: {
   readonly large?: DraftStore.Large | undefined
   readonly chatCache?: Platform.ChatCache | undefined
 }): Platform.Info {
+  const notifications = Notifications.make()
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   const posthogKey = import.meta.env.VITE_POSTHOG_KEY
   const posthogUiHost = import.meta.env.VITE_POSTHOG_UI_HOST
@@ -94,15 +96,8 @@ export function createWebPlatform(stores: {
       if (popup) popup.opener = null
       return popup
     },
-    notify: async (title, body) => {
-      if (!("Notification" in window) || Notification.permission !== "granted") return
-      if (document.visibilityState === "visible" && document.hasFocus()) return
-      const notification = new Notification(title, body === undefined ? undefined : { body })
-      notification.addEventListener("click", () => {
-        window.focus()
-        notification.close()
-      })
-    },
+    notify: notifications.notify,
+    notificationPermission: notifications.permission,
     requestNotifications: async () => {
       if (!("Notification" in window)) return false
       if (Notification.permission !== "default") return Notification.permission === "granted"
