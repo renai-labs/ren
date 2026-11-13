@@ -143,7 +143,7 @@ const addPendingMember = Effect.fnUntraced(function* (
 })
 
 const actions = {
-  getSpace: Primitive.action(Space.definition, "get"),
+  readSpace: SpacePolicy.actions.read,
   list: Primitive.action(SpaceMember.definition, "list"),
   create: Primitive.action(SpaceMember.definition, "create"),
   archive: Primitive.action(SpaceMember.definition, "archive"),
@@ -184,7 +184,7 @@ export const layer = Layer.effect(
         kind: row.kind,
         isOwner: row.ownerUserId === actor.userId,
       })
-      if (!access.isAllowed({ actor, action: actions.getSpace, resource })) return
+      if (!access.isAllowed({ actor, action: actions.readSpace, resource })) return
       return { row, resource }
     })
 

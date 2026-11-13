@@ -99,21 +99,41 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await expect(page.getByRole("link", { name: "Open Lab" })).toBeHidden()
 })
 
-test("an admin joins a space they are not in", async ({ page, request }) => {
+test("a member browses shared spaces they are not in, and an admin joins one", async ({ page, request, browser }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await addMember(page.request, request, { name: "Alan Turing", email: uniqueEmail("member") })
   const created = await request.post(`${serverURL}/spaces`, {
     headers: { origin: appOrigin },
-    data: { name: "Cryptography" },
+    data: { name: "Cryptography", description: "Ciphers and codes" },
   })
   expect(created.ok()).toBe(true)
 
-  await page.goto("/app/spaces")
-  await page.getByRole("button", { name: "Create or join a space" }).click()
-  await page.getByRole("menuitem", { name: "Join space" }).click()
-  const join = page.getByRole("dialog", { name: "Join space" })
-  await join.getByRole("option", { name: /Cryptography/ }).click()
-  await join.getByRole("button", { name: "Join space" }).click()
+  const other = await browser.newContext({ baseURL: appOrigin })
+  await addMember(page.request, other.request, { name: "Ada Lovelace", email: uniqueEmail("ada") })
+  const ada = await other.newPage()
+  await ada.goto("/app/spaces")
+  await expect(ada.getByRole("link", { name: "Cryptography" })).toHaveCount(0)
+  await ada.getByRole("tab", { name: "All spaces" }).click()
+  await expect(ada).toHaveURL(/tab=all/)
+  const card = ada.locator("[data-slot=card]").filter({ hasText: "Cryptography" })
+  await expect(card).toContainText("Ciphers and codes")
+  await expect(card).toContainText("1 member")
+  await expect(card.getByRole("button", { name: "Join" })).toHaveCount(0)
+  await expect(
+    ada.getByRole("region", { name: "Sidebar spaces" }).getByRole("link", { name: /Cryptography/ }),
+  ).toHaveCount(0)
+  await card.getByRole("link", { name: "Cryptography" }).click()
+  await expect(ada.getByText("You’re not in this space")).toBeVisible()
+  await expect(ada.getByRole("button", { name: "Join space" })).toHaveCount(0)
+  await other.close()
+
+  await page.goto("/app/spaces?tab=all")
+  await page
+    .locator("[data-slot=card]")
+    .filter({ hasText: "Cryptography" })
+    .getByRole("button", { name: "Join" })
+    .click()
   await expect(page.getByText("Joined Cryptography")).toBeVisible()
-  await expect(page.getByRole("heading", { level: 1, name: "Cryptography" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Switch space (current: Cryptography)" })).toBeVisible()
+  await expect(page.getByRole("link", { name: /Members/ })).toBeVisible()
 })

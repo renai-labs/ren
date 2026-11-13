@@ -79,7 +79,7 @@ function SpaceSwitcher(props: {
   section: (typeof spaceSections)[number]
 }) {
   const navigate = useNavigate()
-  const spaces = useSpaces().spaces
+  const spaces = useSpaces().joined
   return (
     <DropdownMenu>
       <DropdownMenuTrigger

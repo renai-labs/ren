@@ -1,12 +1,13 @@
 import { Loading } from "@ren/ui/loading"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
-import { IconArchive, IconDots } from "@tabler/icons-react"
+import { Link, useNavigate } from "@tanstack/react-router"
+import { IconArchive, IconCheck, IconDots, IconUsers } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
+import { Spinner } from "@ren/ui/spinner"
 import { SpaceCardFrame } from "../../components/space-card-frame.js"
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { useApps } from "../../lib/use-app.js"
+import { useMe } from "../../lib/use-me.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { initials, plural } from "../../lib/format.js"
@@ -155,7 +157,73 @@ function SpaceChannels(props: { spaceId: string }) {
   )
 }
 
-export function SpaceCard(props: { space: SpaceInfo }) {
+const titleClass =
+  "truncate text-base/6 font-medium tracking-snug outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+
+function BrowsedSpaceCard(props: { space: SpaceInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const navigate = useNavigate()
+  const me = useMe()
+  const space = props.space
+  const join = useMutation(api["space-member"].create.mutationOptions())
+  return (
+    <SpaceCardFrame
+      title={
+        <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} className={titleClass}>
+          {space.name}
+        </Link>
+      }
+      description={space.description ?? ""}
+      members={
+        <span className="flex items-center gap-1.5">
+          <IconUsers className="size-3.5" />
+          {plural(space.memberCount, "member")}
+        </span>
+      }
+      action={
+        space.canJoin ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="relative"
+            disabled={join.isPending}
+            onClick={() =>
+              join.mutate(
+                { payload: { spaceId: space.id, userId: me.user.id } },
+                {
+                  onSuccess: () => {
+                    toast.success(`Joined ${space.name}`)
+                    void navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
+                  },
+                  onError: (error) => toast.error("Could not join the space", { description: errorMessage(error) }),
+                },
+              )
+            }
+          >
+            {join.isPending ? <Spinner data-icon="inline-start" /> : null}
+            Join
+          </Button>
+        ) : null
+      }
+    />
+  )
+}
+
+function JoinedMark() {
+  return (
+    <span className="flex items-center gap-1 text-foreground">
+      <IconCheck className="size-3.5" />
+      Joined
+    </span>
+  )
+}
+
+export function SpaceCard(props: { space: SpaceInfo; browsing?: boolean | undefined }) {
+  if (props.space.membershipId === null) return <BrowsedSpaceCard space={props.space} />
+  return <JoinedSpaceCard space={props.space} action={props.browsing ? <JoinedMark /> : null} />
+}
+
+function JoinedSpaceCard(props: { space: SpaceInfo; action: ReactNode }) {
   const { api } = RouterContext.useRouterContext()
   const space = props.space
   const chats = useQuery({
@@ -184,11 +252,7 @@ export function SpaceCard(props: { space: SpaceInfo }) {
   return (
     <SpaceCardFrame
       title={
-        <Link
-          to="/spaces/$spaceId"
-          params={{ spaceId: space.id }}
-          className="truncate text-base/6 font-medium tracking-snug outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-        >
+        <Link to="/spaces/$spaceId" params={{ spaceId: space.id }} className={titleClass}>
           {space.name}
         </Link>
       }
@@ -219,6 +283,7 @@ export function SpaceCard(props: { space: SpaceInfo }) {
         )
       }
       channels={<SpaceChannels spaceId={space.id} />}
+      action={props.action}
       apps={
         <Loading loading={appsLoading} label="Loading space apps">
           <Stack

@@ -232,7 +232,10 @@ describe("Ren MCP tools", () => {
       result(await modern(app, token, "tools/call", { name: "space_get", arguments: { idOrSlug: space.id } }))
     const notFound = { isError: true, content: [{ type: "text", text: expect.stringMatching(/^NotFoundError: /) }] }
     expect(await get(owner.token)).toMatchObject({ isError: false, structuredContent: { id: space.id } })
-    expect(await get(await tokenFor(app, member, owner.organizationId))).toMatchObject(notFound)
+    expect(await get(await tokenFor(app, member, owner.organizationId))).toMatchObject({
+      isError: false,
+      structuredContent: { id: space.id, membershipId: null, canUpdate: false },
+    })
     expect(await get((await accessToken(app, "other-org@example.com")).token)).toMatchObject(notFound)
   })
 
