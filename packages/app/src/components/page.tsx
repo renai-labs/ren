@@ -190,7 +190,7 @@ export function Section(props: { title: string; description?: string | undefined
 
 export function Rows(props: { children: ReactNode[] }) {
   return (
-    <ItemGroup className="gap-0 rounded-xl border bg-card in-data-[slot=dialog-content]:rounded-none in-data-[slot=dialog-content]:border-0 in-data-[slot=dialog-content]:bg-transparent in-data-[slot=sheet-content]:rounded-none in-data-[slot=sheet-content]:border-0 in-data-[slot=sheet-content]:bg-transparent">
+    <ItemGroup className="gap-0 rounded-xl border bg-card in-data-[slot=dialog-content]:rounded-none in-data-[slot=dialog-content]:border-0 in-data-[slot=dialog-content]:bg-transparent in-data-[slot=sheet-content]:rounded-none in-data-[slot=sheet-content]:border-0 in-data-[slot=sheet-content]:bg-transparent has-data-[size=sm]:gap-0 has-data-[size=xs]:gap-0">
       {props.children.map((child, index) => (
         // oxlint-disable-next-line react/no-array-index-key -- rows are positional; each child is a fixed setting row
         <Fragment key={index}>
@@ -229,6 +229,18 @@ export function Row(props: {
         {props.description ? <ItemDescription className="text-xs">{props.description}</ItemDescription> : null}
       </ItemContent>
       {props.children ? <ItemActions className="max-w-full min-w-0">{props.children}</ItemActions> : null}
+    </Item>
+  )
+}
+
+export function StackedRow(props: { title: string; aside?: ReactNode | undefined; children: ReactNode }) {
+  return (
+    <Item className="flex-col flex-nowrap items-stretch gap-4 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <ItemTitle className="leading-5">{props.title}</ItemTitle>
+        {props.aside}
+      </div>
+      {props.children}
     </Item>
   )
 }

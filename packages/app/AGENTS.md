@@ -10,7 +10,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
 - `src/routes/`: TanStack Router file routes. A route declares its loader, guard, search-param schema and pending and error components, then composes feature components. Keep logic out of routes.
 - `src/features/<domain>/`: product UI for one backend domain (components, query and mutation hooks, forms). Features never import each other; routes compose them. Each section of a page loads its own data; there is no page-level hook that returns a page object.
 - `src/components/`: app-wide compositions used by several features, such as the shell, the sidebars, the `Page` frame (`page.tsx`) and the theme provider.
-- `src/icons/`: every SVG the app draws. `heroicons.tsx` is the icon set (`vite.config.ts` aliases `@tabler/icons-react` to it), `brands.tsx` the brand marks, `logomark.tsx` Ren's mark, and `avatars/` the photo and logo presets as `.svg` files.
+- `src/icons/`: every SVG the app draws. `heroicons.tsx` is the icon set (`vite.config.ts` aliases `@tabler/icons-react` to it), `brands.tsx` the brand marks, `preferences.tsx` the filled icons no set has for the Preferences menus, `logomark.tsx` Ren's mark, and `avatars/` the photo and logo presets as `.svg` files.
 - `src/lib/`: the runtime (query client, API factory, auth client, router), preferences and the chat runtime. This is where effects and subscriptions live.
 
 ## Conventions
@@ -30,7 +30,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
   - Anything shareable or restorable (filters, tabs, open panels, selection) lives in the URL as search params validated with Effect Schema.
   - Everything else lives in the component that owns it.
 - Auth goes through `better-auth/client` in `src/lib/auth.ts`. The session is a query (`sessionOptions(auth)`), guarded in `beforeLoad`.
-- Persist client-side settings with `Preference.make(key, schema, fallback)`. Keys carry a version (`theme.v1`); bump it when the shape changes.
+- Persist client-side settings with `Preference.make(key, schema, fallback)`. Keys carry a version (`theme.v1`); bump it when the shape changes. A settings row for one is `ChoiceRow` or `SwitchRow` from `src/components/preference-rows.tsx`.
 - Forms keep their values in component state and use shadcn's `Field` parts, with the error under the field and the submit button disabled while saving.
 - Toasts go through `toast` from `@ren/ui/sonner`.
 - Host capabilities come from `usePlatform()`. Check optional members before using them, because each host implements a different set. Keyboard shortcuts go through `Keyboard.useKeyDown`, file drops through `FileDrop.use`, and leaving the app through `platform.redirect`.

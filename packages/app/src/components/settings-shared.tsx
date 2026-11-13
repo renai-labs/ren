@@ -1,5 +1,5 @@
-import { IconCrown, IconUser, IconUserShield } from "@tabler/icons-react"
-import { useState } from "react"
+import { IconCornerUpRight, IconCrown, IconEyeOff, IconStack2, IconUser, IconUserShield } from "@tabler/icons-react"
+import { useState, type ComponentType } from "react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
@@ -19,6 +19,13 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
 import { roleLabel, type Role, formText } from "../lib/format.js"
+import {
+  IconActivityCenter,
+  IconActivityLeft,
+  IconActivityRight,
+  IconWidthComfortable,
+  IconWidthWide,
+} from "../icons/preferences.js"
 import { Theme } from "./theme.js"
 import { RouterContext } from "../lib/router-context.js"
 
@@ -32,22 +39,32 @@ export const roles = roleList.map((role) => ({
   icon: roleIcons[role],
 }))
 
-type Option = { value: string; label: string }
+export const roleOptions = roles.map((role) => ({ value: role.value, label: role.label }))
 
-export function Choice(props: {
+export type ChoiceOption<V> = {
+  readonly value: V
+  readonly label: string
+  readonly icon?: ComponentType<{ className?: string }> | undefined
+}
+
+export function Choice<V extends string | number>(props: {
   label: string
-  options: Option[]
-  value: string
+  options: ReadonlyArray<ChoiceOption<V>>
+  value: V
   disabled?: boolean | undefined
   size?: "sm" | undefined
   className?: string | undefined
-  onChange?: ((value: string) => void) | undefined
+  onChange?: ((value: V) => void) | undefined
 }) {
+  const selected = props.options.find((option) => option.value === props.value)
   return (
     <Select
       items={props.options}
       value={props.value}
-      onValueChange={(value) => props.onChange?.(String(value))}
+      onValueChange={(value) => {
+        const option = props.options.find((item) => item.value === value)
+        if (option) props.onChange?.(option.value)
+      }}
       disabled={props.disabled}
     >
       <SelectTrigger
@@ -55,12 +72,16 @@ export function Choice(props: {
         size={props.size ?? "default"}
         className={props.className ?? "border-transparent text-muted-foreground dark:bg-transparent"}
       >
-        <SelectValue />
+        <SelectValue>
+          {selected?.icon ? <selected.icon /> : null}
+          {selected?.label}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent align="end" className="w-auto min-w-(--anchor-width)">
         <SelectGroup>
           {props.options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
+              {option.icon ? <option.icon className="text-foreground" /> : null}
               {option.label}
             </SelectItem>
           ))}
@@ -70,20 +91,20 @@ export function Choice(props: {
   )
 }
 
-export const details = [
-  { value: "compact", label: "Compact" },
-  { value: "detailed", label: "Detailed" },
-]
+export const timelineWidths = [
+  { value: "comfortable", label: "Comfortable", icon: IconWidthComfortable },
+  { value: "wide", label: "Wide", icon: IconWidthWide },
+] as const
 export const deliveries = [
-  { value: "steer", label: "Steer the current turn" },
-  { value: "queue", label: "Queue for the next turn" },
-]
+  { value: "steer", label: "Steer the current turn", icon: IconCornerUpRight },
+  { value: "queue", label: "Queue for the next turn", icon: IconStack2 },
+] as const
 export const backgroundActivities = [
-  { value: "off", label: "Hidden" },
-  { value: "left", label: "Left" },
-  { value: "center", label: "Center" },
-  { value: "right", label: "Right" },
-]
+  { value: "off", label: "Hidden", icon: IconEyeOff },
+  { value: "left", label: "Left", icon: IconActivityLeft },
+  { value: "center", label: "Center", icon: IconActivityCenter },
+  { value: "right", label: "Right", icon: IconActivityRight },
+] as const
 
 export function PasswordDialog() {
   const { auth } = RouterContext.useRouterContext()

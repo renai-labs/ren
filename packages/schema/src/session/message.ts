@@ -183,6 +183,9 @@ export const SyntheticMetadata = Schema.Struct({
   childID: Schema.optionalKey(Schema.String),
   shellID: Schema.optionalKey(Schema.String),
   jobID: Schema.optionalKey(Schema.String),
+  state: Schema.optionalKey(Schema.String),
+  exit: Schema.optionalKey(Schema.Number),
+  timeout: Schema.optionalKey(Schema.Boolean),
 }).annotate({ identifier: "SessionMessage.SyntheticMetadata" })
 
 export interface Synthetic extends Schema.Schema.Type<typeof Synthetic> {}

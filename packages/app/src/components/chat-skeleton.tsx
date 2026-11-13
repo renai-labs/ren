@@ -60,11 +60,11 @@ export function ChatSkeleton() {
           Chat
         </span>
       </Breadcrumb.Header>
-      <div className="mx-auto w-full max-w-3xl flex-1 p-6">
+      <div className="mx-auto w-full max-w-(--container-chat) flex-1 p-6">
         <MessagesSkeleton />
       </div>
       <div className="px-6 pb-4">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-(--container-chat)">
           <ComposerFrame />
         </div>
       </div>

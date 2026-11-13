@@ -104,7 +104,7 @@ export function TerminalTab(props: { root: Session.ID; focus: string | undefined
         <MessageScrollerProvider autoScroll>
           <MessageScroller className="flex-1">
             <MessageScrollerViewport>
-              <MessageScrollerContent className="gap-4 px-4 py-2 font-mono text-xs/5">
+              <MessageScrollerContent className="gap-4 px-4 py-2 font-mono text-(length:--ren-code-terminal-size)/5">
                 {others.map((shell) => (
                   <MessageScrollerItem key={shell.id} messageId={shell.id}>
                     <Command root={props.root} shell={shell} byRen />

@@ -1,19 +1,9 @@
 import { expect, test, type Page } from "@playwright/test"
-import { Schema } from "effect"
-import { ports } from "../lib/env.js"
-import { createOrganization } from "../lib/servers.js"
+import { createOrganization, script } from "../lib/servers.js"
 
 const brainStart = 30_000
 
 test.describe.configure({ timeout: 120_000 })
-
-const Marker = Schema.Struct({ marker: Schema.String })
-
-const script = async (page: Page, tool: { name: string; input: unknown }) => {
-  const scripted = await page.request.post(`http://127.0.0.1:${ports.mailbox}/script`, { data: { tools: [tool] } })
-  expect(scripted.ok()).toBe(true)
-  return Schema.decodeUnknownSync(Marker)(await scripted.json())
-}
 
 const send = async (page: Page, marker: string) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
@@ -24,8 +14,10 @@ const send = async (page: Page, marker: string) => {
 }
 
 const shellTurn = async (page: Page) => {
-  const shell = await script(page, { name: "shell", input: { command: "echo started; sleep 30", description: "Wait" } })
-  await send(page, shell.marker)
+  const marker = await script(page.request, {
+    tools: [{ name: "shell", input: { command: "echo started; sleep 30", description: "Wait" } }],
+  })
+  await send(page, marker)
   return page.getByRole("button", { name: "1 shell" })
 }
 
@@ -49,15 +41,18 @@ test("Move to background lets the turn end while the shell keeps running", async
   await expect(page.getByText("stub reply").first()).toBeVisible({ timeout: brainStart })
   await expect(pill).toBeVisible()
   await expect(move).toHaveAttribute("inert")
+  await expect(page.getByRole("button", { name: /^Running in background/ })).toBeVisible()
+  await expect(page.getByRole("button", { name: /^Worked.*0 steps/ })).toHaveCount(0)
 })
 
 test("a running subagent shows in the activity pill and its row opens the subagent view", async ({ page }) => {
-  const child = await script(page, { name: "shell", input: { command: "sleep 30", description: "Wait" } })
-  const parent = await script(page, {
-    name: "subagent",
-    input: { agent: "general", description: "Look around", prompt: `${child.marker} look` },
+  const child = await script(page.request, {
+    tools: [{ name: "shell", input: { command: "sleep 30", description: "Wait" } }],
   })
-  await send(page, parent.marker)
+  const parent = await script(page.request, {
+    tools: [{ name: "subagent", input: { agent: "general", description: "Look around", prompt: `${child} look` } }],
+  })
+  await send(page, parent)
   const pill = page.getByRole("button", { name: "1 subagent" })
   await expect(pill).toBeVisible({ timeout: brainStart })
   await pill.click()
@@ -69,12 +64,13 @@ test("a running subagent shows in the activity pill and its row opens the subage
 })
 
 test("Delete on a subagent row interrupts it and the pill goes", async ({ page }) => {
-  const child = await script(page, { name: "shell", input: { command: "sleep 60", description: "Wait" } })
-  const parent = await script(page, {
-    name: "subagent",
-    input: { agent: "general", description: "Look around", prompt: `${child.marker} look` },
+  const child = await script(page.request, {
+    tools: [{ name: "shell", input: { command: "sleep 60", description: "Wait" } }],
   })
-  await send(page, parent.marker)
+  const parent = await script(page.request, {
+    tools: [{ name: "subagent", input: { agent: "general", description: "Look around", prompt: `${child} look` } }],
+  })
+  await send(page, parent)
   const pill = page.getByRole("button", { name: "1 subagent" })
   await expect(pill).toBeVisible({ timeout: brainStart })
   await pill.click()

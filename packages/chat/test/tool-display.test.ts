@@ -101,6 +101,12 @@ describe("tool display", () => {
     expect(ToolDisplay.subtitle(tool("shell", "streaming"))).toBeUndefined()
   })
 
+  test("gives the full command of shell tools only", () => {
+    expect(ToolDisplay.command(tool("bash", "completed", { command: "git log\n  | head" }))).toBe("git log\n  | head")
+    expect(ToolDisplay.command(tool("shell", "running", {}, { metadata: { command: "ls" } }))).toBe("ls")
+    expect(ToolDisplay.command(tool("execute", "completed", { code: "const a = 1" }))).toBeUndefined()
+  })
+
   test("cleans terminal escapes from command output only", () => {
     expect(ToolDisplay.output(tool("shell", "completed", {}, { output: "\u001b[31mred\u001b[0m\r\n" }))).toBe("red\n")
     expect(ToolDisplay.output(tool("read", "completed", {}, { output: "a\r\nb" }))).toBe("a\r\nb")
@@ -155,6 +161,18 @@ describe("tool display", () => {
     expect(ToolDisplay.group([reasoning, reasoning])).toEqual({ title: "Used 2 Thoughts", count: 2 })
     expect(ToolDisplay.group([reasoning])).toEqual({ title: "Used 1 Thought", count: 1 })
     expect(ToolDisplay.group([{ type: "notice" }])).toEqual({ title: "Updates", count: 0 })
+  })
+
+  test("a group of one step, or of only thoughts, shows its rows without the group", () => {
+    const reasoning: SessionMessage.Reasoning = { type: "reasoning", text: "Planning" }
+    const commentary: SessionMessage.Content = { type: "text", text: "Looking around." }
+    expect(ToolDisplay.standsAlone([tool("read", "completed")])).toBe(true)
+    expect(ToolDisplay.standsAlone([{ type: "shell" }])).toBe(true)
+    expect(ToolDisplay.standsAlone([reasoning, reasoning])).toBe(true)
+    expect(ToolDisplay.standsAlone([commentary])).toBe(false)
+    expect(ToolDisplay.standsAlone([reasoning, commentary])).toBe(false)
+    expect(ToolDisplay.standsAlone([tool("read", "completed"), reasoning])).toBe(false)
+    expect(ToolDisplay.standsAlone([tool("read", "completed"), tool("grep", "completed")])).toBe(false)
   })
 
   test("lists unique web search links without trailing punctuation", () => {

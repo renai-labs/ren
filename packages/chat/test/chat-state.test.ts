@@ -59,7 +59,7 @@ describe("visibleTimelineMessages", () => {
     const projection = Projection.project({
       messages: visible,
       busy: true,
-      detail: TimelineDetail.presets[2].value,
+      detail: TimelineDetail.compact,
       pendingInputIDs: new Set([steer.id]),
     })
     expect(projection.activeMessageID).toBe("msg_1")

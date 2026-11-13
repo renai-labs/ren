@@ -147,7 +147,7 @@ function CodeBlockContent({
       style={{ counterReset: `line ${startLine - 1}`, ...style }}
       className={cn(
         // oxlint-disable-next-line ren/require-companion-class -- the code block draws the focus ring around the content
-        "min-h-0 min-w-0 scroll-fade-x scrollbar-thin overflow-auto overscroll-contain p-3 text-start font-mono leading-relaxed outline-none group-has-data-[slot=code-block-footer]/code-block:pb-2 group-has-data-[slot=code-block-header]/code-block:pt-2 group-data-[size=sm]/code-block:p-2.5 group-data-[size=sm]/code-block:group-has-data-[slot=code-block-header]/code-block:pt-1.5 data-wrap:scroll-fade-y data-wrap:wrap-break-word data-wrap:whitespace-pre-wrap",
+        "min-h-0 min-w-0 scroll-fade-x scrollbar-thin overflow-auto overscroll-contain p-3 text-start font-mono text-(length:--ren-code-size) leading-relaxed outline-none group-has-data-[slot=code-block-footer]/code-block:pb-2 group-has-data-[slot=code-block-header]/code-block:pt-2 group-data-[size=sm]/code-block:p-2.5 group-data-[size=sm]/code-block:group-has-data-[slot=code-block-header]/code-block:pt-1.5 data-wrap:scroll-fade-y data-wrap:wrap-break-word data-wrap:whitespace-pre-wrap",
         className,
       )}
       {...props}

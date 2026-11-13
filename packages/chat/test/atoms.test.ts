@@ -69,7 +69,7 @@ test("the timeline atom of a session shows a prompt and its reply as rows", () =
   Effect.gen(function* () {
     const made = yield* setup
     const brain = made.brain
-    const timeline = made.atoms.timeline(brain.id)
+    const timeline = made.atoms.timeline({ root: brain.id })
     yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(timeline)))
     yield* made.until(
       made.atoms.status(brain.id),
@@ -188,7 +188,7 @@ test("the child atom of a subagent session reads its transcript through the root
   Effect.gen(function* () {
     const made = yield* setup
     const brain = made.brain
-    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.timeline(brain.id))))
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.timeline({ root: brain.id }))))
     yield* made.until(
       made.atoms.status(brain.id),
       (value) => AsyncResult.isSuccess(value) && value.value === "connected",

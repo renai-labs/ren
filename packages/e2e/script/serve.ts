@@ -26,9 +26,11 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
+const ScriptedTool = Schema.Struct({ name: Schema.String, input: Schema.Unknown })
+
 const Script = Schema.Struct({
   reply: Schema.optionalKey(Schema.String),
-  tools: Schema.optionalKey(Schema.Array(Schema.Struct({ name: Schema.String, input: Schema.Unknown }))),
+  tools: Schema.optionalKey(Schema.Array(ScriptedTool)),
 })
 
 const held = new Map<string, ReturnType<ReturnType<typeof Shared.stub>["script"]>>()

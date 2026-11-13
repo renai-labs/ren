@@ -1,8 +1,7 @@
-import { DateTime, Option } from "effect"
+import { DateTime } from "effect"
 import { flushSync } from "react-dom"
 import {
   useImperativeHandle,
-  use,
   useRef,
   useState,
   type KeyboardEvent,
@@ -14,62 +13,25 @@ import {
   type WheelEvent,
 } from "react"
 import {
-  AppConnect,
   ChannelReply,
   ChatState,
-  Composer,
-  PatchFiles,
   Projection,
-  ShownFile,
+  TimelineDetail,
   TimelineRow,
   TimelineText,
-  ToolDisplay,
-  ToolState,
   type ChatAtoms,
 } from "@ren/chat"
-import { ChatReact } from "@ren/chat/react"
-import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
 import { AppConnectCard } from "./app-connect.js"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import type { Shell } from "@ren/schema/shell"
-import {
-  IconBrain,
-  IconChevronDown,
-  IconChevronRight,
-  IconClipboardText,
-  IconClock,
-  IconCopy,
-  IconInfoCircle,
-  IconPencil,
-  IconChecklist,
-  IconWebhook,
-} from "@tabler/icons-react"
-import { AsyncResult } from "effect/reactivity"
-import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { Kbd, KbdGroup } from "@ren/ui/kbd"
-import { DiffFile } from "./diff-file.js"
-import { workspacePath } from "./workspace-edits.js"
-import { OpenPanel } from "./open-panel.js"
-import { FileIcon } from "@ren/ui/file-icon"
 import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
-import {
-  Attachment,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-  AttachmentTrigger,
-} from "@ren/ui/attachment"
-import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
-import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
-import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
+import { Message, MessageContent, MessageFooter } from "@ren/ui/message"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -80,40 +42,18 @@ import {
   useMessageScroller,
 } from "@ren/ui/message-scroller"
 import { Spinner } from "@ren/ui/spinner"
-import {
-  Trace,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceDescription,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
-} from "@ren/ui/trace"
 import { DriveFileCards } from "./attachments.js"
-import { QuoteCards, QuoteSelection, type QuoteProps } from "./quote.js"
+import { QuoteSelection, type QuoteProps } from "./quote.js"
 import { Markdown } from "../../components/markdown.js"
-import { toolIcons } from "./tool-icons.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
-import { useSubagentCard } from "./chat-view.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSkeleton } from "../../components/chat-skeleton.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { ImageLightbox } from "../../components/image-lightbox.js"
-import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
-import { ChannelOrigin } from "./channel-origin.js"
 import { useMentionedApps } from "../../lib/use-app.js"
-import type { CatalogApp } from "../../lib/apps.js"
-import { useSmoothText } from "../../lib/use-smooth-text.js"
-import { formatRun, localTimeZone } from "../../lib/schedules.js"
-import { InlineFile } from "./file-chip.js"
-import { WorkspaceImage } from "./workspace-image.js"
-
-interface Person {
-  readonly name: string
-  readonly image: string | undefined
-}
+import { SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
+import { TranscriptBlocks } from "./transcript-blocks.js"
+import { CopyButton, UserMessage, type Person } from "./user-message.js"
 
 export interface TranscriptHandle {
   readonly page: (direction: -1 | 1) => void
@@ -122,8 +62,9 @@ export interface TranscriptHandle {
 
 export interface TranscriptProps {
   readonly handle?: Ref<TranscriptHandle> | undefined
-  readonly view: ChatAtoms.View
   readonly files?: boolean | undefined
+  readonly quote?: QuoteProps | undefined
+  readonly view: ChatAtoms.View
   readonly spaceId?: string | undefined
   readonly messages: ReadonlyArray<SessionMessage.Info>
   readonly rows: ReadonlyArray<TimelineRow.Row>
@@ -142,7 +83,9 @@ export interface TranscriptProps {
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
   readonly onRetry?: ((id: SessionMessage.ID) => void) | undefined
   readonly onRemove?: ((id: SessionMessage.ID) => void) | undefined
-  readonly expanded?: boolean | undefined
+  readonly fold: boolean
+  readonly detail: TimelineDetail.Detail
+  readonly foldMessages?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
@@ -152,536 +95,6 @@ export interface TranscriptProps {
   readonly onChangeModel?: (() => void) | undefined
   readonly onStop?: (() => void) | undefined
   readonly background?: { readonly blocking: boolean; readonly onMove: () => void } | undefined
-  readonly quote?: QuoteProps | undefined
-}
-
-type Step =
-  | {
-      readonly kind: "reasoning"
-      readonly key: string
-      readonly content: SessionMessage.Reasoning
-      readonly running: boolean
-    }
-  | { readonly kind: "tool"; readonly key: string; readonly tool: SessionMessage.Tool }
-  | { readonly kind: "shell"; readonly key: string; readonly message: SessionMessage.Shell }
-  | { readonly kind: "notice"; readonly key: string; readonly message: SessionMessage.Info }
-  | { readonly kind: "text"; readonly key: string; readonly text: string; readonly streaming: boolean }
-
-type Block =
-  | { readonly kind: "user"; readonly key: string; readonly message: SessionMessage.User }
-  | { readonly kind: "steps"; readonly key: string; readonly turn: string; readonly steps: Step[] }
-  | {
-      readonly kind: "answer"
-      readonly key: string
-      readonly turn: string
-      readonly text: string
-      readonly streaming: boolean
-    }
-  | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
-  | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
-  | {
-      readonly kind: "connect"
-      readonly key: string
-      readonly connects: ReadonlyArray<{ readonly appId: string; readonly spaceId: string }>
-    }
-  | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
-
-const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
-
-function stepsOf(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): Step[] | undefined {
-  if (row._tag === "Thinking") {
-    const content = Projection.resolveContent(byId.get(row.ref.messageID), row.ref.partID)
-    return content?.type === "reasoning"
-      ? [{ kind: "reasoning", key: TimelineRow.key(row), content, running: true }]
-      : []
-  }
-  if (row._tag === "Shell") {
-    const message = byId.get(row.messageID)
-    return message?.type === "shell" ? [{ kind: "shell", key: TimelineRow.key(row), message }] : []
-  }
-  if (row._tag !== "AssistantPart") return undefined
-  const group = row.group
-  const refs = group.type === "part" ? [group.ref] : group.refs
-  return refs.flatMap((reference): Step[] => {
-    const message = byId.get(reference.messageID)
-    const key = `${reference.messageID}:${reference.partID}`
-    if (reference.partID === reference.messageID) {
-      if (message?.type === "shell") return [{ kind: "shell", key, message }]
-      return message ? [{ kind: "notice", key, message }] : []
-    }
-    const content = Projection.resolveContent(message, reference.partID)
-    if (content?.type === "reasoning")
-      return [{ kind: "reasoning", key, content, running: streaming(message) && !content.time?.completed }]
-    if (content?.type === "tool") return ToolDisplay.hidden(content) ? [] : [{ kind: "tool", key, tool: content }]
-    return []
-  })
-}
-
-function partBlock(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): Block | undefined {
-  if (row._tag !== "AssistantPart" || row.group.type !== "part") return undefined
-  const message = byId.get(row.group.ref.messageID)
-  const content = Projection.resolveContent(message, row.group.ref.partID)
-  if (content?.type === "text")
-    return {
-      kind: "answer",
-      key: TimelineRow.key(row),
-      turn: row.userMessageID,
-      text: content.text,
-      streaming: streaming(message),
-    }
-  return content?.type === "tool" ? toolBlock(content, TimelineRow.key(row)) : undefined
-}
-
-function toolBlock(content: SessionMessage.Tool, key: string): Block | undefined {
-  if (ChannelReply.shown(content)) return { kind: "reply", key, tool: content }
-  const connects = AppConnect.of(content)
-  if (connects.length > 0) return { kind: "connect", key, connects }
-  const shown = Option.getOrUndefined(ShownFile.of(content))
-  return shown && { kind: "file", key, file: shown }
-}
-
-function pushSteps(blocks: Block[], key: string, turn: string, steps: Step[]) {
-  const last = blocks.at(-1)
-  if (last?.kind === "steps" && last.turn === turn) last.steps.push(...steps)
-  else if (steps.length > 0) blocks.push({ kind: "steps", key, turn, steps })
-}
-
-function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string, SessionMessage.Info>) {
-  return rows.reduce<Block[]>((blocks, row) => {
-    if (row._tag === "TurnGap") return blocks
-    if (row._tag === "UserMessage") {
-      const message = byId.get(row.userMessageID)
-      if (message?.type === "user") blocks.push({ kind: "user", key: TimelineRow.key(row), message })
-      return blocks
-    }
-    const part = partBlock(row, byId)
-    const steps = part ? undefined : stepsOf(row, byId)
-    if (part) blocks.push(part)
-    else if (steps) pushSteps(blocks, TimelineRow.key(row), row.userMessageID, steps)
-    else blocks.push({ kind: "row", key: TimelineRow.key(row), row })
-    return blocks
-  }, [])
-}
-
-function groupTurns(blocks: ReadonlyArray<Block>, live: (turn: string) => boolean) {
-  const lastSteps = new Map(
-    blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
-  )
-  return blocks.reduce<Block[]>((grouped, block, index) => {
-    if (block.kind !== "steps" && block.kind !== "answer") {
-      grouped.push(block)
-      return grouped
-    }
-    if (block.kind === "answer" && (live(block.turn) || (lastSteps.get(block.turn) ?? -1) < index)) {
-      grouped.push(block)
-      return grouped
-    }
-    const items: Step[] =
-      block.kind === "steps"
-        ? block.steps
-        : [{ kind: "text", key: block.key, text: block.text, streaming: block.streaming }]
-    const group = live(block.turn)
-      ? grouped.find((each) => each.kind === "steps" && each.turn === block.turn)
-      : grouped.at(-1)
-    if (group?.kind === "steps" && group.turn === block.turn) group.steps.push(...items)
-    else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
-    return grouped
-  }, [])
-}
-
-const isPasteBlock = (text: string) => text.length >= 2000 || text.split("\n").length >= 20
-
-function splitPasted(text: string) {
-  const separator = text.indexOf("\n\n")
-  const head = separator === -1 ? text : text.slice(0, separator)
-  const tail = separator === -1 ? "" : text.slice(separator + 2)
-  if (tail && isPasteBlock(tail) && !isPasteBlock(head)) return { typed: head, pasted: tail }
-  if (isPasteBlock(text)) return { typed: "", pasted: text }
-  return { typed: text, pasted: undefined }
-}
-
-function PastedChip(props: { text: string }) {
-  const [open, setOpen] = useState(false)
-  const lines = props.text.split("\n").length
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <Attachment size="sm">
-        <AttachmentMedia>
-          <IconClipboardText />
-        </AttachmentMedia>
-        <AttachmentContent>
-          <AttachmentTitle>Pasted text</AttachmentTitle>
-          <AttachmentDescription className="tabular-nums">
-            {lines === 1 ? "1 line" : `${lines} lines`}
-          </AttachmentDescription>
-        </AttachmentContent>
-        <AttachmentTrigger aria-label={open ? "Hide pasted text" : "Show pasted text"} onClick={() => setOpen(!open)} />
-      </Attachment>
-      {open ? (
-        <CodeBlock size="sm" className="w-full">
-          <CodeBlockContent wrap className="max-h-64">
-            {props.text}
-          </CodeBlockContent>
-        </CodeBlock>
-      ) : null}
-    </div>
-  )
-}
-
-function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> }) {
-  return (
-    <AttachmentGroup className="max-w-full justify-end-safe">
-      {props.files.map((file, index) => {
-        const image = file.mime.startsWith("image/") && file.source.type === "inline" && file.data
-        return (
-          // oxlint-disable-next-line react/no-array-index-key -- two attachments can share a name and type
-          <Attachment key={`${file.name ?? file.mime}-${index}`} size="sm">
-            {image ? (
-              <AttachmentMedia variant="image">
-                <ImageLightbox
-                  src={`data:${file.mime};base64,${file.data}`}
-                  alt={file.name ?? "Image"}
-                  className="size-full cursor-zoom-in"
-                >
-                  <img src={`data:${file.mime};base64,${file.data}`} alt={file.name ?? "Image"} />
-                </ImageLightbox>
-              </AttachmentMedia>
-            ) : (
-              <AttachmentMedia>
-                <FileIcon name={file.name ?? ""} mime={file.mime} className="size-5" />
-              </AttachmentMedia>
-            )}
-            <AttachmentContent>
-              <AttachmentTitle>{file.name ?? "Attachment"}</AttachmentTitle>
-              <AttachmentDescription>{file.mime}</AttachmentDescription>
-            </AttachmentContent>
-          </Attachment>
-        )
-      })}
-    </AttachmentGroup>
-  )
-}
-
-function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: string) => void }) {
-  const [text, setText] = useState(props.text)
-  const save = () => {
-    if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
-    else props.onSave(text.trim())
-  }
-  return (
-    <div className="flex flex-col gap-1.5">
-      <InputGroup className="rounded-xl bg-card dark:bg-card">
-        <InputGroupTextarea
-          value={text}
-          aria-label="Edit message"
-          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens because the person asked to edit
-          autoFocus
-          className="max-h-60 min-h-16 px-4 pt-3 text-base/relaxed"
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") props.onCancel()
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
-            event.preventDefault()
-            save()
-          }}
-        />
-        <InputGroupAddon align="block-end" className="justify-end gap-2 px-3 pt-0 pb-3">
-          <Button variant="ghost" size="sm" onClick={props.onCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={save}>
-            Send
-          </Button>
-        </InputGroupAddon>
-      </InputGroup>
-      <p className="px-1 text-xs text-muted-foreground">
-        Sending replaces this message and removes everything after it.
-      </p>
-    </div>
-  )
-}
-
-function CopyButton(props: { text: string }) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      className="text-muted-foreground"
-      aria-label="Copy"
-      onClick={() => void navigator.clipboard.writeText(props.text)}
-    >
-      <IconCopy />
-    </Button>
-  )
-}
-
-function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["schedule"]> }) {
-  return (
-    <Marker className="justify-end text-xs">
-      <MarkerIcon>
-        <IconClock />
-      </MarkerIcon>
-      <MarkerContent>
-        Scheduled ·{" "}
-        <Link to="/schedules" search={{ schedule: props.schedule.scheduleId }}>
-          {props.schedule.name}
-        </Link>{" "}
-        · {formatRun(props.schedule.scheduledAt, localTimeZone())}
-      </MarkerContent>
-    </Marker>
-  )
-}
-
-function WebhookOrigin(props: { webhook: NonNullable<SessionMessage.User["webhook"]>; spaceId: string | undefined }) {
-  return (
-    <Marker className="justify-end text-xs">
-      <MarkerIcon>
-        <IconWebhook />
-      </MarkerIcon>
-      <MarkerContent>
-        Webhook · {props.webhook.name} · {formatRun(props.webhook.receivedAt, localTimeZone())}
-        {props.spaceId ? (
-          <>
-            {" · "}
-            <Link
-              to="/spaces/$spaceId/webhooks/$webhookId"
-              params={{ spaceId: props.spaceId, webhookId: props.webhook.webhookId }}
-              search={{ tab: "requests", request: props.webhook.requestId }}
-            >
-              View request
-            </Link>
-          </>
-        ) : null}
-      </MarkerContent>
-    </Marker>
-  )
-}
-
-const requestStart = "\n\n<webhook_request>"
-
-function WebhookRequest(props: { request: string }) {
-  const [open, setOpen] = useState(false)
-  const bytes = new TextEncoder().encode(props.request).length
-  return (
-    <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
-      <Button
-        variant="ghost"
-        className="justify-start gap-2 rounded-none px-3.5"
-        aria-expanded={open}
-        onClick={() => setOpen((previous) => !previous)}
-      >
-        {open ? <IconChevronDown data-icon="inline-start" /> : <IconChevronRight data-icon="inline-start" />}
-        Request
-        <span className="text-muted-foreground">{bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`}</span>
-      </Button>
-      {open ? (
-        <CodeBlock size="sm" className="rounded-none border-0">
-          <CodeBlockContent wrap className="max-h-80">
-            {props.request}
-          </CodeBlockContent>
-        </CodeBlock>
-      ) : null}
-    </div>
-  )
-}
-
-function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) {
-  const [open, setOpen] = useState(false)
-  const rest = props.task.brief
-  return (
-    <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
-      <div className="relative flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 ease-out hover:bg-muted/50">
-        <IconChecklist className="size-4.5 shrink-0 text-muted-foreground" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-xs text-muted-foreground">
-            Task assigned<span className="font-mono"> · {props.task.identifier}</span>
-          </span>
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: props.task.taskId }}
-            className="truncate font-medium after:absolute after:inset-0"
-          >
-            {props.task.title}
-          </Link>
-        </div>
-        {rest ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="relative z-10 text-muted-foreground"
-            aria-label={open ? "Hide the brief" : "Show the brief"}
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-          >
-            <IconChevronDown className={cn("transition-transform duration-150 ease-out", open && "rotate-180")} />
-          </Button>
-        ) : null}
-      </div>
-      {open && rest ? (
-        <p className="max-h-72 overflow-y-auto overscroll-contain border-t px-3.5 py-3 whitespace-pre-wrap text-muted-foreground">
-          {rest}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined; subject: string }) {
-  if (props.message.task) return <TaskHandoff task={props.message.task} />
-  const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
-  if (at >= 0)
-    return (
-      <>
-        <UserText
-          message={props.message}
-          text={props.message.text.slice(0, at)}
-          spaceId={props.spaceId}
-          subject={props.subject}
-        />
-        <WebhookRequest request={props.message.text.slice(at + 2)} />
-      </>
-    )
-  return (
-    <UserText
-      message={props.message}
-      text={props.message.presentation?.displayText}
-      spaceId={props.spaceId}
-      subject={props.subject}
-    />
-  )
-}
-
-function UserText(props: {
-  message: SessionMessage.User
-  text?: string | undefined
-  spaceId: string | undefined
-  subject: string
-}) {
-  const parts = splitPasted(props.text ?? props.message.text)
-  const apps = useMentionedApps(parts.typed)
-  const files = props.message.files ?? []
-  const uploads = props.message.uploads ?? []
-  return (
-    <>
-      {uploads.length > 0 ? (
-        <DriveFileCards spaceId={props.spaceId} files={uploads} className="max-w-full justify-end-safe" />
-      ) : null}
-      {files.length > 0 ? <FileChips files={files} /> : null}
-      {props.message.presentation ? <QuoteCards comments={props.message.presentation.comments} /> : null}
-      {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
-      {parts.typed ? (
-        <Bubble variant="muted" align="end">
-          <BubbleContent
-            data-searchable=""
-            data-quotable={props.subject}
-            className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
-          >
-            {withAppMentions(parts.typed, apps)}
-          </BubbleContent>
-        </Bubble>
-      ) : null}
-    </>
-  )
-}
-
-const statusLabels: Partial<Record<ChatState.PendingStatus, string>> = {
-  starting: "Pending",
-  steering: "Pending",
-  stranded: "Pending",
-  unreachable: "Can’t reach Ren. Trying again…",
-  unsent: "Not sent",
-}
-
-function UserFooter(props: {
-  text: string
-  status: ChatState.PendingStatus | undefined
-  onEdit?: (() => void) | undefined
-  onRetry?: (() => void) | undefined
-  onRemove?: (() => void) | undefined
-}) {
-  const label = props.status && statusLabels[props.status]
-  const unsent = props.status === "unsent"
-  return (
-    <MessageFooter className="justify-end gap-1">
-      {label ? (
-        <span className={cn("px-1 text-xs", unsent ? "text-destructive" : "text-muted-foreground")}>{label}</span>
-      ) : null}
-      {unsent && props.onRetry ? (
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRetry}>
-          Retry
-        </Button>
-      ) : null}
-      {unsent && props.onRemove ? (
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onRemove}>
-          Remove
-        </Button>
-      ) : null}
-      {props.onEdit ? (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Edit"
-          onClick={props.onEdit}
-        >
-          <IconPencil />
-        </Button>
-      ) : null}
-      <CopyButton text={props.text} />
-    </MessageFooter>
-  )
-}
-
-function UserMessage(props: {
-  message: SessionMessage.User
-  spaceId: string | undefined
-  person: Person
-  status: ChatState.PendingStatus | undefined
-  editing: boolean
-  onEdit?: (() => void) | undefined
-  onRetry?: (() => void) | undefined
-  onRemove?: (() => void) | undefined
-  onCancel: () => void
-  onSave: (text: string) => void
-}) {
-  return (
-    <Message
-      align="end"
-      data-turn={props.message.id}
-      className={cn("scroll-mt-16", props.editing ? "w-full @transcript:-mr-13.5" : "w-auto @transcript:-mr-13.5")}
-    >
-      <MessageAvatar className="ml-3.5">
-        <Avatar size="sm">
-          {props.person.image ? <AvatarImage src={props.person.image} alt="" /> : null}
-          <AvatarFallback>{props.person.name.charAt(0)}</AvatarFallback>
-        </Avatar>
-      </MessageAvatar>
-      <MessageContent className={props.editing ? "w-full" : undefined}>
-        <MessageHeader className="px-0">{props.person.name}</MessageHeader>
-        {props.message.schedule ? <ScheduleOrigin schedule={props.message.schedule} /> : null}
-        {props.message.webhook ? <WebhookOrigin webhook={props.message.webhook} spaceId={props.spaceId} /> : null}
-        {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}
-        {props.editing ? (
-          <EditPrompt
-            text={props.message.presentation?.displayText ?? props.message.text}
-            onCancel={props.onCancel}
-            onSave={props.onSave}
-          />
-        ) : (
-          <>
-            <UserBody message={props.message} spaceId={props.spaceId} subject={`${props.person.name}'s message`} />
-            <UserFooter
-              text={Composer.copyText(props.message)}
-              status={props.status}
-              onEdit={props.onEdit}
-              onRetry={props.onRetry}
-              onRemove={props.onRemove}
-            />
-          </>
-        )}
-      </MessageContent>
-    </Message>
-  )
 }
 
 function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
@@ -706,399 +119,6 @@ function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
         </Bubble>
       </MessageContent>
     </Message>
-  )
-}
-
-function Output(props: { text: string; failed?: boolean | undefined; quotable?: string | undefined }) {
-  return (
-    <CodeBlock size="sm" variant={props.failed ? "destructive" : "default"}>
-      <CodeBlockContent wrap className="max-h-64" data-quotable={props.quotable}>
-        {props.text}
-      </CodeBlockContent>
-    </CodeBlock>
-  )
-}
-
-const traceStatus = (state: { running?: boolean | undefined; failed?: boolean | undefined }) => {
-  if (state.running) return "running"
-  return state.failed ? "error" : undefined
-}
-
-function Expandable(props: { content: ReactNode; className?: string | undefined; children: ReactNode }) {
-  if (!props.content) return props.children
-  return (
-    <TraceCollapsible>
-      <TraceCollapsibleTrigger>{props.children}</TraceCollapsibleTrigger>
-      <TraceCollapsibleContent className={props.className}>{props.content}</TraceCollapsibleContent>
-    </TraceCollapsible>
-  )
-}
-
-function StepDetail(props: {
-  quotable: string
-  output: string | undefined
-  failed: boolean | undefined
-  images: ReadonlyArray<SessionMessage.ToolFileContent>
-}) {
-  const images = props.images
-  return (
-    <>
-      {images.map((image) => (
-        <ImageLightbox key={image.uri} src={image.uri} alt={image.name?.split("/").at(-1) ?? "Image"}>
-          <img
-            src={image.uri}
-            alt={image.name ?? "Image"}
-            className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
-          />
-        </ImageLightbox>
-      ))}
-      {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
-        <Output text={props.output} failed={props.failed} quotable={props.quotable} />
-      ) : null}
-    </>
-  )
-}
-
-function StepRow(props: {
-  icon: ReactNode
-  verb: string
-  subject?: string | undefined
-  running?: boolean
-  failed?: boolean
-  output?: string | undefined
-  images?: ReadonlyArray<SessionMessage.ToolFileContent> | undefined
-}) {
-  const images = props.images ?? []
-  const detail =
-    props.output || images.length > 0 ? (
-      <StepDetail
-        quotable={`the output of ${props.subject ?? props.verb}`}
-        output={props.output}
-        failed={props.failed}
-        images={images}
-      />
-    ) : undefined
-  return (
-    <Trace>
-      <Expandable content={detail} className="flex flex-col gap-2">
-        <TraceLine status={traceStatus(props)}>
-          <TraceIcon>{props.running ? <Spinner /> : props.icon}</TraceIcon>
-          <TraceTitle className="shrink-0">{props.verb}</TraceTitle>
-          {props.subject ? (
-            <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{props.subject}</TraceDescription>
-          ) : null}
-        </TraceLine>
-      </Expandable>
-    </Trace>
-  )
-}
-
-function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: ReadonlyArray<PatchFiles.File> }) {
-  const openPanel = use(OpenPanel)
-  const additions = props.files.reduce((total, file) => total + file.additions, 0)
-  const deletions = props.files.reduce((total, file) => total + file.deletions, 0)
-  return (
-    <Trace>
-      <TraceCollapsible>
-        <TraceCollapsibleTrigger>
-          <TraceLine>
-            <TraceIcon>{props.icon}</TraceIcon>
-            <TraceTitle className="shrink-0">{ToolDisplay.label(props.tool)}</TraceTitle>
-            <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">
-              {ToolDisplay.subtitle(props.tool)}
-            </TraceDescription>
-            <TraceDescription>
-              +{additions} −{deletions}
-            </TraceDescription>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-2">
-          {props.files.map((file) => (
-            <DiffFile
-              key={file.path}
-              view={file.view}
-              capped
-              action={
-                openPanel ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="-mr-2 text-muted-foreground"
-                    onClick={() => openPanel({ kind: "changes", path: workspacePath(file.path) })}
-                  >
-                    Open in Changes
-                  </Button>
-                ) : undefined
-              }
-            />
-          ))}
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
-}
-
-const movedToBackground = (tool: SessionMessage.Tool) =>
-  tool.state.status === "completed" && ToolState.metadata(tool).status === "running"
-
-function shellVerb(tool: SessionMessage.Tool, options: { readonly running: boolean }) {
-  if (!movedToBackground(tool)) return ToolDisplay.label(tool)
-  return options.running ? "Running in background" : "Ran in background"
-}
-
-function LiveShell(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; shellID: Shell.ID }) {
-  const pending = props.tool.state.status === "streaming" || props.tool.state.status === "running"
-  const live = ChatReact.useShellRunning(props.view.root, props.shellID)
-  const running = pending || live
-  const streamed = AsyncResult.getOrElse(
-    ChatReact.useShellOutput({ ...props.view, shellID: props.shellID, running }),
-    () => "",
-  )
-  const failed = !running && ToolDisplay.status(props.tool) === "failed"
-  return (
-    <StepRow
-      icon={<toolIcons.command />}
-      verb={shellVerb(props.tool, { running })}
-      subject={ToolDisplay.subtitle(props.tool)}
-      running={running}
-      failed={failed}
-      output={streamed ? TimelineText.shellOutput(streamed) : ToolDisplay.output(props.tool)}
-    />
-  )
-}
-
-type Card = ReturnType<typeof useSubagentCard>
-
-function subagentTitle(card: Card) {
-  if (card.needsInput) return "Needs your input"
-  if (card.status === "failed") return "Failed to delegate"
-  if (card.background) return card.status === "running" ? "Running in background" : "Ran in background"
-  return card.status === "running" || card.status === "delegating" ? "Delegating" : "Delegated"
-}
-
-function subagentState(card: Card, tool: SessionMessage.Tool) {
-  const failed = card.status === "failed"
-  return {
-    child: card.child?.startsWith("ses_") ? Session.ID.make(card.child) : undefined,
-    running: card.status === "running" || card.status === "delegating",
-    failed,
-    error: failed ? (ToolDisplay.error(tool) ?? ToolDisplay.output(tool)) : undefined,
-  }
-}
-
-function SubagentError(props: { error: string; onOpen: (() => void) | undefined }) {
-  return (
-    <>
-      <Output text={props.error} failed />
-      {props.onOpen ? (
-        <Button variant="link" size="sm" className="px-0" onClick={props.onOpen}>
-          Open subagent
-        </Button>
-      ) : null}
-    </>
-  )
-}
-
-function Opener(props: { label: string; onOpen: (() => void) | undefined; children: ReactNode }) {
-  if (!props.onOpen) return props.children
-  return (
-    // oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the subagent, and Trace styles its button
-    <button type="button" aria-label={props.label} onClick={props.onOpen}>
-      {props.children}
-    </button>
-  )
-}
-
-function SubagentStep(props: {
-  tool: SessionMessage.Tool
-  view: ChatAtoms.View
-  onOpenChild: (id: Session.ID) => void
-}) {
-  const card = useSubagentCard(props.view, props.tool)
-  const state = subagentState(card, props.tool)
-  const child = state.child
-  const open = child ? () => props.onOpenChild(child) : undefined
-  const error = state.error
-  const running = state.running
-  return (
-    <Trace>
-      <Opener label={`Open ${card.title}`} onOpen={error ? undefined : open}>
-        <Expandable
-          content={error ? <SubagentError error={error} onOpen={open} /> : undefined}
-          className="flex flex-col items-start gap-2"
-        >
-          <TraceLine status={traceStatus(state)}>
-            <TraceIcon>{running ? <Spinner /> : <toolIcons.agent />}</TraceIcon>
-            <TraceTitle className="shrink-0">{subagentTitle(card)}</TraceTitle>
-            <TraceDescription className="min-w-0 shrink truncate">{card.description ?? card.title}</TraceDescription>
-            {card.activity && running ? (
-              <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{card.activity}</TraceDescription>
-            ) : null}
-            {open && !error ? (
-              <TraceIcon>
-                <IconChevronRight />
-              </TraceIcon>
-            ) : null}
-          </TraceLine>
-        </Expandable>
-      </Opener>
-    </Trace>
-  )
-}
-
-function ToolStep(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
-  const tool = props.tool
-  const shellID = ToolState.liveShellID(tool)
-  if (shellID) return <LiveShell tool={tool} view={props.view} shellID={shellID} />
-  const status = ToolDisplay.status(tool)
-  const error = ToolDisplay.error(tool)
-  const Icon = toolIcons[ToolDisplay.kind(tool)]
-  if (tool.name === "subagent" || tool.name === "task")
-    return <SubagentStep tool={tool} view={props.view} onOpenChild={props.onOpenChild} />
-  const changed =
-    PatchFiles.isFileChange(tool) && status === "completed" ? PatchFiles.patchFiles(PatchFiles.toolFiles(tool)) : []
-  if (changed.length > 0) return <DiffStep tool={tool} icon={<Icon />} files={changed} />
-  return (
-    <StepRow
-      icon={<Icon />}
-      verb={ToolDisplay.label(tool)}
-      subject={[ToolDisplay.subtitle(tool), ToolDisplay.matches(tool)].filter(Boolean).join(" · ") || undefined}
-      running={status === "running"}
-      failed={status === "failed"}
-      output={error ?? ToolDisplay.output(tool)}
-      images={
-        "content" in tool.state
-          ? tool.state.content.filter(
-              (item): item is SessionMessage.ToolFileContent => item.type === "file" && item.mime.startsWith("image/"),
-            )
-          : []
-      }
-    />
-  )
-}
-
-function ReasoningStep(props: { step: Extract<Step, { kind: "reasoning" }> }) {
-  const text = props.step.content.text.trim()
-  return (
-    <Trace>
-      <Expandable content={text ? <Markdown className="text-sm/relaxed">{text}</Markdown> : undefined}>
-        <TraceLine status={props.step.running ? "running" : undefined}>
-          <TraceIcon>
-            <IconBrain />
-          </TraceIcon>
-          <TraceTitle>{props.step.running ? "Thinking" : "Thought"}</TraceTitle>
-        </TraceLine>
-      </Expandable>
-    </Trace>
-  )
-}
-
-function ShellStep(props: { message: SessionMessage.Shell }) {
-  const message = props.message
-  const error = TimelineText.shellError(message)
-  return (
-    <StepRow
-      icon={<toolIcons.command />}
-      verb={message.status === "running" ? "Running" : "Ran"}
-      subject={message.command}
-      running={message.status === "running"}
-      failed={Boolean(error)}
-      output={message.output?.output ? TimelineText.shellOutput(message.output.output) : (error ?? "No output")}
-    />
-  )
-}
-
-function NoticeStep(props: { message: SessionMessage.Info }) {
-  const notice = TimelineText.notice(props.message)
-  if (!notice) return null
-  return (
-    <Trace>
-      <TraceLine>
-        <TraceIcon>
-          <IconInfoCircle />
-        </TraceIcon>
-        <TraceTitle>{notice.title}</TraceTitle>
-        {notice.detail ? (
-          <TraceDescription className="min-w-0 shrink truncate">{notice.detail}</TraceDescription>
-        ) : null}
-      </TraceLine>
-    </Trace>
-  )
-}
-
-function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
-  const step = props.step
-  if (step.kind === "reasoning") return <ReasoningStep step={step} />
-  if (step.kind === "tool") return <ToolStep tool={step.tool} view={props.view} onOpenChild={props.onOpenChild} />
-  if (step.kind === "text") return null
-  if (step.kind === "shell") return <ShellStep message={step.message} />
-  return <NoticeStep message={step.message} />
-}
-
-function workedLabel(props: { running: boolean; workedFor: string | undefined }) {
-  if (props.running) return "Working"
-  return props.workedFor ? `Worked for ${props.workedFor}` : "Worked"
-}
-
-function Steps(props: {
-  expanded?: boolean | undefined
-  steps: ReadonlyArray<Step>
-  workedFor: string | undefined
-  running: boolean
-  view: ChatAtoms.View
-  files: boolean
-  onOpenChild: (id: Session.ID) => void
-}) {
-  const backgrounded = props.steps.filter((step) => step.kind === "tool" && movedToBackground(step.tool))
-  const steps = props.steps.filter((step) => !backgrounded.includes(step))
-  const count = steps.filter((step) => step.kind !== "text").length
-  const runs = steps.reduce<Array<{ key: string; text?: Extract<Step, { kind: "text" }>; steps: Step[] }>>(
-    (all, step) => {
-      const last = all.at(-1)
-      if (step.kind === "text") all.push({ key: step.key, text: step, steps: [] })
-      else if (last && !last.text) last.steps.push(step)
-      else all.push({ key: step.key, steps: [step] })
-      return all
-    },
-    [],
-  )
-  return (
-    <Trace>
-      <TraceCollapsible defaultOpen={props.expanded === true}>
-        <TraceCollapsibleTrigger>
-          <TraceLine status={props.running ? "running" : undefined}>
-            <TraceIcon>
-              <IconClock />
-            </TraceIcon>
-            <TraceTitle>{workedLabel(props)}</TraceTitle>
-            <TraceDescription>{count === 1 ? "1 step" : `${count} steps`}</TraceDescription>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-3">
-          {runs.map((run) =>
-            run.text ? (
-              <SmoothMarkdown
-                key={run.key}
-                text={run.text.text}
-                streaming={run.text.streaming}
-                root={props.view.root}
-                files={props.files}
-                className="text-sm/relaxed text-foreground"
-              />
-            ) : (
-              <Trace key={run.key}>
-                {run.steps.map((step) => (
-                  <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
-                ))}
-              </Trace>
-            ),
-          )}
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-      {backgrounded.map((step) => (
-        <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
-      ))}
-    </Trace>
   )
 }
 
@@ -1209,6 +229,7 @@ interface Context {
 
 function UserBlock(props: {
   message: SessionMessage.User
+  rowKey: string
   transcript: TranscriptProps
   editing: boolean
   onEditing: (id: string | undefined) => void
@@ -1226,6 +247,8 @@ function UserBlock(props: {
     <UserMessage
       message={message}
       spaceId={transcript.spaceId}
+      fold={transcript.foldMessages === true}
+      reveal={transcript.find?.match?.row === props.rowKey}
       person={person}
       status={status}
       editing={props.editing}
@@ -1238,38 +261,6 @@ function UserBlock(props: {
         edit?.(message, text)
       }}
     />
-  )
-}
-
-function SmoothMarkdown(props: {
-  text: string
-  streaming: boolean
-  className: string
-  apps?: ReadonlyArray<CatalogApp> | undefined
-  root?: Session.ID | undefined
-  files?: boolean | undefined
-  images?: ReadonlyMap<string, string> | undefined
-}) {
-  const text = useSmoothText(props.text, { streaming: props.streaming })
-  const root = props.root
-  return (
-    <Markdown
-      streaming={props.streaming || text.length < props.text.length}
-      apps={props.apps}
-      className={props.className}
-      workspaceImage={
-        root
-          ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
-          : undefined
-      }
-      fileReference={
-        root && props.files && !props.streaming
-          ? (text, code) => <InlineFile root={root} text={text} code={code} />
-          : undefined
-      }
-    >
-      {text}
-    </Markdown>
   )
 }
 
@@ -1326,7 +317,7 @@ function AnswerBlock(props: {
 }
 
 function BlockView(props: {
-  block: Block
+  block: TranscriptBlocks.Block
   transcript: TranscriptProps
   context: Context
   editing: string | undefined
@@ -1340,6 +331,7 @@ function BlockView(props: {
     return (
       <UserBlock
         message={block.message}
+        rowKey={block.key}
         transcript={props.transcript}
         editing={props.editing === block.message.id}
         onEditing={props.onEditing}
@@ -1349,15 +341,17 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent>
-          <Steps
-            expanded={props.transcript.expanded}
-            steps={block.steps}
-            running={props.activeTurn === block.turn}
-            workedFor={props.workedFor(block.turn)}
-            view={props.transcript.view}
-            files={props.transcript.files === true}
-            onOpenChild={props.transcript.onOpenChild}
-          />
+          {props.transcript.fold ? (
+            <Steps
+              steps={block.steps}
+              running={props.activeTurn === block.turn}
+              workedFor={props.workedFor(block.turn)}
+            />
+          ) : (
+            <div className="flex flex-col gap-3">
+              <StepRuns steps={block.steps} />
+            </div>
+          )}
         </MessageContent>
       </Message>
     )
@@ -1373,6 +367,16 @@ function BlockView(props: {
       />
     )
   if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
+  if (block.kind === "empty")
+    return (
+      <Message>
+        <MessageContent>
+          <Marker variant="default">
+            <MarkerContent>Ren sent an empty response.</MarkerContent>
+          </Marker>
+        </MessageContent>
+      </Message>
+    )
   if (block.kind === "connect")
     return (
       <Message>
@@ -1456,7 +460,7 @@ function WorkingMarker(props: { busy: boolean; working: boolean; background: Tra
 
 const liveItems = 20
 
-function useEasedSend(blocks: ReadonlyArray<Block>) {
+function useEasedSend(blocks: ReadonlyArray<TranscriptBlocks.Block>) {
   const sent = blocks.filter((block) => block.kind === "user").length
   const [opened, setOpened] = useState(sent)
   if (sent < opened) setOpened(sent)
@@ -1472,8 +476,6 @@ function useWatchedTurns(running: string | undefined) {
 const scrollUpKeys = new Set(["ArrowUp", "PageUp", "Home"])
 
 const bottomSlack = 8
-
-const pageStep = 0.9
 
 const atBottom = (viewport: HTMLElement) =>
   viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= bottomSlack
@@ -1517,19 +519,21 @@ export function Transcript(props: TranscriptProps) {
     return (
       <div className="min-h-0 flex-1 overflow-hidden">
         {props.more && !props.loadingHistory ? <LoadEarlier onVisible={props.onLoadMore} /> : null}
-        <div className="mx-auto w-full max-w-3xl p-6">
+        <div className="mx-auto w-full max-w-(--container-chat) p-6">
           <MessagesSkeleton />
         </div>
       </div>
     )
   return (
-    <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
-      <TranscriptScroller transcript={props} follow={follow} />
-    </MessageScrollerProvider>
+    <StepsProvider view={props.view} detail={props.detail} files={props.files === true} onOpenChild={props.onOpenChild}>
+      <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
+        <TranscriptScroller transcript={props} follow={follow} />
+      </MessageScrollerProvider>
+    </StepsProvider>
   )
 }
 
-function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Block> }) {
+function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<TranscriptBlocks.Block> }) {
   const match = props.find.match
   const row = props.blocks.find(
     (block) =>
@@ -1562,7 +566,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
       const element = viewport.current
       if (!element) return
       if (direction < 0) pause(element)
-      element.scrollBy({ top: direction * element.clientHeight * pageStep })
+      element.scrollBy({ top: direction * element.clientHeight * 0.9 })
     },
     toEnd,
   }))
@@ -1571,7 +575,11 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
   const turns = context.turns
   const activeTurn = props.busy ? props.activeMessageID : undefined
   const watched = useWatchedTurns(activeTurn)
-  const blocks = groupTurns(blocksOf(props.rows, byId), watched.live)
+  const blocks = TranscriptBlocks.withEmptyReplies(
+    TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(props.rows, byId), { live: watched.live, fold: props.fold }),
+    turns,
+    activeTurn,
+  )
   const easing = useEasedSend(blocks)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(
@@ -1621,7 +629,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
         }}
       >
         {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
-        <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
+        <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
           {blocks.map((block, index) => (
             <MessageScrollerItem
               key={block.key}

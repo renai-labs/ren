@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Switch } from "@ren/ui/switch"
+import { Preference } from "../../lib/preference.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
@@ -13,16 +14,35 @@ import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import {
   backgroundActivities,
-  Choice,
   deliveries,
-  details,
   PasswordDialog,
   ThemePicker,
+  timelineWidths,
 } from "../../components/settings-shared.js"
+import { ChoiceRow, SwitchRow } from "../../components/preference-rows.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
+import { AppearancePreferences } from "../../lib/appearance-preferences.js"
+import { TimelineDetailSetting } from "./timeline-detail-setting.js"
+import { TypographySection } from "./typography-section.js"
+
+const resettable = [
+  AppearancePreferences.theme,
+  AppearancePreferences.uiFont,
+  AppearancePreferences.uiSize,
+  AppearancePreferences.codeFont,
+  AppearancePreferences.codeSize,
+  ChatPreferences.timelineDetail,
+  ChatPreferences.foldTurns,
+  ChatPreferences.foldMessages,
+  ChatPreferences.timelineWidth,
+  ChatPreferences.backgroundActivity,
+  ChatPreferences.followUp,
+  ChatPreferences.notifications,
+  TimeZone.chosen,
+]
 
 const notificationRows = [
   { kind: "finished", title: "Ren finishes", description: "When Ren is done." },
@@ -34,14 +54,12 @@ const notificationRows = [
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
   const me = useMe()
-  const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
-  const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
-  const [backgroundActivity, setBackgroundActivity] = useState(() =>
-    ChatPreferences.backgroundActivity.read(platform.storage),
-  )
-  const [notifications, setNotifications] = useState(() => ChatPreferences.notifications.read(platform.storage))
+  const notifications = Preference.usePreference(ChatPreferences.notifications)
   const [permission, setPermission] = useState(() => platform.notificationPermission?.())
-  const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
+  const timeZone = Preference.usePreference(TimeZone.chosen) ?? ""
+  const setPreference = Preference.useSetPreference()
+  const allDefault = Preference.useAllDefault(resettable)
+  const reset = Preference.useReset(resettable)
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const result = await auth.updateUser({ name })
@@ -74,21 +92,6 @@ export function PreferencesPage() {
     resetSession(queryClient)
     await navigate({ to: "/" })
   }
-  const chooseDetail = (value: string) => {
-    const next = value === "detailed" ? "detailed" : "compact"
-    ChatPreferences.detail.write(platform.storage, next)
-    setDetail(next)
-  }
-  const chooseFollowUp = (value: string) => {
-    const next = value === "queue" ? "queue" : "steer"
-    ChatPreferences.followUp.write(platform.storage, next)
-    setFollowUp(next)
-  }
-  const chooseBackgroundActivity = (value: string) => {
-    const next = value === "off" || value === "center" || value === "right" ? value : "left"
-    ChatPreferences.backgroundActivity.write(platform.storage, next)
-    setBackgroundActivity(next)
-  }
   const changeNotification = async (
     key: ChatPreferences.NotificationKind | "sound",
     change: { readonly enabled: boolean },
@@ -98,18 +101,30 @@ export function PreferencesPage() {
       setPermission(platform.notificationPermission?.())
       if (granted === false) return
     }
-    const next = { ...notifications, [key]: change.enabled }
-    ChatPreferences.notifications.write(platform.storage, next)
-    setNotifications(next)
+    setPreference(ChatPreferences.notifications, {
+      ...ChatPreferences.notifications.read(platform.storage),
+      [key]: change.enabled,
+    })
   }
   return (
-    <Page title="Preferences">
+    <Page
+      title="Preferences"
+      actions={
+        <Button
+          variant="outline"
+          disabled={allDefault}
+          onClick={() => {
+            const undo = reset()
+            toast.success("Preferences reset to defaults", { action: { label: "Undo", onClick: undo } })
+          }}
+        >
+          Reset to defaults
+        </Button>
+      }
+    >
       <Rows>
         {[
-          <Row key="email" title="Email" description="Contact support to change.">
-            <span className="text-sm text-muted-foreground">{user.email}</span>
-          </Row>,
-          <Row key="photo" title="Photo" description="Shown beside your name across Ren.">
+          <Row key="photo" title="Photo">
             <AvatarPicker
               kind="person"
               label="Your photo"
@@ -126,55 +141,51 @@ export function PreferencesPage() {
               onCommit={(name: string) => rename.mutateAsync(name)}
             />
           </Row>,
+          <Row key="email" title="Email" description="Contact support to change.">
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+          </Row>,
         ]}
       </Rows>
       <Section title="Appearance">
         <Rows>{[<ThemePicker key="theme" />]}</Rows>
       </Section>
-      <Section title="Time">
+      <TypographySection />
+      <Section title="Timeline">
         <Rows>
           {[
-            <Row key="time-zone" title="Timezone" description="New schedules start in this timezone.">
-              <TimeZonePicker
-                automatic
-                value={timeZone}
-                variant="ghost"
-                className="gap-2 text-muted-foreground"
-                onChange={(value) => {
-                  TimeZone.chosen.write(platform.storage, value || null)
-                  setTimeZone(value)
-                }}
-              />
-            </Row>,
+            <TimelineDetailSetting key="detail" />,
+            <SwitchRow
+              key="fold-turns"
+              title="Fold finished turns"
+              description="Collapse the steps into “Worked for…”."
+              preference={ChatPreferences.foldTurns}
+            />,
+            <SwitchRow key="fold-messages" title="Fold long messages" preference={ChatPreferences.foldMessages} />,
+            <ChoiceRow
+              key="timeline-width"
+              title="Timeline width"
+              preference={ChatPreferences.timelineWidth}
+              options={timelineWidths}
+            />,
+            <ChoiceRow
+              key="background"
+              title="Background activity"
+              description="Running subagents and shells, above the composer."
+              preference={ChatPreferences.backgroundActivity}
+              options={backgroundActivities}
+            />,
           ]}
         </Rows>
       </Section>
       <Section title="Chats">
         <Rows>
           {[
-            <Row key="detail" title="Detail" description="How much of Ren’s work a chat shows.">
-              <Choice label="Detail" options={details} value={detail} onChange={chooseDetail} />
-            </Row>,
-            <Row key="delivery" title="Messages sent while Ren works">
-              <Choice
-                label="Messages sent while Ren works"
-                options={deliveries}
-                value={followUp}
-                onChange={chooseFollowUp}
-              />
-            </Row>,
-            <Row
-              key="background"
-              title="Background activity"
-              description="Show running subagents and shells above the composer."
-            >
-              <Choice
-                label="Background activity"
-                options={backgroundActivities}
-                value={backgroundActivity}
-                onChange={chooseBackgroundActivity}
-              />
-            </Row>,
+            <ChoiceRow
+              key="delivery"
+              title="Messages sent while Ren works"
+              preference={ChatPreferences.followUp}
+              options={deliveries}
+            />,
           ]}
         </Rows>
       </Section>
@@ -207,14 +218,34 @@ export function PreferencesPage() {
           ]}
         </Rows>
       </Section>
+      <Section title="Time">
+        <Rows>
+          {[
+            <Row key="time-zone" title="Timezone" description="New schedules start in this timezone.">
+              <TimeZonePicker
+                automatic
+                value={timeZone}
+                variant="ghost"
+                className="gap-2 text-muted-foreground"
+                onChange={(value) => setPreference(TimeZone.chosen, value || null)}
+              />
+            </Row>,
+          ]}
+        </Rows>
+      </Section>
+      <Section title="Security">
+        <Rows>
+          {[
+            <Row key="password" title="Password">
+              <PasswordDialog />
+            </Row>,
+          ]}
+        </Rows>
+      </Section>
       <Section title="Organization">
         <Rows>
           {[
-            <Row
-              key="leave"
-              title={organization.name}
-              description="Leaving archives your private space and deletes your personal credentials here."
-            >
+            <Row key="leave" title={organization.name}>
               <Button variant="outline" size="sm" onClick={() => setLeaving(true)}>
                 Leave organization
               </Button>
@@ -232,15 +263,6 @@ export function PreferencesPage() {
           }}
           onConfirm={leave}
         />
-      </Section>
-      <Section title="Security">
-        <Rows>
-          {[
-            <Row key="password" title="Password">
-              <PasswordDialog />
-            </Row>,
-          ]}
-        </Rows>
       </Section>
     </Page>
   )
