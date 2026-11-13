@@ -103,7 +103,7 @@ export type CredentialID = string
 
 export type AppProfileOAuthAppGate = { name: string; isConfigured: boolean }
 
-export type AppListingTool = { name: string; description: string; readOnly: boolean }
+export type McpToolPrice = { usd: number; unit: string; note?: string }
 
 export type AgentMembershipID = string
 
@@ -536,7 +536,7 @@ export type AppProfileLink = { appId: AppID; profileId: AppProfileID | null }
 
 export type CredentialProfileOwner = { kind: "profile"; profileId: AppProfileID }
 
-export type AppListingTools = { [x: PrimitiveSlug]: Array<AppListingTool> }
+export type AppListingTool = { name: string; description: string; readOnly: boolean; price?: McpToolPrice }
 
 export type AgentMembershipInfo = {
   id: AgentMembershipID
@@ -1148,6 +1148,8 @@ export type CredentialOwner =
   | { kind: "space"; spaceId: SpaceID }
   | { kind: "person"; userId: AuthUserID }
   | CredentialProfileOwner
+
+export type AppListingTools = { [x: PrimitiveSlug]: Array<AppListingTool> }
 
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
 

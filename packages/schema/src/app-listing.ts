@@ -2,6 +2,7 @@ export * as AppListing from "./app-listing.js"
 
 import { Effect, Schema } from "effect"
 import { AppIdentity } from "./app/identity.js"
+import { Mcp } from "./mcp.js"
 import { Primitive } from "./primitive.js"
 
 export const Categories = Schema.Record(
@@ -17,6 +18,7 @@ export const Tool = Schema.Struct({
   name: Schema.NonEmptyString,
   description: Schema.String,
   readOnly: Schema.Boolean.annotate({ description: "The tool only reads, as the MCP’s readOnlyHint says." }),
+  price: Schema.optionalKey(Mcp.ToolPrice),
 }).annotate({ identifier: "AppListing.Tool" })
 
 export const Tools = Schema.Record(Primitive.Slug, Schema.Array(Tool)).annotate({
