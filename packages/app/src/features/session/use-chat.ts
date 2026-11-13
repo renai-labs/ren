@@ -197,6 +197,8 @@ export function useChat(
     ),
   )
   const interrupt = ChatReact.useAction(root, (opened) => opened.interrupt)
+  const cancelQueued = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.cancelInput(id))
+  const steerQueued = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.steerInput(id))
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed))
   const loadAll = ChatReact.useAction(root, (opened) => opened.loadMore(view.viewed, true))
   const revert = ChatReact.useAction(root, (opened, id: SessionMessage.ID) => opened.revert(id))
@@ -260,6 +262,15 @@ export function useChat(
     },
     tasks: visibleTasks(tasks, { running, unfinished: SessionTasks.unfinished(tasks) }),
     running,
+    queued: Composer.queued(ChatState.pending(state, root)),
+    removeQueued: (id: SessionMessage.ID) =>
+      void cancelQueued(id).catch((error: unknown) =>
+        toast.error("Could not remove the message", { description: errorMessage(error) }),
+      ),
+    sendQueuedNow: (id: SessionMessage.ID) =>
+      void steerQueued(id).catch((error: unknown) =>
+        toast.error("Could not send the message now", { description: errorMessage(error) }),
+      ),
     reverted,
     reverting,
     failed: AsyncResult.isFailure(view.session.state),
