@@ -48,9 +48,9 @@ This is the usual layout for sites on one shared domain: one Cloudflare zone, on
 
 1. **Label.** `Artifact.label(id)` in `@ren/schema/artifact`: `"art-" + Identifier.suffix(id).toLowerCase()`. The harness names the ID: `art_` and 1 to 59 letters and digits (`Artifact.ID`). The cell makes 26 (`Identifier.ascending`). So a label has at most 63 characters, the limit of a host name label. An ID has `_` and capital letters, which a hostname cannot keep. The label is also the script name in the namespace, so the dispatcher needs no lookup.
 2. **Label collision.** Two IDs that differ only in letter case give one label. The provider reads the script's ETag and uploads with `If-Match`, so the second ID would replace the first artifact and get its Durable Object data. A unique index on `lower(id)` in the `artifact` table refuses the second ID: its deploy gets `NotFound`.
-3. **The Cloudflare provider changes to Workers for Platforms.** It keeps the provider ID `cloudflare`. Its state changes from `{ account, subdomain }` to `{ account, namespace, domain }`. A state with `subdomain` fails with a `Failed` that is not retryable. No code keeps ordinary Workers.
+3. **The Cloudflare provider changes to Workers for Platforms.** It keeps the provider ID `cloudflare`. Its state changes from `{ account, subdomain }` to `{ account, namespace, domain }` (version 3). A migration clears the state of each artifact published before: its next deploy publishes it into the namespace, at its new URL. No code keeps ordinary Workers.
 4. **No reserved path.** The dispatcher passes every path to the artifact. Readiness uses the `x-ren-artifact-probe` header, which the artifact's platform-owned `main.js` answers (`cloudflare-code.ts:47`).
-5. **Separate staging.** Staging uses its own domain, its own zone and the namespace `ren-artifacts-staging`. Universal SSL covers only one level, so `*.staging.useren.site` cannot get a certificate without Advanced Certificate Manager.
+5. **No staging.** One domain, one zone and the namespace `ren-artifacts`. The live checks run on that namespace before launch. A staging domain would need its own zone, because Universal SSL covers one level: `*.staging.useren.site` gets no certificate.
 6. **Two tokens.** Terraform's token changes zones, DNS, routes, zone settings, redirect rules and the dispatcher. The server's token writes Workers scripts in the namespace only. The server's token has no zone permissions. Check each permission against its endpoint.
 
 ## 4. Dispatcher
@@ -81,19 +81,19 @@ export default {
 
 ## 5. Infrastructure
 
-New stack `infra/cloudflare`, with a partial `backend "s3" {}` as `infra/aws/versions.tf` has. One module, two instances: production and staging.
+New stack `infra/cloudflare`, with a partial `backend "s3" {}` as `infra/aws/versions.tf` has. One instance.
 
-| Resource           | Value                                                                                               |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| Zone               | `useren.site`; staging: its own domain. Output the name servers. Set them at the registrar by hand. |
-| DNS `*`            | `AAAA 100::`, proxied                                                                               |
-| DNS apex           | `AAAA 100::`, proxied, for the redirect                                                             |
-| Redirect rule      | `useren.site/*` → `https://useren.ai`, 301                                                          |
-| DNS `_psl` TXT     | The Public Suffix List pull request URL (section 6)                                                 |
-| Zone settings      | Always Use HTTPS on; minimum TLS 1.2                                                                |
-| Dispatch namespace | `ren-artifacts-production`; `ren-artifacts-staging`                                                 |
-| Workers script     | The dispatcher, with `ARTIFACTS` and `DOMAIN`                                                       |
-| Workers route      | `*.useren.site/*` → the dispatcher. The apex does not match, so it gets only the redirect.          |
+| Resource           | Value                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| Zone               | `useren.site`. Output the name servers. Set them at the registrar by hand.                 |
+| DNS `*`            | `AAAA 100::`, proxied                                                                      |
+| DNS apex           | `AAAA 100::`, proxied, for the redirect                                                    |
+| Redirect rule      | `useren.site/*` → `https://useren.ai`, 301                                                 |
+| DNS `_psl` TXT     | The Public Suffix List pull request URL (section 6)                                        |
+| Zone settings      | Always Use HTTPS on; minimum TLS 1.2                                                       |
+| Dispatch namespace | `ren-artifacts`                                                                            |
+| Workers script     | The dispatcher, with `ARTIFACTS` and `DOMAIN`                                              |
+| Workers route      | `*.useren.site/*` → the dispatcher. The apex does not match, so it gets only the redirect. |
 
 Check the resource names against the Cloudflare provider version that the stack pins.
 
@@ -122,15 +122,14 @@ Without it, `art-a….useren.site` can set a cookie for `useren.site` that `art-
 
 ## 8. Order and gates
 
-| Step | Work                                                                                                                                                                                                                                                                        | Gate                                                                                                                    |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 0    | Set up the domains and Workers for Platforms on the account. Open the Public Suffix List pull request.                                                                                                                                                                      | Approval                                                                                                                |
-| 1    | On the staging namespace, with a script: create a namespace script with `If-None-Match: *`, read its ETag, update it with `If-Match`, and send a stale `If-Match`. Upload a script with a SQLite Durable Object, declarative `exports` and the `immediate` update strategy. | The stale update returns 412, and the Durable Object script uploads. Else stop: publication fencing needs a new design. |
-| 2    | `infra/cloudflare`: plan and apply staging.                                                                                                                                                                                                                                 | Approval of the apply                                                                                                   |
-| 3    | Provider changes (section 7), dispatcher, label.                                                                                                                                                                                                                            |                                                                                                                         |
-| 4    | Live tests on staging through the final URL (section 10).                                                                                                                                                                                                                   | All pass                                                                                                                |
-| 5    | Count production rows with `provider = 'cloudflare'`.                                                                                                                                                                                                                       | Zero: continue. More than zero: stop and decide. Their Durable Object data cannot move.                                 |
-| 6    | Apply production, set the server's configuration, release.                                                                                                                                                                                                                  | Approval of the apply and the release                                                                                   |
+| Step | Work                                                                                                                                                                                                                                                                | Gate                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 0    | Buy the domain and set up Workers for Platforms on the account. Open the Public Suffix List pull request.                                                                                                                                                           | Approval                                                                                                                |
+| 1    | `infra/cloudflare`: plan and apply.                                                                                                                                                                                                                                 | Approval of the apply                                                                                                   |
+| 2    | On the namespace, with a script: create a namespace script with `If-None-Match: *`, read its ETag, update it with `If-Match`, and send a stale `If-Match`. Upload a script with a SQLite Durable Object, declarative `exports` and the `immediate` update strategy. | The stale update returns 412, and the Durable Object script uploads. Else stop: publication fencing needs a new design. |
+| 3    | Provider changes (section 7), dispatcher, label.                                                                                                                                                                                                                    |                                                                                                                         |
+| 4    | Live tests through the final URL, before launch (section 10).                                                                                                                                                                                                       | All pass                                                                                                                |
+| 5    | Release #513 and this change together: migrate, deploy, delete the old `workers.dev` Workers. The migration clears the state of each artifact on an ordinary Worker.                                                                                                | Approval of the release                                                                                                 |
 
 ## 9. Out of scope
 
@@ -141,7 +140,7 @@ Without it, `art-a….useren.site` can set a cookie for `useren.site` that `art-
 
 ## 10. Tests
 
-Run the live scenarios of `artifacts-cloudflare.slow.test.ts` and `artifacts-brain.slow.test.ts` through `https://<label>.<staging-domain>/`. Add these cases:
+Run the live scenarios of `artifacts-cloudflare.slow.test.ts` and `artifacts-brain.slow.test.ts` through `https://<label>.<domain>/`. Add these cases:
 
 | Case                                                              | Expected                                                                       |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -154,9 +153,7 @@ Run the live scenarios of `artifacts-cloudflare.slow.test.ts` and `artifacts-bra
 | Two deploys race                                                  | The stale upload gets 412 on the namespace endpoint; one version serves        |
 | A deploy whose readiness fails                                    | Recovery serves the previous version at the same URL                           |
 | Process loss before and after each remote write                   | The next call recovers; no Durable Object class is lost                        |
-| A production host on staging, and the reverse                     | Each namespace serves only its own artifacts                                   |
 
 ## 11. Open
 
 1. **Deep links in static single-page apps.** Without `_worker.js`, `GET /settings` on a client-routed app returns 404: the assets config has no `not_found_handling` (`cloudflare.ts:204`). The `single-page-application` mode also changes real 404s and may answer `GET /api/*` with `index.html` before `_worker.js` runs. Decide separately.
-2. **The staging domain name.**

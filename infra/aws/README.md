@@ -62,7 +62,7 @@ Add this to the deployment's private `terraform.tfvars`:
 ```hcl
 artifact_cloudflare = {
   account_id = "<cloudflare-account-id>"
-  namespace  = "ren-artifacts-production"
+  namespace  = "ren-artifacts"
   domain     = "useren.site"
 }
 ```

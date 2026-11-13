@@ -1,6 +1,6 @@
 variable "account_id" {
   type        = string
-  description = "The Cloudflare account that holds the zones, the dispatch namespaces and the dispatchers."
+  description = "The Cloudflare account that holds the zone, the dispatch namespace and the dispatcher."
 
   validation {
     condition     = can(regex("^[a-f0-9]{32}$", var.account_id))
@@ -8,15 +8,10 @@ variable "account_id" {
   }
 }
 
-variable "production_domain" {
+variable "domain" {
   type        = string
   default     = "useren.site"
-  description = "The domain of production artifacts."
-}
-
-variable "staging_domain" {
-  type        = string
-  description = "The domain of staging artifacts. It is a separate domain, because the zone's certificate covers one level only."
+  description = "The domain of artifacts."
 }
 
 variable "redirect_url" {
@@ -26,7 +21,7 @@ variable "redirect_url" {
 }
 
 variable "psl_pull_request" {
-  type        = map(string)
-  default     = {}
-  description = "The Public Suffix List pull request URL of each domain, for its _psl TXT record."
+  type        = string
+  default     = null
+  description = "The Public Suffix List pull request URL, for the _psl TXT record."
 }
