@@ -135,6 +135,57 @@ const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
   archive: EndpointSpaceMemberArchive(raw),
 })
 
+type SpaceJoinRequestListRequest = Parameters<RawClient["space-join-request"]["space-join-request.list"]>[0]
+type SpaceJoinRequestListInput = {
+  readonly spaceId?: SpaceJoinRequestListRequest["query"]["spaceId"]
+  readonly status?: SpaceJoinRequestListRequest["query"]["status"]
+  readonly page: SpaceJoinRequestListRequest["query"]["page"]
+  readonly pageSize: SpaceJoinRequestListRequest["query"]["pageSize"]
+}
+const EndpointSpaceJoinRequestList = (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestListInput) =>
+  raw["space-join-request.list"]({
+    query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceJoinRequestCreateRequest = Parameters<RawClient["space-join-request"]["space-join-request.create"]>[0]
+type SpaceJoinRequestCreateInput = {
+  readonly spaceId: SpaceJoinRequestCreateRequest["payload"]["spaceId"]
+  readonly note?: SpaceJoinRequestCreateRequest["payload"]["note"]
+}
+const EndpointSpaceJoinRequestCreate = (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestCreateInput) =>
+  raw["space-join-request.create"]({ payload: { spaceId: input["spaceId"], note: input["note"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SpaceJoinRequestApproveRequest = Parameters<RawClient["space-join-request"]["space-join-request.approve"]>[0]
+type SpaceJoinRequestApproveInput = { readonly id: SpaceJoinRequestApproveRequest["params"]["id"] }
+const EndpointSpaceJoinRequestApprove =
+  (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestApproveInput) =>
+    raw["space-join-request.approve"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+type SpaceJoinRequestDeclineRequest = Parameters<RawClient["space-join-request"]["space-join-request.decline"]>[0]
+type SpaceJoinRequestDeclineInput = { readonly id: SpaceJoinRequestDeclineRequest["params"]["id"] }
+const EndpointSpaceJoinRequestDecline =
+  (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestDeclineInput) =>
+    raw["space-join-request.decline"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+type SpaceJoinRequestCancelRequest = Parameters<RawClient["space-join-request"]["space-join-request.cancel"]>[0]
+type SpaceJoinRequestCancelInput = { readonly id: SpaceJoinRequestCancelRequest["params"]["id"] }
+const EndpointSpaceJoinRequestCancel = (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestCancelInput) =>
+  raw["space-join-request.cancel"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceJoinRequest = (raw: RawClient["space-join-request"]) => ({
+  list: EndpointSpaceJoinRequestList(raw),
+  create: EndpointSpaceJoinRequestCreate(raw),
+  approve: EndpointSpaceJoinRequestApprove(raw),
+  decline: EndpointSpaceJoinRequestDecline(raw),
+  cancel: EndpointSpaceJoinRequestCancel(raw),
+})
+
 type EnvironmentTemplateListRequest = Parameters<RawClient["environment-template"]["environment-template.list"]>[0]
 type EnvironmentTemplateListInput = {
   readonly page: EnvironmentTemplateListRequest["query"]["page"]
@@ -2035,6 +2086,7 @@ const adaptClient = (raw: RawClient) => ({
   invitation: adaptGroupInvitation(raw["invitation"]),
   space: adaptGroupSpace(raw["space"]),
   "space-member": adaptGroupSpaceMember(raw["space-member"]),
+  "space-join-request": adaptGroupSpaceJoinRequest(raw["space-join-request"]),
   "environment-template": adaptGroupEnvironmentTemplate(raw["environment-template"]),
   environmentProvider: adaptGroupEnvironmentProvider(raw["environmentProvider"]),
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),

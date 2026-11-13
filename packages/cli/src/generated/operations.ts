@@ -117,6 +117,56 @@ export const SpaceMemberArchive = (input: Command.Command.Config.Infer<typeof Co
     (client, request) => client["space-member"]["archive"]({ ...request.params }),
   )
 
+export const SpaceJoinRequestList = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestList>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.list"],
+    {
+      query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { spaceId: "--space", status: "--status", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-join-request"]["list"]({ ...request.query }),
+  )
+
+export const SpaceJoinRequestCreate = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestCreate>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.create"],
+    {
+      payload: { spaceId: input["spaceId"], note: input["note"] },
+      input: input["input"],
+      labels: { spaceId: "--space", note: "--note" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-join-request"]["create"]({ ...request.payload }),
+  )
+
+export const SpaceJoinRequestApprove = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestApprove>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.approve"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<request>" } },
+    (client, request) => client["space-join-request"]["approve"]({ ...request.params, ...request.payload }),
+  )
+
+export const SpaceJoinRequestDecline = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestDecline>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.decline"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<request>" } },
+    (client, request) => client["space-join-request"]["decline"]({ ...request.params, ...request.payload }),
+  )
+
+export const SpaceJoinRequestCancel = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestCancel>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.cancel"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<request>" } },
+    (client, request) => client["space-join-request"]["cancel"]({ ...request.params, ...request.payload }),
+  )
+
 export const AgentMembershipList = (input: Command.Command.Config.Infer<typeof Commands.AgentMembershipList>) =>
   Operation.run(
     ClientApi.groups["agent-membership"].endpoints["agent-membership.list"],

@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { IconPlus } from "@tabler/icons-react"
+import { getRouteApi } from "@tanstack/react-router"
+import type { SpaceInfo, SpaceJoinRequestInfo } from "@ren/client"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
@@ -15,8 +17,11 @@ import {
   DialogTrigger,
 } from "@ren/ui/dialog"
 import { Spinner } from "@ren/ui/spinner"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
+import { Tabs } from "@ren/ui/tabs"
+import { formatDateTime, formatRelative } from "@ren/ui/time"
 import { LoadMore } from "../../components/load-more.js"
-import { PageActions, useShapeId } from "../../components/page.js"
+import { PageActions, PageTabsList, PageTabsTrigger, TableCard, TableEmpty, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
@@ -117,7 +122,129 @@ function AddSpaceMemberDialog(props: {
   )
 }
 
+const route = getRouteApi("/_authed/_shell/spaces/$spaceId/members")
+
 export function SpaceMembersTab() {
+  const { client } = RouterContext.useRouterContext()
+  const space = useSpace()
+  const navigate = route.useNavigate()
+  const tab = route.useSearch({ select: (search) => search.tab ?? "members" })
+  const requests = useInfiniteQuery({ ...Pages.spaceJoinRequests(client, space.id), ...Loader.required })
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <Tabs
+        value={tab}
+        onValueChange={(value: string) =>
+          void navigate({ search: value === "requests" ? { tab: "requests" } : {}, replace: true })
+        }
+      >
+        <PageTabsList>
+          <PageTabsTrigger value="members">Members</PageTabsTrigger>
+          <PageTabsTrigger value="requests" count={requests.data?.pages.at(0)?.total}>
+            Requests
+          </PageTabsTrigger>
+        </PageTabsList>
+      </Tabs>
+      {tab === "requests" ? <SpaceRequests /> : <SpaceMembers />}
+    </div>
+  )
+}
+
+function RequestRow(props: { request: SpaceJoinRequestInfo; space: SpaceInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const request = props.request
+  const approve = useMutation({
+    ...api["space-join-request"].approve.mutationOptions(),
+    onSuccess: () => toast.success(`${request.name} added to ${props.space.name}`),
+    onError: (error) => toast.error("Could not approve the request", { description: errorMessage(error) }),
+  })
+  const decline = useMutation({
+    ...api["space-join-request"].decline.mutationOptions(),
+    onSuccess: () => toast.success(`Declined ${request.name}`),
+    onError: (error) => toast.error("Could not decline the request", { description: errorMessage(error) }),
+  })
+  const deciding = approve.isPending || decline.isPending
+  return (
+    <TableRow>
+      <TableCell>
+        <span className="flex min-w-0 items-center gap-3">
+          <PersonAvatar name={request.name} image={request.image ?? undefined} />
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate">{request.name}</span>
+            <span className="truncate text-xs text-muted-foreground" title={request.email}>
+              {request.email}
+            </span>
+          </span>
+        </span>
+      </TableCell>
+      <TableCell className="truncate text-muted-foreground" title={request.note ?? undefined}>
+        {request.note ?? "No note"}
+      </TableCell>
+      <TableCell className="text-muted-foreground tabular-nums">
+        <time dateTime={request.createdAt} title={formatDateTime(request.createdAt)}>
+          {formatRelative(request.createdAt)}
+        </time>
+      </TableCell>
+      <TableCell className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" disabled={deciding} onClick={() => decline.mutate({ id: request.id })}>
+          {decline.isPending ? <Spinner data-icon="inline-start" /> : null}
+          Decline
+        </Button>
+        <Button size="sm" disabled={deciding} onClick={() => approve.mutate({ id: request.id })}>
+          {approve.isPending ? <Spinner data-icon="inline-start" /> : null}
+          Approve
+        </Button>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function SpaceRequests() {
+  const { client } = RouterContext.useRouterContext()
+  const space = useSpace()
+  const [query, setQuery] = useState("")
+  const requests = useInfiniteQuery({ ...Pages.spaceJoinRequests(client, space.id), ...Loader.required })
+  const shapeId = useShapeId("requests")
+  const rows = (requests.data?.pages ?? [])
+    .flatMap((page) => page.items)
+    .filter((request) => Search.matches(query, request.name, request.email, request.note))
+  return (
+    <>
+      <PageActions>
+        <ToolbarSearch label="Search requests" value={query} onChange={setQuery} />
+      </PageActions>
+      <Loading id={shapeId} loading={requests.isPending} label="Loading requests">
+        <TableCard>
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-1/3">Person</TableHead>
+                <TableHead>Note</TableHead>
+                <TableHead className="w-28">Requested</TableHead>
+                <TableHead className="w-48" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableEmpty columns={4}>{Search.empty(query, "No requests to join")}</TableEmpty>
+              ) : null}
+              {rows.map((request) => (
+                <RequestRow key={request.id} request={request} space={space} />
+              ))}
+            </TableBody>
+          </Table>
+        </TableCard>
+      </Loading>
+      <LoadMore
+        more={requests.hasNextPage}
+        loading={requests.isFetchingNextPage}
+        onMore={() => void requests.fetchNextPage()}
+      />
+    </>
+  )
+}
+
+function SpaceMembers() {
   const { api, client } = RouterContext.useRouterContext()
   const space = useSpace()
   const me = useMe()
@@ -199,7 +326,7 @@ export function SpaceMembersTab() {
     if (failed.length > 0) toast.error("Could not add the member", { description: errorMessage(failed[0]?.reason) })
   }
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <>
       <PageActions>
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
         {space.canAddMember ? (
@@ -251,6 +378,6 @@ export function SpaceMembersTab() {
         loading={members.isFetchingNextPage}
         onMore={() => void members.fetchNextPage()}
       />
-    </div>
+    </>
   )
 }

@@ -31,6 +31,7 @@ import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
 import { WebhookGroup, WebhookRequestGroup } from "./groups/webhook.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
+import { SpaceJoinRequestGroup } from "./groups/space-join-request.js"
 import { SpaceMemberGroup } from "./groups/space-member.js"
 import { SpaceSettingsGroup } from "./groups/space-settings.js"
 import { TaskGroup } from "./groups/task.js"
@@ -43,6 +44,7 @@ export const Api = HttpApi.make("server")
   .add(InvitationGroup)
   .add(SpaceGroup)
   .add(SpaceMemberGroup)
+  .add(SpaceJoinRequestGroup)
   .add(MachineTemplateGroup)
   .add(MachineProviderGroup)
   .add(SpaceSettingsGroup)

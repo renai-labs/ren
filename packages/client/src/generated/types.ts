@@ -26,7 +26,11 @@ export type SpaceMembershipID = string
 
 export type FactoryStartMode = "new" | "continue"
 
+export type SpaceJoinRequestID = string
+
 export type SpaceAssignmentID = string
+
+export type SpaceJoinRequestStatus = "pending" | "approved" | "declined" | "cancelled"
 
 export type HostNamePattern = string
 
@@ -475,6 +479,20 @@ export type SpaceMemberPending = {
   email: string
   createdAt: string
   archivedAt: string | null
+}
+
+export type SpaceJoinRequestInfo = {
+  id: SpaceJoinRequestID
+  spaceId: SpaceID
+  userId: AuthUserID
+  name: string
+  email: string
+  image: string | null
+  note: string | null
+  status: SpaceJoinRequestStatus
+  decidedBy: AuthUserID | null
+  createdAt: string
+  decidedAt: string | null
 }
 
 export type EnvironmentTemplateNetworking =
@@ -1076,6 +1094,8 @@ export type FactoryEntry = { agentId: string; maxRuns?: number; finish?: true; t
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
+export type SpaceJoinRequestPage = { items: Array<SpaceJoinRequestInfo>; page: number; pageSize: number; total: number }
+
 export type EnvironmentTemplateInfo = {
   id: EnvironmentTemplateID
   organizationId: AuthOrganizationID
@@ -1555,6 +1575,8 @@ export type SpaceInfo = {
   factory: FactoryInfo
   canUpdate: boolean
   canJoin: boolean
+  canRequestJoin: boolean
+  joinRequestId: SpaceJoinRequestID | null
   canAddMember: boolean
   canRemoveMember: boolean
   canArchive: boolean
@@ -2066,6 +2088,54 @@ export type SpaceMemberCreateOutput = SpaceMemberInfo
 export type SpaceMemberArchiveInput = { readonly id: { readonly id: string | string }["id"] }
 
 export type SpaceMemberArchiveOutput = SpaceMemberInfo
+
+export type SpaceJoinRequestListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly status?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type SpaceJoinRequestListOutput = SpaceJoinRequestPage
+
+export type SpaceJoinRequestCreateInput = {
+  readonly spaceId: { readonly spaceId: string; readonly note?: string | undefined }["spaceId"]
+  readonly note?: { readonly spaceId: string; readonly note?: string | undefined }["note"]
+}
+
+export type SpaceJoinRequestCreateOutput = SpaceJoinRequestInfo
+
+export type SpaceJoinRequestApproveInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceJoinRequestApproveOutput = SpaceJoinRequestInfo
+
+export type SpaceJoinRequestDeclineInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceJoinRequestDeclineOutput = SpaceJoinRequestInfo
+
+export type SpaceJoinRequestCancelInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceJoinRequestCancelOutput = SpaceJoinRequestInfo
 
 export type EnvironmentTemplateListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]

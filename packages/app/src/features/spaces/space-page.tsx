@@ -12,13 +12,16 @@ import { errorMessage } from "../../lib/errors.js"
 import { isSoftwareFactory } from "../../lib/factory.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMe } from "../../lib/use-me.js"
+import { AskToJoin } from "./ask-to-join.js"
 import { useSpace } from "./use-space.js"
 import { Routing } from "../../lib/routing.js"
 
-const sharedReason = (space: SpaceInfo) =>
-  space.canJoin
-    ? "Join to see its chats, tasks, files and apps."
-    : "Its chats, tasks, files and apps are visible to its members."
+const sharedReason = (space: SpaceInfo) => {
+  if (space.canJoin) return "Join to see its chats, tasks, files and apps."
+  if (space.joinRequestId) return "Your request is waiting for a member of this space to answer."
+  if (space.canRequestJoin) return "Ask to join to see its chats, tasks, files and apps."
+  return "Its chats, tasks, files and apps are visible to its members."
+}
 
 function NotJoined(props: { space: SpaceInfo }) {
   const { api } = RouterContext.useRouterContext()
@@ -47,7 +50,9 @@ function NotJoined(props: { space: SpaceInfo }) {
               {join.isPending ? <Spinner data-icon="inline-start" /> : null}
               Join space
             </Button>
-          ) : null
+          ) : (
+            <AskToJoin space={space} />
+          )
         }
       >
         {reason}

@@ -15,6 +15,7 @@ import { initials, plural } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMe } from "../../lib/use-me.js"
 import { isPersonal, usePinnedSpaces } from "../../lib/use-pinned-spaces.js"
+import { AskToJoin } from "./ask-to-join.js"
 
 function Members(props: { space: SpaceInfo }) {
   const { api } = RouterContext.useRouterContext()
@@ -58,7 +59,8 @@ function Members(props: { space: SpaceInfo }) {
 }
 
 function Membership(props: { space: SpaceInfo; browsing: boolean }) {
-  if (props.space.membershipId === null) return props.space.canJoin ? <JoinButton space={props.space} /> : null
+  if (props.space.membershipId === null)
+    return props.space.canJoin ? <JoinButton space={props.space} /> : <AskToJoin space={props.space} size="sm" />
   if (!props.browsing) return null
   return (
     <span className="flex items-center gap-1 text-xs">

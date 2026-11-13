@@ -21,6 +21,16 @@ import type {
   SpaceMemberCreateOutput,
   SpaceMemberArchiveInput,
   SpaceMemberArchiveOutput,
+  SpaceJoinRequestListInput,
+  SpaceJoinRequestListOutput,
+  SpaceJoinRequestCreateInput,
+  SpaceJoinRequestCreateOutput,
+  SpaceJoinRequestApproveInput,
+  SpaceJoinRequestApproveOutput,
+  SpaceJoinRequestDeclineInput,
+  SpaceJoinRequestDeclineOutput,
+  SpaceJoinRequestCancelInput,
+  SpaceJoinRequestCancelOutput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateListOutput,
   EnvironmentTemplateGetInput,
@@ -544,6 +554,73 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/space-members/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-join-request": {
+      list: (input: SpaceJoinRequestListInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestListOutput>(
+          {
+            method: "GET",
+            path: `/space-join-requests`,
+            query: {
+              spaceId: input["spaceId"],
+              status: input["status"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SpaceJoinRequestCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestCreateOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests`,
+            body: { spaceId: input["spaceId"], note: input["note"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      approve: (input: SpaceJoinRequestApproveInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestApproveOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests/${encodeURIComponent(input.id)}/approve`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      decline: (input: SpaceJoinRequestDeclineInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestDeclineOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests/${encodeURIComponent(input.id)}/decline`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      cancel: (input: SpaceJoinRequestCancelInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestCancelOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests/${encodeURIComponent(input.id)}/cancel`,
+            body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

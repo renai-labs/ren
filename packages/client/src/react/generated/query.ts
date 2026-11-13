@@ -11,6 +11,11 @@ import type {
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
+  SpaceJoinRequestListInput,
+  SpaceJoinRequestCreateInput,
+  SpaceJoinRequestApproveInput,
+  SpaceJoinRequestDeclineInput,
+  SpaceJoinRequestCancelInput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateGetInput,
   EnvironmentTemplateCreateInput,
@@ -265,6 +270,51 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["space-member", "archive"] as const,
             mutationFn: (input: SpaceMemberArchiveInput) => client["space-member"]["archive"](input),
+          }),
+      },
+    },
+    "space-join-request": {
+      list: {
+        queryKey: (input?: SpaceJoinRequestListInput) =>
+          input === undefined
+            ? (["space-join-request", "list"] as const)
+            : (["space-join-request", "list", input] as const),
+        queryOptions: (input: SpaceJoinRequestListInput) =>
+          queryOptions({
+            queryKey: ["space-join-request", "list", input] as const,
+            queryFn: (context) => client["space-join-request"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["space-join-request", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "create"] as const,
+            mutationFn: (input: SpaceJoinRequestCreateInput) => client["space-join-request"]["create"](input),
+          }),
+      },
+      approve: {
+        mutationKey: () => ["space-join-request", "approve"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "approve"] as const,
+            mutationFn: (input: SpaceJoinRequestApproveInput) => client["space-join-request"]["approve"](input),
+          }),
+      },
+      decline: {
+        mutationKey: () => ["space-join-request", "decline"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "decline"] as const,
+            mutationFn: (input: SpaceJoinRequestDeclineInput) => client["space-join-request"]["decline"](input),
+          }),
+      },
+      cancel: {
+        mutationKey: () => ["space-join-request", "cancel"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "cancel"] as const,
+            mutationFn: (input: SpaceJoinRequestCancelInput) => client["space-join-request"]["cancel"](input),
           }),
       },
     },

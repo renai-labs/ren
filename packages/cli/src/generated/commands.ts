@@ -55,6 +55,37 @@ export const SpaceMemberCreate = {
 
 export const SpaceMemberArchive = { id: Argument.String("member").pipe(Argument.withDescription("Member ID")) }
 
+export const SpaceJoinRequestList = {
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  status: Flag.Literals("status", ["pending", "approved", "declined", "cancelled"]).pipe(
+    Flag.optional,
+    Flag.withDescription("A pending request waits for a member of the space."),
+  ),
+  page: Flag.Finite("page").pipe(Flag.optional),
+  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
+}
+
+export const SpaceJoinRequestCreate = {
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  note: Flag.String("note").pipe(Flag.optional),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const SpaceJoinRequestApprove = {
+  id: Argument.String("request").pipe(Argument.withDescription("Request ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const SpaceJoinRequestDecline = {
+  id: Argument.String("request").pipe(Argument.withDescription("Request ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const SpaceJoinRequestCancel = {
+  id: Argument.String("request").pipe(Argument.withDescription("Request ID")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const AgentMembershipList = {
   spaceId: Argument.String("space").pipe(Argument.optional, Argument.withDescription("Space slug or ID")),
   agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
@@ -1038,6 +1069,42 @@ export const commands = [
             Command.withDescription("Remove a member from a space"),
             Command.withHandler((input) =>
               Effect.flatMap(Effect.promise(operations), (module) => module.SpaceMemberArchive(input)),
+            ),
+          ),
+        ]),
+      ),
+      Command.make("join-request").pipe(
+        Command.withDescription("Manage requests to join a space"),
+        Command.withAlias("join-requests"),
+        Command.withSubcommands([
+          Command.make("list", SpaceJoinRequestList).pipe(
+            Command.withDescription("List the requests to join a space, or your own requests without --space"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceJoinRequestList(input)),
+            ),
+          ),
+          Command.make("create", SpaceJoinRequestCreate).pipe(
+            Command.withDescription("Ask to join a shared space"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceJoinRequestCreate(input)),
+            ),
+          ),
+          Command.make("approve", SpaceJoinRequestApprove).pipe(
+            Command.withDescription("Add the person who asked to the space"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceJoinRequestApprove(input)),
+            ),
+          ),
+          Command.make("decline", SpaceJoinRequestDecline).pipe(
+            Command.withDescription("Decline a request to join a space"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceJoinRequestDecline(input)),
+            ),
+          ),
+          Command.make("cancel", SpaceJoinRequestCancel).pipe(
+            Command.withDescription("Cancel your request to join a space"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.SpaceJoinRequestCancel(input)),
             ),
           ),
         ]),
