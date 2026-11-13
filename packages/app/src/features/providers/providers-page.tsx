@@ -145,7 +145,7 @@ export function ProvidersPage() {
           ) : null}
         </>
       }
-      leading={
+      tabs={
         <Tabs value={tab} onValueChange={setTab}>
           <PageTabsList aria-label="Providers">
             {providers.map((provider) => (

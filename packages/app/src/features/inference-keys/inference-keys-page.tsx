@@ -399,13 +399,7 @@ export function InferenceKeysPage() {
           Back to providers
         </Link>
       }
-      aside={
-        <Button onClick={() => setCreating(true)}>
-          <IconPlus />
-          Create key
-        </Button>
-      }
-      leading={
+      tabs={
         <Tabs value={status} onValueChange={(value: string) => update({ status: value === "all" ? "all" : "active" })}>
           <PageTabsList aria-label="Key status">
             <PageTabsTrigger value="active" count={live.length}>
@@ -425,6 +419,10 @@ export function InferenceKeysPage() {
             onChange={(value) => update({ q: value || undefined })}
           />
           <PeriodSelect value={period} onChange={(value) => update({ period: value })} />
+          <Button onClick={() => setCreating(true)}>
+            <IconPlus data-icon="inline-start" />
+            Create key
+          </Button>
         </>
       }
     >

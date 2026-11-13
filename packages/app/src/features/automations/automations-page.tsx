@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Tabs } from "@ren/ui/tabs"
-import { PageActions, PageLeading, PageTabsList, PageTabsTrigger } from "../../components/page.js"
+import { PageActions, PageTabs, PageTabsList, PageTabsTrigger } from "../../components/page.js"
 import { ScheduleGrid, ScheduleToolbar } from "../../components/schedule-grid.js"
 import type { Automations } from "../../lib/automations.js"
 import { useSchedules } from "../../lib/use-schedules.js"
@@ -31,7 +31,7 @@ export function AutomationsView(props: {
 }) {
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <PageLeading>
+      <PageTabs>
         <Tabs
           value={props.search.kind ?? "schedules"}
           onValueChange={(value: string) =>
@@ -46,7 +46,7 @@ export function AutomationsView(props: {
             <PageTabsTrigger value="webhooks">Webhooks</PageTabsTrigger>
           </PageTabsList>
         </Tabs>
-      </PageLeading>
+      </PageTabs>
       {props.search.kind === "webhooks" ? (
         props.webhooks
       ) : (
