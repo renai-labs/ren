@@ -5,7 +5,8 @@ import { HttpClient, HttpClientRequest } from "effect/http"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { ArtifactProvider } from "../artifact-provider.js"
 
-const failed = (message: string) => new ArtifactProvider.Failed({ message })
+const failed = (message: string, options: { readonly retryable: boolean } = { retryable: false }) =>
+  new ArtifactProvider.Failed({ message, retryable: options.retryable })
 
 export const stage = Effect.fn("ArtifactCloudflareUpload.stage")(function* (input: {
   readonly account: string
