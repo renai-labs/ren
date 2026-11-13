@@ -19,15 +19,11 @@ CLOUDFLARE_API_TOKEN=<account-owned-token>
 
 `ARTIFACT_PROVIDER` defaults to `workerd`. Cloudflare credentials are read only
 when `cloudflare` is selected. Nothing needs changing in the brain or artifact
-callers. The server image includes Node 22 and the installed Wrangler dependency.
-For a source checkout, Node must be on `PATH`; `ARTIFACT_NODE` overrides it.
-`ARTIFACT_CLOUDFLARE_ROOT` optionally selects the parent staging directory. Each
-upload gets a scoped temporary directory that is removed on success, failure or
-interruption. Only a bounded diagnostic tail is retained in deployment errors.
-Wrangler execution is capped at 55 seconds, with forced termination after three
-seconds; recovery is capped at 25 seconds. The corresponding
-`ARTIFACT_CLOUDFLARE_UPLOAD_TIMEOUT` and `ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT`
-settings can shorten those budgets for diagnostics, not extend them.
+callers. The Cloudflare provider uploads with Cloudflare's direct upload API from
+memory: it needs no Node, no Wrangler and no temporary folder. Only the local
+`workerd` provider runs Wrangler. One call to Cloudflare has a budget of 2
+minutes, its recovery included; recovery alone is capped at 25 seconds, and
+`ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT` can shorten it for diagnostics.
 
 Before using a new account:
 
@@ -39,10 +35,8 @@ Before using a new account:
    calls this **Workers Scripts Write/Edit**. No billing, DNS or zone permissions
    are needed for ordinary `workers.dev` hosting.
 3. Store the token as a server secret, not in source control or artifact files.
-4. Ensure the server's existing private drive bucket permits `GetObject` and
-   conditional `PutObject` under `artifact-provider/cloudflare/*`, in addition to
-   its existing source-archive permissions. Preserve this prefix and its backups.
-   Source archives also need `PutObject`, `GetObject` and `DeleteObject`
+4. The provider keeps its state in Postgres (`artifact.remote`), not in the
+   bucket. Source archives need `PutObject`, `GetObject` and `DeleteObject`
    under `artifact-uploads/*` (presigned uploads, which a deploy copies and
    deletes) and `PutObject` and `GetObject` under `<organization>/artifacts/*`
    (the kept copies and presigned downloads). Environments PUT uploads straight
@@ -82,18 +76,21 @@ stops require their original provider; the Core checks provider identity before
 performing a remote operation. Restoring the original configuration lets pending
 stop work finish on its original provider.
 
-The provider also records account and subdomain identity independently of the
-artifact row's active binding. Changing the account/subdomain does not migrate
+The provider also records account and subdomain identity in the artifact row's
+provider state. Changing the account/subdomain does not migrate
 existing artifacts: operations fail closed rather than recreating their state
 in another account. Do not rename the account subdomain after publishing.
 
 ## Deployment, recovery and retention
 
-- Ren still accepts deploys asynchronously. The existing durable workflows own
-  source archives, deployment status, completion notifications and stop fencing.
+- Ren accepts deploys, stops and archives asynchronously. Each deploy and each
+  stop has a row in `artifact_deployment`; status reads only that row. A durable
+  run does the work and gives the row a final status. When the run ends, Ren
+  sends the result to the chat that asked; the brain does not poll.
 - A platform-owned entrypoint handles a probe header before assets or user
   request handlers. Deploy returns only when the public URL serves the exact
-  deployment UUID and an independent random upload proof retained in S3. The
+  deployment UUID and an independent random upload proof kept in the provider
+  state. The
   expected proof is not sent to the public Worker in a request header or query;
   an old deployment cannot impersonate a known future UUID by echoing it. No
   application path is reserved. Readiness also verifies a normal request to the
@@ -106,14 +103,14 @@ in another account. Do not rename the account subdomain after publishing.
   their dependencies into `_worker.js`, except for workerd runtime imports such
   as `cloudflare:workers`.
 - Successful same-deployment replay checks that marker and reuses the deployment.
-- A conditional-write S3 state object retains the account, stable Worker name,
-  accumulated binding/class map, last publication ETag, and
-  references to the existing immutable compressed source archives. It does not
-  duplicate the file map as base64 on every metadata write. A ready pending
-  source becomes the active source when Core supplies its committed binding,
-  so a lost acknowledgement cannot silently replace the last committed source.
-  The write-ahead state survives a runner restart and Core clearing `binding`
-  after stop. There is no new database migration or artifact version table.
+- The provider state is the artifact row's `remote` column: the account, stable
+  Worker name, accumulated binding/class map, last publication ETag, and
+  references to the immutable compressed source archives. Before each change to
+  Cloudflare, the provider saves it with a compare-and-swap on `remote_version`
+  (write-ahead), so a run after a crash finds what the last one started. A save
+  that lost a race to another run fails as retryable and overwrites nothing.
+  `deploy` returns the new state, and the run writes it in its final transaction.
+  A stop keeps the state.
 - Durable Object namespaces use declarative `exports`: every retained class is
   declared as `{type:"durable-object",storage:"sqlite"}`. Ren never generates
   deletion, rename or transfer entries. Applied additions remain represented
@@ -125,20 +122,20 @@ in another account. Do not rename the account subdomain after publishing.
   clients must reconnect interrupted WebSockets and retry interrupted operations.
   Global rollout is still eventually consistent, so use backwards-compatible
   application/SQL changes. See [Cloudflare's code-update contract](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
-- Ren reads the remote script ETag, records a conditional S3 write intent, then
+- Ren reads the remote script ETag, saves its write-ahead state, then
   publishes with `If-Match`. Creation uses `If-None-Match: *`. Cloudflare rejects
   stale writes with HTTP 412. These backend conditions—not process termination,
   an in-memory lock or an S3 lease—fence delayed uploads. Recovery uses a fresh
   embedded proof so its source cannot have an ABA-identical ETag to the previous
   upload. A read from a lagging metadata replica can cause a safe, retryable 412;
   it cannot authorize an overwrite.
-- Installed Wrangler does not expose conditional upload headers. A scoped
-  loopback staging adapter lets it read metadata and stage asset content, but
-  captures its script PUT instead of forwarding it. It forces the script-upload
-  path even for static apps; version/deployment/settings mutations are blocked.
-  Ren owns the single final conditional PUT. The temporary server closes with
-  the child process scope. This retains Wrangler's asset/multipart machinery
-  without silently bypassing the publication guard.
+- Ren uploads with [direct upload](https://developers.cloudflare.com/workers/static-assets/direct-upload/)
+  in three steps: an asset upload session with the manifest, one request for
+  each bucket of assets that Cloudflare lacks, then one conditional multipart PUT
+  of the metadata and the ES modules. An asset's hash is Wrangler's: blake3 of
+  its base64 bytes and its extension, first 32 hex characters. The metadata has
+  the fields Wrangler sends, taken from a live deploy. Wrangler turns on the
+  `workers.dev` route with a separate call, as Ren does after the upload.
 - Existing successful binding/class mappings cannot be removed, renamed or
   rebound. A terminated process or failed request does not prove an upload was
   rejected. Recovery therefore keeps pending class intents and can provision
@@ -156,15 +153,31 @@ in another account. Do not rename the account subdomain after publishing.
   exports. It does not import application code or race an independent serving
   flag against an earlier upload. Its last archived assets remain attached, but
   the tombstone prevents serving them. Preview URLs remain disabled. Stop never
-  deletes the Worker, DO class, namespace, archive or S3 recovery state. A later
+  deletes the Worker, DO class, namespace, archive or provider state. A later
   deployment restores the application at the same URL. Already-open connections
   can drain; stop does not forcibly delete live Durable Objects.
-- Ordinary errors are reported as failed deployments, not defects that replay a
-  rejected upload indefinitely. If bounded recovery fails, its pending archive
-  and intent remain durable, and another version cannot publish until that state
-  is reconciled. Interruption closes the process scope; a following stop or
-  workflow replay performs the reconciliation. S3 requests have abort signals
-  and deadlines, and the child exits if its parent-owned input pipe disappears.
+- A provider failure says if it is retryable. Network errors, HTTP 5xx and 412
+  are; Ren tries them again. Any other failure, and a defect, ends the row as
+  `failed` and releases the claim. A stop stops trying after 24 hours. A failed
+  stop of an archived artifact can leave its link serving; Ren reports it to the
+  error reporter. If bounded recovery fails, its pending archive and intent stay
+  in the provider state, and another version cannot publish until that state is
+  reconciled. A following stop or run performs the reconciliation.
+
+## Upgrading from S3 provider state
+
+Before this release, the provider kept its state in the drive bucket at
+`artifact-provider/cloudflare/<artifact>/state.json`. Drain artifact work first.
+After the migration, run the copy once with the server's environment, as a
+one-off task:
+
+```sh
+bun /repo/packages/core/script/artifact-cloudflare-state.ts          # lists what it copies
+bun /repo/packages/core/script/artifact-cloudflare-state.ts --write  # copies
+```
+
+It writes only a row whose `remote` is empty or still the old binding, so a
+second run changes nothing. Leave the bucket objects in place as a backup.
 
 The archive-reference metadata format is version 2. Earlier local experimental
 state containing file maps is rejected explicitly, without modifying its Worker
@@ -220,8 +233,7 @@ REN_ARTIFACT_SMOKE_APPROVED=1 \
   bun --env-file <private-env-file> packages/core/script/artifact-cloudflare-smoke.ts
 ```
 
-Dry-run checks local Node/Wrangler availability without credentials or network
-calls. The approved mode runs the same two real Ren integration files above,
+Dry-run checks that the Cloudflare credentials are set, without network calls. The approved mode runs the same two real Ren integration files above,
 sequentially; it has no second deployment implementation. Local and Cloudflare
 tests share report/dashboard and guestbook/SQLite/WebSocket scenarios. This
 still does not verify paid WFP dispatch.

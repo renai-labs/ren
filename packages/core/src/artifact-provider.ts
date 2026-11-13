@@ -47,6 +47,9 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ArtifactProvider") {}
 
+// oxlint-disable-next-line ren/no-comments -- The URL path a person opens first: the site root for index.html, else the entry file.
+export const entryPath = (config: Artifact.Config) => (config.entry === "index.html" ? "/" : `/${config.entry}`)
+
 export const make = <Remote>(definition: Definition<Remote>): Interface => {
   const codec = Schema.toCodecJson(definition.remote)
   const stored = (value: Option.Option<Schema.Json>) =>

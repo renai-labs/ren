@@ -1,4 +1,4 @@
-export * as ArtifactCloudflarePlan from "./cloudflare-plan.js"
+export * as ArtifactDurableObjects from "./durable-objects.js"
 
 import { Artifact } from "@ren/schema/artifact"
 import { Result, Schema } from "effect"

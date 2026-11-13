@@ -71,7 +71,8 @@ precedence over the same keys in `server_environment`. Leaving this variable
 unset preserves the existing provider configuration.
 
 The drives bucket expires temporary `artifact-uploads/` objects after seven days.
-Retained source archives and provider recovery state are outside that prefix.
+Retained source archives are outside that prefix; the provider keeps its
+recovery state in Postgres.
 The existing server bucket policy covers their access; environments must be able
 to reach the bucket endpoint for presigned uploads and downloads.
 
