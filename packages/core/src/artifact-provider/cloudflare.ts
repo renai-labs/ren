@@ -19,7 +19,6 @@ export const State = Schema.Struct({
   version: Schema.Literal(3),
   account: Schema.String,
   namespace: Schema.String,
-  domain: Schema.String,
   script: Schema.String,
   plan: ArtifactDurableObjects.State,
   active: Schema.NullOr(Snapshot),
@@ -111,12 +110,6 @@ export const putScript = Effect.fn("ArtifactCloudflare.putScript")(function* (in
   )).result.etag
 })
 
-const origin = (state: State) => `https://${state.script}.${state.domain}`
-const deployed = (state: State, snapshot: Snapshot) => ({
-  remote: { ...state, active: snapshot, pending: null, stopped: false, stop: null },
-  url: `${origin(state)}${ArtifactProvider.entryPath(snapshot.config)}`,
-})
-
 export const layer = Layer.effect(
   ArtifactProvider.Service,
   Effect.gen(function* () {
@@ -128,6 +121,12 @@ export const layer = Layer.effect(
       recoverWithin: Config.Duration("ARTIFACT_CLOUDFLARE_RECOVERY_TIMEOUT").pipe(
         Config.withDefault(Duration.seconds(25)),
       ),
+    })
+    // oxlint-disable-next-line ren/no-comments -- The address of an artifact: its host name under the artifact domain. The domain is not the artifact's state: the script in the namespace does not depend on it.
+    const origin = (host: string) => `https://${host}.${config.domain}`
+    const deployed = (state: State, snapshot: Snapshot) => ({
+      remote: { ...state, active: snapshot, pending: null, stopped: false, stop: null },
+      url: `${origin(state.script)}${ArtifactProvider.entryPath(snapshot.config)}`,
     })
     const storage = yield* ObjectStorage.Service
     const http = yield* HttpClient.HttpClient
@@ -154,7 +153,7 @@ export const layer = Layer.effect(
     const probe = (state: State, version: Version) =>
       http
         .execute(
-          HttpClientRequest.get(`${origin(state)}/`).pipe(
+          HttpClientRequest.get(`${origin(state.script)}/`).pipe(
             HttpClientRequest.setHeader("x-ren-artifact-probe", "1"),
             HttpClientRequest.setHeader("cache-control", "no-cache"),
           ),
@@ -175,7 +174,9 @@ export const layer = Layer.effect(
         {
           marker: probe(state, version),
           route: http
-            .get(`${origin(state)}${Option.isSome(source) ? ArtifactProvider.entryPath(source.value.config) : "/"}`)
+            .get(
+              `${origin(state.script)}${Option.isSome(source) ? ArtifactProvider.entryPath(source.value.config) : "/"}`,
+            )
             .pipe(
               Effect.map((response) =>
                 Option.isSome(source) ? response.status >= 200 && response.status < 400 : response.status === 410,
@@ -317,20 +318,14 @@ export const layer = Layer.effect(
       persist: (state: State) => Effect.Effect<void, ArtifactProvider.Failed>,
     ) {
       const initial = Option.getOrNull(remote)
-      if (
-        initial &&
-        (initial.account !== config.account ||
-          initial.namespace !== config.namespace ||
-          initial.domain !== config.domain)
-      )
+      if (initial && (initial.account !== config.account || initial.namespace !== config.namespace))
         return yield* failed(
-          "This artifact belongs to another Cloudflare account, namespace or domain; provider migration is not supported",
+          "This artifact belongs to another Cloudflare account or namespace; provider migration is not supported",
         )
       let current: State = initial ?? {
         version: 3,
         account: config.account,
         namespace: config.namespace,
-        domain: config.domain,
         script: Artifact.label(artifactId),
         plan: { objects: {} },
         active: null,

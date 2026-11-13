@@ -69,9 +69,10 @@ stops require their original provider; the Core checks provider identity before
 performing a remote operation. Restoring the original configuration lets pending
 stop work finish on its original provider.
 
-The provider also records the account, the namespace and the domain in the
-artifact row's provider state. Changing one of them does not migrate existing
-artifacts: operations fail closed rather than recreating their state elsewhere.
+The provider also records the account and the namespace in the artifact row's
+provider state. Changing one of them does not migrate existing artifacts:
+operations fail closed rather than recreating their state elsewhere. The domain
+is not part of that state: a new domain serves the same scripts.
 An artifact published as an ordinary Worker on `workers.dev` starts again in
 the namespace (see "Upgrading from ordinary Workers").
 
