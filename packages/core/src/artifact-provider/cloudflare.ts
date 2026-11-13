@@ -29,7 +29,10 @@ export const State = Schema.Struct({
   publication: Schema.optional(Schema.String),
 })
 type State = typeof State.Type
-const Metadata = Schema.Struct({ result: Schema.Struct({ script: Schema.Struct({ etag: Schema.NonEmptyString }) }) })
+// oxlint-disable-next-line ren/no-comments -- A dispatch namespace answers 200 with a null script for a name it does not have, not 404.
+const Metadata = Schema.Struct({
+  result: Schema.Struct({ script: Schema.NullOr(Schema.Struct({ etag: Schema.NonEmptyString })) }),
+})
 const UploadSession = Schema.Struct({
   result: Schema.Struct({ jwt: Schema.NonEmptyString, buckets: Schema.Array(Schema.Array(Schema.String)) }),
 })
@@ -143,9 +146,10 @@ export const layer = Layer.effect(
       if (response.status === 404) return Option.none<string>()
       if (response.status !== 200)
         return yield* refused("Cannot read the Cloudflare Worker metadata", response.status, response.body)
-      const etag = (yield* Schema.decodeUnknownEffect(Metadata)(response.body).pipe(Effect.mapError(failed))).result
-        .script.etag
-      return Option.some(etag.startsWith('"') ? etag : JSON.stringify(etag))
+      const script = (yield* Schema.decodeUnknownEffect(Metadata)(response.body).pipe(Effect.mapError(failed))).result
+        .script
+      if (!script) return Option.none<string>()
+      return Option.some(script.etag.startsWith('"') ? script.etag : JSON.stringify(script.etag))
     })
     const probe = (state: State, version: Version) =>
       http
