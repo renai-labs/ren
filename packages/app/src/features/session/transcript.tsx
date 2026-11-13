@@ -1386,7 +1386,7 @@ export function Transcript(props: TranscriptProps) {
     return (
       <div className="min-h-0 flex-1 overflow-hidden">
         {props.more && !props.loadingHistory ? <LoadEarlier onVisible={props.onLoadMore} /> : null}
-        <div className="mx-auto w-full max-w-3xl p-6">
+        <div className="mx-auto w-full max-w-(--container-chat) p-6">
           <MessagesSkeleton />
         </div>
       </div>
@@ -1478,7 +1478,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
         }}
       >
         {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
-        <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
+        <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
           {blocks.map((block, index) => (
             <MessageScrollerItem
               key={block.key}

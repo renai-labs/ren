@@ -11,7 +11,14 @@ import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
-import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../components/settings-shared.js"
+import {
+  Choice,
+  deliveries,
+  details,
+  PasswordDialog,
+  ThemePicker,
+  timelineWidths,
+} from "../../components/settings-shared.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
@@ -21,6 +28,7 @@ export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
   const me = useMe()
   const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
+  const [timelineWidth, setTimelineWidth] = useState(() => ChatPreferences.timelineWidth.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
   const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
@@ -60,6 +68,12 @@ export function PreferencesPage() {
     const next = value === "detailed" ? "detailed" : "compact"
     ChatPreferences.detail.write(platform.storage, next)
     setDetail(next)
+  }
+  const chooseTimelineWidth = (value: string) => {
+    const next = value === "focused" || value === "wide" ? value : "comfortable"
+    ChatPreferences.timelineWidth.write(platform.storage, next)
+    document.documentElement.dataset.timelineWidth = next
+    setTimelineWidth(next)
   }
   const chooseFollowUp = (value: string) => {
     const next = value === "queue" ? "queue" : "steer"
@@ -123,6 +137,18 @@ export function PreferencesPage() {
           {[
             <Row key="detail" title="Detail" description="How much of Ren’s work a chat shows.">
               <Choice label="Detail" options={details} value={detail} onChange={chooseDetail} />
+            </Row>,
+            <Row
+              key="timeline-width"
+              title="Timeline width"
+              description="Narrower lines are easier to scan. Wider lines show more at once."
+            >
+              <Choice
+                label="Timeline width"
+                options={timelineWidths}
+                value={timelineWidth}
+                onChange={chooseTimelineWidth}
+              />
             </Row>,
             <Row key="delivery" title="Messages sent while Ren works">
               <Choice
