@@ -117,12 +117,18 @@ function Launcher(props: { onPick: (kind: Kind) => void }) {
 export function WorkspacePanel(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
+  browser: string | undefined
+  browserIds: ReadonlyArray<string>
+  running: boolean
+  open: boolean
   maximized: boolean
   onMaximize: (maximized: boolean) => void
   onClose: () => void
 }) {
-  const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
-  const [active, setActive] = useState<string>()
+  const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>(() =>
+    props.browser ? [{ id: "browser", kind: "browser", label: "Browser" }] : [],
+  )
+  const [active, setActive] = useState(tabs.at(0)?.id)
   const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
   const pick = (kind: Kind) => {
     const meta = byKind.get(kind)
@@ -139,6 +145,11 @@ export function WorkspacePanel(props: {
     }
     setTabs([...tabs, tab])
     setActive(tab.id)
+  }
+  const [shownBrowser, setShownBrowser] = useState(props.browser)
+  if (props.browser !== shownBrowser) {
+    setShownBrowser(props.browser)
+    if (props.browser) pick("browser")
   }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
@@ -205,7 +216,10 @@ export function WorkspacePanel(props: {
             {tab.kind === "changes" ? <ChangesTab root={props.root} messages={props.messages} /> : null}
             {tab.kind === "progress" ? <ProgressTab messages={props.messages} /> : null}
             {tab.kind === "computer" ? <ComputerTab /> : null}
-            {tab.kind === "browser" ? <BrowserTab /> : null}
+            {/* oxlint-disable-next-line ren/no-comments -- The stream keeps the cloud browser running and billed, so a closed panel does not follow it. */}
+            {tab.kind === "browser" && props.open ? (
+              <BrowserTab root={props.root} ids={props.browserIds} running={props.running} />
+            ) : null}
             {tab.kind === "files" ? <FilesTab root={props.root} /> : null}
             {tab.kind === "terminal" ? <TerminalTab root={props.root} /> : null}
           </TabsContent>
