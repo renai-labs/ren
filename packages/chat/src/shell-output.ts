@@ -2,12 +2,16 @@ export * as ShellOutput from "./shell-output.js"
 
 import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Stream } from "effect"
+import { TimelineText } from "./timeline-text.js"
 
 export const tailBytes = 64 * 1024
 
 export const progressLimit = 32
 
 export const pollInterval = "1 second"
+
+export const tail = (output: string, lines: number) =>
+  TimelineText.shellOutput(output).trimEnd().split("\n").slice(-lines).join("\n")
 
 interface Progress {
   readonly cursor: number

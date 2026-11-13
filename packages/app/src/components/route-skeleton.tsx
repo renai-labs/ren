@@ -343,6 +343,13 @@ function SettingsPageSkeleton() {
                 <Button variant="outline">Steer</Button>
               </Row>,
               <Row
+                key="background"
+                title="Background activity"
+                description="Show running subagents and shells above the composer."
+              >
+                <Button variant="outline">Left</Button>
+              </Row>,
+              <Row
                 key="notify"
                 title="Notify me when Ren finishes or needs input"
                 description="Only while Ren’s tab is in the background."

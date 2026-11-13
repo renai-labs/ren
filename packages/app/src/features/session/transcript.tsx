@@ -48,6 +48,7 @@ import { AsyncResult } from "effect/reactivity"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
+import { Kbd, KbdGroup } from "@ren/ui/kbd"
 import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
 import {
   Attachment,
@@ -132,6 +133,7 @@ export interface TranscriptProps {
   readonly onConnected?: ((app: string) => void) | undefined
   readonly onChangeModel?: (() => void) | undefined
   readonly onStop?: (() => void) | undefined
+  readonly background?: { readonly blocking: boolean; readonly onMove: () => void } | undefined
 }
 
 type Step =
@@ -762,6 +764,14 @@ function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: Re
   )
 }
 
+const movedToBackground = (tool: SessionMessage.Tool) =>
+  tool.state.status === "completed" && ToolState.metadata(tool).status === "running"
+
+function shellVerb(tool: SessionMessage.Tool, options: { readonly running: boolean }) {
+  if (!movedToBackground(tool)) return ToolDisplay.label(tool)
+  return options.running ? "Running in background" : "Ran in background"
+}
+
 function LiveShell(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; shellID: Shell.ID }) {
   const pending = props.tool.state.status === "streaming" || props.tool.state.status === "running"
   const live = ChatReact.useShellRunning(props.view.root, props.shellID)
@@ -774,7 +784,7 @@ function LiveShell(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; she
   return (
     <StepRow
       icon={<toolIcons.command />}
-      verb={ToolDisplay.label(props.tool)}
+      verb={shellVerb(props.tool, { running })}
       subject={ToolDisplay.subtitle(props.tool)}
       running={running}
       failed={failed}
@@ -788,6 +798,7 @@ type Card = ReturnType<typeof useSubagentCard>
 function subagentTitle(card: Card) {
   if (card.needsInput) return "Needs your input"
   if (card.status === "failed") return "Failed to delegate"
+  if (card.background) return card.status === "running" ? "Running in background" : "Ran in background"
   return card.status === "running" || card.status === "delegating" ? "Delegating" : "Delegated"
 }
 
@@ -963,8 +974,10 @@ function Steps(props: {
   view: ChatAtoms.View
   onOpenChild: (id: Session.ID) => void
 }) {
-  const count = props.steps.filter((step) => step.kind !== "text").length
-  const runs = props.steps.reduce<Array<{ key: string; text?: Extract<Step, { kind: "text" }>; steps: Step[] }>>(
+  const backgrounded = props.steps.filter((step) => step.kind === "tool" && movedToBackground(step.tool))
+  const steps = props.steps.filter((step) => !backgrounded.includes(step))
+  const count = steps.filter((step) => step.kind !== "text").length
+  const runs = steps.reduce<Array<{ key: string; text?: Extract<Step, { kind: "text" }>; steps: Step[] }>>(
     (all, step) => {
       const last = all.at(-1)
       if (step.kind === "text") all.push({ key: step.key, text: step, steps: [] })
@@ -1005,6 +1018,9 @@ function Steps(props: {
           )}
         </TraceCollapsibleContent>
       </TraceCollapsible>
+      {backgrounded.map((step) => (
+        <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
+      ))}
     </Trace>
   )
 }
@@ -1310,16 +1326,41 @@ function History(props: { loading: boolean; onLoadMore: () => void }) {
   )
 }
 
-function WorkingMarker(props: { busy: boolean; working: boolean }) {
+function WorkingMarker(props: { busy: boolean; working: boolean; background: TranscriptProps["background"] }) {
   if (!props.busy && !props.working) return null
+  const labelled = props.working || props.background?.blocking === true
   return (
     // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
     <MessageScrollerItem messageId="working">
-      <Marker
-        aria-hidden={!props.working}
-        className={cn("transition-opacity duration-150", !props.working && "opacity-0")}
-      >
-        <MarkerContent className="shimmer motion-reduce:shimmer-none">Working on the next step</MarkerContent>
+      <Marker className={cn(props.background && "min-h-6.5")}>
+        <MarkerContent
+          aria-hidden={!labelled}
+          className={cn(
+            "shimmer whitespace-nowrap transition-opacity duration-150 motion-reduce:shimmer-none",
+            !labelled && "w-0 overflow-hidden opacity-0",
+          )}
+        >
+          Working on the next step
+        </MarkerContent>
+        {props.background ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Press Ctrl+B to move running work to the background"
+            inert={!props.background.blocking}
+            className={cn(
+              "transition-opacity duration-150 motion-reduce:transition-none",
+              !props.background.blocking && "opacity-0",
+            )}
+            onClick={props.background.onMove}
+          >
+            Move to background
+            <KbdGroup className="text-muted-foreground">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>B</Kbd>
+            </KbdGroup>
+          </Button>
+        ) : null}
       </Marker>
     </MessageScrollerItem>
   )
@@ -1507,7 +1548,11 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
               <EmptyState>{props.empty}</EmptyState>
             </MessageScrollerItem>
           ) : null}
-          <WorkingMarker busy={props.busy || watched.live(props.activeMessageID)} working={props.working} />
+          <WorkingMarker
+            busy={props.busy || watched.live(props.activeMessageID)}
+            working={props.working}
+            background={props.background}
+          />
         </MessageScrollerContent>
       </MessageScrollerViewport>
       {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}

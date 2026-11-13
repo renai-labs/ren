@@ -13,6 +13,8 @@ export interface Task {
   readonly id: string
   readonly type: "subagent" | "shell"
   readonly label: string
+  readonly started: number
+  readonly sessionID: string
   readonly agent?: string
 }
 
@@ -21,6 +23,19 @@ export interface Blocking {
   readonly partID: string
   readonly id: string | undefined
   readonly label: string | undefined
+  readonly started: number
+  readonly agent?: string | undefined
+}
+
+export interface Activity {
+  readonly key: string
+  readonly type: "subagent" | "shell"
+  readonly label: string
+  readonly started: number
+  readonly agent?: string | undefined
+  readonly sessionID: string | undefined
+  readonly id: string | undefined
+  readonly blocking: boolean
 }
 
 export interface Background {
@@ -118,6 +133,8 @@ export const taskSession = (state: ChatState.State, parentID: string, tool: Sess
 const isWork = (part: SessionMessage.Content): part is SessionMessage.Tool =>
   part.type === "tool" && (part.name === "subagent" || part.name === "shell")
 
+const started = (part: SessionMessage.Tool) => DateTime.toEpochMillis(part.time.ran ?? part.time.created)
+
 export const background = (state: ChatState.State, sessionID: string): Background => {
   const messages = ChatState.messages(state, sessionID)
   const completed = new Set(
@@ -141,13 +158,24 @@ export const background = (state: ChatState.State, sessionID: string): Backgroun
     if (!id || completed.has(id)) return []
     const input = ToolState.input(part)
     const agent = string(input.agent)
-    return [{ id, type: "subagent", label: string(input.description) ?? id, ...(agent && { agent }) }]
+    return [
+      {
+        id,
+        type: "subagent",
+        label: string(input.description) ?? id,
+        started: started(part),
+        sessionID: id,
+        ...(agent && { agent }),
+      },
+    ]
   })
   const shells = running.flatMap((part): ReadonlyArray<Task> => {
     if (part.name !== "shell") return []
     const id = string(ToolState.metadata(part).shellID) ?? part.id
     if (completed.has(part.id) || completed.has(id)) return []
-    return [{ id, type: "shell", label: string(ToolState.input(part).command) ?? part.id }]
+    return [
+      { id, type: "shell", label: string(ToolState.input(part).command) ?? part.id, started: started(part), sessionID },
+    ]
   })
   const latest = messages.findLast((message) => message.type === "assistant" && !message.time.completed)
   const blocking =
@@ -161,8 +189,10 @@ export const background = (state: ChatState.State, sessionID: string): Backgroun
             return {
               type: part.name === "shell" ? "shell" : "subagent",
               partID: part.id,
-              id: string(part.name === "shell" ? metadata.shellID : metadata.sessionID),
+              id: part.name === "shell" ? string(metadata.shellID) : taskSession(state, sessionID, part),
               label: string(part.name === "shell" ? input.command : input.description),
+              started: started(part),
+              agent: string(input.agent),
             }
           })
       : []
@@ -175,7 +205,15 @@ export const background = (state: ChatState.State, sessionID: string): Backgroun
       )
     )
       return []
-    return [{ id: info.id, type: "subagent", label: info.title ?? info.id }]
+    return [
+      {
+        id: info.id,
+        type: "subagent",
+        label: info.title ?? info.id,
+        started: DateTime.toEpochMillis(info.time.created),
+        sessionID: info.id,
+      },
+    ]
   })
   const live = ChatState.shells(state, sessionID).flatMap((shell): ReadonlyArray<Task> => {
     if (shell.status !== "running") return []
@@ -186,13 +224,53 @@ export const background = (state: ChatState.State, sessionID: string): Backgroun
       )
     )
       return []
-    return [{ id: shell.id, type: "shell", label: shell.command }]
+    return [
+      { id: shell.id, type: "shell", label: shell.command, started: shell.time.started, sessionID: shell.sessionID },
+    ]
   })
   return {
     blocking,
-    tasks: [...new Map([...subagents, ...active, ...shells, ...live].map((task) => [task.id, task])).values()],
+    tasks: [
+      ...[...subagents, ...active, ...shells, ...live]
+        .reduce((tasks, task) => tasks.set(task.id, { ...tasks.get(task.id), ...task }), new Map<string, Task>())
+        .values(),
+    ],
   }
 }
+
+export const activity = (state: ChatState.State, sessionID: string): ReadonlyArray<Activity> => {
+  const work = background(state, sessionID)
+  const live = ChatState.shells(state, sessionID).filter((shell) => shell.status === "running")
+  const found = (item: Blocking) =>
+    item.id ?? (item.type === "shell" ? live.find((shell) => shell.command === item.label)?.id : undefined)
+  return [
+    ...work.blocking.map((item): Activity => ({
+      key: item.partID,
+      type: item.type,
+      label: item.label ?? "",
+      started: item.started,
+      sessionID: found(item) && (item.type === "shell" ? sessionID : found(item)),
+      id: found(item),
+      blocking: true,
+      agent: item.agent,
+    })),
+    ...work.tasks.map((task): Activity => ({
+      key: task.id,
+      type: task.type,
+      label: task.label,
+      started: task.started,
+      sessionID: task.sessionID,
+      id: task.id,
+      blocking: false,
+      agent: task.agent,
+    })),
+  ]
+}
+
+export const counts = (items: ReadonlyArray<Pick<Activity, "type">>) => ({
+  subagents: items.filter((item) => item.type === "subagent").length,
+  shells: items.filter((item) => item.type === "shell").length,
+})
 
 export type Attention = "asking" | "running" | "idle"
 
@@ -253,7 +331,7 @@ export const subagent = (state: ChatState.State, parentID: string, tool: Session
   const agent = string(input.agent) ?? string(input.subagent_type)
   const background = tool.state.status === "completed" && ToolState.metadata(tool).status === "running"
   const status = subagentStatus(tool, {
-    running: background || (child ? ChatState.activity(state, child) === "running" : false),
+    running: child ? ChatState.activity(state, child) === "running" : background,
   })
   const tools = toolsOf(state, child)
   const current = status === "running" ? tools.findLast((item) => item.state.status !== "streaming") : undefined

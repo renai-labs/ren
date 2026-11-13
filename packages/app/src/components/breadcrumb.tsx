@@ -1,7 +1,8 @@
 export * as Breadcrumb from "./breadcrumb.js"
 
 import { Fragment, type ComponentProps, type ReactNode } from "react"
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@ren/ui/breadcrumb"
+import { Button } from "@ren/ui/button"
 import { EditableText } from "./editable-text.js"
 import { cn } from "cn"
 
@@ -31,6 +32,17 @@ export function Root(props: {
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>
+  )
+}
+
+export function Action(props: { onClick: () => void; children: ReactNode }) {
+  return (
+    <BreadcrumbLink
+      render={<Button variant="link" className="h-auto max-w-60 p-0 font-normal text-inherit hover:no-underline" />}
+      onClick={props.onClick}
+    >
+      <span className="truncate">{props.children}</span>
+    </BreadcrumbLink>
   )
 }
 

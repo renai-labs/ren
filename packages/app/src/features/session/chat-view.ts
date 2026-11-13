@@ -8,6 +8,8 @@ import { sessionTitle } from "../../lib/sessions.js"
 
 const noRows: ReadonlyArray<TimelineRow.Row> = []
 
+const noActivity: ReadonlyArray<Family.Activity> = []
+
 export const childTitle = (state: ChatState.State, sessionID: string) =>
   sessionTitle(Family.childTitle(state, sessionID, ""), "Subagent")
 
@@ -33,6 +35,7 @@ export function useView(root: Session.ID, child: Session.ID | undefined) {
     messages: ChatState.messages(state, viewed),
     rows: projection?.rows ?? noRows,
     running: ChatState.activity(state, viewed) === "running",
+    activity: child ? noActivity : Family.activity(state, root),
     working: projection ? Working.show(state, viewed, projection, workingRoot(state, { root, child })) : false,
     permission,
     permissionTitle: permission ? childTitle(state, permission.sessionID) : "",

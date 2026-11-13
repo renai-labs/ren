@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, Composer, SessionTasks, type ChatSession } from "@ren/chat"
+import { ChatState, Composer, SessionTasks, type ChatSession, type Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -26,6 +26,7 @@ import { useAttentionNotification } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Keyboard } from "../../platform/keyboard.js"
 
 const statusesOf = (state: ChatState.State, sessionID: Session.ID): ReadonlyMap<string, ChatState.PendingStatus> =>
   new Map(
@@ -142,6 +143,23 @@ const viewerOf = (user: {
   image: user.image ?? undefined,
 })
 
+function useBackgroundWork(root: Session.ID, child: Session.ID | undefined, activity: ReadonlyArray<Family.Activity>) {
+  const background = ChatReact.useAction(root, (opened) => opened.background)
+  const blocking = activity.some((item) => item.blocking)
+  const move = () =>
+    void background().catch((error: unknown) =>
+      toast.error("Could not move the work to the background", { description: errorMessage(error) }),
+    )
+  Keyboard.useKeyDown((event) => {
+    if (child || !blocking || event.key !== "b" || !event.ctrlKey || event.metaKey || event.altKey) return
+    event.preventDefault()
+    event.stopPropagation()
+    move()
+  })
+  if (child) return
+  return { blocking, onMove: move }
+}
+
 const visibleTasks = <A>(
   tasks: ReadonlyArray<A>,
   state: { readonly running: boolean; readonly unfinished: boolean },
@@ -209,6 +227,7 @@ export function useChat(
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(root))
   const restart = useMutation(api.chat.retry.mutationOptions())
   const archive = useMutation(api.session.archive.mutationOptions())
+  const backgroundWork = useBackgroundWork(root, child, view.activity)
   const reverted = ChatState.revertMessageID(state, root) !== undefined
   const tasks = SessionTasks.latest(ChatState.messages(state, root))
 
@@ -245,6 +264,9 @@ export function useChat(
     rows: view.rows,
     activeMessageID: view.projection?.activeMessageID,
     busy: view.running,
+    activity: view.activity,
+    background: backgroundWork,
+    backgroundActivity: ChatPreferences.backgroundActivity.read(platform.storage),
     working: view.working,
     statuses: statusesOf(state, view.viewed),
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
