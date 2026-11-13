@@ -466,11 +466,6 @@ function StepItem(props: { step: Step }) {
   )
 }
 
-function workedLabel(props: { running: boolean; workedFor: string | undefined }) {
-  if (props.running) return "Working"
-  return props.workedFor ? `Worked for ${props.workedFor}` : "Worked"
-}
-
 export function StepRuns(props: { steps: ReadonlyArray<Step> }) {
   const timeline = useTimeline()
   const runs = props.steps.reduce<Array<{ key: string; text?: Extract<Step, { kind: "text" }>; steps: Step[] }>>(
@@ -552,7 +547,7 @@ function GroupStep(props: { step: Extract<Step, { kind: "group" }> }) {
   )
 }
 
-export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | undefined; running: boolean }) {
+export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | undefined }) {
   const backgrounded = props.steps.filter((step) => step.kind === "tool" && ToolState.backgrounded(step.tool))
   const steps = props.steps.filter((step) => step.kind !== "tool" || !ToolState.backgrounded(step.tool))
   const count = leaves(steps).filter((step) => step.kind !== "text").length
@@ -561,11 +556,11 @@ export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | u
       {steps.length > 0 ? (
         <TraceCollapsible>
           <TraceCollapsibleTrigger>
-            <TraceLine status={props.running ? "running" : undefined}>
+            <TraceLine>
               <TraceIcon>
                 <IconClock />
               </TraceIcon>
-              <TraceTitle>{workedLabel(props)}</TraceTitle>
+              <TraceTitle>{props.workedFor ? `Worked for ${props.workedFor}` : "Worked"}</TraceTitle>
               <TraceDescription>{count === 1 ? "1 step" : `${count} steps`}</TraceDescription>
             </TraceLine>
           </TraceCollapsibleTrigger>
