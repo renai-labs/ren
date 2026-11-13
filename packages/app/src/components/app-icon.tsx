@@ -30,7 +30,7 @@ export function AppAvatarImage(props: { src: string | undefined }) {
       src={props.src}
       alt=""
       onLoad={(event) => setTiled(needsTile(event))}
-      className={tiled ? onWhiteTile : "object-cover"}
+      className={tiled ? onWhiteTile : "bg-white object-cover"}
     />
   )
 }
