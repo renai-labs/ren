@@ -69,13 +69,23 @@ export const handoff = (state: ChatState.State, prompt: Prompt, now: DateTime.Ut
   })
 }
 
-export const rollback = (state: ChatState.State, sessionID: string, id: string): ChatState.State => {
-  if (!state.outbox.has(id)) return state
-  return Reducer.retract({ ...state, outbox: new Set([...state.outbox].filter((item) => item !== id)) }, sessionID, id)
-}
+const settled = (state: ChatState.State, id: string): ChatState.State => ({
+  ...state,
+  outbox: new Set([...state.outbox].filter((item) => item !== id)),
+  stalled: new Map([...state.stalled].filter(([item]) => item !== id)),
+})
+
+export const rollback = (state: ChatState.State, sessionID: string, id: string): ChatState.State =>
+  state.outbox.has(id) ? Reducer.retract(settled(state, id), sessionID, id) : state
 
 export const acknowledge = (state: ChatState.State, id: string): ChatState.State =>
-  state.outbox.has(id) ? { ...state, outbox: new Set([...state.outbox].filter((item) => item !== id)) } : state
+  state.outbox.has(id) ? settled(state, id) : state
+
+export const stall = (state: ChatState.State, id: string): ChatState.State =>
+  state.outbox.has(id) ? { ...state, stalled: new Map(state.stalled).set(id, "unsent") } : state
+
+export const resume = (state: ChatState.State, id: string): ChatState.State =>
+  state.stalled.has(id) ? { ...state, stalled: new Map([...state.stalled].filter(([item]) => item !== id)) } : state
 
 export const propose = (
   state: ChatState.State,

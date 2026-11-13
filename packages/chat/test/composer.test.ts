@@ -65,6 +65,15 @@ describe("Composer draft", () => {
     expect(Composer.retryID({ ...failed, text: "Plan the launch now" })).toBeUndefined()
   })
 
+  test("recalls a removed message after the text in the composer, on a new paragraph, with its files", () => {
+    const file = { path: "/a.png", name: "a.png", mime: "image/png", size: 1 }
+    expect(Composer.recall(draft("typing"), { text: "removed", files: [file] })).toEqual({
+      ...draft("typing\n\nremoved"),
+      files: [file],
+    })
+    expect(Composer.recall(Composer.empty, { text: "removed" })).toEqual(draft("removed"))
+  })
+
   test("restores an unsent draft only when the composer is untouched, otherwise keeps the new text after it", () => {
     const id = SessionMessage.ID.make("msg_retry")
     const restored = Composer.restore(draft("Follow-up", ["new block"]), draft("Plan the launch", ["log"]), id)
