@@ -64,6 +64,7 @@ variable "artifact_cloudflare" {
     account_id = string
     namespace  = string
     domain     = string
+    names      = optional(string)
   })
   default     = null
   description = "Serve artifacts on Cloudflare Workers for Platforms at https://<label>.<domain>/. infra/cloudflare makes the namespace and the domain. Store CLOUDFLARE_API_TOKEN in the existing server secret before deploying."
