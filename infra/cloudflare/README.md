@@ -1,19 +1,18 @@
 # infra/cloudflare
 
-Terraform for the domains that serve artifacts. One module (`site/`), two instances: production and staging. The design is in [specs/runtime/artifact-sites.md](../../specs/runtime/artifact-sites.md).
+Terraform for the domain that serves artifacts. The design is in [specs/runtime/artifact-sites.md](../../specs/runtime/artifact-sites.md).
 
 ```
-browser ──HTTPS <label>.<domain>──▶ route *.<domain>/* ──▶ dispatcher ──ARTIFACTS.get(<label>)──▶ artifact Worker in ren-artifacts-<environment>
+browser ──HTTPS <label>.<domain>──▶ route *.<domain>/* ──▶ dispatcher ──ARTIFACTS.get(<label>)──▶ artifact Worker in ren-artifacts
 browser ──HTTPS <domain>──▶ redirect rule ──301──▶ redirect_url
 ```
 
 | File            | Contents                                                                               |
 | --------------- | -------------------------------------------------------------------------------------- |
 | `dispatcher.js` | The dispatcher Worker                                                                  |
-| `main.tf`       | The production and staging instances                                                   |
-| `site/main.tf`  | Zone, DNS records, redirect rule, zone settings, dispatch namespace, dispatcher, route |
+| `main.tf`       | Zone, DNS records, redirect rule, zone settings, dispatch namespace, dispatcher, route |
 
-Terraform owns everything in this stack. Ren owns only the Workers in each namespace and their Durable Objects.
+Terraform owns everything in this stack. Ren owns only the Workers in the namespace and their Durable Objects.
 
 ## Rules
 
@@ -29,6 +28,6 @@ terraform init -backend-config="bucket=<state bucket>" -backend-config="key=<key
 terraform plan -out=plan && terraform apply plan
 ```
 
-The `terraform.tfvars` has `account_id`, `staging_domain` and, after the Public Suffix List pull request, `psl_pull_request` (domain → pull request URL).
+The `terraform.tfvars` has `account_id` and, after the Public Suffix List pull request, `psl_pull_request`.
 
-After the first apply, set the `name_servers` output at each domain's registrar. Set the server's `ARTIFACT_CLOUDFLARE_NAMESPACE` from the `namespaces` output, and `ARTIFACT_DOMAIN` to the domain.
+After the first apply, set the `name_servers` output at the domain's registrar. Set the server's `ARTIFACT_CLOUDFLARE_NAMESPACE` to the `namespace` output, and `ARTIFACT_DOMAIN` to the domain.
