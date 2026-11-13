@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Artifact } from "@ren/schema/artifact"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Fiber, Layer, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { join } from "node:path"
@@ -57,6 +57,33 @@ const stop = (artifacts: Artifacts.Interface, owner: Artifacts.Owner, id: Artifa
     yield* idle(id)
   })
 
+// oxlint-disable-next-line ren/no-comments -- A Worker whose answer waits for release, so its deployment holds in the provider's readiness check.
+const held = Effect.gen(function* () {
+  const entered = Promise.withResolvers<void>()
+  const released = Promise.withResolvers<void>()
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    idleTimeout: 0,
+    fetch: async () => {
+      entered.resolve()
+      await released.promise
+      return new Response("ready")
+    },
+  })
+  yield* Effect.addFinalizer(() =>
+    Effect.promise(async () => {
+      released.resolve()
+      await server.stop(true)
+    }),
+  )
+  return {
+    files: { "_worker.js": text(`export default { fetch: () => fetch("http://127.0.0.1:${server.port}/") }`) },
+    entered: Effect.promise(() => entered.promise),
+    release: Effect.sync(() => released.resolve()),
+  }
+})
+
 describe("Artifacts with durable workflows and workerd", () => {
   it.live("an upload link names no checksum, which S3 and R2 would hold the archive to", () =>
     Effect.gen(function* () {
@@ -67,25 +94,150 @@ describe("Artifacts with durable workflows and workerd", () => {
     }),
   )
 
-  it.live("a refused archive leaves no copy among the artifact's archives", () =>
+  it.live("a refused archive fails its deployment and leaves no copy among the artifact's archives", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifacts.Service
       const storage = yield* ObjectStorage.Service
       const owner = yield* Seed.owner()
       const id = artifactId()
-      const refused = yield* ArtifactSamples.deploy(artifacts, owner, id, {
-        deploymentId: deployment(),
+      const deploymentId = deployment()
+      yield* ArtifactSamples.deploy(artifacts, owner, id, {
+        deploymentId,
         title: "Escaping",
         config: { entry: "index.html" },
         files: { "index.html": text("x"), "../escape.txt": text("y") },
-      }).pipe(Effect.flip)
+      })
+      const refused = yield* settle(artifacts, owner, id, deploymentId)
       const kept = yield* Effect.promise(() =>
         storage.s3.send(
           new ListObjectsV2Command({ Bucket: storage.bucket, Prefix: `${owner.organizationId}/artifacts/${id}/` }),
         ),
       )
-      expect([refused._tag, kept.KeyCount ?? 0]).toEqual(["Primitive.Invalid", 0])
+      expect([refused.status, kept.KeyCount ?? 0]).toEqual(["failed", 0])
     }).pipe(Effect.provide(ObjectStorage.layer.pipe(Layer.provide(TestDrives.layer)))),
+  )
+
+  it.live("a deployment checks its archive in its run, and an archive with no entry fails there with the reason", () =>
+    Effect.gen(function* () {
+      const artifacts = yield* Artifacts.Service
+      const owner = yield* Seed.owner()
+      const id = artifactId()
+      const deploymentId = deployment()
+      const upload = yield* artifacts.upload(owner, id)
+      const body = yield* Effect.promise(() => ArtifactSamples.archive({ "a.txt": "a", "b.txt": "b" }))
+      yield* Effect.promise(() => fetch(upload.url, { method: "PUT", body }))
+      const accepted = yield* artifacts.deploy(owner, id, {
+        deploymentId,
+        uploadId: upload.uploadId,
+        title: "No entry",
+      })
+      expect(accepted.status).toBe("deploying")
+      const failed = yield* settle(artifacts, owner, id, deploymentId)
+      expect([failed.status, failed.error]).toEqual(["failed", expect.stringContaining("index.html")])
+    }),
+  )
+
+  it.live(
+    "a deployment keeps its status after the engine's rows of its runs are gone",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const sql = yield* SqlClient.SqlClient
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        const deploymentId = deployment()
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          deploymentId,
+          title: "Kept",
+          config: { entry: "index.html" },
+          files: { "index.html": text("kept") },
+        })
+        const ready = yield* settle(artifacts, owner, id, deploymentId)
+        expect(ready.status).toBe("ready")
+        yield* sql`delete from cluster_replies where request_id in (select id from cluster_messages where entity_type like 'Workflow/Artifact%' and payload::jsonb ->> 'id' = ${id})`
+        yield* sql`delete from cluster_messages where entity_type like 'Workflow/Artifact%' and payload::jsonb ->> 'id' = ${id}`
+        const after = yield* artifacts.status(owner, id, deploymentId)
+        expect([after.status, after.url]).toEqual(["ready", ready.url])
+      }),
+    120_000,
+  )
+
+  it.live(
+    "a deployment names the version it started from, and Ren refuses a stale one",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        const input = { title: "Base", config: { entry: "index.html" }, files: { "index.html": text("v1") } }
+        const first = deployment()
+        yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: first })
+        expect((yield* settle(artifacts, owner, id, first)).status).toBe("ready")
+        const broken = deployment()
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          ...input,
+          deploymentId: broken,
+          baseDeploymentId: first,
+          config: { entry: "missing.html" },
+        })
+        expect((yield* settle(artifacts, owner, id, broken)).status).toBe("failed")
+        const second = deployment()
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          ...input,
+          deploymentId: second,
+          baseDeploymentId: broken,
+          files: { "index.html": text("v2") },
+        })
+        expect((yield* settle(artifacts, owner, id, second)).status).toBe("ready")
+        const stored = yield* database.db
+          .select({ base: Database.Schema.artifact_deployment.base_deployment_id })
+          .from(Database.Schema.artifact_deployment)
+          .where(eq(Database.Schema.artifact_deployment.id, second))
+        expect(stored).toEqual([{ base: first }])
+        const stale = yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          ...input,
+          deploymentId: deployment(),
+          baseDeploymentId: first,
+        }).pipe(Effect.flip)
+        expect([stale._tag, stale.message]).toEqual(["Primitive.Conflict", expect.stringContaining(second)])
+      }),
+    120_000,
+  )
+
+  it.live(
+    "a defect in a run ends its row as failed and releases the claim",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        const input = { title: "Defect", config: { entry: "index.html" }, files: { "index.html": text("v1") } }
+        const first = deployment()
+        yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: first })
+        expect((yield* settle(artifacts, owner, id, first)).status).toBe("ready")
+        const table = Database.Schema.artifact
+        const remote = (yield* database.db.select({ remote: table.remote }).from(table).where(eq(table.id, id))).at(0)
+        yield* Effect.addFinalizer(() =>
+          database.db
+            .update(table)
+            .set({ remote: remote?.remote ?? null })
+            .where(eq(table.id, id))
+            .pipe(Effect.andThen(stop(artifacts, owner, id)), Effect.ignore),
+        )
+        yield* database.db
+          .update(table)
+          .set({ remote: { unknown: true } })
+          .where(eq(table.id, id))
+        const next = deployment()
+        yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: next })
+        expect((yield* settle(artifacts, owner, id, next)).status).toBe("failed")
+        expect((yield* artifacts.read(owner, id)).pendingDeploymentId).toBeNull()
+      }),
+    120_000,
   )
 
   it.live(
@@ -267,76 +419,49 @@ describe("Artifacts with durable workflows and workerd", () => {
   )
 
   it.live(
-    "accepts asynchronously and stops held deployment work without losing its first source",
+    "stop returns while a deployment holds, takes the claim at once, and ends the deployment as stopped",
     () =>
       Effect.gen(function* () {
         const artifacts = yield* Artifacts.Service
         const database = yield* Database.Service
+        const sql = yield* SqlClient.SqlClient
         const owner = yield* Seed.owner()
         const id = artifactId()
         const deploymentId = deployment()
-        const entered = Promise.withResolvers<void>()
-        const released = Promise.withResolvers<void>()
-        const server = Bun.serve({
-          hostname: "127.0.0.1",
-          port: 0,
-          idleTimeout: 0,
-          fetch: async () => {
-            entered.resolve()
-            await released.promise
-            return new Response("ready")
-          },
-        })
-        yield* Effect.addFinalizer(() =>
-          Effect.promise(async () => {
-            released.resolve()
-            await server.stop(true)
-          }),
-        )
+        const hold = yield* held
         yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
-        const input = {
-          deploymentId,
-          title: "Pending",
-          config: { entry: "_worker.js" },
-          files: { "_worker.js": text(`export default { fetch: () => fetch("http://127.0.0.1:${server.port}/") }`) },
-        }
+        const input = { deploymentId, title: "Pending", config: { entry: "_worker.js" }, files: hold.files }
         expect((yield* ArtifactSamples.deploy(artifacts, owner, id, input)).status).toBe("deploying")
-        yield* Effect.promise(() => entered.promise)
-        expect((yield* ArtifactSamples.deploy(artifacts, owner, id, input)).deploymentId).toBe(deploymentId)
-        expect(
-          (yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: deployment() }).pipe(
-            Effect.flip,
-          ))._tag,
-        ).toBe("Primitive.Conflict")
-        const sql = yield* SqlClient.SqlClient
-        const connection = yield* sql.reserve
-        yield* connection.execute("BEGIN", [], undefined)
-        yield* Effect.addFinalizer(() => connection.execute("ROLLBACK", [], undefined).pipe(Effect.orDie))
-        yield* connection.execute("LOCK TABLE cluster_replies IN SHARE MODE", [], undefined)
-        const stopping = yield* artifacts.stop(owner, id).pipe(Effect.forkScoped)
-        yield* database.db
-          .select({ active: Database.Schema.artifact.pending_deployment_id })
-          .from(Database.Schema.artifact)
-          .where(eq(Database.Schema.artifact.id, id))
-          .pipe(Effect.repeat({ until: (rows) => rows.at(0)?.active !== deploymentId }))
-        expect((yield* artifacts.status(owner, id, deploymentId)).status).toBe("deploying")
-        expect(
-          (yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: deployment() }).pipe(
-            Effect.flip,
-          ))._tag,
-        ).toBe("Primitive.Conflict")
-        yield* connection.execute("COMMIT", [], undefined)
-        yield* Fiber.join(stopping)
-        released.resolve()
-        expect((yield* artifacts.status(owner, id, deploymentId)).status).toBe("stopped")
-        expect(yield* ArtifactSamples.published(artifacts, owner, id)).toEqual(input.files)
-        expect((yield* ArtifactSamples.deploy(artifacts, owner, id, input)).status).toBe("stopped")
-        const row = (yield* database.db
+        yield* hold.entered
+        expect(yield* ArtifactSamples.deploy(artifacts, owner, id, input)).toMatchObject({
+          deploymentId,
+          status: "deploying",
+        })
+        const rows = yield* database.db
           .select()
-          .from(Database.Schema.artifact)
-          .where(eq(Database.Schema.artifact.id, id))).at(0)
-        expect(row?.pending_deployment_id).toBeNull()
-        expect(row?.url).toBeNull()
+          .from(Database.Schema.artifact_deployment)
+          .where(eq(Database.Schema.artifact_deployment.artifact_id, id))
+        const runs =
+          yield* sql`select id from cluster_messages where entity_type = 'Workflow/ArtifactDeploy' and payload::jsonb ->> 'deploymentId' = ${deploymentId}`
+        expect([rows.length, runs.length]).toEqual([1, 1])
+        const stopping = yield* artifacts.stop(owner, id)
+        expect(stopping.status).toBe("stopping")
+        expect((yield* artifacts.stop(owner, id)).deploymentId).toBe(stopping.deploymentId)
+        expect(
+          (yield* ArtifactSamples.deploy(artifacts, owner, id, { ...input, deploymentId: deployment() }).pipe(
+            Effect.flip,
+          ))._tag,
+        ).toBe("Primitive.Conflict")
+        yield* hold.release
+        yield* idle(id)
+        expect((yield* artifacts.status(owner, id, stopping.deploymentId)).status).toBe("stopped")
+        expect((yield* artifacts.status(owner, id, deploymentId)).status).toBe("stopped")
+        expect(yield* artifacts.read(owner, id)).toMatchObject({
+          url: null,
+          pendingDeploymentId: null,
+          publishedDeploymentId: null,
+        })
+        expect((yield* artifacts.download(owner, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
       }),
     120_000,
   )
@@ -407,7 +532,7 @@ describe("Artifacts with durable workflows and workerd", () => {
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
-        expect(stopped?.remote).toBeNull()
+        expect(stopped?.remote).toEqual(before?.remote)
         expect(stopped?.url).toBeNull()
         expect(yield* read(url).pipe(Effect.isFailure)).toBe(true)
         latest = deployment()
@@ -508,7 +633,7 @@ const deploy = (owner: Artifacts.Owner, id: Artifact.ID) =>
       title: "Orders",
       config: { entry: "index.html" },
       files: orders,
-    }),
+    }).pipe(Effect.andThen(idle(id))),
   )
 
 const memberOf = (owner: Effect.Success<ReturnType<typeof Seed.owner>>) => ({
@@ -525,9 +650,9 @@ describe("artifacts for people", () => {
       const older = artifactId()
       const newer = artifactId()
       yield* deploy(owner, older)
-      yield* artifacts.stop(owner, older)
+      yield* stop(artifacts, owner, older)
       yield* deploy(owner, newer)
-      yield* artifacts.stop(owner, newer)
+      yield* stop(artifacts, owner, newer)
       const member = memberOf(owner)
       const listed = yield* artifacts.list(member, { spaceId: owner.spaceId, ...page })
       expect([listed.items.map((item) => item.id), listed.total]).toEqual([[newer, older], 2])
@@ -544,6 +669,33 @@ describe("artifacts for people", () => {
       expect((yield* artifacts.get(outsider, newer).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
       expect((yield* artifacts.archive(outsider, newer).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
     }),
+  )
+
+  it.live(
+    "archive returns while a deployment holds, and the stop it starts takes the artifact down",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* Seed.owner()
+        const id = artifactId()
+        const hold = yield* held
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          deploymentId: deployment(),
+          title: "Held",
+          config: { entry: "_worker.js" },
+          files: hold.files,
+        })
+        yield* hold.entered
+        const archived = yield* artifacts.archive(memberOf(owner), id)
+        expect(archived.archivedAt).not.toBeNull()
+        const stopId = yield* Schema.decodeUnknownEffect(Artifact.DeploymentID)(archived.pendingDeploymentId)
+        yield* hold.release
+        yield* idle(id)
+        expect((yield* artifacts.status(owner, id, stopId)).status).toBe("stopped")
+        expect((yield* artifacts.read(owner, id)).url).toBeNull()
+      }),
+    120_000,
   )
 
   it.live(
@@ -564,13 +716,15 @@ describe("artifacts for people", () => {
           title: "Orders",
         }
         yield* artifacts.deploy(owner, id, first)
+        yield* idle(id)
         const archived = yield* artifacts.archive(member, id)
-        expect([archived.url, archived.pendingDeploymentId, archived.archivedAt === null]).toEqual([null, null, false])
+        expect(archived.archivedAt).not.toBeNull()
+        yield* idle(id)
         const row = (yield* database.db
           .select()
           .from(Database.Schema.artifact)
           .where(eq(Database.Schema.artifact.id, id))).at(0)
-        expect([row?.remote, row?.url]).toEqual([null, null])
+        expect([row?.url, row?.pending_deployment_id]).toEqual([null, null])
         expect((yield* artifacts.list(member, { spaceId: owner.spaceId, ...page })).total).toBe(0)
         expect((yield* artifacts.get(member, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
         expect((yield* artifacts.archive(member, id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")

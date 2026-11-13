@@ -91,7 +91,7 @@ describe("Ren Host API: host token checks", () => {
   )
 
   it.live(
-    "an artifact's archive goes to its upload URL rather than through the host API, and a deploy before the PUT or with an entry that is not one of the files is a 400",
+    "an artifact's archive goes to its upload URL rather than through the host API, and a deploy is accepted before Ren checks the archive",
     () =>
       Effect.gen(function* () {
         const owner = yield* Seed.owner()
@@ -106,27 +106,6 @@ describe("Ren Host API: host token checks", () => {
               HttpClientResponse.schemaBodyJson(Schema.Struct({ uploadId: Schema.String, url: Schema.String })),
             ),
           )
-        const deploy = http
-          .execute(
-            HttpClientRequest.put(`/host/artifacts/${id}`).pipe(
-              HttpClientRequest.bearerToken(token),
-              HttpClientRequest.bodyJsonUnsafe({
-                deploymentId: crypto.randomUUID(),
-                title: "Report",
-                entry: "index.html",
-                uploadId: started.uploadId,
-              }),
-            ),
-          )
-          .pipe(
-            Effect.flatMap((response) =>
-              Effect.map(response.json, (body) => ({
-                status: response.status,
-                tag: Schema.decodeUnknownOption(Schema.Struct({ _tag: Schema.String }))(body),
-              })),
-            ),
-          )
-        const before = yield* deploy
         const image = new Uint8Array(2 * 1024 * 1024).fill(7)
         const archive = yield* Effect.promise(() =>
           new Bun.Archive(
@@ -135,13 +114,21 @@ describe("Ren Host API: host token checks", () => {
           ).bytes(),
         )
         const put = yield* Effect.promise(() => fetch(started.url, { method: "PUT", body: archive }))
-        expect([before.status, Option.getOrUndefined(before.tag)?._tag, put.status]).toEqual([
-          400,
-          "ArtifactInvalidError",
-          200,
-        ])
-        const after = yield* deploy
-        expect([after.status, Option.getOrUndefined(after.tag)?._tag]).toEqual([400, "ArtifactInvalidError"])
+        const accepted = yield* http.execute(
+          HttpClientRequest.put(`/host/artifacts/${id}`).pipe(
+            HttpClientRequest.bearerToken(token),
+            HttpClientRequest.bodyJsonUnsafe({
+              deploymentId: crypto.randomUUID(),
+              title: "Report",
+              entry: "index.html",
+              uploadId: started.uploadId,
+            }),
+          ),
+        )
+        const body = yield* accepted.json.pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ status: Schema.String }))),
+        )
+        expect([put.status, accepted.status, body.status]).toEqual([200, 202, "deploying"])
       }),
   )
 

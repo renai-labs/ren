@@ -246,13 +246,13 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
       params: ArtifactParams,
       payload: Artifact.DeployInput,
       success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
-      error: [ArtifactConflictError, ArtifactInvalidError, ArtifactFailedError],
+      error: [ArtifactConflictError, ArtifactInvalidError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "artifacts.deploy",
         summary: "Publish an artifact",
         description:
-          "Check the uploaded source, keep a copy and queue a durable deployment. Returns accepted without waiting for deployment. Read status before reporting the artifact as live.",
+          "Queue a durable deployment of an upload and return it as deploying. The deployment checks the upload, keeps a copy and serves it; a bad upload ends it as failed with the reason. Read status before reporting the artifact as live.",
       }),
     ),
   )
@@ -265,7 +265,8 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
       OpenApi.annotations({
         identifier: "artifacts.status",
         summary: "Read artifact deployment status",
-        description: "Read a specific deployment’s deploying, ready, failed or stopped status, URL and error.",
+        description:
+          "Read one deployment or stop: its deploying, stopping, ready, failed or stopped status, URL and error.",
       }),
     ),
   )
@@ -279,7 +280,7 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
         identifier: "artifacts.read",
         summary: "Read an artifact",
         description:
-          "Read an artifact’s title, entry, URL and active deployment. Its files are in the archive that artifacts.download links to.",
+          "Read an artifact’s title, entry, URL, its deployment in progress and its published deployment. Its files are in the archive that artifacts.download links to.",
       }),
     ),
   )
@@ -300,13 +301,14 @@ const ArtifactsGroup = HttpApiGroup.make("artifacts")
   .add(
     HttpApiEndpoint.delete("artifacts.stop", "/host/artifacts/:id", {
       params: ArtifactParams,
-      error: ArtifactFailedError,
+      success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
+      error: [ArtifactNotFoundError, ArtifactConflictError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "artifacts.stop",
         summary: "Remove an artifact deployment",
         description:
-          "Stop serving an artifact. Keep its record, source files and application data. Removing an unknown artifact succeeds.",
+          "Queue a durable stop of an artifact and return it as stopping, or the stop that runs. The stop ends the deployment in progress and stops serving the artifact. Ren keeps its record, source files and application data.",
       }),
     ),
   )

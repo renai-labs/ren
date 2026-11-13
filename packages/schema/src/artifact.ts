@@ -25,7 +25,8 @@ export const DeploymentID = Schema.String.check(Schema.isUUID()).pipe(
   Schema.brand("Artifact.DeploymentID"),
   Schema.annotate({
     identifier: "Artifact.DeploymentID",
-    description: "Names one deployment. Retrying it returns its workflow result without starting another deployment.",
+    description:
+      "Names one deployment or stop. Retrying a deployment with it returns that deployment without starting another.",
   }),
 )
 export type DeploymentID = typeof DeploymentID.Type
@@ -158,6 +159,10 @@ export const Archive = Schema.Struct({
 export interface DeployInput extends Schema.Schema.Type<typeof DeployInput> {}
 export const DeployInput = Schema.Struct({
   deploymentId: DeploymentID,
+  baseDeploymentId: Schema.optional(DeploymentID).annotate({
+    description:
+      "The deployment your change starts from: the deploymentId of the last read, create or update. Ren refuses a deployment whose base is not the published one, so a change never overwrites one it did not see. A failed deployment counts as its own base. A new artifact, or one that was never ready, needs none.",
+  }),
   uploadId: UploadID.annotate({
     description: `The upload that holds the source archive. Ren checks it on deploy and reads the Durable Objects from its ${manifestPath}.`,
   }),
