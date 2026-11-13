@@ -4,6 +4,7 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { DateTime } from "effect"
 import { FileDiff } from "../src/file-diff.js"
 import { PatchFiles } from "../src/patch-files.js"
+import { InlineCodeKind } from "../src/inline-code-kind.js"
 
 const emptyView: FileDiff.View = FileDiff.normalize({ file: "", additions: 0, deletions: 0 })
 
@@ -186,6 +187,28 @@ const tool = (name: string, input: typeof SessionMessage.Json.Type): SessionMess
 })
 
 describe("file tool groups", () => {
+  test("collects edited paths without diffs and ignores unchanged files", () => {
+    const tools = [
+      tool("edit", { path: "a.ts", oldString: "one\n", newString: "two\n" }),
+      tool("edit", { path: "b.ts", oldString: "same\n", newString: "same\n" }),
+      tool("write", { filePath: "a.ts", content: "three\n" }),
+      tool("write", { path: "empty.ts", content: "" }),
+    ]
+    expect(tools.flatMap(PatchFiles.toolPaths)).toEqual(["a.ts", "a.ts"])
+  })
+
+  test("groups absolute and relative paths together without changing default grouping", () => {
+    const tools = [
+      tool("edit", { path: "/workspace/repo/a.ts", oldString: "one\n", newString: "two\n" }),
+      tool("edit", { path: "a.ts", oldString: "other\n", newString: "three\n" }),
+    ]
+    expect(PatchFiles.groups(tools).map((group) => group.path)).toEqual(["/workspace/repo/a.ts", "a.ts"])
+    const grouped = PatchFiles.groups(tools, { path: InlineCodeKind.relativePath })
+    expect(grouped.map((group) => group.path)).toEqual(["a.ts"])
+    expect(grouped[0]?.views).toHaveLength(2)
+    expect(grouped[0]).toMatchObject({ additions: 2, deletions: 2 })
+  })
+
   test("synthesizes an edit diff and drops a no-op edit", () => {
     const groups = PatchFiles.groups([
       tool("edit", { path: "a.ts", oldString: "one\n", newString: "two\n" }),

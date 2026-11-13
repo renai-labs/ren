@@ -58,6 +58,17 @@ const useRefreshable = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>) =>
 
 export const useFolder = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().folder(view))
 
+export const useFolders = (root: Session.ID, opened: ReadonlyArray<string>) => {
+  const atoms = useAtoms()
+  const registry = useContext(RegistryContext)
+  return {
+    results: useAtomValue(atoms.folders({ root, opened })),
+    refresh: useCallback((path: string) => registry.refresh(atoms.folder({ root, path })), [atoms, registry, root]),
+  }
+}
+
+export const useFileExists = (view: ChatAtoms.PathView) => useAtomValue(useAtoms().fileExists(view))
+
 export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))
 
 export const useVcs = (root: Session.ID) => useRefreshable(useAtoms().vcs(root))

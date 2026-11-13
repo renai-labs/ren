@@ -1,6 +1,7 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useCallback, useRef, useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
+import { Composer, Mentions } from "@ren/chat"
 import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Badge } from "@ren/ui/badge"
 import { Breadcrumb } from "../../components/breadcrumb.js"
@@ -8,6 +9,7 @@ import { Button } from "@ren/ui/button"
 import { ActivityPill } from "./activity-pill.js"
 import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
+import { OpenPanel } from "./open-panel.js"
 import { WorkspacePanel, type PanelRequest, type PanelTarget } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ContextUsage } from "./context-usage.js"
@@ -46,6 +48,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         handle={keys.transcript}
         key={chat.view.sessionID}
         view={chat.view}
+        files={chat.canReadFiles}
         spaceId={chat.spaceId}
         messages={chat.messages}
         rows={chat.rows}
@@ -298,6 +301,12 @@ export function ChatPage() {
       }),
     onArchived: () => void navigate({ to: "/" }),
   })
+  const updateDraft = chat.files.update
+  const mentionFile = useCallback(
+    (path: string) =>
+      updateDraft((draft) => Composer.withText(draft, Mentions.insertFile(draft.text, path, draft.text.length).text)),
+    [updateDraft],
+  )
   return (
     <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
@@ -316,7 +325,9 @@ export function ChatPage() {
             </Button>
           </div>
         ) : (
-          <ChatThread chat={chat} />
+          <OpenPanel value={chat.child ? undefined : requestPanel}>
+            <ChatThread chat={chat} />
+          </OpenPanel>
         )}
         {chat.child ? null : <TurnRail messages={chat.messages} />}
       </div>
@@ -334,6 +345,7 @@ export function ChatPage() {
             request={request}
             maximized={maximized}
             onMaximize={setMaximized}
+            onMention={mentionFile}
             onClose={() => {
               setPanel(false)
               setMaximized(false)

@@ -4,6 +4,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./factory.css";
+@import "./file-icon.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -55,6 +56,9 @@
   --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
   --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
 
+  --diff-addition-word: color-mix(in srgb, var(--chart-2) 30%, transparent);
+  --diff-deletion-word: color-mix(in srgb, var(--chart-4) 30%, transparent);
+
   --radius: 8px;
 
   --sidebar: #f2f2f2;
@@ -102,6 +106,9 @@
 
   --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
   --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
+
+  --diff-addition-word: color-mix(in srgb, var(--chart-2) 30%, transparent);
+  --diff-deletion-word: color-mix(in srgb, var(--chart-4) 30%, transparent);
 
   --sidebar: #101010;
   --sidebar-foreground: #c4c4c4;

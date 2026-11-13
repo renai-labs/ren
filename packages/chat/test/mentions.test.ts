@@ -38,6 +38,14 @@ describe("Mentions suggestions", () => {
 })
 
 describe("Mentions tokens", () => {
+  test("inserts a file at the cursor and separates it from the previous word", () => {
+    expect(Mentions.insertFile("Read", "src/app.ts", 4)).toEqual({ text: "Read @  src/app.ts ", cursor: 19 })
+    expect(Mentions.insertFile("Read more", "src/app.ts", 5)).toEqual({
+      text: "Read @  src/app.ts more",
+      cursor: 19,
+    })
+    expect(Mentions.insertFile("", "src/app.ts", 0)).toEqual({ text: "@  src/app.ts ", cursor: 14 })
+  })
   test("replaces the @query with the mention and one space, and puts the caret after it", () => {
     expect(Mentions.insert("Ask @gen", general, 4, 8)).toEqual({ text: "Ask @  General ", cursor: 15 })
     expect(Mentions.insert("Ask @gen about it", general, 4, 8)).toEqual({ text: "Ask @  General about it", cursor: 14 })

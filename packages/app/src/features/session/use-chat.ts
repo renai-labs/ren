@@ -147,6 +147,7 @@ const capabilitiesOf = (info: { readonly capabilities: SessionInfo["capabilities
   canRevert: info?.capabilities.revert !== false,
   canRename: info?.capabilities.rename !== false,
   canCompact: info?.capabilities.compact !== false,
+  canReadFiles: info?.capabilities.files === true,
 })
 
 const bridgeOf = (
