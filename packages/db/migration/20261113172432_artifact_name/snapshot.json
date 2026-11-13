@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "4ec51a38-7536-45ac-bd3f-6721e9ee338b",
+  "id": "9a7fb08c-ef15-4e8c-ab29-8ecdf3606f56",
   "prevIds": [
     "0551a135-fe7d-4c54-960a-840a90259c22"
   ],
@@ -1512,6 +1512,19 @@
       "generated": null,
       "identity": null,
       "name": "epoch",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "artifact_name_sync"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "synced_epoch",
       "entityType": "columns",
       "schema": "public",
       "table": "artifact_name_sync"

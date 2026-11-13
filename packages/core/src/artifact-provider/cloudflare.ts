@@ -61,8 +61,8 @@ const budgeted = <A>(call: Effect.Effect<A, ArtifactProvider.Failed>) =>
       orElse: () => Effect.fail(failed(`Cloudflare did not finish within ${Duration.format(budget)}`)),
     }),
   )
-const apiBase = (account: string) =>
-  `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/workers`
+const accountBase = (account: string) => `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}`
+const apiBase = (account: string) => `${accountBase(account)}/workers`
 const scriptBase = (input: { readonly account: string; readonly namespace: string; readonly script: string }) =>
   `${apiBase(input.account)}/dispatch/namespaces/${encodeURIComponent(input.namespace)}/scripts/${input.script}`
 
@@ -372,8 +372,8 @@ export const layer = Layer.effect(
 
     // oxlint-disable-next-line ren/no-comments -- The Workers KV namespace where the dispatcher reads which label a name serves.
     const names = Option.map(config.names, (namespace) => {
-      const value = (name: Artifact.Name) =>
-        `${base.replace(/\/workers$/u, "")}/storage/kv/namespaces/${encodeURIComponent(namespace)}/values/${name}`
+      const keyUrl = (name: Artifact.Name) =>
+        `${accountBase(config.account)}/storage/kv/namespaces/${encodeURIComponent(namespace)}/values/${name}`
       const write = (what: string, request: HttpClientRequest.HttpClientRequest) =>
         api(request).pipe(
           Effect.flatMap((response) =>
@@ -381,15 +381,14 @@ export const layer = Layer.effect(
           ),
         )
       return {
-        origin: (artifactId: Artifact.ID, name: Artifact.Name | null) =>
-          `https://${name ?? Artifact.label(artifactId)}.${config.domain}`,
+        origin: (artifactId: Artifact.ID, name: Artifact.Name | null) => origin(name ?? Artifact.label(artifactId)),
         put: (name: Artifact.Name, artifactId: Artifact.ID) =>
           write(
             "Cloudflare refused the artifact name",
-            HttpClientRequest.put(value(name)).pipe(HttpClientRequest.bodyText(Artifact.label(artifactId))),
+            HttpClientRequest.put(keyUrl(name)).pipe(HttpClientRequest.bodyText(Artifact.label(artifactId))),
           ),
         remove: (name: Artifact.Name) =>
-          write("Cloudflare did not remove the artifact name", HttpClientRequest.delete(value(name))),
+          write("Cloudflare did not remove the artifact name", HttpClientRequest.delete(keyUrl(name))),
       } satisfies ArtifactProvider.Names
     })
 

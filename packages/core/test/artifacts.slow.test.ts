@@ -10,6 +10,7 @@ import { FetchHttpClient, HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { chmod } from "node:fs/promises"
 import { join } from "node:path"
+import { ArtifactProvider } from "../src/artifact-provider.js"
 import { ArtifactWorkerd } from "../src/artifact-provider/workerd.js"
 import { Access } from "../src/access.js"
 import { Artifacts } from "../src/artifacts.js"
@@ -34,6 +35,49 @@ const runtimeWith = (cellUrl: string) =>
   )
 
 const runtime = runtimeWith("http://127.0.0.1:9")
+
+// oxlint-disable-next-line ren/no-comments -- The names of the workerd provider, kept in memory. remove waits while a test holds it, so a test can make a write land late.
+const names = new Map<string, string>()
+const removes: {
+  hold?: { readonly entered: PromiseWithResolvers<void>; readonly release: PromiseWithResolvers<void> }
+} = {}
+const named = testEffect(
+  Artifacts.layer.pipe(
+    Layer.provide([
+      Layer.effect(
+        ArtifactProvider.Service,
+        Effect.map(ArtifactProvider.Service, (provider) => ({
+          ...provider,
+          names: {
+            origin: (id: Artifact.ID, name: Artifact.Name | null) => `https://${name ?? Artifact.label(id)}.example`,
+            put: (name: Artifact.Name, id: Artifact.ID) => Effect.sync(() => void names.set(name, Artifact.label(id))),
+            remove: (name: Artifact.Name) =>
+              Effect.gen(function* () {
+                const hold = removes.hold
+                delete removes.hold
+                if (hold) {
+                  hold.entered.resolve()
+                  yield* Effect.promise(() => hold.release.promise)
+                }
+                names.delete(name)
+              }),
+          },
+        })),
+      ).pipe(Layer.provide(ArtifactWorkerd.layer)),
+      Access.layer,
+    ]),
+    Layer.provideMerge(
+      Host.cellLayerWith(DurableRunner.layerEffect)(
+        { CELL_URL: "http://127.0.0.1:9" },
+        Models.layerNone,
+        Host.noTemplates,
+      ),
+    ),
+    Layer.provideMerge(DurableRunner.layerEffect),
+    Layer.provide(TestDrives.layer),
+    Layer.provideMerge(Layer.mergeAll(Testing.layer, FetchHttpClient.layer)),
+  ),
+)
 
 const base = Layer.mergeAll(Testing.layer, FetchHttpClient.layer)
 const it = testEffect(runtime.pipe(Layer.provideMerge(base)))
@@ -744,7 +788,7 @@ const memberOf = (owner: Effect.Success<ReturnType<typeof Seed.owner>>) => ({
 })
 
 describe("artifacts for people", () => {
-  it.live(
+  named.live(
     "a new artifact gets a free name from its title; a taken name is a conflict; archive frees the name",
     () =>
       Effect.gen(function* () {
@@ -774,6 +818,44 @@ describe("artifacts for people", () => {
         yield* artifacts.archive(member, first)
         yield* idle(first)
         expect((yield* artifacts.update(member, second, { name: base })).name).toBe(base)
+        yield* stop(artifacts, owner, second)
+      }),
+    60_000,
+  )
+
+  named.live(
+    "a late write of a freed name does not undo its new owner",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const owner = yield* ArtifactSamples.owner()
+        const member = memberOf(owner)
+        const suffix = crypto.randomUUID().slice(0, 8)
+        const publish = (id: Artifact.ID, title: string) =>
+          ArtifactSamples.deploy(artifacts, owner, id, {
+            deploymentId: deployment(),
+            title,
+            config: { entry: "index.html" },
+            files: orders,
+          }).pipe(Effect.andThen(idle(id)))
+        const first = artifactId()
+        const second = artifactId()
+        yield* publish(first, `Shop ${suffix}`)
+        yield* publish(second, `Other ${suffix}`)
+        const name = Artifact.nameOf(`Shop ${suffix}`) ?? ""
+        yield* DurableRunner.join(Artifacts.NameRun, { name, epoch: 1 })
+        expect(names.get(name)).toBe(Artifact.label(first))
+        const hold = { entered: Promise.withResolvers<void>(), release: Promise.withResolvers<void>() }
+        removes.hold = hold
+        yield* artifacts.update(member, first, { name: `moved-${suffix}` })
+        yield* Effect.promise(() => hold.entered.promise)
+        yield* artifacts.update(member, second, { name })
+        yield* DurableRunner.join(Artifacts.NameRun, { name, epoch: 3 })
+        expect(names.get(name)).toBe(Artifact.label(second))
+        hold.release.resolve()
+        yield* DurableRunner.join(Artifacts.NameRun, { name, epoch: 2 })
+        expect([names.get(name), names.get(`moved-${suffix}`)]).toEqual([Artifact.label(second), Artifact.label(first)])
+        yield* stop(artifacts, owner, first)
         yield* stop(artifacts, owner, second)
       }),
     60_000,
