@@ -5,21 +5,40 @@ import { cn } from "cn"
 import { IconChevronRight, IconDots } from "@tabler/icons-react"
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" className={cn(className)} {...props} />
+  return (
+    <nav
+      aria-label="breadcrumb"
+      data-slot="breadcrumb"
+      className={cn("flex min-h-8 min-w-0 items-center", className)}
+      {...props}
+    />
+  )
 }
 
 function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
   return (
     <ol
       data-slot="breadcrumb-list"
-      className={cn("flex flex-wrap items-center gap-1.5 text-sm wrap-break-word text-muted-foreground", className)}
+      className={cn(
+        "flex min-w-0 flex-nowrap items-center gap-4 text-sm wrap-break-word text-muted-foreground",
+        className,
+      )}
       {...props}
     />
   )
 }
 
 function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
-  return <li data-slot="breadcrumb-item" className={cn("inline-flex items-center gap-1", className)} {...props} />
+  return (
+    <li
+      data-slot="breadcrumb-item"
+      className={cn(
+        "inline-flex min-w-0 items-center gap-1 text-foreground aria-[current=page]:text-muted-foreground [&_button]:text-inherit",
+        className,
+      )}
+      {...props}
+    />
+  )
 }
 
 function BreadcrumbLink({ className, render, ...props }: useRender.ComponentProps<"a">) {
@@ -45,7 +64,7 @@ function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
       role="link"
       aria-disabled="true"
       aria-current="page"
-      className={cn("font-normal text-foreground", className)}
+      className={cn("font-normal text-muted-foreground", className)}
       {...props}
     />
   )
@@ -57,7 +76,7 @@ function BreadcrumbSeparator({ children, className, ...props }: React.ComponentP
       data-slot="breadcrumb-separator"
       role="presentation"
       aria-hidden="true"
-      className={cn("[&>svg]:size-3.5", className)}
+      className={cn("shrink-0 text-muted-foreground/50 [&>svg]:size-3.5", className)}
       {...props}
     >
       {children ?? <IconChevronRight />}

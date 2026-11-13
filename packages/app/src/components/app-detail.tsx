@@ -1,14 +1,7 @@
 import type { ReactNode } from "react"
 import { IconChevronDown, IconPlus } from "@tabler/icons-react"
 import { Link } from "@tanstack/react-router"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@ren/ui/breadcrumb"
+import { Breadcrumb } from "./breadcrumb.js"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
@@ -17,28 +10,14 @@ import { AccountList, AppSections } from "./app-list.js"
 import { pageWidths, useShapeId } from "./page.js"
 import type { CatalogApp } from "../lib/apps.js"
 
-export function AppsBreadcrumb(props: { name: string }) {
-  return (
-    <div className="flex h-12 shrink-0 items-center px-3 pt-2 max-md:pl-11">
-      <Breadcrumb className="flex h-8 items-center rounded-lg border bg-sidebar px-3">
-        <BreadcrumbList className="gap-2">
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link to="/apps" />}>Apps</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator className="text-muted-foreground">/</BreadcrumbSeparator>
-          <BreadcrumbItem>
-            <BreadcrumbPage>{props.name}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-    </div>
-  )
-}
-
 export function AppDetailFrame(props: { name: string; children: ReactNode }) {
   return (
     <div className="flex flex-1 flex-col">
-      <AppsBreadcrumb name={props.name} />
+      <Breadcrumb.Header>
+        <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>
+          {props.name}
+        </Breadcrumb.Root>
+      </Breadcrumb.Header>
       <div className={cn("mx-auto flex w-full flex-1 flex-col gap-10 px-6 pt-8 pb-12", pageWidths.column)}>
         {props.children}
       </div>

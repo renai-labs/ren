@@ -92,10 +92,19 @@ test("a member renames a chat from its breadcrumb", async ({ page }) => {
   await message.press("Enter")
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  await page.getByRole("button", { name: /^Edit Chat title/ }).click()
+  await page.getByRole("navigation", { name: "breadcrumb" }).getByRole("button").click()
   await page.getByRole("textbox", { name: "Chat title" }).fill("Board agenda")
   await page.getByRole("textbox", { name: "Chat title" }).press("Enter")
   await expect(page.getByRole("link", { name: "Board agenda" })).toBeVisible()
+  await page.getByRole("button", { name: "Board agenda", exact: true }).click()
+  const title = page.getByRole("textbox", { name: "Chat title" })
+  await expect(title).toBeFocused()
+  await expect(title).toHaveValue("Board agenda")
+  await title.fill("Final agenda")
+  await title.press("Enter")
+  await expect(page.getByRole("link", { name: "Final agenda", exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Final agenda", exact: true })).toBeVisible()
 })
 
 test("a member opens the model picker with its shortcut and undoes the last message with a command from the + menu", async ({

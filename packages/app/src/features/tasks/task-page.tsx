@@ -1,4 +1,5 @@
 import { SkeletonRows } from "../../components/page.js"
+import { Breadcrumb } from "../../components/breadcrumb.js"
 import { useState, type ReactNode } from "react"
 import type { TaskInfo, TaskUpdateInput } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
@@ -9,7 +10,6 @@ import {
   IconCalendarDue,
   IconCheck,
   IconChecklist,
-  IconChevronRight,
   IconCube,
   IconDots,
   IconGhostFilled,
@@ -214,25 +214,27 @@ function TaskHeader(props: {
       },
     )
   return (
-    <header className="mx-8 flex h-15 shrink-0 items-center gap-2.5 border-b pt-1 text-sm max-md:pl-6">
-      <Link to="/tasks" className="font-medium">
-        Tasks
-      </Link>
-      <IconChevronRight className="size-4 text-muted-foreground" />
-      {task.parent ? (
-        <>
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: task.parent.id }}
-            className="max-w-60 truncate text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
-          >
-            {task.parent.title}
-          </Link>
-          <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
-        </>
-      ) : null}
-      <IconChecklist aria-label={task.identifier} className="size-4 shrink-0 text-muted-foreground" />
-      <span className="truncate font-medium">{task.title}</span>
+    <Breadcrumb.Header className="h-15 gap-2.5 border-b pt-1 text-sm">
+      <Breadcrumb.Root
+        ancestors={[
+          { key: "tasks", content: <Link to="/tasks">Tasks</Link> },
+          ...(task.parent
+            ? [
+                {
+                  key: task.parent.id,
+                  content: (
+                    <Link to="/tasks/$taskId" params={{ taskId: task.parent.id }}>
+                      {task.parent.title}
+                    </Link>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      >
+        <IconChecklist aria-label={task.identifier} className="size-4 shrink-0" />
+        <span className="truncate">{task.title}</span>
+      </Breadcrumb.Root>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button className="ml-auto" aria-label={`Start a session for ${task.title}`} />}>
           <IconPlayerPlay />
@@ -295,7 +297,7 @@ function TaskHeader(props: {
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-    </header>
+    </Breadcrumb.Header>
   )
 }
 
