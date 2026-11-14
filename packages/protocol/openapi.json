@@ -3182,112 +3182,6 @@
         "summary": "Delete a memory file"
       }
     },
-    "/drive": {
-      "get": {
-        "tags": ["drive"],
-        "operationId": "drive.list",
-        "parameters": [
-          {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Space.ID_3"
-            },
-            "required": false
-          },
-          {
-            "name": "folder",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": false
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "description": "The `cursor` of the previous page, to list the next one."
-            },
-            "required": false
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of a folder, sorted by path.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Drive.Listing"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "UnavailableError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "List the folders and files directly in one folder of a drive, one page at a time. Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only.",
-        "summary": "List a drive folder"
-      }
-    },
     "/drive/uploads": {
       "post": {
         "tags": ["drive"],
@@ -3363,7 +3257,7 @@
             }
           }
         },
-        "description": "Get a form that uploads one file to a path of a drive: POST its fields, then the file as the field `file`, to uploadUrl before expiresAt. The file must be exactly size bytes. Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only.",
+        "description": "Get a form that uploads one file to a path of a drive: POST its fields, then the file as the field `file`, to uploadUrl before expiresAt. The file must be exactly size bytes. Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only. files.list, files.read and files.delete list, read and delete them.",
         "summary": "Start a drive upload",
         "requestBody": {
           "content": {
@@ -3467,28 +3361,48 @@
             }
           }
         },
-        "description": "Get a link that downloads one file of a drive until expiresAt. Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only.",
+        "description": "Get a link that downloads one file of a drive until expiresAt. Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only. files.list, files.read and files.delete list, read and delete them.",
         "summary": "Download a drive file"
-      },
-      "delete": {
-        "tags": ["drive"],
-        "operationId": "drive.delete",
+      }
+    },
+    "/files": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.list",
         "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FileSystem.Source"
+            },
+            "required": true
+          },
           {
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_3"
+              "$ref": "#/components/schemas/Space.ID_4"
             },
             "required": false
           },
           {
-            "name": "path",
+            "name": "folder",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Drive.PathEncoded"
+              "type": "string",
+              "description": "The folder to list, such as `reports/`. Omit it for the root."
             },
-            "required": true
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "The `cursor` of the previous page, to list the next one."
+            },
+            "required": false
           }
         ],
         "security": [
@@ -3500,8 +3414,25 @@
           }
         ],
         "responses": {
-          "204": {
-            "description": "<No Content>"
+          "200": {
+            "description": "One page of the entries directly in a folder.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileSystem.Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
           },
           "401": {
             "description": "UnauthorizedError",
@@ -3544,8 +3475,209 @@
             }
           }
         },
-        "description": "Delete one file of a drive. Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only.",
-        "summary": "Delete a drive file"
+        "description": "List the folders and files directly in one folder, folders first, one page at a time. A folder’s path ends with `/`; pass it as folder to list that folder. actions says what you may do in the folder. source picks the files: `drive` for a drive, `memory` for a memory. Pass spaceId for a space’s; omit it for the organization’s.",
+        "summary": "List a folder"
+      },
+      "delete": {
+        "tags": ["files"],
+        "operationId": "files.delete",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FileSystem.Source"
+            },
+            "required": true
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID_4"
+            },
+            "required": false
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "A file’s path inside its source, such as `reports/q3.pdf`."
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete one file. There is no undo. source picks the files: `drive` for a drive, `memory` for a memory. Pass spaceId for a space’s; omit it for the organization’s.",
+        "summary": "Delete a file"
+      }
+    },
+    "/files/content": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.read",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FileSystem.Source"
+            },
+            "required": true
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID_4"
+            },
+            "required": false
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "A file’s path inside its source, such as `reports/q3.pdf`."
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A file: text as `utf8`, anything else as `base64`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileSystem.Content"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return a file: text as `utf8`, anything else as `base64`. A file over 1 MiB returns its start, with truncated set; drive.download gives a link to a whole drive file. source picks the files: `drive` for a drive, `memory` for a memory. Pass spaceId for a space’s; omit it for the organization’s.",
+        "summary": "Read a file"
       }
     },
     "/agents": {
@@ -4579,7 +4711,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_4"
+              "$ref": "#/components/schemas/Space.ID_5"
             },
             "required": false
           },
@@ -16201,7 +16333,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID_5"
+            "$ref": "#/components/schemas/Space.ID_6"
           }
         },
         "required": ["spaceId"],
@@ -18528,25 +18660,6 @@
         "enum": ["attachment", "inline"],
         "description": "Defaults to `attachment`."
       },
-      "Drive.File": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "description": "The file’s path inside its drive."
-          },
-          "size": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "modifiedAt": {
-            "type": "string"
-          }
-        },
-        "required": ["path", "size", "modifiedAt"],
-        "additionalProperties": false
-      },
       "Drive.Link": {
         "type": "object",
         "properties": {
@@ -18560,39 +18673,6 @@
         },
         "required": ["url", "expiresAt"],
         "additionalProperties": false
-      },
-      "Drive.Listing": {
-        "type": "object",
-        "properties": {
-          "folders": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The paths of the folders directly in the folder."
-          },
-          "files": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Drive.File"
-            },
-            "description": "The files directly in the folder."
-          },
-          "cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Null on the last page."
-          }
-        },
-        "required": ["folders", "files", "cursor"],
-        "additionalProperties": false,
-        "description": "One page of a folder, sorted by path."
       },
       "Drive.PathEncoded": {
         "type": "string",
@@ -19111,6 +19191,111 @@
       "Factory.StartMode": {
         "type": "string",
         "enum": ["new", "continue"]
+      },
+      "FileSystem.Action": {
+        "type": "string",
+        "enum": ["upload", "write", "remove"],
+        "description": "`upload`: add files to the folder through the source’s upload. `write`: create and edit files in the folder. `remove`: delete files of the folder."
+      },
+      "FileSystem.Content": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The whole file’s size in bytes."
+          },
+          "encoding": {
+            "type": "string",
+            "enum": ["utf8", "base64"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when content is only the file’s start."
+          }
+        },
+        "required": ["path", "mime", "size", "encoding", "content", "truncated"],
+        "additionalProperties": false,
+        "description": "A file: text as `utf8`, anything else as `base64`."
+      },
+      "FileSystem.Entry": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The path inside its source. A folder’s path ends with `/`."
+          },
+          "type": {
+            "$ref": "#/components/schemas/FileSystem.EntryType"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "In bytes."
+          },
+          "modifiedAt": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          }
+        },
+        "required": ["path", "type"],
+        "additionalProperties": false,
+        "description": "A file or a folder. A source omits what it does not know."
+      },
+      "FileSystem.EntryType": {
+        "type": "string",
+        "enum": ["file", "directory"]
+      },
+      "FileSystem.Page": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileSystem.Entry"
+            },
+            "description": "Folders first, then files, each sorted by path."
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null on the last page."
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileSystem.Action"
+            },
+            "description": "What the caller may do in the folder."
+          }
+        },
+        "required": ["entries", "cursor", "actions"],
+        "additionalProperties": false,
+        "description": "One page of the entries directly in a folder."
+      },
+      "FileSystem.Source": {
+        "type": "string",
+        "enum": ["drive", "memory"],
+        "description": "`drive`: the files of a drive. `memory`: the files of a memory."
       },
       "ForbiddenErrorEncoded": {
         "type": "object",
@@ -25842,9 +26027,14 @@
       "Space.ID_4": {
         "type": "string",
         "pattern": "^spc_",
-        "description": "Only the profiles that this space reaches."
+        "description": "The space whose files to use. Omit it for the organization’s."
       },
       "Space.ID_5": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "Only the profiles that this space reaches."
+      },
+      "Space.ID_6": {
         "type": "string",
         "pattern": "^spc_",
         "description": "The one space that the shared profile lists."
@@ -29256,6 +29446,9 @@
     },
     {
       "name": "drive"
+    },
+    {
+      "name": "files"
     },
     {
       "name": "agent"

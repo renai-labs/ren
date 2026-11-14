@@ -105,7 +105,8 @@ export function useUploads(target: Target, draft: Composer.Draft) {
     },
     remove: (path: string) => {
       target.update((current) => Composer.withoutFile(current, path))
-      if (target.spaceId) void client.drive.delete({ spaceId: target.spaceId, path }).catch(() => undefined)
+      if (target.spaceId)
+        void client.files.delete({ source: "drive", spaceId: target.spaceId, path }).catch(() => undefined)
     },
   }
 }

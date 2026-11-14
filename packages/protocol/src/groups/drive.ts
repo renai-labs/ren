@@ -1,28 +1,15 @@
 import { Drive } from "@ren/schema/drive"
 import { WriteResult } from "@ren/schema/write-result"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ForbiddenError, InvalidRequestError, NotFoundError, UnavailableError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
 
 const scope =
-  "Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only."
+  "Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only. files.list, files.read and files.delete list, read and delete them."
 
 export const DriveGroup = HttpApiGroup.make("drive")
-  .add(
-    HttpApiEndpoint.get("drive.list", "/drive", {
-      query: Drive.ListInput,
-      success: Drive.Listing,
-      error: [NotFoundError, ForbiddenError, InvalidRequestError, UnavailableError],
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "drive.list",
-        summary: "List a drive folder",
-        description: `List the folders and files directly in one folder of a drive, one page at a time. ${scope}`,
-      }),
-    ),
-  )
   .add(
     HttpApiEndpoint.post("drive.startUpload", "/drive/uploads", {
       payload: Drive.StartUploadInput,
@@ -46,19 +33,6 @@ export const DriveGroup = HttpApiGroup.make("drive")
         identifier: "drive.download",
         summary: "Download a drive file",
         description: `Get a link that downloads one file of a drive until expiresAt. ${scope}`,
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.delete("drive.delete", "/drive/file", {
-      query: Drive.PathInput,
-      success: HttpApiSchema.NoContent,
-      error: [NotFoundError, ForbiddenError, UnavailableError],
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "drive.delete",
-        summary: "Delete a drive file",
-        description: `Delete one file of a drive. ${scope}`,
       }),
     ),
   )

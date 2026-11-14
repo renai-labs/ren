@@ -19,7 +19,11 @@ const exceptions = new Map([
   ],
   [
     "drive",
-    "Lists, uploads to, downloads from and deletes files of an organization's or a space's drive by path, in S3 and not in records: an upload and a download are links to S3, which no primitive operation is.",
+    "Uploads to and downloads from an organization's or a space's drive by path, in S3 and not in records: an upload and a download are links to S3, which no primitive operation is.",
+  ],
+  [
+    "files",
+    "Lists, reads and deletes the files of a drive or a memory by path, through one contract for every source: files are not records, and no primitive operation addresses a part of one.",
   ],
   ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],

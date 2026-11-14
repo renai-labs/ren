@@ -908,15 +908,6 @@ export const MemoryDelete = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
 }
 
-export const DriveList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
-  folder: Flag.String("folder").pipe(Flag.optional, Flag.withDescription("The folder to list, such as `reports`.")),
-  cursor: Flag.String("cursor").pipe(
-    Flag.optional,
-    Flag.withDescription("The `cursor` of the previous page, to list the next one."),
-  ),
-}
-
 export const DriveDownload = {
   path: Argument.String("path").pipe(
     Argument.withDescription("A file’s path inside its drive, such as `reports/q3.pdf`."),
@@ -928,10 +919,29 @@ export const DriveDownload = {
   ),
 }
 
-export const DriveDelete = {
-  path: Argument.String("path").pipe(
-    Argument.withDescription("A file’s path inside its drive, such as `reports/q3.pdf`."),
+export const FilesList = {
+  source: Flag.Literals("source", ["drive", "memory"]).pipe(Flag.withDescription("`drive`: the files of a drive.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  folder: Flag.String("folder").pipe(Flag.optional, Flag.withDescription("The folder to list, such as `reports/`.")),
+  cursor: Flag.String("cursor").pipe(
+    Flag.optional,
+    Flag.withDescription("The `cursor` of the previous page, to list the next one."),
   ),
+}
+
+export const FilesRead = {
+  path: Argument.String("path").pipe(
+    Argument.withDescription("A file’s path inside its source, such as `reports/q3.pdf`."),
+  ),
+  source: Flag.Literals("source", ["drive", "memory"]).pipe(Flag.withDescription("`drive`: the files of a drive.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+}
+
+export const FilesDelete = {
+  path: Argument.String("path").pipe(
+    Argument.withDescription("A file’s path inside its source, such as `reports/q3.pdf`."),
+  ),
+  source: Flag.Literals("source", ["drive", "memory"]).pipe(Flag.withDescription("`drive`: the files of a drive.")),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
 }
 
@@ -2016,20 +2026,29 @@ export const commands = [
   Command.make("drive").pipe(
     Command.withDescription("Manage drive files"),
     Command.withSubcommands([
-      Command.make("list", DriveList).pipe(
-        Command.withDescription("List a drive folder"),
-        Command.withHandler((input) => Effect.flatMap(Effect.promise(operations), (module) => module.DriveList(input))),
-      ),
       Command.make("download", DriveDownload).pipe(
         Command.withDescription("Download a drive file"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.DriveDownload(input)),
         ),
       ),
-      Command.make("delete", DriveDelete).pipe(
-        Command.withDescription("Delete a drive file"),
+    ]),
+  ),
+  Command.make("files").pipe(
+    Command.withDescription("List, read and delete drive and memory files"),
+    Command.withSubcommands([
+      Command.make("list", FilesList).pipe(
+        Command.withDescription("List a folder"),
+        Command.withHandler((input) => Effect.flatMap(Effect.promise(operations), (module) => module.FilesList(input))),
+      ),
+      Command.make("read", FilesRead).pipe(
+        Command.withDescription("Read a file"),
+        Command.withHandler((input) => Effect.flatMap(Effect.promise(operations), (module) => module.FilesRead(input))),
+      ),
+      Command.make("delete", FilesDelete).pipe(
+        Command.withDescription("Delete a file"),
         Command.withHandler((input) =>
-          Effect.flatMap(Effect.promise(operations), (module) => module.DriveDelete(input)),
+          Effect.flatMap(Effect.promise(operations), (module) => module.FilesDelete(input)),
         ),
       ),
     ]),
