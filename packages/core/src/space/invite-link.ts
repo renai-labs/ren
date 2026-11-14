@@ -138,7 +138,7 @@ export const layer = Layer.effect(
       actor: Actor.Info,
       spaceId: Space.ID,
     ) {
-      return (yield* transaction
+      const row = (yield* transaction
         .insert(Database.Schema.space_invite_link)
         .values({
           id: SpaceInviteLink.ID.create(),
@@ -147,6 +147,8 @@ export const layer = Layer.effect(
           created_by: actor.userId,
         })
         .returning()).at(0)
+      if (!row) return yield* notFound
+      return toInfo(row)
     })
 
     return Service.of({
@@ -154,9 +156,8 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* lockSpace(transaction, actor, spaceId)
-            const link = (yield* liveLink(transaction, spaceId)) ?? (yield* createLink(transaction, actor, spaceId))
-            if (!link) return yield* notFound
-            return toInfo(link)
+            const link = yield* liveLink(transaction, spaceId)
+            return link ? toInfo(link) : yield* createLink(transaction, actor, spaceId)
           }),
         )
       }),
@@ -173,9 +174,7 @@ export const layer = Layer.effect(
                   isNull(Database.Schema.space_invite_link.archived_at),
                 ),
               )
-            const link = yield* createLink(transaction, actor, spaceId)
-            if (!link) return yield* notFound
-            return toInfo(link)
+            return yield* createLink(transaction, actor, spaceId)
           }),
         )
       }),
