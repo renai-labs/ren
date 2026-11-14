@@ -113,6 +113,7 @@ const toInfo = (row: Row): Session.Info => ({
   id: row.session.id,
   spaceId: row.session.space_id,
   createdBy: row.session.created_by,
+  agentId: row.session.agent_id,
   origin: row.session.origin,
   harness: row.session.harness,
   title: row.opencode?.title ?? null,

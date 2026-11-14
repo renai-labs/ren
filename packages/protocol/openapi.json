@@ -22738,6 +22738,17 @@
           "createdBy": {
             "$ref": "#/components/schemas/Auth.UserID"
           },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The agent the chat runs, or null for Ren."
+          },
           "origin": {
             "$ref": "#/components/schemas/Session.Origin"
           },
@@ -22792,6 +22803,7 @@
           "id",
           "spaceId",
           "createdBy",
+          "agentId",
           "origin",
           "harness",
           "title",

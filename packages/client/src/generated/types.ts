@@ -566,6 +566,7 @@ export type SessionInfo = {
   id: SessionID
   spaceId: SpaceID
   createdBy: AuthUserID
+  agentId: AgentID | null
   origin: SessionOrigin
   harness: SessionHarness
   title: string | null
