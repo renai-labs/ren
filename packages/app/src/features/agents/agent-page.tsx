@@ -18,7 +18,8 @@ import { Textarea } from "@ren/ui/textarea"
 import { formatDate } from "@ren/ui/time"
 import { Equal, Result, Schema, Struct } from "effect"
 import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
-import { Page, Row, Rows } from "../../components/page.js"
+import { Page, Row, Rows, Section } from "../../components/page.js"
+import { PermissionRules } from "../../components/permission-rules.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Agents } from "../../lib/agents.js"
 import { errorMessage, errorStatus } from "../../lib/errors.js"
@@ -492,6 +493,40 @@ function AgentView(props: { agent: AgentInfo; spaceId: string }) {
           </div>
         ) : null}
       </AgentFormFrame>
+      <AgentPermissions agent={agent} spaceId={props.spaceId} />
     </Page>
+  )
+}
+
+function AgentPermissions(props: { agent: AgentInfo; spaceId: string }) {
+  const { api } = RouterContext.useRouterContext()
+  const update = useMutation(api.agent.update.mutationOptions())
+  const organization = useQuery(api["organization-settings"].get.queryOptions({ idOrSlug: useMe().organization.id }))
+  const space = useQuery(
+    api["space-settings"].get.queryOptions({ idOrSlug: props.agent.ownerSpaceId ?? props.spaceId }),
+  )
+  const agent = props.agent
+  return (
+    <Section
+      title="Permissions"
+      description="Rules for this agent, on top of your organization’s and the space’s where a chat runs."
+    >
+      <PermissionRules
+        rules={agent.settings.permissions ?? []}
+        inherited={[
+          { source: "Organization", rules: organization.data?.settings.permissions ?? [] },
+          { source: "Space", rules: space.data?.settings.permissions ?? [] },
+        ]}
+        scopeName="This agent"
+        readOnly={!agent.canUpdate}
+        saving={update.isPending}
+        onSave={(permissions) =>
+          update.mutateAsync(
+            { id: agent.id, settings: { ...agent.settings, permissions: [...permissions] } },
+            { onError: (error) => toast.error("Couldn’t save the permissions", { description: errorMessage(error) }) },
+          )
+        }
+      />
+    </Section>
   )
 }

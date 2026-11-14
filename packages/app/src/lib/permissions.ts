@@ -214,7 +214,7 @@ export const strictest = (effects: ReadonlyArray<Decision>) =>
 
 const special = /[.+^${}()|[\]\\]/g
 
-export const matches = (input: string, pattern: string) => {
+const matches = (input: string, pattern: string) => {
   const escaped = pattern.replaceAll(special, "\\$&").replaceAll("*", ".*").replaceAll("?", ".")
   return new RegExp(`^${escaped.endsWith(" .*") ? `${escaped.slice(0, -3)}( .*)?` : escaped}$`, "s").test(input)
 }
@@ -238,7 +238,7 @@ export const covering = (rules: ReadonlyArray<Rule>, rule: Rule) =>
       !isStricter(rule.effect, each.effect),
   )
 
-export const same = (left: Rule, right: Rule) => left.action === right.action && left.resource === right.resource
+const same = (left: Rule, right: Rule) => left.action === right.action && left.resource === right.resource
 
 export const parse = Schema.decodeUnknownResult(Schema.fromJsonString(Permission.RuleList))
 
