@@ -1580,6 +1580,7 @@ export type AgentInfo = {
   description: string | null
   isSubagent: boolean
   settings: SettingsInfo
+  canUpdate: boolean
   createdAt: string
   updatedAt: string
   archivedAt: string | null

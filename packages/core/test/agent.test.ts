@@ -144,7 +144,12 @@ describe("Agent", () => {
       expect((yield* agents.list(o.grace, { ...page, isSubagent: false })).items.map((agent) => agent.id)).toEqual([
         ren,
       ])
-      expect(yield* agents.get(o.grace, ren)).toMatchObject({ name: "ren", organizationId: null, ownerSpaceId: null })
+      expect(yield* agents.get(o.grace, ren)).toMatchObject({
+        name: "ren",
+        organizationId: null,
+        ownerSpaceId: null,
+        canUpdate: false,
+      })
       expect((yield* agents.get(o.grace, "ren")).id).toBe(ren)
       expect((yield* Effect.flip(agents.update(o.admin, ren, { description: "Mine" })))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(agents.archive(o.admin, ren)))._tag).toBe("Primitive.NotFound")
@@ -157,12 +162,13 @@ describe("Agent", () => {
       const memberships = yield* AgentMembership.Service
       const o = yield* org
       const created = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
+      expect(created.canUpdate).toBe(true)
       yield* o.join(o.ada, o.eng.id)
       yield* memberships.create(o.ada, { agentId: created.id, spaceId: o.eng.id })
-      expect((yield* agents.get(o.grace, created.id)).settings).toEqual(build.settings)
-      expect((yield* agents.list(o.grace, { ...page, spaceId: o.eng.id })).items.map((agent) => agent.id)).toEqual([
-        created.id,
-      ])
+      expect(yield* agents.get(o.grace, created.id)).toMatchObject({ settings: build.settings, canUpdate: false })
+      expect(
+        (yield* agents.list(o.grace, { ...page, spaceId: o.eng.id })).items.map((agent) => [agent.id, agent.canUpdate]),
+      ).toEqual([[created.id, false]])
       expect((yield* Effect.flip(agents.update(o.grace, created.id, { description: "Mine" })))._tag).toBe(
         "Primitive.Forbidden",
       )
@@ -241,7 +247,7 @@ describe("Agent", () => {
     }),
   )
 
-  it.live("a subagent agent with references is refused", () =>
+  it.live("a subagent with references or without a description is refused", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const o = yield* org
@@ -249,6 +255,7 @@ describe("Agent", () => {
       const refused = yield* Effect.flip(
         agents.create(o.ada, {
           name: "explorer",
+          description: "Explores the docs.",
           isSubagent: true,
           ownerSpaceId: o.factory.id,
           settings: { ...empty, references },
@@ -260,8 +267,26 @@ describe("Agent", () => {
         ownerSpaceId: o.factory.id,
         settings: { ...empty, references },
       })
-      expect((yield* Effect.flip(agents.update(o.ada, primary.id, { isSubagent: true })))._tag).toBe(
-        "Primitive.Conflict",
+      expect(
+        (yield* Effect.flip(agents.update(o.ada, primary.id, { isSubagent: true, description: "Builds." })))._tag,
+      ).toBe("Primitive.Conflict")
+      expect(
+        yield* Effect.flip(
+          agents.create(o.ada, {
+            name: "helper",
+            description: " ",
+            isSubagent: true,
+            ownerSpaceId: o.factory.id,
+            settings: empty,
+          }),
+        ),
+      ).toMatchObject({ _tag: "Primitive.Invalid", field: "description" })
+      const plain = yield* agents.create(o.ada, { ...build, name: "plain", ownerSpaceId: o.factory.id })
+      expect((yield* Effect.flip(agents.update(o.ada, plain.id, { isSubagent: true })))._tag).toBe("Primitive.Invalid")
+      const helper = yield* agents.update(o.ada, plain.id, { isSubagent: true, description: "Helps." })
+      expect(helper).toMatchObject({ isSubagent: true, description: "Helps." })
+      expect((yield* Effect.flip(agents.update(o.ada, helper.id, { description: null })))._tag).toBe(
+        "Primitive.Invalid",
       )
     }),
   )

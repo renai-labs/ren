@@ -87,6 +87,7 @@ describe("AgentMembership", () => {
         yield* memberships.create(s.bridge, { agentId: s.agent.id, spaceId: s.eng.id })
         const review = yield* agents.create(s.grace, {
           name: "review",
+          description: "Reviews changes.",
           isSubagent: true,
           ownerSpaceId: s.eng.id,
           settings: { permissions: [], references: [] },
