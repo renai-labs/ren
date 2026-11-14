@@ -221,17 +221,22 @@ describe("Auth", () => {
     }),
   )
 
-  it.live("signs back in to the oldest organization", () =>
+  it.live("signs back in to the organization used last", () =>
     Effect.gen(function* () {
       const session = sessionCookie(yield* register("frances@example.org"))
       const first = (yield* get("/get-session", session)).session.activeOrganizationId
-      expect((yield* post("/organization/create", { name: "Side Project", slug: "side" }, session)).status).toBe(200)
+      const side = yield* post("/organization/create", { name: "Side Project", slug: "side" }, session).pipe(
+        Effect.flatMap(json),
+      )
+      const signInAgain = () =>
+        post("/sign-in/email", { email: "frances@example.org", password: "correct horse battery staple" }).pipe(
+          Effect.flatMap((signIn) => get("/get-session", sessionCookie(signIn))),
+          Effect.map((found) => found.session.activeOrganizationId),
+        )
 
-      const signIn = yield* post("/sign-in/email", {
-        email: "frances@example.org",
-        password: "correct horse battery staple",
-      })
-      expect((yield* get("/get-session", sessionCookie(signIn))).session.activeOrganizationId).toBe(first)
+      expect(yield* signInAgain()).toBe(side.id)
+      expect((yield* post("/organization/set-active", { organizationId: first }, session)).status).toBe(200)
+      expect(yield* signInAgain()).toBe(first)
     }),
   )
 
