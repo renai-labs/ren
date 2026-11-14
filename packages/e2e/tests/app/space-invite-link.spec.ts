@@ -15,11 +15,11 @@ test("a member copies a space's invite link, and another organization member ope
 
   await page.goto("/app/spaces")
   await page.getByRole("button", { name: "New space" }).click()
-  await page.getByRole("menuitem", { name: "Create space" }).click()
   const create = page.getByRole("dialog", { name: "New space" })
   await create.getByRole("textbox", { name: "Name" }).fill("Design")
   await create.getByRole("button", { name: "Create space" }).click()
   await expect(page).toHaveURL(/\/app\/spaces\/spc_\w+/)
+  await page.getByRole("button", { name: "Space", exact: true }).click()
   await page.getByRole("link", { name: "Members" }).click()
 
   await page.getByRole("button", { name: "Invite link" }).click()
@@ -39,7 +39,7 @@ test("a member copies a space's invite link, and another organization member ope
   if (shots) await alan.screenshot({ path: `${shots}/2-join-page.png` })
   await alan.getByRole("button", { name: "Join", exact: true }).click()
   await expect(alan).toHaveURL(/\/app\/spaces\/spc_\w+/)
-  await expect(alan.getByRole("link", { name: "Members" })).toBeVisible()
+  await expect(alan.getByRole("button", { name: "Switch space (current: Design)" })).toBeVisible()
   if (shots) await alan.screenshot({ path: `${shots}/3-space-after-joining.png` })
 
   await alan.goto(url)
@@ -74,6 +74,7 @@ test("someone outside the organization cannot join with the link, and a signed-o
     .getByRole("link", { name: /General Space/ })
     .first()
     .click()
+  await page.getByRole("button", { name: "Space", exact: true }).click()
   await page.getByRole("link", { name: "Members" }).click()
   await page.getByRole("button", { name: "Invite link" }).click()
   const url = await page
