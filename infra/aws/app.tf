@@ -68,7 +68,7 @@ resource "aws_cloudfront_distribution" "app" {
   enabled         = true
   is_ipv6_enabled = true
   comment         = "${var.name} app"
-  aliases         = [var.domain]
+  aliases         = concat([var.domain], local.alias_published ? [var.alias_domain.name] : [])
   http_version    = "http2"
   price_class     = "PriceClass_100"
 
@@ -94,7 +94,7 @@ resource "aws_cloudfront_distribution" "app" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.this.certificate_arn
+    acm_certificate_arn      = var.alias_domain == null ? aws_acm_certificate_validation.this.certificate_arn : aws_acm_certificate_validation.alias[0].certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }

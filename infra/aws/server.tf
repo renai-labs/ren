@@ -104,7 +104,7 @@ resource "aws_lb_listener_rule" "server" {
 
   condition {
     host_header {
-      values = ["api.${var.domain}"]
+      values = concat(["api.${var.domain}"], var.alias_domain == null ? [] : ["api.${var.alias_domain.name}"])
     }
   }
 

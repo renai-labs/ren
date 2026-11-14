@@ -51,6 +51,88 @@ resource "aws_acm_certificate_validation" "this" {
   validation_record_fqdns = [for record in aws_route53_record.certificate_validation : record.fqdn]
 }
 
+# The alias domain's certificate covers the apex and every name under it, so it also covers `domain`
+# when `domain` is one level under it; CloudFront then serves both names with it.
+data "aws_route53_zone" "alias" {
+  count = var.alias_domain == null ? 0 : 1
+
+  name = "${var.alias_domain.name}."
+}
+
+resource "aws_acm_certificate" "alias" {
+  count = var.alias_domain == null ? 0 : 1
+
+  domain_name               = var.alias_domain.name
+  subject_alternative_names = ["*.${var.alias_domain.name}"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+
+    precondition {
+      condition     = can(regex("^[^.]+\\.${replace(var.alias_domain.name, ".", "\\.")}$", var.domain))
+      error_message = "domain must be one level under alias_domain, so that the alias certificate covers both CloudFront names."
+    }
+  }
+}
+
+# Overwrites, not creates: another certificate of the account for the same names validates through
+# the same record.
+resource "aws_route53_record" "alias_certificate_validation" {
+  for_each = {
+    for option in try(aws_acm_certificate.alias[0].domain_validation_options, []) : option.domain_name => option if option.domain_name == var.alias_domain.name
+  }
+
+  zone_id         = data.aws_route53_zone.alias[0].zone_id
+  name            = each.value.resource_record_name
+  type            = each.value.resource_record_type
+  ttl             = 60
+  records         = [each.value.resource_record_value]
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "alias" {
+  count = var.alias_domain == null ? 0 : 1
+
+  certificate_arn         = aws_acm_certificate.alias[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.alias_certificate_validation : record.fqdn]
+}
+
+locals {
+  alias_published = var.alias_domain == null ? false : var.alias_domain.publish
+}
+
+# Overwrites, not creates: the names exist before this stack takes them.
+resource "aws_route53_record" "alias_app" {
+  for_each = local.alias_published ? toset(["A", "AAAA"]) : toset([])
+
+  zone_id         = data.aws_route53_zone.alias[0].zone_id
+  name            = var.alias_domain.name
+  type            = each.value
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_cloudfront_distribution.app.domain_name
+    zone_id                = aws_cloudfront_distribution.app.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "alias_api" {
+  count = local.alias_published ? 1 : 0
+
+  zone_id         = data.aws_route53_zone.alias[0].zone_id
+  name            = "api.${var.alias_domain.name}"
+  type            = "A"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_lb.this.dns_name
+    zone_id                = aws_lb.this.zone_id
+    evaluate_target_health = false
+  }
+}
+
 resource "aws_route53_record" "api" {
   zone_id = aws_route53_zone.this.zone_id
   name    = "api.${var.domain}"
