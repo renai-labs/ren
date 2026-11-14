@@ -12,7 +12,7 @@ import { SearchDialog } from "./search-dialog.js"
 import { SettingsSidebar } from "./settings-sidebar.js"
 import { SpaceSidebar } from "./space-sidebar.js"
 import { useMe } from "../lib/use-me.js"
-import { chatFor } from "../lib/chat.js"
+import { useCurrentChat } from "../lib/chat.js"
 import { Routing } from "../lib/routing.js"
 import { Keyboard } from "../platform/keyboard.js"
 import { Platform } from "../platform/platform.js"
@@ -49,7 +49,7 @@ function ShellSidebar(props: { path: string; onSearch: () => void }) {
 export function AppShell() {
   const platform = Platform.usePlatform()
   const me = useMe()
-  const chat = chatFor(platform, me.user.id)
+  const chat = useCurrentChat(platform, me.user.id)
   const [searching, setSearching] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
   const sidebarOpen = Preference.usePreference(SidebarPreferences.open)
@@ -58,7 +58,7 @@ export function AppShell() {
   useNewTaskShortcut(() => setCreatingTask(true))
   const path = Routing.useRenderedPath()
   return (
-    <RegistryContext value={chat.registry}>
+    <RegistryContext key={chat.generation} value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
         <SidebarProvider open={sidebarOpen} onOpenChange={(next) => setPreference(SidebarPreferences.open, next)}>
           <ShellSidebar path={path} onSearch={() => setSearching(true)} />
