@@ -123,6 +123,18 @@ describe("EmitCli.emitCli", () => {
     expect(help).not.toContain("--settings")
   })
 
+  test("names the identifier of an input or of its list's items", () => {
+    const endpoint = contract.groups
+      .flatMap((group) => group.endpoints)
+      .find((each) => each.endpoint.identifier === "widget.update")
+    expect(endpoint && EmitCli.inputs(endpoint)).toEqual([
+      { name: "id", source: "params", identifier: "Widget.ID" },
+      { name: "name", source: "payload", identifier: undefined },
+      { name: "tags", source: "payload", identifier: "Widget.Tag" },
+      { name: "settings", source: "payload", identifier: undefined },
+    ])
+  })
+
   test("adds a group's handwritten commands next to its generated ones", async () => {
     await using cli = await emitted()
     await cli.run(["widget", "hello"])

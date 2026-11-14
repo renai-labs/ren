@@ -502,6 +502,8 @@ export const AppProfileCreate = (input: Command.Command.Config.Infer<typeof Comm
       },
       lookups: {
         appId: (client, value) => client["app"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        spaceIds: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["app-profile"]["create"]({ ...request.payload }),
@@ -534,6 +536,8 @@ export const AppProfileAccess = (input: Command.Command.Config.Infer<typeof Comm
       lookups: {
         id: (client, value) =>
           client["app-profile"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        add: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        remove: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["app-profile"]["access"]({ ...request.params, ...request.payload }),
@@ -692,8 +696,6 @@ export const TaskList = (input: Command.Command.Config.Infer<typeof Commands.Tas
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
         agentId: (client, value) =>
           client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-        parentId: (client, value) =>
-          client["task"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["task"]["list"]({ ...request.query }),
@@ -2163,6 +2165,10 @@ export const OrganizationInviteLinkCreate = (
       payload: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
       input: input["input"],
       labels: { spaceIds: "--space-ids", expiresIn: "--expires-in" },
+      lookups: {
+        spaceIds: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
     },
     (client, request) => client["organization-invite-link"]["create"]({ ...request.payload }),
   )

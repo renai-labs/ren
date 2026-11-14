@@ -117,9 +117,28 @@ const sourcesOf = (endpoint: Types.Endpoint) =>
     ["payload", properties(endpoint.payloads.at(0), "json")],
   ] as const
 
+function identifier(ast: SchemaAST.AST): string | undefined {
+  const own = SchemaAST.resolveIdentifier(ast)
+  if (own !== undefined) return own
+  const members = SchemaAST.isUnion(ast) ? ast.types.filter(present) : []
+  const only = SchemaAST.isArrays(ast) && ast.elements.length === 0 ? ast.rest.at(0) : members.at(0)
+  return only !== undefined && members.length <= 1 ? identifier(only) : undefined
+}
+
 export function inputs(endpoint: Types.Endpoint) {
+  const identifiers = new Map(
+    [
+      ...properties(endpoint.params, "type"),
+      ...properties(endpoint.query, "type"),
+      ...properties(endpoint.payloads.at(0), "type"),
+    ].map((property) => [String(property.name), identifier(property.type)]),
+  )
   return sourcesOf(endpoint).flatMap(([source, list]) =>
-    list.map((property) => ({ name: String(property.name), source })),
+    list.map((property) => ({
+      name: String(property.name),
+      source,
+      identifier: identifiers.get(String(property.name)),
+    })),
   )
 }
 
