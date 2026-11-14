@@ -889,6 +889,10 @@ export const MemoryWrite = {
   ),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   content: Flag.String("content").pipe(Flag.optional, Flag.withDescription("The whole new content of the file.")),
+  mode: Flag.Literals("mode", ["create", "replace"]).pipe(
+    Flag.optional,
+    Flag.withDescription("`create` refuses a path that has a file, with a conflict."),
+  ),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 

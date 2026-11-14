@@ -2543,9 +2543,30 @@ export type MemoryReadInput = {
 export type MemoryReadOutput = MemoryFile
 
 export type MemoryWriteInput = {
-  readonly spaceId?: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["spaceId"]
-  readonly path: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["path"]
-  readonly content: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["content"]
+  readonly spaceId?: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["spaceId"]
+  readonly path: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["path"]
+  readonly content: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["content"]
+  readonly mode?: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["mode"]
 }
 
 export type MemoryWriteOutput = void

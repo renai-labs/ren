@@ -1935,9 +1935,9 @@ export const MemoryWrite = (input: Command.Command.Config.Infer<typeof Commands.
   Operation.run(
     ClientApi.groups["memory"].endpoints["memory.write"],
     {
-      payload: { path: input["path"], spaceId: input["spaceId"], content: input["content"] },
+      payload: { path: input["path"], spaceId: input["spaceId"], content: input["content"], mode: input["mode"] },
       input: input["input"],
-      labels: { path: "<path>", spaceId: "--space", content: "--content" },
+      labels: { path: "<path>", spaceId: "--space", content: "--content", mode: "--mode" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),

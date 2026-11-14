@@ -127,6 +127,23 @@ describe("Memory", () => {
     }),
   )
 
+  it.live("a create never replaces a file that exists", () =>
+    Effect.gen(function* () {
+      const memory = yield* Memory.Service
+      const owner = yield* Seed.owner()
+      const ada = { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] }
+      const spaceId = owner.spaceId
+      yield* memory.write(ada, { spaceId, path: "memory.md", content: "- Keep this.\n" })
+      const clash = yield* Effect.flip(memory.write(ada, { spaceId, path: "memory.md", content: "", mode: "create" }))
+      expect([clash._tag, (yield* memory.read(ada, { spaceId, path: "memory.md" })).content]).toEqual([
+        "Primitive.Conflict",
+        "- Keep this.\n",
+      ])
+      yield* memory.write(ada, { spaceId, path: "people/ana.md", content: "", mode: "create" })
+      expect(yield* memory.list(ada, { spaceId })).toEqual(["memory.md", "people/ana.md"])
+    }),
+  )
+
   it.live("writes to two files of one memory at the same time both land (memory M3)", () =>
     Effect.gen(function* () {
       const memory = yield* Memory.Service
