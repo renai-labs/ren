@@ -162,7 +162,7 @@ function SpaceSectionSample(props: { section: string }) {
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
   if (props.section === "automations") return table(["Name", "Frequency", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
-  if (props.section === "agents") return <RowsSample count={3} />
+  if (props.section === "agents") return table(["Name", "Type", "Model", "Source", ""])
   if (props.section === "inbox") return table(inboxColumns)
   if (props.section === "instructions")
     return (

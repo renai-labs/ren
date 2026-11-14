@@ -73,7 +73,7 @@ export function SpaceLayout() {
         </Suspense>
       </div>
     )
-  if (ownPages.has(tab) || (tab === "automations" && path.at(4) !== undefined))
+  if (ownPages.has(tab) || ((tab === "automations" || tab === "agents") && path.at(4) !== undefined))
     return (
       <Suspense fallback={<SpaceSectionSkeleton />}>
         <Outlet />

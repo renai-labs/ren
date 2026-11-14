@@ -12,7 +12,7 @@ test("a member arranges the factory, moves a card and moves a task to an agent o
   })
   expect(response.ok()).toBe(true)
   const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
-  await page.goto(`/app/spaces/${space.id}/agents`)
+  await page.goto(`/app/spaces/${space.id}/agents?tab=factory`)
   await expect(page.getByRole("button", { name: "Remove ren from the factory", exact: true })).toBeDisabled()
   await expect(
     page.getByText("Spaces without their own primary agents use global agents as the default factory order.", {
@@ -40,7 +40,7 @@ test("a member arranges the factory, moves a card and moves a task to an agent o
   })
   expect(newer.ok()).toBe(true)
 
-  await page.goto(`/app/spaces/${space.id}/agents`)
+  await page.goto(`/app/spaces/${space.id}/agents?tab=factory`)
   const factory = page.getByRole("list", { name: "Factory", exact: true }).getByRole("listitem")
   const add = async (name: string) => {
     await page.getByRole("button", { name: "Add agent", exact: true }).click()
