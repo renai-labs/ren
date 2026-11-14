@@ -27,12 +27,12 @@ type Listed = { readonly entries: ReadonlyArray<Pick<FileSystem.Entry, "path" | 
 const listedOf = (result: AsyncResult.AsyncResult<Listed, unknown>) =>
   Option.match(AsyncResult.value(result), { onNone: () => [], onSome: (page) => page.entries })
 
-export const pathsOf = (results: ReadonlyArray<AsyncResult.AsyncResult<Listed, unknown>>) =>
+const pathsOf = (results: ReadonlyArray<AsyncResult.AsyncResult<Listed, unknown>>) =>
   results.flatMap((result) =>
     listedOf(result).map((entry) => (entry.type === "directory" ? withSlash(entry.path) : entry.path)),
   )
 
-export function useFolderFailures(
+function useFolderFailures(
   results: ReadonlyArray<readonly [string, AsyncResult.AsyncResult<unknown, unknown>]>,
   refreshFolder: (path: string) => void,
 ) {
