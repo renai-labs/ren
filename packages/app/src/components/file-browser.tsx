@@ -24,6 +24,7 @@ import { FileIcon } from "@ren/ui/file-icon"
 import { FileExplorer } from "@ren/ui/file-tree"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Spinner } from "@ren/ui/spinner"
+import { FileName } from "@ren/util/file-name"
 import { cn } from "cn"
 import { ChatPreferences } from "../lib/chat-preferences.js"
 import { errorStatus } from "../lib/errors.js"
@@ -44,7 +45,6 @@ export interface FileTree {
   readonly reveal: (path: string) => void
   readonly refreshFolder: (path: string) => void
   readonly refresh: () => void
-  readonly pinned?: ReadonlyArray<string> | undefined
 }
 
 export interface FileRead {
@@ -55,8 +55,6 @@ export interface FileRead {
 const highlightLimit = 256 * 1024
 
 const FileView = lazy(() => import("@ren/ui/file-view").then((module) => ({ default: module.FileView })))
-
-const nameOf = (path: string) => path.replace(/\/$/u, "").split("/").at(-1) ?? path
 
 function Crumbs(props: { path: string; onFolder: (folder: string) => void }) {
   const parts = props.path.split("/")
@@ -98,7 +96,7 @@ function Unsupported(props: { file: FileSystem.Content }) {
       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto overscroll-contain p-4">
         <img
           src={`data:${props.file.mime};base64,${props.file.content}`}
-          alt={nameOf(props.file.path)}
+          alt={FileName.base(props.file.path)}
           className="max-w-full rounded-md border bg-muted object-contain"
         />
       </div>
@@ -125,7 +123,7 @@ function OpenIn(props: { file: FileSystem.Content; onMention: ((path: string) =>
         : Uint8Array.from(atob(props.file.content), (char) => char.charCodeAt(0))
     const link = document.createElement("a")
     link.href = URL.createObjectURL(new Blob([bytes], { type: props.file.mime }))
-    link.download = nameOf(props.file.path)
+    link.download = FileName.base(props.file.path)
     link.click()
     URL.revokeObjectURL(link.href)
   }
@@ -263,12 +261,12 @@ function TabStrip(props: {
             )}
           >
             <FileIcon name={tab.path} data-icon="inline-start" />
-            <span className="truncate">{nameOf(tab.path)}</span>
+            <span className="truncate">{FileName.base(tab.path)}</span>
           </Button>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Close ${nameOf(tab.path)}`}
+            aria-label={`Close ${FileName.base(tab.path)}`}
             onClick={() => props.onClose(tab.path)}
             className="absolute top-1/2 right-1 size-5 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/file:opacity-100 group-hover/file:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
           >
@@ -295,13 +293,10 @@ function Tree(props: {
   onPin: (path: string) => void
   onMention: ((path: string) => void) | undefined
   onTerminal: ((folder: string) => void) | undefined
-  onUpload: ((folder: string) => void) | undefined
-  onDelete: ((path: string) => void) | undefined
 }) {
   const tree = props.tree
   const root = tree.root
   const copy = useCopy()
-  const pinned = (path: string) => (tree.pinned ?? []).some((name) => path.startsWith(`${name}/`))
   if (!root || !AsyncResult.isSuccess(root))
     return (
       <WorkspacePending
@@ -323,7 +318,6 @@ function Tree(props: {
       onExpand={tree.expand}
       onQuery={tree.setQuery}
       onRefresh={tree.refresh}
-      pinned={tree.pinned}
       notice={
         root.value.entries.length === 0 ? (
           <p className="px-3 py-1.5 text-xs text-muted-foreground">This folder is empty</p>
@@ -368,24 +362,6 @@ function Tree(props: {
               }}
             />
           ) : null}
-          {item.kind === "directory" && props.onUpload && !pinned(item.path) ? (
-            <MenuItem
-              label="Upload here"
-              onClick={() => {
-                close()
-                props.onUpload?.(item.path)
-              }}
-            />
-          ) : null}
-          {item.kind === "file" && props.onDelete && !pinned(item.path) ? (
-            <MenuItem
-              label="Delete"
-              onClick={() => {
-                close()
-                props.onDelete?.(item.path)
-              }}
-            />
-          ) : null}
         </>
       )}
     />
@@ -398,8 +374,6 @@ export function FileBrowser(props: {
   onFiles: (files: FileTabs.State) => void
   onMention: ((path: string) => void) | undefined
   onTerminal: ((folder: string) => void) | undefined
-  onUpload?: ((folder: string) => void) | undefined
-  onDelete?: ((path: string) => void) | undefined
   empty: string
   children: ReactNode
 }) {
@@ -415,8 +389,6 @@ export function FileBrowser(props: {
           onPin={(path) => props.onFiles(FileTabs.open(files, path, { pin: true }))}
           onMention={props.onMention}
           onTerminal={props.onTerminal}
-          onUpload={props.onUpload}
-          onDelete={props.onDelete}
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
