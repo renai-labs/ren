@@ -23,6 +23,10 @@ interface Interface {
   readonly getSession: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
   readonly getAccessToken: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
   readonly actAs: (caller: Caller) => Effect.Effect<Option.Option<AuthenticatedSession>>
+  readonly addMember: (input: {
+    readonly userId: Auth.UserID
+    readonly organizationId: Auth.OrganizationID
+  }) => Effect.Effect<void>
   readonly mcpChallenge: string
   readonly getActiveMembership: (
     session: AuthenticatedSession,
@@ -204,6 +208,12 @@ export const layer = Layer.effect(
         return yield* actAs({ userId: claims.value.sub, organizationId: claims.value[BetterAuth.organizationClaim] })
       }),
       actAs,
+      addMember: Effect.fn("Auth.addMember")(function* (input: {
+        readonly userId: Auth.UserID
+        readonly organizationId: Auth.OrganizationID
+      }) {
+        yield* Effect.promise(() => auth.api.addMember({ body: { ...input, role: "member" } }))
+      }),
       mcpChallenge: `Bearer resource_metadata="${new URL(`/.well-known/oauth-protected-resource${mcpPath}`, config.baseURL).href}", scope="${BetterAuth.mcpScope}"`,
       getActiveMembership: Effect.fn("Auth.getActiveMembership")(function* (
         session: AuthenticatedSession,

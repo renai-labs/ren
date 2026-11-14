@@ -29,6 +29,7 @@ import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
 import { WebhookGroup, WebhookRequestGroup } from "./groups/webhook.js"
+import { OrganizationInviteLinkGroup, OrganizationJoinLinkGroup } from "./groups/organization-invite-link.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
 import { SpaceJoinRequestGroup } from "./groups/space-join-request.js"
@@ -48,6 +49,8 @@ export const Api = HttpApi.make("server")
   .add(SpaceJoinRequestGroup)
   .add(SpaceInviteLinkGroup)
   .add(JoinLinkGroup)
+  .add(OrganizationInviteLinkGroup)
+  .add(OrganizationJoinLinkGroup)
   .add(MachineTemplateGroup)
   .add(MachineProviderGroup)
   .add(SpaceSettingsGroup)

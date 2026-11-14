@@ -38,6 +38,8 @@ import { RouterContext } from "../../lib/router-context.js"
 import { formatDate } from "@ren/ui/time"
 import { isRole, plural, roleLabel, type Role } from "../../lib/format.js"
 import { Choice, roleOptions, roles } from "../../components/settings-shared.js"
+import { OrganizationInviteLinkDialog } from "./organization-invite-link-dialog.js"
+import { OrganizationInviteLinksTable } from "./organization-invite-links-table.js"
 
 const route = getRouteApi("/_authed/_shell/settings/_admin/members")
 
@@ -271,9 +273,15 @@ export function MembersSettingsPage() {
     queryClient.invalidateQueries({ queryKey: organizationOptions(auth, me.organization.id).queryKey })
   const shownRows = useShown(rows)
   const shownInvitations = useShown(invitations)
-  const shown = tab === "members" ? shownRows : shownInvitations
+  const links = useQuery({ ...api["organization-invite-link"].list.queryOptions(), enabled: canAdminister })
+  const shownLinks = useShown(
+    (links.data?.items ?? []).filter((link) =>
+      Search.matches(query, link.createdBy.name, ...link.spaces.map((space) => space.name)),
+    ),
+  )
+  const shown = { members: shownRows, invitations: shownInvitations, links: shownLinks }[tab]
   const openTab = (next: string) =>
-    void navigate({ search: { tab: next === "invitations" ? "invitations" : "members" } })
+    void navigate({ search: { tab: next === "invitations" || next === "links" ? next : "members" } })
   const memberCount = members.length
   const invitationCount = invitations.length
   const changeRole = async (memberId: string, name: string, role: string) => {
@@ -352,19 +360,30 @@ export function MembersSettingsPage() {
             <PageTabsTrigger value="invitations" count={invitationCount}>
               Invitations
             </PageTabsTrigger>
+            {canAdminister ? (
+              <PageTabsTrigger value="links" count={links.data?.items.length}>
+                Links
+              </PageTabsTrigger>
+            ) : null}
           </PageTabsList>
         </Tabs>
       }
       actions={
         <>
           <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
-          <FilterMenu
-            label="Filter members"
-            properties={[{ key: "role", label: "Role", any: "Any", icon: IconShield, options: roles }]}
-            value={filters}
-            onChange={setFilters}
-          />
-          {canAdminister ? <InviteDialog onInvite={invite} /> : null}
+          {tab === "links" ? (
+            <OrganizationInviteLinkDialog />
+          ) : (
+            <>
+              <FilterMenu
+                label="Filter members"
+                properties={[{ key: "role", label: "Role", any: "Any", icon: IconShield, options: roles }]}
+                value={filters}
+                onChange={setFilters}
+              />
+              {canAdminister ? <InviteDialog onInvite={invite} /> : null}
+            </>
+          )}
         </>
       }
     >
@@ -401,7 +420,11 @@ export function MembersSettingsPage() {
           onRemove={(row) => remove(row.memberId, row.name)}
           empty="No members match these filters"
         />
-      ) : (
+      ) : null}
+      {tab === "links" ? (
+        <OrganizationInviteLinksTable links={shownLinks.items} empty={Search.empty(query, "No invite links yet")} />
+      ) : null}
+      {tab === "invitations" ? (
         <TableCard>
           <Table>
             <TableHeader>
@@ -446,7 +469,7 @@ export function MembersSettingsPage() {
             </TableBody>
           </Table>
         </TableCard>
-      )}
+      ) : null}
       <LoadMore more={shown.more} onMore={shown.next} />
       {adding ? <AddToSpacesDialog key={adding.id} member={adding} onClose={() => setAdding(undefined)} /> : null}
     </Page>

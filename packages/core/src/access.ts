@@ -13,6 +13,7 @@ import { ChannelMappingPolicy } from "./channel-mapping/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
 import { MemoryPolicy } from "./memory/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
+import { OrganizationInviteLinkPolicy } from "./organization-invite-link/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
 import { DrivePolicy } from "./drives/policy.js"
@@ -95,6 +96,7 @@ export const where = (plan: Plan, facts: ReadonlyMap<string, SQL>): SQL => {
 
 export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SpacePolicy.documents,
+  ...OrganizationInviteLinkPolicy.documents,
   ...SessionPolicy.documents,
   ...MachineTemplatePolicy.documents,
   ...SettingsPolicy.documents,

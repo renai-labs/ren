@@ -62,12 +62,10 @@ const admit = Effect.fnUntraced(function* (
   const organizationMember = yield* SpaceQueries.organizationMember(transaction, actor.organizationId, request.userId)
   if (!organizationMember)
     return yield* new Primitive.Conflict({ message: "The person is no longer in this organization." })
-  const inserted = yield* transaction
-    .insert(Database.Schema.space_member)
-    .values({ id: Space.MembershipID.create(), space_id: request.spaceId, user_id: request.userId })
-    .onConflictDoNothing()
-    .returning({ id: Database.Schema.space_member.id })
-  return inserted.length > 0 ? yield* CredentialOffboarding.spaceBrains(transaction, [request.spaceId]) : []
+  return yield* CredentialOffboarding.spaceBrains(
+    transaction,
+    yield* SpaceQueries.admit(transaction, request.userId, [request.spaceId]),
+  )
 })
 
 export const layer = Layer.effect(

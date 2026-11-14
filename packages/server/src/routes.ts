@@ -35,6 +35,7 @@ import { Webhooks } from "@ren/core/webhooks"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
+import { OrganizationInviteLink } from "@ren/core/organization-invite-link"
 import { Space } from "@ren/core/space"
 import { SpaceJoinRequest } from "@ren/core/space/join-request"
 import { SpaceInviteLink } from "@ren/core/space/invite-link"
@@ -93,6 +94,7 @@ import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SessionHandler } from "./handlers/api/session.js"
+import { OrganizationInviteLinkHandler, OrganizationJoinLinkHandler } from "./handlers/api/organization-invite-link.js"
 import { SpaceHandler } from "./handlers/api/space.js"
 import { SpaceJoinRequestHandler } from "./handlers/api/space-join-request.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
@@ -182,6 +184,8 @@ export const layer = Layer.mergeAll(
         SpaceJoinRequestHandler,
         SpaceInviteLinkHandler,
         JoinLinkHandler,
+        OrganizationInviteLinkHandler,
+        OrganizationJoinLinkHandler,
         MachineTemplateHandler,
         MachineProviderHandler,
         SpaceSettingsHandler,
@@ -229,6 +233,7 @@ export const layer = Layer.mergeAll(
         SpaceMember.layer,
         SpaceJoinRequest.layer,
         SpaceInviteLink.layer,
+        OrganizationInviteLink.layer,
         MachineTemplates.layer,
         Memory.layer,
         Insights.layer,

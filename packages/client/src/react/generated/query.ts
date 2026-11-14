@@ -20,6 +20,10 @@ import type {
   SpaceInviteLinkResetInput,
   JoinLinkPreviewInput,
   JoinLinkAcceptInput,
+  OrganizationInviteLinkCreateInput,
+  OrganizationInviteLinkRevokeInput,
+  OrganizationJoinLinkPreviewInput,
+  OrganizationJoinLinkAcceptInput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateGetInput,
   EnvironmentTemplateCreateInput,
@@ -359,6 +363,55 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["join-link", "accept"] as const,
             mutationFn: (input: JoinLinkAcceptInput) => client["join-link"]["accept"](input),
+          }),
+      },
+    },
+    "organization-invite-link": {
+      create: {
+        mutationKey: () => ["organization-invite-link", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-invite-link", "create"] as const,
+            mutationFn: (input: OrganizationInviteLinkCreateInput) =>
+              client["organization-invite-link"]["create"](input),
+          }),
+      },
+      list: {
+        queryKey: () => ["organization-invite-link", "list"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["organization-invite-link", "list"] as const,
+            queryFn: (context) => client["organization-invite-link"]["list"]({ signal: context.signal }),
+          }),
+      },
+      revoke: {
+        mutationKey: () => ["organization-invite-link", "revoke"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-invite-link", "revoke"] as const,
+            mutationFn: (input: OrganizationInviteLinkRevokeInput) =>
+              client["organization-invite-link"]["revoke"](input),
+          }),
+      },
+    },
+    "organization-join-link": {
+      preview: {
+        queryKey: (input?: OrganizationJoinLinkPreviewInput) =>
+          input === undefined
+            ? (["organization-join-link", "preview"] as const)
+            : (["organization-join-link", "preview", input] as const),
+        queryOptions: (input: OrganizationJoinLinkPreviewInput) =>
+          queryOptions({
+            queryKey: ["organization-join-link", "preview", input] as const,
+            queryFn: (context) => client["organization-join-link"]["preview"](input, { signal: context.signal }),
+          }),
+      },
+      accept: {
+        mutationKey: () => ["organization-join-link", "accept"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-join-link", "accept"] as const,
+            mutationFn: (input: OrganizationJoinLinkAcceptInput) => client["organization-join-link"]["accept"](input),
           }),
       },
     },

@@ -103,7 +103,7 @@ export function BackButton(props: { onClick: () => void; children?: ReactNode | 
   )
 }
 
-export function GoogleButton(props: { destination: Destination }) {
+export function GoogleButton(props: { destination: Destination; before?: () => Promise<unknown> }) {
   const { auth } = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
   const afterAuth = `${platform.appUrl}${destinationHref({ ...props.destination, join: true })}`
@@ -113,7 +113,9 @@ export function GoogleButton(props: { destination: Destination }) {
       variant="secondary"
       className="h-10 w-full"
       onClick={() =>
-        void auth.signIn.social({ provider: "google", callbackURL: afterAuth, newUserCallbackURL: afterAuth })
+        void Promise.resolve(props.before?.()).then(() =>
+          auth.signIn.social({ provider: "google", callbackURL: afterAuth, newUserCallbackURL: afterAuth }),
+        )
       }
     >
       <GoogleMark data-icon="inline-start" className="size-4" />

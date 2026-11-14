@@ -1543,6 +1543,272 @@
         "summary": "Join a space with its invite link"
       }
     },
+    "/organization-invite-links": {
+      "post": {
+        "tags": ["organization-invite-link"],
+        "operationId": "organization-invite-link.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OrganizationInviteLink.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationInviteLink.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Make a link that brings anyone who opens it into the organization as a member, and into the chosen shared spaces. Owners and admins only. The organization’s first space is always on the link.",
+        "summary": "Create an organization invite link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationInviteLink.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "get": {
+        "tags": ["organization-invite-link"],
+        "operationId": "organization-invite-link.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The links that still work: not revoked and not expired. The newest comes first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationInviteLink.List"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the links that still work. Owners and admins only.",
+        "summary": "List organization invite links"
+      }
+    },
+    "/organization-invite-links/{id}": {
+      "delete": {
+        "tags": ["organization-invite-link"],
+        "operationId": "organization-invite-link.revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationInviteLink.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Stop a link. People who already joined with it stay. Owners and admins only.",
+        "summary": "Revoke an organization invite link"
+      }
+    },
+    "/organization-join-links/{token}/preview": {
+      "get": {
+        "tags": ["organization-join-link"],
+        "operationId": "organization-join-link.preview",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationInviteLink.Token_1"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OrganizationInviteLink.Preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationInviteLink.Preview"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the state of an invite link with its organization, inviter and spaces, without signing in. Unknown links return the `invalid` state.",
+        "summary": "Preview an organization invite link"
+      }
+    },
+    "/organization-join-links/{token}/accept": {
+      "post": {
+        "tags": ["organization-join-link"],
+        "operationId": "organization-join-link.accept",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/OrganizationInviteLink.Token_1"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OrganizationInviteLink.Joined",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationInviteLink.Joined"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Add the signed-in person to the link’s organization as a member, and to the link’s shared spaces, in one step. A person already in the organization only gains the spaces. Accepting again is safe and finishes a join that stopped half way. Expired and revoked links return a `NotFoundError` and add no one.",
+        "summary": "Join an organization with its invite link"
+      }
+    },
     "/environment-templates": {
       "get": {
         "tags": ["environment-template"],
@@ -2555,7 +2821,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_1"
+              "$ref": "#/components/schemas/Space.ID_2"
             },
             "required": false
           },
@@ -2635,7 +2901,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_1"
+              "$ref": "#/components/schemas/Space.ID_2"
             },
             "required": false
           },
@@ -2856,7 +3122,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_1"
+              "$ref": "#/components/schemas/Space.ID_2"
             },
             "required": false
           },
@@ -2925,7 +3191,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_2"
+              "$ref": "#/components/schemas/Space.ID_3"
             },
             "required": false
           },
@@ -3120,7 +3386,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_2"
+              "$ref": "#/components/schemas/Space.ID_3"
             },
             "required": false
           },
@@ -3212,7 +3478,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_2"
+              "$ref": "#/components/schemas/Space.ID_3"
             },
             "required": false
           },
@@ -4313,7 +4579,7 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_3"
+              "$ref": "#/components/schemas/Space.ID_4"
             },
             "required": false
           },
@@ -15935,7 +16201,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID_4"
+            "$ref": "#/components/schemas/Space.ID_5"
           }
         },
         "required": ["spaceId"],
@@ -18338,7 +18604,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID_2"
+                "$ref": "#/components/schemas/Space.ID_3"
               },
               {
                 "type": "null"
@@ -21014,7 +21280,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID_1"
+                "$ref": "#/components/schemas/Space.ID_2"
               },
               {
                 "type": "null"
@@ -21081,7 +21347,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID_1"
+                "$ref": "#/components/schemas/Space.ID_2"
               },
               {
                 "type": "null"
@@ -21601,6 +21867,206 @@
       "OAuthSession.Status": {
         "type": "string",
         "enum": ["pending", "complete", "failed", "expired"]
+      },
+      "OrganizationInviteLink.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "description": "Shared spaces that you are in. Ren adds the organization’s first space to the link when it is not here."
+          },
+          "expiresIn": {
+            "$ref": "#/components/schemas/OrganizationInviteLink.Expiry"
+          }
+        },
+        "required": ["spaceIds", "expiresIn"],
+        "additionalProperties": false
+      },
+      "OrganizationInviteLink.Expiry": {
+        "type": "string",
+        "enum": ["1d", "7d", "30d"],
+        "description": "When a new link expires: in 1 day, in 7 days or in 30 days."
+      },
+      "OrganizationInviteLink.ID": {
+        "type": "string",
+        "pattern": "^oil_"
+      },
+      "OrganizationInviteLink.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OrganizationInviteLink.ID"
+          },
+          "token": {
+            "$ref": "#/components/schemas/OrganizationInviteLink.Token"
+          },
+          "spaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            },
+            "description": "The shared spaces that the link adds people to. The organization’s first space is always one."
+          },
+          "createdBy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many times people used the link."
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "token", "spaces", "createdBy", "uses", "expiresAt", "createdAt"],
+        "additionalProperties": false
+      },
+      "OrganizationInviteLink.Joined": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID_1"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": ["organizationId", "spaceId", "slug"],
+        "additionalProperties": false
+      },
+      "OrganizationInviteLink.List": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationInviteLink.Info"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false,
+        "description": "The links that still work: not revoked and not expired. The newest comes first."
+      },
+      "OrganizationInviteLink.Preview": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/OrganizationInviteLink.State"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.OrganizationID"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "logo": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": ["id", "name", "logo"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inviter": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["state", "organization", "inviter", "spaces"],
+        "additionalProperties": false
+      },
+      "OrganizationInviteLink.State": {
+        "type": "string",
+        "enum": ["pending", "expired", "revoked", "invalid"],
+        "description": "`invalid`: the link never existed."
+      },
+      "OrganizationInviteLink.Token": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "description": "The secret in the link: `/join/<token>` on the app’s address."
+      },
+      "OrganizationInviteLink.Token_1": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
       },
       "OrganizationSettings.Info": {
         "type": "object",
@@ -25361,19 +25827,24 @@
       "Space.ID_1": {
         "type": "string",
         "pattern": "^spc_",
-        "description": "The space whose memory to use. Omit it for the organization’s memory."
+        "description": "The first space of the link: where the person lands."
       },
       "Space.ID_2": {
         "type": "string",
         "pattern": "^spc_",
-        "description": "The space whose drive to use. Omit it for the organization’s drive."
+        "description": "The space whose memory to use. Omit it for the organization’s memory."
       },
       "Space.ID_3": {
         "type": "string",
         "pattern": "^spc_",
-        "description": "Only the profiles that this space reaches."
+        "description": "The space whose drive to use. Omit it for the organization’s drive."
       },
       "Space.ID_4": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "Only the profiles that this space reaches."
+      },
+      "Space.ID_5": {
         "type": "string",
         "pattern": "^spc_",
         "description": "The one space that the shared profile lists."
@@ -28761,6 +29232,12 @@
     },
     {
       "name": "join-link"
+    },
+    {
+      "name": "organization-invite-link"
+    },
+    {
+      "name": "organization-join-link"
     },
     {
       "name": "environment-template"

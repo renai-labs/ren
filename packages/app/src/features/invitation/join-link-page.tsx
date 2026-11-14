@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
+import { OrganizationInviteLink } from "@ren/schema/organization-invite-link"
 import { Avatar, AvatarFallback } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
@@ -10,6 +11,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { initials } from "../../lib/format.js"
 import { openWorkspace } from "../../lib/invitation.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { OrganizationJoinPage } from "./organization-join-page.js"
 
 const route = getRouteApi("/join/$token")
 
@@ -68,7 +70,7 @@ function AlreadyInSpace(props: { target: Target }) {
   )
 }
 
-export function JoinLinkPage() {
+function JoinSpaceLinkPage() {
   const { api } = RouterContext.useRouterContext()
   const params = route.useParams()
   const navigate = useNavigate()
@@ -100,4 +102,13 @@ export function JoinLinkPage() {
     )
   if (preview.data.state === "member") return <AlreadyInSpace target={{ organization, space }} />
   return <JoinSpace token={params.token} target={{ organization, space }} />
+}
+
+export function JoinLinkPage() {
+  const params = route.useParams()
+  return params.token.startsWith(OrganizationInviteLink.tokenPrefix) ? (
+    <OrganizationJoinPage token={params.token} />
+  ) : (
+    <JoinSpaceLinkPage />
+  )
 }

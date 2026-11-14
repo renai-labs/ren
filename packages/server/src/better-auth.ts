@@ -11,8 +11,8 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { BASE_ERROR_CODES, betterAuth } from "better-auth"
-import type { BetterAuthPlugin } from "better-auth"
-import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
+import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth"
+import { APIError, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
 import { genericOAuth } from "better-auth/plugins/generic-oauth"
 import { Option, Schema } from "effect"
@@ -139,12 +139,33 @@ const emailCodes = (input: Input) =>
     },
   })
 
+const joinLinkCookie = "join_link"
+
+const JoinLinkBody = Schema.toStandardSchemaV1(Schema.Struct({ token: Schema.String }))
+
+const joinLink = {
+  id: "ren-join-link",
+  endpoints: {
+    rememberJoinLink: createAuthEndpoint("/join-link/remember", { method: "POST", body: JoinLinkBody }, async (ctx) => {
+      const cookie = ctx.context.createAuthCookie(joinLinkCookie, { maxAge: 60 * 60 })
+      ctx.setCookie(cookie.name, ctx.body.token, cookie.attributes)
+      return ctx.json({ ok: true })
+    }),
+  },
+} satisfies BetterAuthPlugin
+
 const provisionOrganization =
   (input: Input) =>
-  async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(session: Session) => {
+  async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(
+    session: Session,
+    ctx: GenericEndpointContext | null,
+  ) => {
+    const cookie = ctx?.context.createAuthCookie(joinLinkCookie)
+    const joinToken = (cookie && ctx?.getCookie(cookie.name)) || ""
+    if (cookie && joinToken) ctx?.setCookie(cookie.name, "", { ...cookie.attributes, maxAge: 0 })
     if (session.activeOrganizationId) return { data: session }
-    const organization = await DefaultOrganization.provision(input.database, session.userId).catch((error: unknown) =>
-      input.logFailure("Default organization provisioning failed", error, session.userId),
+    const organization = await DefaultOrganization.provision(input.database, session.userId, joinToken).catch(
+      (error: unknown) => input.logFailure("Default organization provisioning failed", error, session.userId),
     )
     if (!organization) return { data: session }
     if (organization.user) {
@@ -391,6 +412,7 @@ export const make = (input: Input) => {
         }),
       ),
       consentOrganization(input),
+      joinLink,
       genericOAuth({ config: input.slack ? [slackSignIn(input.slack)] : [] }),
       indexes,
     ],
