@@ -105,7 +105,7 @@ function SpaceSwitcher(props: {
   spaceId: string
   space: SpaceInfo | undefined
   current: SpaceItem
-  to: SpaceItem["to"] | "/spaces/$spaceId/artifacts"
+  to: SpaceItem["to"]
 }) {
   const navigate = useNavigate()
   const spaces = useSpaces().joined
@@ -199,8 +199,7 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
     ...api.space.get.queryOptions({ idOrSlug: props.spaceId }),
     ...Seed.fromList<SpaceInfo>(queryClient, [api.space.list.queryKey()], props.spaceId),
   }).data
-  const segment = path.split("/").at(3)
-  const value = segment === "artifacts" ? "drive" : segment
+  const value = path.split("/").at(3)
   const current =
     spaceGroups.flatMap((group): ReadonlyArray<SpaceItem> => group.items).find((item) => item.value === value) ??
     spaceGroups[0].items[0]
@@ -218,12 +217,7 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-            <SpaceSwitcher
-              spaceId={props.spaceId}
-              space={space}
-              current={current}
-              to={segment === "artifacts" ? "/spaces/$spaceId/artifacts" : current.to}
-            />
+            <SpaceSwitcher spaceId={props.spaceId} space={space} current={current} to={current.to} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
