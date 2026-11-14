@@ -936,7 +936,6 @@ export const layer = Layer.effect(
         id: Credential.ID,
         input: Credential.MoveInput,
       ) {
-        // oxlint-disable-next-line ren/no-comments -- owner-access §4 rule 4 (A7): copy is for pasted keys only; two owners of one sign-in would share its grant, and a provider that rotates refresh tokens breaks one of them.
         const found = yield* find(actor, id, actions.copy).pipe(
           Effect.catchTag("Primitive.Forbidden", () =>
             Effect.fail(
