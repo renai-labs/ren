@@ -1303,9 +1303,9 @@ export const ArtifactUpdate = (input: Command.Command.Config.Infer<typeof Comman
     ClientApi.groups["artifact"].endpoints["artifact.update"],
     {
       params: { id: input["id"] },
-      payload: { name: input["name"] },
+      payload: { title: input["title"], name: input["name"] },
       input: input["input"],
-      labels: { id: "<artifact>", name: "--name" },
+      labels: { id: "<artifact>", title: "--title", name: "--name" },
       lookups: {
         id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },

@@ -818,6 +818,10 @@ describe("artifacts for people", () => {
         yield* artifacts.archive(member, first)
         yield* idle(first)
         expect((yield* artifacts.update(member, second, { name: base })).name).toBe(base)
+        expect(yield* artifacts.update(member, second, { title: "Lunch menu" })).toMatchObject({
+          title: "Lunch menu",
+          name: base,
+        })
         yield* stop(artifacts, owner, second)
       }),
     60_000,

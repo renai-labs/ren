@@ -1620,10 +1620,11 @@ const EndpointArtifactGet = (raw: RawClient["artifact"]) => (input: ArtifactGetI
 type ArtifactUpdateRequest = Parameters<RawClient["artifact"]["artifact.update"]>[0]
 type ArtifactUpdateInput = {
   readonly id: ArtifactUpdateRequest["params"]["id"]
-  readonly name: ArtifactUpdateRequest["payload"]["name"]
+  readonly title?: ArtifactUpdateRequest["payload"]["title"]
+  readonly name?: ArtifactUpdateRequest["payload"]["name"]
 }
 const EndpointArtifactUpdate = (raw: RawClient["artifact"]) => (input: ArtifactUpdateInput) =>
-  raw["artifact.update"]({ params: { id: input["id"] }, payload: { name: input["name"] } }).pipe(
+  raw["artifact.update"]({ params: { id: input["id"] }, payload: { title: input["title"], name: input["name"] } }).pipe(
     Effect.mapError(mapClientError),
   )
 

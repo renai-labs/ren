@@ -639,6 +639,7 @@ export const ArtifactGet = {
 
 export const ArtifactUpdate = {
   id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
+  title: Flag.String("title").pipe(Flag.optional, Flag.withDescription("The new title.")),
   name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("The new name.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }

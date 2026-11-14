@@ -907,7 +907,17 @@ export const layer = Layer.effect(
               })
             )
               return yield* new Primitive.Forbidden({ message: "You cannot change this artifact." })
-            return toInfo(yield* rename(transaction, found.artifact, input.name))
+            const named =
+              // ast-grep-ignore: no-nullish-comparison -- null removes the name; only a missing name keeps it
+              input.name === undefined ? found.artifact : yield* rename(transaction, found.artifact, input.name)
+            if (!input.title || input.title === named.title) return toInfo(named)
+            const titled = (yield* transaction
+              .update(artifacts)
+              .set({ title: input.title, updated_at: sql`now()` })
+              .where(eq(artifacts.id, id))
+              .returning()).at(0)
+            if (!titled) return yield* Effect.die(new Error(`Ren did not retitle artifact ${id}`))
+            return toInfo(titled)
           }),
         )
       }),

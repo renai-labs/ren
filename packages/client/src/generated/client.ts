@@ -2237,7 +2237,7 @@ export function make(options: ClientOptions) {
           {
             method: "PATCH",
             path: `/artifacts/${encodeURIComponent(input.id)}`,
-            body: { name: input["name"] },
+            body: { title: input["title"], name: input["name"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
