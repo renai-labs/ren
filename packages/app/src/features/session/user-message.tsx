@@ -149,7 +149,10 @@ export function CopyButton(props: { text: string }) {
   )
 }
 
-function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["schedule"]> }) {
+function ScheduleOrigin(props: {
+  schedule: NonNullable<SessionMessage.User["schedule"]>
+  spaceId: string | undefined
+}) {
   return (
     <Marker className="justify-end text-xs">
       <MarkerIcon>
@@ -157,9 +160,16 @@ function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["sche
       </MarkerIcon>
       <MarkerContent>
         Scheduled ·{" "}
-        <Link to="/automations" search={{ schedule: props.schedule.scheduleId }}>
-          {props.schedule.name}
-        </Link>{" "}
+        {props.spaceId ? (
+          <Link
+            to="/spaces/$spaceId/automations/schedules/$scheduleId"
+            params={{ spaceId: props.spaceId, scheduleId: props.schedule.scheduleId }}
+          >
+            {props.schedule.name}
+          </Link>
+        ) : (
+          <Link to="/automations">{props.schedule.name}</Link>
+        )}{" "}
         · {formatRun(props.schedule.scheduledAt, localTimeZone())}
       </MarkerContent>
     </Marker>
@@ -459,7 +469,7 @@ export function UserMessage(props: {
       </MessageAvatar>
       <MessageContent className={props.editing ? "w-full" : undefined}>
         <MessageHeader className="px-0">{props.person.name}</MessageHeader>
-        {props.message.schedule ? <ScheduleOrigin schedule={props.message.schedule} /> : null}
+        {props.message.schedule ? <ScheduleOrigin schedule={props.message.schedule} spaceId={props.spaceId} /> : null}
         {props.message.webhook ? <WebhookOrigin webhook={props.message.webhook} spaceId={props.spaceId} /> : null}
         {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}
         {props.editing ? (

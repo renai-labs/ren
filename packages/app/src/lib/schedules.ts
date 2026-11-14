@@ -1,15 +1,56 @@
-import type { ScheduleInfo, ScheduleListInput, ScheduleWhen } from "@ren/client"
+import type {
+  ScheduleInfo,
+  ScheduleListInput,
+  ScheduleRunReason,
+  ScheduleRunStatus,
+  ScheduleRunTrigger,
+  ScheduleWhen,
+} from "@ren/client"
+import { IconAlertTriangle, IconCircleCheck, IconMinus, IconProgress, type Icon } from "@tabler/icons-react"
 import { Cron, DateTime, Option, Result, Schema } from "effect"
 import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
 
 const ScheduleSearchSchema = Schema.Struct({
   filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
-  schedule: Schema.optional(Schema.String),
 })
 
 export type ScheduleSearch = typeof ScheduleSearchSchema.Type
 
 export const scheduleSearchFields = ScheduleSearchSchema.fields
+
+const SchedulePageSearchSchema = Schema.Struct({
+  status: Schema.optional(Schema.String),
+})
+
+export const schedulePageSearch = Schema.toStandardSchemaV1(SchedulePageSearchSchema)
+
+export const runStatuses: Readonly<Record<ScheduleRunStatus, { readonly label: string; readonly icon: Icon }>> = {
+  pending: { label: "Pending", icon: IconProgress },
+  started: { label: "Started", icon: IconCircleCheck },
+  skipped: { label: "Skipped", icon: IconMinus },
+  failed: { label: "Failed", icon: IconAlertTriangle },
+}
+
+export const isRunStatus = (value: string | undefined): value is ScheduleRunStatus =>
+  value !== undefined && value in runStatuses
+
+export const runReasons: Readonly<Record<ScheduleRunReason, string>> = {
+  previous_run_busy: "The previous run was still working.",
+  paused: "The schedule was paused.",
+  archived: "The schedule was deleted.",
+  owner_left: "Its owner left the space.",
+  agent_removed: "Its agent left the space.",
+  chat_archived: "Its chat was archived.",
+}
+
+export const runTriggers: Readonly<Record<ScheduleRunTrigger, string>> = {
+  timed: "On schedule",
+  manual: "Run now",
+}
+
+export const refreshEvery = 5_000
+
+export const runColumns = ["Scheduled for", "Trigger", "Status", "Chat"]
 
 export function scheduleListInput(
   search: ScheduleSearch,

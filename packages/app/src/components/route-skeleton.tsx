@@ -147,7 +147,7 @@ function SpaceSectionSample(props: { section: string }) {
   if (props.section === "credentials") return table(["Secret", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
-  if (props.section === "automations") return table(["Name", "Frequency", "Next run", "Status", ""])
+  if (props.section === "automations") return table(["Name", "Frequency", "Last run", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
   if (props.section === "agents") return table(["Name", "Type", "Model", "Source", ""])
   if (props.section === "inbox") return table(inboxColumns)
@@ -206,7 +206,7 @@ export function RouteSkeleton() {
   if (path === "/automations")
     return (
       <PageSkeleton title="Automations" width="full">
-        <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
+        <TableSample columns={["Name", "Frequency", "Last run", "Next run", "Status", ""]} />
       </PageSkeleton>
     )
   if (path.startsWith("/apps/")) return <AppDetailSample />

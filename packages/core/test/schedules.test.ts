@@ -547,6 +547,71 @@ describe("Schedules", () => {
     }),
   )
 
+  it.live(
+    "a schedule shows its latest run, and its runs filter by status and name a chat only when the run reached one (S24)",
+    () =>
+      Effect.gen(function* () {
+        const schedules = yield* Schedules.Service
+        const database = yield* Database.Service
+        const t = yield* team
+        const sessionId = yield* Seed.session({
+          organizationId: t.organizationId,
+          spaceId: t.spaceId,
+          createdBy: t.createdBy,
+        })
+        const created = yield* schedules.create(
+          t.ada,
+          decodeCreate({ spaceId: t.spaceId, name: "Ping", message: "Ping.", when: hourly, target: { sessionId } }),
+        )
+        expect(created.lastRun).toBeNull()
+        const skipped = ScheduleRun.ID.create()
+        const started = ScheduleRun.ID.create()
+        const latest = new Date(Date.now() - 3_600_000)
+        yield* database.db.insert(Database.Schema.schedule_run).values([
+          {
+            id: skipped,
+            schedule_id: created.id,
+            scheduled_at: new Date(latest.getTime() - 3_600_000),
+            trigger: "timed",
+            status: "skipped",
+            reason: "previous_run_busy",
+            session_id: Session.ID.create(),
+            message_id: Session.MessageID.create(),
+          },
+          {
+            id: started,
+            schedule_id: created.id,
+            scheduled_at: latest,
+            started_at: latest,
+            trigger: "timed",
+            status: "started",
+            session_id: sessionId,
+            message_id: Session.MessageID.create(),
+          },
+        ])
+        const last = (yield* schedules.get(t.ada, created.id)).lastRun
+        expect(last && [last.id, last.status, DateTime.toEpochMillis(last.scheduledAt)]).toEqual([
+          started,
+          "started",
+          latest.getTime(),
+        ])
+        const listed = yield* schedules.list(t.ada, { spaceId: t.spaceId, page: 1, pageSize: 50 })
+        expect(listed.items.map((item) => item.lastRun?.id)).toEqual([started])
+        const runs = yield* schedules.runs(t.ada, { scheduleId: created.id, page: 1, pageSize: 50 })
+        expect(runs.items.map((run) => [run.id, run.sessionId])).toEqual([
+          [started, sessionId],
+          [skipped, null],
+        ])
+        const filtered = yield* schedules.runs(t.ada, {
+          scheduleId: created.id,
+          status: "skipped",
+          page: 1,
+          pageSize: 50,
+        })
+        expect([filtered.total, filtered.items.map((run) => run.id)]).toEqual([1, [skipped]])
+      }),
+  )
+
   it.live("a run claimed before a pause is skipped as paused (S27)", () =>
     Effect.gen(function* () {
       const schedules = yield* Schedules.Service

@@ -65,6 +65,7 @@ import { Route as AuthedShellSpacesSpaceIdAutomationsIndexRouteImport } from "./
 import { Route as AuthedShellSpacesSpaceIdTasksIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/tasks/index"
 import { Route as AuthedShellSpacesSpaceIdAgentsAgentIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/agents/$agentId/index"
 import { Route as AuthedShellSpacesSpaceIdTasksTaskIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/tasks/$taskId/index"
+import { Route as AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/automations/schedules/$scheduleId/index"
 import { Route as AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/index"
 
 const AuthedRoute = AuthedRouteImport.update({
@@ -391,6 +392,14 @@ const AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute =
       (d) => d.Route,
     ),
   )
+const AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute =
+  AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRouteImport.update(
+    {
+      id: "/automations/schedules/$scheduleId/",
+      path: "/automations/schedules/$scheduleId/",
+      getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+    } as any,
+  )
 const AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute =
   AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRouteImport.update({
     id: "/automations/webhooks/$webhookId/",
@@ -453,6 +462,7 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId/tasks/": typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   "/spaces/$spaceId/agents/$agentId/": typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   "/spaces/$spaceId/tasks/$taskId/": typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
+  "/spaces/$spaceId/automations/schedules/$scheduleId/": typeof AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute
   "/spaces/$spaceId/automations/webhooks/$webhookId/": typeof AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -508,6 +518,7 @@ export interface FileRoutesByTo {
   "/spaces/$spaceId/tasks": typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   "/spaces/$spaceId/agents/$agentId": typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   "/spaces/$spaceId/tasks/$taskId": typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
+  "/spaces/$spaceId/automations/schedules/$scheduleId": typeof AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute
   "/spaces/$spaceId/automations/webhooks/$webhookId": typeof AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute
 }
 export interface FileRoutesById {
@@ -568,6 +579,7 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId/tasks/": typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   "/_authed/_shell/spaces/$spaceId/agents/$agentId/": typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   "/_authed/_shell/spaces/$spaceId/tasks/$taskId/": typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
+  "/_authed/_shell/spaces/$spaceId/automations/schedules/$scheduleId/": typeof AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute
   "/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/": typeof AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -627,6 +639,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/tasks/"
     | "/spaces/$spaceId/agents/$agentId/"
     | "/spaces/$spaceId/tasks/$taskId/"
+    | "/spaces/$spaceId/automations/schedules/$scheduleId/"
     | "/spaces/$spaceId/automations/webhooks/$webhookId/"
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -682,6 +695,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/tasks"
     | "/spaces/$spaceId/agents/$agentId"
     | "/spaces/$spaceId/tasks/$taskId"
+    | "/spaces/$spaceId/automations/schedules/$scheduleId"
     | "/spaces/$spaceId/automations/webhooks/$webhookId"
   id:
     | "__root__"
@@ -741,6 +755,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId/tasks/"
     | "/_authed/_shell/spaces/$spaceId/agents/$agentId/"
     | "/_authed/_shell/spaces/$spaceId/tasks/$taskId/"
+    | "/_authed/_shell/spaces/$spaceId/automations/schedules/$scheduleId/"
     | "/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/"
   fileRoutesById: FileRoutesById
 }
@@ -1150,6 +1165,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
+    "/_authed/_shell/spaces/$spaceId/automations/schedules/$scheduleId/": {
+      id: "/_authed/_shell/spaces/$spaceId/automations/schedules/$scheduleId/"
+      path: "/automations/schedules/$scheduleId"
+      fullPath: "/spaces/$spaceId/automations/schedules/$scheduleId/"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
     "/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/": {
       id: "/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/"
       path: "/automations/webhooks/$webhookId"
@@ -1180,6 +1202,7 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdTasksIndexRoute: typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute: typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute: typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
+  AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute: typeof AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute
   AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute: typeof AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute
 }
 
@@ -1217,6 +1240,8 @@ const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteR
       AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute,
     AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute:
       AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute,
+    AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute:
+      AuthedShellSpacesSpaceIdAutomationsSchedulesScheduleIdIndexRoute,
     AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute:
       AuthedShellSpacesSpaceIdAutomationsWebhooksWebhookIdIndexRoute,
   }

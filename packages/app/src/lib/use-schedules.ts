@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { ScheduleInfo } from "@ren/client"
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import type { Filters } from "../components/filter-menu.js"
 import { useDebouncedValue } from "./use-debounced-value.js"
@@ -34,21 +34,11 @@ export function useSchedules(options: {
     ...Loader.required,
   })
   const items = pages.data?.pages.flatMap((page) => page.items)
-  const [sheet, setSheet] = useState<{
-    open: boolean
-    id: string | undefined
-    key: number
-  }>(() => ({
-    open: search.schedule !== undefined,
-    id: search.schedule,
+  const [sheet, setSheet] = useState<{ open: boolean; key: number; schedule: ScheduleInfo | undefined }>({
+    open: false,
     key: 0,
-  }))
-  const listed = items?.find((schedule) => schedule.id === sheet.id)
-  const fetched = useQuery({
-    ...api.schedule.get.queryOptions({ idOrSlug: sheet.id ?? "" }),
-    enabled: sheet.id !== undefined && !listed,
+    schedule: undefined,
   })
-  const editing = listed ?? fetched.data
   const pause = useMutation(api.schedule.pause.mutationOptions())
   const resume = useMutation(api.schedule.resume.mutationOptions())
   const archive = useMutation(api.schedule.archive.mutationOptions())
@@ -75,17 +65,10 @@ export function useSchedules(options: {
       options.setSearch({
         filters: Object.values(next).some((values) => values.length > 0) ? next : undefined,
       }),
-    sheet: {
-      open: sheet.open && (sheet.id === undefined || editing !== undefined),
-      key: sheet.key,
-      schedule: sheet.id === undefined ? undefined : editing,
-    },
-    create: () => setSheet((previous) => ({ open: true, id: undefined, key: previous.key + 1 })),
-    edit: (schedule: ScheduleInfo) => setSheet((previous) => ({ open: true, id: schedule.id, key: previous.key + 1 })),
-    closeSheet: () => {
-      setSheet((previous) => ({ ...previous, open: false }))
-      if (search.schedule) options.setSearch({ schedule: undefined }, { replace: true })
-    },
+    sheet,
+    create: () => setSheet((previous) => ({ open: true, key: previous.key + 1, schedule: undefined })),
+    edit: (schedule: ScheduleInfo) => setSheet((previous) => ({ open: true, key: previous.key + 1, schedule })),
+    closeSheet: () => setSheet((previous) => ({ ...previous, open: false })),
     isActive: (schedule: ScheduleInfo) =>
       toggling(schedule) ? schedule.status !== "active" : schedule.status === "active",
     toggle: (schedule: ScheduleInfo) => {
