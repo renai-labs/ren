@@ -8,12 +8,11 @@ import { AppListingSample, AppSection } from "../../components/app-list.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
-import { fromApp, fromRegistry, isSpaceApp, type CatalogApp } from "../../lib/apps.js"
+import { fromApp, fromRegistry, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
-import { useSpaces } from "../../lib/use-spaces.js"
 import { AppCategories } from "./app-categories.js"
 import { CatalogAppRow, CatalogList } from "./catalog.js"
 import { useAddSheet, useRegistryApps } from "./use-catalog.js"
@@ -23,7 +22,6 @@ const route = getRouteApi("/_authed/_shell/apps/")
 
 function useOwnApps(options: { connected: boolean }) {
   const { client } = RouterContext.useRouterContext()
-  const spaces = useSpaces().spaces
   const pages = useInfiniteQuery({
     queryKey: ["app", "list", options.connected ? "connected" : "organization", { pageSize: pickerPageSize }] as const,
     queryFn: (context) =>
@@ -34,11 +32,9 @@ function useOwnApps(options: { connected: boolean }) {
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
   })
-  const loaded = (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromApp)
-  const apps = loaded.filter((app) => !isSpaceApp(app, spaces))
   return {
-    apps,
-    total: (pages.data?.pages.at(0)?.total ?? 0) - (loaded.length - apps.length),
+    apps: (pages.data?.pages ?? []).flatMap((page) => page.items).map(fromApp),
+    total: pages.data?.pages.at(0)?.total ?? 0,
     pending: pages.isPending,
     more: pages.hasNextPage,
     fetching: pages.isFetchingNextPage,

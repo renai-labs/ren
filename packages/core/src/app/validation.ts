@@ -40,6 +40,11 @@ export const refuseManaged = (mcps: App.Definition["mcps"]) =>
     ? Effect.fail(new Primitive.Invalid({ message: "Only a registry app can declare a managed MCP." }))
     : Effect.void
 
+export const refuseSpaceName = (name: string, space: { readonly name: string }) =>
+  name.trim().toLowerCase() === space.name.trim().toLowerCase()
+    ? Effect.fail(new Primitive.Conflict({ message: `An app cannot have the name of its space, “${space.name}”.` }))
+    : Effect.void
+
 export const dependencies = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   access: Access.Interface,

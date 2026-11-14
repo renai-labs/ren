@@ -118,7 +118,7 @@ export const visibleSpace = Effect.fnUntraced(function* (
   spaceId: Space.ID,
 ) {
   const row = (yield* transaction
-    .select({ membershipId: SpaceQueries.membership.id })
+    .select({ membershipId: SpaceQueries.membership.id, name: Database.Schema.space.name })
     .from(Database.Schema.space)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
     .where(
@@ -131,7 +131,7 @@ export const visibleSpace = Effect.fnUntraced(function* (
     .for("share", { of: Database.Schema.space })).at(0)
   // oxlint-disable-next-line ren/no-comments -- access AC4: members only.
   if (!row?.membershipId) return yield* new Primitive.NotFound({ message: "Space not found." })
-  return { isMember: true, membershipId: row.membershipId }
+  return { isMember: true, membershipId: row.membershipId, name: row.name }
 })
 
 export const targetSpace = Effect.fnUntraced(function* (
