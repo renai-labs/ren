@@ -44,27 +44,19 @@ type Row = Effect.Success<ReturnType<typeof select>>[number]
 
 const settingsOf = (row: Row) => Effect.map(SettingsRows.decode(row.settings), (decoded) => decoded.settings)
 
-const toInfo = (agent: typeof Database.Schema.agent.$inferSelect, settings: Settings.Info) =>
-  Schema.decodeUnknownEffect(Agent.Info)({
-    id: agent.id,
-    organizationId: agent.organization_id,
-    ownerSpaceId: agent.owner_space_id,
-    name: agent.name,
-    description: agent.description,
-    isSubagent: agent.is_subagent,
-    settings,
-    createdAt: DateTime.fromDateUnsafe(agent.created_at),
-    updatedAt: DateTime.fromDateUnsafe(agent.updated_at),
-    archivedAt: agent.archived_at && DateTime.fromDateUnsafe(agent.archived_at),
-  }).pipe(Effect.orDie)
-
-const rowInfo = (row: Row) => Effect.flatMap(settingsOf(row), (settings) => toInfo(row.agent, settings))
-
 const refused = (input: { readonly name: string; readonly isSubagent: boolean; readonly settings: Settings.Info }) =>
   [
     Agent.reserved.has(input.name) && `The name ${input.name} is reserved.`,
     input.isSubagent && input.settings.references.length > 0 && "A subagent cannot have references.",
   ].find(Predicate.isString)
+
+const undescribed = (input: { readonly isSubagent: boolean; readonly description?: string | null | undefined }) =>
+  input.isSubagent && !input.description?.trim()
+    ? new Primitive.Invalid({
+        message: "A subagent needs a description, so other agents know when to use it.",
+        field: "description",
+      })
+    : undefined
 
 const nameTaken = (name: string) =>
   Primitive.uniqueConflict(Database.Schema.agentNameConstraint, `An agent named ${name} already exists.`)
@@ -75,6 +67,29 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const references = yield* ReferenceCheck.Service
+
+    const toInfo = (
+      actor: Actor.Info,
+      agent: typeof Database.Schema.agent.$inferSelect,
+      settings: Settings.Info,
+      holds: AgentPolicy.Holds,
+    ) =>
+      Schema.decodeUnknownEffect(Agent.Info)({
+        id: agent.id,
+        organizationId: agent.organization_id,
+        ownerSpaceId: agent.owner_space_id,
+        name: agent.name,
+        description: agent.description,
+        isSubagent: agent.is_subagent,
+        settings,
+        canUpdate: access.isAllowed({ actor, action: actions.update, resource: AgentPolicy.resource(holds) }),
+        createdAt: DateTime.fromDateUnsafe(agent.created_at),
+        updatedAt: DateTime.fromDateUnsafe(agent.updated_at),
+        archivedAt: agent.archived_at && DateTime.fromDateUnsafe(agent.archived_at),
+      }).pipe(Effect.orDie)
+
+    const rowInfo = (actor: Actor.Info, row: Row) =>
+      Effect.flatMap(settingsOf(row), (settings) => toInfo(actor, row.agent, settings, row))
 
     const visibleTo = (actor: Actor.Info) => Access.where(access.plan(actor, actions.get), AgentQueries.where(actor))
 
@@ -122,7 +137,7 @@ export const layer = Layer.effect(
               .offset((input.page - 1) * input.pageSize)
             const totals = yield* transaction.select({ total: count() }).from(Database.Schema.agent).where(where)
             return {
-              items: yield* Effect.forEach(rows, rowInfo),
+              items: yield* Effect.forEach(rows, (row) => rowInfo(actor, row)),
               page: input.page,
               pageSize: input.pageSize,
               total: totals.at(0)?.total ?? 0,
@@ -139,13 +154,15 @@ export const layer = Layer.effect(
             const global = (yield* select(transaction, actor).where(
               and(where, isNull(Database.Schema.agent.organization_id), isNull(Database.Schema.agent.archived_at)),
             )).at(0)
-            return yield* rowInfo(global ?? (yield* findLive(transaction, actor, where)))
+            return yield* rowInfo(actor, global ?? (yield* findLive(transaction, actor, where)))
           }),
         )
       }),
       create: Effect.fn("Agent.create")(function* (actor: Actor.Info, input: Agent.CreateInput) {
         const reason = refused(input)
         if (reason) return yield* new Primitive.Conflict({ message: reason })
+        const invalid = undescribed(input)
+        if (invalid) return yield* invalid
         yield* references.check(actor.organizationId, [], input.settings.references)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -177,7 +194,7 @@ export const layer = Layer.effect(
             const agent = rows.at(0)
             if (!agent) return yield* Effect.die(new Error("The agent insert returned no row"))
             yield* SettingsRows.write(transaction, { agent_id: agent.id }, input.settings)
-            return yield* toInfo(agent, input.settings)
+            return yield* toInfo(actor, agent, input.settings, { isOwnerMember: true, isSpaceMember: true })
           }),
         )
       }),
@@ -195,16 +212,19 @@ export const layer = Layer.effect(
               return yield* new Primitive.Forbidden({ message: "Only members of the owner space can edit this agent." })
             const next = {
               name: input.name ?? row.agent.name,
+              description: Predicate.isUndefined(input.description) ? row.agent.description : input.description,
               isSubagent: input.isSubagent ?? row.agent.is_subagent,
               settings: input.settings ?? (yield* settingsOf(row)),
             }
             const reason = refused(next)
             if (reason) return yield* new Primitive.Conflict({ message: reason })
+            const invalid = undescribed(next)
+            if (invalid) return yield* invalid
             const rows = yield* transaction
               .update(Database.Schema.agent)
               .set({
                 name: next.name,
-                description: input.description,
+                description: next.description,
                 is_subagent: next.isSubagent,
                 updated_at: sql`now()`,
               })
@@ -214,7 +234,7 @@ export const layer = Layer.effect(
             const agent = rows.at(0)
             if (!agent) return yield* notFound
             if (input.settings) yield* SettingsRows.write(transaction, { agent_id: id }, input.settings)
-            return yield* toInfo(agent, next.settings)
+            return yield* toInfo(actor, agent, next.settings, row)
           }),
         )
       }),
@@ -236,7 +256,7 @@ export const layer = Layer.effect(
               .returning()
             const agent = rows.at(0)
             if (!agent) return yield* notFound
-            return yield* toInfo(agent, yield* settingsOf(row))
+            return yield* toInfo(actor, agent, yield* settingsOf(row), row)
           }),
         )
       }),
@@ -257,11 +277,11 @@ export const layer = Layer.effect(
               })
             )
               return yield* new Primitive.Forbidden({
-                message: "Moving an agent needs membership in both spaces, or an organization admin.",
+                message: "Moving an agent needs membership in both spaces.",
               })
             const ownerSpaceId = row.agent.owner_space_id
             if (!ownerSpaceId) return yield* notFound
-            if (ownerSpaceId === input.spaceId) return yield* rowInfo(row)
+            if (ownerSpaceId === input.spaceId) return yield* rowInfo(actor, row)
             yield* transaction
               .delete(Database.Schema.agent_membership)
               .where(
@@ -281,7 +301,7 @@ export const layer = Layer.effect(
               .returning()
             const agent = rows.at(0)
             if (!agent) return yield* notFound
-            return yield* toInfo(agent, yield* settingsOf(row))
+            return yield* toInfo(actor, agent, yield* settingsOf(row), { isOwnerMember: true, isSpaceMember: true })
           }),
         )
       }),

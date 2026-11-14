@@ -64,6 +64,7 @@ const setup = Effect.gen(function* () {
     Effect.flatMap(Agent.Service, (agents) =>
       agents.create(ada, {
         name,
+        description: `Helps as ${name}.`,
         isSubagent: input.isSubagent ?? false,
         ownerSpaceId: input.ownerSpaceId ?? factory.id,
         settings: layer({ instructions: `You are ${name}.` }),
@@ -176,7 +177,7 @@ describe("Settings.pull", () => {
           "visiting (subagent)",
         ])
         yield* memberships.archive(s.ada, joined.id)
-        yield* agents.update(s.ada, build.id, { isSubagent: true })
+        yield* agents.update(s.ada, build.id, { isSubagent: true, description: "Builds features." })
         expect(names(yield* layersOf(settings, s.brainId))).toEqual([
           "build (subagent)",
           "explore (subagent)",

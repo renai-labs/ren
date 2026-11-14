@@ -26,6 +26,9 @@ export const Info = Schema.Struct({
   description: Schema.NullOr(Schema.String),
   isSubagent: Schema.Boolean,
   settings: Settings.Info,
+  canUpdate: Schema.Boolean.annotate({
+    description: "The caller is a member of the owner space, so can edit and archive the agent.",
+  }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
