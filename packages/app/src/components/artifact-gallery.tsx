@@ -120,19 +120,51 @@ const samples: ReadonlyArray<ArtifactInfo> = Array.from({ length: 6 }, (_, index
   archivedAt: null,
 }))
 
+export function useArtifactActions() {
+  const { api } = RouterContext.useRouterContext()
+  const platform = Platform.usePlatform()
+  const navigate = useNavigate()
+  const archive = useMutation(api.artifact.archive.mutationOptions())
+  const write = platform.writeClipboardText
+  return {
+    build: (spaceId: string) => void navigate({ to: "/", search: { spaceId, prompt: "Build an artifact: " } }),
+    edit: (artifact: ArtifactInfo) =>
+      void navigate({
+        to: "/",
+        search: {
+          spaceId: artifact.spaceId,
+          artifact: artifact.id,
+          artifactName: artifact.title,
+          prompt: `Edit @${artifact.title}`,
+        },
+      }),
+    open: (url: string) => platform.openExternal(url),
+    copy: write
+      ? (url: string) =>
+          void write(url).then(
+            () => toast.success("Link copied", { description: url }),
+            (error: unknown) => toast.error("Could not copy the link", { description: errorMessage(error) }),
+          )
+      : undefined,
+    archive: (artifact: ArtifactInfo) =>
+      archive.mutateAsync({ id: artifact.id }).then(
+        () => toast.success(`“${artifact.title}” archived`),
+        (error: unknown) => toast.error("Could not archive the artifact", { description: errorMessage(error) }),
+      ),
+  }
+}
+
 function Root(props: {
   spaceId?: string | undefined
   search: Artifacts.Search
   onSearch: (update: Partial<Artifacts.Search>, navigation?: { readonly replace?: boolean }) => void
   children: ReactNode
 }) {
-  const { client, api } = RouterContext.useRouterContext()
-  const platform = Platform.usePlatform()
-  const navigate = useNavigate()
+  const { client } = RouterContext.useRouterContext()
   const spaces = useSpaces()
   const now = useNow()
   const artifacts = useQuery({ ...Artifacts.allOptions(client, props.spaceId), ...Loader.required })
-  const archive = useMutation(api.artifact.archive.mutationOptions())
+  const artifactActions = useArtifactActions()
   const query = props.search.q ?? ""
   const needle = useDeferredValue(query).trim().toLowerCase()
   const sort = props.search.sort ?? "updated"
@@ -163,7 +195,6 @@ function Root(props: {
     }))
     .toSorted((a, b) => a.name.localeCompare(b.name) || a.spaceId.localeCompare(b.spaceId))
   const counts = Map.groupBy(all ?? [], (artifact) => artifact.spaceId)
-  const write = platform.writeClipboardText
   const value: Context = {
     state: {
       all,
@@ -193,30 +224,7 @@ function Root(props: {
       clear: () => {
         props.onSearch({ q: undefined, filters: undefined })
       },
-      build: (spaceId) => void navigate({ to: "/", search: { spaceId, prompt: "Build an artifact: " } }),
-      edit: (artifact) =>
-        void navigate({
-          to: "/",
-          search: {
-            spaceId: artifact.spaceId,
-            artifact: artifact.id,
-            artifactName: artifact.title,
-            prompt: `Edit @${artifact.title}`,
-          },
-        }),
-      open: (url) => platform.openExternal(url),
-      copy: write
-        ? (url) =>
-            void write(url).then(
-              () => toast.success("Link copied", { description: url }),
-              (error: unknown) => toast.error("Could not copy the link", { description: errorMessage(error) }),
-            )
-        : undefined,
-      archive: (artifact) =>
-        archive.mutateAsync({ id: artifact.id }).then(
-          () => toast.success(`“${artifact.title}” archived`),
-          (error: unknown) => toast.error("Could not archive the artifact", { description: errorMessage(error) }),
-        ),
+      ...artifactActions,
     },
     meta: {
       spaceOptions: spaces.spaces
@@ -364,27 +372,31 @@ function Display() {
   )
 }
 
-function ArtifactMenu(props: { artifact: ArtifactInfo; className?: string | undefined }) {
-  const context = useArtifacts()
+export function ArtifactMenu(props: {
+  artifact: ArtifactInfo
+  actions: Pick<Context["actions"], "edit" | "open" | "copy" | "archive">
+  className?: string | undefined
+}) {
   const artifact = props.artifact
   const url = artifact.url
-  const copy = context.actions.copy
+  const actions = props.actions
+  const copy = actions.copy
   return (
     <RowMenu
       label={`${artifact.title} actions`}
       className={props.className}
       items={[
-        { label: "Edit", icon: IconPencil, onSelect: () => context.actions.edit(artifact) },
+        { label: "Edit", icon: IconPencil, onSelect: () => actions.edit(artifact) },
         ...(url === null
           ? []
           : [
-              { label: "Open", icon: IconExternalLink, onSelect: () => context.actions.open(url) },
+              { label: "Open", icon: IconExternalLink, onSelect: () => actions.open(url) },
               ...(copy ? [{ label: "Copy link", icon: IconLink, onSelect: () => copy(url) }] : []),
             ]),
         {
           label: "Archive",
           icon: IconArchive,
-          onSelect: () => context.actions.archive(artifact),
+          onSelect: () => actions.archive(artifact),
           confirm: {
             title: `Archive “${artifact.title}”?`,
             description:
@@ -397,7 +409,7 @@ function ArtifactMenu(props: { artifact: ArtifactInfo; className?: string | unde
   )
 }
 
-function ServingBadge(props: { artifact: ArtifactInfo }) {
+export function ServingBadge(props: { artifact: ArtifactInfo }) {
   if (props.artifact.pendingDeploymentId !== null)
     return (
       <Badge variant="secondary" className="h-6">
@@ -466,7 +478,11 @@ function Card(props: { artifact: ArtifactInfo }) {
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {formatRelative(artifact.updatedAt, context.state.now)}
         </span>
-        <ArtifactMenu artifact={artifact} className="relative z-10 flex text-muted-foreground" />
+        <ArtifactMenu
+          artifact={artifact}
+          actions={context.actions}
+          className="relative z-10 flex text-muted-foreground"
+        />
       </div>
     </article>
   )
@@ -510,7 +526,11 @@ function ListTable(props: { artifacts: ReadonlyArray<ArtifactInfo> }) {
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums sm:w-32">
             {formatRelative(artifact.updatedAt, context.state.now)}
           </span>
-          <ArtifactMenu artifact={artifact} className="relative z-10 flex text-muted-foreground" />
+          <ArtifactMenu
+            artifact={artifact}
+            actions={context.actions}
+            className="relative z-10 flex text-muted-foreground"
+          />
         </li>
       ))}
     </ul>
