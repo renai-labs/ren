@@ -148,8 +148,11 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Artifact.Page" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
-  name: Schema.NullOr(Name).annotate({
-    description: "The new name. Null removes the name. The old name is free at once.",
+  title: Schema.optional(Primitive.Name).annotate({
+    description: "The new title. Omit to keep it. A later deployment that names a title replaces it.",
+  }),
+  name: Schema.optional(Schema.NullOr(Name)).annotate({
+    description: "The new name. Omit to keep it; null removes it. The old name is free at once.",
   }),
 }).annotate({ identifier: "Artifact.UpdateInput" })
 

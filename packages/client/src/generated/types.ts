@@ -8760,7 +8760,8 @@ export type ArtifactGetOutput = ArtifactInfo
 
 export type ArtifactUpdateInput = {
   readonly id: { readonly id: string }["id"]
-  readonly name: { readonly name: string | null }["name"]
+  readonly title?: { readonly title?: string | null; readonly name?: string | null | null }["title"]
+  readonly name?: { readonly title?: string | null; readonly name?: string | null | null }["name"]
 }
 
 export type ArtifactUpdateOutput = ArtifactInfo
