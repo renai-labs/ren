@@ -103,12 +103,13 @@ export const space = Effect.fnUntraced(function* (
 export const remote = (
   name: string,
   auth: Mcp.Auth = { type: "oauth", tokenEndpointAuth: "none" },
+  requiredCredentials: Mcp.Declaration["requiredCredentials"] = [],
 ): Mcp.Declaration => ({
   name,
   description: `The ${name} server`,
   transport: { type: "remote", url: `https://${name.toLowerCase()}.example.com/mcp` },
   auth,
-  requiredCredentials: [],
+  requiredCredentials,
 })
 
 export const managed = (name: string, replaces?: string): Mcp.Declaration => ({

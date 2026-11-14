@@ -1320,6 +1320,7 @@ function ConnectStep(props: {
   const [key, setKey] = useState("")
   const oauthItem = profile.items.find(signsIn)
   const keyItem = profile.items.find((item) => !signsIn(item))
+  const target = keyTarget(keyItem, props.app)
   const status = statusOf(props.app, [profile])
   const screen = {
     app: props.app,
@@ -1369,14 +1370,13 @@ function ConnectStep(props: {
     if (oauthItem) return signIn.start(profile.id, oauthItem)
     const value = key.trim()
     if (!keyItem || !value) return
-    const field = keyTarget(keyItem, props.app).field
     saveKey.mutate(
       {
         payload: {
           owner: { kind: "profile", profileId: profile.id },
           item: keyItem.item,
-          hosts: Credential.splitHosts(keyTarget(keyItem, props.app).host),
-          value: field ? { type: "fields", fields: { [field]: value } } : { type: "key", value },
+          hosts: Credential.splitHosts(target.host),
+          value: target.field ? { type: "fields", fields: { [target.field]: value } } : { type: "key", value },
         },
       },
       { onSuccess: props.onSaved },
@@ -1401,7 +1401,7 @@ function ConnectStep(props: {
       <Gates profile={profile} />
       {keyItem ? (
         <Field className="w-full text-left">
-          <FieldLabel htmlFor="profile-key">API key</FieldLabel>
+          <FieldLabel htmlFor="profile-key">{target.copy.label}</FieldLabel>
           <Input
             id="profile-key"
             type="password"
@@ -1409,7 +1409,7 @@ function ConnectStep(props: {
             autoComplete="off"
             // oxlint-disable-next-line jsx-a11y/no-autofocus -- the key is the only thing this step asks for
             autoFocus
-            placeholder="Paste your API key"
+            placeholder={target.copy.placeholder}
             className="h-10 font-mono placeholder:font-sans"
             value={key}
             onChange={(event) => setKey(event.target.value)}
@@ -1487,7 +1487,7 @@ function Connected(props: {
   const signIn = useSignIn(props.onWaiting)
   const holder = props.profile.items.find((item) => item.holder)?.holder
   const oauthItem = props.profile.items.find(signsIn)
-  const keyed = props.profile.items.some((item) => !signsIn(item))
+  const keyItem = props.profile.items.find((item) => !signsIn(item))
   return (
     <Screen
       app={props.app}
@@ -1519,9 +1519,9 @@ function Connected(props: {
               Reconnect
             </Button>
           ) : null}
-          {!oauthItem && keyed ? (
+          {!oauthItem && keyItem ? (
             <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={props.onReplace}>
-              Replace key
+              {keyTarget(keyItem, props.app).copy.replace}
             </Button>
           ) : null}
         </div>
@@ -1571,13 +1571,32 @@ function SignInRow(props: { item: AppProfileItem; waiting: boolean; onSignIn: ()
   )
 }
 
-function keyTarget(item: AppProfileItem, app: App) {
-  const mcp = "mcp" in item.item ? app.mcps?.[item.item.mcp] : undefined
-  const auth = mcp?.auth
-  const transport = mcp?.transport
+const secretCopy = {
+  key: {
+    label: "API key",
+    placeholder: "Paste your API key",
+    add: "Add key",
+    replace: "Replace key",
+    saved: "Key saved",
+  },
+  token: {
+    label: "Token",
+    placeholder: "Paste your token",
+    add: "Add token",
+    replace: "Replace token",
+    saved: "Token saved",
+  },
+}
+
+function keyTarget(item: AppProfileItem | undefined, app: App) {
+  const mcp = item && "mcp" in item.item ? app.mcps?.[item.item.mcp] : undefined
+  if (!mcp) return { field: undefined, host: "", copy: secretCopy.key }
+  const auth = mcp.auth
+  const transport = mcp.transport
   return {
-    field: auth?.type === "header" && typeof auth.credential === "string" ? auth.credential : undefined,
-    host: transport?.type === "remote" ? (URL.parse(transport.url)?.hostname ?? "") : "",
+    field: "credential" in auth ? auth.credential : undefined,
+    host: transport.type === "remote" ? (URL.parse(transport.url)?.hostname ?? "") : "",
+    copy: secretCopy[auth.type === "bearer" ? "token" : "key"],
   }
 }
 
@@ -1590,9 +1609,9 @@ function KeyRow(props: { profileId: string; app: App; item: AppProfileItem }) {
   const target = keyTarget(props.item, props.app)
   if (props.item.status === "ok" && !replacing)
     return (
-      <Row title="API key" description="Saved" media={<IconCheck className="size-4 text-chart-2" />}>
+      <Row title={target.copy.label} description="Saved" media={<IconCheck className="size-4 text-chart-2" />}>
         <Button variant="outline" size="sm" onClick={() => setReplacing(true)}>
-          Replace key
+          {target.copy.replace}
         </Button>
       </Row>
     )
@@ -1615,7 +1634,7 @@ function KeyRow(props: { profileId: string; app: App; item: AppProfileItem }) {
         onSuccess: () => {
           setReplacing(false)
           setValue("")
-          toast.success("Key saved")
+          toast.success(target.copy.saved)
         },
       },
     )
@@ -1623,13 +1642,13 @@ function KeyRow(props: { profileId: string; app: App; item: AppProfileItem }) {
   return (
     <div className="flex flex-col gap-2 px-4 py-3">
       <Field>
-        <FieldLabel htmlFor={id}>API key</FieldLabel>
+        <FieldLabel htmlFor={id}>{target.copy.label}</FieldLabel>
         <div className="flex items-center gap-2">
           <Input
             id={id}
             type="password"
             autoComplete="off"
-            placeholder="Paste your API key"
+            placeholder={target.copy.placeholder}
             className="font-mono placeholder:font-sans"
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -1641,7 +1660,7 @@ function KeyRow(props: { profileId: string; app: App; item: AppProfileItem }) {
           />
           <Button type="button" variant="outline" disabled={create.isPending || !value.trim()} onClick={save}>
             {create.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Add key
+            {target.copy.add}
           </Button>
         </div>
       </Field>

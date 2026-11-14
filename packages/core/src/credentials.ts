@@ -803,9 +803,13 @@ export const layer = Layer.effect(
           const label = ProfileLabel.labelOf(input.item, found.profile.slug)
           const item = declared.find((entry) => entry.label === label)
           if (!item) return yield* new Primitive.NotFound({ message: "The app has no such item." })
-          if (item.kind === "oauth" || item.kind === "provider")
+          if (["oauth", "provider"].includes(item.kind))
             return yield* new Primitive.Invalid({ message: "This item connects with a sign-in.", field: "item" })
-          yield* checkAnyHost(owner, input.hosts, Credential.defaultInject(input.value.type))
+          const inject: Credential.Inject =
+            item.mcp?.auth.type === "query"
+              ? { op: "replace", in: ["query"] }
+              : Credential.defaultInject(input.value.type)
+          yield* checkAnyHost(owner, input.hosts, inject)
           const exchanged = yield* exchange(sealedOf(input.value))
           const created = yield* insert(actor, owner, {
             label,
@@ -814,7 +818,7 @@ export const layer = Layer.effect(
             value: exchanged.value,
             expiresAt: exchanged.expiresAt,
             hosts: input.hosts,
-            inject: Credential.defaultInject(input.value.type),
+            inject,
             delivery: "egress",
             accountUserId: null,
             madeFor: item.madeFor,

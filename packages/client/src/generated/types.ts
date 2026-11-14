@@ -1738,7 +1738,9 @@ export type McpInfo = {
         tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
         client?: { clientId: string; resource?: string; redirectUri?: string }
       }
+    | { type: "bearer"; credential: CredentialName }
     | { type: "header"; name: string; credential: CredentialName }
+    | { type: "query"; name: string; credential: CredentialName }
     | { type: "basic"; username: CredentialName; password: CredentialName }
   timeouts?: McpTimeouts
   requiredCredentials?: Array<CredentialRequirement>
@@ -3204,7 +3206,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3384,7 +3388,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3564,7 +3570,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3744,7 +3752,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3924,7 +3934,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4104,7 +4116,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4284,7 +4298,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4464,7 +4480,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4644,7 +4662,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4824,7 +4844,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5004,7 +5026,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5187,7 +5211,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5366,7 +5392,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5545,7 +5573,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5724,7 +5754,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5903,7 +5935,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6082,7 +6116,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6261,7 +6297,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6440,7 +6478,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6619,7 +6659,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6798,7 +6840,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -9756,7 +9800,9 @@ export type InfraPullInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -10152,7 +10198,9 @@ export type InfraPullInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -10548,7 +10596,9 @@ export type InfraPullInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -10949,7 +10999,9 @@ export type InfraPlanInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -11345,7 +11397,9 @@ export type InfraPlanInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -11741,7 +11795,9 @@ export type InfraPlanInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -12142,7 +12198,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -12540,7 +12598,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -12938,7 +12998,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -13336,7 +13398,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -13734,7 +13798,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number

@@ -21150,6 +21150,21 @@
             "properties": {
               "type": {
                 "type": "string",
+                "enum": ["bearer"]
+              },
+              "credential": {
+                "$ref": "#/components/schemas/Credential.Name"
+              }
+            },
+            "required": ["type", "credential"],
+            "additionalProperties": false,
+            "description": "Sends the credential as `Authorization: Bearer <value>`."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "enum": ["header"]
               },
               "name": {
@@ -21162,6 +21177,25 @@
             },
             "required": ["type", "name", "credential"],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["query"]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "credential": {
+                "$ref": "#/components/schemas/Credential.Name"
+              }
+            },
+            "required": ["type", "name", "credential"],
+            "additionalProperties": false,
+            "description": "Adds the credential to the URL's query string as `<name>=<value>`."
           },
           {
             "type": "object",
@@ -21387,6 +21421,21 @@
                 "properties": {
                   "type": {
                     "type": "string",
+                    "enum": ["bearer"]
+                  },
+                  "credential": {
+                    "$ref": "#/components/schemas/Credential.Name"
+                  }
+                },
+                "required": ["type", "credential"],
+                "additionalProperties": false,
+                "description": "Sends the credential as `Authorization: Bearer <value>`."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
                     "enum": ["header"]
                   },
                   "name": {
@@ -21399,6 +21448,25 @@
                 },
                 "required": ["type", "name", "credential"],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["query"]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "credential": {
+                    "$ref": "#/components/schemas/Credential.Name"
+                  }
+                },
+                "required": ["type", "name", "credential"],
+                "additionalProperties": false,
+                "description": "Adds the credential to the URL's query string as `<name>=<value>`."
               },
               {
                 "type": "object",

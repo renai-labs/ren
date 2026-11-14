@@ -192,7 +192,7 @@ const endpointsOf = (
   })
 }
 
-// oxlint-disable-next-line ren/no-comments -- §10a rule 4: an OAuth MCP item signs in here; a provider MCP item is section 10; an env key or a header MCP takes a pasted value.
+// oxlint-disable-next-line ren/no-comments -- §10a rule 4: an OAuth MCP item signs in here; a provider MCP item is section 10; an env key or a bearer, header, query or basic MCP takes a pasted value.
 interface Target {
   readonly declaration: Mcp.Declaration
   readonly auth: OAuthDeclaration
