@@ -18,6 +18,7 @@ RUN apt-get update \
 
 COPY --from=deps /repo ./
 COPY packages/server ./packages/server
+COPY packages/brain ./packages/brain
 COPY packages/core ./packages/core
 COPY packages/db ./packages/db
 COPY packages/host-api ./packages/host-api
