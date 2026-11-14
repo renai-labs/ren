@@ -54,6 +54,7 @@ const it = testEffect(
             { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
           ]),
           REN_URL: "https://ren.test",
+          REN_URL_ALIASES: "https://old.ren.test",
         }),
       ),
     ),
@@ -146,6 +147,19 @@ const reset = (options: OAuthServer.Options = {}) =>
     server.seen.length = 0
     invalidated.length = 0
   })
+
+describe("OAuth.clientMetadata", () => {
+  it.live(
+    "answers with the client ID of the origin asked, so a connection made under an earlier REN_URL refreshes",
+    () =>
+      Effect.gen(function* () {
+        const oauth = yield* OAuth.Service
+        expect((yield* oauth.clientMetadata("ren.test")).client_id).toBe("https://ren.test/oauth/client.json")
+        expect((yield* oauth.clientMetadata("old.ren.test")).client_id).toBe("https://old.ren.test/oauth/client.json")
+        expect((yield* oauth.clientMetadata("other.test")).client_id).toBe("https://ren.test/oauth/client.json")
+      }),
+  )
+})
 
 describe("OAuth.connect: discovery (§7 rule 2, test 8)", () => {
   it.live("resource_metadata from WWW-Authenticate, then the server metadata; the authorize URL uses it", () =>

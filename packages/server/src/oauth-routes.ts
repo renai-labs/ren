@@ -55,10 +55,8 @@ export const layer = HttpRouter.use((router) =>
     const oauth = yield* OAuth.Service
     const auth = yield* Auth.Service
     const template = yield* Effect.promise(() => Bun.file(new URL("oauth-done.html", import.meta.url)).text())
-    yield* router.add(
-      "GET",
-      "/oauth/client.json",
-      Effect.map(oauth.clientMetadata, (body) => HttpServerResponse.jsonUnsafe(body)),
+    yield* router.add("GET", "/oauth/client.json", (request) =>
+      Effect.map(oauth.clientMetadata(request.headers.host), (body) => HttpServerResponse.jsonUnsafe(body)),
     )
     yield* router.add("GET", "/oauth/callback", (request) =>
       Effect.gen(function* () {

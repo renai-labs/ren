@@ -74,7 +74,7 @@ export interface Interface {
   >
   readonly callback: (input: Callback, browser: Option.Option<Auth.UserID>) => Effect.Effect<Outcome>
   readonly session: (actor: Actor.Info, id: string) => Effect.Effect<OAuthSession.Info, Primitive.NotFound>
-  readonly clientMetadata: Effect.Effect<Readonly<Record<string, unknown>>>
+  readonly clientMetadata: (host: string | undefined) => Effect.Effect<Readonly<Record<string, unknown>>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/OAuth") {}
@@ -244,6 +244,14 @@ export const layer = Layer.effect(
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
     const callbackUrl = `${base}/oauth/callback`
     const clientDocument = `${base}/oauth/client.json`
+    // oxlint-disable-next-line ren/no-comments -- A connection keeps the client ID it was made with, and a server that takes client documents checks that the document's client_id is the URL it fetched. Each earlier REN_URL in REN_URL_ALIASES keeps answering with its own ID, so its connections still refresh.
+    const origins = [
+      base,
+      ...(yield* Config.String("REN_URL_ALIASES").pipe(Config.withDefault("")))
+        .split(",")
+        .map((origin) => origin.trim().replace(/\/$/u, ""))
+        .filter((origin) => origin.length > 0),
+    ]
 
     const seal = (
       organizationId: Auth.OrganizationID,
@@ -768,14 +776,15 @@ export const layer = Layer.effect(
       connect,
       callback,
       session,
-      clientMetadata: Effect.succeed({
-        client_id: clientDocument,
-        client_name: "Ren",
-        redirect_uris: [callbackUrl],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      }),
+      clientMetadata: (host) =>
+        Effect.succeed({
+          client_id: `${origins.find((origin) => new URL(origin).host === host) ?? base}/oauth/client.json`,
+          client_name: "Ren",
+          redirect_uris: [callbackUrl],
+          grant_types: ["authorization_code", "refresh_token"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
     })
   }),
 )
