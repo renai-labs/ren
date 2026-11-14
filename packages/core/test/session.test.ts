@@ -295,6 +295,10 @@ describe("Session", () => {
       expect(yield* listed(actor)).toEqual({ ids: [idle, scheduled, slack], total: 3 })
       expect((yield* listed(actor, { origin: ["slack", "schedule"] })).ids).toEqual([scheduled, slack])
       expect((yield* listed(actor, { agentId: [agentId] })).ids).toEqual([slack])
+      const agents = (yield* Effect.flatMap(Session.Service, (sessions) =>
+        sessions.list(actor, { ...Configured.page, origin: ["slack", "schedule"] }),
+      )).items.map((item) => item.agentId)
+      expect(agents).toEqual([null, agentId])
       expect(yield* listed(actor, { status: "busy" })).toEqual({ ids: [slack], total: 1 })
       expect((yield* listed(actor, { status: "idle" })).ids).toEqual([idle, scheduled])
       expect(yield* listed(actor, { archived: true })).toEqual({ ids: [archived], total: 1 })

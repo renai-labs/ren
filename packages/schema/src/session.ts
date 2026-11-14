@@ -225,6 +225,7 @@ export const Info = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   createdBy: Auth.UserID,
+  agentId: Schema.NullOr(AgentIdentity.ID).annotate({ description: "The agent the chat runs, or null for Ren." }),
   origin: Origin,
   harness: Harness,
   title: Schema.NullOr(Schema.String),
