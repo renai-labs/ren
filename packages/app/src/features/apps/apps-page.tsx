@@ -1,11 +1,16 @@
 import { useState } from "react"
-import { IconChevronRight } from "@tabler/icons-react"
+import { IconChevronRight, IconPlus } from "@tabler/icons-react"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
+import { Button } from "@ren/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Loading } from "@ren/ui/loading"
 import { Tabs } from "@ren/ui/tabs"
-import { AppListingSample, AppSection } from "../../components/app-list.js"
-import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
+import { AppGrid, AppListingSample, AppSection } from "../../components/app-list.js"
+import { EmptyState } from "../../components/empty-state.js"
+import { LoadMore } from "../../components/load-more.js"
+import { CustomAppDialog } from "../../components/custom-app-dialog.js"
+import { Page, PageActions, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { AppRegistryPages } from "../../lib/app-registry.js"
 import { fromApp, fromRegistry, type CatalogApp } from "../../lib/apps.js"
@@ -13,8 +18,9 @@ import { pickerPageSize } from "../../lib/pagination.js"
 import { Search } from "../../lib/search.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { useSpaces } from "../../lib/use-spaces.js"
 import { AppCategories } from "./app-categories.js"
-import { CatalogAppRow, CatalogList } from "./catalog.js"
+import { AppGridSample, CatalogAppRow, CatalogList } from "./catalog.js"
 import { useAddSheet, useRegistryApps } from "./use-catalog.js"
 import { CategoryPage } from "./category-page.js"
 
@@ -73,6 +79,82 @@ function OwnApps(props: {
         />
       )}
     </Loading>
+  )
+}
+
+function SpaceApps(props: { name: string; apps: ReadonlyArray<CatalogApp>; onAdd: (app: CatalogApp) => void }) {
+  return (
+    <Collapsible defaultOpen render={<section aria-label={props.name} />} className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">
+        <CollapsibleTrigger
+          render={<Button variant="ghost" size="sm" className="group/space -ml-2 text-sm font-medium" />}
+        >
+          <IconChevronRight
+            data-icon="inline-start"
+            className="text-muted-foreground transition-transform duration-150 ease-out group-aria-expanded/space:rotate-90 motion-reduce:transition-none"
+          />
+          {props.name}
+        </CollapsibleTrigger>
+      </h2>
+      <CollapsibleContent>
+        <AppGrid label={props.name}>
+          {props.apps.map((app) => (
+            <CatalogAppRow key={app.id} app={app} onAdd={props.onAdd} />
+          ))}
+        </AppGrid>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function OrganizationApps(props: { query: string; onAdd: (app: CatalogApp) => void }) {
+  const shapeId = useShapeId("organization")
+  const own = useOwnApps({ connected: false })
+  const spaceName = useSpaces().spaceName
+  const [creating, setCreating] = useState(false)
+  const shown = own.apps.filter((app) => Search.matches(props.query, app.name, app.description))
+  const groups = [...Map.groupBy(shown, (app) => app.ownerSpaceId ?? "")]
+    .map(([spaceId, apps]) => ({ spaceId, name: spaceName(spaceId), apps }))
+    .toSorted((left, right) => left.name.localeCompare(right.name))
+  const empty = !own.pending && shown.length === 0 && !own.more
+  return (
+    <>
+      <PageActions>
+        <Button onClick={() => setCreating(true)}>
+          <IconPlus data-icon="inline-start" />
+          Create app
+        </Button>
+      </PageActions>
+      {empty ? (
+        <EmptyState
+          action={
+            props.query.trim() ? undefined : (
+              <Button variant="outline" onClick={() => setCreating(true)}>
+                <IconPlus data-icon="inline-start" />
+                Create app
+              </Button>
+            )
+          }
+        >
+          {Search.empty(props.query, "No apps made in your organization yet.")}
+        </EmptyState>
+      ) : (
+        <Loading id={shapeId} loading={own.pending} label="Loading apps">
+          {own.pending ? (
+            <AppListingSample title="Organization" />
+          ) : (
+            <div className="flex flex-col gap-8">
+              {groups.map((group) => (
+                <SpaceApps key={group.spaceId} name={group.name} apps={group.apps} onAdd={props.onAdd} />
+              ))}
+              <LoadMore more={own.more} onMore={own.onMore} />
+              {own.fetching ? <AppGridSample count={4} /> : null}
+            </div>
+          )}
+        </Loading>
+      )}
+      {creating ? <CustomAppDialog onClose={() => setCreating(false)} /> : null}
+    </>
   )
 }
 
@@ -222,15 +304,7 @@ function AppsHome() {
       {tab === "all" && needle ? <AppResults title="All apps" query={query} needle={needle} onAdd={sheet.add} /> : null}
       {tab === "all" && !needle ? <FeaturedApps onAdd={sheet.add} /> : null}
       {tab === "managed" ? <ManagedApps query={query} onAdd={sheet.add} /> : null}
-      {tab === "organization" ? (
-        <OwnApps
-          connected={false}
-          title="Made in your organization"
-          empty="No apps made in your organization yet"
-          query={query}
-          onAdd={sheet.add}
-        />
-      ) : null}
+      {tab === "organization" ? <OrganizationApps query={query} onAdd={sheet.add} /> : null}
       {tab === "installed" ? (
         <OwnApps connected title="Installed" empty="No apps installed yet" query={query} onAdd={sheet.add} />
       ) : null}

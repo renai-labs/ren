@@ -1,4 +1,4 @@
-import { getRouteApi } from "@tanstack/react-router"
+import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import type { AppProfileInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -12,10 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { toast } from "@ren/ui/sonner"
+import { Tabs } from "@ren/ui/tabs"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
-import { AccountList, AppSheet } from "../../components/app-list.js"
+import { AccountList, AppGrid, AppRow, AppSheet } from "../../components/app-list.js"
+import { CustomAppDialog } from "../../components/custom-app-dialog.js"
+import { EmptyState } from "../../components/empty-state.js"
 import { AppsTable } from "../../components/apps-table.js"
-import { PageActions, TableSample, useShapeId } from "../../components/page.js"
+import { PageActions, PageTabs, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
 import { afterRemoval } from "../../components/space-removal.js"
 import type { RowMenuItem } from "../../components/row-menu.js"
@@ -26,7 +29,8 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Search } from "../../lib/search.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useApp, useApps } from "../../lib/use-app.js"
-import { source, type CatalogApp } from "../../lib/apps.js"
+import { fromApp, source, type CatalogApp } from "../../lib/apps.js"
+import { pickerPageSize } from "../../lib/pagination.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -128,6 +132,71 @@ function useRemoveApp(space: { id: string; name: string; kind: string; membershi
   }
 }
 
+function CustomApps(props: { space: { id: string; name: string }; query: string }) {
+  const { api } = RouterContext.useRouterContext()
+  const navigate = useNavigate()
+  const shapeId = useShapeId("custom-apps")
+  const [creating, setCreating] = useState(false)
+  const listed = useQuery(api.app.list.queryOptions({ spaceId: props.space.id, page: 1, pageSize: pickerPageSize }))
+  const owned = (listed.data?.items ?? [])
+    .filter((app) => app.ownerSpaceId === props.space.id)
+    .map(fromApp)
+    .filter((app) => Search.matches(props.query, app.name, app.description))
+  return (
+    <>
+      {!listed.isPending && owned.length === 0 ? (
+        <EmptyState
+          action={
+            props.query.trim() ? undefined : (
+              <Button variant="outline" onClick={() => setCreating(true)}>
+                <IconPlus data-icon="inline-start" />
+                Create app
+              </Button>
+            )
+          }
+        >
+          {Search.empty(props.query, `No apps made in ${props.space.name} yet.`)}
+        </EmptyState>
+      ) : (
+        <Loading id={shapeId} loading={listed.isPending} label="Loading apps">
+          <AppGrid label={`Apps made in ${props.space.name}`}>
+            {listed.isPending
+              ? Array.from({ length: 4 }, (_, index) => (
+                  <AppRow key={index} name="Team app" caption="Tools for your team’s work" />
+                ))
+              : owned.map((app) => (
+                  <AppRow
+                    key={app.id}
+                    name={app.name}
+                    icon={app.icon}
+                    caption={app.description}
+                    onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: app.id } })}
+                  />
+                ))}
+          </AppGrid>
+        </Loading>
+      )}
+      {creating ? <CustomAppDialog spaceId={props.space.id} onClose={() => setCreating(false)} /> : null}
+    </>
+  )
+}
+
+function AppsPills(props: { show: "custom" | undefined; onShow: (show: "installed" | "custom") => void }) {
+  return (
+    <PageTabs>
+      <Tabs
+        value={props.show ?? "installed"}
+        onValueChange={(value: string) => props.onShow(value === "custom" ? "custom" : "installed")}
+      >
+        <PageTabsList>
+          <PageTabsTrigger value="installed">Installed</PageTabsTrigger>
+          <PageTabsTrigger value="custom">Custom</PageTabsTrigger>
+        </PageTabsList>
+      </Tabs>
+    </PageTabs>
+  )
+}
+
 export function SpaceAppsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
@@ -165,6 +234,15 @@ export function SpaceAppsTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <AppsPills
+        show={search.show}
+        onShow={(next) =>
+          void navigate({
+            search: (previous) => ({ ...previous, show: next === "custom" ? "custom" : undefined }),
+            replace: true,
+          })
+        }
+      />
       <PageActions>
         <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
         <Button onClick={() => setAdding(true)}>
@@ -179,20 +257,26 @@ export function SpaceAppsTab() {
         onOpenChange={setAdding}
         onPick={(picked) => setProfile({ appId: picked.id, from })}
       />
-      <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
-        {reach.isPending || catalog.pending ? (
-          <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
-        ) : (
-          <AppsTable
-            rows={shown.items}
-            empty={<NoApps query={query} space={space.name} onAdd={() => setAdding(true)} />}
-            onOpen={setOpened}
-            onNew={(appId) => setProfile({ appId, from, newAccount: true })}
-            remove={remove}
-          />
-        )}
-      </Loading>
-      <LoadMore more={shown.more} onMore={shown.next} />
+      {search.show === "custom" ? (
+        <CustomApps space={space} query={query} />
+      ) : (
+        <>
+          <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
+            {reach.isPending || catalog.pending ? (
+              <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
+            ) : (
+              <AppsTable
+                rows={shown.items}
+                empty={<NoApps query={query} space={space.name} onAdd={() => setAdding(true)} />}
+                onOpen={setOpened}
+                onNew={(appId) => setProfile({ appId, from, newAccount: true })}
+                remove={remove}
+              />
+            )}
+          </Loading>
+          <LoadMore more={shown.more} onMore={shown.next} />
+        </>
+      )}
       <AppSheet app={app} onClose={() => setOpened(undefined)}>
         {app ? (
           <AccountList

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
@@ -16,6 +16,7 @@ import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
+import { McpInspect } from "../lib/mcp-inspect.js"
 import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo } from "@ren/client"
 import { RouterContext } from "../lib/router-context.js"
@@ -172,10 +173,64 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
   )
 }
 
+type Listing = {
+  readonly pending: boolean
+  readonly tools: ReadonlyArray<AppListingTool>
+  readonly empty: string
+}
+
+function useCustomListings(app: App, mcps: NonNullable<App["mcps"]>) {
+  const { client } = RouterContext.useRouterContext()
+  const urls = Object.values(mcps).flatMap((mcp) =>
+    app.source === "custom" && mcp.transport.type === "remote" && URL.parse(mcp.transport.url)?.protocol === "https:"
+      ? [mcp.transport.url]
+      : [],
+  )
+  const queries = useQueries({ queries: urls.map((url) => McpInspect.options(client, url)) })
+  return (mcp: Mcp): Listing | undefined => {
+    if (app.source !== "custom") return undefined
+    if (mcp.transport.type === "local") return { pending: false, tools: [], empty: "Tools show after the first chat" }
+    const query = mcp.transport.type === "remote" ? queries[urls.indexOf(mcp.transport.url)] : undefined
+    if (!query) return { pending: false, tools: [], empty: "No tools listed." }
+    return { pending: query.isPending, tools: query.data?.tools ?? [], empty: McpInspect.noTools(query.data) }
+  }
+}
+
+const listingCaption = (listing: Listing | undefined, count: number) => {
+  if (!listing) return count > 0 ? `${plural(count, "tool")} · ` : null
+  if (listing.pending) return "Checking tools… · "
+  return listing.tools.length > 0
+    ? `${plural(listing.tools.length, "tool")} · `
+    : `${listing.empty.replace(/\.$/u, "")} · `
+}
+
+function OpenedMcp(props: {
+  app: App
+  slug: string
+  mcp: Mcp
+  listing: Listing | undefined
+  icon: ReactNode
+  onClose: () => void
+}) {
+  if (props.listing)
+    return <McpDialog mcp={props.mcp} listing={props.listing} sample={6} icon={props.icon} onClose={props.onClose} />
+  return (
+    <RegistryMcpDialog
+      appId={props.app.id}
+      slug={props.slug}
+      mcp={props.mcp}
+      count={props.app.listing?.toolCounts[props.slug] ?? 0}
+      icon={props.icon}
+      onClose={props.onClose}
+    />
+  )
+}
+
 function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
   const app = props.app
   const tile = appTile(app)
   const [opened, setOpened] = useState<string>()
+  const listingOf = useCustomListings(app, props.mcps)
   const openedMcp = opened === undefined ? undefined : props.mcps[opened]
   const mcpIcon = (slug: string) =>
     tile ? (
@@ -204,7 +259,7 @@ function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm">{slug}</span>
                   <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-                    {tools > 0 ? `${plural(tools, "tool")} · ` : null}
+                    {listingCaption(listingOf(mcp), tools)}
                     {mcp.transport.type === "managed"
                       ? "Ren managed"
                       : usageOf(props.mcps, mcp) || transportLabel(mcp.transport)}
@@ -220,11 +275,11 @@ function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
         })}
       </div>
       {opened && openedMcp ? (
-        <McpDialog
-          appId={app.id}
+        <OpenedMcp
+          app={app}
           slug={opened}
           mcp={openedMcp}
-          count={app.listing?.toolCounts[opened] ?? 0}
+          listing={listingOf(openedMcp)}
           icon={mcpIcon(opened)}
           onClose={() => setOpened(undefined)}
         />
@@ -358,7 +413,7 @@ function SheetSection(props: { title: string; actions?: ReactNode; children: Rea
   )
 }
 
-function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> }) {
+export function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> }) {
   return (
     <Collapsible defaultOpen render={<section aria-label={`${props.title} tools`} />}>
       <div className="sticky top-0 z-10 bg-background pt-3">
@@ -399,7 +454,7 @@ function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> 
   )
 }
 
-function McpDialog(props: {
+function RegistryMcpDialog(props: {
   appId: string
   slug: string
   mcp: Mcp
@@ -408,24 +463,32 @@ function McpDialog(props: {
   onClose: () => void
 }) {
   const { api } = RouterContext.useRouterContext()
-  const [query, setQuery] = useState("")
   const listed = useQuery({
     ...api["app-tools"].get.queryOptions({ idOrSlug: props.appId }),
     enabled: props.count > 0,
   })
-  const pending = props.count > 0 && listed.isPending
-  const tools = listed.data?.[props.slug] ?? []
+  const listing: Listing = {
+    pending: props.count > 0 && listed.isPending,
+    tools: listed.data?.[props.slug] ?? [],
+    empty: listed.isError
+      ? "Couldn’t load this MCP’s tools. Close and open it to try again."
+      : "The registry doesn’t list this MCP’s tools yet.",
+  }
+  return <McpDialog mcp={props.mcp} listing={listing} sample={props.count} icon={props.icon} onClose={props.onClose} />
+}
+
+function McpDialog(props: { mcp: Mcp; listing: Listing; sample: number; icon: ReactNode; onClose: () => void }) {
+  const [query, setQuery] = useState("")
+  const pending = props.listing.pending
+  const tools = props.listing.tools
+  const count = pending ? props.sample : tools.length
   const needle = query.trim().toLowerCase()
   const shown = tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(needle))
   const groups = [
     { title: "Read", tools: shown.filter((tool) => tool.readOnly) },
     { title: "Write", tools: shown.filter((tool) => !tool.readOnly) },
   ].filter((group) => group.tools.length > 0)
-  const empty = (() => {
-    if (listed.isError) return "Couldn’t load this MCP’s tools. Close and open it to try again."
-    if (props.count === 0) return "The registry doesn’t list this MCP’s tools yet."
-    return `No tools match “${query.trim()}”`
-  })()
+  const empty = tools.length === 0 ? props.listing.empty : `No tools match “${query.trim()}”`
   return (
     <Dialog
       open
@@ -450,8 +513,8 @@ function McpDialog(props: {
               ) : null}
             </div>
           </div>
-          {props.count > 0 ? (
-            <ToolbarSearch label={`Search ${plural(props.count, "tool")}`} value={query} onChange={setQuery} />
+          {count > 0 ? (
+            <ToolbarSearch label={`Search ${plural(count, "tool")}`} value={query} onChange={setQuery} />
           ) : null}
         </DialogHeader>
         <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-3">
@@ -459,7 +522,7 @@ function McpDialog(props: {
             {pending ? (
               <ToolGroup
                 title="Read"
-                tools={Array.from({ length: Math.min(props.count, 6) }, (_, index) => ({
+                tools={Array.from({ length: Math.min(count, 6) }, (_, index) => ({
                   name: `tool_${index}`,
                   description: "What this tool does",
                   readOnly: true,

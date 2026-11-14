@@ -1,11 +1,21 @@
 import { Fragment, lazy, Suspense, useState } from "react"
-import { IconArrowRight, IconChevronDown, IconCube, IconLock, IconPlus } from "@tabler/icons-react"
+import {
+  IconArchive,
+  IconArrowRight,
+  IconArrowsExchange,
+  IconChevronDown,
+  IconCube,
+  IconDots,
+  IconLock,
+  IconPencil,
+  IconPlus,
+} from "@tabler/icons-react"
 import { Composer, Mentions } from "@ren/chat"
 import { AppMention } from "@ren/ui/app-mention"
 import { Button } from "@ren/ui/button"
 import type { AppRegistryInfo } from "@ren/client"
 import { Loading } from "@ren/ui/loading"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import {
   DropdownMenu,
@@ -16,7 +26,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Field, FieldError, FieldLabel } from "@ren/ui/field"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { toast } from "@ren/ui/sonner"
+import { Spinner } from "@ren/ui/spinner"
 import { AppDetailFrame, AppDetailSample, AppDetailsSample, AppHeader } from "../../components/app-detail.js"
+import { ConfirmDialog } from "../../components/confirm-dialog.js"
+import { CustomAppDialog } from "../../components/custom-app-dialog.js"
+import { errorMessage } from "../../lib/errors.js"
 import { AccountList, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { useShapeId } from "../../components/page.js"
@@ -154,6 +172,186 @@ const actionOf = (use: SpaceUse) => {
   return use.status === "expired" ? "Reconnect" : "Connect"
 }
 
+function OwnerSpaceField(props: {
+  spaces: ReadonlyArray<{ id: string; name: string }>
+  value: string | undefined
+  problem: string | undefined
+  onChange: (spaceId: string) => void
+}) {
+  const invalid = props.problem !== undefined || undefined
+  return (
+    <Field data-invalid={invalid}>
+      <FieldLabel>Owner</FieldLabel>
+      <Select
+        items={props.spaces.map((space) => ({ value: space.id, label: space.name }))}
+        value={props.value ?? null}
+        onValueChange={(value) => {
+          if (typeof value === "string") props.onChange(value)
+        }}
+      >
+        <SelectTrigger aria-label="Owner" aria-invalid={invalid} className="w-full">
+          <SelectValue placeholder="Choose a space" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {props.spaces.map((space) => (
+              <SelectItem key={space.id} value={space.id}>
+                {space.name}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {props.problem ? <FieldError>{props.problem}</FieldError> : null}
+    </Field>
+  )
+}
+
+const nameClash = (app: CatalogApp, space: { name: string } | undefined) =>
+  space && space.name.trim().toLowerCase() === app.name.trim().toLowerCase()
+    ? `An app cannot have the name of its space, “${space.name}”.`
+    : undefined
+
+function ChangeOwnerDialog(props: { app: CatalogApp; onClose: () => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const spaces = useSpaces().joined.filter((space) => space.id !== props.app.ownerSpaceId)
+  const move = useMutation(api.app.transferOwnership.mutationOptions())
+  const [spaceId, setSpaceId] = useState(spaces.at(0)?.id)
+  const target = spaces.find((space) => space.id === spaceId)
+  const clash = nameClash(props.app, target)
+  const failed = move.error ? errorMessage(move.error) : undefined
+  return (
+    <Dialog open onOpenChange={(open) => (open ? undefined : props.onClose())}>
+      <DialogContent>
+        <form
+          className="contents"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!target || clash) return
+            move.mutate(
+              { id: props.app.id, spaceId: target.id },
+              {
+                onSuccess: () => {
+                  toast.success(`${target.name} now owns ${props.app.name}`)
+                  props.onClose()
+                },
+              },
+            )
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Change owner of {props.app.name}</DialogTitle>
+            <DialogDescription>
+              Members of the owner space can edit, archive and change the owner of the app.
+            </DialogDescription>
+          </DialogHeader>
+          <OwnerSpaceField spaces={spaces} value={spaceId} problem={clash ?? failed} onChange={setSpaceId} />
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={props.onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!target || clash !== undefined || move.isPending}>
+              {move.isPending ? <Spinner data-icon="inline-start" /> : null}
+              Change owner
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SearchDialogs(props: { app: CatalogApp; onChat: (spaceId: string) => void }) {
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
+  const close = () => void navigate({ search: {}, replace: true })
+  if (search.connect) return <ProfileDialog appId={props.app.id} profileId={search.connect} onClose={close} />
+  if (search.account && search.space)
+    return (
+      <ShareRequest
+        app={props.app}
+        account={search.account}
+        space={search.space}
+        onChat={props.onChat}
+        onClose={close}
+      />
+    )
+  return null
+}
+
+function OwnerActions(props: { app: CatalogApp; uses: ReadonlyArray<SpaceUse> }) {
+  const app = props.app
+  if (app.source !== "custom" || !props.uses.some((use) => use.space.id === app.ownerSpaceId)) return null
+  return <OwnerMenu app={app} />
+}
+
+function OwnerMenu(props: { app: CatalogApp }) {
+  const { api } = RouterContext.useRouterContext()
+  const navigate = useNavigate()
+  const archive = useMutation(api.app.archive.mutationOptions())
+  const [open, setOpen] = useState<"edit" | "owner" | "archive">()
+  const [chosen, setChosen] = useState<"edit" | "owner" | "archive">()
+  const app = props.app
+  return (
+    <>
+      <DropdownMenu
+        onOpenChangeComplete={(isOpen) => {
+          if (isOpen || !chosen) return
+          setOpen(chosen)
+          setChosen(undefined)
+        }}
+      >
+        <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label={`More for ${app.name}`} />}>
+          <IconDots />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={() => setChosen("edit")}>
+              <IconPencil />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setChosen("owner")}>
+              <IconArrowsExchange />
+              Change owner
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem variant="destructive" onClick={() => setChosen("archive")}>
+              <IconArchive />
+              Archive app
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {open === "edit" ? <CustomAppDialog appId={app.id} onClose={() => setOpen(undefined)} /> : null}
+      {open === "owner" ? <ChangeOwnerDialog app={app} onClose={() => setOpen(undefined)} /> : null}
+      <ConfirmDialog
+        open={open === "archive"}
+        onOpenChange={(isOpen) => setOpen(isOpen ? "archive" : undefined)}
+        confirmation={{
+          title: `Archive ${app.name}?`,
+          description: `Every space that uses ${app.name} loses its tools and skills, and its accounts stop working.`,
+          action: "Archive app",
+          working: "Archiving…",
+        }}
+        onConfirm={() =>
+          archive.mutateAsync(
+            { id: app.id },
+            {
+              onSuccess: () => {
+                toast.success(`${app.name} archived`)
+                void navigate({ to: "/apps", search: { tab: "organization" } })
+              },
+              onError: (error) => toast.error(`Couldn’t archive ${app.name}`, { description: errorMessage(error) }),
+            },
+          )
+        }
+      />
+    </>
+  )
+}
+
 function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => void) | undefined }) {
   const isReduced = ReducedMotion.use()
   const prompts = props.app.listing?.examplePrompts ?? []
@@ -220,8 +418,6 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
   const app = props.app
   const uses = useSpaceUses(app)
   const start = useStartChat(app)
-  const search = route.useSearch()
-  const navigate = route.useNavigate()
   const [editing, setEditing] = useState<ProfileTarget>()
   const headerShape = useShapeId("app-header")
   const detailsShape = useShapeId("app-details")
@@ -234,7 +430,12 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
           name={app.name}
           description={app.description}
           icon={app.icon}
-          actions={<OpenInChat app={app} uses={uses} onStart={(spaceId) => start(spaceId)} onProfile={setEditing} />}
+          actions={
+            <>
+              <OwnerActions app={app} uses={uses} />
+              <OpenInChat app={app} uses={uses} onStart={(spaceId) => start(spaceId)} onProfile={setEditing} />
+            </>
+          }
         />
       </Loading>
       <Loading id={detailsShape} loading={props.loading} label="Loading app details">
@@ -252,15 +453,7 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
         )}
       </Loading>
       {editing ? <ProfileDialog {...editing} onClose={() => setEditing(undefined)} /> : null}
-      {search.account && search.space && !props.loading ? (
-        <ShareRequest
-          app={app}
-          account={search.account}
-          space={search.space}
-          onChat={(spaceId) => start(spaceId)}
-          onClose={() => void navigate({ search: {}, replace: true })}
-        />
-      ) : null}
+      {editing || props.loading ? null : <SearchDialogs app={app} onChat={(spaceId) => start(spaceId)} />}
     </AppDetailFrame>
   )
 }
