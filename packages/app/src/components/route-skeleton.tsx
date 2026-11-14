@@ -26,7 +26,11 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   automations: { title: "Automations", width: "full" },
   agents: { title: "Agents", description: (space) => `Agents that work in ${space}.` },
   instructions: { title: "Instructions", description: (space) => `Guidance every agent follows in ${space}.` },
-  memory: { title: "Memory", description: (space) => `What agents remember between chats in ${space}.` },
+  memory: {
+    title: "Memory",
+    description: (space) => `What agents remember between chats in ${space}.`,
+    width: "full",
+  },
   permissions: {
     title: "Permissions",
     description: (space) => `Tools agents in ${space} can use, and which ones ask first.`,
