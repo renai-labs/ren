@@ -474,6 +474,46 @@ describe("Credentials: move and copy (owner-access §4 rules 2 to 4)", () => {
         expect(failure(foreign)).toContain("Primitive.NotFound")
       }),
   )
+
+  it.live("a sign-in that nobody holds is not copied either, so two owners never share one refresh token", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credentials.Service
+      const database = yield* Database.Service
+      const envelope = yield* Envelope.Service
+      const setup = yield* team()
+      const id = Credential.ID.create()
+      const value = yield* envelope.seal(
+        Redacted.make(
+          JSON.stringify({
+            type: "oauth",
+            accessToken: "tok_1",
+            refresh: {
+              refreshToken: "ref_1",
+              clientId: "client",
+              tokenEndpoint: "https://auth.example.com/token",
+              tokenEndpointAuth: "none",
+            },
+          }),
+        ),
+        { organizationId: setup.organizationId, kind: "credential", id },
+      )
+      yield* database.db.insert(Database.Schema.credential).values({
+        id,
+        organization_id: setup.organizationId,
+        owner: "space",
+        space_id: setup.space.id,
+        label: "MCP_ADNOVA",
+        type: "oauth",
+        value,
+        hosts: ["app.adnova.ai"],
+        inject: { op: "setHeader", name: "Authorization", format: "Bearer {value}" },
+        created_by_user_id: setup.ada.userId,
+      })
+      const copied = yield* Effect.exit(credentials.copy(setup.ada, id, { owner: { kind: "org" } }))
+      expect(failure(copied)).toContain("Primitive.Forbidden")
+      expect(failure(copied)).toContain("sign in again")
+    }),
+  )
 })
 
 describe("Credentials: lookup (README §6.3, §6.4)", () => {

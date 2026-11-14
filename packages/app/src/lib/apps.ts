@@ -94,6 +94,7 @@ export const ownerLabel = (
   return owner.userId === userId ? "You" : "Personal"
 }
 
+// oxlint-disable-next-line ren/no-comments -- owner-access §4 rule 4 (A7): Copy is offered only for a pasted secret with no account, as the policy's `signIn` fact allows; a sign-in's grant is never shared between owners.
 export const canCopy = (credential: Credential) =>
   (credential.type === "key" || credential.type === "basic" || credential.type === "fields") && !credential.account
 
