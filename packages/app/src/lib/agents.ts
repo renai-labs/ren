@@ -1,15 +1,8 @@
 export * as Agents from "./agents.js"
 
 import type { AgentInfo } from "@ren/client"
-import { Schema } from "effect"
 import { pickerPageSize } from "./pagination.js"
 import type { Runtime } from "./runtime.js"
-
-const SearchSchema = Schema.Struct({ tab: Schema.optional(Schema.Literals(["custom", "factory"])) })
-
-export type Search = typeof SearchSchema.Type
-
-export const Search = Schema.toStandardSchemaV1(SearchSchema)
 
 export const listOptions = (api: Runtime.Context["api"], spaceId: string) =>
   api.agent.list.queryOptions({ spaceId, page: 1, pageSize: pickerPageSize })

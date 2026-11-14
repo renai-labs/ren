@@ -25,6 +25,11 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   drive: { title: "Drive", width: "full" },
   automations: { title: "Automations", width: "full" },
   agents: { title: "Agents", description: (space) => `Agents that work in ${space}.` },
+  factory: {
+    title: "Factory",
+    description: (space) => `How tasks move between the agents in ${space}.`,
+    width: "full",
+  },
   instructions: { title: "Instructions", description: (space) => `Guidance every agent follows in ${space}.` },
   memory: {
     title: "Memory",
@@ -71,6 +76,17 @@ export function TasksSample() {
         </div>
       ))}
     </div>
+  )
+}
+
+export function FactorySample() {
+  return (
+    <Card className="mt-4 min-h-120 flex-1 gap-0 py-0 contain-size">
+      <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2 text-sm">
+        <span className="px-3">Flow</span>
+        <span className="px-3">spec.yaml</span>
+      </div>
+    </Card>
   )
 }
 
@@ -150,6 +166,7 @@ function SpaceSectionSample(props: { section: string }) {
   if (props.section === "automations") return table(["Name", "Frequency", "Last run", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
   if (props.section === "agents") return table(["Name", "Type", "Model", "Source", ""])
+  if (props.section === "factory") return <FactorySample />
   if (props.section === "inbox") return table(inboxColumns)
   if (props.section === "instructions")
     return (

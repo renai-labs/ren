@@ -52,6 +52,7 @@ import { Route as AuthedShellSpacesSpaceIdChannelsRouteImport } from "./routes/_
 import { Route as AuthedShellSpacesSpaceIdComputeRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/compute"
 import { Route as AuthedShellSpacesSpaceIdCredentialsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/credentials"
 import { Route as AuthedShellSpacesSpaceIdDriveRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/drive"
+import { Route as AuthedShellSpacesSpaceIdFactoryRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/factory"
 import { Route as AuthedShellSpacesSpaceIdInstructionsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/instructions"
 import { Route as AuthedShellSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/members"
 import { Route as AuthedShellSpacesSpaceIdMemoryRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/memory"
@@ -307,6 +308,12 @@ const AuthedShellSpacesSpaceIdDriveRoute =
     path: "/drive",
     getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
+const AuthedShellSpacesSpaceIdFactoryRoute =
+  AuthedShellSpacesSpaceIdFactoryRouteImport.update({
+    id: "/factory",
+    path: "/factory",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
 const AuthedShellSpacesSpaceIdInstructionsRoute =
   AuthedShellSpacesSpaceIdInstructionsRouteImport.update({
     id: "/instructions",
@@ -450,6 +457,7 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
   "/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveRoute
+  "/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/spaces/$spaceId/instructions": typeof AuthedShellSpacesSpaceIdInstructionsRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
   "/spaces/$spaceId/memory": typeof AuthedShellSpacesSpaceIdMemoryRoute
@@ -507,6 +515,7 @@ export interface FileRoutesByTo {
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
   "/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveRoute
+  "/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/spaces/$spaceId/instructions": typeof AuthedShellSpacesSpaceIdInstructionsRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
   "/spaces/$spaceId/memory": typeof AuthedShellSpacesSpaceIdMemoryRoute
@@ -569,6 +578,7 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/_authed/_shell/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
   "/_authed/_shell/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveRoute
+  "/_authed/_shell/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/_authed/_shell/spaces/$spaceId/instructions": typeof AuthedShellSpacesSpaceIdInstructionsRoute
   "/_authed/_shell/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
   "/_authed/_shell/spaces/$spaceId/memory": typeof AuthedShellSpacesSpaceIdMemoryRoute
@@ -630,6 +640,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/compute"
     | "/spaces/$spaceId/credentials"
     | "/spaces/$spaceId/drive"
+    | "/spaces/$spaceId/factory"
     | "/spaces/$spaceId/instructions"
     | "/spaces/$spaceId/members"
     | "/spaces/$spaceId/memory"
@@ -687,6 +698,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/compute"
     | "/spaces/$spaceId/credentials"
     | "/spaces/$spaceId/drive"
+    | "/spaces/$spaceId/factory"
     | "/spaces/$spaceId/instructions"
     | "/spaces/$spaceId/members"
     | "/spaces/$spaceId/memory"
@@ -748,6 +760,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId/compute"
     | "/_authed/_shell/spaces/$spaceId/credentials"
     | "/_authed/_shell/spaces/$spaceId/drive"
+    | "/_authed/_shell/spaces/$spaceId/factory"
     | "/_authed/_shell/spaces/$spaceId/instructions"
     | "/_authed/_shell/spaces/$spaceId/members"
     | "/_authed/_shell/spaces/$spaceId/memory"
@@ -1087,6 +1100,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdDriveRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
+    "/_authed/_shell/spaces/$spaceId/factory": {
+      id: "/_authed/_shell/spaces/$spaceId/factory"
+      path: "/factory"
+      fullPath: "/spaces/$spaceId/factory"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdFactoryRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
     "/_authed/_shell/spaces/$spaceId/instructions": {
       id: "/_authed/_shell/spaces/$spaceId/instructions"
       path: "/instructions"
@@ -1208,6 +1228,7 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdComputeRoute: typeof AuthedShellSpacesSpaceIdComputeRoute
   AuthedShellSpacesSpaceIdCredentialsRoute: typeof AuthedShellSpacesSpaceIdCredentialsRoute
   AuthedShellSpacesSpaceIdDriveRoute: typeof AuthedShellSpacesSpaceIdDriveRoute
+  AuthedShellSpacesSpaceIdFactoryRoute: typeof AuthedShellSpacesSpaceIdFactoryRoute
   AuthedShellSpacesSpaceIdInstructionsRoute: typeof AuthedShellSpacesSpaceIdInstructionsRoute
   AuthedShellSpacesSpaceIdMembersRoute: typeof AuthedShellSpacesSpaceIdMembersRoute
   AuthedShellSpacesSpaceIdMemoryRoute: typeof AuthedShellSpacesSpaceIdMemoryRoute
@@ -1235,6 +1256,7 @@ const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteR
     AuthedShellSpacesSpaceIdCredentialsRoute:
       AuthedShellSpacesSpaceIdCredentialsRoute,
     AuthedShellSpacesSpaceIdDriveRoute: AuthedShellSpacesSpaceIdDriveRoute,
+    AuthedShellSpacesSpaceIdFactoryRoute: AuthedShellSpacesSpaceIdFactoryRoute,
     AuthedShellSpacesSpaceIdInstructionsRoute:
       AuthedShellSpacesSpaceIdInstructionsRoute,
     AuthedShellSpacesSpaceIdMembersRoute: AuthedShellSpacesSpaceIdMembersRoute,

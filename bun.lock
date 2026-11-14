@@ -67,6 +67,7 @@
         "react-dom": "catalog:",
         "remark-breaks": "catalog:",
         "streamdown": "catalog:",
+        "yaml": "catalog:",
       },
       "devDependencies": {
         "@babel/core": "catalog:",

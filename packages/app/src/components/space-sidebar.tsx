@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
   IconArrowLeft,
   IconBrain,
+  IconBuildingFactory2,
   IconChartPie,
   IconMessagesFilled,
   IconChecklist,
@@ -67,6 +68,7 @@ const spaceGroups = [
     label: "Agents",
     items: [
       { value: "agents", label: "Agents", icon: IconSparkles, to: "/spaces/$spaceId/agents" },
+      { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
       { value: "instructions", label: "Instructions", icon: IconFileText, to: "/spaces/$spaceId/instructions" },
       { value: "memory", label: "Memory", icon: IconBrain, to: "/spaces/$spaceId/memory" },
       { value: "permissions", label: "Permissions", icon: IconShield, to: "/spaces/$spaceId/permissions" },
