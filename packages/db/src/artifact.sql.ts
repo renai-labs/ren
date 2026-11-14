@@ -44,6 +44,15 @@ export const artifact = pgTable(
   ],
 )
 
+// oxlint-disable-next-line ren/no-comments -- A share link of Ren v1 (/a/<token>/) and the artifact it opens now. Only the copy from v1 writes it.
+export const artifact_share_link = pgTable("artifact_share_link", {
+  token: text().primaryKey(),
+  artifact_id: text()
+    .$type<Artifact.ID>()
+    .notNull()
+    .references(() => artifact.id, { onDelete: "cascade" }),
+})
+
 // oxlint-disable-next-line ren/no-comments -- Each change of who owns a name moves its epoch on. synced_epoch is the last epoch whose owner the provider has; a name with synced_epoch below epoch is not copied yet.
 export const artifact_name_sync = pgTable("artifact_name_sync", {
   name: text().$type<Artifact.Name>().primaryKey(),
