@@ -141,6 +141,11 @@ describe("Infra.Spec", () => {
       },
     })
 
+  const tokenAuths = [
+    { type: "bearer", credential: "LANGFUSE_SECRET_KEY" },
+    { type: "query", name: "key", credential: "LANGFUSE_SECRET_KEY" },
+  ]
+
   test("an MCP authenticates with credentials it requires, by env name", () => {
     const exit = mcp({
       auth: { type: "basic", username: "LANGFUSE_PUBLIC_KEY", password: "LANGFUSE_SECRET_KEY" },
@@ -150,6 +155,10 @@ describe("Infra.Spec", () => {
       ],
     })
     expect(Exit.isSuccess(exit)).toBe(true)
+    for (const auth of tokenAuths)
+      expect(Exit.isSuccess(mcp({ auth, requiredCredentials: [{ kind: "env", name: "LANGFUSE_SECRET_KEY" }] }))).toBe(
+        true,
+      )
   })
 
   test("rejects MCP auth that names a credential the MCP does not require", () => {
@@ -158,6 +167,10 @@ describe("Infra.Spec", () => {
       requiredCredentials: [{ kind: "env", name: "LANGFUSE_PUBLIC_KEY" }],
     })
     expect(String(exit)).toContain('The auth uses credential "LANGFUSE_SECRET_KEY", which the MCP does not require.')
+    for (const auth of tokenAuths)
+      expect(String(mcp({ auth }))).toContain(
+        'The auth uses credential "LANGFUSE_SECRET_KEY", which the MCP does not require.',
+      )
   })
 
   test("custom dependency cycles report their path", () => {

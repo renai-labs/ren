@@ -86,31 +86,51 @@ it.live("two profiles of one app are two servers, each with its own placeholder;
   }),
 )
 
-it.effect("a local entry runs with its declared env and the profile's placeholders; a header MCP sends its field", () =>
-  Effect.sync(() => {
-    const catalog = McpPeer.catalog("local", [
-      {
-        slug: "sheets",
-        transport: { type: "local", command: ["sheets"], env: { MODE: "read" } },
-        profile: { slug: "acme", name: "Acme client" },
-        env: { SHEETS_KEY: "ren:SHEETS_KEY__ACME" },
-      },
-      {
-        slug: "crm",
-        url: "https://crm.example.com/mcp",
-        auth: { type: "header", name: "X-Api-Key", credential: "apiKey" },
-        profile: { slug: "acme", name: "Acme client" },
-      },
-    ])
-    const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: true, speakerHeaders: {} })
-    expect(rendered.map((server) => [server.name, server.config])).toMatchObject([
-      ["sheets__acme", { type: "local", environment: { MODE: "read", SHEETS_KEY: "ren:SHEETS_KEY__ACME" } }],
-      ["crm__acme", { type: "remote", headers: { "X-Api-Key": "ren:MCP_CRM__ACME.apiKey" } }],
-    ])
-    expect(
-      OpenCodeMcp.servers(Option.some(catalog), { local: false, speakerHeaders: {} }).map((server) => server.name),
-    ).toEqual(["crm__acme"])
-  }),
+it.effect(
+  "a local entry runs with its declared env and the profile's placeholders; a header, bearer or query MCP sends its field",
+  () =>
+    Effect.sync(() => {
+      const acme = { slug: "acme", name: "Acme client" }
+      const catalog = McpPeer.catalog("local", [
+        {
+          slug: "sheets",
+          transport: { type: "local", command: ["sheets"], env: { MODE: "read" } },
+          profile: acme,
+          env: { SHEETS_KEY: "ren:SHEETS_KEY__ACME" },
+        },
+        {
+          slug: "crm",
+          url: "https://crm.example.com/mcp",
+          auth: { type: "header", name: "X-Api-Key", credential: "apiKey" },
+          profile: acme,
+        },
+        {
+          slug: "wiki",
+          url: "https://wiki.example.com/mcp",
+          auth: { type: "bearer", credential: "apiToken" },
+          profile: acme,
+        },
+        {
+          slug: "maps",
+          url: "https://maps.example.com/mcp?region=eu",
+          auth: { type: "query", name: "key", credential: "apiKey" },
+          profile: acme,
+        },
+      ])
+      const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: true, speakerHeaders: {} })
+      expect(rendered.map((server) => [server.name, server.config])).toMatchObject([
+        ["sheets__acme", { type: "local", environment: { MODE: "read", SHEETS_KEY: "ren:SHEETS_KEY__ACME" } }],
+        ["crm__acme", { type: "remote", headers: { "X-Api-Key": "ren:MCP_CRM__ACME.apiKey" } }],
+        ["wiki__acme", { type: "remote", headers: { Authorization: "Bearer ren:MCP_WIKI__ACME.apiToken" } }],
+        [
+          "maps__acme",
+          { type: "remote", url: "https://maps.example.com/mcp?region=eu&key=ren%3AMCP_MAPS__ACME.apiKey" },
+        ],
+      ])
+      expect(
+        OpenCodeMcp.servers(Option.some(catalog), { local: false, speakerHeaders: {} }).map((server) => server.name),
+      ).toEqual(["crm__acme", "wiki__acme", "maps__acme"])
+    }),
 )
 
 it.effect("the env note: one line per app with connected env items, in catalog order, the same bytes each time", () =>

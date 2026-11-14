@@ -409,6 +409,34 @@ describe("Egress.resolve", () => {
     }),
   )
 
+  it.live("a key pasted for a query MCP is replaced in the query only", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const credentials = yield* Credentials.Service
+      const profiles = yield* AppProfiles.Service
+      const found = yield* setup()
+      const app = yield* ProfilesFixture.app(found.ada, found.space.id, "maps", {
+        mcps: {
+          maps: ProfilesFixture.remote("Maps", { type: "query", name: "key", credential: "apiKey" }, [
+            { kind: "secret", name: "apiKey", optional: false },
+          ]),
+        },
+      })
+      const team = (yield* profiles.list(found.ada, { appId: app.id, page: 1, pageSize: 50 })).items.at(0)
+      if (!team) return yield* Effect.die(new Error("expected the owner-space profile"))
+      const saved = yield* credentials.create(found.ada, {
+        owner: { kind: "profile", profileId: team.id },
+        item: { mcp: "maps" },
+        hosts: ["maps.example.com"],
+        value: { type: "fields", fields: { apiKey: Redacted.make("maps-key") } },
+      })
+      const placeholder = `ren:${saved.label}.apiKey`
+      expect(values(yield* resolver.resolve(all, request(found.proof, "maps.example.com", [placeholder])))).toEqual([
+        { op: "replace", placeholder, value: "maps-key", in: ["query"] },
+      ])
+    }),
+  )
+
   it.live("a missing label is named and works on the next request once saved; a delete clears every egress copy", () =>
     Effect.gen(function* () {
       const resolver = yield* Egress.Service
