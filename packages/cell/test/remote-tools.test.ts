@@ -694,11 +694,15 @@ for (const place of places) {
             ]).then(() => undefined),
         })
         const chat = opened.harness.chat
-        expect(yield* chat.listFiles(session.sessionId, undefined)).toEqual([
-          { path: "src/", type: "directory" },
-          { path: "notes.md", type: "file" },
-        ])
-        expect(yield* chat.listFiles(session.sessionId, "src/")).toEqual([
+        expect(yield* chat.listFiles(session.sessionId, undefined)).toEqual({
+          entries: [
+            { path: "src/", type: "directory" },
+            { path: "notes.md", type: "file" },
+          ],
+          cursor: null,
+          actions: [],
+        })
+        expect((yield* chat.listFiles(session.sessionId, "src/")).entries).toEqual([
           { path: "src/image.bin", type: "file" },
           { path: "src/large.txt", type: "file" },
         ])

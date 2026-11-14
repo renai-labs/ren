@@ -1,9 +1,9 @@
 import { lazy, Suspense, useState } from "react"
 import { ChatReact } from "@ren/chat/react"
 import { FileTabs, Mentions } from "@ren/chat"
+import type { FileSystem } from "@ren/schema/file-system"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { Session } from "@ren/schema/session"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import { IconDots, IconFile, IconFiles, IconX } from "@tabler/icons-react"
 import { Cause } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -80,7 +80,7 @@ function Crumbs(props: { path: string; onFolder: (folder: string) => void }) {
   )
 }
 
-function Unsupported(props: { file: SessionCatalog.FileContent }) {
+function Unsupported(props: { file: FileSystem.Content }) {
   if (props.file.mime.startsWith("image/") && !props.file.truncated && props.file.encoding === "base64")
     return (
       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto overscroll-contain p-4">
@@ -104,7 +104,7 @@ function Unsupported(props: { file: SessionCatalog.FileContent }) {
   )
 }
 
-function OpenIn(props: { file: SessionCatalog.FileContent; onMention: ((path: string) => void) | undefined }) {
+function OpenIn(props: { file: FileSystem.Content; onMention: ((path: string) => void) | undefined }) {
   const copy = useCopy()
   const download = () => {
     const bytes =
@@ -311,7 +311,7 @@ function Tree(props: {
       onQuery={tree.setQuery}
       onRefresh={tree.refresh}
       notice={
-        root.value.length === 0 ? (
+        root.value.entries.length === 0 ? (
           <p className="px-3 py-1.5 text-xs text-muted-foreground">This folder is empty</p>
         ) : null
       }

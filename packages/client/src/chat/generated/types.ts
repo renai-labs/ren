@@ -160,9 +160,11 @@ export type SessionCatalogSkill = { id: string; name: string; description?: stri
 
 export type SessionCatalogCommand = { name: string; description?: string }
 
-export type SessionCatalogFileType = "file" | "directory"
+export type FileSystemEntryType = "file" | "directory"
 
-export type SessionCatalogFileContent = {
+export type FileSystemAction = "upload" | "write" | "remove"
+
+export type FileSystemContent = {
   path: string
   mime: string
   size: number
@@ -788,7 +790,13 @@ export type SessionInboxSyntheticPayload1 = {
 
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy
 
-export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
+export type FileSystemEntry = {
+  path: string
+  type: FileSystemEntryType
+  size?: number
+  modifiedAt?: string
+  mime?: string
+}
 
 export type SessionInboxUserPayload = {
   text: string
@@ -914,6 +922,12 @@ export type SessionInboxSynthetic = {
 }
 
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }
+
+export type FileSystemPage = {
+  entries: Array<FileSystemEntry>
+  cursor: string | null
+  actions: Array<FileSystemAction>
+}
 
 export type SessionInboxItem =
   | { type: "user"; payload: SessionInboxUserPayload; delivery: SessionInboxDelivery }
@@ -1575,21 +1589,21 @@ export type FileSearchInput = {
   }["limit"]
 }
 
-export type FileSearchOutput = Array<SessionCatalogFile>
+export type FileSearchOutput = Array<FileSystemEntry>
 
 export type FileListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly path?: { readonly path?: string | undefined }["path"]
 }
 
-export type FileListOutput = Array<SessionCatalogFile>
+export type FileListOutput = FileSystemPage
 
 export type FileReadInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly path: { readonly path: string }["path"]
 }
 
-export type FileReadOutput = SessionCatalogFileContent
+export type FileReadOutput = FileSystemContent
 
 export type VcsGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 

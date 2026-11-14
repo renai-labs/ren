@@ -3,7 +3,7 @@ export * as Translate from "./translate.js"
 import type { Agent } from "@opencode/schema/agent"
 import type { Command } from "@opencode/schema/command"
 import type { EventManifest } from "@opencode/schema/event-manifest"
-import type { FileSystem } from "@opencode/schema/filesystem"
+import type { FileSystem as OpenCodeFileSystem } from "@opencode/schema/filesystem"
 import type { Form as OpenCodeForm } from "@opencode/schema/form"
 import type { Permission as OpenCodePermission } from "@opencode/schema/permission"
 import type { Session as OpenCodeSession } from "@opencode/schema/session"
@@ -14,6 +14,7 @@ import type { Shell as OpenCodeShell } from "@opencode/schema/shell"
 import type { Skill } from "@opencode/schema/skill"
 import type { Vcs } from "@opencode/schema/vcs"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
+import { FileSystem } from "@ren/schema/file-system"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { ScheduleOrigin } from "@ren/schema/schedule-origin"
@@ -255,7 +256,7 @@ const readShell = Schema.decodeUnknownOption(Schema.toType(Shell.Info))
 const readAgent = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Agent))
 const readSkill = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Skill))
 const readCommand = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Command))
-const readFile = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.File))
+const readFile = Schema.decodeUnknownOption(Schema.toType(FileSystem.Entry))
 const readVcs = Schema.decodeUnknownOption(Schema.toType(SessionVcs.Info))
 
 const Typed = Schema.Struct({ type: Schema.String })
@@ -320,6 +321,6 @@ export const skill = (info: Skill.Info) => readSkill(info)
 
 export const command = (info: Command.Info) => readCommand(info)
 
-export const file = (entry: FileSystem.Entry) => readFile(entry)
+export const file = (entry: OpenCodeFileSystem.Entry) => readFile(entry)
 
 export const vcs = (info: Vcs.Info) => readVcs(info)

@@ -25,23 +25,5 @@ export const Command = Schema.Struct({
   description: Schema.optionalKey(Schema.String),
 }).annotate({ identifier: "SessionCatalog.Command" })
 
-export const FileType = Schema.Literals(["file", "directory"]).annotate({ identifier: "SessionCatalog.FileType" })
-export type FileType = typeof FileType.Type
-
-export interface File extends Schema.Schema.Type<typeof File> {}
-export const File = Schema.Struct({ path: Schema.String, type: FileType }).annotate({
-  identifier: "SessionCatalog.File",
-})
-
-export interface FileContent extends Schema.Schema.Type<typeof FileContent> {}
-export const FileContent = Schema.Struct({
-  path: Schema.String,
-  mime: Schema.String,
-  size: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  encoding: Schema.Literals(["utf8", "base64"]),
-  content: Schema.String,
-  truncated: Schema.Boolean,
-}).annotate({ identifier: "SessionCatalog.FileContent" })
-
 export const mentionable = (agents: ReadonlyArray<Agent>) =>
   agents.filter((agent) => !agent.hidden && agent.mode !== "primary")
