@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { useQueries, useQuery } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
@@ -20,6 +21,7 @@ import { McpInspect } from "../lib/mcp-inspect.js"
 import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo } from "@ren/client"
 import { RouterContext } from "../lib/router-context.js"
+import { useApps } from "../lib/use-app.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import type { CatalogApp, Status } from "../lib/apps.js"
 
@@ -288,6 +290,44 @@ function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
   )
 }
 
+function DependencyCards(props: { app: App }) {
+  const navigate = useNavigate()
+  const apps = useApps(props.app.dependsOn)
+  const nested = useApps(props.app.dependsOn.flatMap((slug) => apps.of(slug)?.dependsOn ?? []))
+  return (
+    <SheetSection title="Apps">
+      <p className="-mt-3 text-sm text-muted-foreground">
+        Adding {props.app.name} to a space adds these apps too. Each one connects on its own.
+      </p>
+      <div className="-mx-2 grid grid-cols-2 gap-x-4 gap-y-1">
+        {props.app.dependsOn.map((slug) => {
+          const app = apps.of(slug)
+          const includes = (app?.dependsOn ?? []).map((each) => nested.of(each)?.name ?? each)
+          return (
+            <Button
+              key={slug}
+              variant="ghost"
+              disabled={!app}
+              onClick={() => {
+                if (app) void navigate({ to: "/apps/$appId", params: { appId: app.id } })
+              }}
+              className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
+            >
+              <AppIcon name={app?.name ?? slug} description={app?.description} icon={app?.icon} size="lg" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm">{app?.name ?? slug}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {includes.length > 0 ? `Includes ${includes.join(", ")}` : app?.description}
+                </span>
+              </span>
+            </Button>
+          )
+        })}
+      </div>
+    </SheetSection>
+  )
+}
+
 export function AppSections(props: { app: App }) {
   const app = props.app
   const spaceName = useSpaces().spaceName
@@ -300,6 +340,7 @@ export function AppSections(props: { app: App }) {
   ] as const
   return (
     <>
+      {app.dependsOn.length > 0 ? <DependencyCards app={app} /> : null}
       {app.mcps && Object.keys(app.mcps).length > 0 ? <McpCards app={app} mcps={app.mcps} /> : null}
       {skills.length > 0 ? (
         <SheetSection title="Skills">

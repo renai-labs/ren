@@ -111,6 +111,26 @@ it.live("self-dependency during creation reports the authored slug", () =>
   }),
 )
 
+it.live("an app's dependencies may have dependencies, but no deeper, counting the apps that depend on it", () =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    const organizationId = yield* Seed.organization()
+    const actor = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+    const add = (slug: string, dependsOn: ReadonlyArray<string> = []) =>
+      ProfilesFixture.app(actor, actor.personal, slug, { dependsOn })
+    const third = yield* add("third")
+    yield* add("second", ["third"])
+    yield* add("first", ["second"])
+    yield* add("fourth")
+    const deeper = yield* Effect.flip(
+      apps.update(actor, third.id, { ...definition(third), dependsOn: ["fourth"], expectedRevision: third.revision }),
+    )
+    expect(deeper).toMatchObject({ _tag: "Primitive.Conflict" })
+    expect(deeper.message).toContain("first -> second -> third -> fourth")
+    expect((yield* Effect.flip(add("top", ["first"]))).message).toContain("top -> first -> second -> third")
+  }),
+)
+
 it.live("an org's own app cannot declare a managed MCP, on create or on edit", () =>
   Effect.gen(function* () {
     const apps = yield* App.Service
