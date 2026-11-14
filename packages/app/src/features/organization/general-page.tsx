@@ -1,9 +1,10 @@
+import type { SettingsInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
-import { ModelPicker } from "../../components/model-picker.js"
+import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { useMe } from "../../lib/use-me.js"
@@ -21,21 +22,13 @@ export function GeneralSettingsPage() {
   const settings = useSuspenseQuery(api["organization-settings"].get.queryOptions({ idOrSlug: me.organization.id }))
   const update = useMutation(api["organization-settings"].update.mutationOptions())
   const current = settings.data.settings
-  const saveSettings = (patch: {
-    instructions?: string
-    model?: { endpointId: string; modelId: string; variant?: string }
-  }) =>
+  const saveSettings = (patch: Partial<SettingsInfo>) =>
     update.mutateAsync(
       { id: me.organization.id, settings: { ...current, ...patch } },
       { onError: (error) => toast.error("Couldn’t save the settings", { description: errorMessage(error) }) },
     )
-  const model = current.model
   const organization = me.organization
   const canUpdate = settings.data.canUpdate
-  const chooseModel = (next: { id: string; providerID: string; variant?: string }) =>
-    void saveSettings({
-      model: { endpointId: next.providerID, modelId: next.id, ...(next.variant && { variant: next.variant }) },
-    })
   const rename = async (name: string) => {
     const result = await auth.organization.update({ organizationId: me.organization.id, data: { name } })
     if (result.error !== null) {
@@ -82,17 +75,9 @@ export function GeneralSettingsPage() {
           <Row key="model" title="Default model" description="New chats start with it unless a space sets its own.">
             <ModelPicker
               models={models}
-              value={
-                (model
-                  ? {
-                      id: model.modelId,
-                      providerID: model.endpointId,
-                      ...(model.variant && { variant: model.variant }),
-                    }
-                  : undefined) ?? models.at(0)
-              }
+              value={pickModel(models, [current.model && modelRef(current.model)])}
               disabled={!canUpdate}
-              onChange={chooseModel}
+              onChange={(next) => void saveSettings({ model: modelSetting(next) })}
             />
           </Row>,
         ]}
