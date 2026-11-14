@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router"
-import { IconBrowser, IconChecklist, IconCube, IconEdit, IconLayoutGridFilled, IconWebhook } from "@tabler/icons-react"
+import { IconChecklist, IconCube, IconEdit, IconFolder, IconLayoutGridFilled, IconWebhook } from "@tabler/icons-react"
 import { buttonVariants } from "@ren/ui/button"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -13,8 +13,8 @@ const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
 const tasks = { to: "/tasks", label: "Tasks", icon: IconChecklist } as const
 const automations = { to: "/automations", label: "Automations", icon: IconWebhook } as const
 const apps = { to: "/apps", label: "Apps", icon: IconLayoutGridFilled } as const
-const artifacts = { to: "/artifacts", label: "Artifacts", icon: IconBrowser } as const
-type Page = typeof newChat | typeof tasks | typeof automations | typeof artifacts | typeof apps
+const drive = { to: "/drive", label: "Drive", icon: IconFolder } as const
+type Page = typeof newChat | typeof tasks | typeof automations | typeof drive | typeof apps
 
 function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
   return (
@@ -52,7 +52,7 @@ function CollapsibleLayout(props: { path: string }) {
   return (
     <>
       <SidebarContent className="scrollbar-thin overflow-y-auto overscroll-contain">
-        <Nav path={props.path} pages={[newChat, tasks, automations, artifacts, apps]} />
+        <Nav path={props.path} pages={[newChat, tasks, automations, drive, apps]} />
         <Section
           label="Spaces"
           actions={
