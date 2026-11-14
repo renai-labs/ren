@@ -4,7 +4,7 @@ import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Spinner } from "@ren/ui/spinner"
-import { errorMessage } from "../../lib/errors.js"
+import { errorMessage } from "../lib/errors.js"
 
 const failureOf = <A, E>(result: AsyncResult.AsyncResult<A, E>) =>
   AsyncResult.isFailure(result) ? errorMessage(Cause.squash(result.cause)) : undefined

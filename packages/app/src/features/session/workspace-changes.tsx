@@ -14,7 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { DiffFile } from "./diff-file.js"
 import { editsOf, type Change } from "./workspace-edits.js"
 import type { PanelRequest } from "./workspace-panel.js"
-import { WorkspacePending } from "./workspace-state.js"
+import { WorkspacePending } from "../../components/workspace-pending.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Platform } from "../../platform/platform.js"
 
