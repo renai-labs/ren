@@ -265,6 +265,7 @@ function SettingsPageSkeleton() {
     general: "General",
     members: "Members",
     credentials: "Credentials",
+    memory: "Memory",
     providers: "Providers",
     channels: "Channels",
     billing: "Billing & plans",

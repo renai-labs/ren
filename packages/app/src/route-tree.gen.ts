@@ -29,6 +29,7 @@ import { Route as AuthedShellMarketplaceIndexRouteImport } from "./routes/_authe
 import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_shell/settings/index"
 import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
 import { Route as AuthedShellSettingsCredentialsRouteImport } from "./routes/_authed/_shell/settings/credentials"
+import { Route as AuthedShellSettingsMemoryRouteImport } from "./routes/_authed/_shell/settings/memory"
 import { Route as AuthedShellSettingsPreferencesRouteImport } from "./routes/_authed/_shell/settings/preferences"
 import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
 import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
@@ -168,6 +169,12 @@ const AuthedShellSettingsCredentialsRoute =
   AuthedShellSettingsCredentialsRouteImport.update({
     id: "/settings/credentials",
     path: "/settings/credentials",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSettingsMemoryRoute =
+  AuthedShellSettingsMemoryRouteImport.update({
+    id: "/settings/memory",
+    path: "/settings/memory",
     getParentRoute: () => AuthedShellRoute,
   } as any)
 const AuthedShellSettingsPreferencesRoute =
@@ -424,6 +431,7 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   "/settings": typeof AuthedShellSettingsAdminRouteWithChildren
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
+  "/settings/memory": typeof AuthedShellSettingsMemoryRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps/": typeof AuthedShellAppsIndexRoute
   "/marketplace/": typeof AuthedShellMarketplaceIndexRoute
@@ -481,6 +489,7 @@ export interface FileRoutesByTo {
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
+  "/settings/memory": typeof AuthedShellSettingsMemoryRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps": typeof AuthedShellAppsIndexRoute
   "/marketplace": typeof AuthedShellMarketplaceIndexRoute
@@ -541,6 +550,7 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   "/_authed/_shell/settings/_admin": typeof AuthedShellSettingsAdminRouteWithChildren
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
+  "/_authed/_shell/settings/memory": typeof AuthedShellSettingsMemoryRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/_authed/_shell/apps/": typeof AuthedShellAppsIndexRoute
   "/_authed/_shell/marketplace/": typeof AuthedShellMarketplaceIndexRoute
@@ -601,6 +611,7 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId"
     | "/settings"
     | "/settings/credentials"
+    | "/settings/memory"
     | "/settings/preferences"
     | "/apps/"
     | "/marketplace/"
@@ -658,6 +669,7 @@ export interface FileRouteTypes {
     | "/organizations/new"
     | "/settings"
     | "/settings/credentials"
+    | "/settings/memory"
     | "/settings/preferences"
     | "/apps"
     | "/marketplace"
@@ -717,6 +729,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId"
     | "/_authed/_shell/settings/_admin"
     | "/_authed/_shell/settings/credentials"
+    | "/_authed/_shell/settings/memory"
     | "/_authed/_shell/settings/preferences"
     | "/_authed/_shell/apps/"
     | "/_authed/_shell/marketplace/"
@@ -911,6 +924,13 @@ declare module "@tanstack/react-router" {
       path: "/settings/credentials"
       fullPath: "/settings/credentials"
       preLoaderRoute: typeof AuthedShellSettingsCredentialsRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/settings/memory": {
+      id: "/_authed/_shell/settings/memory"
+      path: "/settings/memory"
+      fullPath: "/settings/memory"
+      preLoaderRoute: typeof AuthedShellSettingsMemoryRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/settings/preferences": {
@@ -1283,6 +1303,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   AuthedShellSettingsAdminRoute: typeof AuthedShellSettingsAdminRouteWithChildren
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
+  AuthedShellSettingsMemoryRoute: typeof AuthedShellSettingsMemoryRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellAppsIndexRoute: typeof AuthedShellAppsIndexRoute
   AuthedShellMarketplaceIndexRoute: typeof AuthedShellMarketplaceIndexRoute
@@ -1308,6 +1329,7 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
     AuthedShellSpacesSpaceIdRouteRouteWithChildren,
   AuthedShellSettingsAdminRoute: AuthedShellSettingsAdminRouteWithChildren,
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
+  AuthedShellSettingsMemoryRoute: AuthedShellSettingsMemoryRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellAppsIndexRoute: AuthedShellAppsIndexRoute,
   AuthedShellMarketplaceIndexRoute: AuthedShellMarketplaceIndexRoute,
