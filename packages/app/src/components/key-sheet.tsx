@@ -97,7 +97,7 @@ function KeyForm(props: { credential: Key; onClose: () => void }) {
         setError("")
         void saving
           .save({ name, hosts: listed, owner, value })
-          .catch((failure: unknown) => setError(errorMessage(failure, "Couldn’t save the key. Try again.")))
+          .catch((failure: unknown) => setError(errorMessage(failure, "Couldn’t save the secret. Try again.")))
       }}
     >
       <SheetHeader>
@@ -126,16 +126,16 @@ function KeyForm(props: { credential: Key; onClose: () => void }) {
         </Field>
         {rotatable ? (
           <Field>
-            <FieldLabel htmlFor="key-value">New key</FieldLabel>
+            <FieldLabel htmlFor="key-value">New secret</FieldLabel>
             <Input
               id="key-value"
               type="password"
               autoComplete="off"
               value={value}
               onChange={(event) => setValue(event.currentTarget.value)}
-              placeholder="Paste to replace the current key"
+              placeholder="Paste to replace the current secret"
             />
-            <FieldDescription>Leave empty to keep the current key.</FieldDescription>
+            <FieldDescription>Leave empty to keep the current secret.</FieldDescription>
           </Field>
         ) : null}
         {owner === "" ? null : (
@@ -171,7 +171,7 @@ function KeyForm(props: { credential: Key; onClose: () => void }) {
               placeholder="api.stripe.com"
             />
             <FieldDescription>
-              Ren adds the key only to requests to these hosts. Separate them with commas.
+              Ren adds the secret only to requests to these hosts. Separate them with commas.
             </FieldDescription>
           </Field>
         )}
@@ -193,7 +193,7 @@ function KeyForm(props: { credential: Key; onClose: () => void }) {
         onOpenChange={setDeleting}
         confirmation={{
           title: `Delete ${key.label}?`,
-          description: `Chats that use ${key.label} lose it at once: their next request to ${key.hosts.includes(anyHost) ? "any website" : key.hosts.join(", ")} gets no key.`,
+          description: `Chats that use ${key.label} lose it at once: their next request to ${key.hosts.includes(anyHost) ? "any website" : key.hosts.join(", ")} gets no secret.`,
           action: "Delete",
         }}
         onConfirm={() =>
@@ -204,7 +204,7 @@ function KeyForm(props: { credential: Key; onClose: () => void }) {
                 toast.success(`${key.label} deleted`)
                 props.onClose()
               },
-              onError: (failure) => toast.error("Couldn’t delete the key", { description: errorMessage(failure) }),
+              onError: (failure) => toast.error("Couldn’t delete the secret", { description: errorMessage(failure) }),
             },
           )
         }

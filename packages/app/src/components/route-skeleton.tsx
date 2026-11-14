@@ -44,7 +44,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   apps: { title: "Apps", description: (space) => `Apps every chat in ${space} can use.` },
   repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
   channels: { title: "Channels", description: (space) => `Where people mention @Ren to work in ${space}.` },
-  credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
+  credentials: { title: "Secrets", description: (space) => `Secrets every chat in ${space} can use.` },
 }
 
 export function TasksSample() {
@@ -144,7 +144,7 @@ function SpaceSectionSample(props: { section: string }) {
   const table = (columns: ReadonlyArray<string>) => <TableSample columns={columns} count={3} />
   if (props.section === "permissions") return <PermissionRulesSample />
   if (props.section === "members") return table(["Name", "Email", "Status", ""])
-  if (props.section === "credentials") return table(["Key", "Hosts", "Owner", ""])
+  if (props.section === "credentials") return table(["Secret", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
   if (props.section === "automations") return table(["Name", "Frequency", "Next run", "Status", ""])
@@ -407,7 +407,7 @@ function SettingsPageSkeleton() {
         {
           members: "Everyone in your organization.",
           providers: "Subscriptions your agents run on.",
-          credentials: "App accounts and keys you can use.",
+          credentials: "App accounts and secrets you can use.",
           channels: "Invoke Ren from where your team already works.",
           permissions: "What agents in every space may do, and what they ask first.",
         }[section]

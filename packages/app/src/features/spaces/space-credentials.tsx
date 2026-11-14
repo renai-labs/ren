@@ -67,19 +67,19 @@ export function SpaceCredentialsTab() {
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageActions>
-        <ToolbarSearch label="Search keys" value={query} onChange={setQuery} />
+        <ToolbarSearch label="Search secrets" value={query} onChange={setQuery} />
         {elsewhere.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button />}>
               <IconPlus />
-              Add key
+              Add secret
               <IconChevronDown />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => setAdding(true)}>
                   <IconPlus />
-                  Add key
+                  Add secret
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCopying(true)}>
                   <IconCopy />
@@ -91,22 +91,22 @@ export function SpaceCredentialsTab() {
         ) : (
           <Button onClick={() => setAdding(true)}>
             <IconPlus />
-            Add key
+            Add secret
           </Button>
         )}
       </PageActions>
-      <Loading id={shapeId} loading={loading} label="Loading keys">
+      <Loading id={shapeId} loading={loading} label="Loading secrets">
         {loading ? (
-          <TableSample columns={["Key", "Hosts", "Owner", ""]} count={3} />
+          <TableSample columns={["Secret", "Hosts", "Owner", ""]} count={3} />
         ) : (
-          <CredentialsTable credentials={here} stale={stale} empty={Search.empty(query, "No keys")} />
+          <CredentialsTable credentials={here} stale={stale} empty={Search.empty(query, "No secrets")} />
         )}
       </Loading>
       <LoadMore more={keys.hasNextPage} loading={keys.isFetchingNextPage} onMore={() => void keys.fetchNextPage()} />
       <CredentialSheet
         open={adding}
         onOpenChange={setAdding}
-        title="Add key to this space"
+        title="Add secret to this space"
         description="Every chat in this space can use it."
         owners={[{ value: `space:${space.id}`, label: space.name }]}
         userId={me.user.id}
@@ -116,7 +116,7 @@ export function SpaceCredentialsTab() {
           <DialogHeader>
             <DialogTitle>Copy from a space</DialogTitle>
             <DialogDescription>
-              A copy is a separate pasted key. Sign-ins cannot be copied; move them instead.
+              A copy is a separate pasted secret. Sign-ins cannot be copied; move them instead.
             </DialogDescription>
           </DialogHeader>
           <Rows>
@@ -141,12 +141,12 @@ export function SpaceCredentialsTab() {
                         {
                           onSuccess: () => toast.success(`${label} copied`),
                           onError: (error) =>
-                            toast.error("Could not copy the key", { description: errorMessage(error) }),
+                            toast.error("Could not copy the secret", { description: errorMessage(error) }),
                         },
                       ))(credential.id, credential.label)
                   }
                 >
-                  Copy key
+                  Copy secret
                 </Button>
               </Row>
             ))}
