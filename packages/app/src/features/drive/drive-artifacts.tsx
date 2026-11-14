@@ -12,13 +12,13 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { Loading } from "@ren/ui/loading"
 import { formatDate } from "@ren/ui/time"
-import { IconBrowser, IconChevronDown, IconCube, IconLock, IconSparkles } from "@tabler/icons-react"
+import { IconBrowser, IconChevronDown, IconCopy, IconCube, IconLock, IconSparkles } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { cn } from "cn"
 import { ArtifactMenu, ServingBadge, useArtifactActions } from "../../components/artifact-actions.js"
 import { MenuSearch } from "../../components/menu-search.js"
-import { FileRow, FileTable, FileTableSample, rowLink } from "../../components/file-table.js"
+import { FileRow, FileTable, FileTableSample } from "../../components/file-table.js"
 import { Page, PageActions, TableEmpty, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { WorkspacePending } from "../../components/workspace-pending.js"
@@ -33,6 +33,9 @@ import { DriveCrumbs } from "./drive-crumbs.js"
 const route = getRouteApi("/_authed/_shell/drive/artifacts")
 
 const spaceRoute = getRouteApi("/_authed/_shell/spaces/$spaceId/drive/artifacts")
+
+const target =
+  "h-auto min-w-0 shrink cursor-pointer justify-start rounded-sm border-0 p-0 font-normal hover:no-underline active:not-aria-[haspopup]:scale-none"
 
 function Build(props: { space: string | undefined }) {
   const spaces = useSpaces()
@@ -79,29 +82,46 @@ function ArtifactRow(props: {
 }) {
   const artifact = props.artifact
   const url = artifact.url
+  const host = Artifacts.host(url)
+  const copy = props.actions.copy
+  const name = (
+    <>
+      <ArtifactThumbnail artifact={artifact} className="w-7 shrink-0 rounded-sm border" />
+      <span className="min-w-0 truncate">{artifact.title}</span>
+    </>
+  )
   return (
     <FileRow
-      className={url === null ? "cursor-default" : undefined}
-      media={<ArtifactThumbnail artifact={artifact} className="w-7 rounded-sm border" />}
+      className="cursor-default"
       name={
         url === null ? (
-          <span className="min-w-0 truncate">{artifact.title}</span>
+          <span className="flex min-w-0 items-center gap-3">{name}</span>
         ) : (
           <Button
             variant="link"
             onClick={() => props.actions.open(url)}
-            className={cn(
-              "block h-auto justify-start p-0 text-left font-normal text-foreground hover:no-underline active:not-aria-[haspopup]:scale-none",
-              rowLink,
-            )}
+            className={cn(target, "gap-3 text-left text-foreground hover:[&>span]:underline")}
           >
-            {artifact.title}
+            {name}
           </Button>
         )
       }
       badge={<ServingBadge artifact={artifact} />}
       cells={[
-        Artifacts.host(url) ?? "No link",
+        url === null || host === undefined || copy === undefined ? (
+          (host ?? "No link")
+        ) : (
+          <Button
+            key="link"
+            variant="link"
+            aria-label={`Copy ${host}`}
+            onClick={() => copy(url)}
+            className={cn(target, "max-w-full gap-1.5 text-muted-foreground hover:text-foreground")}
+          >
+            <span className="truncate">{host}</span>
+            <IconCopy className="opacity-0 group-hover/button:opacity-100 group-focus-visible/button:opacity-100" />
+          </Button>
+        ),
         ...(props.spaceName === undefined ? [] : [props.spaceName]),
         formatDate(artifact.updatedAt),
       ]}
