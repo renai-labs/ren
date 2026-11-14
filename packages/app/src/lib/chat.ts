@@ -123,7 +123,7 @@ function forget() {
   for (const listener of listeners) listener()
 }
 
-export function chatFor(platform: Platform.Info, userId: string): Chat {
+function chatFor(platform: Platform.Info, userId: string): Chat {
   if (current.chat?.userId === userId) return current.chat
   retire(current.chat)
   void platform.chatCache?.forget(userId)
