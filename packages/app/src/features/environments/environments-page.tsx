@@ -85,7 +85,7 @@ function NetworkingFields(props: {
               placeholder={"api.example.com\n*.github.com"}
               className="min-h-16 font-mono text-xs"
             />
-            <FieldDescription>One per line. Hosts of the space’s keys are always allowed.</FieldDescription>
+            <FieldDescription>One per line. Hosts of the space’s secrets are always allowed.</FieldDescription>
           </Field>
           <Field orientation="horizontal">
             <Checkbox

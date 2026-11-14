@@ -38,7 +38,7 @@ function CredentialTabs(props: { tab: "apps" | "keys"; keys?: number | undefined
       <PageTabsList>
         <PageTabsTrigger value="apps">Apps</PageTabsTrigger>
         <PageTabsTrigger value="keys" count={props.keys}>
-          Keys
+          Secrets
         </PageTabsTrigger>
       </PageTabsList>
     </Tabs>
@@ -49,7 +49,7 @@ export function CredentialsSettingsPage() {
   const search = route.useSearch()
   if (search.tab === "keys") return <CredentialKeys />
   return (
-    <Page title="Credentials" description="App accounts and keys you can use." tabs={<CredentialTabs tab="apps" />}>
+    <Page title="Credentials" description="App accounts and secrets you can use." tabs={<CredentialTabs tab="apps" />}>
       <OrgApps />
     </Page>
   )
@@ -76,35 +76,35 @@ function CredentialKeys() {
   return (
     <Page
       title="Credentials"
-      description="App accounts and keys you can use."
+      description="App accounts and secrets you can use."
       tabs={<CredentialTabs tab="keys" keys={total} />}
       actions={
         <>
-          <ToolbarSearch label="Search keys" value={query} onChange={setQuery} />
+          <ToolbarSearch label="Search secrets" value={query} onChange={setQuery} />
           <Button onClick={() => setAdding(true)}>
             <IconPlus />
-            Add key
+            Add secret
           </Button>
         </>
       }
     >
-      <Loading id={keysShapeId} loading={!list.data} label="Loading keys">
+      <Loading id={keysShapeId} loading={!list.data} label="Loading secrets">
         {list.data ? (
           <CredentialsTable
             credentials={list.data.items}
             stale={list.isPlaceholderData}
-            empty={Search.empty(query, "No keys")}
+            empty={Search.empty(query, "No secrets")}
           />
         ) : (
-          <TableSample columns={["Key", "Hosts", "Owner", ""]} />
+          <TableSample columns={["Secret", "Hosts", "Owner", ""]} />
         )}
       </Loading>
       <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
       <CredentialSheet
         open={adding}
         onOpenChange={setAdding}
-        title="Add key"
-        description="Paste a key. Ren keeps it encrypted and never shows it again."
+        title="Add secret"
+        description="Paste a secret, such as an API key or token. Ren keeps it encrypted and never shows it again."
         owners={ownerOptions(spaces)}
         userId={me.user.id}
       />

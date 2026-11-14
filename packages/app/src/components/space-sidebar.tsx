@@ -78,7 +78,7 @@ const spaceGroups = [
     items: [
       { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
       { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
-      { value: "credentials", label: "Keys", icon: IconKey, to: "/spaces/$spaceId/credentials" },
+      { value: "credentials", label: "Secrets", icon: IconKey, to: "/spaces/$spaceId/credentials" },
       { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },
     ],
   },

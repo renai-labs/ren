@@ -361,7 +361,7 @@ function SpaceMembers() {
               ? undefined
               : {
                   title: `Remove ${row.name} from ${space.name}?`,
-                  description: "They lose access to this space’s chats, apps and keys.",
+                  description: "They lose access to this space’s chats, apps and secrets.",
                   action: "Remove",
                 }
           }

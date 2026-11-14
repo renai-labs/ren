@@ -55,17 +55,17 @@ function RotateDialog(props: { credential: Credential; onClose: () => void }) {
                   toast.success(`${props.credential.label} rotated`)
                   props.onClose()
                 },
-                onError: (error) => toast.error("Could not rotate the key", { description: errorMessage(error) }),
+                onError: (error) => toast.error("Could not rotate the secret", { description: errorMessage(error) }),
               },
             )
           }}
         >
           <DialogHeader>
             <DialogTitle>Rotate {props.credential.label}</DialogTitle>
-            <DialogDescription>Paste the new key. Chats use it from their next request.</DialogDescription>
+            <DialogDescription>Paste the new secret. Chats use it from their next request.</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="rotate-key">New key</FieldLabel>
+            <FieldLabel htmlFor="rotate-key">New secret</FieldLabel>
             <Input
               id="rotate-key"
               type="password"
@@ -110,7 +110,7 @@ function OwnerDialog(props: { kind: "move" | "copy"; credential: Credential; onC
           <DialogDescription>
             {props.kind === "move"
               ? "Choose who can use it from now on."
-              : "A copy is a separate pasted key with its own owner."}
+              : "A copy is a separate pasted secret with its own owner."}
           </DialogDescription>
         </DialogHeader>
         <Field>
@@ -144,7 +144,7 @@ function OwnerDialog(props: { kind: "move" | "copy"; credential: Credential; onC
                   props.onClose()
                 },
                 onError: (error: Error) =>
-                  toast.error(`Could not ${props.kind} the key`, { description: errorMessage(error) }),
+                  toast.error(`Could not ${props.kind} the secret`, { description: errorMessage(error) }),
               }
               if (props.kind === "move") move.mutate(input, done)
               else copy.mutate(input, done)
@@ -228,7 +228,7 @@ export function CredentialsTable(props: {
       <Table className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead>Key</TableHead>
+            <TableHead>Secret</TableHead>
             <TableHead className="w-1/3">Hosts</TableHead>
             <TableHead className="w-1/4">Owner</TableHead>
             <TableHead className="w-15" />
@@ -286,12 +286,12 @@ export function CredentialsTable(props: {
                             {
                               onSuccess: () => toast.success(`${credential.label} deleted`),
                               onError: (error) =>
-                                toast.error("Could not delete the key", { description: errorMessage(error) }),
+                                toast.error("Could not delete the secret", { description: errorMessage(error) }),
                             },
                           ),
                         confirm: {
                           title: `Delete ${credential.label}?`,
-                          description: `Chats that use ${credential.label} lose it at once: their next request to ${credential.hosts.includes(anyHost) ? "any website" : credential.hosts.join(", ")} gets no key.`,
+                          description: `Chats that use ${credential.label} lose it at once: their next request to ${credential.hosts.includes(anyHost) ? "any website" : credential.hosts.join(", ")} gets no secret.`,
                           action: "Delete",
                         },
                       },
