@@ -9422,6 +9422,14 @@
             "required": true
           },
           {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ScheduleRun.Status"
+            },
+            "required": false
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -23558,6 +23566,17 @@
               }
             ]
           },
+          "lastRun": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.LastRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest run in the last 30 days."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -23588,10 +23607,27 @@
           "status",
           "pausedReason",
           "nextRunAt",
+          "lastRun",
           "createdAt",
           "updatedAt",
           "archivedAt"
         ],
+        "additionalProperties": false
+      },
+      "Schedule.LastRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ScheduleRun.ID"
+          },
+          "scheduledAt": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScheduleRun.Status"
+          }
+        },
+        "required": ["id", "scheduledAt", "status"],
         "additionalProperties": false
       },
       "Schedule.MessageEncoded": {
@@ -23889,7 +23925,15 @@
             ]
           },
           "sessionId": {
-            "$ref": "#/components/schemas/Session.ID_1"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that the run started or sent to. Null when it reached no chat, such as a skipped run."
           }
         },
         "required": [
@@ -24068,11 +24112,6 @@
       "Session.ID": {
         "type": "string",
         "pattern": "^ses_"
-      },
-      "Session.ID_1": {
-        "type": "string",
-        "pattern": "^ses_",
-        "description": "The chat that the run started or sent to."
       },
       "Session.Info": {
         "type": "object",

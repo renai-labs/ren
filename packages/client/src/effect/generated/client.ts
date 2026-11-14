@@ -1447,12 +1447,18 @@ const adaptGroupSchedule = (raw: RawClient["schedule"]) => ({
 type ScheduleRunListRequest = Parameters<RawClient["schedule-run"]["schedule-run.list"]>[0]
 type ScheduleRunListInput = {
   readonly scheduleId: ScheduleRunListRequest["query"]["scheduleId"]
+  readonly status?: ScheduleRunListRequest["query"]["status"]
   readonly page: ScheduleRunListRequest["query"]["page"]
   readonly pageSize: ScheduleRunListRequest["query"]["pageSize"]
 }
 const EndpointScheduleRunList = (raw: RawClient["schedule-run"]) => (input: ScheduleRunListInput) =>
   raw["schedule-run.list"]({
-    query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+    query: {
+      scheduleId: input["scheduleId"],
+      status: input["status"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupScheduleRun = (raw: RawClient["schedule-run"]) => ({ list: EndpointScheduleRunList(raw) })

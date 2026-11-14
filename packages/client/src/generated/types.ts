@@ -284,9 +284,9 @@ export type SchedulePauseReason = "user" | "owner_left" | "agent_removed" | "fai
 
 export type ScheduleRunID = string
 
-export type ScheduleRunTrigger = "timed" | "manual"
-
 export type ScheduleRunStatus = "pending" | "started" | "skipped" | "failed"
+
+export type ScheduleRunTrigger = "timed" | "manual"
 
 export type ScheduleRunReason =
   | "previous_run_busy"
@@ -835,6 +835,8 @@ export type PullRequestInfo = { url: string; number: number; title: string | nul
 
 export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
 
+export type ScheduleLastRun = { id: ScheduleRunID; scheduledAt: string; status: ScheduleRunStatus }
+
 export type ScheduleRunInfo = {
   id: ScheduleRunID
   scheduleId: ScheduleID
@@ -844,7 +846,7 @@ export type ScheduleRunInfo = {
   status: ScheduleRunStatus
   reason: ScheduleRunReason | null
   error: string | null
-  sessionId: SessionID
+  sessionId: SessionID | null
 }
 
 export type WebhookLastRequest = {
@@ -1377,6 +1379,7 @@ export type ScheduleInfo = {
   status: ScheduleStatus
   pausedReason: SchedulePauseReason | null
   nextRunAt: string | null
+  lastRun: ScheduleLastRun | null
   createdAt: string
   updatedAt: string
   archivedAt: string | null
@@ -8233,9 +8236,30 @@ export type ScheduleRunInput = { readonly id: { readonly id: string }["id"] }
 export type ScheduleRunOutput = ScheduleInfo
 
 export type ScheduleRunListInput = {
-  readonly scheduleId: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["scheduleId"]
-  readonly page: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+  readonly scheduleId: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["scheduleId"]
+  readonly status?: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly page: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
 }
 
 export type ScheduleRunListOutput = ScheduleRunPage

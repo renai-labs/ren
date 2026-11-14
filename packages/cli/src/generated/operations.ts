@@ -1888,8 +1888,13 @@ export const ScheduleRunList = (input: Command.Command.Config.Infer<typeof Comma
   Operation.run(
     ClientApi.groups["schedule-run"].endpoints["schedule-run.list"],
     {
-      query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { scheduleId: "<schedule>", page: "--page", pageSize: "--page-size" },
+      query: {
+        scheduleId: input["scheduleId"],
+        status: input["status"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { scheduleId: "<schedule>", status: "--status", page: "--page", pageSize: "--page-size" },
       lookups: {
         scheduleId: (client, value) =>
           client["schedule"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),

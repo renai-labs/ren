@@ -36,7 +36,7 @@ export function AutomationsView(props: {
           value={props.search.kind ?? "schedules"}
           onValueChange={(value: string) =>
             props.setSearch(
-              { kind: value === "webhooks" ? "webhooks" : undefined, filters: undefined, schedule: undefined },
+              { kind: value === "webhooks" ? "webhooks" : undefined, filters: undefined },
               { replace: true },
             )
           }

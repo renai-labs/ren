@@ -6,7 +6,7 @@ import type { ScheduleOrigin } from "@ren/schema/schedule-origin"
 import { ScheduleRun } from "@ren/schema/schedule-run"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { and, count, desc, eq, ilike, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
+import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
 import { Cause, Clock, Context, Cron, DateTime, Duration, Effect, Layer, Option, Result, Schema } from "effect"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { WorkflowEngine } from "effect/workflow"
@@ -100,7 +100,7 @@ const whenOf = (row: Row): Schedule.When =>
         ...(row.until_at && { until: DateTime.fromDateUnsafe(row.until_at) }),
       }
 
-const toInfo = (row: Row): Schedule.Info => ({
+const toInfo = (row: Row, lastRun: Schedule.LastRun | undefined): Schedule.Info => ({
   id: row.id,
   spaceId: row.space_id,
   slug: row.slug,
@@ -113,12 +113,13 @@ const toInfo = (row: Row): Schedule.Info => ({
   status: statusOf(row),
   pausedReason: row.paused_reason,
   nextRunAt: row.next_run_at && DateTime.fromDateUnsafe(row.next_run_at),
+  lastRun: lastRun ?? null,
   createdAt: DateTime.fromDateUnsafe(row.created_at),
   updatedAt: DateTime.fromDateUnsafe(row.updated_at),
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
 })
 
-const toRun = (row: RunRow): ScheduleRun.Info => ({
+const toRun = (row: RunRow, sessionId: Session.ID | null): ScheduleRun.Info => ({
   id: row.id,
   scheduleId: row.schedule_id,
   scheduledAt: DateTime.fromDateUnsafe(row.scheduled_at),
@@ -127,8 +128,36 @@ const toRun = (row: RunRow): ScheduleRun.Info => ({
   status: row.status,
   reason: row.reason,
   error: row.error,
-  sessionId: row.session_id,
+  sessionId,
 })
+
+const lastRuns = (client: Pick<Database.Transaction, "selectDistinctOn">, ids: ReadonlyArray<Schedule.ID>) =>
+  ids.length === 0
+    ? Effect.succeed(new Map<Schedule.ID, Schedule.LastRun>())
+    : client
+        .selectDistinctOn([run.schedule_id], {
+          scheduleId: run.schedule_id,
+          id: run.id,
+          scheduledAt: run.scheduled_at,
+          status: run.status,
+        })
+        .from(run)
+        .where(inArray(run.schedule_id, ids))
+        .orderBy(run.schedule_id, desc(run.scheduled_at), desc(run.id))
+        .pipe(
+          Effect.map(
+            (rows) =>
+              new Map(
+                rows.map((row) => [
+                  row.scheduleId,
+                  { id: row.id, scheduledAt: DateTime.fromDateUnsafe(row.scheduledAt), status: row.status },
+                ]),
+              ),
+          ),
+        )
+
+const infoOf = (client: Pick<Database.Transaction, "selectDistinctOn">, row: Row) =>
+  Effect.map(lastRuns(client, [row.id]), (last) => toInfo(row, last.get(row.id)))
 
 // oxlint-disable-next-line ren/no-comments -- S22: "Daily report · Oct 28, 09:00" in the schedule's time zone; a one-time schedule has none, so UTC.
 const titleOf = (row: Row, scheduledAt: Date) =>
@@ -151,9 +180,9 @@ const membershipOf = (actor: Actor.Info) =>
 
 const invalid = (message: string, field: string) => new Primitive.Invalid({ message, field })
 
-const written = (rows: ReadonlyArray<Row>) => {
+const written = (client: Pick<Database.Transaction, "selectDistinctOn">, rows: ReadonlyArray<Row>) => {
   const row = rows.at(0)
-  return row ? Effect.succeed(toInfo(row)) : Effect.fail(notFound)
+  return row ? infoOf(client, row) : Effect.fail(notFound)
 }
 
 type Outcome =
@@ -564,8 +593,12 @@ export const layer = Layer.effect(
               .from(schedule)
               .leftJoin(SchedulePolicy.membership, membershipOf(actor))
               .where(where)
+            const last = yield* lastRuns(
+              transaction,
+              rows.map((row) => row.schedule.id),
+            )
             return {
-              items: rows.map((row) => toInfo(row.schedule)),
+              items: rows.map((row) => toInfo(row.schedule, last.get(row.schedule.id))),
               page: input.page,
               pageSize: input.pageSize,
               total: totals.at(0)?.total ?? 0,
@@ -590,7 +623,7 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, action)
             const rows = yield* write(transaction, row, at)
-            return yield* written(rows)
+            return yield* written(transaction, rows)
           }),
         )
         yield* trigger.changed(id)
@@ -608,7 +641,7 @@ export const layer = Layer.effect(
           .where(and(eq(schedule.id, idOrSlug), visibleTo(actor)))
           .pipe(Effect.orDie)).at(0)
         if (!found) return yield* notFound
-        return toInfo(found.schedule)
+        return yield* infoOf(database.db, found.schedule).pipe(Effect.orDie)
       }),
       create: Effect.fn("Schedules.create")(function* (actor: Actor.Info, input: Schedule.CreateInput) {
         const at = yield* now
@@ -659,7 +692,7 @@ export const layer = Layer.effect(
                 next_run_at: Option.getOrNull(ScheduleTime.nextFire(stored, at)),
               })
               .returning()
-            return yield* written(rows)
+            return yield* written(transaction, rows)
           }),
         )
         yield* trigger.changed(info.id)
@@ -699,7 +732,7 @@ export const layer = Layer.effect(
               })
               .where(eq(schedule.id, id))
               .returning()
-            return yield* written(rows)
+            return yield* written(transaction, rows)
           }),
         )
         yield* trigger.changed(id)
@@ -771,19 +804,21 @@ export const layer = Layer.effect(
                   resource: SchedulePolicy.resource(visible.membershipId),
                 })
               if (!allowed) return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
+              const where = and(
+                eq(run.schedule_id, input.scheduleId),
+                input.status ? eq(run.status, input.status) : undefined,
+              )
               const rows = yield* transaction
-                .select()
+                .select({ run, sessionId: Database.Schema.agent_session.id })
                 .from(run)
-                .where(eq(run.schedule_id, input.scheduleId))
+                .leftJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, run.session_id))
+                .where(where)
                 .orderBy(desc(run.scheduled_at), desc(run.id))
                 .limit(input.pageSize)
                 .offset((input.page - 1) * input.pageSize)
-              const totals = yield* transaction
-                .select({ total: count() })
-                .from(run)
-                .where(eq(run.schedule_id, input.scheduleId))
+              const totals = yield* transaction.select({ total: count() }).from(run).where(where)
               return {
-                items: rows.map(toRun),
+                items: rows.map((row) => toRun(row.run, row.sessionId)),
                 page: input.page,
                 pageSize: input.pageSize,
                 total: totals.at(0)?.total ?? 0,

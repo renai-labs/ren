@@ -862,6 +862,7 @@ export const AppProfileDelete = { id: Argument.String("profile").pipe(Argument.w
 
 export const ScheduleRunList = {
   scheduleId: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  status: Flag.Literals("status", ["pending", "started", "skipped", "failed"]).pipe(Flag.optional),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }

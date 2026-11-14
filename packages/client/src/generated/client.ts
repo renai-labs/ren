@@ -2031,7 +2031,12 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/schedule-runs`,
-            query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+            query: {
+              scheduleId: input["scheduleId"],
+              status: input["status"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
