@@ -3022,9 +3022,19 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
           }
         },
-        "description": "Create a memory file or replace its whole content. Keep each fact to one short line and each file on one topic; prefer an edit for a small change. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
+        "description": "Create a memory file or replace its whole content. Pass mode create to fail instead of replacing a file that exists. Keep each fact to one short line and each file on one topic; prefer an edit for a small change. Pass spaceId for a space’s memory; omit it for the organization’s memory. `memory.md` is the root file that every chat in scope gets in its context.",
         "summary": "Write a memory file",
         "requestBody": {
           "content": {
@@ -21589,6 +21599,18 @@
           "content": {
             "type": "string",
             "description": "The whole new content of the file."
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["create", "replace"],
+                "description": "`create` refuses a path that has a file, with a conflict. `replace`, the default, creates or replaces."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": ["path", "content"],

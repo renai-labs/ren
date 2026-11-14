@@ -23,7 +23,7 @@ export interface Interface {
   readonly write: (
     actor: Actor.Info,
     input: Memory.WriteInput,
-  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid>
+  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Primitive.Conflict>
   readonly edit: (
     actor: Actor.Info,
     input: Memory.EditInput,
@@ -185,16 +185,20 @@ export const layer = Layer.effect(
         return { path: input.path, content: files[input.path] ?? "" }
       }),
       write: Effect.fn("Memory.write")(function* (actor: Actor.Info, input: Memory.WriteInput) {
-        yield* change(actor, input.spaceId, (files) => {
-          const clash = Object.keys(files).find(
-            (path) => path.startsWith(`${input.path}/`) || input.path.startsWith(`${path}/`),
-          )
-          return clash
-            ? Effect.fail(
-                new Primitive.Invalid({ message: `${clash} is in the way: a path is a file or a folder, not both.` }),
-              )
-            : Effect.succeed({ ...files, [input.path]: input.content })
-        })
+        yield* change(actor, input.spaceId, (files) =>
+          Effect.gen(function* () {
+            const clash = Object.keys(files).find(
+              (path) => path.startsWith(`${input.path}/`) || input.path.startsWith(`${path}/`),
+            )
+            if (clash)
+              return yield* new Primitive.Invalid({
+                message: `${clash} is in the way: a path is a file or a folder, not both.`,
+              })
+            if (input.mode === "create" && Object.hasOwn(files, input.path))
+              return yield* new Primitive.Conflict({ message: `${input.path} already exists.` })
+            return { ...files, [input.path]: input.content }
+          }),
+        )
       }),
       edit: Effect.fn("Memory.edit")(function* (actor: Actor.Info, input: Memory.EditInput) {
         const files = yield* change(actor, input.spaceId, (files) =>

@@ -33,6 +33,7 @@ export const MemoryHandler = HttpApiBuilder.group(Api, "memory", (handlers) =>
             "Primitive.NotFound": notFound,
             "Primitive.Forbidden": forbidden,
             "Primitive.Invalid": invalid,
+            "Primitive.Conflict": Primitive.conflict,
           }),
         ),
       )

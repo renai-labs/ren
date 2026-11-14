@@ -446,11 +446,12 @@ type MemoryWriteInput = {
   readonly spaceId?: MemoryWriteRequest["payload"]["spaceId"]
   readonly path: MemoryWriteRequest["payload"]["path"]
   readonly content: MemoryWriteRequest["payload"]["content"]
+  readonly mode?: MemoryWriteRequest["payload"]["mode"]
 }
 const EndpointMemoryWrite = (raw: RawClient["memory"]) => (input: MemoryWriteInput) =>
-  raw["memory.write"]({ payload: { spaceId: input["spaceId"], path: input["path"], content: input["content"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["memory.write"]({
+    payload: { spaceId: input["spaceId"], path: input["path"], content: input["content"], mode: input["mode"] },
+  }).pipe(Effect.mapError(mapClientError))
 
 type MemoryEditRequest = Parameters<RawClient["memory"]["memory.edit"]>[0]
 type MemoryEditInput = {

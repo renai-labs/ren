@@ -950,9 +950,9 @@ export function make(options: ClientOptions) {
           {
             method: "PUT",
             path: `/memory/file`,
-            body: { spaceId: input["spaceId"], path: input["path"], content: input["content"] },
+            body: { spaceId: input["spaceId"], path: input["path"], content: input["content"], mode: input["mode"] },
             successStatus: 204,
-            declaredStatuses: [400, 401, 403, 404],
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: true,
           },
           requestOptions,
