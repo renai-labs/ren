@@ -1,7 +1,6 @@
 import { useState } from "react"
-import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { IconDownload, IconRefresh, IconUpload, IconX } from "@tabler/icons-react"
+import { IconDownload, IconRefresh, IconX } from "@tabler/icons-react"
 import {
   Attachment,
   AttachmentAction,
@@ -22,8 +21,7 @@ import { ImageTrigger } from "../../components/image-set.js"
 import { MediaUnavailable } from "../../components/media-unavailable.js"
 import { formatBytes } from "../../lib/format.js"
 import { playableKind, useDriveFile } from "../../lib/use-drive-file.js"
-import { maxFileBytes, type Upload } from "../../lib/use-uploads.js"
-import { FileDrop } from "../../platform/file-drop.js"
+import type { Upload } from "../../lib/use-uploads.js"
 import { HtmlPage } from "./html-page.js"
 import { HtmlPageBridge } from "./html-page-bridge.js"
 
@@ -202,21 +200,5 @@ export function UploadChips(props: {
         />
       ))}
     </>
-  )
-}
-
-export function DropOverlay(props: { onFiles: (files: ReadonlyArray<File>) => void }) {
-  const dragging = FileDrop.use(props.onFiles)
-  if (!dragging) return null
-  return (
-    <div className="pointer-events-none fixed inset-2 z-50 flex animate-in items-center justify-center rounded-2xl border-2 border-dashed border-ring/60 bg-background/80 backdrop-blur-sm duration-150 ease-out fade-in-0 motion-reduce:animate-none">
-      <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
-        <IconUpload className="size-6 text-foreground" />
-        <span className="text-foreground">Drop files to attach</span>
-        <span className="text-xs">
-          Up to {Session.maxDriveFiles} files, {formatBytes(maxFileBytes)} each
-        </span>
-      </div>
-    </div>
   )
 }
