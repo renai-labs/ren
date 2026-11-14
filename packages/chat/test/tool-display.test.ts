@@ -33,6 +33,13 @@ const tool = (
 }
 
 describe("tool display", () => {
+  test("names the Browser app's tools without the provider", () => {
+    expect(ToolDisplay.label(tool("browser_browser_repl", "running"))).toBe("Using browser")
+    expect(ToolDisplay.label(tool("browser_manage_browsers", "completed"))).toBe("Managing browser")
+    expect(ToolDisplay.kind(tool("browser_browser_curl", "running"))).toBe("web")
+    expect(ToolDisplay.kind(tool("browser_exec_command", "running"))).toBe("command")
+  })
+
   test("presents native image submission without claiming the image is finished", () => {
     const input = { prompt: "Mount Fuji at sunrise", path: "/workspace/images/fuji.png" }
     const completed = tool("experimental_image_generate", "completed", input, {
