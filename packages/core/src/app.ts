@@ -184,7 +184,7 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
             const found = yield* AppQueries.find(transaction, access, actor, id)
-            const target = yield* AppQueries.visibleSpace(transaction, actor, input.spaceId)
+            const target = yield* AppQueries.targetSpace(transaction, access, actor, input.spaceId)
             if (!authorize(actor, "app.transferOwnership", { ...found, isTargetMember: target.isMember }))
               return yield* new Primitive.Forbidden({ message: "Moving an app requires access to both spaces." })
             if (found.app.owner_space_id === input.spaceId) return yield* AppQueries.info(transaction, found.app)

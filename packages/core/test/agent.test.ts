@@ -37,6 +37,7 @@ const org = Effect.gen(function* () {
   const factory = yield* spaces.create(ada, { name: "Factory" })
   const eng = yield* spaces.create(grace, { name: "Eng" })
   return {
+    organizationId,
     ada,
     grace,
     admin,
@@ -233,13 +234,24 @@ describe("Agent", () => {
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const memberships = yield* AgentMembership.Service
+      const database = yield* Database.Service
       const o = yield* org
       const created = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
       yield* o.join(o.grace, o.factory.id)
       yield* memberships.create(o.grace, { agentId: created.id, spaceId: o.eng.id })
-      expect((yield* Effect.flip(agents.transferOwnership(o.ada, created.id, { spaceId: o.eng.id })))._tag).toBe(
+      const hidden = yield* Seed.space(o.organizationId)
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ kind: "private", owner_user_id: o.grace.userId })
+        .where(eq(Database.Schema.space.id, hidden))
+      yield* Seed.join(hidden, o.grace.userId)
+      expect((yield* Effect.flip(agents.transferOwnership(o.ada, created.id, { spaceId: hidden })))._tag).toBe(
         "Primitive.NotFound",
       )
+      expect(yield* Effect.flip(agents.transferOwnership(o.ada, created.id, { spaceId: o.eng.id }))).toMatchObject({
+        _tag: "Primitive.Forbidden",
+        message: "Moving an agent needs membership in both spaces.",
+      })
       expect((yield* Effect.flip(agents.transferOwnership(o.admin, created.id, { spaceId: o.eng.id })))._tag).toBe(
         "Primitive.NotFound",
       )
