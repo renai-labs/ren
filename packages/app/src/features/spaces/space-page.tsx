@@ -61,7 +61,7 @@ function NotJoined(props: { space: SpaceInfo }) {
   )
 }
 
-const ownPages = new Set(["artifacts", "tasks"])
+const ownPages = new Set(["tasks"])
 
 export function SpaceLayout() {
   const space = useSpace()

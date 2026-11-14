@@ -2,35 +2,8 @@ export * as Artifacts from "./artifacts.js"
 
 import type { ArtifactInfo } from "@ren/client"
 import { queryOptions } from "@tanstack/react-query"
-import { Schema } from "effect"
 import { pickerPageSize } from "./pagination.js"
 import type { Runtime } from "./runtime.js"
-
-const views = ["gallery", "list"] as const
-
-export type View = (typeof views)[number]
-
-const sorts = ["updated", "name"] as const
-
-export type Sort = (typeof sorts)[number]
-
-export const sortLabels: Readonly<Record<Sort, string>> = { updated: "Recently updated", name: "Name" }
-
-const SearchSchema = Schema.Struct({
-  q: Schema.optional(Schema.String),
-  view: Schema.optional(Schema.Literals(views)),
-  sort: Schema.optional(Schema.Literals(sorts)),
-  filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
-  collapsed: Schema.optional(Schema.Array(Schema.String)),
-})
-
-export type Search = typeof SearchSchema.Type
-
-export const Search = Schema.toStandardSchemaV1(SearchSchema)
-
-export const isView = (value: unknown): value is View => views.some((view) => view === value)
-
-export const isSort = (value: unknown): value is Sort => sorts.some((sort) => sort === value)
 
 const refreshEvery = 5000
 

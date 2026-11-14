@@ -45,25 +45,6 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
   channels: { title: "Channels", description: (space) => `Where people mention @Ren to work in ${space}.` },
   credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
-  artifacts: { title: "Artifacts" },
-}
-
-function ArtifactsSkeleton() {
-  return (
-    <PageSkeleton title="Artifacts" width="full">
-      <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {Array.from({ length: 6 }, (_, index) => (
-          <div key={index} className="flex flex-col gap-2.5">
-            <div className="aspect-16/10 rounded-xl border bg-muted" />
-            <div className="flex min-h-7 items-center justify-between gap-2">
-              <span className="text-sm font-medium">Artifact title</span>
-              <span className="text-xs">1 day ago</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </PageSkeleton>
-  )
 }
 
 export function TasksSample() {
@@ -186,7 +167,6 @@ export function SpaceSectionSkeleton() {
   const path = Routing.useRenderedPath()
   const shapeId = useShapeId("page")
   const parts = path.split("/")
-  if (parts.at(3) === "artifacts") return <ArtifactsSkeleton />
   if (parts.at(3) === "tasks") return parts.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
   return (
     <Loading id={shapeId} label="Loading space">
@@ -201,7 +181,6 @@ export function SpaceSectionSkeleton() {
 
 function SpaceRouteSkeleton(props: { path: ReadonlyArray<string> }) {
   const tab = props.path.at(3) ?? "inbox"
-  if (tab === "artifacts") return <ArtifactsSkeleton />
   if (tab === "tasks") return props.path.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
   const section = spaceSections[tab] ?? spaceSections.inbox
   return (
@@ -215,7 +194,7 @@ export function RouteSkeleton() {
   const path = Routing.useRenderedPath()
   if (path.startsWith("/sessions/")) return <ChatSkeleton />
   if (path.startsWith("/tasks/")) return <TaskSkeleton />
-  if (path === "/artifacts") return <ArtifactsSkeleton />
+  if (path === "/drive") return <PageSkeleton title="Drive" width="full" />
   if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton path={path.split("/")} />
   if (path === "/spaces")
     return (
