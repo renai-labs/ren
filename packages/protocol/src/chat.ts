@@ -1,3 +1,4 @@
+import { FileSystem } from "@ren/schema/file-system"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
@@ -108,7 +109,7 @@ export const InterruptQuery = Schema.Struct({
 
 export const FileSearchQuery = Schema.Struct({
   query: Schema.String,
-  type: Schema.optional(SessionCatalog.FileType),
+  type: Schema.optional(FileSystem.EntryType),
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
 }).annotate({ identifier: "Chat.FileSearchQuery" })
 
@@ -621,7 +622,7 @@ export const FileGroup = HttpApiGroup.make("file")
     HttpApiEndpoint.get("file.search", "/chat/session/:sessionID/file", {
       params,
       query: FileSearchQuery,
-      success: Schema.Array(SessionCatalog.File),
+      success: Schema.Array(FileSystem.Entry),
       error: NotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
@@ -636,14 +637,14 @@ export const FileGroup = HttpApiGroup.make("file")
     HttpApiEndpoint.get("file.list", "/chat/session/:sessionID/file/list", {
       params,
       query: FileListQuery,
-      success: Schema.Array(SessionCatalog.File),
+      success: FileSystem.Page,
       error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "file.list",
         summary: "List a folder",
         description:
-          "Return the files and folders directly in a folder of the session’s environment, folders first. Paths are relative to the session’s folder; a folder ends with `/`. A folder that is missing is not found, and a session without an environment refuses it.",
+          "Return the files and folders directly in a folder of the session’s environment, folders first, as one page with no actions. Paths are relative to the session’s folder; a folder ends with `/`. A folder that is missing is not found, and a session without an environment refuses it.",
       }),
     ),
   )
@@ -651,7 +652,7 @@ export const FileGroup = HttpApiGroup.make("file")
     HttpApiEndpoint.get("file.read", "/chat/session/:sessionID/file/read", {
       params,
       query: FileReadQuery,
-      success: SessionCatalog.FileContent,
+      success: FileSystem.Content,
       error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({

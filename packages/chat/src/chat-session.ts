@@ -1,10 +1,10 @@
 export * as ChatSession from "./chat-session.js"
 
 import { ClientError, Ren } from "@ren/client/chat/effect"
+import type { FileSystem } from "@ren/schema/file-system"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import type { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -1161,7 +1161,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     agents: Effect.flatMap(client, (api) => api.agent.list({ sessionID: root })),
     skills: Effect.flatMap(client, (api) => api.skill.list({ sessionID: root })),
     commands: Effect.flatMap(client, (api) => api.command.list({ sessionID: root })),
-    searchFiles: (query: string, type?: SessionCatalog.FileType) =>
+    searchFiles: (query: string, type?: FileSystem.EntryType) =>
       Effect.flatMap(client, (api) => api.file.search({ sessionID: root, query, ...(type && { type }) })),
     listFiles: (path: string) =>
       Effect.flatMap(client, (api) => api.file.list({ sessionID: root, ...(path && { path }) })),

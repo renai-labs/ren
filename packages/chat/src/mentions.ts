@@ -1,5 +1,6 @@
 export * as Mentions from "./mentions.js"
 
+import type { FileSystem } from "@ren/schema/file-system"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
 
@@ -37,7 +38,7 @@ export const fromSkill = (skill: SessionCatalog.Skill): Item => ({
   ...(skill.description && { description: skill.description }),
 })
 
-export const fromFile = (file: SessionCatalog.File): Item => ({
+export const fromFile = (file: FileSystem.Entry): Item => ({
   kind: "file",
   id: file.path,
   label: file.path,

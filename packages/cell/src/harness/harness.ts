@@ -2,6 +2,7 @@ export * as Harness from "./harness.js"
 
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
+import type { FileSystem } from "@ren/schema/file-system"
 import type { Form } from "@ren/schema/form"
 import type { Models } from "@ren/schema/models"
 import type { Permission } from "@ren/schema/permission"
@@ -111,16 +112,13 @@ export interface Chat {
   readonly commands: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Command>, NotFound>
   readonly files: (
     sessionId: Session.ID,
-    search: { readonly query: string; readonly type?: SessionCatalog.FileType; readonly limit?: number },
-  ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound>
+    search: { readonly query: string; readonly type?: FileSystem.EntryType; readonly limit?: number },
+  ) => Effect.Effect<ReadonlyArray<FileSystem.Entry>, NotFound>
   readonly listFiles: (
     sessionId: Session.ID,
     path: string | undefined,
-  ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound | Rejected>
-  readonly readFile: (
-    sessionId: Session.ID,
-    path: string,
-  ) => Effect.Effect<SessionCatalog.FileContent, NotFound | Rejected>
+  ) => Effect.Effect<FileSystem.Page, NotFound | Rejected>
+  readonly readFile: (sessionId: Session.ID, path: string) => Effect.Effect<FileSystem.Content, NotFound | Rejected>
   readonly vcs: (sessionId: Session.ID) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
   readonly vcsDiff: (
     sessionId: Session.ID,

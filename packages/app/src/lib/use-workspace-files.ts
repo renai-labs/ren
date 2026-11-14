@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
+import type { FileSystem } from "@ren/schema/file-system"
 import { toast } from "@ren/ui/sonner"
 import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -22,8 +22,8 @@ const lineageOf = (path: string) => [...ancestorsOf(path), path]
 
 const withSlash = (path: string) => (path.endsWith("/") ? path : `${path}/`)
 
-const listedOf = (result: AsyncResult.AsyncResult<ReadonlyArray<SessionCatalog.File>, unknown>) =>
-  Option.getOrElse(AsyncResult.value(result), () => [])
+const listedOf = (result: AsyncResult.AsyncResult<FileSystem.Page, unknown>) =>
+  Option.match(AsyncResult.value(result), { onNone: () => [], onSome: (page) => page.entries })
 
 export type WorkspaceFiles = ReturnType<typeof useWorkspaceFiles>
 

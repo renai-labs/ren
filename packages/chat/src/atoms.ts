@@ -1,7 +1,7 @@
 export * as ChatAtoms from "./atoms.js"
 
+import type { FileSystem } from "@ren/schema/file-system"
 import type { Session } from "@ren/schema/session"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
@@ -35,7 +35,7 @@ export interface ChildView extends View {
 export interface FileQuery {
   readonly root: Session.ID
   readonly query: string
-  readonly type?: SessionCatalog.FileType
+  readonly type?: FileSystem.EntryType
 }
 
 export interface PathView {
@@ -274,7 +274,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
       const slash = view.path.lastIndexOf("/")
       const listed = get
         .result(folder({ root: view.root, path: view.path.slice(0, slash + 1) }))
-        .pipe(Effect.map((entries) => entries.some((entry) => entry.type === "file" && entry.path === view.path)))
+        .pipe(Effect.map((page) => page.entries.some((entry) => entry.type === "file" && entry.path === view.path)))
       if (slash >= 0) return Effect.map(listed, (found) => (found ? view.path : undefined))
       return Effect.flatMap(listed, (found) =>
         found

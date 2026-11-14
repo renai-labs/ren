@@ -150,7 +150,7 @@ const withFolders = Effect.gen(function* () {
       path: `${requested}${entry.name}`,
       type: entry.isDirectory() ? "directory" : "file",
     }))
-    return Promise.resolve(Response.json(entries))
+    return Promise.resolve(Response.json({ entries, cursor: null, actions: [] }))
   })
   folder.directory = made.brain.directory
   return made

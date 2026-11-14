@@ -7,13 +7,12 @@ import { SessionMessage } from "@opencode/schema/session-message"
 import type { Session as OpenCodeSession } from "@opencode/schema/session"
 import { RelativePath } from "@opencode/schema/schema"
 import { Skill } from "@opencode/schema/skill"
+import { FileSystem } from "@ren/schema/file-system"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Exit, Fiber, Option, Predicate, Result, Schedule, Schema, Stream } from "effect"
-import { Base64 } from "effect/encoding"
+import { Clock, Effect, Exit, Fiber, Option, Predicate, Schedule, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
@@ -21,8 +20,6 @@ import { Translate } from "@ren/opencode-transcript/translate"
 import { OpenCodeAttachments } from "./attachments.js"
 
 const capabilities = SessionCapabilities.of("opencode")
-
-const readLimit = 1024 * 1024
 
 const Speaker = Schema.Struct({
   userID: Schema.String,
@@ -333,36 +330,24 @@ export const make = (
             ),
           ),
         )
-        .pipe(Effect.flatMap((all) => readAll(all, Translate.file))),
+        .pipe(
+          Effect.flatMap((all) => readAll(all, Translate.file)),
+          Effect.map((entries) => ({ entries, cursor: null, actions: [] })),
+        ),
     readFile: (sessionId, path) =>
       host.environment(sessionId, (environment) =>
         environment.files.read({ path: RelativePath.make(path) }).pipe(
           Effect.catchTag("FileSystem.NotFoundError", () =>
             Effect.fail(new Harness.NotFound({ message: `${path} is not a file on the environment` })),
           ),
-          Effect.flatMap((file) => {
-            const truncated = file.size > readLimit
-            const bytes =
-              file.size === 0
-                ? Effect.succeed(new Uint8Array())
-                : file.stream({ bytesToRead: Math.min(file.size, readLimit) }).pipe(Stream.mkUint8Array, Effect.orDie)
-            return Effect.map(bytes, (read): SessionCatalog.FileContent => {
-              const text = read.includes(0)
-                ? Result.fail(undefined)
-                : Result.try(() =>
-                    new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(read, { stream: truncated }),
-                  )
-              return {
-                path,
-                mime: file.mime,
-                size: file.size,
-                truncated,
-                ...(Result.isSuccess(text)
-                  ? { encoding: "utf8", content: text.success }
-                  : { encoding: "base64", content: Base64.encode(read) }),
-              }
-            })
-          }),
+          Effect.flatMap((file) =>
+            (file.size === 0
+              ? Effect.succeed(new Uint8Array())
+              : file
+                  .stream({ bytesToRead: Math.min(file.size, FileSystem.readLimit) })
+                  .pipe(Stream.mkUint8Array, Effect.orDie)
+            ).pipe(Effect.map((bytes) => FileSystem.contentOf({ path, mime: file.mime, size: file.size, bytes }))),
+          ),
         ),
       ),
     vcs: (sessionId) =>
