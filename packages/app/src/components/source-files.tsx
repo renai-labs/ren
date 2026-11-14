@@ -1,13 +1,11 @@
 import { useRef, useState } from "react"
-import type { ArtifactInfo } from "@ren/client"
 import { FileTabs } from "@ren/chat"
-import type { FileSystem } from "@ren/schema/file-system"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
-import { FileName } from "@ren/util/file-name"
+import { Memory } from "@ren/schema/memory"
 import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
 import { toast } from "@ren/ui/sonner"
-import { IconLinkOff, IconUpload } from "@tabler/icons-react"
+import { FileName } from "@ren/util/file-name"
+import { IconUpload } from "@tabler/icons-react"
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { AsyncResult } from "effect/reactivity"
 import { Artifacts } from "../lib/artifacts.js"
@@ -15,31 +13,83 @@ import { errorMessage } from "../lib/errors.js"
 import { formatBytes } from "../lib/format.js"
 import { RouterContext } from "../lib/router-context.js"
 import { maxFileBytes } from "../lib/use-uploads.js"
+import { useSpaces } from "../lib/use-spaces.js"
 import { ancestorsOf, pathsOf, useFolderFailures } from "../lib/use-workspace-files.js"
-import { ArtifactMenu, ServingBadge, useArtifactActions } from "./artifact-gallery.js"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { DropOverlay } from "./drop-overlay.js"
-import { FileBrowser, OpenFile } from "./file-browser.js"
+import { FileBrowser } from "./file-browser.js"
 import { PageActions } from "./page.js"
+import { NewMemoryFile, Pane, resultOf, type Scope } from "./source-panes.js"
 
-type Scope = { readonly source: FileSystem.Source; readonly spaceId?: string | undefined }
+export type Pin = "artifacts" | "spaces" | "memory"
 
-const resultOf = <A,>(query: { readonly data: A | undefined; readonly error: unknown }) => {
-  if (query.data !== undefined) return AsyncResult.success<A, unknown>(query.data)
-  return query.error ? AsyncResult.fail<unknown, A>(query.error) : AsyncResult.initial<A, unknown>(true)
+type Root = { readonly prefix: string; readonly scope: Scope }
+
+type Roots = readonly [Root, ...ReadonlyArray<Root>]
+
+const artifactsFolder = "Artifacts"
+const spacesFolder = "Spaces"
+const memoryFolder = "Org memory"
+
+const nameOf = (path: string) => path.split("/").at(-1) ?? path
+
+const clean = (name: string) => name.replaceAll("/", "-") || "Untitled"
+
+const freeNames = <A,>(folder: string, entries: ReadonlyArray<readonly [string, A]>) =>
+  entries.reduce(
+    (named, entry) => named.set(FileName.free(`${folder}/${clean(entry[0])}`, new Set(named.keys())), entry[1]),
+    new Map<string, A>(),
+  )
+
+const rootOf = (roots: Roots, path: string) =>
+  roots.reduce(
+    (best, root) => (path.startsWith(root.prefix) && root.prefix.length > best.prefix.length ? root : best),
+    roots[0],
+  )
+
+function useRoots(scope: Scope, pins: ReadonlyArray<Pin>): Roots {
+  const spaces = useSpaces().joined
+  const named = freeNames(
+    spacesFolder,
+    pins.includes("spaces") ? spaces.map((space) => [space.name, space.id] as const) : [],
+  )
+  return [
+    { prefix: "", scope },
+    ...[...named].map((entry): Root => ({ prefix: `${entry[0]}/`, scope: { source: "drive", spaceId: entry[1] } })),
+    ...(pins.includes("memory") ? [{ prefix: `${memoryFolder}/`, scope: { source: "memory" } } as const] : []),
+  ]
 }
 
-function useTree(scope: Scope) {
+function useArtifacts(scope: Scope, pins: ReadonlyArray<Pin>) {
+  const { client } = RouterContext.useRouterContext()
+  const artifacts = useQuery({ ...Artifacts.allOptions(client, scope.spaceId), enabled: pins.includes("artifacts") })
+  return freeNames(
+    artifactsFolder,
+    (artifacts.data ?? []).map((artifact) => [artifact.title, artifact] as const),
+  )
+}
+
+function useTree(roots: Roots, virtual: ReadonlyArray<string>) {
   const { api } = RouterContext.useRouterContext()
   const [expanded, setExpanded] = useState<ReadonlyArray<string>>([])
-  const folders = ["", ...expanded]
+  const folders = ["", ...expanded.filter((path) => !virtual.includes(path))].map((path) => ({
+    path,
+    root: rootOf(roots, path),
+  }))
   const queries = useQueries({
-    queries: folders.map((folder) => api.files.list.queryOptions({ ...scope, ...(folder && { folder }) })),
+    queries: folders.map((each) => {
+      const folder = each.path.slice(each.root.prefix.length)
+      return api.files.list.queryOptions({ ...each.root.scope, ...(folder && { folder }) })
+    }),
   })
-  const results = folders.map(
-    (folder, index) => [folder, resultOf(queries[index] ?? { data: undefined, error: null })] as const,
-  )
-  const refreshFolder = (path: string) => void queries[folders.indexOf(path)]?.refetch()
+  const results = folders.map((each, index) => {
+    const query = queries[index]
+    const data = query?.data && {
+      entries: query.data.entries.map((entry) => ({ path: `${each.root.prefix}${entry.path}`, type: entry.type })),
+    }
+    return [each.path, resultOf({ data, error: query?.error ?? null })] as const
+  })
+  const refreshFolder = (path: string) => void queries[folders.findIndex((each) => each.path === path)]?.refetch()
   useFolderFailures(results, refreshFolder)
   return {
     actions: queries[0]?.data?.actions ?? [],
@@ -60,23 +110,6 @@ function useTree(scope: Scope) {
     },
   }
 }
-
-function SourceFile(props: { scope: Scope; tab: FileTabs.Tab; onFolder: (folder: string) => void }) {
-  const { api } = RouterContext.useRouterContext()
-  const query = useQuery(api.files.read.queryOptions({ ...props.scope, path: props.tab.path }))
-  return (
-    <OpenFile
-      read={{ result: resultOf(query), refresh: () => void query.refetch() }}
-      tab={props.tab}
-      onFolder={props.onFolder}
-      onMention={undefined}
-    />
-  )
-}
-
-const artifactsFolder = "Artifacts"
-
-const nameOf = (path: string) => path.split("/").at(-1) ?? path
 
 function useUpload(scope: Scope, onDone: (folder: string) => void) {
   const { client, platform } = RouterContext.useRouterContext()
@@ -110,62 +143,6 @@ function useUpload(scope: Scope, onDone: (folder: string) => void) {
             toast.error(`Could not upload ${nameOf(each.path)}`, { id, description: errorMessage(error) }),
         )
     }
-  }
-}
-
-function ArtifactPane(props: { artifact: ArtifactInfo }) {
-  const actions = useArtifactActions()
-  const artifact = props.artifact
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b px-3">
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{Artifacts.host(artifact.url)}</span>
-        <ServingBadge artifact={artifact} />
-        <ArtifactMenu artifact={artifact} actions={actions} className="flex text-muted-foreground" />
-      </div>
-      {artifact.url ? (
-        <iframe
-          title={artifact.title}
-          src={artifact.url}
-          sandbox="allow-scripts allow-forms allow-popups"
-          referrerPolicy="no-referrer"
-          className="min-h-0 flex-1 border-0 bg-background"
-        />
-      ) : (
-        <Empty className="flex-1">
-          <EmptyHeader>
-            <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
-              <IconLinkOff />
-            </EmptyMedia>
-            <EmptyTitle>{artifact.title} isn’t served</EmptyTitle>
-            <EmptyDescription>It has no live link right now. Edit it with Ren to publish it again.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      )}
-    </div>
-  )
-}
-
-function useArtifactTree(scope: Scope, tree: ReturnType<typeof useTree>) {
-  const { client } = RouterContext.useRouterContext()
-  const drive = scope.source === "drive"
-  const artifacts = useQuery({ ...Artifacts.allOptions(client, scope.spaceId), enabled: drive })
-  const byPath = (artifacts.data ?? []).reduce(
-    (named, artifact) =>
-      named.set(
-        FileName.free(`${artifactsFolder}/${artifact.title.replaceAll("/", "-")}`, new Set(named.keys())),
-        artifact,
-      ),
-    new Map<string, ArtifactInfo>(),
-  )
-  if (!drive) return { tree, byPath }
-  return {
-    tree: {
-      ...tree,
-      paths: [...new Set([...tree.paths, `${artifactsFolder}/`, ...byPath.keys()])],
-      pinned: [artifactsFolder],
-    },
-    byPath,
   }
 }
 
@@ -215,17 +192,58 @@ function DeleteDialog(props: {
   )
 }
 
-export function SourceFiles(props: { scope: Scope; empty: string }) {
-  const listed = useTree(props.scope)
-  const shown = useArtifactTree(props.scope, listed)
+function useMounts(scope: Scope, pins: ReadonlyArray<Pin>) {
+  const roots = useRoots(scope, pins)
+  const artifacts = useArtifacts(scope, pins)
+  const virtual = [
+    ...(pins.includes("artifacts") ? [`${artifactsFolder}/`] : []),
+    ...(pins.includes("spaces") ? [`${spacesFolder}/`] : []),
+  ]
+  return {
+    roots,
+    artifacts,
+    virtual,
+    paths: [...virtual, ...roots.flatMap((each) => each.prefix || []), ...artifacts.keys()],
+    pinned: [
+      ...virtual.map((path) => path.slice(0, -1)),
+      ...(pins.includes("memory") ? [memoryFolder] : []),
+      ...(scope.source === "memory" ? [Memory.root] : []),
+    ],
+  }
+}
+
+const uploadFolder = (mounts: ReturnType<typeof useMounts>, path: string | undefined) =>
+  path === undefined || mounts.artifacts.has(path) || rootOf(mounts.roots, path).prefix
+    ? ""
+    : (ancestorsOf(path).at(-1) ?? "")
+
+function OpenPane(props: {
+  tab: FileTabs.Tab
+  mounts: ReturnType<typeof useMounts>
+  onFolder: (folder: string) => void
+}) {
+  const root = rootOf(props.mounts.roots, props.tab.path)
+  return (
+    <Pane
+      artifact={props.mounts.artifacts.get(props.tab.path)}
+      scope={root.scope}
+      path={props.tab.path.slice(root.prefix.length)}
+      tab={props.tab}
+      onFolder={(folder) => props.onFolder(`${root.prefix}${folder}`)}
+    />
+  )
+}
+
+export function SourceFiles(props: { scope: Scope; pins: ReadonlyArray<Pin>; empty: string }) {
+  const mounts = useMounts(props.scope, props.pins)
+  const listed = useTree(mounts.roots, mounts.virtual)
   const upload = useUpload(props.scope, listed.refreshFolder)
   const picker = useRef<HTMLInputElement>(null)
   const [target, setTarget] = useState("")
   const [deleting, setDeleting] = useState<string>()
   const [files, setFiles] = useState(FileTabs.empty)
   const current = files.tabs.find((tab) => tab.path === files.active)
-  const artifact = current && shown.byPath.get(current.path)
-  const folder = current && !artifact ? (ancestorsOf(current.path).at(-1) ?? "") : ""
+  const folder = uploadFolder(mounts, current?.path)
   const send = listed.actions.includes("upload") ? upload : undefined
   const pick = (into: string) => {
     setTarget(into)
@@ -240,6 +258,15 @@ export function SourceFiles(props: { scope: Scope; empty: string }) {
           onFiles={(incoming) => send(folder, incoming, new Set(listed.paths))}
         />
       ) : null}
+      <NewMemoryFile
+        scope={props.scope}
+        actions={listed.actions}
+        taken={listed.paths}
+        onCreated={(path) => {
+          listed.reveal(path)
+          setFiles((previous) => FileTabs.open(previous, path, { pin: true }))
+        }}
+      />
       <Input
         ref={picker}
         type="file"
@@ -251,7 +278,12 @@ export function SourceFiles(props: { scope: Scope; empty: string }) {
         }}
       />
       <FileBrowser
-        tree={shown.tree}
+        tree={{
+          ...listed,
+          paths: [...new Set([...listed.paths, ...mounts.paths])],
+          loaded: [...listed.loaded, ...mounts.virtual],
+          pinned: mounts.pinned,
+        }}
         files={files}
         onFiles={setFiles}
         onMention={undefined}
@@ -260,10 +292,7 @@ export function SourceFiles(props: { scope: Scope; empty: string }) {
         onDelete={listed.actions.includes("remove") ? setDeleting : undefined}
         empty={props.empty}
       >
-        {artifact ? <ArtifactPane key={current.path} artifact={artifact} /> : null}
-        {current && !artifact ? (
-          <SourceFile key={current.path} scope={props.scope} tab={current} onFolder={listed.reveal} />
-        ) : null}
+        {current ? <OpenPane key={current.path} tab={current} mounts={mounts} onFolder={listed.reveal} /> : null}
       </FileBrowser>
       <DeleteDialog
         scope={props.scope}

@@ -9,6 +9,7 @@ export function InstructionsField(props: {
   label: string
   value: string
   placeholder: string
+  empty?: string | undefined
   readOnly: boolean
   saving: boolean
   onSave: (value: string) => Promise<unknown>
@@ -63,7 +64,7 @@ export function InstructionsField(props: {
         </Button>
       )}
       <Streamdown controls={false} className="min-w-0 text-sm/relaxed [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm">
-        {props.value || "No instructions yet."}
+        {props.value || (props.empty ?? "No instructions yet.")}
       </Streamdown>
     </div>
   )
