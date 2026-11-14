@@ -20,10 +20,10 @@ function DefaultModel(props: { settings: ReturnType<typeof useSpaceSettings> }) 
   const organization = useQuery(api["organization-settings"].get.queryOptions({ idOrSlug: useMe().organization.id }))
   return (
     <ModelPicker
-      models={models.data ?? []}
+      models={models.data?.models ?? []}
       loading={models.isPending || props.settings.loading}
       value={pickModel(
-        models.data ?? [],
+        models.data?.models ?? [],
         [props.settings.current.model, organization.data?.settings.model].map((model) => model && modelRef(model)),
       )}
       disabled={!props.settings.canUpdate}

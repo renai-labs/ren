@@ -45,7 +45,11 @@ export const ChatHandler = HttpApiBuilder.group(Api, "chat", (handlers) =>
         ),
       )
       .handle("chat.models", (request) =>
-        Effect.flatMap(Primitive.currentActor, (actor) => sessions.models(actor, request.params.id)),
+        Effect.flatMap(Primitive.currentActor, (actor) =>
+          sessions.models(actor, request.params.id, request.query),
+        ).pipe(
+          Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
+        ),
       )
   }),
 )

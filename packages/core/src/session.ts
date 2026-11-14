@@ -1,5 +1,6 @@
 export * as Session from "./session.js"
 
+import { BrainSettings } from "@ren/brain/settings"
 import { Database } from "@ren/db/database"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
@@ -9,6 +10,7 @@ import type { SessionLinks } from "@ren/schema/session/links"
 import type { SessionUsage } from "@ren/schema/session/usage"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
+import { Settings } from "@ren/schema/settings"
 import { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
 import {
@@ -29,7 +31,7 @@ import {
   type SQL,
 } from "drizzle-orm"
 import type { NonEmptyReadonlyArray } from "effect/Array"
-import { Array, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore, Struct } from "effect"
+import { Array, Context, DateTime, Duration, Effect, Layer, Option, Result, Schema, Semaphore, Struct } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { Billing } from "./billing.js"
@@ -67,7 +69,11 @@ export type Interface = Primitive.Interface<typeof Session.definition> & {
     id: Session.ID,
     query: { readonly limit?: number | undefined; readonly cursor?: string | undefined },
   ) => Effect.Effect<SessionMessage.Page, Primitive.NotFound | Primitive.Invalid | Busy | PageTooLarge>
-  readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
+  readonly models: (
+    actor: Actor.Info,
+    id: Session.ID,
+    options?: { readonly spaceId?: Space.ID | undefined },
+  ) => Effect.Effect<SessionModel.Choices, Primitive.NotFound>
   readonly links: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionLinks.Info, Primitive.NotFound>
   readonly usage: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionUsage.Info, Primitive.NotFound>
   readonly pullRequests: (
@@ -193,7 +199,7 @@ export const layer = Layer.effect(
     const historyReading = yield* Semaphore.make(historyReads)
     const historyMemory = yield* Semaphore.make(historyMemoryBytes)
 
-    const models = (actor: Actor.Info) =>
+    const choices = (actor: Actor.Info) =>
       catalog.catalog(actor.organizationId).pipe(
         Effect.orDie,
         Effect.map((found) =>
@@ -421,7 +427,7 @@ export const layer = Layer.effect(
         const model = input.model
         if (
           model &&
-          !(yield* models(actor)).some(
+          !(yield* choices(actor)).some(
             (item) =>
               item.id === model.id &&
               item.providerID === model.providerID &&
@@ -508,7 +514,71 @@ export const layer = Layer.effect(
         if (Option.isNone(admitted)) return yield* busy
         return admitted.value
       }),
-      models: Effect.fn("Session.models")(models),
+      models: Effect.fn("Session.models")(function* (actor, _id, options) {
+        const spaceId = options?.spaceId
+        if (spaceId) yield* visibleSpace(actor, spaceId)
+        const listed = yield* choices(actor)
+        const settings = Database.Schema.settings
+        const agent = Database.Schema.agent
+        const rows = yield* database.db
+          .select({ ownerId: settings.owner_id, settings: settings.settings })
+          .from(settings)
+          .where(
+            inArray(settings.owner_id, [Database.Schema.renOwner, actor.organizationId, ...(spaceId ? [spaceId] : [])]),
+          )
+          .pipe(Effect.orDie)
+        const primary = (yield* database.db
+          .select({ name: agent.name, settings: settings.settings })
+          .from(agent)
+          .leftJoin(settings, eq(settings.owner_id, agent.id))
+          .where(and(isNull(agent.organization_id), isNull(agent.archived_at), eq(agent.is_subagent, false)))
+          .orderBy(asc(agent.name))
+          .limit(1)
+          .pipe(Effect.orDie)).at(0)
+        const decode = (stored: unknown) => Schema.decodeUnknownEffect(Settings.Info)(stored).pipe(Effect.orDie)
+        const layer = (ownerId: string | undefined) => {
+          const row = rows.find((each) => each.ownerId === ownerId)
+          return row
+            ? Effect.map(decode(row.settings), (decoded) => ({ hash: null, settings: decoded }))
+            : Effect.succeed({ hash: null })
+        }
+        const resolved = BrainSettings.resolve(
+          {
+            ren: yield* layer(Database.Schema.renOwner),
+            organization: yield* layer(actor.organizationId),
+            space: yield* layer(spaceId),
+            agents: primary
+              ? [
+                  {
+                    name: primary.name,
+                    description: null,
+                    isSubagent: false,
+                    hash: "",
+                    settings: yield* decode(primary.settings ?? {}),
+                  },
+                ]
+              : [],
+          },
+          { agent: null, model: Option.none() },
+          (model) =>
+            Option.map(
+              Option.fromUndefinedOr(
+                listed.find((item) => item.providerID === model.endpointId && item.id === model.modelId),
+              ),
+              (item) => ({ variants: item.variants.map((variant) => variant.id) }),
+            ),
+        )
+        if (Result.isFailure(resolved)) return { models: listed }
+        const model = resolved.success.primary.model
+        return {
+          models: listed,
+          default: {
+            id: model.modelId,
+            providerID: model.endpointId,
+            ...(model.variant && { variant: model.variant }),
+          },
+        }
+      }),
       links: Effect.fn("Session.links")(function* (actor: Actor.Info, id: Session.ID) {
         const found = yield* linked(actor, id)
         return {

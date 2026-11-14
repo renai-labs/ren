@@ -18,7 +18,7 @@ export function GeneralSettingsPage() {
   const { api, auth } = RouterContext.useRouterContext()
   const me = useMe()
   const queryClient = useQueryClient()
-  const models = useSuspenseQuery(api.chat.models.queryOptions({ id: modelsProbe })).data
+  const models = useSuspenseQuery(api.chat.models.queryOptions({ id: modelsProbe })).data.models
   const settings = useSuspenseQuery(api["organization-settings"].get.queryOptions({ idOrSlug: me.organization.id }))
   const update = useMutation(api["organization-settings"].update.mutationOptions())
   const current = settings.data.settings

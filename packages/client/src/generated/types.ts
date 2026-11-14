@@ -1315,6 +1315,8 @@ export type SessionMessageCompaction =
   | SessionMessageCompactionCompleted
   | SessionMessageCompactionFailed
 
+export type SessionModelChoices = { models: Array<SessionModelChoice>; default?: SessionModelRef }
+
 export type SessionLinksInfo = {
   tasks: Array<SessionLinksLinkedTask>
   pullRequests: Array<SessionLinksLinkedPullRequest>
@@ -7418,9 +7420,12 @@ export type ChatPrepareInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatPrepareOutput = void
 
-export type ChatModelsInput = { readonly id: { readonly id: string }["id"] }
+export type ChatModelsInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId?: { readonly spaceId?: string | undefined }["spaceId"]
+}
 
-export type ChatModelsOutput = Array<SessionModelChoice>
+export type ChatModelsOutput = SessionModelChoices
 
 export type TaskListInput = {
   readonly spaceId?: {

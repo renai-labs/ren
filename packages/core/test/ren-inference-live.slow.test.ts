@@ -102,7 +102,7 @@ describe.skipIf(Object.values(live).some((value) => !value))("Ren Inference Serv
       const actor = { userId: ada.id, organizationId, roles: ["member"] }
       const team = yield* spaces.create(actor, { name: "Team" })
       const [providerID = "", id = ""] = live.model.split("/")
-      expect(yield* sessions.models(actor, Session.ID.create())).toContainEqual(
+      expect((yield* sessions.models(actor, Session.ID.create())).models).toContainEqual(
         expect.objectContaining({ providerID, id }),
       )
 

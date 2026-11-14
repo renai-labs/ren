@@ -6825,6 +6825,19 @@
               "$ref": "#/components/schemas/Session.ID"
             },
             "required": true
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              ],
+              "description": "The space the session starts in."
+            },
+            "required": false
           }
         ],
         "security": [
@@ -6837,14 +6850,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "SessionModel.Choices",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SessionModel.Choice"
-                  }
+                  "$ref": "#/components/schemas/SessionModel.Choices"
                 }
               }
             }
@@ -6868,9 +6878,19 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
-        "description": "Return the models and variants a session with this ID may start with, before it exists. Pass one as `model` to `session.create`. Once the session runs, `model.list` in the Chat API lists them.",
+        "description": "Return the models and variants a session with this ID may start with, before it exists, and its default. Pass one as `model` to `session.create`. Once the session runs, `model.list` in the Chat API lists them.",
         "summary": "List models for a new session"
       }
     },
@@ -25692,6 +25712,22 @@
         "required": ["id", "providerID", "name", "variants"],
         "additionalProperties": false
       },
+      "SessionModel.Choices": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionModel.Choice"
+            }
+          },
+          "default": {
+            "$ref": "#/components/schemas/SessionModel.Ref_1"
+          }
+        },
+        "required": ["models"],
+        "additionalProperties": false
+      },
       "SessionModel.Ref": {
         "type": "object",
         "properties": {
@@ -25707,6 +25743,23 @@
         },
         "required": ["id", "providerID"],
         "additionalProperties": false
+      },
+      "SessionModel.Ref_1": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "providerID"],
+        "additionalProperties": false,
+        "description": "The model a session starts with when it names none."
       },
       "SessionModel.Variant": {
         "type": "object",
