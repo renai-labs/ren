@@ -67,15 +67,15 @@ A Drive shows a `FileSystem` source in the chat's Files panel: the `FileExplorer
 
 ### Items
 
-| Kind     | Where                                                                                          | Opens                                          | Actions                                         |
-| -------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
-| Folder   | `directory` entries                                                                            | Expands in the tree                            | Upload here                                     |
-| File     | `file` entries                                                                                 | A tab in the viewer                            | Copy path, Copy contents, Download, Delete      |
-| Artifact | The pinned **Artifacts** folder at a drive's root, one entry per artifact from `artifact.list` | Its live site, with its host and serving badge | Edit, Open, Copy link, Archive (`ArtifactMenu`) |
-| Space    | The pinned **Spaces** folder at the home Drive's root, one folder per space the person is in   | That space's drive                             | none                                            |
-| Memory   | The pinned **Memory** folder at the home Drive's root: the organization's memory (part 4)      | The memory editor                              | New file, Delete                                |
+| Kind     | Where                                                                                                | Opens                                             | Actions                                         |
+| -------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------- |
+| Folder   | `directory` entries                                                                                  | Expands in the tree                               | Upload here                                     |
+| File     | `file` entries                                                                                       | A tab in the viewer                               | Copy path, Copy contents, Download, Delete      |
+| Artifact | The pinned **Artifacts** folder at a space Drive's root, one entry per artifact from `artifact.list` | Its live site, with its host and serving badge    | Edit, Open, Copy link, Archive (`ArtifactMenu`) |
+| Space    | The pinned **Spaces** folder at the home Drive's root, one folder per space the person is in         | Expands to that space's drive, in place           | none                                            |
+| Memory   | The pinned **Org memory** folder at the home Drive's root: the organization's memory (part 4)        | Expands to the memory; a file opens in its editor | none                                            |
 
-1. Artifacts are not files. Their entries are named by title and open a pane with the gallery's `ServingBadge` and `ArtifactMenu`; the artifacts API does not change. A space Drive's folder has that space's artifacts; the home Drive's has every space's the person can see.
+1. Artifacts are not files. Their entries are named by title and open a pane with the gallery's `ServingBadge` and `ArtifactMenu`; the artifacts API does not change. Only a space Drive has the folder, with that space's artifacts; the home Drive has none, because artifacts belong to a space.
 2. Pinned folders sort first (`FileExplorer`'s `pinned`); everything else keeps the tree's order.
 3. Upload goes through `drive.startUpload` and `platform.upload`, as `use-uploads.ts` does, into the folder of the open file or the root, or the folder whose menu has "Upload here". Dropping files on the page uploads them the same way (`FileDrop.use`). A name that is taken gets a free one (`FileName.free`). When the upload finishes, that folder's `files.list` refetches.
 4. Delete is in the tree's menu for a file. It confirms, because the drive has no undo, and closes the file's tab. `files.delete` is a generated mutation, so it refetches the open `files` queries.
@@ -94,7 +94,7 @@ Drive replaces `/spaces/$id/artifacts` and `/artifacts` in the same step. Neithe
 
 ## 4. Memory
 
-`/spaces/$id/memory`, and the organization's memory as a pinned **Memory** folder at the home Drive's root. The same panel over the memory source.
+`/spaces/$id/memory`, and the organization's memory as the pinned **Org memory** folder at the home Drive's root. The same panel over the memory source. A folder under **Spaces** or **Org memory** lists its own source, so the tree maps each path prefix to the drive or memory it reads.
 
 1. `memory.md` is pinned first with "In every chat", because every chat in scope gets its start in its context (`Memory.injectedLength`).
 2. A file opens in the editor the space and organization instructions share: `InstructionsField`, a markdown preview with Edit, then a textarea with Cancel and Save. Save writes through `memory.write`; nothing saves until the person chooses Save.
@@ -123,7 +123,7 @@ Packages: `db`, `schema`, `protocol`, `core`, `server`, `app`.
 
 ## 7. Done when
 
-A member of General Space opens Drive, drops `summary.md` on the page with `reports/q3.md` open, and sees it appear in `reports` without a reload. Clicking it opens it in a tab; deleting it from the tree's menu asks first and closes the tab. The pinned Artifacts folder lists the space's artifacts, and opening one shows its live site with its serving badge and menu; the home Drive's Artifacts folder lists every space's artifacts. A member who cannot write sees no Upload or Delete. In Memory they open `memory.md`, choose Edit, change it and choose Save; a new chat in the space has the edit in its context. The chat's Files panel works as before. `/artifacts` and `/spaces/$id/artifacts` are gone and no link points to them.
+A member of General Space opens Drive, drops `summary.md` on the page with `reports/q3.md` open, and sees it appear in `reports` without a reload. Clicking it opens it in a tab; deleting it from the tree's menu asks first and closes the tab. The pinned Artifacts folder lists the space's artifacts, and opening one shows its live site with its serving badge and menu; the home Drive's Spaces folder opens each of the person's spaces in place. A member who cannot write sees no Upload or Delete. In Memory they open `memory.md`, choose Edit, change it and choose Save; a new chat in the space has the edit in its context. The chat's Files panel works as before. `/artifacts` and `/spaces/$id/artifacts` are gone and no link points to them.
 
 ## 8. Tests
 
@@ -137,7 +137,7 @@ A member of General Space opens Drive, drops `summary.md` on the page with `repo
 ## 9. Order
 
 1. Review actions on task cards, where a space needs them.
-2. Drive, Memory and the chat panel on one browser: space Drive and Memory, pinned Artifacts, upload and delete, Memory editing, then home Drive with the Spaces and Memory folders; the artifacts routes go away.
+2. Drive, Memory and the chat panel on one browser: space Drive and Memory, pinned Artifacts, upload and delete, Memory editing, then home Drive with the Spaces and Org memory folders; the artifacts routes go away.
 3. Search across spaces (part 5), in its own PR.
 4. Later (part 10).
 
