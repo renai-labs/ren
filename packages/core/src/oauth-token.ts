@@ -19,7 +19,7 @@ const decodeClaims = Schema.decodeUnknownOption(
 export const sha256 = (text: string, encoding: "hex" | "base64url") =>
   new Bun.CryptoHasher("sha256").update(text).digest(encoding)
 
-// oxlint-disable-next-line ren/no-comments -- §8 rule 6 and §10c rule 4: only these codes with HTTP 400 or 401 are fatal.
+// oxlint-disable-next-line ren/no-comments -- §8 rule 6 and §10c rule 4: these codes with HTTP 400 or 401 are fatal; a refresh also treats any 401 as fatal.
 export const refreshFatal: ReadonlyArray<string> = ["invalid_grant", "invalid_client", "bad_refresh_token"]
 
 export const clientCredentialsFatal: ReadonlyArray<string> = ["invalid_client", "unauthorized_client"]
@@ -53,7 +53,7 @@ const decodeAnswer = Schema.decodeUnknownOption(Answer)
 
 const text = (value: unknown) => Option.liftPredicate(value, (found): found is string => typeof found === "string")
 
-// oxlint-disable-next-line ren/no-comments -- §8 rule 6: the code is a string or `{ error: { code } }`; anything else is an unknown code, which is temporary (ren-v1 bug S15).
+// oxlint-disable-next-line ren/no-comments -- §8 rule 6: the code is a string or `{ error: { code } }`; anything else is an unknown code, which is temporary unless the status is 401 (ren-v1 bug S15). `{ error: { message } }` is only a description.
 const errorCodeOf = (error: unknown) =>
   Option.orElse(text(error), () =>
     error && typeof error === "object" && "code" in error ? text(error.code) : Option.none(),
@@ -85,7 +85,14 @@ export const readToken = (status: number, body: unknown): Result.Result<Token, T
     return Result.fail({
       status,
       code: Option.getOrElse(errorCodeOf(answer.error), () => (ok ? "invalid_response" : "unknown")),
-      description: Option.getOrElse(text(answer.error_description), () => ""),
+      description: Option.getOrElse(
+        Option.orElse(text(answer.error_description), () =>
+          answer.error && typeof answer.error === "object" && "message" in answer.error
+            ? text(answer.error.message)
+            : Option.none(),
+        ),
+        () => "",
+      ),
     })
   const tokenType = text(answer.token_type)
   if (Option.isSome(tokenType) && tokenType.value.toLowerCase() !== "bearer")
