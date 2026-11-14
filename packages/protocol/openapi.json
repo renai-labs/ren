@@ -21195,7 +21195,7 @@
             },
             "required": ["type", "name", "credential"],
             "additionalProperties": false,
-            "description": "Adds the credential to the URL's query string as `<name>=<value>`."
+            "description": "Adds the credential to the URL’s query string as `<name>=<value>`."
           },
           {
             "type": "object",
@@ -21466,7 +21466,7 @@
                 },
                 "required": ["type", "name", "credential"],
                 "additionalProperties": false,
-                "description": "Adds the credential to the URL's query string as `<name>=<value>`."
+                "description": "Adds the credential to the URL’s query string as `<name>=<value>`."
               },
               {
                 "type": "object",
@@ -21735,6 +21735,12 @@
             ],
             "description": "Sorted by name. Null when the server lists its tools only after a sign-in."
           },
+          "readOnlyInferred": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many of the tools have `readOnly` from their name, because the server gave no `readOnlyHint`."
+          },
           "source": {
             "anyOf": [
               {
@@ -21758,7 +21764,7 @@
             "description": "Why Ren could not read the server."
           }
         },
-        "required": ["reachable", "server", "auth", "tools", "source", "problem"],
+        "required": ["reachable", "server", "auth", "tools", "readOnlyInferred", "source", "problem"],
         "additionalProperties": false
       },
       "McpInspection.Server": {

@@ -99,6 +99,7 @@ describe("McpInspect", () => {
           { name: "search_docs", description: "Search", readOnly: false },
           { name: "update_doc", description: "Change a doc", readOnly: false },
         ],
+        readOnlyInferred: 2,
         source: "tools-list",
         problem: null,
       })
@@ -135,6 +136,7 @@ describe("McpInspect", () => {
         server: { name: "acme-docs", title: "Acme Docs", description: "Search Acme’s docs" },
         auth: { type: "basic" },
         tools: [{ name: "list_docs", description: "List docs", readOnly: true }],
+        readOnlyInferred: 1,
         source: "server-card",
         problem: null,
       })
@@ -143,6 +145,7 @@ describe("McpInspect", () => {
         server: null,
         auth: { type: "bearer" },
         tools: null,
+        readOnlyInferred: 0,
         source: null,
         problem: null,
       })
