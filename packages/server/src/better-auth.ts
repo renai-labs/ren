@@ -255,6 +255,7 @@ const slackSignIn = (slack: NonNullable<Input["slack"]>) => ({
   clientId: slack.clientId,
   clientSecret: slack.clientSecret,
   scopes: ["openid", "email", "profile"],
+  requireEmailVerification: true,
   accountSubject: (context: { readonly profile: unknown }) => {
     const profile = Schema.decodeUnknownSync(SlackProfile)(context.profile)
     return `${profile["https://slack.com/team_id"]}:${profile["https://slack.com/user_id"]}`
@@ -356,7 +357,11 @@ export const make = (input: Input) => {
         requireEmailVerification: true,
       },
       ...(input.github && {
-        github: { clientId: input.github.clientId, clientSecret: input.github.clientSecret },
+        github: {
+          clientId: input.github.clientId,
+          clientSecret: input.github.clientSecret,
+          requireEmailVerification: true,
+        },
       }),
     },
     account: {
