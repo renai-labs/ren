@@ -47,6 +47,9 @@ export const Result = Schema.Struct({
   tools: Schema.NullOr(Schema.Array(AppListing.Tool)).annotate({
     description: "Sorted by name. Null when the server lists its tools only after a sign-in.",
   }),
+  readOnlyInferred: Schema.Int.annotate({
+    description: "How many of the tools have `readOnly` from their name, because the server gave no `readOnlyHint`.",
+  }),
   source: Schema.NullOr(Schema.Literals(["tools-list", "server-card"])),
   problem: Schema.NullOr(Schema.String).annotate({ description: "Why Ren could not read the server." }),
 }).annotate({ identifier: "McpInspection.Result" })

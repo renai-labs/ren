@@ -1283,6 +1283,7 @@ export type McpInspectionResult = {
   server: McpInspectionServer | null
   auth: McpInspectionAuth
   tools: Array<AppListingTool> | null
+  readOnlyInferred: number
   source: "tools-list" | "server-card" | null
   problem: string | null
 }

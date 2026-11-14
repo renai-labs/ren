@@ -82,16 +82,19 @@ const Tool = Schema.Struct({
 
 const decodeTool = Schema.decodeUnknownOption(Tool)
 
-const toolsOf = (listed: ReadonlyArray<unknown>): ReadonlyArray<AppListing.Tool> =>
-  listed
-    .flatMap((item) => Option.toArray(decodeTool(item)))
-    .filter((tool) => tool.name.trim())
-    .map((tool) => ({
-      name: tool.name.trim(),
-      description: tool.description?.trim() ?? "",
-      readOnly: tool.annotations?.readOnlyHint ?? isReadOnlyName(tool.name),
-    }))
-    .toSorted((left, right) => left.name.localeCompare(right.name))
+const toolsOf = (listed: ReadonlyArray<unknown>) => {
+  const decoded = listed.flatMap((item) => Option.toArray(decodeTool(item))).filter((tool) => tool.name.trim())
+  return {
+    tools: decoded
+      .map((tool): AppListing.Tool => ({
+        name: tool.name.trim(),
+        description: tool.description?.trim() ?? "",
+        readOnly: tool.annotations?.readOnlyHint ?? isReadOnlyName(tool.name),
+      }))
+      .toSorted((left, right) => left.name.localeCompare(right.name)),
+    readOnlyInferred: decoded.filter((tool) => typeof tool.annotations?.readOnlyHint !== "boolean").length,
+  }
+}
 
 const Implementation = Schema.Struct({
   name: Schema.optionalKey(Schema.String),
@@ -156,6 +159,8 @@ const messagesOf = (text: string, contentType: string) =>
 class Refused extends Data.TaggedError("Refused")<{ readonly challenge: Option.Option<Response> }> {}
 
 class Failed extends Data.TaggedError("Failed")<{ readonly reason: string; readonly reachable: boolean }> {}
+
+const unlisted = { tools: null, readOnlyInferred: 0, source: null }
 
 const reasonOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
@@ -224,7 +229,7 @@ export const make = (fetch: OAuthFetch.Fetch): Interface => {
     }
     return {
       server: serverOf(Option.getOrUndefined(decodeInitialize(initialized.result))?.serverInfo),
-      tools: toolsOf(listed),
+      ...toolsOf(listed),
     }
   })
 
@@ -239,13 +244,18 @@ export const make = (fetch: OAuthFetch.Fetch): Interface => {
           Effect.orElseSucceed(() => Option.none()),
         ),
     )
-    return Option.map(Option.firstSomeOf(found), (card) => ({
-      server: serverOf(card.serverInfo, {
-        ...(card.description && { description: card.description }),
-        ...(card.iconUrl && { icon: card.iconUrl }),
+    return Option.match(Option.firstSomeOf(found), {
+      onNone: () => ({ server: null, ...unlisted }),
+      onSome: (card) => ({
+        server: serverOf(card.serverInfo, {
+          ...(card.description && { description: card.description }),
+          ...(card.iconUrl && { icon: card.iconUrl }),
+        }),
+        ...(card.tools && card.tools.length > 0
+          ? { ...toolsOf(card.tools), source: "server-card" as const }
+          : unlisted),
       }),
-      tools: card.tools && card.tools.length > 0 ? toolsOf(card.tools) : null,
-    }))
+    })
   })
 
   const authOf = Effect.fnUntraced(function* (url: string, challenge: Option.Option<Response>) {
@@ -275,6 +285,7 @@ export const make = (fetch: OAuthFetch.Fetch): Interface => {
         server: listed.success.server,
         auth: { type: "none" },
         tools: listed.success.tools,
+        readOnlyInferred: listed.success.readOnlyInferred,
         source: "tools-list",
         problem: null,
       } satisfies McpInspection.Result
@@ -284,17 +295,13 @@ export const make = (fetch: OAuthFetch.Fetch): Interface => {
         reachable: false,
         server: null,
         auth: { type: "unknown" },
-        tools: null,
-        source: null,
+        ...unlisted,
         problem: failure.reason,
       } satisfies McpInspection.Result
-    const card = Option.getOrUndefined(yield* serverCard(url))
     return {
       reachable: true,
-      server: card?.server ?? null,
+      ...(yield* serverCard(url)),
       auth: failure._tag === "Refused" ? yield* authOf(url, failure.challenge) : { type: "unknown" },
-      tools: card?.tools ?? null,
-      source: card?.tools ? "server-card" : null,
       problem: failure._tag === "Failed" ? failure.reason : null,
     } satisfies McpInspection.Result
   })
@@ -309,8 +316,7 @@ export const make = (fetch: OAuthFetch.Fetch): Interface => {
               reachable: false,
               server: null,
               auth: { type: "unknown" },
-              tools: null,
-              source: null,
+              ...unlisted,
               problem: `The server did not answer within ${Duration.format(timeout)}.`,
             } satisfies McpInspection.Result),
         }),
