@@ -23,16 +23,33 @@ export const playableKind = (mime: string) => {
   return mime.startsWith("audio/") ? "audio" : undefined
 }
 
-export function useDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
-  const { api, platform, queryClient } = RouterContext.useRouterContext()
-  const [gone, setGone] = useState(false)
-  const [reloaded, setReloaded] = useState(false)
-  const image = file.mime.startsWith("image/")
-  const link = (disposition: "inline" | "attachment") => ({
-    ...api.drive.download.queryOptions({ ...(spaceId && { spaceId }), path: file.path, disposition }),
+export const useDriveLink = (spaceId: string | undefined) => {
+  const { api } = RouterContext.useRouterContext()
+  return (path: string, disposition: "inline" | "attachment") => ({
+    ...api.drive.download.queryOptions({ ...(spaceId && { spaceId }), path, disposition }),
     staleTime: linkLifetime,
     retry: (count: number, error: unknown) => errorStatus(error) !== 404 && count < 1,
   })
+}
+
+export function useDriveDownload(spaceId: string | undefined) {
+  const { platform, queryClient } = RouterContext.useRouterContext()
+  const link = useDriveLink(spaceId)
+  return (path: string) =>
+    queryClient.query(link(path, "attachment")).then((found) => {
+      if (platform.redirect) platform.redirect(found.url)
+      else platform.openExternal(found.url)
+    })
+}
+
+export function useDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
+  const { platform, queryClient } = RouterContext.useRouterContext()
+  const [gone, setGone] = useState(false)
+  const [reloaded, setReloaded] = useState(false)
+  const image = file.mime.startsWith("image/")
+  const linkOf = useDriveLink(spaceId)
+  const link = (disposition: "inline" | "attachment") => linkOf(file.path, disposition)
+  const save = useDriveDownload(spaceId)
   const shown = useQuery({
     ...link("inline"),
     enabled: Boolean(spaceId) && !gone && (image || playableKind(file.mime) !== undefined),
@@ -41,11 +58,7 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
     if (errorStatus(error) === 404) setGone(true)
     else toast.error(`Could not open ${file.name}`, { description: errorMessage(error) })
   }
-  const download = () =>
-    void queryClient.query(link("attachment")).then((found) => {
-      if (platform.redirect) platform.redirect(found.url)
-      else platform.openExternal(found.url)
-    }, fail)
+  const download = () => void save(file.path).then(undefined, fail)
   return {
     image,
     url: shown.data?.url,
