@@ -268,7 +268,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* findLive(transaction, actor, eq(Database.Schema.agent.id, id))
-            const target = yield* AgentQueries.visibleSpace(transaction, actor, input.spaceId)
+            const target = yield* AgentQueries.targetSpace(transaction, access, actor, input.spaceId)
             if (
               !access.isAllowed({
                 actor,

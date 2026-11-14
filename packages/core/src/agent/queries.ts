@@ -7,9 +7,11 @@ import { Space } from "@ren/schema/space"
 import { and, eq, isNull, or, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Effect } from "effect"
+import { Access } from "../access.js"
 import { Actor } from "../actor.js"
 import { AgentPolicy } from "./policy.js"
 import { Primitive } from "../primitive.js"
+import { SpacePolicy } from "../space/policy.js"
 import { SpaceQueries } from "../space/queries.js"
 
 export const isOwnerMember = (actor: Actor.Info) =>
@@ -130,4 +132,27 @@ export const visibleSpace = Effect.fnUntraced(function* (
   // oxlint-disable-next-line ren/no-comments -- access AC4: members only.
   if (!row?.membershipId) return yield* new Primitive.NotFound({ message: "Space not found." })
   return { isMember: true, membershipId: row.membershipId }
+})
+
+export const targetSpace = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  actor: Actor.Info,
+  spaceId: Space.ID,
+) {
+  const row = (yield* transaction
+    .select({ membershipId: SpaceQueries.membership.id })
+    .from(Database.Schema.space)
+    .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+    .where(
+      and(
+        eq(Database.Schema.space.id, spaceId),
+        eq(Database.Schema.space.organization_id, actor.organizationId),
+        isNull(Database.Schema.space.archived_at),
+        Access.where(access.plan(actor, SpacePolicy.actions.get), SpaceQueries.where),
+      ),
+    )
+    .for("share", { of: Database.Schema.space })).at(0)
+  if (!row) return yield* new Primitive.NotFound({ message: "Space not found." })
+  return { isMember: Boolean(row.membershipId) }
 })
