@@ -4,8 +4,6 @@ import { Observability } from "@ren/schema/observability"
 import {
   checkResourceAllowed,
   discoverAuthorizationServerMetadata,
-  discoverOAuthServerInfo,
-  extractWWWAuthenticateParams,
   registerClient,
   type AuthorizationServerMetadata,
   type OAuthServerInfo,
@@ -43,6 +41,7 @@ import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
 import { ProviderConnect } from "./mcp-provider/connect.js"
+import { McpInspect } from "./mcp-inspect.js"
 import { OAuthFetch } from "./oauth-fetch.js"
 import { OAuthToken } from "./oauth-token.js"
 import { Primitive } from "./primitive.js"
@@ -110,16 +109,11 @@ type Existing = {
   readonly wanted: ReadonlyArray<string>
 }
 
-interface Discovery {
-  readonly challengeScope: Option.Option<string>
-  readonly info: OAuthServerInfo
-}
-
 const invalid = (message: string) => new Primitive.Invalid({ message })
 
 // oxlint-disable-next-line ren/no-comments -- §7 rule 5 (S5, K46, K47): the challenge's scope, else the resource's, else the org app's or the declaration's. A reconnect adds the granted and wanted scopes; `offline_access` is added when the server lists it.
 const scopesOf = (
-  discovery: Option.Option<Discovery>,
+  discovery: Option.Option<McpInspect.Discovery>,
   app: Option.Option<OrgApp>,
   auth: OAuthDeclaration,
   existing: Option.Option<Existing>,
@@ -300,7 +294,6 @@ export const layer = Layer.effect(
       return Option.some(app)
     })
 
-    // oxlint-disable-next-line ren/no-comments -- §7 rules 2, 3 and 12 (K9, S6): an initialize without a token gives the challenge; then protected-resource metadata and the server's metadata in the RFC 8414 and OpenID orders (MCP SDK, which also checks that the metadata names the issuer it was asked for).
     const discover = Effect.fnUntraced(function* (url: string) {
       const probe = yield* Effect.tryPromise({
         try: () =>
@@ -311,22 +304,19 @@ export const layer = Layer.effect(
               jsonrpc: "2.0",
               id: 1,
               method: "initialize",
-              params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "Ren", version: "1" } },
+              params: {
+                protocolVersion: McpInspect.protocolVersion,
+                capabilities: {},
+                clientInfo: { name: "Ren", version: "1" },
+              },
             }),
           }),
         catch: () => invalid("Ren could not reach the MCP server."),
       })
       if (probe.ok) return yield* invalid("This server does not ask for sign-in.")
-      const challenge = extractWWWAuthenticateParams(probe)
-      const info = yield* Effect.tryPromise({
-        try: () =>
-          discoverOAuthServerInfo(url, {
-            ...(challenge.resourceMetadataUrl && { resourceMetadataUrl: challenge.resourceMetadataUrl }),
-            fetchFn: http.fetch,
-          }),
-        catch: (cause) => invalid(`Ren could not read the server's sign-in metadata: ${String(cause)}`),
-      })
-      return { challengeScope: Option.fromNullishOr(challenge.scope), info } satisfies Discovery
+      return yield* McpInspect.discover(http.fetch, url, probe).pipe(
+        Effect.mapError((cause) => invalid(`Ren could not read the server's sign-in metadata: ${cause}`)),
+      )
     })
 
     const register = (info: OAuthServerInfo, metadata: AuthorizationServerMetadata) =>
@@ -359,7 +349,7 @@ export const layer = Layer.effect(
       actor: Actor.Info,
       app: Option.Option<OrgApp>,
       auth: OAuthDeclaration,
-      discovery: Option.Option<Discovery>,
+      discovery: Option.Option<McpInspect.Discovery>,
     ) {
       if (Option.isSome(app)) {
         const secret = app.value.client_secret
@@ -378,12 +368,10 @@ export const layer = Layer.effect(
       const metadata = Option.getOrUndefined(
         Option.flatMap(info, (found) => Option.fromNullishOr(found.authorizationServerMetadata)),
       )
-      if (
-        metadata?.client_id_metadata_document_supported === true &&
-        metadata.token_endpoint_auth_methods_supported?.includes("none")
-      )
+      const strategy = McpInspect.clientOf(metadata)
+      if (strategy === "metadata-document")
         return { clientId: clientDocument, tokenEndpointAuth: "none" } satisfies Client
-      if (metadata?.registration_endpoint && Option.isSome(info)) return yield* register(info.value, metadata)
+      if (strategy === "registration" && metadata && Option.isSome(info)) return yield* register(info.value, metadata)
       return yield* invalid("This server lets Ren register no client; set up an OAuth app (AppNotConfigured).")
     })
 

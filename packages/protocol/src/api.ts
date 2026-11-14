@@ -18,6 +18,7 @@ import { DriveGroup } from "./groups/drive.js"
 import { FilesGroup } from "./groups/files.js"
 import { MachineTemplateGroup } from "./groups/machine-template.js"
 import { MachineProviderGroup } from "./groups/machine-provider.js"
+import { McpInspectGroup } from "./groups/mcp-inspect.js"
 import { HealthGroup } from "./groups/health.js"
 import { InfraGroup } from "./groups/infra.js"
 import { InsightsGroup } from "./groups/insights.js"
@@ -65,6 +66,7 @@ export const Api = HttpApi.make("server")
   .add(AppProfileReachGroup)
   .add(AppRegistryGroup)
   .add(AppToolsGroup)
+  .add(McpInspectGroup)
   .add(AgentMembershipGroup)
   .add(SessionGroup)
   .add(ChatGroup)

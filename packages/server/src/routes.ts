@@ -8,6 +8,7 @@ import { Artifacts } from "@ren/core/artifacts"
 import { Agent } from "@ren/core/agent"
 import { App } from "@ren/core/app"
 import { AppRegistry } from "@ren/core/app/registry"
+import { McpInspect } from "@ren/core/mcp-inspect"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { Billing } from "@ren/core/billing"
 import { Brains } from "@ren/core/brains"
@@ -58,6 +59,7 @@ import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AppHandler } from "./handlers/api/app.js"
 import { AppRegistryHandler, AppToolsHandler } from "./handlers/api/app-registry.js"
+import { McpInspectHandler } from "./handlers/api/mcp-inspect.js"
 import { AppProfileHandler, AppProfileReachHandler } from "./handlers/api/app-profile.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
 import { BillingHandler } from "./handlers/api/billing.js"
@@ -202,6 +204,7 @@ export const layer = Layer.mergeAll(
         AppProfileReachHandler,
         AppRegistryHandler,
         AppToolsHandler,
+        McpInspectHandler,
         AgentMembershipHandler,
         SessionHandler,
         ChatHandler,
@@ -264,6 +267,7 @@ export const layer = Layer.mergeAll(
         Artifacts.layer,
         App.layer,
         AppRegistry.layer,
+        McpInspect.layer,
         AgentMembership.layer,
         Session.layer.pipe(
           Layer.provide(SessionRunner.layer),

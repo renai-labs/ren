@@ -130,6 +130,17 @@ export type AppProfileOAuthAppGate = { name: string; isConfigured: boolean }
 
 export type McpToolPrice = { usd: number; unit: string; note?: string }
 
+export type McpInspectionServer = {
+  name?: string
+  title?: string
+  version?: string
+  description?: string
+  icon?: string
+  websiteUrl?: string
+}
+
+export type McpInspectionClient = "metadata-document" | "registration" | "oauth-app"
+
 export type AgentMembershipID = string
 
 export type SessionID = string
@@ -623,6 +634,11 @@ export type AppProfileLink = { appId: AppID; profileId: AppProfileID | null }
 export type CredentialProfileOwner = { kind: "profile"; profileId: AppProfileID }
 
 export type AppListingTool = { name: string; description: string; readOnly: boolean; price?: McpToolPrice }
+
+export type McpInspectionAuth =
+  | { type: "none" }
+  | { type: "oauth"; scopes: Array<string>; client: McpInspectionClient }
+  | { type: "bearer" | "basic" | "unknown" }
 
 export type AgentMembershipInfo = {
   id: AgentMembershipID
@@ -1261,6 +1277,15 @@ export type CredentialOwner =
   | CredentialProfileOwner
 
 export type AppListingTools = { [x: PrimitiveSlug]: Array<AppListingTool> }
+
+export type McpInspectionResult = {
+  reachable: boolean
+  server: McpInspectionServer | null
+  auth: McpInspectionAuth
+  tools: Array<AppListingTool> | null
+  source: "tools-list" | "server-card" | null
+  problem: string | null
+}
 
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
 
@@ -7068,6 +7093,10 @@ export type AppRegistryGetOutput = AppRegistryInfo
 export type AppToolsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
 export type AppToolsGetOutput = AppListingTools
+
+export type McpInspectMcpInspectInput = { readonly url: { readonly url: string }["url"] }
+
+export type McpInspectMcpInspectOutput = McpInspectionResult
 
 export type AgentMembershipListInput = {
   readonly spaceId?: {

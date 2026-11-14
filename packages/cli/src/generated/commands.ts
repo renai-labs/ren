@@ -957,6 +957,11 @@ export const CredentialConnect = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
+export const McpInspect = {
+  url: Argument.String("url").pipe(Argument.withDescription("The MCP server’s streamable HTTP address.")),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const EnvironmentProviderList = {}
 
 export const EnvironmentProviderBrains = {}
@@ -2055,6 +2060,17 @@ export const commands = [
         Command.withDescription("Delete a file"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.FilesDelete(input)),
+        ),
+      ),
+    ]),
+  ),
+  Command.make("mcp").pipe(
+    Command.withDescription("Inspect MCP servers"),
+    Command.withSubcommands([
+      Command.make("inspect", McpInspect).pipe(
+        Command.withDescription("Read a remote MCP server’s auth and tools"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.McpInspect(input)),
         ),
       ),
     ]),

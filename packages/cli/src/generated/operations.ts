@@ -2060,6 +2060,13 @@ export const CredentialConnect = (input: Command.Command.Config.Infer<typeof Com
     (client, request) => client["credential-connect"]["credential"]["connect"]({ ...request.payload }),
   )
 
+export const McpInspect = (input: Command.Command.Config.Infer<typeof Commands.McpInspect>) =>
+  Operation.run(
+    ClientApi.groups["mcp-inspect"].endpoints["mcp.inspect"],
+    { payload: { url: input["url"] }, input: input["input"], labels: { url: "<url>" } },
+    (client, request) => client["mcp-inspect"]["mcp"]["inspect"]({ ...request.payload }),
+  )
+
 export const EnvironmentProviderList = () =>
   Operation.run(
     ClientApi.groups["environmentProvider"].endpoints["environmentProvider.list"],

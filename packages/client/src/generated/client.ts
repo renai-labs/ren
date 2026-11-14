@@ -144,6 +144,8 @@ import type {
   AppRegistryGetOutput,
   AppToolsGetInput,
   AppToolsGetOutput,
+  McpInspectMcpInspectInput,
+  McpInspectMcpInspectOutput,
   AgentMembershipListInput,
   AgentMembershipListOutput,
   AgentMembershipCreateInput,
@@ -1440,6 +1442,22 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "mcp-inspect": {
+      mcp: {
+        inspect: (input: McpInspectMcpInspectInput, requestOptions?: RequestOptions) =>
+          request<McpInspectMcpInspectOutput>(
+            {
+              method: "POST",
+              path: `/mcp/inspect`,
+              body: { url: input["url"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     "agent-membership": {
       list: (input: AgentMembershipListInput, requestOptions?: RequestOptions) =>
