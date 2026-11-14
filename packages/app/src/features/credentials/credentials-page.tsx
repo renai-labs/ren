@@ -22,7 +22,7 @@ import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Pages } from "../../lib/pages.js"
 import { Search } from "../../lib/search.js"
-import { fromApp, isSpaceApp, usedIn } from "../../lib/apps.js"
+import { fromApp, usedIn } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
@@ -120,12 +120,8 @@ function OrgApps() {
   const setOpened = (app: string | undefined) => void navigate({ search: (previous) => ({ ...previous, app }) })
   const [profile, setProfile] = useState<ProfileTarget>()
   const { client } = RouterContext.useRouterContext()
-  const spaces = useSpaces().spaces
   const list = useInfiniteQuery(Pages.connectedApps(client))
-  const used = (list.data?.pages ?? [])
-    .flatMap((page) => page.items)
-    .map(fromApp)
-    .filter((app) => !isSpaceApp(app, spaces))
+  const used = (list.data?.pages ?? []).flatMap((page) => page.items).map(fromApp)
   const app = useApp(opened).app
   const profiles = useAppProfiles(used.map((each) => each.id))
   const accounts = useAppProfiles(app ? [app.id] : [])

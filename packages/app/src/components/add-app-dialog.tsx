@@ -12,7 +12,7 @@ import { useAddManaged } from "./profile-dialog.js"
 import { Loading } from "@ren/ui/loading"
 import { AppRegistryPages } from "../lib/app-registry.js"
 import { Search } from "../lib/search.js"
-import { fromApp, fromRegistry, hasManaged, isSpaceApp, type CatalogApp } from "../lib/apps.js"
+import { fromApp, fromRegistry, hasManaged, type CatalogApp } from "../lib/apps.js"
 import { errorMessage } from "../lib/errors.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -87,7 +87,7 @@ function AppResults(props: {
   const listed = (pages.data?.pages ?? []).flatMap((page) => page.items)
   const own = (apps.data?.items ?? [])
     .map(fromApp)
-    .filter((app) => !isSpaceApp(app, spaces.spaces) && Search.matches(props.query, app.name, app.description))
+    .filter((app) => Search.matches(props.query, app.name, app.description))
   const managed = new Set([
     ...listed.filter((app) => app.managed).map((app) => app.id),
     ...own.filter(hasManaged).map((app) => app.id),

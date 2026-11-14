@@ -3,9 +3,8 @@ import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
-import { fromApp, fromRegistry, hasManaged, isSpaceApp, mentionColor, type Status } from "../../lib/apps.js"
+import { fromApp, fromRegistry, hasManaged, mentionColor, type Status } from "../../lib/apps.js"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
-import { useSpaces } from "../../lib/use-spaces.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Repositories } from "../../lib/repositories.js"
@@ -101,26 +100,21 @@ function useRepositoryMentions(spaceId: string | undefined): ReadonlyArray<Menti
 
 function useAppMentions(query: string | undefined, mentions: ReadonlyArray<Composer.MentionedApp>) {
   const { api } = RouterContext.useRouterContext()
-  const spaces = useSpaces().spaces
   const own = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
   const found = useQuery({
     ...api["app-registry"].list.queryOptions({ page: 1, pageSize, ...(query && { query }) }),
     enabled: query !== undefined,
     placeholderData: keepPreviousData,
   })
+  const ownApps = (own.data?.items ?? []).map(fromApp)
   const managed = new Set([
-    ...(own.data?.items ?? [])
-      .map(fromApp)
-      .filter(hasManaged)
-      .map((app) => app.id),
+    ...ownApps.filter(hasManaged).map((app) => app.id),
     ...(found.data?.items ?? []).filter((app) => app.managed).map((app) => app.id),
   ])
   const byId = new Map<string, Composer.MentionedApp>(
-    [
-      ...(own.data?.items ?? []).map(fromApp).filter((app) => !isSpaceApp(app, spaces)),
-      ...mentions,
-      ...(query === undefined ? [] : (found.data?.items ?? []).map(fromRegistry)),
-    ].map((app) => [app.id, app]),
+    [...ownApps, ...mentions, ...(query === undefined ? [] : (found.data?.items ?? []).map(fromRegistry))].map(
+      (app) => [app.id, app],
+    ),
   )
   return {
     byId,

@@ -68,8 +68,7 @@ import { ProfileDialog, useAddManaged, type ProfileTarget } from "../../componen
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
 import { StatusDot } from "../../components/app-list.js"
-import { useSpaces } from "../../lib/use-spaces.js"
-import { isSpaceApp, statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
+import { statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
 import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
 import { useStep } from "../../lib/use-step.js"
@@ -140,7 +139,6 @@ const addingApps = (state: { adding: boolean; empty: boolean; requested: boolean
   state.adding || (state.empty && state.requested)
 
 function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const spaces = useSpaces()
   const space = useSpaceApps(props.spaceId)
   const [connecting, setConnecting] = useState<ProfileTarget & { fromAdding?: boolean }>()
   const open = props.open
@@ -150,7 +148,7 @@ function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open:
   if (space.pending || !from) return null
   const apps = [...new Set(space.profiles.map((profile) => profile.appId))].flatMap((appId) => {
     const app = space.app(appId)
-    return app && !isSpaceApp(app, spaces.spaces) ? [{ app, status: space.status(appId), here: space.here(appId) }] : []
+    return app ? [{ app, status: space.status(appId), here: space.here(appId) }] : []
   })
   const shown = apps.slice(0, 3)
   const expired = apps.filter((each) => each.status === "expired").length

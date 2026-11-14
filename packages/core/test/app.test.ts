@@ -50,6 +50,29 @@ it.live("read access follows reach, while edits and transfers keep owner checks"
   }),
 )
 
+it.live("an app cannot have the name of its owner space, on create, edit or transfer", () =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    const organizationId = yield* Seed.organization()
+    const actor = yield* ProfilesFixture.user(organizationId, "Ana")
+    const design = yield* ProfilesFixture.space(actor, "Design")
+    const refused = (space: string) => ({
+      _tag: "Primitive.Conflict",
+      message: `An app cannot have the name of its space, “${space}”.`,
+    })
+    expect(yield* Effect.flip(ProfilesFixture.app(actor, design, "design", { name: "design" }))).toMatchObject(
+      refused("Design"),
+    )
+    const app = yield* ProfilesFixture.app(actor, design, "design-kit", { name: "Design Kit" })
+    const edit = { ...definition(app), name: "DESIGN", expectedRevision: app.revision }
+    expect(yield* Effect.flip(apps.update(actor, app.id, edit))).toMatchObject(refused("Design"))
+    const kit = yield* ProfilesFixture.space(actor, "design kit")
+    expect(yield* Effect.flip(apps.transferOwnership(actor, app.id, { spaceId: kit }))).toMatchObject(
+      refused("design kit"),
+    )
+  }),
+)
+
 it.live("connected lists every app with a profile the actor sees, registry apps too", () =>
   Effect.gen(function* () {
     const apps = yield* App.Service
