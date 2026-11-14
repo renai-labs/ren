@@ -33,6 +33,15 @@ variable "domain" {
   description = "The deployment's domain, for example ren.example.com. The app serves on it; api. and egress. are under it."
 }
 
+variable "alias_domain" {
+  type = object({
+    name    = string
+    publish = bool
+  })
+  default     = null
+  description = "A second domain in an existing public zone, for example example.com. The app also serves on it and the API on api.<name>; machines keep using `domain`. With publish false, the stack makes only the certificate and the load balancer rule. With publish true, it also takes the CloudFront alias and points the zone's records here: another distribution must not hold the alias."
+}
+
 variable "database_security_group_id" {
   type        = string
   description = "Security group of the Postgres instance. This stack adds one ingress rule to it, from the server only."
