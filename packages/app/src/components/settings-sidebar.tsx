@@ -55,11 +55,11 @@ export const settingsSections = [
         icon: IconShield,
         admin: true,
       },
+      { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
       { id: "credentials", to: "/settings/credentials", label: "Credentials", icon: IconKey },
+      { id: "channels", to: "/settings/channels", label: "Channels", icon: IconMessagesFilled },
       { id: "machines", to: "/settings/machines", label: "Machines", icon: IconCpu, admin: true },
       { id: "billing", to: "/settings/billing", label: "Billing & plans", icon: IconCreditCard, admin: true },
-      { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
-      { id: "channels", to: "/settings/channels", label: "Channels", icon: IconMessagesFilled },
     ],
   },
 ] as const
