@@ -21,6 +21,7 @@ Generated clients follow the protocol `HttpApi`.
 | Spec                                                                 | Pending                                                                                                                         |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | [app-connections.md](app-connections.md)                             | One Add app sheet, app status, account rules (last space, Use here, unique names), seed data                                    |
+| [app/spaces.md](app/spaces.md)                                       | Inbox usage, task-card review actions, Drive and Memory on one `FileBrowser` and `FileSystem` contract, the chat panel, search  |
 | [tasks.md](tasks.md)                                                 | Handoff to the next agent, drag and drop, review start as a flag, dashboard                                                     |
 | [chat-list.md](chat-list.md)                                         | The app's chat filters, webhook chats, stable pages, search at scale                                                            |
 | [cli.md](cli.md)                                                     | `ren2 api`, connection profiles, device login, chat and streaming                                                               |

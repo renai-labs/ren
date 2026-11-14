@@ -1,18 +1,19 @@
 import { useState, type ComponentType } from "react"
 import { useScrollEdges } from "../../lib/use-scroll-edges.js"
-import { Link } from "@tanstack/react-router"
 import type { TaskInfo } from "@ren/client"
 import { IconCalendarDue, IconGhostFilled, IconHandStop, IconPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 import { NewTaskDialog } from "../../components/new-task-dialog.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
-import { LabelBadge, PriorityIcon, StatusIcon, UnassignedIcon } from "../../components/task-meta.js"
+import { LabelBadge, PriorityIcon, SpaceBadge, StatusIcon, UnassignedIcon } from "../../components/task-meta.js"
 import { formatShortDate } from "@ren/ui/time"
 import { useAgents } from "../../lib/use-agents.js"
 import { useMembers } from "../../lib/use-members.js"
+import { useSpaces } from "../../lib/use-spaces.js"
 import { LinkChip } from "./task-links.js"
 import { TaskCardActions } from "./task-card-actions.js"
+import { TaskLink } from "./task-scope.js"
 
 export type BoardGroup = {
   readonly id: string
@@ -35,14 +36,18 @@ function BoardAssignee(props: { task: TaskInfo }) {
 function CardFooter(props: { task: TaskInfo; show: (property: string) => boolean }) {
   const task = props.task
   const show = props.show
-  const priority = show("priority") && task.priority
-  const due = show("due") && task.dueAt
-  if (!(show("labels") && task.labels.length > 0) && !priority && !due) return null
+  const spaces = useSpaces()
+  const space = show("space") ? <SpaceBadge name={spaces.spaceName(task.spaceId)} /> : null
+  const labels = show("labels") ? task.labels : []
+  const priority = show("priority") ? task.priority : null
+  const due = show("due") ? task.dueAt : null
+  if (!space && labels.length === 0 && !priority && !due) return null
   return (
-    <div className={cn("flex min-h-5 items-center gap-1.5", show("status") && "pl-6")}>
-      {show("labels")
-        ? task.labels.map((label) => <LabelBadge key={label.id} name={label.name} color={label.color} />)
-        : null}
+    <div className={cn("flex min-h-5 flex-wrap items-center gap-1.5", show("status") && "pl-6")}>
+      {space}
+      {labels.map((label) => (
+        <LabelBadge key={label.id} name={label.name} color={label.color} />
+      ))}
       <span className="grow" />
       {due ? (
         <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
@@ -50,7 +55,7 @@ function CardFooter(props: { task: TaskInfo; show: (property: string) => boolean
           {formatShortDate(due)}
         </span>
       ) : null}
-      {show("priority") && task.priority ? <PriorityIcon priority={task.priority} /> : null}
+      {priority ? <PriorityIcon priority={priority} /> : null}
     </div>
   )
 }
@@ -83,14 +88,13 @@ function BoardCard(props: {
             <StatusIcon task={task} />
           </span>
         ) : null}
-        <Link
-          to="/tasks/$taskId"
-          params={{ taskId: task.id }}
+        <TaskLink
+          taskId={task.id}
           draggable={false}
           className="line-clamp-2 min-w-0 grow font-medium outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
         >
           {task.title}
-        </Link>
+        </TaskLink>
         <span className="flex h-5 shrink-0 items-center gap-1.5">
           {task.humanReview ? <IconHandStop aria-label="Needs your review" className="size-4 text-chart-3" /> : null}
           {link ? <LinkChip link={link} /> : null}

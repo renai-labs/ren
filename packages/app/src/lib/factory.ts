@@ -1,5 +1,4 @@
 import type { InsightsRow, SpaceInfo, TaskInfo } from "@ren/client"
-import type { StageSpend } from "@ren/ui/factory-board"
 import {
   AREAS,
   SPEND_STAGES,
@@ -104,20 +103,6 @@ export function realWorld(input: {
     events: [],
     timelines,
   }
-}
-
-export function spendToday(spend: Partial<Record<SpendStage, ReadonlyArray<InsightsRow>>>, now: number) {
-  const today = startOfDay(now)
-  return Object.fromEntries(
-    SPEND_STAGES.map((stage) => {
-      const rows = (spend[stage] ?? []).filter((row) => dayOf(row) === today)
-      const total: StageSpend = {
-        spentToday: rows.reduce((sum, row) => sum + usd(row), 0),
-        tokensToday: rows.reduce((sum, row) => sum + tokens(row), 0),
-      }
-      return [stage, total]
-    }),
-  )
 }
 
 const sumOf = (days: ReadonlyArray<DailyStat>, pick: (day: DailyStat) => number) =>

@@ -1,6 +1,5 @@
 import type { TaskInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
 import { IconArchive, IconCircleCheck, IconCircleX, IconExternalLink, IconPlayerPlay } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
@@ -8,18 +7,18 @@ import { toast } from "@ren/ui/sonner"
 import { RowMenu } from "../../components/row-menu.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { TaskScopeContext } from "./task-scope-context.js"
 
 const failed = (title: string) => (error: unknown) => toast.error(title, { description: errorMessage(error) })
 
 export function TaskCardActions(props: { task: TaskInfo }) {
   const { api } = RouterContext.useRouterContext()
-  const navigate = useNavigate()
+  const scope = TaskScopeContext.useOpen()
   const task = props.task
   const start = useMutation(api.task.start.mutationOptions())
   const update = useMutation(api.task.update.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
-  const open = (session?: string) =>
-    void navigate({ to: "/tasks/$taskId", params: { taskId: task.id }, search: session ? { session } : {} })
+  const open = (session?: string) => scope.task(task.id, session)
   return (
     <span className="absolute right-2.5 bottom-2.5 z-10 flex items-center gap-1 rounded-md bg-card opacity-0 transition-opacity duration-150 ease-out group-hover/card:opacity-100 focus-within:opacity-100 has-data-popup-open:opacity-100 pointer-coarse:opacity-100">
       <RowMenu

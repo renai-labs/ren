@@ -1,5 +1,5 @@
 import { useId, type SVGProps } from "react"
-import { IconLineDashed } from "@tabler/icons-react"
+import { IconCube, IconLineDashed } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { cn } from "cn"
 import type { TaskInfo } from "@ren/client"
@@ -179,6 +179,15 @@ export function PriorityIcon(props: { priority: string | null; className?: strin
 }
 
 export const labelColor = (color: string | null | undefined) => color ?? "var(--muted-foreground)"
+
+export function SpaceBadge(props: { name: string }) {
+  return (
+    <Badge variant="outline" className="h-6 gap-1.5 rounded-full bg-muted">
+      <IconCube />
+      {props.name}
+    </Badge>
+  )
+}
 
 export function LabelBadge(props: { name: string; color?: string | null | undefined }) {
   return (

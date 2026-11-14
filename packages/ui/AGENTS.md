@@ -24,7 +24,7 @@ The design system: shadcn's components (style `base-nova` on Base UI, Tabler ico
 
 ## Software Factory
 
-- `factory-board` and `factory-analytics` render a space's factory from a `FactoryWorld` and `Analytics` the app builds from real tasks, agents and `/insights`.
+- `factory-analytics` renders a factory space's Overview from a `FactoryWorld` and `Analytics` the app builds from real tasks, agents and `/insights`.
 - `src/lib/factory/simulate.ts` builds a simulated factory. The app uses it only for the figures the API does not report yet (tickets, QA passes, runs and time per stage), as `VARIANTS.md` lists under "Factory overview". Replace each one when the API reports it.
 
 ## Testing

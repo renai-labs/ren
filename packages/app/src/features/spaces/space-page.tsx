@@ -56,19 +56,15 @@ function NotJoined(props: { space: SpaceInfo }) {
   )
 }
 
+const ownPages = new Set(["artifacts", "tasks"])
+
 export function SpaceLayout() {
   const space = useSpace()
   const path = Routing.useRenderedPath().split("/")
   const tab = path.at(3) ?? "inbox"
-  const factory = (tab === "overview" || tab === "tasks") && isSoftwareFactory(space)
+  const factory = tab === "overview" && isSoftwareFactory(space)
   const section = spaceSections[tab] ?? spaceSections.inbox
   if (space.membershipId === null) return <NotJoined space={space} />
-  if ((tab === "automations" && path.at(4)) || tab === "artifacts")
-    return (
-      <Suspense fallback={<SpaceSectionSkeleton />}>
-        <Outlet />
-      </Suspense>
-    )
   if (factory)
     return (
       <div className="flex min-h-0 w-full flex-1 flex-col px-8 pt-2">
@@ -76,6 +72,12 @@ export function SpaceLayout() {
           <Outlet />
         </Suspense>
       </div>
+    )
+  if (ownPages.has(tab) || (tab === "automations" && path.at(4) !== undefined))
+    return (
+      <Suspense fallback={<SpaceSectionSkeleton />}>
+        <Outlet />
+      </Suspense>
     )
   return (
     <Page title={section.title} description={section.description?.(space.name)} width={section.width}>

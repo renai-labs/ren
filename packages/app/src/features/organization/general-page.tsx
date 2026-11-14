@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
@@ -8,7 +7,6 @@ import { ModelPicker } from "../../components/model-picker.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { useMe } from "../../lib/use-me.js"
-import { useAutosave } from "../../lib/use-autosave.js"
 import { errorMessage } from "../../lib/errors.js"
 import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -23,8 +21,6 @@ export function GeneralSettingsPage() {
   const settings = useSuspenseQuery(api["organization-settings"].get.queryOptions({ idOrSlug: me.organization.id }))
   const update = useMutation(api["organization-settings"].update.mutationOptions())
   const current = settings.data.settings
-  const [instructions, setInstructions] = useState<string>()
-  const draft = instructions ?? current.instructions ?? ""
   const saveSettings = (patch: {
     instructions?: string
     model?: { endpointId: string; modelId: string; variant?: string }
@@ -33,11 +29,9 @@ export function GeneralSettingsPage() {
       { id: me.organization.id, settings: { ...current, ...patch } },
       { onError: (error) => toast.error("Couldn’t save the settings", { description: errorMessage(error) }) },
     )
-  useAutosave(instructions, current.instructions ?? "", (value) => saveSettings({ instructions: value }))
   const model = current.model
   const organization = me.organization
   const canUpdate = settings.data.canUpdate
-  const saving = update.isPending
   const chooseModel = (next: { id: string; providerID: string; variant?: string }) =>
     void saveSettings({
       model: { endpointId: next.providerID, modelId: next.id, ...(next.variant && { variant: next.variant }) },
@@ -109,12 +103,12 @@ export function GeneralSettingsPage() {
       >
         <InstructionsField
           label="Instructions"
-          value={draft}
+          value={current.instructions ?? ""}
           readOnly={!canUpdate}
-          onChange={setInstructions}
+          saving={update.isPending}
+          onSave={(instructions) => saveSettings({ instructions })}
           placeholder={"# Organization instructions\n\n- Conventions every agent should follow."}
         />
-        <p className="text-xs text-muted-foreground">{saving ? "Saving…" : "Changes save automatically."}</p>
       </Section>
     </Page>
   )

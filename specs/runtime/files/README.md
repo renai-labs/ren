@@ -132,4 +132,4 @@ A right sheet from a button at the top right of the chat. It lists the chat's up
 
 1. Chats on a cell (no mount): how a non-inline file reaches the agent.
 2. Slack files to the drive, and `upload_file` with a drive path (F12).
-3. Drive pages in the app (F13).
+3. Drive pages in the app (F13): [`specs/app/spaces.md`](../../app/spaces.md), parts 2 and 3.

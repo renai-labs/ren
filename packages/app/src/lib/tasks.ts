@@ -26,11 +26,11 @@ const one = (values: ReadonlyArray<string> | undefined) => (values?.length === 1
 
 type TaskFilterInput = Omit<TaskListInput, "page" | "pageSize">
 
-export function taskListInput(search: TaskSearch): TaskFilterInput {
+export function taskListInput(search: TaskSearch, space?: string): TaskFilterInput {
   const filters = search.filters ?? {}
   const status = one(filters.status)
   const priority = one(filters.priority)
-  const spaceId = one(filters.space)
+  const spaceId = space ?? one(filters.space)
   const agentId = one(filters.agent)
   const ownerId = one(filters.owner)
   const label = one(filters.label)
