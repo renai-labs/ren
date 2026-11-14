@@ -47,6 +47,53 @@ describe("Memory", () => {
       }),
   )
 
+  it.live("the memory lists one folder at a time, folders first, and reads a file as text", () =>
+    Effect.gen(function* () {
+      const memory = yield* Memory.Service
+      const owner = yield* Seed.owner()
+      const ada = { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] }
+      const spaceId = owner.spaceId
+      yield* Effect.forEach(
+        [
+          ["memory.md", "- Ship on Fridays.\n"],
+          ["people/ana.md", "Ana leads design ✓"],
+          ["people/team/bo.md", "Bo."],
+          ["notes.txt", "Notes."],
+        ] as const,
+        ([path, content]) => memory.write(ada, { spaceId, path, content }),
+        { discard: true },
+      )
+      expect(yield* memory.fileSystem.list(ada, { spaceId })).toEqual({
+        entries: [
+          { path: "people/", type: "directory" },
+          { path: "memory.md", type: "file", size: 19, mime: "text/markdown" },
+          { path: "notes.txt", type: "file", size: 6, mime: "text/plain" },
+        ],
+        cursor: null,
+        actions: ["write", "remove"],
+      })
+      expect((yield* memory.fileSystem.list(ada, { spaceId, folder: "people/" })).entries).toEqual([
+        { path: "people/team/", type: "directory" },
+        { path: "people/ana.md", type: "file", size: 20, mime: "text/markdown" },
+      ])
+      expect(yield* memory.fileSystem.read(ada, { spaceId, path: "people/ana.md" })).toEqual({
+        path: "people/ana.md",
+        mime: "text/markdown",
+        size: 20,
+        encoding: "utf8",
+        content: "Ana leads design ✓",
+        truncated: false,
+      })
+      yield* memory.fileSystem.remove(ada, { spaceId, path: "people/team/bo.md" })
+      expect(
+        (yield* memory.fileSystem.list(ada, { spaceId, folder: "people" })).entries.map((entry) => entry.path),
+      ).toEqual(["people/ana.md"])
+      expect((yield* Effect.flip(memory.fileSystem.read(ada, { spaceId, path: "people/bo.md" })))._tag).toBe(
+        "Primitive.NotFound",
+      )
+    }),
+  )
+
   it.live("an edit whose text is missing or occurs twice changes nothing", () =>
     Effect.gen(function* () {
       const memory = yield* Memory.Service
@@ -116,6 +163,16 @@ describe("Memory", () => {
         expect((yield* Effect.flip(memory.write(agent, { ...file, spaceId: other })))._tag).toBe("Primitive.Forbidden")
         yield* memory.write(agent, { ...file, spaceId: owner.spaceId })
         expect(yield* memory.list(agent, { spaceId: other })).toEqual([])
+        const actions = (actor: Actor.Info, spaceId?: Space.ID) =>
+          Effect.map(memory.fileSystem.list(actor, spaceId ? { spaceId } : {}), (page) => page.actions)
+        expect(yield* actions(admin)).toEqual(["write", "remove"])
+        expect(yield* actions(outsider)).toEqual([])
+        expect(yield* actions(agent)).toEqual([])
+        expect(yield* actions(agent, owner.spaceId)).toEqual(["write", "remove"])
+        expect(yield* actions(agent, other)).toEqual([])
+        expect((yield* Effect.flip(memory.fileSystem.remove(outsider, { path: "memory.md" })))._tag).toBe(
+          "Primitive.Forbidden",
+        )
       }),
   )
 })

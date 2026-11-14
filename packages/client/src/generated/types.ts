@@ -64,8 +64,6 @@ export type ReferenceDescription = string
 
 export type MemoryPath = string
 
-export type DriveFile = { path: string; size: number; modifiedAt: string }
-
 export type WriteResultUpload = {
   uploadId: string
   uploadUrl: string
@@ -74,6 +72,19 @@ export type WriteResultUpload = {
 }
 
 export type DriveLink = { url: string; expiresAt: string }
+
+export type FileSystemEntryType = "file" | "directory"
+
+export type FileSystemAction = "upload" | "write" | "remove"
+
+export type FileSystemContent = {
+  path: string
+  mime: string
+  size: number
+  encoding: "utf8" | "base64"
+  content: string
+  truncated: boolean
+}
 
 export type AgentID = string
 
@@ -558,7 +569,13 @@ export type ReferenceInfo = {
 
 export type MemoryFile = { path: MemoryPath; content: string }
 
-export type DriveListing = { folders: Array<string>; files: Array<DriveFile>; cursor: string | null }
+export type FileSystemEntry = {
+  path: string
+  type: FileSystemEntryType
+  size?: number
+  modifiedAt?: string
+  mime?: string
+}
 
 export type TaskEventAssigned = {
   _tag: "assigned"
@@ -1157,6 +1174,12 @@ export type EnvironmentTemplateInfo = {
 export type PermissionRuleList = Array<PermissionRule>
 
 export type ReferenceList = Array<ReferenceInfo>
+
+export type FileSystemPage = {
+  entries: Array<FileSystemEntry>
+  cursor: string | null
+  actions: Array<FileSystemAction>
+}
 
 export type CredentialSkillRequirement = CredentialEnv | CredentialOAuthApp
 
@@ -2569,26 +2592,6 @@ export type MemoryDeleteInput = {
 
 export type MemoryDeleteOutput = void
 
-export type DriveListInput = {
-  readonly spaceId?: {
-    readonly spaceId?: string | undefined
-    readonly folder?: string | undefined
-    readonly cursor?: string | undefined
-  }["spaceId"]
-  readonly folder?: {
-    readonly spaceId?: string | undefined
-    readonly folder?: string | undefined
-    readonly cursor?: string | undefined
-  }["folder"]
-  readonly cursor?: {
-    readonly spaceId?: string | undefined
-    readonly folder?: string | undefined
-    readonly cursor?: string | undefined
-  }["cursor"]
-}
-
-export type DriveListOutput = DriveListing
-
 export type DriveStartUploadInput = {
   readonly spaceId?: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["spaceId"]
   readonly path: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["path"]
@@ -2617,12 +2620,74 @@ export type DriveDownloadInput = {
 
 export type DriveDownloadOutput = DriveLink
 
-export type DriveDeleteInput = {
-  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
-  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+export type FilesListInput = {
+  readonly source: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["source"]
+  readonly spaceId?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["spaceId"]
+  readonly folder?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["folder"]
+  readonly cursor?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["cursor"]
 }
 
-export type DriveDeleteOutput = void
+export type FilesListOutput = FileSystemPage
+
+export type FilesReadInput = {
+  readonly source: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["source"]
+  readonly spaceId?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["spaceId"]
+  readonly path: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["path"]
+}
+
+export type FilesReadOutput = FileSystemContent
+
+export type FilesDeleteInput = {
+  readonly source: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["source"]
+  readonly spaceId?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["spaceId"]
+  readonly path: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["path"]
+}
+
+export type FilesDeleteOutput = void
 
 export type AgentListInput = {
   readonly spaceId?: {

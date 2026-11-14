@@ -224,9 +224,9 @@ describe("Retention", () => {
         .set({ archived_at: null })
         .where(inArray(Database.Schema.space.id, spaceIds))
       const folders = yield* Effect.forEach(spaceIds, (spaceId) =>
-        Effect.map(drives.list(ada, { spaceId }), (listing) => listing.folders),
+        Effect.map(drives.fileSystem.list(ada, { spaceId }), (page) => page.entries.map((entry) => entry.path)),
       )
-      expect(folders).toEqual([[], ["notes"]])
+      expect(folders).toEqual([[], ["notes/"]])
     }),
   )
 })

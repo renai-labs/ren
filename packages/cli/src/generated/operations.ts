@@ -1982,20 +1982,6 @@ export const MemoryDelete = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["memory"]["delete"]({ ...request.query }),
   )
 
-export const DriveList = (input: Command.Command.Config.Infer<typeof Commands.DriveList>) =>
-  Operation.run(
-    ClientApi.groups["drive"].endpoints["drive.list"],
-    {
-      query: { spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
-      labels: { spaceId: "--space", folder: "--folder", cursor: "--cursor" },
-      lookups: {
-        spaceId: (client, value) =>
-          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
-    (client, request) => client["drive"]["list"]({ ...request.query }),
-  )
-
 export const DriveDownload = (input: Command.Command.Config.Infer<typeof Commands.DriveDownload>) =>
   Operation.run(
     ClientApi.groups["drive"].endpoints["drive.download"],
@@ -2010,18 +1996,46 @@ export const DriveDownload = (input: Command.Command.Config.Infer<typeof Command
     (client, request) => client["drive"]["download"]({ ...request.query }),
   )
 
-export const DriveDelete = (input: Command.Command.Config.Infer<typeof Commands.DriveDelete>) =>
+export const FilesList = (input: Command.Command.Config.Infer<typeof Commands.FilesList>) =>
   Operation.run(
-    ClientApi.groups["drive"].endpoints["drive.delete"],
+    ClientApi.groups["files"].endpoints["files.list"],
     {
-      query: { path: input["path"], spaceId: input["spaceId"] },
-      labels: { path: "<path>", spaceId: "--space" },
+      query: { source: input["source"], spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
+      labels: { source: "--source", spaceId: "--space", folder: "--folder", cursor: "--cursor" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
-    (client, request) => client["drive"]["delete"]({ ...request.query }),
+    (client, request) => client["files"]["list"]({ ...request.query }),
+  )
+
+export const FilesRead = (input: Command.Command.Config.Infer<typeof Commands.FilesRead>) =>
+  Operation.run(
+    ClientApi.groups["files"].endpoints["files.read"],
+    {
+      query: { path: input["path"], source: input["source"], spaceId: input["spaceId"] },
+      labels: { path: "<path>", source: "--source", spaceId: "--space" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["files"]["read"]({ ...request.query }),
+  )
+
+export const FilesDelete = (input: Command.Command.Config.Infer<typeof Commands.FilesDelete>) =>
+  Operation.run(
+    ClientApi.groups["files"].endpoints["files.delete"],
+    {
+      query: { path: input["path"], source: input["source"], spaceId: input["spaceId"] },
+      labels: { path: "<path>", source: "--source", spaceId: "--space" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["files"]["delete"]({ ...request.query }),
   )
 
 export const CredentialConnect = (input: Command.Command.Config.Infer<typeof Commands.CredentialConnect>) =>

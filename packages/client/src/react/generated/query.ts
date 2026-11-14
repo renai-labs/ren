@@ -40,10 +40,11 @@ import type {
   MemoryWriteInput,
   MemoryEditInput,
   MemoryDeleteInput,
-  DriveListInput,
   DriveStartUploadInput,
   DriveDownloadInput,
-  DriveDeleteInput,
+  FilesListInput,
+  FilesReadInput,
+  FilesDeleteInput,
   AgentListInput,
   AgentGetInput,
   AgentCreateInput,
@@ -584,15 +585,6 @@ export function make(client: ReturnType<typeof Ren.make>) {
       },
     },
     drive: {
-      list: {
-        queryKey: (input?: DriveListInput) =>
-          input === undefined ? (["drive", "list"] as const) : (["drive", "list", input] as const),
-        queryOptions: (input?: DriveListInput) =>
-          queryOptions({
-            queryKey: ["drive", "list", input] as const,
-            queryFn: (context) => client["drive"]["list"](input, { signal: context.signal }),
-          }),
-      },
       startUpload: {
         mutationKey: () => ["drive", "startUpload"] as const,
         mutationOptions: () =>
@@ -610,12 +602,32 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["drive"]["download"](input, { signal: context.signal }),
           }),
       },
+    },
+    files: {
+      list: {
+        queryKey: (input?: FilesListInput) =>
+          input === undefined ? (["files", "list"] as const) : (["files", "list", input] as const),
+        queryOptions: (input: FilesListInput) =>
+          queryOptions({
+            queryKey: ["files", "list", input] as const,
+            queryFn: (context) => client["files"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      read: {
+        queryKey: (input?: FilesReadInput) =>
+          input === undefined ? (["files", "read"] as const) : (["files", "read", input] as const),
+        queryOptions: (input: FilesReadInput) =>
+          queryOptions({
+            queryKey: ["files", "read", input] as const,
+            queryFn: (context) => client["files"]["read"](input, { signal: context.signal }),
+          }),
+      },
       delete: {
-        mutationKey: () => ["drive", "delete"] as const,
+        mutationKey: () => ["files", "delete"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["drive", "delete"] as const,
-            mutationFn: (input: DriveDeleteInput) => client["drive"]["delete"](input),
+            mutationKey: ["files", "delete"] as const,
+            mutationFn: (input: FilesDeleteInput) => client["files"]["delete"](input),
           }),
       },
     },

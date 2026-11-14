@@ -27,6 +27,7 @@ import { Favicon } from "@ren/core/favicon"
 import { Insights } from "@ren/core/insights"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
+import { FileSystem } from "@ren/core/file-system"
 import { Memory } from "@ren/core/memory"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { ScheduleTrigger } from "@ren/core/schedule-trigger"
@@ -82,6 +83,7 @@ import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
 import { DriveHandler } from "./handlers/api/drive.js"
+import { FilesHandler } from "./handlers/api/files.js"
 import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
@@ -192,6 +194,7 @@ export const layer = Layer.mergeAll(
         OrganizationSettingsHandler,
         MemoryHandler,
         DriveHandler,
+        FilesHandler,
         AgentHandler,
         AppHandler,
         AppProfileHandler,
@@ -236,6 +239,7 @@ export const layer = Layer.mergeAll(
         OrganizationInviteLink.layer,
         MachineTemplates.layer,
         Memory.layer,
+        FileSystem.layer.pipe(Layer.provide(Memory.layer)),
         Insights.layer,
         settingsAndAgents,
         InfraSpecs.layer.pipe(

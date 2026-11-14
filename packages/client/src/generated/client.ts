@@ -82,14 +82,16 @@ import type {
   MemoryEditOutput,
   MemoryDeleteInput,
   MemoryDeleteOutput,
-  DriveListInput,
-  DriveListOutput,
   DriveStartUploadInput,
   DriveStartUploadOutput,
   DriveDownloadInput,
   DriveDownloadOutput,
-  DriveDeleteInput,
-  DriveDeleteOutput,
+  FilesListInput,
+  FilesListOutput,
+  FilesReadInput,
+  FilesReadOutput,
+  FilesDeleteInput,
+  FilesDeleteOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -987,18 +989,6 @@ export function make(options: ClientOptions) {
         ),
     },
     drive: {
-      list: (input?: DriveListInput, requestOptions?: RequestOptions) =>
-        request<DriveListOutput>(
-          {
-            method: "GET",
-            path: `/drive`,
-            query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 503],
-            empty: false,
-          },
-          requestOptions,
-        ),
       startUpload: (input: DriveStartUploadInput, requestOptions?: RequestOptions) =>
         request<DriveStartUploadOutput>(
           {
@@ -1023,14 +1013,45 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      delete: (input: DriveDeleteInput, requestOptions?: RequestOptions) =>
-        request<DriveDeleteOutput>(
+    },
+    files: {
+      list: (input: FilesListInput, requestOptions?: RequestOptions) =>
+        request<FilesListOutput>(
+          {
+            method: "GET",
+            path: `/files`,
+            query: {
+              source: input["source"],
+              spaceId: input["spaceId"],
+              folder: input["folder"],
+              cursor: input["cursor"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: FilesReadInput, requestOptions?: RequestOptions) =>
+        request<FilesReadOutput>(
+          {
+            method: "GET",
+            path: `/files/content`,
+            query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: FilesDeleteInput, requestOptions?: RequestOptions) =>
+        request<FilesDeleteOutput>(
           {
             method: "DELETE",
-            path: `/drive/file`,
-            query: { spaceId: input["spaceId"], path: input["path"] },
+            path: `/files`,
+            query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] },
             successStatus: 204,
-            declaredStatuses: [401, 403, 404, 503],
+            declaredStatuses: [400, 401, 403, 404, 503],
             empty: true,
           },
           requestOptions,

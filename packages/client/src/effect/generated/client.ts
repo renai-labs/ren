@@ -489,17 +489,6 @@ const adaptGroupMemory = (raw: RawClient["memory"]) => ({
   delete: EndpointMemoryDelete(raw),
 })
 
-type DriveListRequest = Parameters<RawClient["drive"]["drive.list"]>[0]
-type DriveListInput = {
-  readonly spaceId?: DriveListRequest["query"]["spaceId"]
-  readonly folder?: DriveListRequest["query"]["folder"]
-  readonly cursor?: DriveListRequest["query"]["cursor"]
-}
-const EndpointDriveList = (raw: RawClient["drive"]) => (input?: DriveListInput) =>
-  raw["drive.list"]({
-    query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
-  }).pipe(Effect.mapError(mapClientError))
-
 type DriveStartUploadRequest = Parameters<RawClient["drive"]["drive.startUpload"]>[0]
 type DriveStartUploadInput = {
   readonly spaceId?: DriveStartUploadRequest["payload"]["spaceId"]
@@ -522,21 +511,49 @@ const EndpointDriveDownload = (raw: RawClient["drive"]) => (input: DriveDownload
     query: { spaceId: input["spaceId"], path: input["path"], disposition: input["disposition"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type DriveDeleteRequest = Parameters<RawClient["drive"]["drive.delete"]>[0]
-type DriveDeleteInput = {
-  readonly spaceId?: DriveDeleteRequest["query"]["spaceId"]
-  readonly path: DriveDeleteRequest["query"]["path"]
+const adaptGroupDrive = (raw: RawClient["drive"]) => ({
+  startUpload: EndpointDriveStartUpload(raw),
+  download: EndpointDriveDownload(raw),
+})
+
+type FilesListRequest = Parameters<RawClient["files"]["files.list"]>[0]
+type FilesListInput = {
+  readonly source: FilesListRequest["query"]["source"]
+  readonly spaceId?: FilesListRequest["query"]["spaceId"]
+  readonly folder?: FilesListRequest["query"]["folder"]
+  readonly cursor?: FilesListRequest["query"]["cursor"]
 }
-const EndpointDriveDelete = (raw: RawClient["drive"]) => (input: DriveDeleteInput) =>
-  raw["drive.delete"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+const EndpointFilesList = (raw: RawClient["files"]) => (input: FilesListInput) =>
+  raw["files.list"]({
+    query: { source: input["source"], spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type FilesReadRequest = Parameters<RawClient["files"]["files.read"]>[0]
+type FilesReadInput = {
+  readonly source: FilesReadRequest["query"]["source"]
+  readonly spaceId?: FilesReadRequest["query"]["spaceId"]
+  readonly path: FilesReadRequest["query"]["path"]
+}
+const EndpointFilesRead = (raw: RawClient["files"]) => (input: FilesReadInput) =>
+  raw["files.read"]({ query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] } }).pipe(
     Effect.mapError(mapClientError),
   )
 
-const adaptGroupDrive = (raw: RawClient["drive"]) => ({
-  list: EndpointDriveList(raw),
-  startUpload: EndpointDriveStartUpload(raw),
-  download: EndpointDriveDownload(raw),
-  delete: EndpointDriveDelete(raw),
+type FilesDeleteRequest = Parameters<RawClient["files"]["files.delete"]>[0]
+type FilesDeleteInput = {
+  readonly source: FilesDeleteRequest["query"]["source"]
+  readonly spaceId?: FilesDeleteRequest["query"]["spaceId"]
+  readonly path: FilesDeleteRequest["query"]["path"]
+}
+const EndpointFilesDelete = (raw: RawClient["files"]) => (input: FilesDeleteInput) =>
+  raw["files.delete"]({ query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupFiles = (raw: RawClient["files"]) => ({
+  list: EndpointFilesList(raw),
+  read: EndpointFilesRead(raw),
+  delete: EndpointFilesDelete(raw),
 })
 
 type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
@@ -2178,6 +2195,7 @@ const adaptClient = (raw: RawClient) => ({
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
   memory: adaptGroupMemory(raw["memory"]),
   drive: adaptGroupDrive(raw["drive"]),
+  files: adaptGroupFiles(raw["files"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),
