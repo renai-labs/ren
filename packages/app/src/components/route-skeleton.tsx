@@ -112,7 +112,7 @@ function TaskSkeleton() {
   )
 }
 
-export function TasksSkeleton() {
+function TasksSkeleton() {
   return (
     <PageSkeleton title="Tasks" width="full" shape="tasks-first-load" actions={<div className="min-h-8" />}>
       <TasksSample />
