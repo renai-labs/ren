@@ -5,6 +5,7 @@ import { Link, useLocation } from "@tanstack/react-router"
 import {
   IconAdjustmentsHorizontal,
   IconArrowLeft,
+  IconBrain,
   IconCpu,
   IconMessagesFilled,
   IconBuilding,
@@ -55,6 +56,7 @@ export const settingsSections = [
         icon: IconShield,
         admin: true,
       },
+      { id: "memory", to: "/settings/memory", label: "Memory", icon: IconBrain },
       { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
       { id: "credentials", to: "/settings/credentials", label: "Credentials", icon: IconKey },
       { id: "channels", to: "/settings/channels", label: "Channels", icon: IconMessagesFilled },
