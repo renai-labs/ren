@@ -18,7 +18,7 @@ test("an edit by Ren shows as a diff with line numbers, and Open in Changes show
     ],
   })
 
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill(`${marker} change the notes`)
   await message.press("Enter")
@@ -51,7 +51,7 @@ test("a diff above 200 changed lines renders only the lines in view", async ({ p
     tools: [{ name: "write", input: { path: "big.txt", content } }],
   })
 
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill(`${marker} write the big file`)
   await message.press("Enter")

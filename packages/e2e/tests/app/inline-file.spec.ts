@@ -9,7 +9,7 @@ test("Ren's reply shows an inline-code path as a chip when the file exists, and 
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Set up the project")
   await message.press("Enter")

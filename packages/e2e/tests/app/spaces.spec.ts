@@ -2,7 +2,6 @@ import { expect, test } from "@playwright/test"
 import {
   addMember,
   appOrigin,
-  appURL,
   createOrganization,
   createSpace,
   inviteMember,
@@ -13,7 +12,7 @@ import {
 test("space placeholders stay inaccessible until the real list arrives", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.addInitScript(() => localStorage.setItem("theme.v1", JSON.stringify("light")))
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
   const held = Promise.withResolvers<void>()
   await page.route(/\/spaces\?.*pageSize=25/, async (route) => {
@@ -34,7 +33,7 @@ test("space placeholders stay inaccessible until the real list arrives", async (
 
 test("a new organization starts with a protected shared space and a personal space", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("link", { name: "Spaces" }).click()
   await expect(page.getByRole("heading", { level: 1, name: "Spaces" })).toBeVisible()
   const spaces = page.getByRole("table")
@@ -51,7 +50,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   const invitee = uniqueEmail("invitee")
   await inviteMember(page.request, invitee)
 
-  await page.goto("/app/spaces")
+  await page.goto("/spaces")
   await page.getByRole("button", { name: "New space" }).click()
   const create = page.getByRole("dialog", { name: "New space" })
   await create.getByRole("textbox", { name: "Name" }).fill("Research")
@@ -98,7 +97,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await page.getByRole("table").getByRole("button", { name: "Lab actions", exact: true }).click()
   await page.getByRole("menuitem", { name: "Archive space" }).click()
   await page.getByRole("alertdialog", { name: "Archive “Lab”?" }).getByRole("button", { name: "Archive" }).click()
-  await expect(page).toHaveURL(`${appURL}/spaces`)
+  await expect(page).toHaveURL(`${appOrigin}/spaces`)
   await expect(page.getByText("Lab archived")).toBeVisible()
   await expect(page.getByRole("table").getByRole("link", { name: "Lab", exact: true })).toBeHidden()
 })
@@ -115,7 +114,7 @@ test("a member browses shared spaces they are not in, and an admin joins one", a
   const other = await browser.newContext({ baseURL: appOrigin })
   await addMember(page.request, other.request, { name: "Ada Lovelace", email: uniqueEmail("ada") })
   const ada = await other.newPage()
-  await ada.goto("/app/spaces")
+  await ada.goto("/spaces")
   await expect(ada.getByRole("link", { name: "Cryptography" })).toHaveCount(0)
   await ada.getByRole("tab", { name: "All spaces" }).click()
   await expect(ada).toHaveURL(/tab=all/)
@@ -131,7 +130,7 @@ test("a member browses shared spaces they are not in, and an admin joins one", a
   await expect(ada.getByRole("button", { name: "Join space" })).toHaveCount(0)
   await other.close()
 
-  await page.goto("/app/spaces?tab=all")
+  await page.goto("/spaces?tab=all")
   await page.getByRole("row").filter({ hasText: "Cryptography" }).getByRole("button", { name: "Join" }).click()
   await expect(page.getByText("Joined Cryptography")).toBeVisible()
   await expect(page.getByRole("button", { name: "Switch space (current: Cryptography)" })).toBeVisible()
@@ -145,7 +144,7 @@ test("a member adds two people to a space in one go", async ({ page, request }) 
   await inviteMember(page.request, invitee)
   const spaceId = await createSpace(page.request, "Research")
 
-  await page.goto(`/app/spaces/${spaceId}/members`)
+  await page.goto(`/spaces/${spaceId}/members`)
   await page.getByRole("button", { name: "Add member" }).click()
   const add = page.getByRole("dialog", { name: "Add member" })
   await add.getByRole("option", { name: /Alan Turing/ }).click()

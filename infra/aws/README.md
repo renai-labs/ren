@@ -4,8 +4,10 @@ Terraform for one Ren deployment on AWS. The deploy workflow (`.github/workflows
 
 The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren2/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
 
+The site and the app share the domain's root. The bucket holds the site's files at its root and the app's under `/app/`; the CloudFront function in `app.tf` picks one for each page. Site sections (`/docs`, `/pricing` and the rest of the list in `app.tf`) and `/home` get the site. `/` gets the app when the browser has the `ren_signed_in` cookie, which the app sets while someone is signed in, and the landing page otherwise. Any other page gets the app. An old link under `/app` redirects to the same page without `/app`. Set the server's `APP_URL` to the domain's root, with no `/app`.
+
 ```
-browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
+browser ──HTTPS──▶ CloudFront ──▶ S3 (site files, /; app files, /app/)
 browser ──HTTPS <posthog_proxy.name>.<domain>──▶ PostHog's managed reverse proxy ──▶ PostHog
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
 browser ──HTTPS POST (form the server signed)──▶ S3 (drives)

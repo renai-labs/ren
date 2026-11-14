@@ -7,7 +7,7 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react"
 import { defineConfig, loadEnv } from "vite"
 import type { Plugin } from "vite"
 
-const base = "/app/"
+const buildBase = "/app/"
 
 const firstPaintFonts = new Set(["sf-pro.woff2"])
 
@@ -23,7 +23,7 @@ const preloadFonts: Plugin = {
           tag: "link",
           attrs: {
             rel: "preload",
-            href: `${base}${output.fileName}`,
+            href: `${buildBase}${output.fileName}`,
             as: "font",
             type: "font/woff2",
             crossorigin: true,
@@ -39,7 +39,7 @@ const pdfjsAssets: Plugin = (() => {
   return {
     name: "ren:pdfjs-assets",
     configureServer: (server) => {
-      server.middlewares.use(`${base}pdfjs`, (request, response, next) => {
+      server.middlewares.use("/pdfjs", (request, response, next) => {
         const target = path.join(root, path.normalize(request.url ?? "/"))
         if (!folders.some((folder) => target.startsWith(path.join(root, folder))) || !existsSync(target)) return next()
         response.end(readFileSync(target))
@@ -58,7 +58,7 @@ const pdfjsAssets: Plugin = (() => {
 })()
 
 export default defineConfig((env) => ({
-  base,
+  base: env.command === "build" ? buildBase : "/",
   resolve: {
     alias: [
       {

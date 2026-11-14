@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test"
-import { appURL, createUser, uniqueEmail } from "../lib/servers.js"
+import { appOrigin, createUser, uniqueEmail } from "../lib/servers.js"
 
 test("searches actions and settings from the sidebar and the keyboard", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("search") })
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Ada Lovelace")
 
   await page.keyboard.press("ControlOrMeta+k")
@@ -23,7 +23,7 @@ test("searches actions and settings from the sidebar and the keyboard", async ({
   await page.getByRole("button", { name: "Search" }).click()
   await page.getByRole("combobox", { name: "Search" }).fill("prefer")
   await page.keyboard.press("Enter")
-  await expect(page).toHaveURL(`${appURL}/settings/preferences`)
+  await expect(page).toHaveURL(`${appOrigin}/settings/preferences`)
 
   await page.keyboard.press("ControlOrMeta+k")
   await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible()

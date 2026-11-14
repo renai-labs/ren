@@ -1,5 +1,5 @@
-# The site and the web app: static builds in a private bucket behind CloudFront. The site is served
-# at the root, the app under /app/.
+# The site and the web app: static builds in a private bucket behind CloudFront. The site's files sit
+# at the bucket's root and the app's under /app/; both serve pages at the root of the domain.
 
 resource "aws_s3_bucket" "app" {
   bucket = "${var.name}-app-${data.aws_caller_identity.current.account_id}"
@@ -37,27 +37,54 @@ resource "aws_cloudfront_origin_access_control" "app" {
   signing_protocol                  = "sigv4"
 }
 
-# A path under /ren2/ (CLI releases) or with a file extension is a file and goes to the bucket. Without
-# one, a path under /app/ is a client route, so it gets the app's index; any other path is a site page,
-# so it gets that directory's index.
+# A path under /ren2/ (CLI releases) or with a file extension is a file and goes to the bucket; the
+# app's files sit under /app/. The app's pages are at the root, so any other path under /app is an old
+# link: it redirects to the same page without /app and sets the signed-in hint, because whoever opens it
+# wants the app. A site section gets that directory's index and /home the landing page. / gets the app
+# when the app has set the hint cookie and the landing page when it has not. Every other path is a page
+# of the app.
 resource "aws_cloudfront_function" "app" {
   name    = "${var.name}-app"
   runtime = "cloudfront-js-2.0"
   publish = true
   code    = <<-EOF
+    var site = ["/demo", "/docs", "/pricing", "/privacy", "/raw", "/terms", "/why"]
+    var hint = "ren_signed_in"
+
+    function query(querystring) {
+      var pairs = []
+      Object.keys(querystring).forEach(function (key) {
+        var each = querystring[key].multiValue || [querystring[key]]
+        each.forEach(function (item) { pairs.push(item.value === "" ? key : key + "=" + item.value) })
+      })
+      return pairs.length === 0 ? "" : "?" + pairs.join("&")
+    }
+
     function handler(event) {
       var request = event.request
       var uri = request.uri
-      if (uri === "/app") {
-        return { statusCode: 301, statusDescription: "Moved Permanently", headers: { location: { value: "/app/" } } }
+      var file = uri.split("/").pop().indexOf(".") !== -1
+      if (uri === "/app" || (uri.startsWith("/app/") && !file)) {
+        var cookies = {}
+        cookies[hint] = { value: "1", attributes: "Path=/; Max-Age=7776000; Secure; SameSite=Lax" }
+        return {
+          statusCode: 302,
+          statusDescription: "Found",
+          headers: { location: { value: (uri.slice(4) || "/") + query(request.querystring) } },
+          cookies: cookies,
+        }
       }
-      if (uri.startsWith("/ren2/") || uri.split("/").pop().indexOf(".") !== -1) {
+      if (uri.startsWith("/ren2/") || file) {
         return request
       }
-      if (uri.startsWith("/app/")) {
-        request.uri = "/app/index.html"
-      } else {
+      if (uri === "/") {
+        request.uri = request.cookies[hint] ? "/app/index.html" : "/index.html"
+      } else if (uri === "/home" || uri === "/home/") {
+        request.uri = "/index.html"
+      } else if (site.some(function (path) { return uri === path || uri.startsWith(path + "/") })) {
         request.uri = uri.endsWith("/") ? uri + "index.html" : uri + "/index.html"
+      } else {
+        request.uri = "/app/index.html"
       }
       return request
     }

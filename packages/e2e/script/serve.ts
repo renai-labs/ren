@@ -171,7 +171,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     ...TestDrives.config,
     BETTER_AUTH_URL: serverURL,
     TRUSTED_ORIGINS: appOrigin,
-    APP_URL: `${appOrigin}/app`,
+    APP_URL: appOrigin,
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
@@ -232,9 +232,8 @@ Bun.serve({
   hostname: "127.0.0.1",
   fetch: async (request) => {
     const pathname = new URL(request.url).pathname
-    if (!pathname.startsWith("/app/")) return new Response("Not found", { status: 404 })
     const file = Bun.file(path.join(dist, path.normalize(pathname.slice("/app/".length))))
-    if (await file.exists()) return new Response(file)
+    if (pathname.startsWith("/app/") && (await file.exists())) return new Response(file)
     return new Response(Bun.file(path.join(dist, "index.html")), {
       headers: { "content-type": "text/html" },
     })

@@ -7,7 +7,7 @@ test.describe.configure({ timeout: 120_000 })
 
 const send = async (page: Page, marker: string) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill(`${marker} wait`)
   await message.press("Enter")

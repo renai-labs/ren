@@ -11,7 +11,7 @@ test("a member hides steps with Messages only and keeps them in the timeline wit
     reply: "All done",
     tools: [{ name: "glob", input: { pattern: "*" } }],
   })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill(`Look around ${marker}`)
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
@@ -20,7 +20,7 @@ test("a member hides steps with Messages only and keeps them in the timeline wit
   const fold = page.getByRole("button", { name: /^Worked/ })
   await expect(fold).toBeVisible()
 
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await page.getByRole("slider", { name: "Timeline detail" }).focus()
   await page.keyboard.press("Home")
   await expect(page.getByText("Hide all activity.")).toBeVisible()
@@ -28,7 +28,7 @@ test("a member hides steps with Messages only and keeps them in the timeline wit
   await expect(page.getByText("All done")).toBeVisible({ timeout: brainStart })
   await expect(page.getByRole("button", { name: /^Worked/ })).toHaveCount(0)
 
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await page.getByRole("slider", { name: "Timeline detail" }).focus()
   await page.keyboard.press("End")
   await page.getByRole("switch", { name: "Fold finished turns" }).click()
@@ -43,7 +43,7 @@ test("expansion preferences update open chats without discarding unrelated manua
   const marker = await script(page.request, {
     tools: [{ name: "shell", input: { command: "echo expansion-preference" } }],
   })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill(`Run the command ${marker}`)
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -52,7 +52,7 @@ test("expansion preferences update open chats without discarding unrelated manua
   await expect(shell).toHaveAttribute("aria-expanded", "false")
 
   const preferences = await page.context().newPage()
-  await preferences.goto("/app/settings/preferences")
+  await preferences.goto("/settings/preferences")
   await preferences.getByRole("button", { name: "Advanced", exact: true }).click()
   const collapse = preferences.getByRole("switch", { name: "Collapse Shell", exact: true })
   await collapse.click()

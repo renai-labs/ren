@@ -12,7 +12,7 @@ test("a member opens one of three attached images in the viewer, steps to the ne
 }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"])
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Plan the launch")
   await message.press("Enter")

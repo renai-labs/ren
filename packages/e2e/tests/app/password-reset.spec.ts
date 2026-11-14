@@ -5,7 +5,7 @@ test("a forgotten password is reset through the emailed link", async ({ page, re
   const email = uniqueEmail("reset")
   await createUser(request, { name: "Ada Lovelace", email })
 
-  await page.goto("/app/login")
+  await page.goto("/login")
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByRole("link", { name: "Forgot your password?" }).click()
@@ -27,7 +27,7 @@ test("a forgotten password is reset through the emailed link", async ({ page, re
 })
 
 test("a used or missing reset link offers a new one", async ({ page }) => {
-  await page.goto("/app/reset-password?token=not-a-token")
+  await page.goto("/reset-password?token=not-a-token")
   await page.getByLabel("New password", { exact: true }).fill("second password")
   await page.getByLabel("Confirm new password").fill("second password")
   await page.getByRole("button", { name: "Continue", exact: true }).click()

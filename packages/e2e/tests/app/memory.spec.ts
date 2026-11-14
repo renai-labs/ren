@@ -5,7 +5,7 @@ test("an owner keeps the organization's memory as a list: a new file opens in a 
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/settings/memory")
+  await page.goto("/settings/memory")
   const main = page.getByRole("main")
   await expect(main.getByText("Nothing remembered yet.")).toBeVisible()
 

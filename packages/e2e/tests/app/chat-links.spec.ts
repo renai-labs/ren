@@ -1,14 +1,14 @@
 import { expect, test, type Page } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { addMember, appOrigin, appURL, createOrganization, script, serverURL, uniqueEmail } from "../lib/servers.js"
+import { addMember, appOrigin, createOrganization, script, serverURL, uniqueEmail } from "../lib/servers.js"
 
 const brainStart = 30_000
 
 test.describe.configure({ timeout: 120_000 })
 
 const startChat = async (page: Page, text: string, spaceId?: string) => {
-  await page.goto(spaceId ? `/app/?spaceId=${spaceId}` : "/app/")
+  await page.goto(spaceId ? `/?spaceId=${spaceId}` : "/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill(text)
   await message.press("Enter")
@@ -30,25 +30,25 @@ test("a chat link shows the chat's title and opens in place, and a member outsid
   const other = new URL(page.url()).pathname.split("/").at(-1) ?? ""
   expect(Schema.is(Session.ID)(other)).toBe(true)
 
-  const marker = await script(page.request, { reply: `Continuing from ${appURL}/sessions/${other} and ${other}.` })
+  const marker = await script(page.request, { reply: `Continuing from ${appOrigin}/sessions/${other} and ${other}.` })
   await startChat(page, `Link the other chat ${marker}`, personal)
   const chips = page.locator("[data-slot=chat-mention]")
   await expect(chips).toHaveCount(2, { timeout: brainStart })
   await expect(chips.first()).toHaveText("Stub title")
-  await expect(chips.first()).toHaveAttribute("href", `${appURL}/sessions/${other}`)
+  await expect(chips.first()).toHaveAttribute("href", `${appOrigin}/sessions/${other}`)
   await chips.first().click()
-  await expect(page).toHaveURL(`${appURL}/sessions/${other}`)
+  await expect(page).toHaveURL(`${appOrigin}/sessions/${other}`)
   expect(page.context().pages()).toHaveLength(1)
 
   const member = await browser.newContext({ baseURL: appOrigin })
   await addMember(page.request, member.request, { name: "Alan Turing", email: uniqueEmail("alan") })
   const alan = await member.newPage()
-  const hidden = await script(alan.request, { reply: `I picked up from ${appURL}/sessions/${other} and ${other}.` })
+  const hidden = await script(alan.request, { reply: `I picked up from ${appOrigin}/sessions/${other} and ${other}.` })
   await startChat(alan, `Link the other chat ${hidden}`)
   await expect(alan.getByText("I picked up from")).toBeVisible({ timeout: brainStart })
-  await expect(alan.getByRole("link", { name: `${appURL}/sessions/${other}` })).toBeVisible()
+  await expect(alan.getByRole("link", { name: `${appOrigin}/sessions/${other}` })).toBeVisible()
   await expect(alan.locator("[data-slot=chat-mention]")).toHaveCount(0)
-  await alan.getByRole("link", { name: `${appURL}/sessions/${other}` }).hover()
+  await alan.getByRole("link", { name: `${appOrigin}/sessions/${other}` }).hover()
   await expect(alan.getByText("Chat not found or not shared with you")).toBeVisible()
   await member.close()
 })

@@ -32,7 +32,7 @@ test("chat placeholders remain until the first message page arrives", async ({ p
     },
   )
   try {
-    await page.goto(`/app/sessions/${sessionId}`)
+    await page.goto(`/sessions/${sessionId}`)
     await requested.promise
     await expect(page.getByRole("button", { name: "Open panel", exact: true })).toBeVisible()
     await expect(page.getByRole("status", { name: "Loading messages", exact: true })).toBeVisible()
@@ -49,7 +49,7 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const composer = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await composer.fill("Plan the launch")
   await composer.press("Enter")
@@ -81,7 +81,7 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
   await expect(page.getByText("Ask @src/budget.ts to check it")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(3)
 
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(async () => {
     await page.reload()
     await page.getByRole("link", { name: "Stub title" }).click({ timeout: 1_000 })
@@ -93,7 +93,7 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
 
 test("a finished turn with no answer says that Ren sent an empty response", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Say nothing [stub:empty-reply]")
   await message.press("Enter")
@@ -104,7 +104,7 @@ test("a finished turn with no answer says that Ren sent an empty response", asyn
 
 test("a member renames a chat from its breadcrumb", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("textbox", { name: "Message", exact: true })
   await message.fill("Draft the agenda")
   await message.press("Enter")
@@ -129,7 +129,7 @@ test("a member opens the model picker with its shortcut and undoes the last mess
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -148,7 +148,7 @@ test("a member opens the model picker with its shortcut and undoes the last mess
 
 test.fixme("a member undoes the last message with a command", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -167,7 +167,7 @@ test("a member queues a message while Ren works, steers with the other key, reca
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -215,7 +215,7 @@ test("a member queues a message while Ren works, steers with the other key, reca
 
 test("a member opens the terminal and a file and renames the chat with slash commands", async ({ page }) => {
   await createOrganization(page.request, { name: "Mary Jackson" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("textbox", { name: "Message", exact: true })
   await message.fill("Draft the board memo")
   await message.press("Enter")
@@ -245,7 +245,7 @@ test("a member opens the terminal and a file and renames the chat with slash com
 
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -262,7 +262,7 @@ test("a member finds text in a chat and closes find with Escape", async ({ page 
 
 test("a member edits a sent message, which replaces it and what came after", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const start = page.getByRole("main")
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await start.getByRole("button", { name: "Send" }).click()
@@ -305,7 +305,7 @@ test("a member sees the context in the chat header after a reply and compacts th
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Summarise the plan")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -323,7 +323,7 @@ test("a member quotes a reply with a comment, and the message shows the quote ca
   page,
 }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Plan the budget")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -347,7 +347,7 @@ test("a member quotes a reply into the composer, removes a chip and sends the ot
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })

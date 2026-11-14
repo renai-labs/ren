@@ -3,7 +3,7 @@ import { emailedCode, password, uniqueEmail } from "../lib/servers.js"
 
 test("a new account is created and verified with the emailed code", async ({ page, request }) => {
   const email = uniqueEmail("signup")
-  await page.goto("/app/signup")
+  await page.goto("/signup")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(page.getByText("Enter your name")).toBeVisible()
   await expect(page.getByText("Enter a valid email")).toBeVisible()
@@ -37,7 +37,7 @@ test("a new account is created and verified with the emailed code", async ({ pag
 })
 
 test("a rejected address returns to the details step with the server’s reason", async ({ page }) => {
-  await page.goto("/app/signup")
+  await page.goto("/signup")
   await page.getByLabel("Name").fill("Ada Lovelace")
   await page.getByLabel("Email").fill(`ada-${crypto.randomUUID()}@mailinator.com`)
   await page.getByRole("button", { name: "Continue", exact: true }).click()

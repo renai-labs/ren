@@ -30,7 +30,7 @@ test("U3: a model added in the gateway appears in the picker, and a chat started
     (await page.request.post(controlURL, { data: [...defaults, entry("stub", "stub-added", "Stub Added")] })).status(),
   ).toBe(204)
   try {
-    await page.goto("/app/")
+    await page.goto("/")
     const start = page.getByRole("form", { name: "Start a chat" })
     await expect(async () => {
       await page.reload()

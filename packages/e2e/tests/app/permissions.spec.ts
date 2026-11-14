@@ -5,7 +5,7 @@ test("an admin's organization rule locks the space, and a space edits its own ru
   await createOrganization(page.request, { name: "Grace Hopper" })
   const spaceId = await createSpace(page.request, "Platform")
 
-  await page.goto("/app/settings/permissions")
+  await page.goto("/settings/permissions")
   await expect(page.getByRole("heading", { level: 1, name: "Permissions" })).toBeVisible()
   const commands = page.getByRole("group", { name: "Run commands" })
   await commands.getByRole("button", { name: "Ask" }).click()
@@ -13,7 +13,7 @@ test("an admin's organization rule locks the space, and a space edits its own ru
   await page.getByRole("tab", { name: "Rules" }).click()
   await expect(page.getByRole("cell", { name: "Every command" })).toBeVisible()
 
-  await page.goto(`/app/spaces/${spaceId}/permissions`)
+  await page.goto(`/spaces/${spaceId}/permissions`)
   const locked = page.getByRole("group", { name: "Run commands" })
   await expect(locked.getByRole("button", { name: "Ask" })).toHaveAttribute("aria-pressed", "true")
   await expect(locked.getByRole("button", { name: "Allow" })).toBeDisabled()

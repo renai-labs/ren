@@ -7,7 +7,7 @@ test.describe.configure({ timeout: 120_000 })
 
 test("a member runs a command from the composer's shell mode and recalls it with the up arrow", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Set up the project")
   await message.press("Enter")

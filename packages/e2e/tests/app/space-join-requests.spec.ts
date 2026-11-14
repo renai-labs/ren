@@ -12,7 +12,7 @@ async function setup(page: Page, browser: Browser) {
   const context = await browser.newContext({ baseURL: appOrigin })
   await addMember(page.request, context.request, { name: "Alan Turing", email: uniqueEmail("alan") })
   const alan = await context.newPage()
-  await alan.goto("/app/spaces?tab=all")
+  await alan.goto("/spaces?tab=all")
   const spaceRow = alan.getByRole("row").filter({ hasText: "Cryptography" })
   return {
     context,
@@ -34,7 +34,7 @@ test("a member asks to join a space, and a member of it approves", async ({ page
   const sidebar = alan.getByRole("region", { name: "Sidebar spaces" })
   await expect(sidebar.getByRole("link", { name: /Cryptography/ })).toHaveCount(0)
 
-  await page.goto(`/app/spaces/${spaceId}/members`)
+  await page.goto(`/spaces/${spaceId}/members`)
   await expect(page.getByRole("tab", { name: /Requests\s*1/ })).toBeVisible()
   await page.getByRole("tab", { name: /Requests/ }).click()
   await expect(page).toHaveURL(/members\?tab=requests/)
@@ -58,7 +58,7 @@ test("a declined member can ask again", async ({ page, browser }) => {
     .click()
   await expect(spaceRow).toContainText("Requested")
 
-  await page.goto(`/app/spaces/${spaceId}/members?tab=requests`)
+  await page.goto(`/spaces/${spaceId}/members?tab=requests`)
   const row = page.getByRole("row", { name: /Alan Turing/ })
   await expect(row).toContainText("No note")
   await row.getByRole("button", { name: "Decline" }).click()

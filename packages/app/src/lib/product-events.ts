@@ -3,9 +3,9 @@ export * as ProductEvents from "./product-events.js"
 import type { Platform } from "../platform/platform.js"
 
 export const autocaptureUrls: ReadonlyArray<RegExp> = [
-  /\/app\/apps(?:[/?#]|$)/u,
-  /\/app\/settings\/(?:channels|credentials|providers)(?:[/?#]|$)/u,
-  /\/app\/spaces\/[^/]+\/(?:apps|channels|credentials)(?:[/?#]|$)/u,
+  /\/\/[^/]+\/apps(?:[/?#]|$)/u,
+  /\/\/[^/]+\/settings\/(?:channels|credentials|providers)(?:[/?#]|$)/u,
+  /\/\/[^/]+\/spaces\/[^/]+\/(?:apps|channels|credentials)(?:[/?#]|$)/u,
 ]
 
 export type Integration =

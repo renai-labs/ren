@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test"
-import { appURL, createOrganization } from "../lib/servers.js"
+import { appOrigin, createOrganization } from "../lib/servers.js"
 
 test("creates an organization from the profile card and switches to it", async ({ page }) => {
   const company = (await createOrganization(page.request, { name: "Ada Lovelace" })).organization
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()
   await page.getByRole("button", { name: "Create organization" }).click()
 
@@ -23,6 +23,6 @@ test("creates an organization from the profile card and switches to it", async (
   await expect(dialog.getByText(name.toLowerCase().replace(" ", "-"), { exact: true })).toBeVisible()
   await dialog.getByRole("button", { name: "Create organization" }).click()
   await expect(dialog).toBeHidden()
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appOrigin}/`)
   await expect(page.getByRole("combobox", { name: `Switch organization (current: ${name})` })).toBeVisible()
 })

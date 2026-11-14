@@ -13,12 +13,12 @@ test("a member copies a space's invite link, and another organization member ope
   const alanContext = await browser.newContext({ baseURL: appOrigin })
   await addMember(page.request, alanContext.request, { name: "Alan Turing", email: uniqueEmail("alan") })
 
-  await page.goto("/app/spaces")
+  await page.goto("/spaces")
   await page.getByRole("button", { name: "New space" }).click()
   const create = page.getByRole("dialog", { name: "New space" })
   await create.getByRole("textbox", { name: "Name" }).fill("Design")
   await create.getByRole("button", { name: "Create space" }).click()
-  await expect(page).toHaveURL(/\/app\/spaces\/spc_\w+/)
+  await expect(page).toHaveURL(/\/spaces\/spc_\w+/)
   await page.getByRole("button", { name: "Space", exact: true }).click()
   await page.getByRole("link", { name: "Members" }).click()
 
@@ -26,7 +26,7 @@ test("a member copies a space's invite link, and another organization member ope
   const dialog = page.getByRole("dialog", { name: "Invite link", exact: true })
   await expect(dialog).toContainText("Used 0 times")
   const link = dialog.getByRole("textbox", { name: "Link" })
-  await expect(link).toHaveValue(/\/app\/join\/sil_/)
+  await expect(link).toHaveValue(/\/join\/sil_/)
   await dialog.getByRole("button", { name: "Copy link" }).click()
   await expect(page.getByText("Link copied")).toBeVisible()
   if (shots) await page.screenshot({ path: `${shots}/1-invite-link-dialog.png` })
@@ -38,7 +38,7 @@ test("a member copies a space's invite link, and another organization member ope
   await expect(alan.getByRole("heading", { level: 1, name: "Join Design" })).toBeVisible()
   if (shots) await alan.screenshot({ path: `${shots}/2-join-page.png` })
   await alan.getByRole("button", { name: "Join", exact: true }).click()
-  await expect(alan).toHaveURL(/\/app\/spaces\/spc_\w+/)
+  await expect(alan).toHaveURL(/\/spaces\/spc_\w+/)
   await expect(alan.getByRole("button", { name: "Switch space (current: Design)" })).toBeVisible()
   if (shots) await alan.screenshot({ path: `${shots}/3-space-after-joining.png` })
 
@@ -69,7 +69,7 @@ test("someone outside the organization cannot join with the link, and a signed-o
   browser,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/spaces")
+  await page.goto("/spaces")
   await page
     .getByRole("link", { name: /General Space/ })
     .first()
@@ -85,7 +85,7 @@ test("someone outside the organization cannot join with the link, and a signed-o
   const outsider = await browser.newContext({ baseURL: appOrigin })
   const signedOut = await outsider.newPage()
   await signedOut.goto(url)
-  await expect(signedOut).toHaveURL(/\/app\/login\?redirect=/)
+  await expect(signedOut).toHaveURL(/\/login\?redirect=/)
   await createOrganization(outsider.request, { name: "Eve Outsider" })
   await signedOut.goto(url)
   await expect(signedOut.getByRole("heading", { level: 1, name: /This link is for people in/ })).toBeVisible()

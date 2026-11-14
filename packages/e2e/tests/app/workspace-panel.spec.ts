@@ -22,7 +22,7 @@ const openTab = async (page: Page, label: string) => {
 
 test("a shell row in the transcript opens to the full command, highlighted, above its output", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Say hi [stub:bash echo hi]")
   await message.press("Enter")
@@ -42,7 +42,7 @@ test("a member runs commands in the chat's terminal, browses and opens its files
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Set up the project")
   const first = page.waitForRequest(
@@ -118,7 +118,7 @@ test("a member runs commands in the chat's terminal, browses and opens its files
     },
   })
   expect(created.ok()).toBe(true)
-  await page.goto(`/app/sessions/${repository}`)
+  await page.goto(`/sessions/${repository}`)
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
   await page.getByRole("button", { name: "Open panel", exact: true }).click()
   await panel.getByRole("button", { name: /^Changes:/ }).click()
@@ -134,7 +134,7 @@ test("a member opens a file from its chip in the chat, and copies its path from 
   const marker = await script(page.request, {
     tools: [{ name: "write", input: { path: "src/answer.ts", content: "export const answer = 42\n" } }],
   })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill(`Write the answer ${marker}`)
   await message.press("Enter")
@@ -171,7 +171,7 @@ test("a member opens a nested folder, finds a file that is not loaded yet and dr
   page,
 }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Set up the project")
   await message.press("Enter")

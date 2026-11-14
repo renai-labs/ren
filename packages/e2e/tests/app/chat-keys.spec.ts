@@ -9,7 +9,7 @@ test("a member types and pastes into the composer from anywhere on the chat page
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Plan the launch")
   await message.press("Enter")
