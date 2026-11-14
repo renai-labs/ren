@@ -39,6 +39,7 @@ import { Route as AuthedShellSettingsAdminBillingRouteImport } from "./routes/_a
 import { Route as AuthedShellSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/settings/_admin/general"
 import { Route as AuthedShellSettingsAdminMachinesRouteImport } from "./routes/_authed/_shell/settings/_admin/machines"
 import { Route as AuthedShellSettingsAdminMembersRouteImport } from "./routes/_authed/_shell/settings/_admin/members"
+import { Route as AuthedShellSettingsAdminPermissionsRouteImport } from "./routes/_authed/_shell/settings/_admin/permissions"
 import { Route as AuthedShellSettingsChannelsIndexRouteImport } from "./routes/_authed/_shell/settings/channels/index"
 import { Route as AuthedShellSettingsChannelsProviderRouteImport } from "./routes/_authed/_shell/settings/channels/$provider"
 import { Route as AuthedShellSettingsProvidersIndexRouteImport } from "./routes/_authed/_shell/settings/providers/index"
@@ -225,6 +226,12 @@ const AuthedShellSettingsAdminMembersRoute =
   AuthedShellSettingsAdminMembersRouteImport.update({
     id: "/members",
     path: "/members",
+    getParentRoute: () => AuthedShellSettingsAdminRoute,
+  } as any)
+const AuthedShellSettingsAdminPermissionsRoute =
+  AuthedShellSettingsAdminPermissionsRouteImport.update({
+    id: "/permissions",
+    path: "/permissions",
     getParentRoute: () => AuthedShellSettingsAdminRoute,
   } as any)
 const AuthedShellSettingsChannelsIndexRoute =
@@ -418,6 +425,7 @@ export interface FileRoutesByFullPath {
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/settings/machines": typeof AuthedShellSettingsAdminMachinesRoute
   "/settings/members": typeof AuthedShellSettingsAdminMembersRoute
+  "/settings/permissions": typeof AuthedShellSettingsAdminPermissionsRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
@@ -472,6 +480,7 @@ export interface FileRoutesByTo {
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/settings/machines": typeof AuthedShellSettingsAdminMachinesRoute
   "/settings/members": typeof AuthedShellSettingsAdminMembersRoute
+  "/settings/permissions": typeof AuthedShellSettingsAdminPermissionsRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
@@ -531,6 +540,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/_admin/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/_authed/_shell/settings/_admin/machines": typeof AuthedShellSettingsAdminMachinesRoute
   "/_authed/_shell/settings/_admin/members": typeof AuthedShellSettingsAdminMembersRoute
+  "/_authed/_shell/settings/_admin/permissions": typeof AuthedShellSettingsAdminPermissionsRoute
   "/_authed/_shell/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/_authed/_shell/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/_authed/_shell/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
@@ -589,6 +599,7 @@ export interface FileRouteTypes {
     | "/settings/general"
     | "/settings/machines"
     | "/settings/members"
+    | "/settings/permissions"
     | "/settings/channels/$provider"
     | "/settings/providers/keys"
     | "/spaces/$spaceId/apps"
@@ -643,6 +654,7 @@ export interface FileRouteTypes {
     | "/settings/general"
     | "/settings/machines"
     | "/settings/members"
+    | "/settings/permissions"
     | "/settings/channels/$provider"
     | "/settings/providers/keys"
     | "/spaces/$spaceId/apps"
@@ -701,6 +713,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/_admin/general"
     | "/_authed/_shell/settings/_admin/machines"
     | "/_authed/_shell/settings/_admin/members"
+    | "/_authed/_shell/settings/_admin/permissions"
     | "/_authed/_shell/settings/channels/$provider"
     | "/_authed/_shell/settings/providers/keys"
     | "/_authed/_shell/spaces/$spaceId/apps"
@@ -953,6 +966,13 @@ declare module "@tanstack/react-router" {
       path: "/members"
       fullPath: "/settings/members"
       preLoaderRoute: typeof AuthedShellSettingsAdminMembersRouteImport
+      parentRoute: typeof AuthedShellSettingsAdminRoute
+    }
+    "/_authed/_shell/settings/_admin/permissions": {
+      id: "/_authed/_shell/settings/_admin/permissions"
+      path: "/permissions"
+      fullPath: "/settings/permissions"
+      preLoaderRoute: typeof AuthedShellSettingsAdminPermissionsRouteImport
       parentRoute: typeof AuthedShellSettingsAdminRoute
     }
     "/_authed/_shell/settings/channels/": {
@@ -1214,6 +1234,7 @@ interface AuthedShellSettingsAdminRouteChildren {
   AuthedShellSettingsAdminGeneralRoute: typeof AuthedShellSettingsAdminGeneralRoute
   AuthedShellSettingsAdminMachinesRoute: typeof AuthedShellSettingsAdminMachinesRoute
   AuthedShellSettingsAdminMembersRoute: typeof AuthedShellSettingsAdminMembersRoute
+  AuthedShellSettingsAdminPermissionsRoute: typeof AuthedShellSettingsAdminPermissionsRoute
 }
 
 const AuthedShellSettingsAdminRouteChildren: AuthedShellSettingsAdminRouteChildren =
@@ -1223,6 +1244,8 @@ const AuthedShellSettingsAdminRouteChildren: AuthedShellSettingsAdminRouteChildr
     AuthedShellSettingsAdminMachinesRoute:
       AuthedShellSettingsAdminMachinesRoute,
     AuthedShellSettingsAdminMembersRoute: AuthedShellSettingsAdminMembersRoute,
+    AuthedShellSettingsAdminPermissionsRoute:
+      AuthedShellSettingsAdminPermissionsRoute,
   }
 
 const AuthedShellSettingsAdminRouteWithChildren =

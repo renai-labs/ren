@@ -13,6 +13,7 @@ import { IconCircle, IconChevronDown } from "@tabler/icons-react"
 import { ChatSkeleton, ComposerFrame } from "./chat-skeleton.js"
 import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
+import { PermissionRulesSample } from "./permission-rules.js"
 import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId, type PageWidth } from "./page.js"
 
 type SpaceSection = { title: string; description?: (space: string) => string; width?: PageWidth }
@@ -156,6 +157,7 @@ function SettingsSample() {
 
 function SpaceSectionSample(props: { section: string }) {
   const table = (columns: ReadonlyArray<string>) => <TableSample columns={columns} count={3} />
+  if (props.section === "permissions") return <PermissionRulesSample />
   if (props.section === "members") return table(["Name", "Email", "Status", ""])
   if (props.section === "credentials") return table(["Key", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
@@ -283,6 +285,7 @@ function SettingsPageSkeleton() {
     providers: "Providers",
     channels: "Channels",
     billing: "Billing & plans",
+    permissions: "Permissions",
   }
   let body = <RowsSample />
   if (section === "members") body = <TableSample columns={["Name", "Email", "Role", ""]} />
@@ -423,9 +426,10 @@ function SettingsPageSkeleton() {
           providers: "Subscriptions your agents run on.",
           credentials: "App accounts and keys you can use.",
           channels: "Invoke Ren from where your team already works.",
+          permissions: "What agents in every space may do, and what they ask first.",
         }[section]
       }
-      tabs={["members", "credentials"].includes(section) ? <div className="min-h-8" /> : undefined}
+      tabs={["members", "credentials", "permissions"].includes(section) ? <div className="min-h-8" /> : undefined}
       loading
     >
       {body}

@@ -12,6 +12,7 @@ import {
   IconKey,
   IconSearch,
   IconServer,
+  IconShield,
   IconUsers,
 } from "@tabler/icons-react"
 import { Kbd } from "@ren/ui/kbd"
@@ -47,6 +48,13 @@ export const settingsSections = [
     items: [
       { id: "general", to: "/settings/general", label: "General", icon: IconBuilding, admin: true },
       { id: "members", to: "/settings/members", label: "Members", icon: IconUsers, admin: true },
+      {
+        id: "permissions",
+        to: "/settings/permissions",
+        label: "Permissions",
+        icon: IconShield,
+        admin: true,
+      },
       { id: "credentials", to: "/settings/credentials", label: "Credentials", icon: IconKey },
       { id: "machines", to: "/settings/machines", label: "Machines", icon: IconCpu, admin: true },
       { id: "billing", to: "/settings/billing", label: "Billing & plans", icon: IconCreditCard, admin: true },

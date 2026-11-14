@@ -1,0 +1,58 @@
+import { expect, test } from "@playwright/test"
+import { createOrganization, createSpace } from "../lib/servers.js"
+
+test("an admin's organization rule locks the space, and a space edits its own rules", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const spaceId = await createSpace(page.request, "Platform")
+
+  await page.goto("/app/settings/permissions")
+  await expect(page.getByRole("heading", { level: 1, name: "Permissions" })).toBeVisible()
+  const commands = page.getByRole("group", { name: "Run commands" })
+  await commands.getByRole("button", { name: "Ask" }).click()
+  await expect(commands.getByRole("button", { name: "Ask" })).toHaveAttribute("aria-pressed", "true")
+  await page.getByRole("tab", { name: "Rules" }).click()
+  await expect(page.getByRole("cell", { name: "Every command" })).toBeVisible()
+
+  await page.goto(`/app/spaces/${spaceId}/permissions`)
+  const locked = page.getByRole("group", { name: "Run commands" })
+  await expect(locked.getByRole("button", { name: "Ask" })).toHaveAttribute("aria-pressed", "true")
+  await expect(locked.getByRole("button", { name: "Allow" })).toBeDisabled()
+  await expect(page.getByText("Set by Organization")).toBeVisible()
+  await locked.getByRole("button", { name: "Deny" }).click()
+  await expect(locked.getByRole("button", { name: "Deny" })).toHaveAttribute("aria-pressed", "true")
+
+  await page.getByRole("button", { name: "Add rule" }).click()
+  const dialog = page.getByRole("dialog", { name: "Add rule" })
+  await dialog.getByRole("button", { name: "Add rule" }).click()
+  await expect(dialog.getByText("Enter a pattern, or * for every command.")).toBeVisible()
+  await dialog.getByRole("textbox", { name: "Command" }).fill("git push *")
+  await dialog.getByRole("button", { name: "Add rule" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole("cell", { name: "git push *" })).toBeVisible()
+
+  await page.getByRole("button", { name: "Run commands rule actions" }).last().click()
+  await page.getByRole("menuitem", { name: "Edit" }).click()
+  await page.getByRole("dialog", { name: "Edit rule" }).getByRole("radio", { name: "Never" }).click()
+  await page.getByRole("button", { name: "Save rule" }).click()
+  await expect(page.getByRole("row", { name: /git push \*.*Never/ })).toBeVisible()
+
+  await page.getByRole("tab", { name: "JSON" }).click()
+  const json = page.getByRole("textbox", { name: "Rules as JSON" })
+  await json.fill('[{ "action": "webfetch", "resource": "*", "effect": "allow" }]')
+  await page.getByRole("button", { name: "Save rules" }).click()
+  await expect(json).toHaveAttribute("aria-invalid", "true")
+  await json.fill('[{ "action": "webfetch", "resource": "https://example.com/*", "effect": "deny" }]')
+  await page.getByRole("button", { name: "Save rules" }).click()
+  await expect(page.getByRole("button", { name: "Save rules" })).toBeDisabled()
+  await page.getByRole("tab", { name: "Rules" }).click()
+  await expect(page.getByRole("cell", { name: "https://example.com/*" })).toBeVisible()
+  await expect(page.getByRole("cell", { name: "git push *" })).toBeHidden()
+
+  await page.getByRole("button", { name: "Fetch web pages rule actions" }).click()
+  await page.getByRole("menuitem", { name: "Remove" }).click()
+  await page.getByRole("button", { name: "Remove rule" }).click()
+  await expect(page.getByRole("cell", { name: "https://example.com/*" })).toBeHidden()
+  await page.reload()
+  await page.getByRole("tab", { name: "Rules" }).click()
+  await expect(page.getByRole("cell", { name: "Every command" })).toBeVisible()
+})
