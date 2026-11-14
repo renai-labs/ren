@@ -7,6 +7,7 @@ export function SpaceFiles(props: { source: FileSystem.Source }) {
   return (
     <SourceFiles
       scope={{ source: props.source, spaceId: space.id }}
+      pins={props.source === "drive" ? ["artifacts"] : []}
       empty={`Open a file from ${space.name}’s ${props.source} to read it here.`}
     />
   )

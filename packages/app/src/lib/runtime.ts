@@ -37,6 +37,8 @@ const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
   "channel-mapping": ["channel-mapping", "channel-connect"],
   "channel-install": ["channel-install", "channel-mapping", "channel-connect"],
   chat: [],
+  memory: ["memory", "files"],
+  files: ["files", "memory"],
 }
 
 export function make(platform: Platform.Info) {
