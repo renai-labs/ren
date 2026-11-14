@@ -69,6 +69,7 @@ import { ChannelConnectHandler, ChannelInstallHandler, ChannelMappingHandler } f
 import { RepositoryHandler } from "./handlers/api/repository.js"
 import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
+import { ArtifactLinkRoutes } from "./artifact-link-routes.js"
 import { FaviconRoutes } from "./favicon-routes.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
@@ -291,6 +292,7 @@ export const layer = Layer.mergeAll(
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
     FaviconRoutes.layer.pipe(Layer.provide(Favicon.layer)),
+    ArtifactLinkRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(intake),
       Layer.provide(SlackTaskActions.layer),
