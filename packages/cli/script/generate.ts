@@ -296,19 +296,27 @@ const groups: ReadonlyArray<EmitCli.Group> = [
   { path: ["billing", "invoice"], description: "Manage invoices" },
 ]
 
-const references: Readonly<
-  Record<string, { readonly operation: string; readonly title: string; readonly name?: string }>
-> = {
-  spaceId: { operation: "space.get", title: "Space" },
-  ownerSpaceId: { operation: "space.get", title: "Space", name: "space" },
-  defaultSpaceId: { operation: "space.get", title: "Default space", name: "default-space" },
-  agentId: { operation: "agent.get", title: "Agent" },
-  appId: { operation: "app.get", title: "App" },
-  taskId: { operation: "task.get", title: "Task" },
-  parentId: { operation: "task.get", title: "Parent task" },
-  scheduleId: { operation: "schedule.get", title: "Schedule" },
-  webhookId: { operation: "webhook.get", title: "Webhook" },
-  profileId: { operation: "app-profile.get", title: "App profile" },
+const gets: Readonly<Record<string, string>> = {
+  "Space.ID": "space.get",
+  "Agent.ID": "agent.get",
+  "App.ID": "app.get",
+  "Task.ID": "task.get",
+  "Schedule.ID": "schedule.get",
+  "Webhook.ID": "webhook.get",
+  "AppProfile.ID": "app-profile.get",
+}
+
+const references: Readonly<Record<string, { readonly title: string; readonly name?: string }>> = {
+  spaceId: { title: "Space" },
+  ownerSpaceId: { title: "Space", name: "space" },
+  defaultSpaceId: { title: "Default space", name: "default-space" },
+  agentId: { title: "Agent" },
+  appId: { title: "App" },
+  taskId: { title: "Task" },
+  parentId: { title: "Parent task" },
+  scheduleId: { title: "Schedule" },
+  webhookId: { title: "Webhook" },
+  profileId: { title: "App profile" },
 }
 
 const resolved = (name: string, operation: string) => ({
@@ -512,12 +520,10 @@ const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; r
   const parent = own?.resource.parent
   const lookups = Object.fromEntries(
     fields.flatMap((field) => {
-      const reference = references[field.name]
-      if (reference !== undefined)
-        return [[field.name, { operation: reference.operation, input: "idOrSlug", output: "id" }]]
-      if (field.name === "id" && field.source === "params" && own?.self !== undefined)
-        return [[field.name, { operation: own.self, input: "idOrSlug", output: "id" }]]
-      return []
+      if (field.name === "id" && field.source === "params")
+        return own?.self === undefined ? [] : [[field.name, { operation: own.self, input: "idOrSlug", output: "id" }]]
+      const operation = field.identifier === undefined ? undefined : gets[field.identifier]
+      return operation === undefined ? [] : [[field.name, { operation, input: "idOrSlug", output: "id" }]]
     }),
   )
   const names = Object.fromEntries(
