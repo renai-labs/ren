@@ -234,9 +234,11 @@ export const layer = Layer.effect(
               () => Effect.fail(new Primitive.Invalid({ message: "The cursor is not valid.", field: "cursor" })),
             ),
           )
-          const folders = (listed.CommonPrefixes ?? []).flatMap((common) =>
-            common.Prefix ? [{ path: common.Prefix.slice(root.length), type: "directory" as const }] : [],
-          )
+          const folders = (listed.CommonPrefixes ?? [])
+            .flatMap((common) =>
+              common.Prefix ? [{ path: common.Prefix.slice(root.length), type: "directory" as const }] : [],
+            )
+            .filter((entry) => entry.path !== Drive.chatsFolder)
           const files = filesOf(root, listed.Contents)
             .filter((file) => `${root}${file.path}` !== under)
             .map((file) => ({
