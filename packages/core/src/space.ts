@@ -453,15 +453,6 @@ export const layer = Layer.effect(
               )
             yield* SpaceQueries.cancelJoinRequests(transaction, eq(Database.Schema.space_join_request.space_id, id))
             yield* transaction
-              .update(Database.Schema.space_invite_link)
-              .set({ archived_at: sql`now()` })
-              .where(
-                and(
-                  eq(Database.Schema.space_invite_link.space_id, id),
-                  isNull(Database.Schema.space_invite_link.archived_at),
-                ),
-              )
-            yield* transaction
               .delete(Database.Schema.channel_mapping)
               .where(eq(Database.Schema.channel_mapping.space_id, id))
             yield* transaction

@@ -66,8 +66,8 @@ describe("SpaceInviteLink", () => {
       const grace = yield* person(organizationId)
       const design = yield* spaces.create(ada, { name: "Design" })
       const own = (yield* spaces.list(ada, { page: 1, pageSize: 50 })).items.find((space) => space.kind === "private")
-      expect((yield* Effect.flip(links.get(grace, design.id)))._tag).toBe("Primitive.NotFound")
-      expect((yield* Effect.flip(links.reset(grace, design.id)))._tag).toBe("Primitive.NotFound")
+      expect((yield* Effect.flip(links.get(grace, design.id)))._tag).toBe("Primitive.Forbidden")
+      expect((yield* Effect.flip(links.reset(grace, design.id)))._tag).toBe("Primitive.Forbidden")
       expect((yield* Effect.flip(links.get(ada, own?.id ?? design.id)))._tag).toBe("Primitive.Forbidden")
     }),
   )
