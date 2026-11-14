@@ -830,9 +830,11 @@ export const layerRefresher = Layer.effect(
         ).pipe(Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })))
         if (Result.isFailure(answered)) {
           const failure = answered.failure
-          if (OAuthToken.isFatal(failure, OAuthToken.refreshFatal))
-            return yield* new CredentialRefresh.Fatal({ message: failure.code })
-          return yield* new CredentialRefresh.Transient({ message: `${failure.status} ${failure.code}` })
+          const message = [failure.status, failure.code, failure.description].filter(Boolean).join(" ")
+          // oxlint-disable-next-line ren/no-comments -- §8 rule 6: a 401 to a refresh is fatal with any code, because RFC 6749 §5.2 keeps 401 for a refused client and some servers answer a dead refresh token with 401 and no standard code (Adnova); waiting cannot fix either.
+          if (failure.status === 401 || OAuthToken.isFatal(failure, OAuthToken.refreshFatal))
+            return yield* new CredentialRefresh.Fatal({ message })
+          return yield* new CredentialRefresh.Transient({ message })
         }
         const token = answered.success
         return Option.some({
