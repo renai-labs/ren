@@ -9,6 +9,8 @@ import type { Actor } from "./actor.js"
 
 export const action = Primitive.action
 
+export const maximumNameLength = Primitive.maximumNameLength
+
 export class NotFound extends Schema.TaggedError<NotFound>()("Primitive.NotFound", { message: Schema.String }) {}
 
 export class Forbidden extends Schema.TaggedError<Forbidden>()("Primitive.Forbidden", { message: Schema.String }) {}

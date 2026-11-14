@@ -216,13 +216,31 @@ export function SpaceAppsTab() {
   const reached = reach.data?.profiles ?? []
   const byApp = Map.groupBy(reached, (each) => each.appId)
   const catalog = useApps([...byApp.keys()])
+  const bundled = [...byApp.keys()].flatMap((appId) => catalog.of(appId)?.dependsOn ?? [])
+  const dependencies = useApps(bundled)
+  const nested = useApps(bundled.flatMap((slug) => dependencies.of(slug)?.dependsOn ?? []))
   const app = useApp(opened).app
   const here: ReadonlyArray<AppProfileInfo> = app ? (byApp.get(app.id) ?? []) : []
   const from = { spaceId: space.id, name: space.name, members: space.memberCount, private: space.kind === "private" }
   const rows = [...byApp].flatMap(([appId, profiles]) => {
     const each = catalog.of(appId)
     return each
-      ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
+      ? [
+          {
+            app: each,
+            profiles,
+            usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", "),
+            needs: [
+              ...new Set([
+                ...each.dependsOn,
+                ...each.dependsOn.flatMap((slug) => dependencies.of(slug)?.dependsOn ?? []),
+              ]),
+            ].flatMap((slug) => {
+              const needed = dependencies.of(slug) ?? nested.of(slug)
+              return needed && !byApp.has(needed.id) ? [needed] : []
+            }),
+          },
+        ]
       : []
   })
   const shown = useShown(rows.filter((row) => Search.matches(query, row.app.name, row.app.description, row.usedIn)))
@@ -270,6 +288,7 @@ export function SpaceAppsTab() {
                 empty={<NoApps query={query} space={space.name} onAdd={() => setAdding(true)} />}
                 onOpen={setOpened}
                 onNew={(appId) => setProfile({ appId, from, newAccount: true })}
+                onAdd={(appId) => setProfile({ appId, from })}
                 remove={remove}
               />
             )}

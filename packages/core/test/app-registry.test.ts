@@ -226,28 +226,36 @@ it.live("duplicate dependencies reject the batch without changing existing apps"
   }),
 )
 
-it.live("publication rejects self-dependencies and cycles within a batch or through existing apps", () =>
-  Effect.gen(function* () {
-    const registry = yield* AppRegistry.Service
-    const database = yield* Database.Service
-    yield* Effect.forEach(
-      [
-        [publication("self", { dependsOn: ["self"] })],
-        [publication("first", { dependsOn: ["second"] }), publication("second", { dependsOn: ["first"] })],
-      ],
-      (apps) =>
-        Effect.gen(function* () {
-          const failure = yield* registry.publish({ apps }).pipe(Effect.flip)
-          expect(failure._tag).toBe("Primitive.Conflict")
-          expect(failure.message).toContain("Dependency cycle")
-          expect(yield* database.db.select().from(Database.Schema.app)).toEqual([])
-        }),
-    )
-    yield* registry.publish({ apps: [publication("first"), publication("second", { dependsOn: ["first"] })] })
-    const failure = yield* publish(publication("first", { dependsOn: ["second"] })).pipe(Effect.flip)
-    expect(failure._tag).toBe("Primitive.Conflict")
-    expect(failure.message).toMatch(/first -> second -> first|second -> first -> second/u)
-  }),
+it.live(
+  "publication rejects self-dependencies, cycles and chains deeper than three apps, through existing apps too",
+  () =>
+    Effect.gen(function* () {
+      const registry = yield* AppRegistry.Service
+      const database = yield* Database.Service
+      yield* Effect.forEach(
+        [
+          [publication("self", { dependsOn: ["self"] })],
+          [publication("first", { dependsOn: ["second"] }), publication("second", { dependsOn: ["first"] })],
+        ],
+        (apps) =>
+          Effect.gen(function* () {
+            const failure = yield* registry.publish({ apps }).pipe(Effect.flip)
+            expect(failure._tag).toBe("Primitive.Conflict")
+            expect(failure.message).toContain("Dependency cycle")
+            expect(yield* database.db.select().from(Database.Schema.app)).toEqual([])
+          }),
+      )
+      yield* registry.publish({ apps: [publication("first"), publication("second", { dependsOn: ["first"] })] })
+      const failure = yield* publish(publication("first", { dependsOn: ["second"] })).pipe(Effect.flip)
+      expect(failure._tag).toBe("Primitive.Conflict")
+      expect(failure.message).toMatch(/first -> second -> first|second -> first -> second/u)
+      yield* publish(publication("third", { dependsOn: ["second"] }))
+      const deeper = yield* registry
+        .publish({ apps: [publication("zero"), publication("first", { dependsOn: ["zero"] })] })
+        .pipe(Effect.flip)
+      expect(deeper._tag).toBe("Primitive.Conflict")
+      expect(deeper.message).toContain("third -> second -> first -> zero")
+    }),
 )
 
 it.live("a withdrawn app keeps its profiles running and takes no new ones; publication does not relist", () =>

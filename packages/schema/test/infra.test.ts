@@ -185,13 +185,27 @@ describe("Infra.Spec", () => {
     })
     expect(String(exit)).toContain("first -> second -> first")
     expect(
-      App.dependencyCycles(
+      App.dependencyIssues(
         new Map([
           ["first", { dependsOn: ["second"] }],
           ["second", { dependsOn: ["first"] }],
         ]),
       ),
-    ).toEqual(["first -> second -> first"])
+    ).toEqual([{ kind: "cycle", path: ["first", "second", "first"] }])
+  })
+
+  test("an app's dependencies may have dependencies, but no deeper", () => {
+    const chain = (length: number) =>
+      Object.fromEntries(
+        Array.from({ length }, (_, index) => [
+          `level-${index + 1}`,
+          app({ dependsOn: index + 1 < length ? [`level-${index + 2}`] : [] }),
+        ]),
+      )
+    expect(Exit.isSuccess(decode({ engineering: { name: "Engineering", apps: chain(3) } }))).toBe(true)
+    expect(String(decode({ engineering: { name: "Engineering", apps: chain(4) } }))).toContain(
+      "level-1 -> level-2 -> level-3 -> level-4",
+    )
   })
 
   test("an upstream skill requires one safe explicit source directory", () => {

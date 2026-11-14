@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { IconArrowUpRight, IconUserPlus } from "@tabler/icons-react"
+import { IconArrowUpRight, IconPlus, IconUserPlus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { AppIcon } from "./app-icon.js"
@@ -39,13 +39,14 @@ function AppName(props: { app: App; accounts: number; onOpen: () => void }) {
   )
 }
 
-type AppRow = { app: App; profiles: ReadonlyArray<AppProfile>; usedIn: string }
+type AppRow = { app: App; profiles: ReadonlyArray<AppProfile>; usedIn: string; needs?: ReadonlyArray<App> }
 
 export function AppsTable(props: {
   rows: AppRow[]
   empty: ReactNode
   onOpen: (appId: string) => void
   onNew: (appId: string) => void
+  onAdd?: (appId: string) => void
   remove?: (row: AppRow) => RowMenuItem | undefined
 }) {
   return (
@@ -67,6 +68,8 @@ export function AppsTable(props: {
             const usedIn = row.usedIn
             const status = statusOf(app, profiles)
             const expired = profiles.filter((profile) => statusOf(app, [profile]) === "expired").length
+            const needs = row.needs ?? []
+            const add = props.onAdd
             return (
               <TableRow key={app.id} className="cursor-pointer" onClick={() => props.onOpen(app.id)}>
                 <TableCell>
@@ -76,11 +79,18 @@ export function AppsTable(props: {
                   {usedIn}
                 </TableCell>
                 <TableCell>
-                  <StatusBadge tone={tones[status]}>
-                    {status === "expired" && profiles.length > 1
-                      ? `${expired} of ${profiles.length} need sign-in`
-                      : statusLabel[status]}
-                  </StatusBadge>
+                  <span className="flex flex-col items-start gap-1">
+                    <StatusBadge tone={tones[status]}>
+                      {status === "expired" && profiles.length > 1
+                        ? `${expired} of ${profiles.length} need sign-in`
+                        : statusLabel[status]}
+                    </StatusBadge>
+                    {needs.length > 0 ? (
+                      <StatusBadge tone="warn" className="max-w-full truncate">
+                        Needs {needs.map((each) => each.name).join(", ")}
+                      </StatusBadge>
+                    ) : null}
+                  </span>
                 </TableCell>
                 <TableCell onClick={(event) => event.stopPropagation()}>
                   <RowMenu
@@ -88,6 +98,13 @@ export function AppsTable(props: {
                     items={[
                       { label: "Open", icon: IconArrowUpRight, onSelect: () => props.onOpen(app.id) },
                       { label: "New account", icon: IconUserPlus, onSelect: () => props.onNew(app.id) },
+                      ...(add
+                        ? needs.map((each) => ({
+                            label: `Add ${each.name}`,
+                            icon: IconPlus,
+                            onSelect: () => add(each.id),
+                          }))
+                        : []),
                       ...[props.remove?.(row)].filter((item) => item !== undefined),
                     ]}
                   />
