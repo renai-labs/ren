@@ -59,97 +59,42 @@ Packages: `schema`, `protocol`, `core` (`file-system.ts`, `drives.ts`, `memory.t
 
 ## 3. Drive
 
-A Drive is a folder browser over a `FileSystem` source. The space Drive at `/spaces/$id/drive` shows the space's drive. The home Drive at `/drive` shows the organization's drive and replaces Artifacts in the home sidebar.
+A Drive shows a `FileSystem` source in the chat's Files panel: the `FileExplorer` tree on the left, tabs and the file viewer on the right. The panel's look and behavior do not change; only its data source does.
+
+- `components/file-browser.tsx` holds the panel's parts (`FileBrowser`, `OpenFile`). It takes a `FileTree` (paths, loaded folders, change badges, expand, reveal, refresh) and the open file's read result.
+- The chat (`features/session/workspace-files.tsx`) fills them from `@ren/chat`. `components/source-files.tsx` fills them from `files.list` and `files.read` for a drive or a memory.
+- The space Drive at `/spaces/$id/drive` shows the space's drive. The home Drive at `/drive` shows the organization's drive and replaces Artifacts in the home sidebar.
 
 ### Items
 
-| Kind     | Where                                                                                        | Opens                                             | Actions                        | Details                    |
-| -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------ | -------------------------- |
-| Folder   | `directory` entries                                                                          | The folder                                        | none yet (part 10)             | modified                   |
-| File     | `file` entries                                                                               | The preview panel                                 | Download, Delete               | modified, size, type       |
-| Artifact | The pinned **Artifacts** folder at a drive's root, from `artifact.list`                      | The preview panel with the live site and its link | Open, Copy link, Edit, Archive | host, Updating, Not served |
-| Space    | The pinned **Spaces** folder at the home Drive's root, one folder per space the person is in | That space's drive root                           | none                           | member count               |
-| Memory   | The pinned **Memory** folder at the home Drive's root: the organization's memory (part 4)    | The memory editor                                 | New file, Delete               | none                       |
+| Kind     | Where                                                                                          | Opens                                          | Actions                                         |
+| -------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
+| Folder   | `directory` entries                                                                            | Expands in the tree                            | Upload here                                     |
+| File     | `file` entries                                                                                 | A tab in the viewer                            | Copy path, Copy contents, Download, Delete      |
+| Artifact | The pinned **Artifacts** folder at a drive's root, one entry per artifact from `artifact.list` | Its live site, with its host and serving badge | Edit, Open, Copy link, Archive (`ArtifactMenu`) |
+| Space    | The pinned **Spaces** folder at the home Drive's root, one folder per space the person is in   | That space's drive                             | none                                            |
+| Memory   | The pinned **Memory** folder at the home Drive's root: the organization's memory (part 4)      | The memory editor                              | New file, Delete                                |
 
-1. Artifacts are not files. They are a kind of item with their own preview, actions and badges, taken from `artifact-gallery.tsx` (`ArtifactPreview`, `ServingBadge`, `ArtifactMenu`, "Build with Ren"). The artifacts API does not change.
-2. A space Drive's Artifacts folder shows that space's artifacts. The home Drive's Artifacts folder shows every space's artifacts the person can see, grouped by space with the collapsible sections of `artifact-gallery.tsx`.
-3. The pinned folders list first, with a star, and do not sort with the rest.
-4. Upload goes through `drive.startUpload` and `platform.upload`, as `use-uploads.ts` does, into the open folder. Dropping files on the page uploads them there (`FileDrop.use`). A folder exists only while it holds a file, so "New folder" makes one that lasts until its first upload, in the browser only.
-5. Delete confirms, because the drive has no undo.
-6. Upload and New folder show only when the folder's `Page.actions` has `upload`, and Delete only when it has `remove`.
-7. The preview panel reuses the chat's viewers: `FileView` for text and code, `FilePreview` for PDF and Office files, `ImageLightbox`, `MediaPlayer`, `HtmlPage`. The panel reads small files with `files.read` and big files, media and HTML through `drive.download` links, as `use-drive-file.ts` decides today.
-
-### Cache
-
-`drive.startUpload` and `files.delete` are generated mutations. Today `runtime.ts` has no `drive` or `files` entry, so either one would invalidate every query of its group, and `use-uploads.ts` invalidates nothing after an upload.
-
-1. `runtime.ts` gets `drive: []` and `files: []`, so these mutations invalidate nothing by group.
-2. Delete invalidates only the `files.list` of the file's folder (same `spaceId`, `folder` the path's parent), in the mutation's `onSuccess`.
-3. A file appears only once `platform.upload` finishes, after `startUpload` resolves. `use-uploads.ts` invalidates the target folder's `files.list` then, with an `ast-grep-ignore: no-manual-invalidation` comment that names `platform.upload`.
+1. Artifacts are not files. Their entries are named by title and open a pane with the gallery's `ServingBadge` and `ArtifactMenu`; the artifacts API does not change. A space Drive's folder has that space's artifacts; the home Drive's has every space's the person can see.
+2. Pinned folders sort first (`FileExplorer`'s `pinned`); everything else keeps the tree's order.
+3. Upload goes through `drive.startUpload` and `platform.upload`, as `use-uploads.ts` does, into the folder of the open file or the root, or the folder whose menu has "Upload here". Dropping files on the page uploads them the same way (`FileDrop.use`). A name that is taken gets a free one (`FileName.free`). When the upload finishes, that folder's `files.list` refetches.
+4. Delete is in the tree's menu for a file. It confirms, because the drive has no undo, and closes the file's tab. `files.delete` is a generated mutation, so it refetches the open `files` queries.
+5. Upload shows only when the root `Page.actions` has `upload`, and Delete only when it has `remove`.
+6. Search in the tree finds loaded folders and artifacts; across folders it needs part 5. A folder lists its first page only; later pages need the tree to page.
 
 ### Artifacts routes go away
 
-Drive replaces `/spaces/$id/artifacts` and `/artifacts` in the same step. Neither redirects, as `/kanban`, `/factory`, `/schedules` and `/webhooks` did not. Links that move to the Drive's Artifacts folder (`/spaces/$id/drive?folder=artifacts`, `/drive?folder=artifacts`):
+Drive replaces `/spaces/$id/artifacts` and `/artifacts` in the same step. Neither redirects, as `/kanban`, `/factory`, `/schedules` and `/webhooks` did not. Links that move to the Drive (`/spaces/$id/drive`, `/drive`):
 
 - `app-sidebar.tsx`: the home Artifacts item becomes Drive.
 - `artifact-gallery.tsx`: the space group header link.
 - `space-sidebar.tsx`: the switcher's `artifacts` case.
 - `space-page.tsx` and `route-skeleton.tsx`: the `artifacts` branches and `ArtifactsSkeleton`.
-- `features/artifacts/artifacts-page.tsx` and `features/spaces/space-artifacts.tsx` fold into the Drive's Artifacts folder.
-
-### Layout
-
-The layout follows the width of the container, not the window, so one component fits the chat panel and a page. When narrow it drills in one folder at a time; when wide it shows three columns. The compact width is built and tested first, with the chat panel's tree column (304 px) as its case. The wider patterns follow, each tested at 640 px, 768 px and a full page before the breakpoints between them are fixed.
-
-```
-Compact (chat panel, narrow page)          Full width (Drive and Memory pages)
-┌──────────────────────────────┐           ┌─────────────┬──────────────────────────────────────┬─────────────────────┐
-│ ‹ reports / q3       🔍  ⋯   │           │ ★ Artifacts │ reports › q3     🔍  [Upload] [≡ ▦]   │ summary.md       ✕  │
-├──────────────────────────────┤           │ ▾ reports   ├──────────────────────────────────────┤                     │
-│ 📁 drafts                     │           │   ▸ q3      │ Name          Modified      Size      │ # Q3 summary        │
-│ 📄 revenue.csv          42 KB │  ──tap──► │ ▸ drafts    │ 📁 drafts      2 days ago    —         │ Revenue grew 12%…   │
-│ 📄 summary.md           3 KB  │  viewer   │             │ 📄 revenue.csv 3h ago        42 KB     │                     │
-└──────────────────────────────┘           │             │ 📄 summary.md  yesterday     3 KB  ⋯   │ [Download] [Delete] │
-                                           └─────────────┴──────────────────────────────────────┴─────────────────────┘
-```
-
-- The tree is `FileExplorer` (`@ren/ui/file-tree`), hidden in compact mode.
-- The folder is a list (`Table`, `Breadcrumb`) or, later, a gallery (part 10). Chat entries have no size or time, so those columns are empty there.
-- The toolbar is the Artifacts toolbar: `ToolbarSearch`, `FilterMenu`, `FilterChips`, the Display popover (view, sort), portalled into the page header with `PageActions`. Its state is in the URL as `Artifacts.Search` is: `q`, `view`, `sort`, `filters`, plus `folder`.
-- Search and the Type filter apply to the open folder on the client. Across folders and spaces they need part 5.
-
-### The component
-
-`FileBrowser` in `app/src/components/file-browser/`, a compound with `state`, `actions` and `meta` in its context, as `ArtifactGallery` is. The provider takes a source and the handlers the page supplies; a part renders only when it has a handler and the open folder's `Page.actions` allows it.
-
-```
-<FileBrowser.Root source={chat}   actions={{}} />                                 chat panel
-<FileBrowser.Root source={drive}  actions={{ upload, remove }} />                 Drive
-<FileBrowser.Root source={memory} actions={{ create, write, remove }} />          Memory
-
-source: { list(folder, cursor) → Page; read(path) → Content; search?(query) → Entry[]; pinned?: Item[]; open?(entry) → Item }
-```
-
-The drive and memory sources call `files.list`, `files.read` and `files.delete` with their `source`. The chat source calls the Chat API's `file.list` and `file.read`, whose pages have no `actions`.
-
-Parts: `Tree`, `Crumbs`, `Toolbar` (`Search`, `Filter`, `Display`, `Upload`, `New`), `Folder` (list, later gallery), `Preview`, `Menu`. A `size` on the root picks compact or full from a `ResizeObserver` on the container.
-
-### The chat panel
-
-`workspace-files.tsx` moves to `FileBrowser` last, once Drive uses it, and keeps everything it does today:
-
-| Today                                                         | In `FileBrowser`                                                                           |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `FileExplorer` tree with lazy folders, search, refresh        | `Tree` over the chat source; `source.search` is `file.search`                              |
-| Change badges from `vcs.diff`                                 | `meta.status` per path, drawn by `Tree` and `Folder`                                       |
-| Tabs (`FileTabs.open`, `pin`, `close`)                        | `Preview` renders inside the existing `TabStrip`; the strip stays in `workspace-files.tsx` |
-| "Copy path", "Copy contents", "Download", "Mention in prompt" | `Menu` items the chat passes in                                                            |
-| No actions                                                    | `actions={{}}`                                                                             |
-| Adds                                                          | The compact drill-in list, so a folder is browsable without the tree                       |
+- `features/artifacts/artifacts-page.tsx` and `features/spaces/space-artifacts.tsx` go away; the gallery stays for the menu and badge.
 
 ## 4. Memory
 
-`/spaces/$id/memory`, and the organization's memory as a pinned **Memory** folder at the home Drive's root. Same `FileBrowser`, memory source, full-width layout with the tree left and the editor right.
+`/spaces/$id/memory`, and the organization's memory as a pinned **Memory** folder at the home Drive's root. The same panel over the memory source.
 
 1. `memory.md` is pinned first with "In every chat", because every chat in scope gets its start in its context (`Memory.injectedLength`).
 2. A file opens in the editor the space and organization instructions share: `InstructionsField`, a markdown preview with Edit, then a textarea with Cancel and Save. Save writes through `memory.write`; nothing saves until the person chooses Save.
@@ -170,37 +115,31 @@ Packages: `db`, `schema`, `protocol`, `core`, `server`, `app`.
 
 ## 6. Contract changes
 
-| Contract        | Change                                       | File                                                       |
-| --------------- | -------------------------------------------- | ---------------------------------------------------------- |
-| `insights`      | Exposure `sdk` for the Inbox's usage         | `protocol/src/groups/insights.ts`                          |
-| `drive.search`  | New, with the `drive_file` table             | part 5                                                     |
-| `artifact.list` | Adds `q`                                     | `protocol/src/groups/artifact.ts`, `core/src/artifacts.ts` |
-| `runtime.ts`    | `drive: []` and `files: []` in `invalidates` | `app/src/lib/runtime.ts`                                   |
+| Contract        | Change                               | File                                                       |
+| --------------- | ------------------------------------ | ---------------------------------------------------------- |
+| `insights`      | Exposure `sdk` for the Inbox's usage | `protocol/src/groups/insights.ts`                          |
+| `drive.search`  | New, with the `drive_file` table     | part 5                                                     |
+| `artifact.list` | Adds `q`                             | `protocol/src/groups/artifact.ts`, `core/src/artifacts.ts` |
 
 ## 7. Done when
 
-A member of General Space opens Drive, uploads `q3/summary.md` by dropping it on the page, and sees it appear in `q3` without a reload while other folders do not refetch. Clicking it shows the rendered markdown in the preview panel; deleting it asks first and removes only that row. The pinned Artifacts folder lists the space's artifacts with their serving badges, and the home Drive's Artifacts folder lists every space's artifacts grouped by space. A member who cannot write sees no Upload, New folder or Delete. In Memory they open `memory.md`, choose Edit, change it and choose Save; a new chat in the space has the edit in its context. In a chat, the Files panel browses the same way in its 304 px column, and the Drive page drills in at 640 px and shows three columns at 768 px and full width. `/artifacts` and `/spaces/$id/artifacts` are gone and no link points to them.
+A member of General Space opens Drive, drops `summary.md` on the page with `reports/q3.md` open, and sees it appear in `reports` without a reload. Clicking it opens it in a tab; deleting it from the tree's menu asks first and closes the tab. The pinned Artifacts folder lists the space's artifacts, and opening one shows its live site with its serving badge and menu; the home Drive's Artifacts folder lists every space's artifacts. A member who cannot write sees no Upload or Delete. In Memory they open `memory.md`, choose Edit, change it and choose Save; a new chat in the space has the edit in its context. The chat's Files panel works as before. `/artifacts` and `/spaces/$id/artifacts` are gone and no link points to them.
 
 ## 8. Tests
 
-| Behavior                                                                                                              | Level                                        |
-| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `drive_file` stays current after upload, delete, and the re-sync after a chat                                         | `core`, with the search step                 |
-| Upload, preview, delete and the folder-only refetch on the Drive page; hidden actions without write                   | `packages/e2e/tests/app/drive.spec.ts` (new) |
-| The compact layout drills in and out of folders at 304 px and 640 px; 768 px and full width show the tree and preview | `packages/e2e/tests/app/drive.spec.ts`       |
-| A Memory edit saves and survives a reload                                                                             | `packages/e2e/tests/app/drive.spec.ts`       |
-| The chat panel still lists, opens and mentions files                                                                  | `packages/e2e/tests/app/chat-files.spec.ts`  |
-
-The app has no unit or component tests (`packages/app/AGENTS.md`), so `FileBrowser`'s layouts are covered by e2e runs at set viewport widths, not by a component test: the compact layout first (the 304 px chat-panel column, then a 640 px page), then 768 px and a full page once the wider layout lands.
+| Behavior                                                                                             | Level                                        |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `drive_file` stays current after upload, delete, and the re-sync after a chat                        | `core`, with the search step                 |
+| Upload, open, delete and the pinned Artifacts folder on the Drive page; hidden actions without write | `packages/e2e/tests/app/drive.spec.ts` (new) |
+| A Memory edit saves and survives a reload                                                            | `packages/e2e/tests/app/drive.spec.ts`       |
+| The chat panel still lists, opens and mentions files                                                 | `packages/e2e/tests/app/chat-files.spec.ts`  |
 
 ## 9. Order
 
 1. Review actions on task cards, where a space needs them.
-2. `FileBrowser` with the drive source, both layouts, list view, preview, pinned Artifacts. Space Drive, then home Drive with the Spaces folder; the artifacts routes go away.
-3. Memory.
-4. The chat panel on `FileBrowser`.
-5. Search across spaces (part 5), in its own PR.
-6. Later (part 10).
+2. Drive, Memory and the chat panel on one browser: space Drive and Memory, pinned Artifacts, upload and delete, Memory editing, then home Drive with the Spaces and Memory folders; the artifacts routes go away.
+3. Search across spaces (part 5), in its own PR.
+4. Later (part 10).
 
 Each step is its own PR and removes its placeholders.
 
