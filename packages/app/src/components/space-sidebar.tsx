@@ -3,9 +3,9 @@ import { cn } from "cn"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import {
-  IconApps,
   IconArrowLeft,
   IconBrain,
+  IconChartPie,
   IconMessagesFilled,
   IconChecklist,
   IconCube,
@@ -13,7 +13,7 @@ import {
   IconFolder,
   IconInbox,
   IconKey,
-  IconLayoutDashboard,
+  IconLayoutGridFilled,
   IconLock,
   IconSelector,
   IconSettings,
@@ -56,7 +56,7 @@ const spaceGroups = [
     label: "Work",
     items: [
       { value: "inbox", label: "Inbox", icon: IconInbox, to: "/spaces/$spaceId" },
-      { value: "overview", label: "Overview", icon: IconLayoutDashboard, to: "/spaces/$spaceId/overview" },
+      { value: "overview", label: "Overview", icon: IconChartPie, to: "/spaces/$spaceId/overview" },
       { value: "tasks", label: "Tasks", icon: IconChecklist, to: "/spaces/$spaceId/tasks" },
       { value: "drive", label: "Drive", icon: IconFolder, to: "/spaces/$spaceId/drive" },
       { value: "automations", label: "Automations", icon: IconWebhook, to: "/spaces/$spaceId/automations" },
@@ -76,7 +76,7 @@ const spaceGroups = [
     id: "connections",
     label: "Connections",
     items: [
-      { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
+      { value: "apps", label: "Apps", icon: IconLayoutGridFilled, to: "/spaces/$spaceId/apps" },
       { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
       { value: "credentials", label: "Secrets", icon: IconKey, to: "/spaces/$spaceId/credentials" },
       { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },

@@ -1,5 +1,5 @@
 /* oxlint-disable react/only-export-components, eslint/no-restricted-imports, react/forbid-component-props -- stands in for @tabler/icons-react (aliased in vite.config.ts): filled Heroicons under Tabler's names, Tabler for the rest; the one place that imports Heroicons and maps Tabler's color prop to style */
-import type { ComponentType, SVGProps } from "react"
+import { useId, type ComponentType, type SVGProps } from "react"
 import {
   AdjustmentsHorizontalIcon,
   ArchiveBoxIcon,
@@ -35,6 +35,7 @@ import {
   CalendarIcon,
   ChartBarIcon,
   ChartBarSquareIcon,
+  ChartPieIcon,
   ChatBubbleLeftEllipsisIcon,
   ChatBubbleLeftIcon,
   ChatBubbleOvalLeftIcon,
@@ -160,6 +161,42 @@ const wrap = (Hero: ComponentType<SVGProps<SVGSVGElement>>, weight = 0) => {
   return HeroIcon
 }
 
+const lobes = [
+  [7, 5.5, 3],
+  [4.6, 9, 2.9],
+  [5, 13.2, 3],
+  [8, 15.2, 2.6],
+  [13, 5.5, 3],
+  [15.4, 9, 2.9],
+  [15, 13.2, 3],
+  [12, 15.2, 2.6],
+] as const
+
+function BrainIcon(props: SVGProps<SVGSVGElement>) {
+  const mask = useId()
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
+      <mask id={mask}>
+        <g fill="white" stroke="none">
+          {lobes.map((lobe) => (
+            <circle key={lobe.join()} cx={lobe[0]} cy={lobe[1]} r={lobe[2]} />
+          ))}
+          <rect x={5} y={4} width={10} height={12} />
+        </g>
+        <path
+          d="M10 2.5v15.5M1.2 10.5h2.8c1.1 0 2 .9 2 2M18.8 10.5H16c-1.1 0-2 .9-2 2"
+          fill="none"
+          stroke="black"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </mask>
+      <rect width={20} height={20} mask={`url(#${mask})`} />
+    </svg>
+  )
+}
+
 export const IconActivity = wrap(ChartBarSquareIcon)
 export const IconAdjustmentsHorizontal = wrap(AdjustmentsHorizontalIcon)
 export const IconAlertCircle = wrap(ExclamationCircleIcon)
@@ -183,7 +220,7 @@ export const IconAt = wrap(AtSymbolIcon)
 export const IconAtom = wrap(BeakerIcon)
 export const IconBan = wrap(NoSymbolIcon)
 export const IconBook = wrap(BookOpenIcon)
-export const IconBrain = wrap(LightBulbIcon)
+export const IconBrain = wrap(BrainIcon)
 export const IconBrowser = wrap(WindowIcon)
 export const IconBuilding = wrap(BuildingOffice2Icon)
 export const IconBuildingFactory2 = wrap(WrenchScrewdriverIcon)
@@ -195,6 +232,7 @@ export const IconCalendarMonth = wrap(CalendarDaysIcon)
 export const IconCalendarWeek = wrap(CalendarDaysIcon)
 export const IconChartBar = wrap(ChartBarIcon)
 export const IconChartLine = wrap(PresentationChartLineIcon)
+export const IconChartPie = wrap(ChartPieIcon)
 export const IconCheck = wrap(CheckIcon)
 export const IconChecklist = wrap(ClipboardDocumentCheckIcon)
 export const IconChevronDown = wrap(ChevronDownIcon)
