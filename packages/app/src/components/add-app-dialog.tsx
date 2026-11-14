@@ -7,6 +7,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-grou
 import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
 import { AppRow } from "./app-list.js"
+import { CustomAppDialog } from "./custom-app-dialog.js"
 import { LoadMore } from "./load-more.js"
 import { useAddManaged } from "./profile-dialog.js"
 import { Loading } from "@ren/ui/loading"
@@ -156,42 +157,60 @@ export function AddAppDialog(props: {
   const open = props.open ?? ownOpen
   const setOpen = props.onOpenChange ?? setOwnOpen
   const [query, setQuery] = useState("")
+  const [creating, setCreating] = useState(false)
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {props.open === undefined ? (
-        <DialogTrigger render={<Button />}>
-          <IconPlus />
-          Add app
-        </DialogTrigger>
-      ) : null}
-      <DialogContent className="flex h-[min(--spacing(140),calc(100dvh-(--spacing(16))))] flex-col gap-0 p-0 sm:max-w-140">
-        <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle className="text-base">Add apps to {props.space.name}</DialogTitle>
-          <DialogDescription>Pick the apps this space can use. You can add more later.</DialogDescription>
-        </DialogHeader>
-        <div className="px-6 pb-3">
-          <InputGroup className="h-9">
-            <InputGroupAddon>
-              <IconSearch />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="Search apps"
-              placeholder="Search apps"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </InputGroup>
-        </div>
-        <AppResults
-          query={query}
-          space={props.space}
-          added={props.added}
-          onPick={(app) => {
-            setOpen(false)
-            props.onPick(app)
-          }}
-        />
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {props.open === undefined ? (
+          <DialogTrigger render={<Button />}>
+            <IconPlus />
+            Add app
+          </DialogTrigger>
+        ) : null}
+        <DialogContent className="flex h-[min(--spacing(140),calc(100dvh-(--spacing(16))))] flex-col gap-0 p-0 sm:max-w-140">
+          <DialogHeader className="px-6 pt-6 pb-4">
+            <DialogTitle className="text-base">Add apps to {props.space.name}</DialogTitle>
+            <DialogDescription>Pick the apps this space can use. You can add more later.</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-3">
+            <InputGroup className="h-9">
+              <InputGroupAddon>
+                <IconSearch />
+              </InputGroupAddon>
+              <InputGroupInput
+                aria-label="Search apps"
+                placeholder="Search apps"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </InputGroup>
+          </div>
+          <AppResults
+            query={query}
+            space={props.space}
+            added={props.added}
+            onPick={(app) => {
+              setOpen(false)
+              props.onPick(app)
+            }}
+          />
+          <p className="flex shrink-0 items-center justify-center gap-1 border-t px-6 py-3 text-sm text-muted-foreground">
+            Can’t find it?
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto px-0"
+              onClick={() => {
+                setOpen(false)
+                setCreating(true)
+              }}
+            >
+              Create app
+            </Button>
+          </p>
+        </DialogContent>
+      </Dialog>
+      {creating ? <CustomAppDialog spaceId={props.space.id} onClose={() => setCreating(false)} /> : null}
+    </>
   )
 }
