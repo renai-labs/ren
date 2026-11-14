@@ -23,6 +23,7 @@ import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/in
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
 import { Route as AuthedShellArtifactsRouteImport } from "./routes/_authed/_shell/artifacts"
 import { Route as AuthedShellAutomationsRouteImport } from "./routes/_authed/_shell/automations"
+import { Route as AuthedShellDriveRouteImport } from "./routes/_authed/_shell/drive"
 import { Route as AuthedOrganizationsNewRouteImport } from "./routes/_authed/organizations/new"
 import { Route as AuthedShellAppsIndexRouteImport } from "./routes/_authed/_shell/apps/index"
 import { Route as AuthedShellMarketplaceIndexRouteImport } from "./routes/_authed/_shell/marketplace/index"
@@ -134,6 +135,11 @@ const AuthedShellArtifactsRoute = AuthedShellArtifactsRouteImport.update({
 const AuthedShellAutomationsRoute = AuthedShellAutomationsRouteImport.update({
   id: "/automations",
   path: "/automations",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellDriveRoute = AuthedShellDriveRouteImport.update({
+  id: "/drive",
+  path: "/drive",
   getParentRoute: () => AuthedShellRoute,
 } as any)
 const AuthedOrganizationsNewRoute = AuthedOrganizationsNewRouteImport.update({
@@ -418,6 +424,7 @@ export interface FileRoutesByFullPath {
   "/$": typeof AuthedShellSplatRoute
   "/artifacts": typeof AuthedShellArtifactsRoute
   "/automations": typeof AuthedShellAutomationsRoute
+  "/drive": typeof AuthedShellDriveRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   "/settings": typeof AuthedShellSettingsAdminRouteWithChildren
@@ -476,6 +483,7 @@ export interface FileRoutesByTo {
   "/$": typeof AuthedShellSplatRoute
   "/artifacts": typeof AuthedShellArtifactsRoute
   "/automations": typeof AuthedShellAutomationsRoute
+  "/drive": typeof AuthedShellDriveRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
@@ -534,6 +542,7 @@ export interface FileRoutesById {
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
   "/_authed/_shell/artifacts": typeof AuthedShellArtifactsRoute
   "/_authed/_shell/automations": typeof AuthedShellAutomationsRoute
+  "/_authed/_shell/drive": typeof AuthedShellDriveRoute
   "/_authed/organizations/new": typeof AuthedOrganizationsNewRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
   "/_authed/_shell/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -595,6 +604,7 @@ export interface FileRouteTypes {
     | "/$"
     | "/artifacts"
     | "/automations"
+    | "/drive"
     | "/organizations/new"
     | "/spaces/$spaceId"
     | "/settings"
@@ -653,6 +663,7 @@ export interface FileRouteTypes {
     | "/$"
     | "/artifacts"
     | "/automations"
+    | "/drive"
     | "/organizations/new"
     | "/settings"
     | "/settings/credentials"
@@ -710,6 +721,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/$"
     | "/_authed/_shell/artifacts"
     | "/_authed/_shell/automations"
+    | "/_authed/_shell/drive"
     | "/_authed/organizations/new"
     | "/_authed/_shell/"
     | "/_authed/_shell/spaces/$spaceId"
@@ -867,6 +879,13 @@ declare module "@tanstack/react-router" {
       path: "/automations"
       fullPath: "/automations"
       preLoaderRoute: typeof AuthedShellAutomationsRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/drive": {
+      id: "/_authed/_shell/drive"
+      path: "/drive"
+      fullPath: "/drive"
+      preLoaderRoute: typeof AuthedShellDriveRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/organizations/new": {
@@ -1277,6 +1296,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
   AuthedShellArtifactsRoute: typeof AuthedShellArtifactsRoute
   AuthedShellAutomationsRoute: typeof AuthedShellAutomationsRoute
+  AuthedShellDriveRoute: typeof AuthedShellDriveRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   AuthedShellSettingsAdminRoute: typeof AuthedShellSettingsAdminRouteWithChildren
@@ -1301,6 +1321,7 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
   AuthedShellArtifactsRoute: AuthedShellArtifactsRoute,
   AuthedShellAutomationsRoute: AuthedShellAutomationsRoute,
+  AuthedShellDriveRoute: AuthedShellDriveRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSpacesSpaceIdRouteRoute:
     AuthedShellSpacesSpaceIdRouteRouteWithChildren,
