@@ -8,12 +8,13 @@ import { useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/r
 import { Effect, Layer, Option, Predicate, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { Atom, AtomRegistry } from "effect/reactivity"
-import { useEffect } from "react"
+import { useEffect, useSyncExternalStore } from "react"
 import type { Platform } from "../platform/platform.js"
 import { RouterContext } from "./router-context.js"
 import type { Runtime } from "./runtime.js"
 
 export interface Chat {
+  readonly generation: number
   readonly userId: string
   readonly atoms: ChatAtoms.ChatAtoms
   readonly registry: AtomRegistry.AtomRegistry
@@ -98,23 +99,54 @@ function makeAtoms(platform: Platform.Info, userId: string) {
   })
 }
 
-const current: { chat: Chat | undefined } = { chat: undefined }
+const current: { chat: Chat | undefined; mounted: Chat | undefined; generation: number } = {
+  chat: undefined,
+  mounted: undefined,
+  generation: 0,
+}
+
+const listeners = new Set<() => void>()
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function retire(chat: Chat | undefined) {
+  if (chat !== undefined && chat !== current.mounted) chat.registry.dispose()
+}
 
 function forget() {
-  current.chat?.registry.dispose()
+  const chat = current.chat
   current.chat = undefined
+  retire(chat)
+  for (const listener of listeners) listener()
 }
 
 export function chatFor(platform: Platform.Info, userId: string): Chat {
   if (current.chat?.userId === userId) return current.chat
-  forget()
+  retire(current.chat)
   void platform.chatCache?.forget(userId)
+  current.generation += 1
   const chat = {
+    generation: current.generation,
     userId,
     atoms: makeAtoms(platform, userId),
     registry: AtomRegistry.make({ scheduleTask, defaultIdleTTL: 400 }),
   }
   current.chat = chat
+  return chat
+}
+
+export function useCurrentChat(platform: Platform.Info, userId: string): Chat {
+  const chat = useSyncExternalStore(subscribe, () => chatFor(platform, userId))
+  useEffect(() => {
+    current.mounted = chat
+    return () => {
+      current.mounted = undefined
+      if (current.chat !== chat) chat.registry.dispose()
+    }
+  }, [chat])
   return chat
 }
 
