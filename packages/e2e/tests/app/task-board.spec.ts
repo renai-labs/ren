@@ -33,7 +33,7 @@ test("a member writes the factory spec, moves a card and moves a task to an agen
   })
   expect(newer.ok()).toBe(true)
 
-  await page.goto(`/app/spaces/${space.id}/factory?view=spec`)
+  await page.goto(`/spaces/${space.id}/factory?view=spec`)
   const spec = page.getByRole("textbox", { name: "Factory spec", exact: true })
   await spec.fill("agents:\n  - agent: plan\n    to: [{ agent: nobody }]\n")
   await expect(page.getByText("agents.0.to.0.agent: nobody is not in the factory.", { exact: true })).toBeVisible()
@@ -48,7 +48,7 @@ test("a member writes the factory spec, moves a card and moves a task to an agen
   await page.getByRole("tab", { name: "Flow", exact: true }).click()
   await expect(page.getByRole("application", { name: /^How tasks move between the agents/ })).toBeVisible()
 
-  await page.goto(`/app/spaces/${space.id}/tasks`)
+  await page.goto(`/spaces/${space.id}/tasks`)
   await page.getByRole("button", { name: "Display options" }).click()
   await page.getByRole("combobox", { name: "Group by" }).click()
   await page.getByRole("option", { name: "Agent", exact: true }).click()

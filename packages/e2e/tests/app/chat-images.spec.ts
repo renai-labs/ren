@@ -17,7 +17,7 @@ test("images the agent shows form one gallery with a file chip each, and a missi
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await send(page, "Draw three logos")
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 

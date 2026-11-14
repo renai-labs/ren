@@ -8,7 +8,7 @@ test.describe.configure({ timeout: 90_000 })
 
 test("a member queues two messages while Ren works, sends one now and removes the other", async ({ page }) => {
   await createOrganization(page.request, { name: "Margaret Hamilton" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })

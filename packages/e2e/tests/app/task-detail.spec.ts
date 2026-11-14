@@ -18,7 +18,7 @@ test("a member follows a task's trail, comments and decides a review from its de
   })
   expect(created.ok()).toBe(true)
   const task = Schema.decodeUnknownSync(Schema.Struct({ id: Task.ID }))(await created.json())
-  await page.goto("/app/tasks")
+  await page.goto("/tasks")
   await page.getByRole("button", { name: "Plan the migration", exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}`))
   await expect(page.getByRole("textbox", { name: "Task title", exact: true })).toHaveValue("Plan the migration", {
@@ -75,7 +75,7 @@ test("the list polls all pages and restores selection after reload", async ({ pa
   })
   expect(response.ok()).toBe(true)
   const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
-  await page.goto("/app/tasks")
+  await page.goto("/tasks")
   await page.getByRole("button", { name: "New task", exact: true }).first().focus()
   await page.keyboard.press("c")
   await page.getByRole("textbox", { name: "Task title", exact: true }).fill("Keep this older task reachable")
@@ -125,7 +125,7 @@ test("a member starts the task agent and restores its session drawer from the UR
   })
   expect(created.ok()).toBe(true)
   const task = Schema.decodeUnknownSync(Schema.Struct({ id: Task.ID }))(await created.json())
-  await page.goto(`/app/tasks/${task.id}`)
+  await page.goto(`/tasks/${task.id}`)
   await page.getByRole("button", { name: "Start agent", exact: true }).click()
   await page.getByRole("menuitem", { name: "Start new session", exact: true }).click()
   await page.getByRole("button", { name: "Open agent session", exact: true }).click({ timeout: 30_000 })
@@ -163,7 +163,7 @@ test("a member splits a task into sub-tasks and sees them nested under it in the
   const parent = await create("Ship sub-tasks")
   const docs = await create("Write the docs")
 
-  await page.goto(`/app/tasks/${parent.id}`)
+  await page.goto(`/tasks/${parent.id}`)
   await page.getByRole("button", { name: "Add sub-task", exact: true }).click({ timeout: 30_000 })
   await page.getByRole("textbox", { name: "Sub-task title", exact: true }).fill("Add labels")
   await page.getByRole("button", { name: "Create sub-task", exact: true }).click()
@@ -171,7 +171,7 @@ test("a member splits a task into sub-tasks and sees them nested under it in the
   await expect(subtasks.getByRole("button", { name: "Add labels", exact: true })).toBeVisible()
   await expect(subtasks.getByText("0 of 1 sub-task done", { exact: true })).toBeAttached()
 
-  await page.goto(`/app/tasks/${docs.id}`)
+  await page.goto(`/tasks/${docs.id}`)
   await page.getByLabel("Parent for Write the docs: No parent", { exact: true }).click({ timeout: 30_000 })
   await page.getByRole("option", { name: `${parent.identifier} Ship sub-tasks` }).click()
   await expect(
@@ -179,7 +179,7 @@ test("a member splits a task into sub-tasks and sees them nested under it in the
   ).toBeVisible()
   await expect(page.getByText("Made this a sub-task.", { exact: true })).toBeVisible()
 
-  await page.goto("/app/tasks")
+  await page.goto("/tasks")
   const list = page.getByRole("region", { name: "Tasks" })
   await expect(list.getByText("0 of 2 sub-tasks done", { exact: true })).toBeAttached({ timeout: 30_000 })
   await expect(list.getByRole("button", { name: "Add labels", exact: true })).toBeVisible()

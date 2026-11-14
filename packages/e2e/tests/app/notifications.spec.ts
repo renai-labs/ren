@@ -55,7 +55,7 @@ test("a question shows one notification with the sound on, across two tabs on th
   const marker = Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await scripted.json()).marker
 
   await background(page)
-  await page.goto("/app/")
+  await page.goto("/")
   const start = page.locator("main")
   await start.getByRole("textbox", { name: "Message" }).fill(marker)
   await start.getByRole("button", { name: "Send" }).click()

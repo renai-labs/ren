@@ -1,6 +1,6 @@
-export const APP_URL = `${import.meta.env.SITE}/app`
+export const OPEN_APP_URL = `${import.meta.env.SITE}/login`
 
-export const BILLING_URL = `${APP_URL}/settings/billing`
+export const BILLING_URL = `${import.meta.env.SITE}/settings/billing`
 
 export const CALENDLY_URL = "https://calendly.com/shrey-renai/30min"
 
@@ -14,8 +14,9 @@ const withSource = (url: string, source: string) => {
   return link.href
 }
 
-export const signupHref = (source: string) => withSource(`${APP_URL}/signup`, source)
+export const signupHref = (source: string) => withSource(`${import.meta.env.SITE}/signup`, source)
 
 export const demoHref = (source: string) => withSource(CALENDLY_URL, source)
 
-export const askRenHref = (prompt: string) => `${APP_URL}/?${new URLSearchParams({ prompt })}`
+export const askRenHref = (prompt: string) =>
+  `${OPEN_APP_URL}?${new URLSearchParams({ redirect: `/?${new URLSearchParams({ prompt })}` })}`
