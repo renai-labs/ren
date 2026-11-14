@@ -3,7 +3,7 @@ export * as SpaceQueries from "./queries.js"
 import type { MachineProvider } from "../machine-provider.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Effect, Equal } from "effect"
@@ -158,3 +158,26 @@ export const cancelJoinRequests = (transaction: Database.Transaction, where: SQL
     .update(Database.Schema.space_join_request)
     .set({ status: "cancelled", decided_at: sql`now()` })
     .where(and(eq(Database.Schema.space_join_request.status, "pending"), where))
+
+// oxlint-disable-next-line ren/no-comments -- Puts a person who is already in the organization into the spaces, and closes their pending requests to join them. Returns the spaces they were not in.
+export const admit = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  userId: Auth.UserID,
+  spaceIds: ReadonlyArray<Space.ID>,
+) {
+  if (spaceIds.length === 0) return []
+  const added = (yield* transaction
+    .insert(Database.Schema.space_member)
+    .values(spaceIds.map((spaceId) => ({ id: Space.MembershipID.create(), space_id: spaceId, user_id: userId })))
+    .onConflictDoNothing()
+    .returning({ spaceId: Database.Schema.space_member.space_id })).map((row) => row.spaceId)
+  if (added.length === 0) return []
+  yield* cancelJoinRequests(
+    transaction,
+    and(
+      eq(Database.Schema.space_join_request.user_id, userId),
+      inArray(Database.Schema.space_join_request.space_id, added),
+    ),
+  )
+  return added
+})

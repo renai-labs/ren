@@ -36,6 +36,12 @@ export type SpaceInviteLinkToken = string
 
 export type SpaceInviteLinkState = "joinable" | "member" | "outside" | "invalid"
 
+export type OrganizationInviteLinkID = string
+
+export type OrganizationInviteLinkToken = string
+
+export type OrganizationInviteLinkState = "pending" | "expired" | "revoked" | "invalid"
+
 export type HostNamePattern = string
 
 export type EnvironmentTemplateBuildStatus = "queued" | "building" | "ready" | "failed"
@@ -437,6 +443,8 @@ export type InvitationPreview = {
 
 export type SpaceInviteLinkJoined = { organizationId: AuthOrganizationID; spaceId: SpaceID; slug: string }
 
+export type OrganizationInviteLinkJoined = { organizationId: AuthOrganizationID; spaceId: SpaceID; slug: string }
+
 export type AppProfileSpaceRef = { id: SpaceID; name: string }
 
 export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string; also: PrimitiveSlug }
@@ -507,6 +515,23 @@ export type SpaceInviteLinkPreview = {
   state: SpaceInviteLinkState
   organization: { id: AuthOrganizationID; name: string } | null
   space: { id: SpaceID; slug: string; name: string } | null
+}
+
+export type OrganizationInviteLinkInfo = {
+  id: OrganizationInviteLinkID
+  token: OrganizationInviteLinkToken
+  spaces: Array<{ id: SpaceID; name: string }>
+  createdBy: { id: AuthUserID; name: string }
+  uses: number
+  expiresAt: string
+  createdAt: string
+}
+
+export type OrganizationInviteLinkPreview = {
+  state: OrganizationInviteLinkState
+  organization: { id: AuthOrganizationID; name: string; logo: string | null } | null
+  inviter: { name: string } | null
+  spaces: Array<{ id: SpaceID; name: string }>
 }
 
 export type EnvironmentTemplateNetworking =
@@ -1109,6 +1134,8 @@ export type FactoryEntry = { agentId: string; maxRuns?: number; finish?: true; t
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
 export type SpaceJoinRequestPage = { items: Array<SpaceJoinRequestInfo>; page: number; pageSize: number; total: number }
+
+export type OrganizationInviteLinkList = { items: Array<OrganizationInviteLinkInfo> }
 
 export type EnvironmentTemplateInfo = {
   id: EnvironmentTemplateID
@@ -2166,6 +2193,27 @@ export type JoinLinkPreviewOutput = SpaceInviteLinkPreview
 export type JoinLinkAcceptInput = { readonly token: { readonly token: string }["token"] }
 
 export type JoinLinkAcceptOutput = SpaceInviteLinkJoined
+
+export type OrganizationInviteLinkCreateInput = {
+  readonly spaceIds: { readonly spaceIds: ReadonlyArray<string>; readonly expiresIn: "1d" | "7d" | "30d" }["spaceIds"]
+  readonly expiresIn: { readonly spaceIds: ReadonlyArray<string>; readonly expiresIn: "1d" | "7d" | "30d" }["expiresIn"]
+}
+
+export type OrganizationInviteLinkCreateOutput = OrganizationInviteLinkInfo
+
+export type OrganizationInviteLinkListOutput = OrganizationInviteLinkList
+
+export type OrganizationInviteLinkRevokeInput = { readonly id: { readonly id: string }["id"] }
+
+export type OrganizationInviteLinkRevokeOutput = void
+
+export type OrganizationJoinLinkPreviewInput = { readonly token: { readonly token: string }["token"] }
+
+export type OrganizationJoinLinkPreviewOutput = OrganizationInviteLinkPreview
+
+export type OrganizationJoinLinkAcceptInput = { readonly token: { readonly token: string }["token"] }
+
+export type OrganizationJoinLinkAcceptOutput = OrganizationInviteLinkJoined
 
 export type EnvironmentTemplateListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]

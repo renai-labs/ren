@@ -989,6 +989,25 @@ export const RenInferenceKeyCreate = {
 
 export const RenInferenceKeyRevoke = { id: Argument.String("key").pipe(Argument.withDescription("Key ID")) }
 
+export const OrganizationInviteLinkCreate = {
+  spaceIds: Flag.String("space-ids").pipe(
+    Flag.atLeast(0),
+    Flag.withMetavar("list"),
+    Flag.withDescription("Shared spaces that you are in. Separate values with commas."),
+  ),
+  expiresIn: Flag.Literals("expires-in", ["1d", "7d", "30d"]).pipe(
+    Flag.optional,
+    Flag.withDescription("When a new link expires: in 1 day, in 7 days or in 30 days."),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const OrganizationInviteLinkList = {}
+
+export const OrganizationInviteLinkRevoke = {
+  id: Argument.String("link").pipe(Argument.withDescription("Invite link ID")),
+}
+
 export const RepositoryList = {}
 
 export const BillingGet = {}
@@ -2071,6 +2090,34 @@ export const commands = [
         ]),
       ),
       ...subcommands,
+    ]),
+  ),
+  Command.make("organization").pipe(
+    Command.withDescription("Manage the organization"),
+    Command.withSubcommands([
+      Command.make("invite-link").pipe(
+        Command.withDescription("Manage organization invite links"),
+        Command.withSubcommands([
+          Command.make("create", OrganizationInviteLinkCreate).pipe(
+            Command.withDescription("Make a link that brings people into the organization"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.OrganizationInviteLinkCreate(input)),
+            ),
+          ),
+          Command.make("list", OrganizationInviteLinkList).pipe(
+            Command.withDescription("List the invite links that still work"),
+            Command.withHandler(() =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.OrganizationInviteLinkList()),
+            ),
+          ),
+          Command.make("revoke", OrganizationInviteLinkRevoke).pipe(
+            Command.withDescription("Stop an organization invite link"),
+            Command.withHandler((input) =>
+              Effect.flatMap(Effect.promise(operations), (module) => module.OrganizationInviteLinkRevoke(input)),
+            ),
+          ),
+        ]),
+      ),
     ]),
   ),
   Command.make("repository").pipe(

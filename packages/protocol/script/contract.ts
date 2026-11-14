@@ -32,6 +32,14 @@ const exceptions = new Map([
     "Previews and accepts a space invite link by its token, for a person who may not be in the organization yet: the token names the space, which no primitive operation does.",
   ],
   [
+    "organization-invite-link",
+    "Makes, lists and revokes the links that bring people into the organization: a part of the organization, which no primitive operation addresses.",
+  ],
+  [
+    "organization-join-link",
+    "Previews and accepts an organization invite link by its token, for a person who may not have an account yet: the token names the organization, which no primitive operation does.",
+  ],
+  [
     "environmentProvider",
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
   ],

@@ -2135,6 +2135,35 @@ export const RenInferenceKeyRevoke = (input: Command.Command.Config.Infer<typeof
     (client, request) => client["ren-inference"]["key"]["revoke"]({ ...request.params }),
   )
 
+export const OrganizationInviteLinkCreate = (
+  input: Command.Command.Config.Infer<typeof Commands.OrganizationInviteLinkCreate>,
+) =>
+  Operation.run(
+    ClientApi.groups["organization-invite-link"].endpoints["organization-invite-link.create"],
+    {
+      payload: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
+      input: input["input"],
+      labels: { spaceIds: "--space-ids", expiresIn: "--expires-in" },
+    },
+    (client, request) => client["organization-invite-link"]["create"]({ ...request.payload }),
+  )
+
+export const OrganizationInviteLinkList = () =>
+  Operation.run(
+    ClientApi.groups["organization-invite-link"].endpoints["organization-invite-link.list"],
+    { labels: {} },
+    (client) => client["organization-invite-link"]["list"](),
+  )
+
+export const OrganizationInviteLinkRevoke = (
+  input: Command.Command.Config.Infer<typeof Commands.OrganizationInviteLinkRevoke>,
+) =>
+  Operation.run(
+    ClientApi.groups["organization-invite-link"].endpoints["organization-invite-link.revoke"],
+    { params: { id: input["id"] }, labels: { id: "<link>" } },
+    (client, request) => client["organization-invite-link"]["revoke"]({ ...request.params }),
+  )
+
 export const RepositoryList = () =>
   Operation.run(ClientApi.groups["repository"].endpoints["repository.list"], { labels: {} }, (client) =>
     client["repository"]["list"](),

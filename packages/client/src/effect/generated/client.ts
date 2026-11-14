@@ -216,6 +216,57 @@ const adaptGroupJoinLink = (raw: RawClient["join-link"]) => ({
   accept: EndpointJoinLinkAccept(raw),
 })
 
+type OrganizationInviteLinkCreateRequest = Parameters<
+  RawClient["organization-invite-link"]["organization-invite-link.create"]
+>[0]
+type OrganizationInviteLinkCreateInput = {
+  readonly spaceIds: OrganizationInviteLinkCreateRequest["payload"]["spaceIds"]
+  readonly expiresIn: OrganizationInviteLinkCreateRequest["payload"]["expiresIn"]
+}
+const EndpointOrganizationInviteLinkCreate =
+  (raw: RawClient["organization-invite-link"]) => (input: OrganizationInviteLinkCreateInput) =>
+    raw["organization-invite-link.create"]({
+      payload: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
+    }).pipe(Effect.mapError(mapClientError))
+
+const EndpointOrganizationInviteLinkList = (raw: RawClient["organization-invite-link"]) => () =>
+  raw["organization-invite-link.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type OrganizationInviteLinkRevokeRequest = Parameters<
+  RawClient["organization-invite-link"]["organization-invite-link.revoke"]
+>[0]
+type OrganizationInviteLinkRevokeInput = { readonly id: OrganizationInviteLinkRevokeRequest["params"]["id"] }
+const EndpointOrganizationInviteLinkRevoke =
+  (raw: RawClient["organization-invite-link"]) => (input: OrganizationInviteLinkRevokeInput) =>
+    raw["organization-invite-link.revoke"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOrganizationInviteLink = (raw: RawClient["organization-invite-link"]) => ({
+  create: EndpointOrganizationInviteLinkCreate(raw),
+  list: EndpointOrganizationInviteLinkList(raw),
+  revoke: EndpointOrganizationInviteLinkRevoke(raw),
+})
+
+type OrganizationJoinLinkPreviewRequest = Parameters<
+  RawClient["organization-join-link"]["organization-join-link.preview"]
+>[0]
+type OrganizationJoinLinkPreviewInput = { readonly token: OrganizationJoinLinkPreviewRequest["params"]["token"] }
+const EndpointOrganizationJoinLinkPreview =
+  (raw: RawClient["organization-join-link"]) => (input: OrganizationJoinLinkPreviewInput) =>
+    raw["organization-join-link.preview"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+type OrganizationJoinLinkAcceptRequest = Parameters<
+  RawClient["organization-join-link"]["organization-join-link.accept"]
+>[0]
+type OrganizationJoinLinkAcceptInput = { readonly token: OrganizationJoinLinkAcceptRequest["params"]["token"] }
+const EndpointOrganizationJoinLinkAccept =
+  (raw: RawClient["organization-join-link"]) => (input: OrganizationJoinLinkAcceptInput) =>
+    raw["organization-join-link.accept"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOrganizationJoinLink = (raw: RawClient["organization-join-link"]) => ({
+  preview: EndpointOrganizationJoinLinkPreview(raw),
+  accept: EndpointOrganizationJoinLinkAccept(raw),
+})
+
 type EnvironmentTemplateListRequest = Parameters<RawClient["environment-template"]["environment-template.list"]>[0]
 type EnvironmentTemplateListInput = {
   readonly page: EnvironmentTemplateListRequest["query"]["page"]
@@ -2119,6 +2170,8 @@ const adaptClient = (raw: RawClient) => ({
   "space-join-request": adaptGroupSpaceJoinRequest(raw["space-join-request"]),
   "space-invite-link": adaptGroupSpaceInviteLink(raw["space-invite-link"]),
   "join-link": adaptGroupJoinLink(raw["join-link"]),
+  "organization-invite-link": adaptGroupOrganizationInviteLink(raw["organization-invite-link"]),
+  "organization-join-link": adaptGroupOrganizationJoinLink(raw["organization-join-link"]),
   "environment-template": adaptGroupEnvironmentTemplate(raw["environment-template"]),
   environmentProvider: adaptGroupEnvironmentProvider(raw["environmentProvider"]),
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),

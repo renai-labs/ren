@@ -3,13 +3,13 @@ export * as DefaultOrganization from "./default-organization.js"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
-import { and, desc, eq, like, or } from "drizzle-orm"
+import { and, desc, eq, gt, isNull, like, or } from "drizzle-orm"
 import freeEmailDomains from "free-email-domains"
 import { getDomainWithoutSuffix } from "tldts"
 
 const freemail = new Set([...freeEmailDomains, "duckduckgo.com", "tutanota.com", "tutamail.com", "tuta.io", "hey.com"])
 
-export const provision = (database: AuthDatabase.Interface["db"], userId: string) =>
+export const provision = (database: AuthDatabase.Interface["db"], userId: string, joinToken: string) =>
   database.transaction(async (tx) => {
     const [user] = await tx.select().from(Database.Schema.user).where(eq(Database.Schema.user.id, userId)).for("update")
     if (!user) return
@@ -38,7 +38,17 @@ export const provision = (database: AuthDatabase.Interface["db"], userId: string
       columns: { id: true },
       where: { email: Auth.normalizeEmail(user.email), status: "pending", expiresAt: { gt: new Date() } },
     })
-    if (invitation) return
+    const [link] = await tx
+      .select({ id: Database.Schema.organization_invite_link.id })
+      .from(Database.Schema.organization_invite_link)
+      .where(
+        and(
+          eq(Database.Schema.organization_invite_link.token, joinToken),
+          isNull(Database.Schema.organization_invite_link.revoked_at),
+          gt(Database.Schema.organization_invite_link.expires_at, new Date()),
+        ),
+      )
+    if (invitation || link) return
     const domain = Auth.emailDomain(user.email)
     const company = freemail.has(domain)
       ? ""

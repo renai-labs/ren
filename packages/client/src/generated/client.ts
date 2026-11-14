@@ -39,6 +39,15 @@ import type {
   JoinLinkPreviewOutput,
   JoinLinkAcceptInput,
   JoinLinkAcceptOutput,
+  OrganizationInviteLinkCreateInput,
+  OrganizationInviteLinkCreateOutput,
+  OrganizationInviteLinkListOutput,
+  OrganizationInviteLinkRevokeInput,
+  OrganizationInviteLinkRevokeOutput,
+  OrganizationJoinLinkPreviewInput,
+  OrganizationJoinLinkPreviewOutput,
+  OrganizationJoinLinkAcceptInput,
+  OrganizationJoinLinkAcceptOutput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateListOutput,
   EnvironmentTemplateGetInput,
@@ -679,6 +688,66 @@ export function make(options: ClientOptions) {
             path: `/join-links/${encodeURIComponent(input.token)}/accept`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "organization-invite-link": {
+      create: (input: OrganizationInviteLinkCreateInput, requestOptions?: RequestOptions) =>
+        request<OrganizationInviteLinkCreateOutput>(
+          {
+            method: "POST",
+            path: `/organization-invite-links`,
+            body: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      list: (requestOptions?: RequestOptions) =>
+        request<OrganizationInviteLinkListOutput>(
+          {
+            method: "GET",
+            path: `/organization-invite-links`,
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      revoke: (input: OrganizationInviteLinkRevokeInput, requestOptions?: RequestOptions) =>
+        request<OrganizationInviteLinkRevokeOutput>(
+          {
+            method: "DELETE",
+            path: `/organization-invite-links/${encodeURIComponent(input.id)}`,
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    "organization-join-link": {
+      preview: (input: OrganizationJoinLinkPreviewInput, requestOptions?: RequestOptions) =>
+        request<OrganizationJoinLinkPreviewOutput>(
+          {
+            method: "GET",
+            path: `/organization-join-links/${encodeURIComponent(input.token)}/preview`,
+            successStatus: 200,
+            declaredStatuses: [],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      accept: (input: OrganizationJoinLinkAcceptInput, requestOptions?: RequestOptions) =>
+        request<OrganizationJoinLinkAcceptOutput>(
+          {
+            method: "POST",
+            path: `/organization-join-links/${encodeURIComponent(input.token)}/accept`,
+            successStatus: 200,
+            declaredStatuses: [401, 404],
             empty: false,
           },
           requestOptions,
