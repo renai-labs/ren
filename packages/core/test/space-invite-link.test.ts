@@ -7,6 +7,7 @@ import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Space } from "../src/space.js"
 import { SpaceInviteLink } from "../src/space/invite-link.js"
+import { SpaceJoinRequest } from "../src/space/join-request.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
@@ -17,6 +18,7 @@ const it = testEffect(
     Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceInviteLink.layer,
+    SpaceJoinRequest.layer,
     SpaceProvisioning.layer,
   ).pipe(Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)), Layer.provideMerge(Testing.layer)),
 )
@@ -54,6 +56,23 @@ describe("SpaceInviteLink", () => {
       yield* links.accept(grace.userId, link.token)
       expect((yield* links.get(ada, design.id)).uses).toBe(1)
       expect((yield* spaces.get(grace, design.id)).membershipId).not.toBeNull()
+    }),
+  )
+
+  it.live("joining through the link closes the person's pending request to join the space", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const requests = yield* SpaceJoinRequest.Service
+      const links = yield* SpaceInviteLink.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* person(organizationId)
+      const grace = yield* person(organizationId)
+      const design = yield* spaces.create(ada, { name: "Design" })
+      const request = yield* requests.create(grace, { spaceId: design.id })
+      yield* links.accept(grace.userId, (yield* links.get(ada, design.id)).token)
+      expect((yield* requests.list(ada, { spaceId: design.id, page: 1, pageSize: 50 })).items).toMatchObject([
+        { id: request.id, status: "cancelled" },
+      ])
     }),
   )
 

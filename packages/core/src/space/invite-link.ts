@@ -206,9 +206,7 @@ export const layer = Layer.effect(
               slug: row.slug,
             }
             if (row.membershipId) return { joined, workloads: [] }
-            yield* transaction
-              .insert(Database.Schema.space_member)
-              .values({ id: Space.MembershipID.create(), space_id: row.spaceId, user_id: userId })
+            yield* SpaceQueries.admit(transaction, userId, [row.spaceId])
             yield* transaction
               .update(Database.Schema.space_invite_link)
               .set({ uses: sql`${Database.Schema.space_invite_link.uses} + 1` })
