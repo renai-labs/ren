@@ -71,11 +71,11 @@ it.live(
       const apps = yield* App.Service
       const profiles = yield* AppProfiles.Service
       const reach = (spaceId: typeof found.sales) => ProfilesFixture.reach(found.organizationId, spaceId)
-      expect(yield* reach(found.sales)).toEqual(["google/acme", "google/org-mail"])
-      expect(yield* reach(found.finance)).toEqual(["google/globex", "google/org-mail"])
-      expect(yield* reach(found.design)).toEqual(["google/org-mail"])
-      expect(yield* reach(found.ana.personal)).toEqual(["google/ana", "google/org-mail"])
-      expect(yield* reach(found.bob.personal)).toEqual(["google/bob", "google/org-mail"])
+      expect(yield* reach(found.sales)).toEqual(["base/acme", "base/org-mail", "google/acme", "google/org-mail"])
+      expect(yield* reach(found.finance)).toEqual(["base/globex", "base/org-mail", "google/globex", "google/org-mail"])
+      expect(yield* reach(found.design)).toEqual(["base/org-mail", "google/org-mail"])
+      expect(yield* reach(found.ana.personal)).toEqual(["google/ana", "base/org-mail", "google/org-mail"])
+      expect(yield* reach(found.bob.personal)).toEqual(["google/bob", "base/org-mail", "google/org-mail"])
       expect((yield* Effect.flip(profiles.access(found.ana, found.acme.id, { add: [found.bob.personal] })))._tag).toBe(
         "Primitive.Forbidden",
       )
@@ -83,13 +83,24 @@ it.live(
         "Primitive.Forbidden",
       )
       yield* profiles.access(found.ana, found.acme.id, { add: [found.ana.personal] })
-      expect(yield* reach(found.ana.personal)).toEqual(["google/ana", "google/acme", "google/org-mail"])
+      expect(yield* reach(found.ana.personal)).toEqual([
+        "google/ana",
+        "base/org-mail",
+        "google/acme",
+        "google/org-mail",
+      ])
       yield* profiles.access(found.root, found.acme.id, { remove: [found.ana.personal] })
-      expect(yield* reach(found.ana.personal)).toEqual(["google/ana", "google/org-mail"])
+      expect(yield* reach(found.ana.personal)).toEqual(["google/ana", "base/org-mail", "google/org-mail"])
       yield* profiles.link(found.root, found.acme.id, { appId: found.base.id, profileId: found.shared.id })
-      expect(yield* reach(found.sales)).toEqual(["base/shared", "google/acme", "google/org-mail"])
+      expect(yield* reach(found.sales)).toEqual([
+        "base/acme",
+        "base/org-mail",
+        "base/shared",
+        "google/acme",
+        "google/org-mail",
+      ])
       yield* apps.archive(found.root, found.google.id)
-      expect(yield* reach(found.sales)).toEqual(["base/shared"])
+      expect(yield* reach(found.sales)).toEqual(["base/acme", "base/org-mail", "base/shared"])
     }),
 )
 
@@ -129,6 +140,8 @@ it.live(
       expect(kept).toMatchObject({ id: signedIn.id, spaces: [], hiddenSpaces: 0 })
       expect((yield* profiles.get(found.ana, signedIn.id)).items.at(0)?.credentialId).toBe(credentialId)
       expect(yield* ProfilesFixture.reach(found.organizationId, found.sales)).toEqual([
+        "base/acme",
+        "base/org-mail",
         "google/acme",
         "google/org-mail",
       ])
@@ -293,9 +306,109 @@ it.live(
         spaceIds: [found.design],
       })
       const catalog = (yield* ProfilesFixture.catalog(found.organizationId, found.design)).catalog
-      expect(catalog.apps.map((app) => app.appSlug)).toEqual(["docs", "google", "tools"])
+      expect(catalog.apps.map((app) => app.appSlug)).toEqual(["base", "docs", "google", "tools"])
       expect(catalog.skills.map((skill) => `${skill.appSlug}/${skill.slug}`)).toEqual(["tools/notes"])
       expect(catalog.mcps.map((mcp) => mcp.server)).toEqual(["search"])
-      expect(catalog.apps.at(2)?.appId).toEqual(tools.id)
+      expect(catalog.apps.at(3)?.appId).toEqual(tools.id)
+    }),
+)
+
+it.live(
+  "an app added to a space brings every app it depends on, through apps without sign-ins, as accounts of their own; one already there is kept",
+  () =>
+    Effect.gen(function* () {
+      const profiles = yield* AppProfiles.Service
+      const organizationId = yield* Seed.organization()
+      const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+      const ana = yield* ProfilesFixture.user(organizationId, "Ana")
+      const team = yield* ProfilesFixture.space(root, "Team", [ana])
+      const other = yield* ProfilesFixture.space(root, "Other")
+      yield* ProfilesFixture.app(root, other, "mail", { mcps: { mail: ProfilesFixture.remote("Mail") } })
+      yield* ProfilesFixture.app(root, other, "notes", { skills: { notes: Seed.skill("Notes") }, dependsOn: ["mail"] })
+      const docs = yield* ProfilesFixture.app(root, other, "docs", { skills: { docs: Seed.skill("Docs") } })
+      yield* ProfilesFixture.profile(root, { appId: docs.id, slug: "kept", kind: "shared", spaceIds: [team] })
+      const suite = yield* ProfilesFixture.app(root, other, "suite", {
+        skills: { guide: Seed.skill("Guide") },
+        dependsOn: ["notes", "docs"],
+      })
+      yield* ProfilesFixture.profile(root, {
+        appId: suite.id,
+        slug: "sales",
+        name: "Sales",
+        kind: "shared",
+        spaceIds: [team],
+      })
+      expect(yield* ProfilesFixture.reach(organizationId, team)).toEqual([
+        "docs/kept",
+        "mail/sales",
+        "notes/sales",
+        "suite/sales",
+      ])
+      const mail = (yield* profiles.list(root, { ...page, spaceId: team })).items.find(
+        (found) => found.appSlug === "mail",
+      )
+      expect(mail).toMatchObject({ name: "Sales", kind: "shared" })
+      if (!mail) return
+      yield* ProfilesFixture.connect(organizationId, mail.id, "MCP_MAIL__SALES")
+      expect((yield* ProfilesFixture.catalog(organizationId, team)).catalog.mcps.map((mcp) => mcp.server)).toEqual([
+        "mail__sales",
+      ])
+      yield* ProfilesFixture.profile(ana, { appId: suite.id, slug: "ana", kind: "private" })
+      expect(yield* ProfilesFixture.reach(organizationId, ana.personal)).toEqual([
+        "docs/ana",
+        "mail/ana",
+        "notes/ana",
+        "suite/ana",
+      ])
+    }),
+)
+
+it.live(
+  "an app added to another space or to every space installs its apps there too, numbered when the name is taken",
+  () =>
+    Effect.gen(function* () {
+      const profiles = yield* AppProfiles.Service
+      const organizationId = yield* Seed.organization()
+      const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
+      const team = yield* ProfilesFixture.space(root, "Team")
+      const design = yield* ProfilesFixture.space(root, "Design")
+      const fresh = yield* ProfilesFixture.space(root, "Fresh")
+      const other = yield* ProfilesFixture.space(root, "Other")
+      const mail = yield* ProfilesFixture.app(root, other, "mail", { mcps: { mail: ProfilesFixture.remote("Mail") } })
+      yield* ProfilesFixture.profile(root, {
+        appId: mail.id,
+        slug: "sales",
+        name: "Sales",
+        kind: "shared",
+        spaceIds: [other],
+      })
+      const suite = yield* ProfilesFixture.app(root, other, "suite", {
+        skills: { guide: Seed.skill("Guide") },
+        dependsOn: ["mail"],
+      })
+      const added = yield* ProfilesFixture.profile(root, {
+        appId: suite.id,
+        slug: "sales",
+        name: "Sales",
+        kind: "shared",
+        spaceIds: [team],
+      })
+      yield* profiles.access(root, added.id, { add: [design] })
+      yield* profiles.access(root, added.id, { allSpaces: true })
+      expect(yield* ProfilesFixture.reach(organizationId, design)).toEqual([
+        "mail/sales-3",
+        "mail/sales-4",
+        "suite/sales",
+      ])
+      expect(yield* ProfilesFixture.reach(organizationId, fresh)).toEqual(["mail/sales-4", "suite/sales"])
+      expect(
+        (yield* profiles.list(root, { ...page, appId: mail.id })).items.map((found) => [found.slug, found.name]),
+      ).toEqual([
+        ["other", "Other"],
+        ["sales", "Sales"],
+        ["sales-2", "Sales 2"],
+        ["sales-3", "Sales 3"],
+        ["sales-4", "Sales 4"],
+      ])
     }),
 )

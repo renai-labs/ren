@@ -11,7 +11,6 @@ export const gaps = (profile: AppProfile) => [
   ...required(profile)
     .filter((item) => item.status !== "ok")
     .map((item) => item.name),
-  ...profile.links.filter((link) => link.profileId === null).map(() => "Dependency"),
   ...profile.oauthApps.filter((gate) => !gate.isConfigured).map((gate) => gate.name),
 ]
 
@@ -122,6 +121,7 @@ export type CatalogApp = {
   readonly ownerSpaceId: string | null
   readonly mcps: AppInfo["mcps"] | null
   readonly skills: AppInfo["skills"] | null
+  readonly dependsOn: ReadonlyArray<string>
   readonly listing: AppRegistryInfo["listing"] | null
 }
 
@@ -139,6 +139,7 @@ export const fromApp = (app: AppInfo): CatalogApp => ({
   ownerSpaceId: app.ownerSpaceId,
   mcps: app.mcps,
   skills: app.skills,
+  dependsOn: app.dependsOn ?? [],
   listing: null,
 })
 
@@ -153,6 +154,7 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
   ownerSpaceId: null,
   mcps: null,
   skills: null,
+  dependsOn: [],
   listing: app.listing,
 })
 

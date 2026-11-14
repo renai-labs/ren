@@ -396,7 +396,7 @@ export const candidateOf = (draft: Draft, inspected: Inspected) => {
     ...environmentOf(draft),
     skills: Object.fromEntries(draft.skills.map((each) => [each.slug, each.skill])),
     mcps: Object.fromEntries(resolved.mcps.map((each) => [each.slug, declarationOf(each)])),
-    dependsOn: draft.dependsOn,
+    ...(draft.dependsOn.length > 0 && { dependsOn: draft.dependsOn }),
     webhooks: draft.webhooks ?? {},
   }
 }

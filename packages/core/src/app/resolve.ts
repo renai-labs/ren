@@ -1,7 +1,7 @@
 export * as AppResolve from "./resolve.js"
 
 import { Database } from "@ren/db/database"
-import type { App } from "@ren/schema/app"
+import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
 import type { Mcp } from "@ren/schema/mcp"
@@ -113,9 +113,9 @@ export const layer = Layer.effect(
       const available = new Set(found.available)
       const reachedApps = new Set(found.reached.map((profile) => profile.appId))
       const implied = new Set<App.ID>()
-      const visit = (id: App.ID) => {
-        const member = found.claims.members.get(id)
-        for (const dependency of member?.dependsOn ?? []) {
+      const visit = (id: App.ID, level: number) => {
+        if (level >= App.maxDepth) return
+        for (const dependency of found.claims.members.get(id)?.dependsOn ?? []) {
           const row = apps.get(dependency)
           const hasItems =
             row &&
@@ -125,11 +125,11 @@ export const layer = Layer.effect(
             ).length > 0
           if (row && !hasItems && !reachedApps.has(dependency) && !implied.has(dependency)) {
             implied.add(dependency)
-            visit(dependency)
+            visit(dependency, level + 1)
           }
         }
       }
-      for (const id of reachedApps) visit(id)
+      for (const id of reachedApps) visit(id, 1)
       const ordered = [...reachedApps, ...implied]
         .flatMap((id) => {
           const row = apps.get(id)

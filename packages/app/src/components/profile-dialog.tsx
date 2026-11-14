@@ -40,7 +40,6 @@ import {
 import { Input } from "@ren/ui/input"
 import { RadioGroup, RadioGroupItem } from "@ren/ui/radio-group"
 import { Spinner } from "@ren/ui/spinner"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { AccountAccess } from "./account-actions.js"
 import { toastRemoved } from "./space-removal.js"
 import { AppIcon } from "./app-icon.js"
@@ -49,7 +48,7 @@ import { ConfirmDialog } from "./confirm-dialog.js"
 import { Row, Rows } from "./page.js"
 import { SpacesField } from "./spaces-field.js"
 import { Platform } from "../platform/platform.js"
-import { useApp, useApps } from "../lib/use-app.js"
+import { useApp } from "../lib/use-app.js"
 import { useAppProfiles } from "../lib/use-app-profiles.js"
 import { useMembers } from "../lib/use-members.js"
 import { useSignIn } from "../lib/use-sign-in.js"
@@ -1008,7 +1007,6 @@ function EditStep(props: {
             {...(profile.canShareEverySpace && { every: { checked: edit.every, onChange: edit.setEvery } })}
           />
         ) : null}
-        <DependenciesField profile={profile} />
       </FieldGroup>
     </Screen>
   )
@@ -1131,68 +1129,6 @@ function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
         }
       />
     </>
-  )
-}
-
-function DependenciesField(props: { profile: AppProfile }) {
-  const { api } = RouterContext.useRouterContext()
-  const profile = props.profile
-  const appIds = profile.links.map((each) => each.appId)
-  const apps = useApps(appIds)
-  const profiles = useAppProfiles(appIds)
-  const link = useMutation(api["app-profile"].link.mutationOptions())
-  if (profile.links.length === 0) return null
-  return (
-    <Field className="text-left">
-      <FieldLabel>Dependencies</FieldLabel>
-      <div className="flex flex-col gap-2">
-        {profile.links.map((each) => {
-          const app = apps.of(each.appId)
-          const name = app?.name ?? "App"
-          const options = profiles
-            .of(each.appId)
-            .filter(
-              (option) => option.kind === "shared" || (profile.kind === "private" && option.userId === profile.userId),
-            )
-            .map((option) => ({ value: option.id, label: option.name }))
-          return (
-            <div key={each.appId} className="flex items-center gap-3">
-              <AppIcon name={name} icon={app?.icon} size="sm" className="size-6 rounded-md text-xs" />
-              <span className="flex-1 truncate text-base font-medium">{name}</span>
-              <Select
-                items={options}
-                value={each.profileId}
-                onValueChange={(profileId) => {
-                  if (typeof profileId !== "string") return
-                  void link
-                    .mutateAsync({ id: profile.id, appId: each.appId, profileId })
-                    .catch((error: unknown) =>
-                      toast.error(`Couldn’t link ${name}`, { description: errorMessage(error) }),
-                    )
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  aria-label={`${name} account to use`}
-                  className="gap-1 px-2 text-xs data-[size=sm]:h-6.5"
-                >
-                  <SelectValue placeholder="Choose account" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {options.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-          )
-        })}
-      </div>
-    </Field>
   )
 }
 

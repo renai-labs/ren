@@ -63,6 +63,7 @@ const sampleApp: CatalogApp = {
   ownerSpaceId: null,
   mcps: { server: sampleMcp, tools: sampleMcp },
   skills: {},
+  dependsOn: [],
   listing: null,
 }
 

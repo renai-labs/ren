@@ -148,42 +148,53 @@ export const definition = Primitive.define({
   actions: { transferOwnership: { input: TransferOwnershipInput, result: Info } },
 })
 
+export const maxDepth = 3
+
 export interface DependencyIssue {
-  readonly kind: "missing" | "cycle"
+  readonly kind: "missing" | "cycle" | "depth"
   readonly path: ReadonlyArray<string>
 }
 
 export const dependencyIssues = (
   apps: ReadonlyMap<string, Pick<Declaration, "dependsOn">>,
 ): ReadonlyArray<DependencyIssue> => {
-  const complete = new Set<string>()
+  const chains = new Map<string, ReadonlyArray<string>>()
   const active = new Map<string, number>()
   const path: Array<string> = []
   const issues: Array<DependencyIssue> = []
-  const visit = (slug: string): void => {
-    if (complete.has(slug)) return
+  const visit = (slug: string): ReadonlyArray<string> => {
+    const chain = chains.get(slug)
+    if (chain) return chain
     const start = active.get(slug)
     if (typeof start === "number") {
       issues.push({ kind: "cycle", path: [...path.slice(start), slug] })
-      return
+      return [slug]
     }
     const app = apps.get(slug)
     if (!app) {
       issues.push({ kind: "missing", path: [...path, slug] })
-      return
+      return []
     }
     active.set(slug, path.length)
     path.push(slug)
-    for (const dependency of app.dependsOn) visit(dependency)
+    const longest = app.dependsOn
+      .map(visit)
+      .reduce<ReadonlyArray<string>>((left, right) => (right.length > left.length ? right : left), [])
     path.pop()
     active.delete(slug)
-    complete.add(slug)
+    chains.set(slug, [slug, ...longest])
+    return [slug, ...longest]
   }
-  for (const slug of apps.keys()) visit(slug)
-  return issues
+  const deepest = [...apps.keys()]
+    .map(visit)
+    .reduce<ReadonlyArray<string>>((left, right) => (right.length > left.length ? right : left), [])
+  const isAcyclic = issues.every((issue) => issue.kind !== "cycle")
+  return [...issues, ...(isAcyclic && deepest.length > maxDepth ? [{ kind: "depth" as const, path: deepest }] : [])]
 }
 
-export const dependencyCycles = (apps: ReadonlyMap<string, Pick<Declaration, "dependsOn">>): ReadonlyArray<string> =>
-  dependencyIssues(apps)
-    .filter((issue) => issue.kind === "cycle")
-    .map((issue) => issue.path.join(" -> "))
+export const describeIssue = (issue: DependencyIssue) => {
+  const path = issue.path.join(" -> ")
+  if (issue.kind === "missing") return `Missing dependency: ${path}.`
+  if (issue.kind === "cycle") return `Dependency cycle: ${path}.`
+  return `Apps depend ${issue.path.length} levels deep: ${path}. An app's dependencies may have dependencies of their own, but no deeper (${maxDepth} levels).`
+}

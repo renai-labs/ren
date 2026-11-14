@@ -63,39 +63,71 @@ export const dependencies = Effect.fnUntraced(function* (
   )
 })
 
-// oxlint-disable-next-line ren/no-comments -- Replaces the app's edges and refuses a cycle through any app it reaches.
+// oxlint-disable-next-line ren/no-comments -- Replaces the app's edges. A change refuses a cycle or a chain deeper than App.maxDepth through the app: down every app it reaches, and up the apps of its own organization, or the registry, that depend on it.
 export const writeDependencies = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
-  app: { readonly id: App.ID; readonly slug: string },
+  app: { readonly id: App.ID; readonly slug: string; readonly organization_id: Auth.OrganizationID | null },
   ids: ReadonlyArray<App.ID>,
 ) {
-  yield* transaction.delete(Database.Schema.app_dependency).where(eq(Database.Schema.app_dependency.app_id, app.id))
+  const edges = Database.Schema.app_dependency
+  const before = (yield* transaction
+    .delete(edges)
+    .where(eq(edges.app_id, app.id))
+    .returning({ id: edges.dependency_app_id })).map((edge) => edge.id)
   if (ids.length)
+    yield* transaction.insert(edges).values(ids.map((dependency_app_id) => ({ app_id: app.id, dependency_app_id })))
+  if (before.length === ids.length && ids.every((id) => before.includes(id))) return
+  const related = new Set<App.ID>([app.id])
+  const walk = Effect.fnUntraced(function* (direction: "down" | "up") {
+    let pending: ReadonlyArray<App.ID> = [app.id]
+    while (pending.length) {
+      const found = yield* transaction
+        .select({ app: edges.app_id, dependency: edges.dependency_app_id })
+        .from(edges)
+        .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, edges.app_id))
+        .where(
+          direction === "down"
+            ? inArray(edges.app_id, [...pending])
+            : and(
+                inArray(edges.dependency_app_id, [...pending]),
+                app.organization_id
+                  ? eq(Database.Schema.app.organization_id, app.organization_id)
+                  : isNull(Database.Schema.app.organization_id),
+              ),
+        )
+      pending = [...new Set(found.map((edge) => (direction === "down" ? edge.dependency : edge.app)))].filter(
+        (id) => !related.has(id),
+      )
+      for (const id of pending) related.add(id)
+    }
+  })
+  yield* walk("down")
+  yield* walk("up")
+  const rows = yield* transaction
+    .select({ id: Database.Schema.app.id, slug: Database.Schema.app.slug })
+    .from(Database.Schema.app)
+    .where(inArray(Database.Schema.app.id, [...related]))
+  const slugs = new Map(rows.map((row) => [row.id, row.slug]))
+  const byApp = Map.groupBy(
     yield* transaction
-      .insert(Database.Schema.app_dependency)
-      .values(ids.map((dependency_app_id) => ({ app_id: app.id, dependency_app_id })))
-  const graph = new Map<string, { dependsOn: ReadonlyArray<string> }>()
-  const visited = new Set<App.ID>()
-  let pending: ReadonlyArray<App.ID> = [app.id]
-  while (pending.length) {
-    for (const id of pending) visited.add(id)
-    const rows = yield* transaction
-      .select({ id: Database.Schema.app.id, slug: Database.Schema.app.slug })
-      .from(Database.Schema.app)
-      .where(inArray(Database.Schema.app.id, [...pending]))
-    const edges = yield* AppQueries.dependsOn(
-      transaction,
-      rows.map((row) => row.id),
-    )
-    for (const row of rows) graph.set(row.slug, { dependsOn: edges.get(row.id) ?? [] })
-    const next = yield* transaction
-      .select({ id: Database.Schema.app_dependency.dependency_app_id })
-      .from(Database.Schema.app_dependency)
-      .where(inArray(Database.Schema.app_dependency.app_id, [...pending]))
-    pending = [...new Set(next.map((row) => row.id))].filter((id) => !visited.has(id))
-  }
-  const cycle = App.dependencyCycles(graph).at(0)
-  if (cycle) return yield* new Primitive.Conflict({ message: `Dependency cycle: ${cycle}.` })
+      .select()
+      .from(edges)
+      .where(inArray(edges.app_id, [...related])),
+    (edge) => edge.app_id,
+  )
+  const graph = new Map(
+    rows.map((row) => [
+      row.slug,
+      {
+        dependsOn: (byApp.get(row.id) ?? []).flatMap((edge) => {
+          const slug = slugs.get(edge.dependency_app_id)
+          return slug ? [slug] : []
+        }),
+      },
+    ]),
+  )
+  const issue = App.dependencyIssues(graph).at(0)
+  if (issue) return yield* new Primitive.Conflict({ message: App.describeIssue(issue) })
 })
 
 type Row = typeof Database.Schema.app.$inferSelect
