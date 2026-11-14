@@ -60,6 +60,16 @@ const actions: Readonly<Record<string, string>> = {
   kernel_manage_replays: "Recording replay",
   kernel_browser_curl: "Fetching in browser",
   kernel_exec_command: "Running in browser VM",
+  kernel_browser_repl: "Using browser",
+  browser_manage_browsers: "Managing browser",
+  browser_browser_repl: "Using browser",
+  browser_computer_action: "Using browser",
+  browser_execute_playwright_code: "Running Playwright",
+  browser_manage_browser_files: "Managing browser files",
+  browser_manage_profiles: "Managing browser profiles",
+  browser_manage_replays: "Recording replay",
+  browser_browser_curl: "Fetching in browser",
+  browser_exec_command: "Running in browser VM",
 }
 
 const results: Readonly<Record<string, string>> = {
@@ -112,6 +122,7 @@ const kinds: Readonly<Record<string, Kind>> = {
   bash: "command",
   execute: "command",
   kernel_exec_command: "command",
+  browser_exec_command: "command",
   read: "file",
   write: "edit",
   show_file: "file",
@@ -124,6 +135,7 @@ const kinds: Readonly<Record<string, Kind>> = {
   tool_search: "search",
   webfetch: "web",
   kernel_browser_curl: "web",
+  browser_browser_curl: "web",
   subagent: "agent",
   task: "agent",
 }
