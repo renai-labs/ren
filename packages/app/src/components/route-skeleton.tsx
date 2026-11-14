@@ -212,6 +212,7 @@ export function RouteSkeleton() {
   if (path.startsWith("/sessions/")) return <ChatSkeleton />
   if (path.startsWith("/tasks/")) return <TaskSkeleton />
   if (path === "/drive") return <PageSkeleton title="Drive" width="full" />
+  if (path === "/drive/artifacts") return <PageSkeleton title="Artifacts" width="full" />
   if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton path={path.split("/")} />
   if (path === "/spaces")
     return (

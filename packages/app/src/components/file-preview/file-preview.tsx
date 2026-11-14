@@ -192,7 +192,7 @@ function Blocked(props: { reason: keyof typeof notices; onDownload: () => void }
   )
 }
 
-function Viewer(props: {
+export function Viewer(props: {
   kind: Kind
   file: SessionMessage.DriveFile
   bytes: (signal: AbortSignal) => Promise<ArrayBuffer>

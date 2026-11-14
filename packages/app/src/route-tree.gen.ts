@@ -22,9 +22,10 @@ import { Route as JoinTokenRouteImport } from "./routes/join.$token"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
 import { Route as AuthedShellAutomationsRouteImport } from "./routes/_authed/_shell/automations"
-import { Route as AuthedShellDriveRouteImport } from "./routes/_authed/_shell/drive"
 import { Route as AuthedOrganizationsNewRouteImport } from "./routes/_authed/organizations/new"
 import { Route as AuthedShellAppsIndexRouteImport } from "./routes/_authed/_shell/apps/index"
+import { Route as AuthedShellDriveIndexRouteImport } from "./routes/_authed/_shell/drive/index"
+import { Route as AuthedShellDriveArtifactsRouteImport } from "./routes/_authed/_shell/drive/artifacts"
 import { Route as AuthedShellMarketplaceIndexRouteImport } from "./routes/_authed/_shell/marketplace/index"
 import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_shell/settings/index"
 import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
@@ -51,7 +52,6 @@ import { Route as AuthedShellSpacesSpaceIdAppsRouteImport } from "./routes/_auth
 import { Route as AuthedShellSpacesSpaceIdChannelsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/channels"
 import { Route as AuthedShellSpacesSpaceIdComputeRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/compute"
 import { Route as AuthedShellSpacesSpaceIdCredentialsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/credentials"
-import { Route as AuthedShellSpacesSpaceIdDriveRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/drive"
 import { Route as AuthedShellSpacesSpaceIdFactoryRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/factory"
 import { Route as AuthedShellSpacesSpaceIdInstructionsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/instructions"
 import { Route as AuthedShellSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/members"
@@ -64,6 +64,8 @@ import { Route as AuthedShellTasksTaskIdIndexRouteImport } from "./routes/_authe
 import { Route as AuthedShellSpacesSpaceIdAgentsIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/agents/index"
 import { Route as AuthedShellSpacesSpaceIdAgentsNewRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/agents/new"
 import { Route as AuthedShellSpacesSpaceIdAutomationsIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/automations/index"
+import { Route as AuthedShellSpacesSpaceIdDriveIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/drive/index"
+import { Route as AuthedShellSpacesSpaceIdDriveArtifactsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/drive/artifacts"
 import { Route as AuthedShellSpacesSpaceIdTasksIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/tasks/index"
 import { Route as AuthedShellSpacesSpaceIdAgentsAgentIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/agents/$agentId/index"
 import { Route as AuthedShellSpacesSpaceIdTasksTaskIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/tasks/$taskId/index"
@@ -133,11 +135,6 @@ const AuthedShellAutomationsRoute = AuthedShellAutomationsRouteImport.update({
   path: "/automations",
   getParentRoute: () => AuthedShellRoute,
 } as any)
-const AuthedShellDriveRoute = AuthedShellDriveRouteImport.update({
-  id: "/drive",
-  path: "/drive",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
 const AuthedOrganizationsNewRoute = AuthedOrganizationsNewRouteImport.update({
   id: "/organizations/new",
   path: "/organizations/new",
@@ -148,6 +145,17 @@ const AuthedShellAppsIndexRoute = AuthedShellAppsIndexRouteImport.update({
   path: "/apps/",
   getParentRoute: () => AuthedShellRoute,
 } as any)
+const AuthedShellDriveIndexRoute = AuthedShellDriveIndexRouteImport.update({
+  id: "/drive/",
+  path: "/drive/",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellDriveArtifactsRoute =
+  AuthedShellDriveArtifactsRouteImport.update({
+    id: "/drive/artifacts",
+    path: "/drive/artifacts",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellMarketplaceIndexRoute =
   AuthedShellMarketplaceIndexRouteImport.update({
     id: "/marketplace/",
@@ -302,12 +310,6 @@ const AuthedShellSpacesSpaceIdCredentialsRoute =
     path: "/credentials",
     getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
-const AuthedShellSpacesSpaceIdDriveRoute =
-  AuthedShellSpacesSpaceIdDriveRouteImport.update({
-    id: "/drive",
-    path: "/drive",
-    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
-  } as any)
 const AuthedShellSpacesSpaceIdFactoryRoute =
   AuthedShellSpacesSpaceIdFactoryRouteImport.update({
     id: "/factory",
@@ -384,6 +386,18 @@ const AuthedShellSpacesSpaceIdAutomationsIndexRoute =
     path: "/automations/",
     getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
+const AuthedShellSpacesSpaceIdDriveIndexRoute =
+  AuthedShellSpacesSpaceIdDriveIndexRouteImport.update({
+    id: "/drive/",
+    path: "/drive/",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
+const AuthedShellSpacesSpaceIdDriveArtifactsRoute =
+  AuthedShellSpacesSpaceIdDriveArtifactsRouteImport.update({
+    id: "/drive/artifacts",
+    path: "/drive/artifacts",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
 const AuthedShellSpacesSpaceIdTasksIndexRoute =
   AuthedShellSpacesSpaceIdTasksIndexRouteImport.update({
     id: "/tasks/",
@@ -433,14 +447,15 @@ export interface FileRoutesByFullPath {
   "/join/$token": typeof JoinTokenRoute
   "/$": typeof AuthedShellSplatRoute
   "/automations": typeof AuthedShellAutomationsRoute
-  "/drive": typeof AuthedShellDriveRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
+  "/drive/artifacts": typeof AuthedShellDriveArtifactsRoute
   "/settings": typeof AuthedShellSettingsAdminRouteWithChildren
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/memory": typeof AuthedShellSettingsMemoryRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps/": typeof AuthedShellAppsIndexRoute
+  "/drive/": typeof AuthedShellDriveIndexRoute
   "/marketplace/": typeof AuthedShellMarketplaceIndexRoute
   "/settings/": typeof AuthedShellSettingsIndexRoute
   "/spaces/": typeof AuthedShellSpacesIndexRoute
@@ -456,7 +471,6 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
-  "/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveRoute
   "/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/spaces/$spaceId/instructions": typeof AuthedShellSpacesSpaceIdInstructionsRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -473,8 +487,10 @@ export interface FileRoutesByFullPath {
   "/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/tasks/$taskId/": typeof AuthedShellTasksTaskIdIndexRoute
   "/spaces/$spaceId/agents/new": typeof AuthedShellSpacesSpaceIdAgentsNewRoute
+  "/spaces/$spaceId/drive/artifacts": typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   "/spaces/$spaceId/agents/": typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
   "/spaces/$spaceId/automations/": typeof AuthedShellSpacesSpaceIdAutomationsIndexRoute
+  "/spaces/$spaceId/drive/": typeof AuthedShellSpacesSpaceIdDriveIndexRoute
   "/spaces/$spaceId/tasks/": typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   "/spaces/$spaceId/agents/$agentId/": typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   "/spaces/$spaceId/tasks/$taskId/": typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
@@ -493,13 +509,14 @@ export interface FileRoutesByTo {
   "/join/$token": typeof JoinTokenRoute
   "/$": typeof AuthedShellSplatRoute
   "/automations": typeof AuthedShellAutomationsRoute
-  "/drive": typeof AuthedShellDriveRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
+  "/drive/artifacts": typeof AuthedShellDriveArtifactsRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/memory": typeof AuthedShellSettingsMemoryRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps": typeof AuthedShellAppsIndexRoute
+  "/drive": typeof AuthedShellDriveIndexRoute
   "/marketplace": typeof AuthedShellMarketplaceIndexRoute
   "/spaces": typeof AuthedShellSpacesIndexRoute
   "/tasks": typeof AuthedShellTasksIndexRoute
@@ -514,7 +531,6 @@ export interface FileRoutesByTo {
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
-  "/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveRoute
   "/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/spaces/$spaceId/instructions": typeof AuthedShellSpacesSpaceIdInstructionsRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -531,8 +547,10 @@ export interface FileRoutesByTo {
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/tasks/$taskId": typeof AuthedShellTasksTaskIdIndexRoute
   "/spaces/$spaceId/agents/new": typeof AuthedShellSpacesSpaceIdAgentsNewRoute
+  "/spaces/$spaceId/drive/artifacts": typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   "/spaces/$spaceId/agents": typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
   "/spaces/$spaceId/automations": typeof AuthedShellSpacesSpaceIdAutomationsIndexRoute
+  "/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveIndexRoute
   "/spaces/$spaceId/tasks": typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   "/spaces/$spaceId/agents/$agentId": typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   "/spaces/$spaceId/tasks/$taskId": typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
@@ -553,15 +571,16 @@ export interface FileRoutesById {
   "/join/$token": typeof JoinTokenRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
   "/_authed/_shell/automations": typeof AuthedShellAutomationsRoute
-  "/_authed/_shell/drive": typeof AuthedShellDriveRoute
   "/_authed/organizations/new": typeof AuthedOrganizationsNewRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
   "/_authed/_shell/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
+  "/_authed/_shell/drive/artifacts": typeof AuthedShellDriveArtifactsRoute
   "/_authed/_shell/settings/_admin": typeof AuthedShellSettingsAdminRouteWithChildren
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/_authed/_shell/settings/memory": typeof AuthedShellSettingsMemoryRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/_authed/_shell/apps/": typeof AuthedShellAppsIndexRoute
+  "/_authed/_shell/drive/": typeof AuthedShellDriveIndexRoute
   "/_authed/_shell/marketplace/": typeof AuthedShellMarketplaceIndexRoute
   "/_authed/_shell/settings/": typeof AuthedShellSettingsIndexRoute
   "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
@@ -577,7 +596,6 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/_authed/_shell/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
   "/_authed/_shell/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
-  "/_authed/_shell/spaces/$spaceId/drive": typeof AuthedShellSpacesSpaceIdDriveRoute
   "/_authed/_shell/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/_authed/_shell/spaces/$spaceId/instructions": typeof AuthedShellSpacesSpaceIdInstructionsRoute
   "/_authed/_shell/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -594,8 +612,10 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/_authed/_shell/tasks/$taskId/": typeof AuthedShellTasksTaskIdIndexRoute
   "/_authed/_shell/spaces/$spaceId/agents/new": typeof AuthedShellSpacesSpaceIdAgentsNewRoute
+  "/_authed/_shell/spaces/$spaceId/drive/artifacts": typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   "/_authed/_shell/spaces/$spaceId/agents/": typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
   "/_authed/_shell/spaces/$spaceId/automations/": typeof AuthedShellSpacesSpaceIdAutomationsIndexRoute
+  "/_authed/_shell/spaces/$spaceId/drive/": typeof AuthedShellSpacesSpaceIdDriveIndexRoute
   "/_authed/_shell/spaces/$spaceId/tasks/": typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   "/_authed/_shell/spaces/$spaceId/agents/$agentId/": typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   "/_authed/_shell/spaces/$spaceId/tasks/$taskId/": typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
@@ -616,14 +636,15 @@ export interface FileRouteTypes {
     | "/join/$token"
     | "/$"
     | "/automations"
-    | "/drive"
     | "/organizations/new"
     | "/spaces/$spaceId"
+    | "/drive/artifacts"
     | "/settings"
     | "/settings/credentials"
     | "/settings/memory"
     | "/settings/preferences"
     | "/apps/"
+    | "/drive/"
     | "/marketplace/"
     | "/settings/"
     | "/spaces/"
@@ -639,7 +660,6 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/compute"
     | "/spaces/$spaceId/credentials"
-    | "/spaces/$spaceId/drive"
     | "/spaces/$spaceId/factory"
     | "/spaces/$spaceId/instructions"
     | "/spaces/$spaceId/members"
@@ -656,8 +676,10 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/"
     | "/tasks/$taskId/"
     | "/spaces/$spaceId/agents/new"
+    | "/spaces/$spaceId/drive/artifacts"
     | "/spaces/$spaceId/agents/"
     | "/spaces/$spaceId/automations/"
+    | "/spaces/$spaceId/drive/"
     | "/spaces/$spaceId/tasks/"
     | "/spaces/$spaceId/agents/$agentId/"
     | "/spaces/$spaceId/tasks/$taskId/"
@@ -676,13 +698,14 @@ export interface FileRouteTypes {
     | "/join/$token"
     | "/$"
     | "/automations"
-    | "/drive"
     | "/organizations/new"
+    | "/drive/artifacts"
     | "/settings"
     | "/settings/credentials"
     | "/settings/memory"
     | "/settings/preferences"
     | "/apps"
+    | "/drive"
     | "/marketplace"
     | "/spaces"
     | "/tasks"
@@ -697,7 +720,6 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/compute"
     | "/spaces/$spaceId/credentials"
-    | "/spaces/$spaceId/drive"
     | "/spaces/$spaceId/factory"
     | "/spaces/$spaceId/instructions"
     | "/spaces/$spaceId/members"
@@ -714,8 +736,10 @@ export interface FileRouteTypes {
     | "/spaces/$spaceId"
     | "/tasks/$taskId"
     | "/spaces/$spaceId/agents/new"
+    | "/spaces/$spaceId/drive/artifacts"
     | "/spaces/$spaceId/agents"
     | "/spaces/$spaceId/automations"
+    | "/spaces/$spaceId/drive"
     | "/spaces/$spaceId/tasks"
     | "/spaces/$spaceId/agents/$agentId"
     | "/spaces/$spaceId/tasks/$taskId"
@@ -735,15 +759,16 @@ export interface FileRouteTypes {
     | "/join/$token"
     | "/_authed/_shell/$"
     | "/_authed/_shell/automations"
-    | "/_authed/_shell/drive"
     | "/_authed/organizations/new"
     | "/_authed/_shell/"
     | "/_authed/_shell/spaces/$spaceId"
+    | "/_authed/_shell/drive/artifacts"
     | "/_authed/_shell/settings/_admin"
     | "/_authed/_shell/settings/credentials"
     | "/_authed/_shell/settings/memory"
     | "/_authed/_shell/settings/preferences"
     | "/_authed/_shell/apps/"
+    | "/_authed/_shell/drive/"
     | "/_authed/_shell/marketplace/"
     | "/_authed/_shell/settings/"
     | "/_authed/_shell/spaces/"
@@ -759,7 +784,6 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId/channels"
     | "/_authed/_shell/spaces/$spaceId/compute"
     | "/_authed/_shell/spaces/$spaceId/credentials"
-    | "/_authed/_shell/spaces/$spaceId/drive"
     | "/_authed/_shell/spaces/$spaceId/factory"
     | "/_authed/_shell/spaces/$spaceId/instructions"
     | "/_authed/_shell/spaces/$spaceId/members"
@@ -776,8 +800,10 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/$spaceId/"
     | "/_authed/_shell/tasks/$taskId/"
     | "/_authed/_shell/spaces/$spaceId/agents/new"
+    | "/_authed/_shell/spaces/$spaceId/drive/artifacts"
     | "/_authed/_shell/spaces/$spaceId/agents/"
     | "/_authed/_shell/spaces/$spaceId/automations/"
+    | "/_authed/_shell/spaces/$spaceId/drive/"
     | "/_authed/_shell/spaces/$spaceId/tasks/"
     | "/_authed/_shell/spaces/$spaceId/agents/$agentId/"
     | "/_authed/_shell/spaces/$spaceId/tasks/$taskId/"
@@ -890,13 +916,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellAutomationsRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/drive": {
-      id: "/_authed/_shell/drive"
-      path: "/drive"
-      fullPath: "/drive"
-      preLoaderRoute: typeof AuthedShellDriveRouteImport
-      parentRoute: typeof AuthedShellRoute
-    }
     "/_authed/organizations/new": {
       id: "/_authed/organizations/new"
       path: "/organizations/new"
@@ -909,6 +928,20 @@ declare module "@tanstack/react-router" {
       path: "/apps"
       fullPath: "/apps/"
       preLoaderRoute: typeof AuthedShellAppsIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/drive/": {
+      id: "/_authed/_shell/drive/"
+      path: "/drive"
+      fullPath: "/drive/"
+      preLoaderRoute: typeof AuthedShellDriveIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/drive/artifacts": {
+      id: "/_authed/_shell/drive/artifacts"
+      path: "/drive/artifacts"
+      fullPath: "/drive/artifacts"
+      preLoaderRoute: typeof AuthedShellDriveArtifactsRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/marketplace/": {
@@ -1093,13 +1126,6 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdCredentialsRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
-    "/_authed/_shell/spaces/$spaceId/drive": {
-      id: "/_authed/_shell/spaces/$spaceId/drive"
-      path: "/drive"
-      fullPath: "/spaces/$spaceId/drive"
-      preLoaderRoute: typeof AuthedShellSpacesSpaceIdDriveRouteImport
-      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
-    }
     "/_authed/_shell/spaces/$spaceId/factory": {
       id: "/_authed/_shell/spaces/$spaceId/factory"
       path: "/factory"
@@ -1184,6 +1210,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdAutomationsIndexRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
+    "/_authed/_shell/spaces/$spaceId/drive/": {
+      id: "/_authed/_shell/spaces/$spaceId/drive/"
+      path: "/drive"
+      fullPath: "/spaces/$spaceId/drive/"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdDriveIndexRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
+    "/_authed/_shell/spaces/$spaceId/drive/artifacts": {
+      id: "/_authed/_shell/spaces/$spaceId/drive/artifacts"
+      path: "/drive/artifacts"
+      fullPath: "/spaces/$spaceId/drive/artifacts"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdDriveArtifactsRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
     "/_authed/_shell/spaces/$spaceId/tasks/": {
       id: "/_authed/_shell/spaces/$spaceId/tasks/"
       path: "/tasks"
@@ -1227,7 +1267,6 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdChannelsRoute: typeof AuthedShellSpacesSpaceIdChannelsRoute
   AuthedShellSpacesSpaceIdComputeRoute: typeof AuthedShellSpacesSpaceIdComputeRoute
   AuthedShellSpacesSpaceIdCredentialsRoute: typeof AuthedShellSpacesSpaceIdCredentialsRoute
-  AuthedShellSpacesSpaceIdDriveRoute: typeof AuthedShellSpacesSpaceIdDriveRoute
   AuthedShellSpacesSpaceIdFactoryRoute: typeof AuthedShellSpacesSpaceIdFactoryRoute
   AuthedShellSpacesSpaceIdInstructionsRoute: typeof AuthedShellSpacesSpaceIdInstructionsRoute
   AuthedShellSpacesSpaceIdMembersRoute: typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -1238,8 +1277,10 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdSettingsRoute: typeof AuthedShellSpacesSpaceIdSettingsRoute
   AuthedShellSpacesSpaceIdIndexRoute: typeof AuthedShellSpacesSpaceIdIndexRoute
   AuthedShellSpacesSpaceIdAgentsNewRoute: typeof AuthedShellSpacesSpaceIdAgentsNewRoute
+  AuthedShellSpacesSpaceIdDriveArtifactsRoute: typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   AuthedShellSpacesSpaceIdAgentsIndexRoute: typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
   AuthedShellSpacesSpaceIdAutomationsIndexRoute: typeof AuthedShellSpacesSpaceIdAutomationsIndexRoute
+  AuthedShellSpacesSpaceIdDriveIndexRoute: typeof AuthedShellSpacesSpaceIdDriveIndexRoute
   AuthedShellSpacesSpaceIdTasksIndexRoute: typeof AuthedShellSpacesSpaceIdTasksIndexRoute
   AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute: typeof AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute
   AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute: typeof AuthedShellSpacesSpaceIdTasksTaskIdIndexRoute
@@ -1255,7 +1296,6 @@ const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteR
     AuthedShellSpacesSpaceIdComputeRoute: AuthedShellSpacesSpaceIdComputeRoute,
     AuthedShellSpacesSpaceIdCredentialsRoute:
       AuthedShellSpacesSpaceIdCredentialsRoute,
-    AuthedShellSpacesSpaceIdDriveRoute: AuthedShellSpacesSpaceIdDriveRoute,
     AuthedShellSpacesSpaceIdFactoryRoute: AuthedShellSpacesSpaceIdFactoryRoute,
     AuthedShellSpacesSpaceIdInstructionsRoute:
       AuthedShellSpacesSpaceIdInstructionsRoute,
@@ -1272,10 +1312,14 @@ const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteR
     AuthedShellSpacesSpaceIdIndexRoute: AuthedShellSpacesSpaceIdIndexRoute,
     AuthedShellSpacesSpaceIdAgentsNewRoute:
       AuthedShellSpacesSpaceIdAgentsNewRoute,
+    AuthedShellSpacesSpaceIdDriveArtifactsRoute:
+      AuthedShellSpacesSpaceIdDriveArtifactsRoute,
     AuthedShellSpacesSpaceIdAgentsIndexRoute:
       AuthedShellSpacesSpaceIdAgentsIndexRoute,
     AuthedShellSpacesSpaceIdAutomationsIndexRoute:
       AuthedShellSpacesSpaceIdAutomationsIndexRoute,
+    AuthedShellSpacesSpaceIdDriveIndexRoute:
+      AuthedShellSpacesSpaceIdDriveIndexRoute,
     AuthedShellSpacesSpaceIdTasksIndexRoute:
       AuthedShellSpacesSpaceIdTasksIndexRoute,
     AuthedShellSpacesSpaceIdAgentsAgentIdIndexRoute:
@@ -1320,14 +1364,15 @@ const AuthedShellSettingsAdminRouteWithChildren =
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
   AuthedShellAutomationsRoute: typeof AuthedShellAutomationsRoute
-  AuthedShellDriveRoute: typeof AuthedShellDriveRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
+  AuthedShellDriveArtifactsRoute: typeof AuthedShellDriveArtifactsRoute
   AuthedShellSettingsAdminRoute: typeof AuthedShellSettingsAdminRouteWithChildren
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
   AuthedShellSettingsMemoryRoute: typeof AuthedShellSettingsMemoryRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellAppsIndexRoute: typeof AuthedShellAppsIndexRoute
+  AuthedShellDriveIndexRoute: typeof AuthedShellDriveIndexRoute
   AuthedShellMarketplaceIndexRoute: typeof AuthedShellMarketplaceIndexRoute
   AuthedShellSettingsIndexRoute: typeof AuthedShellSettingsIndexRoute
   AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
@@ -1345,15 +1390,16 @@ interface AuthedShellRouteChildren {
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
   AuthedShellAutomationsRoute: AuthedShellAutomationsRoute,
-  AuthedShellDriveRoute: AuthedShellDriveRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSpacesSpaceIdRouteRoute:
     AuthedShellSpacesSpaceIdRouteRouteWithChildren,
+  AuthedShellDriveArtifactsRoute: AuthedShellDriveArtifactsRoute,
   AuthedShellSettingsAdminRoute: AuthedShellSettingsAdminRouteWithChildren,
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
   AuthedShellSettingsMemoryRoute: AuthedShellSettingsMemoryRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellAppsIndexRoute: AuthedShellAppsIndexRoute,
+  AuthedShellDriveIndexRoute: AuthedShellDriveIndexRoute,
   AuthedShellMarketplaceIndexRoute: AuthedShellMarketplaceIndexRoute,
   AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
   AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
