@@ -27,7 +27,7 @@ export function FileTable(props: { columns: ReadonlyArray<Column>; children: Rea
 }
 
 export function FileRow(props: {
-  media: ReactNode
+  media?: ReactNode | undefined
   name: ReactNode
   badge?: ReactNode | undefined
   cells: ReadonlyArray<ReactNode>
@@ -38,7 +38,9 @@ export function FileRow(props: {
     <TableRow className={cn("relative cursor-pointer", props.className)}>
       <TableCell className="h-12 px-3">
         <span className="flex min-w-0 items-center gap-4">
-          <span className="flex w-6 shrink-0 justify-center text-muted-foreground [&_svg]:size-5">{props.media}</span>
+          {props.media === undefined ? null : (
+            <span className="flex w-6 shrink-0 justify-center text-muted-foreground [&_svg]:size-5">{props.media}</span>
+          )}
           {props.name}
           {props.badge}
         </span>
