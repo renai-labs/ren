@@ -137,9 +137,11 @@ export const Availability = Schema.Union([
 })
 export type Availability = typeof Availability.Type
 
-export const uploadsOf = (sessionId: string, messageId: string) => `chats/${sessionId}/uploads/${messageId}`
+export const chatsFolder = "chats/"
 
-export const outputsOf = (sessionId: string) => `chats/${sessionId}/outputs`
+export const uploadsOf = (sessionId: string, messageId: string) => `${chatsFolder}${sessionId}/uploads/${messageId}`
+
+export const outputsOf = (sessionId: string) => `${chatsFolder}${sessionId}/outputs`
 
 export const typeOf = (name: string) =>
   /\.[cm]?ts$/iu.test(name) ? "text/typescript" : Option.getOrElse(Mime.getType(name), () => "application/octet-stream")

@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Agent } from "@ren/schema/agent"
+import { Drive } from "@ren/schema/drive"
 import { FileSystem } from "@ren/schema/file-system"
 import { Session } from "@ren/schema/session"
 import { DateTime, Effect, Layer } from "effect"
@@ -35,6 +36,8 @@ describe("Drives", () => {
         const upload = yield* drives.startUpload(found.ada, { spaceId, path: "reports/q3.txt", size: 5 })
         expect(yield* TestDrives.post(upload, "third")).toEqual({ status: 204, code: undefined })
         yield* TestDrives.post(yield* drives.startUpload(found.ada, { spaceId, path: "notes.md", size: 2 }), "hi")
+        const chat = `${Drive.uploadsOf("ses_one", "msg_one")}/brief.md`
+        yield* TestDrives.post(yield* drives.startUpload(found.ada, { spaceId, path: chat, size: 2 }), "hi")
         const root = yield* drives.fileSystem.list(found.ada, { spaceId })
         expect(root).toEqual({
           entries: [
@@ -44,6 +47,9 @@ describe("Drives", () => {
           cursor: null,
           actions: ["upload", "remove"],
         })
+        expect(
+          (yield* drives.fileSystem.list(found.ada, { spaceId, folder: "chats/" })).entries.map((entry) => entry.path),
+        ).toEqual(["chats/ses_one/"])
         const reports = yield* drives.fileSystem.list(found.ada, { spaceId, folder: "reports/" })
         expect(reports.entries.map((entry) => entry.path)).toEqual(["reports/q3.txt"])
         expect(yield* drives.fileSystem.read(found.ada, { spaceId, path: "reports/q3.txt" })).toEqual({
