@@ -18,7 +18,7 @@ import { Textarea } from "@ren/ui/textarea"
 import { formatDate } from "@ren/ui/time"
 import { Equal, Result, Schema, Struct } from "effect"
 import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
-import { Page, Row, Rows, Section } from "../../components/page.js"
+import { Page, Row, Rows, ToolbarSection } from "../../components/page.js"
 import { PermissionRules } from "../../components/permission-rules.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Agents } from "../../lib/agents.js"
@@ -507,7 +507,7 @@ function AgentPermissions(props: { agent: AgentInfo; spaceId: string }) {
   )
   const agent = props.agent
   return (
-    <Section
+    <ToolbarSection
       title="Permissions"
       description="Rules for this agent, on top of your organization’s and the space’s where a chat runs."
     >
@@ -527,6 +527,6 @@ function AgentPermissions(props: { agent: AgentInfo; spaceId: string }) {
           )
         }
       />
-    </Section>
+    </ToolbarSection>
   )
 }

@@ -233,6 +233,28 @@ export function Section(props: { title: string; description?: string | undefined
   )
 }
 
+export function ToolbarSection(props: { title: string; description?: string | undefined; children: ReactNode }) {
+  const [tabs, setTabs] = useState<HTMLElement | null>(null)
+  const [actions, setActions] = useState<HTMLElement | null>(null)
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-sm font-medium">{props.title}</h2>
+        {props.description ? <p className="text-xs text-muted-foreground">{props.description}</p> : null}
+      </div>
+      <div className="flex min-h-8 items-center justify-between gap-4">
+        <div ref={setTabs} className="flex min-w-0 items-center" />
+        <div ref={setActions} className="flex shrink-0 items-center gap-2" />
+      </div>
+      <PageActionsSlot value={actions}>
+        <PageTabsSlot value={tabs}>
+          <PageTabsCount value={null}>{props.children}</PageTabsCount>
+        </PageTabsSlot>
+      </PageActionsSlot>
+    </section>
+  )
+}
+
 export function Rows(props: { children: ReactNode[] }) {
   return (
     <ItemGroup className="gap-0 rounded-xl border bg-card in-data-[slot=dialog-content]:rounded-none in-data-[slot=dialog-content]:border-0 in-data-[slot=dialog-content]:bg-transparent in-data-[slot=sheet-content]:rounded-none in-data-[slot=sheet-content]:border-0 in-data-[slot=sheet-content]:bg-transparent has-data-[size=sm]:gap-0 has-data-[size=xs]:gap-0">

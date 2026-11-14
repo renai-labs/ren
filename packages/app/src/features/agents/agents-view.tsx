@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 import type { AgentInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -8,19 +8,9 @@ import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { toast } from "@ren/ui/sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
-import { Tabs } from "@ren/ui/tabs"
 import { EmptyState } from "../../components/empty-state.js"
 import { modelRef } from "../../components/model-picker.js"
-import {
-  PageActions,
-  PageTabs,
-  PageTabsList,
-  PageTabsTrigger,
-  TableCard,
-  TableEmpty,
-  TableSample,
-  useShapeId,
-} from "../../components/page.js"
+import { PageActions, TableCard, TableEmpty, TableSample, useShapeId } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Agents } from "../../lib/agents.js"
@@ -102,7 +92,7 @@ function AgentRow(props: { agent: AgentInfo; spaceId: string; model: string; sou
   )
 }
 
-function CustomAgents(props: { spaceId: string }) {
+export function AgentsView(props: { spaceId: string }) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
   const agents = useQuery(Agents.listOptions(api, props.spaceId))
@@ -174,29 +164,5 @@ function CustomAgents(props: { spaceId: string }) {
         ) : null}
       </Loading>
     </>
-  )
-}
-
-export function AgentsView(props: {
-  spaceId: string
-  tab: "custom" | "factory"
-  onTab: (tab: "custom" | "factory") => void
-  factory: ReactNode
-}) {
-  return (
-    <div className="flex flex-1 flex-col gap-4">
-      <PageTabs>
-        <Tabs
-          value={props.tab}
-          onValueChange={(value: string) => props.onTab(value === "factory" ? "factory" : "custom")}
-        >
-          <PageTabsList>
-            <PageTabsTrigger value="custom">Custom</PageTabsTrigger>
-            <PageTabsTrigger value="factory">Factory</PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
-      </PageTabs>
-      {props.tab === "factory" ? props.factory : <CustomAgents spaceId={props.spaceId} />}
-    </div>
   )
 }

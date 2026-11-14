@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test"
 import { Schema } from "effect"
 import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
 
-test("a member arranges the factory, moves a card and moves a task to an agent on the space board", async ({
+test("a member writes the factory spec, moves a card and moves a task to an agent on the space board", async ({
   page,
 }) => {
   await createOrganization(page.request, { name: "Margaret Hamilton" })
@@ -12,13 +12,6 @@ test("a member arranges the factory, moves a card and moves a task to an agent o
   })
   expect(response.ok()).toBe(true)
   const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
-  await page.goto(`/app/spaces/${space.id}/agents?tab=factory`)
-  await expect(page.getByRole("button", { name: "Remove ren from the factory", exact: true })).toBeDisabled()
-  await expect(
-    page.getByText("Spaces without their own primary agents use global agents as the default factory order.", {
-      exact: true,
-    }),
-  ).toBeVisible()
   await Promise.all(
     ["plan", "build"].map(async (name) => {
       const created = await page.request.post(`${serverURL}/agents`, {
@@ -40,23 +33,20 @@ test("a member arranges the factory, moves a card and moves a task to an agent o
   })
   expect(newer.ok()).toBe(true)
 
-  await page.goto(`/app/spaces/${space.id}/agents?tab=factory`)
-  const factory = page.getByRole("list", { name: "Factory", exact: true }).getByRole("listitem")
-  const add = async (name: string) => {
-    await page.getByRole("button", { name: "Add agent", exact: true }).click()
-    await page.getByRole("menuitem", { name, exact: true }).click()
-  }
-  await add("build")
-  await expect(page.getByRole("button", { name: "Move build up", exact: true })).toBeDisabled()
-  await add("plan")
-  await page.getByRole("button", { name: "Move plan up", exact: true }).click()
-  await expect(factory).toHaveText([/^plan/, /^build/])
-  await add("ren")
-  await expect(factory).toHaveText([/^plan/, /^build/, /^ren/])
-  await page.getByRole("button", { name: "Remove ren from the factory", exact: true }).click()
-  await expect(factory).toHaveText([/^plan/, /^build/])
+  await page.goto(`/app/spaces/${space.id}/factory?view=spec`)
+  const spec = page.getByRole("textbox", { name: "Factory spec", exact: true })
+  await spec.fill("agents:\n  - agent: plan\n    to: [{ agent: nobody }]\n")
+  await expect(page.getByText("agents.0.to.0.agent: nobody is not in the factory.", { exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled()
+  await spec.fill("agents:\n  - agent: plan\n    to: [{ agent: build, max: 2 }]\n  - agent: build\n")
+  await page.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled()
   await page.reload()
-  await expect(factory).toHaveText([/^plan/, /^build/])
+  await expect(spec).toHaveValue(
+    "maxHandoffs: 20\nagents:\n  - agent: plan\n    to:\n      - agent: build\n        max: 2\n  - agent: build\n",
+  )
+  await page.getByRole("tab", { name: "Flow", exact: true }).click()
+  await expect(page.getByRole("application", { name: /^How tasks move between the agents/ })).toBeVisible()
 
   await page.goto(`/app/spaces/${space.id}/tasks`)
   await page.getByRole("button", { name: "Display options" }).click()
