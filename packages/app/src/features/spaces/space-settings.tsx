@@ -1,10 +1,9 @@
 import type { ReactNode } from "react"
-import type { SettingsInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { EditableText } from "../../components/editable-text.js"
-import { ModelPicker } from "../../components/model-picker.js"
+import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
 import { Row, Rows } from "../../components/page.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useMe } from "../../lib/use-me.js"
@@ -19,25 +18,16 @@ function DefaultModel(props: { settings: ReturnType<typeof useSpaceSettings> }) 
   const { api } = RouterContext.useRouterContext()
   const models = useQuery(api.chat.models.queryOptions({ id: modelsProbe }))
   const organization = useQuery(api["organization-settings"].get.queryOptions({ idOrSlug: useMe().organization.id }))
-  const listed = (ref: SettingsInfo["model"]) =>
-    models.data?.some((each) => each.id === ref?.modelId && each.providerID === ref.endpointId) ? ref : undefined
-  const model = listed(props.settings.current.model) ?? listed(organization.data?.settings.model)
-  const value = model && {
-    id: model.modelId,
-    providerID: model.endpointId,
-    ...(model.variant && { variant: model.variant }),
-  }
   return (
     <ModelPicker
       models={models.data ?? []}
       loading={models.isPending || props.settings.loading}
-      value={value ?? models.data?.at(0)}
+      value={pickModel(
+        models.data ?? [],
+        [props.settings.current.model, organization.data?.settings.model].map((model) => model && modelRef(model)),
+      )}
       disabled={!props.settings.canUpdate}
-      onChange={(next) =>
-        void props.settings.save({
-          model: { endpointId: next.providerID, modelId: next.id, ...(next.variant && { variant: next.variant }) },
-        })
-      }
+      onChange={(next) => void props.settings.save({ model: modelSetting(next) })}
     />
   )
 }

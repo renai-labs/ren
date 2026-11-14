@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { IconChevronDown } from "@tabler/icons-react"
+import type { SessionModel as ModelSetting } from "@ren/client"
 import type { SessionModel } from "@ren/schema/session/model"
 import {
   DropdownMenu,
@@ -27,6 +28,18 @@ const providerName: Record<string, string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",
 }
+
+export const modelRef = (model: ModelSetting): SessionModel.Ref => ({
+  id: model.modelId,
+  providerID: model.endpointId,
+  ...(model.variant && { variant: model.variant }),
+})
+
+export const modelSetting = (model: SessionModel.Ref): ModelSetting => ({
+  endpointId: model.providerID,
+  modelId: model.id,
+  ...(model.variant && { variant: model.variant }),
+})
 
 export function pickModel(
   models: ReadonlyArray<Choice>,
