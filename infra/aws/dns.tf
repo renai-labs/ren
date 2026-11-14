@@ -133,6 +133,19 @@ resource "aws_route53_record" "alias_api" {
   }
 }
 
+# Sandboxes reach the egress by name and port only; no certificate names it, so the alias name works as soon as
+# it resolves.
+resource "aws_route53_record" "alias_egress" {
+  count = local.alias_published ? 1 : 0
+
+  zone_id         = data.aws_route53_zone.alias[0].zone_id
+  name            = "egress.${var.alias_domain.name}"
+  type            = "A"
+  ttl             = 300
+  records         = [aws_eip.egress.public_ip]
+  allow_overwrite = true
+}
+
 resource "aws_route53_record" "api" {
   zone_id = aws_route53_zone.this.zone_id
   name    = "api.${var.domain}"
