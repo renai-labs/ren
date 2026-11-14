@@ -90,7 +90,7 @@ describe("Session", () => {
         const spaceId = (yield* spaces.list(ada, Configured.page)).items.at(0)?.id
         if (!spaceId) return yield* Effect.die(new Error("Ada has no space"))
         const id = Session.ID.create()
-        expect(yield* sessions.models(ada, id)).toEqual([
+        expect((yield* sessions.models(ada, id)).models).toEqual([
           { id: "stub-model", providerID: "stub", name: "Stub", variants: [] },
           { id: "stub-other", providerID: "stub", name: "Stub Other", variants: [] },
         ])

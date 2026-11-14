@@ -234,7 +234,7 @@ function useKeyData(period: RenInference.Period) {
     list,
     usage: new Map((usage.data ?? []).map((each) => [each.keyId, each])),
     modelNames: new Map(
-      (models.data ?? []).flatMap((model) => [
+      (models.data?.models ?? []).flatMap((model) => [
         [model.id, model.name],
         [`${model.providerID}/${model.id}`, model.name],
       ]),

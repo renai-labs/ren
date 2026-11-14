@@ -7,6 +7,7 @@ import { RepositoriesPicker } from "./repositories-picker.js"
 import { useState } from "react"
 import { Composer } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
+import { Equal } from "effect"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -37,7 +38,6 @@ export function HomePage(props: {
   const spaces = useSpaces().joined
   const search = route.useSearch()
   const remembered = Preference.usePreference(ChatPreferences.homeSpace)
-  const saved = Preference.usePreference(ChatPreferences.model)
   const setPreference = Preference.useSetPreference()
   const kept = Drafts.useDraft(props.draftKey, props.initialDraft)
   const draft = kept.draft
@@ -48,8 +48,9 @@ export function HomePage(props: {
   const [sent, setSent] = useState<Composer.Draft>()
   const [picking, setPicking] = useState(false)
   const history = Drafts.useHistory()
-  const models = useModels(sessionId)
-  const model = pickModel(models.models, [saved])
+  const models = useModels(sessionId, spaceId)
+  const model = pickModel(models.models, [draft.model, models.fallback])
+  const chosen = Equal.equals(model, models.fallback) ? undefined : model
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
@@ -62,7 +63,7 @@ export function HomePage(props: {
     void navigate({ to: "/", search: { spaceId: next } })
   }
   const chooseModel = (next: SessionModel.Ref) => {
-    setPreference(ChatPreferences.model, next)
+    kept.update((current) => Composer.withModel(current, next))
   }
   const type = (next: Composer.Draft) => {
     setDraft(next)
@@ -83,7 +84,7 @@ export function HomePage(props: {
     setSent(draft)
     history.prepend(draft)
     create.mutate(
-      { id: sessionId, spaceId, message, ...(model && { model }) },
+      { id: sessionId, spaceId, message, ...(chosen && { model: chosen }) },
       {
         onSuccess: () => {
           setDraft(Composer.empty)

@@ -112,7 +112,7 @@ function CustomAgents(props: { spaceId: string }) {
   const shapeId = useShapeId("agents")
   const items = agents.data?.items.filter((agent) => agent.ownerSpaceId !== null)
   const shown = (items ?? []).filter((agent) => Search.matches(query, agent.name, agent.description))
-  const names = new Map((models.data ?? []).map((model) => [modelKey(model), model.name]))
+  const names = new Map((models.data?.models ?? []).map((model) => [modelKey(model), model.name]))
   const modelOf = (agent: AgentInfo) => {
     const model = agent.settings.model
     if (model) return names.get(modelKey(modelRef(model))) ?? model.modelId

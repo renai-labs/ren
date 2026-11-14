@@ -13,6 +13,7 @@ import { SqlClient, Statement } from "effect/sql"
 import type { Actor } from "../src/actor.js"
 import { Session } from "../src/session.js"
 import { Models } from "../src/models.js"
+import { SettingsRows } from "../src/settings/rows.js"
 import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
@@ -119,10 +120,40 @@ describe("Session", () => {
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
       const sessions = yield* Session.Service
-      const listed = yield* sessions.models(actorOf(owner), yield* Seed.session(owner))
+      const listed = (yield* sessions.models(actorOf(owner), yield* Seed.session(owner))).models
       expect(listed.length).toBeGreaterThan(0)
       expect(listed.some((model) => model.id === "image")).toBe(false)
     }),
+  )
+  it.live(
+    "a new chat's default model is its space's, then its organization's, then Ren's, skipping one the list lacks",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const sessions = yield* Session.Service
+        const owner = yield* Seed.owner()
+        const hidden = yield* Seed.space(owner.organizationId)
+        const choose = (row: SettingsRows.Owner, modelId: string) =>
+          database.transaction((transaction) =>
+            SettingsRows.write(transaction, row, {
+              permissions: [],
+              references: [],
+              model: { endpointId: "stub", modelId },
+            }),
+          )
+        const defaultOf = (spaceId?: SpaceSchema.ID) =>
+          sessions
+            .models(actorOf(owner), Session.ID.create(), spaceId && { spaceId })
+            .pipe(Effect.map((choices) => choices.default))
+        expect(yield* defaultOf(owner.spaceId)).toEqual({ providerID: "stub", id: "stub-model" })
+        yield* choose({ organization_id: owner.organizationId }, "stub-other")
+        yield* choose({ space_id: owner.spaceId }, "gone")
+        expect(yield* defaultOf(owner.spaceId)).toEqual({ providerID: "stub", id: "stub-other" })
+        yield* choose({ space_id: owner.spaceId }, "stub-model")
+        expect(yield* defaultOf(owner.spaceId)).toEqual({ providerID: "stub", id: "stub-model" })
+        expect(yield* defaultOf()).toEqual({ providerID: "stub", id: "stub-other" })
+        expect((yield* Effect.flip(defaultOf(hidden)))._tag).toBe("Primitive.NotFound")
+      }),
   )
   it.live(
     "links lists the chat's tasks the caller can read, their pull requests and issues once each, and its threads",

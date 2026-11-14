@@ -1049,9 +1049,14 @@ const EndpointChatPrepare = (raw: RawClient["chat"]) => (input: ChatPrepareInput
   raw["chat.prepare"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
 type ChatModelsRequest = Parameters<RawClient["chat"]["chat.models"]>[0]
-type ChatModelsInput = { readonly id: ChatModelsRequest["params"]["id"] }
+type ChatModelsInput = {
+  readonly id: ChatModelsRequest["params"]["id"]
+  readonly spaceId?: ChatModelsRequest["query"]["spaceId"]
+}
 const EndpointChatModels = (raw: RawClient["chat"]) => (input: ChatModelsInput) =>
-  raw["chat.models"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+  raw["chat.models"]({ params: { id: input["id"] }, query: { spaceId: input["spaceId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 const adaptGroupChat = (raw: RawClient["chat"]) => ({
   access: EndpointChatAccess(raw),

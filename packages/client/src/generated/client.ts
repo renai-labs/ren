@@ -1603,8 +1603,9 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/sessions/${encodeURIComponent(input.id)}/models`,
+            query: { spaceId: input["spaceId"] },
             successStatus: 200,
-            declaredStatuses: [401, 403],
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

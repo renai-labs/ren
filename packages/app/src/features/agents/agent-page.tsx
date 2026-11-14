@@ -246,7 +246,7 @@ function ModelRow() {
   const models = useQuery(api.chat.models.queryOptions({ id: modelsProbe }))
   const space = useQuery(api["space-settings"].get.queryOptions({ idOrSlug: form.state.spaceId }))
   const organization = useQuery(api["organization-settings"].get.queryOptions({ idOrSlug: useMe().organization.id }))
-  const choices = models.data ?? []
+  const choices = models.data?.models ?? []
   const fallback = pickModel(
     choices,
     [space.data?.settings.model, organization.data?.settings.model].map((model) => model && modelRef(model)),
