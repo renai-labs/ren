@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import type { FileTreeSortComparator } from "@pierre/trees"
 import { FileTree as FileTreePrimitive, useFileTree } from "@pierre/trees/react"
 import { IconChevronDown, IconChevronUp, IconRefresh, IconSearch } from "@tabler/icons-react"
 import { cn } from "cn"
@@ -56,6 +57,22 @@ const foldersAbove = (path: string) =>
     .slice(0, -1)
     .map((_, index, parts) => `${parts.slice(0, index + 1).join("/")}/`)
 
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" })
+
+const pinnedFirst =
+  (pinned: ReadonlyArray<string>): FileTreeSortComparator =>
+  (left, right) => {
+    const index = left.segments.findIndex((segment, at) => segment !== right.segments[at])
+    const a = left.segments[index]
+    const b = right.segments[index]
+    if (a === undefined || b === undefined) return left.segments.length - right.segments.length
+    const pin = index === 0 ? Number(pinned.includes(b)) - Number(pinned.includes(a)) : 0
+    const folder =
+      Number(index < right.segments.length - 1 || right.isDirectory) -
+      Number(index < left.segments.length - 1 || left.isDirectory)
+    return pin || folder || collator.compare(a, b)
+  }
+
 const rowPath = (event: Event) =>
   event
     .composedPath()
@@ -73,6 +90,7 @@ function FileExplorer(props: {
   onExpand: (folder: string) => void
   onQuery: (query: string) => void
   onRefresh: () => void
+  pinned?: ReadonlyArray<string> | undefined
   notice?: ReactNode
   // ast-grep-ignore: no-render-props -- the tree hands back the row that was right-clicked
   renderMenu: (item: { readonly path: string; readonly kind: "file" | "directory" }, close: () => void) => ReactNode
@@ -91,6 +109,7 @@ function FileExplorer(props: {
     icons,
     density: "compact",
     initialExpansion: "closed",
+    ...(props.pinned?.length && { sort: pinnedFirst(props.pinned) }),
     fileTreeSearchMode: "hide-non-matches",
     search: false,
     dragAndDrop: { canDrop: () => false },

@@ -44,6 +44,7 @@ export interface FileTree {
   readonly reveal: (path: string) => void
   readonly refreshFolder: (path: string) => void
   readonly refresh: () => void
+  readonly pinned?: ReadonlyArray<string> | undefined
 }
 
 export interface FileRead {
@@ -319,6 +320,7 @@ function Tree(props: {
       onExpand={tree.expand}
       onQuery={tree.setQuery}
       onRefresh={tree.refresh}
+      pinned={tree.pinned}
       notice={
         root.value.entries.length === 0 ? (
           <p className="px-3 py-1.5 text-xs text-muted-foreground">This folder is empty</p>
