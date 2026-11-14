@@ -1,6 +1,5 @@
 import { Preference } from "../../lib/preference.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { Link, getRouteApi } from "@tanstack/react-router"
 import { IconHandStop, IconCube, IconArchive, IconLink, IconX, IconPlus, IconGhostFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
@@ -31,6 +30,7 @@ import { countedTaskProperties, taskProperties, matchesFilters, type TaskLookups
 import {
   LabelBadge,
   PriorityIcon,
+  SpaceBadge,
   StatusGlyph,
   StatusIcon,
   UnassignedIcon,
@@ -46,42 +46,22 @@ import { toast } from "@ren/ui/sonner"
 import { useAgents } from "../../lib/use-agents.js"
 import { useLabels } from "../../lib/use-labels.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { allTasksOptions, taskListInput } from "../../lib/tasks.js"
+import { allTasksOptions, taskListInput, type TaskSearch } from "../../lib/tasks.js"
 import { TaskDisplay } from "./task-display.js"
+import { TaskLink } from "./task-scope.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
-
-const route = getRouteApi("/_authed/_shell/tasks/")
 
 const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
 type Task = TaskInfo
 
-const idWidths = [
-  "w-[0ch]",
-  "w-[1ch]",
-  "w-[2ch]",
-  "w-[3ch]",
-  "w-[4ch]",
-  "w-[5ch]",
-  "w-[6ch]",
-  "w-[7ch]",
-  "w-[8ch]",
-  "w-[9ch]",
-  "w-[10ch]",
-  "w-[11ch]",
-  "w-[12ch]",
-  "w-[13ch]",
-  "w-[14ch]",
-  "w-[15ch]",
-  "w-[16ch]",
-]
-
-function TaskMeta(props: { task: Task; show: (property: string) => boolean }) {
+function TaskMeta(props: { task: Task; spaceName: string; show: (property: string) => boolean }) {
   const task = props.task
   const show = props.show
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1">
+      {show("space") ? <SpaceBadge name={props.spaceName} /> : null}
       {task.humanReview ? (
         <Badge variant="outline" className="h-6 rounded-full bg-muted">
           <IconHandStop className="text-chart-3" />
@@ -132,6 +112,7 @@ function TaskRow(props: {
   selected: boolean
   idWidth: number
   agentName: string | null
+  spaceName: string
   owner: Member | undefined
   onSelect: (selected: boolean) => void
 }) {
@@ -167,10 +148,9 @@ function TaskRow(props: {
         </PriorityMenu>
       ) : null}
       <span
-        className={cn(
-          "ml-2 min-w-14 shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums",
-          idWidths[Math.min(props.idWidth, idWidths.length - 1)],
-        )}
+        className="ml-2 min-w-14 shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums"
+        // oxlint-disable-next-line react/forbid-dom-props -- the ID column fits the longest identifier in the list
+        style={{ width: `${props.idWidth}ch` }}
       >
         {task.identifier}
       </span>
@@ -185,14 +165,13 @@ function TaskRow(props: {
           <StatusIcon task={task} />
         </StatusMenu>
       ) : null}
-      <Link
-        to="/tasks/$taskId"
-        params={{ taskId: task.id }}
+      <TaskLink
+        taskId={task.id}
         className="ml-2 min-w-0 truncate font-medium after:absolute after:inset-0 after:rounded-lg"
       >
         {task.title}
-      </Link>
-      <TaskMeta task={task} show={show} />
+      </TaskLink>
+      <TaskMeta task={task} spaceName={props.spaceName} show={show} />
       {show("assignee") ? <TaskAssignee task={task} agentName={props.agentName} owner={props.owner} /> : null}
     </div>
   )
@@ -241,6 +220,7 @@ type TaskGroup = {
 
 function TaskGroups(props: {
   groups: ReadonlyArray<TaskGroup>
+  spaceId: string | undefined
   loading: boolean
   stale: boolean
   filtered: boolean
@@ -252,6 +232,7 @@ function TaskGroups(props: {
 }) {
   const agents = useAgents()
   const members = useMembers()
+  const spaces = useSpaces()
   const groups = props.groups
   if (props.loading) return <TasksSample />
   if (groups.length === 0 && props.filtered)
@@ -268,7 +249,13 @@ function TaskGroups(props: {
     )
   if (groups.length === 0)
     return (
-      <EmptyState action={<NewTaskDialog trigger={<Button variant="outline" />}>New task</NewTaskDialog>}>
+      <EmptyState
+        action={
+          <NewTaskDialog spaceId={props.spaceId} trigger={<Button variant="outline" />}>
+            New task
+          </NewTaskDialog>
+        }
+      >
         No tasks yet
       </EmptyState>
     )
@@ -304,6 +291,7 @@ function TaskGroups(props: {
                 show={props.properties}
                 idWidth={props.idWidth}
                 agentName={agents.agent(task.agentId)?.name ?? null}
+                spaceName={spaces.spaceName(task.spaceId)}
                 owner={members.member(task.ownerId)}
                 selected={props.selected.includes(task.id)}
                 onSelect={(checked) => props.onSelect({ taskId: task.id, checked })}
@@ -316,19 +304,23 @@ function TaskGroups(props: {
   )
 }
 
-export function TasksPage() {
+export function TasksPage(props: {
+  search: TaskSearch
+  spaceId?: string | undefined
+  setSearch: (update: (previous: TaskSearch) => TaskSearch) => void
+}) {
   const { api, client } = RouterContext.useRouterContext()
-  const search = route.useSearch()
-  const navigate = route.useNavigate()
+  const search = props.search
+  const spaceId = props.spaceId
   const tasks = useQuery({
-    ...allTasksOptions(client, taskListInput(search)),
+    ...allTasksOptions(client, taskListInput(search, spaceId)),
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
   const display = Preference.usePreference(TaskDisplay.preference)
   const setPreference = Preference.useSetPreference()
   const spaces = useSpaces()
-  const agents = useAgents()
+  const agents = useAgents(spaceId)
   const members = useMembers()
   const labels = useLabels()
   const lookups: TaskLookups = {
@@ -344,7 +336,9 @@ export function TasksPage() {
   const assign = useMutation(api.task.assign.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
   const filters: Filters = Object.fromEntries(
-    Object.entries(search.filters ?? {}).map(([key, values]) => [key, [...values]]),
+    Object.entries(search.filters ?? {})
+      .filter((entry) => !spaceId || entry[0] !== "space")
+      .map(([key, values]) => [key, [...values]]),
   )
   const needle = query.trim().toLowerCase()
   const roots: ReadonlyArray<TaskInfo> = tasks.data?.items ?? []
@@ -370,16 +364,17 @@ export function TasksPage() {
   const stale = tasks.isPlaceholderData
   const idWidth = Math.max(0, ...roots.map((task) => task.identifier.length)) + 1
   const setFilters = (next: Filters) =>
-    void navigate({
-      search: (previous) => ({
-        ...previous,
-        filters: Object.values(next).some((values) => values.length > 0) ? next : undefined,
-      }),
-    })
+    props.setSearch((previous) => ({
+      ...previous,
+      filters: Object.values(next).some((values) => values.length > 0) ? next : undefined,
+    }))
   const clearFilters = () => {
     setQuery("")
-    void navigate({ search: (previous) => ({ ...previous, filters: undefined }) })
+    props.setSearch((previous) => ({ ...previous, filters: undefined }))
   }
+  const shown = TaskDisplay.scoped(display, spaceId)
+  const groupBy = shown.groupBy
+  const properties = shown.properties
   const setStatus = (status: string) => {
     const ids = selected
     setSelected([])
@@ -404,27 +399,26 @@ export function TasksPage() {
     const failed = (error: unknown) => {
       toast.error("Couldn’t move the task", { description: errorMessage(error) })
     }
-    if (display.groupBy === "status") {
+    if (groupBy === "status") {
       const status = input.groupId
       return status === "todo" || status === "in_progress" || status === "done" || status === "dismissed"
         ? update.mutateAsync({ id: input.taskId, status }).catch(failed)
         : Promise.resolve()
     }
-    if (display.groupBy === "agent")
+    if (groupBy === "agent")
       return assign
         .mutateAsync({ id: input.taskId, agentId: input.groupId === "none" ? null : input.groupId, start: "none" })
         .catch(failed)
     return assign.mutateAsync({ id: input.taskId, spaceId: input.groupId, start: "none" }).catch(failed)
   }
   const groupings = groupingsFor(lookups)
-  const grouping =
-    display.groupBy === "status" || display.groupBy === "agent" ? groupings[display.groupBy] : groupings.space
+  const grouping = groupBy === "status" || groupBy === "agent" ? groupings[groupBy] : groupings.space
   const groups = grouping
     .map((group) => ({
       id: group.id,
       label: group.label,
       icon: group.icon,
-      spaceId: group.spaceId,
+      spaceId: group.spaceId ?? spaceId,
       tasks: visible.filter(group.has),
     }))
     .filter((group) => display.showEmpty || display.layout === "board" || group.tasks.length > 0)
@@ -433,22 +427,36 @@ export function TasksPage() {
       title="Tasks"
       width="full"
       shape={`page-${display.layout}`}
-      leading={<FilterChips properties={taskProperties(lookups)} value={filters} onChange={setFilters} />}
+      leading={
+        <FilterChips
+          properties={taskProperties(lookups).filter((property) => !spaceId || property.key !== "space")}
+          value={filters}
+          onChange={setFilters}
+        />
+      }
       actions={
         <>
           <ToolbarSearch label="Search tasks" value={query} onChange={setQuery} />
           <FilterMenu
             label="Filter tasks"
-            properties={countedTaskProperties(lookups, roots)}
+            properties={countedTaskProperties(lookups, roots).filter(
+              (property) => !spaceId || property.key !== "space",
+            )}
             value={filters}
             onChange={setFilters}
             noun="task"
           />
           <DisplayOptions
-            value={display}
-            onChange={(next: TaskDisplay.Display) => setPreference(TaskDisplay.preference, next)}
+            value={{ ...display, groupBy }}
+            inSpace={spaceId !== undefined}
+            onChange={(next: TaskDisplay.Display) =>
+              setPreference(TaskDisplay.preference, {
+                ...next,
+                groupBy: next.groupBy === groupBy ? display.groupBy : next.groupBy,
+              })
+            }
           />
-          <NewTaskDialog trigger={<Button />}>
+          <NewTaskDialog spaceId={spaceId} trigger={<Button />}>
             <IconPlus data-icon="inline-start" />
             New task
           </NewTaskDialog>
@@ -457,15 +465,16 @@ export function TasksPage() {
     >
       <Loading id={shapeId} loading={loading} label="Loading tasks">
         {display.layout === "board" && !loading && groups.length > 0 ? (
-          <TaskBoard groups={groups} properties={display.properties} stale={stale} onMove={moveTo} />
+          <TaskBoard groups={groups} properties={properties} stale={stale} onMove={moveTo} />
         ) : (
           <TaskGroups
             groups={groups}
+            spaceId={spaceId}
             loading={loading}
             stale={stale}
             filtered={visible.length < roots.length}
             onClearFilters={clearFilters}
-            properties={display.properties}
+            properties={properties}
             idWidth={idWidth}
             selected={selected}
             onSelect={({ taskId, checked }) =>

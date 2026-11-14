@@ -6,6 +6,7 @@ import { Card } from "@ren/ui/card"
 import { Switch } from "@ren/ui/switch"
 import { Channels } from "../lib/channels.js"
 import { Routing } from "../lib/routing.js"
+import { inboxColumns } from "../lib/sessions.js"
 import { ChannelMark } from "./channel-mark.js"
 import { Textarea } from "@ren/ui/textarea"
 import { IconCircle, IconChevronDown } from "@tabler/icons-react"
@@ -31,7 +32,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   },
   settings: {
     title: "Settings",
-    description: (space) => `The name, instructions and default model of ${space}.`,
+    description: (space) => `The name, description and default model of ${space}.`,
   },
   compute: { title: "Compute", description: (space) => `Machines for ${space}’s brain and tools.` },
   members: { title: "Members", description: (space) => `People who can use ${space}.` },
@@ -87,6 +88,37 @@ export function TasksSample() {
   )
 }
 
+function TaskSkeleton() {
+  return (
+    <Loading label="Loading task" className="flex-1">
+      <div className="flex min-h-full flex-col gap-8 p-8 lg:flex-row">
+        <article className="flex flex-1 flex-col gap-6">
+          <h1 className="text-2xl font-semibold">Task title</h1>
+          <p>Task description and details.</p>
+          <h2 className="text-sm font-medium">Activity</h2>
+          <p className="text-sm text-muted-foreground">Task activity</p>
+        </article>
+        <aside className="flex w-64 flex-col gap-6 text-sm">
+          {["Status", "Priority", "Assignee", "Space", "Labels"].map((title) => (
+            <div key={title} className="flex flex-col gap-2">
+              <span>{title}</span>
+              <span className="text-muted-foreground">Task property</span>
+            </div>
+          ))}
+        </aside>
+      </div>
+    </Loading>
+  )
+}
+
+export function TasksSkeleton() {
+  return (
+    <PageSkeleton title="Tasks" width="full" shape="tasks-first-load" actions={<div className="min-h-8" />}>
+      <TasksSample />
+    </PageSkeleton>
+  )
+}
+
 function SettingsSample() {
   return (
     <>
@@ -131,21 +163,15 @@ function SpaceSectionSample(props: { section: string }) {
   if (props.section === "automations") return table(["Name", "Frequency", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
   if (props.section === "agents") return <RowsSample count={3} />
-  if (props.section === "tasks")
+  if (props.section === "inbox") return table(inboxColumns)
+  if (props.section === "instructions")
     return (
-      <div className="flex gap-4 overflow-hidden">
-        {["Backlog", "Plan", "Build", "Review"].map((title) => (
-          <section key={title} className="flex w-72 shrink-0 flex-col gap-3">
-            <h2 className="text-sm font-medium">{title}</h2>
-            {Array.from({ length: 3 }, (_, index) => (
-              <Card key={index} className="gap-3 p-4">
-                <span className="text-sm">Task title</span>
-                <span className="text-xs text-muted-foreground">Task details</span>
-              </Card>
-            ))}
-          </section>
-        ))}
-      </div>
+      <Textarea
+        readOnly
+        aria-label="Space instructions"
+        placeholder="Instructions for your agents"
+        className="min-h-110 rounded-xl bg-card p-4 dark:bg-card"
+      />
     )
   return <RowsSample count={2} />
 }
@@ -153,24 +179,28 @@ function SpaceSectionSample(props: { section: string }) {
 export function SpaceSectionSkeleton() {
   const path = Routing.useRenderedPath()
   const shapeId = useShapeId("page")
-  if (path.split("/").at(3) === "artifacts") return <ArtifactsSkeleton />
+  const parts = path.split("/")
+  if (parts.at(3) === "artifacts") return <ArtifactsSkeleton />
+  if (parts.at(3) === "tasks") return parts.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
   return (
     <Loading id={shapeId} label="Loading space">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-8">
-          <SpaceSectionSample section={path.split("/").at(3) ?? "inbox"} />
+          <SpaceSectionSample section={parts.at(3) ?? "inbox"} />
         </div>
       </div>
     </Loading>
   )
 }
 
-function SpaceRouteSkeleton(props: { tab: string }) {
-  if (props.tab === "artifacts") return <ArtifactsSkeleton />
-  const section = spaceSections[props.tab] ?? spaceSections.inbox
+function SpaceRouteSkeleton(props: { path: ReadonlyArray<string> }) {
+  const tab = props.path.at(3) ?? "inbox"
+  if (tab === "artifacts") return <ArtifactsSkeleton />
+  if (tab === "tasks") return props.path.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
+  const section = spaceSections[tab] ?? spaceSections.inbox
   return (
     <Page title={section.title} description={section.description?.("this space")} width={section.width} loading>
-      <SpaceSectionSample section={props.tab} />
+      <SpaceSectionSample section={tab} />
     </Page>
   )
 }
@@ -178,41 +208,16 @@ function SpaceRouteSkeleton(props: { tab: string }) {
 export function RouteSkeleton() {
   const path = Routing.useRenderedPath()
   if (path.startsWith("/sessions/")) return <ChatSkeleton />
-  if (path.startsWith("/tasks/"))
-    return (
-      <Loading label="Loading task" className="flex-1">
-        <div className="flex min-h-full flex-col gap-8 p-8 lg:flex-row">
-          <article className="flex flex-1 flex-col gap-6">
-            <h1 className="text-2xl font-semibold">Task title</h1>
-            <p>Task description and details.</p>
-            <h2 className="text-sm font-medium">Activity</h2>
-            <p className="text-sm text-muted-foreground">Task activity</p>
-          </article>
-          <aside className="flex w-64 flex-col gap-6 text-sm">
-            {["Status", "Priority", "Assignee", "Space", "Labels"].map((title) => (
-              <div key={title} className="flex flex-col gap-2">
-                <span>{title}</span>
-                <span className="text-muted-foreground">Task property</span>
-              </div>
-            ))}
-          </aside>
-        </div>
-      </Loading>
-    )
+  if (path.startsWith("/tasks/")) return <TaskSkeleton />
   if (path === "/artifacts") return <ArtifactsSkeleton />
-  if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton tab={path.split("/").at(3) ?? "inbox"} />
+  if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton path={path.split("/")} />
   if (path === "/spaces")
     return (
       <PageSkeleton title="Spaces" description="Each space gives a team its own credentials, apps and agents.">
         <TableSample columns={["Space", "Description", "Members", ""]} />
       </PageSkeleton>
     )
-  if (path === "/tasks")
-    return (
-      <PageSkeleton title="Tasks" width="full" shape="tasks-first-load" actions={<div className="min-h-8" />}>
-        <TasksSample />
-      </PageSkeleton>
-    )
+  if (path === "/tasks") return <TasksSkeleton />
   if (path === "/automations")
     return (
       <PageSkeleton title="Automations" width="full">

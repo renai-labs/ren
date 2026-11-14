@@ -154,21 +154,23 @@ export function Page(props: PageProps) {
   )
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      <div className={frame.head}>
-        {props.back ? <div className="flex">{props.back}</div> : null}
-        <PageHeader {...props} actions={tabbed ? undefined : actions} />
-        <PageTabsRow tabs={props.tabs} onSlot={setTabsSlot} actions={tabbed ? actions : undefined} />
-        {props.leading && width !== "full" ? (
-          <div className="flex min-h-8 items-center">{props.leading}</div>
-        ) : (
-          props.leading
-        )}
+      <div className="shrink-0 scrollbar-thin [scrollbar-gutter:stable] overflow-hidden">
+        <div className={frame.head}>
+          {props.back ? <div className="flex">{props.back}</div> : null}
+          <PageHeader {...props} actions={tabbed ? undefined : actions} />
+          <PageTabsRow tabs={props.tabs} onSlot={setTabsSlot} actions={tabbed ? actions : undefined} />
+          {props.leading && width !== "full" ? (
+            <div className="flex min-h-8 items-center">{props.leading}</div>
+          ) : (
+            props.leading
+          )}
+        </div>
       </div>
       <Loading
         id={shapeId}
         loading={props.loading ?? false}
         label={`Loading ${props.title}`}
-        className="flex min-h-0 flex-1 scrollbar-thin flex-col overflow-y-auto overscroll-contain"
+        className="flex min-h-0 flex-1 scrollbar-thin [scrollbar-gutter:stable] flex-col overflow-y-auto overscroll-contain"
       >
         <div className={frame.body}>
           <PageActionsSlot value={slot}>

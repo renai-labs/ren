@@ -3,7 +3,6 @@ import { Breadcrumb } from "../../components/breadcrumb.js"
 import { useState, type ReactNode } from "react"
 import type { TaskInfo, TaskUpdateInput } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
-import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import {
   IconArrowUpLeft,
@@ -53,6 +52,8 @@ import { pickerPageSize } from "../../lib/pagination.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Seed } from "../../lib/seed.js"
 import { allTasksKey, refreshEvery } from "../../lib/tasks.js"
+import { TaskLink, TasksLink } from "./task-scope.js"
+import { TaskScopeContext } from "./task-scope-context.js"
 import { useAgents } from "../../lib/use-agents.js"
 import { useLabels } from "../../lib/use-labels.js"
 import { useMembers, type Member } from "../../lib/use-members.js"
@@ -80,8 +81,6 @@ function PropertySection(props: { title: string; children: ReactNode }) {
   )
 }
 
-const route = getRouteApi("/_authed/_shell/tasks/$taskId/")
-
 type Patch = Omit<TaskUpdateInput, "id">
 
 type Assignment = { agentId?: string | null; ownerId?: string | null; spaceId?: string }
@@ -97,18 +96,19 @@ function pickShown(patch: Patch): Partial<TaskInfo> {
   }
 }
 
-export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | null }) {
+export function TaskPage(props: {
+  taskId: string
+  sessionId: string | undefined
+  onOpenSession: (session: string | undefined) => void
+  session: ((dock: ReactNode) => ReactNode) | null
+}) {
   const { api, queryClient } = RouterContext.useRouterContext()
-  const params = route.useParams()
-  const search = route.useSearch()
-  const navigate = useNavigate()
-  const navigateHere = route.useNavigate()
-  const openSession = (session: string | undefined) =>
-    void navigateHere({ search: (previous) => ({ ...previous, session }) })
+  const open = TaskScopeContext.useOpen()
+  const openSession = props.onOpenSession
   const stored = useSuspenseQuery({
-    ...api.task.get.queryOptions({ idOrSlug: params.taskId }),
+    ...api.task.get.queryOptions({ idOrSlug: props.taskId }),
     refetchInterval: refreshEvery,
-    ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), allTasksKey()], params.taskId),
+    ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), allTasksKey()], props.taskId),
   }).data
   const update = useMutation(api.task.update.mutationOptions())
   const assign = useMutation(api.task.assign.mutationOptions())
@@ -170,14 +170,14 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
             {
               onSuccess: () => {
                 toast.success(`${task.identifier} archived`)
-                void navigate({ to: "/tasks" })
+                open.tasks()
               },
               onError: failed("Couldn’t archive the task"),
             },
           )
         }
       />
-      <Sheet open={search.session !== undefined} onOpenChange={(open) => (open ? undefined : openSession(undefined))}>
+      <Sheet open={props.sessionId !== undefined} onOpenChange={(open) => (open ? undefined : openSession(undefined))}>
         <SheetContent className="data-[side=right]:sm:max-w-3xl">
           <SheetHeader>
             <SheetTitle>Task session</SheetTitle>
@@ -217,16 +217,12 @@ function TaskHeader(props: {
     <Breadcrumb.Header className="h-15 gap-2.5 border-b pt-1 text-sm">
       <Breadcrumb.Root
         ancestors={[
-          { key: "tasks", content: <Link to="/tasks">Tasks</Link> },
+          { key: "tasks", content: <TasksLink>Tasks</TasksLink> },
           ...(task.parent
             ? [
                 {
                   key: task.parent.id,
-                  content: (
-                    <Link to="/tasks/$taskId" params={{ taskId: task.parent.id }}>
-                      {task.parent.title}
-                    </Link>
-                  ),
+                  content: <TaskLink taskId={task.parent.id}>{task.parent.title}</TaskLink>,
                 },
               ]
             : []),
@@ -311,16 +307,15 @@ function TaskArticle(props: {
     <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 self-start pt-12 pb-24">
       <h1 className="sr-only">{task.title}</h1>
       {task.parent ? (
-        <Link
-          to="/tasks/$taskId"
-          params={{ taskId: task.parent.id }}
+        <TaskLink
+          taskId={task.parent.id}
           title={`Back to ${task.parent.identifier}`}
           className="-mb-3 flex h-7 w-fit max-w-full items-center gap-1.5 rounded-full border bg-muted px-2.5 text-xs text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
         >
           <IconArrowUpLeft className="size-3.5 shrink-0" />
           <IconChecklist className="size-3.5 shrink-0" />
           <span className="truncate font-medium text-foreground">{task.parent.title}</span>
-        </Link>
+        </TaskLink>
       ) : null}
       <Textarea
         key={`title-${task.title}`}
@@ -454,17 +449,16 @@ function Subtasks(props: { task: TaskInfo }) {
       </div>
       {listed.isPending && total > 0 ? <SkeletonRows count={Math.min(total, 3)} label="Loading sub-tasks" /> : null}
       {subtasks.map((subtask) => (
-        <Link
+        <TaskLink
           key={subtask.id}
-          to="/tasks/$taskId"
-          params={{ taskId: subtask.id }}
+          taskId={subtask.id}
           className="-mx-2 flex h-9 items-center gap-2 rounded-lg px-2 text-sm transition-colors duration-150 ease-out hover:bg-muted"
         >
           <PriorityIcon priority={subtask.priority} />
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{subtask.identifier}</span>
           <StatusIcon task={subtask} />
           <span className="truncate font-medium">{subtask.title}</span>
-        </Link>
+        </TaskLink>
       ))}
     </section>
   )

@@ -1,9 +1,7 @@
 import type { SpaceInfo } from "@ren/client"
-import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { ChatReact } from "@ren/chat/react"
-import { Session } from "@ren/schema/session"
 import { DateTime } from "effect"
 import { toast } from "@ren/ui/sonner"
 import { cn } from "cn"
@@ -11,20 +9,16 @@ import {
   IconActivity,
   IconArchive,
   IconBook,
-  IconBrandGithubFilled,
-  IconBrandSlack,
   IconCalendar,
   IconCalendarEvent,
   IconCalendarMonth,
   IconCalendarWeek,
   IconChevronRight,
   IconCircle,
-  IconClock,
   IconCube,
   IconHelpCircle,
   IconLock,
   IconLogout,
-  IconMessageCircle,
   IconPencil,
   IconPin,
   IconPinnedOff,
@@ -34,9 +28,6 @@ import {
   IconSearch,
   IconSelector,
   IconSettings,
-  IconSubtask,
-  IconTicket,
-  IconWebhook,
   type Icon,
 } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -80,7 +71,15 @@ import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { ownChats, sessionTitle, sidebarSessionsOptions, type SessionFilter } from "../lib/sessions.js"
+import {
+  isOrigin,
+  origins,
+  ownChats,
+  sessionTitle,
+  sidebarSessionsOptions,
+  useChatAttention,
+  type SessionFilter,
+} from "../lib/sessions.js"
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
@@ -350,20 +349,6 @@ export function SpaceEntry(props: {
 
 const days = { today: 0, week: 7, month: 30 } as const
 
-const origins = [
-  { value: "chat", label: "Chat", icon: IconMessageCircle },
-  { value: "task", label: "Task", icon: IconSubtask },
-  { value: "schedule", label: "Schedule", icon: IconClock },
-  { value: "slack", label: "Slack", icon: IconBrandSlack },
-  { value: "linear", label: "Linear", icon: IconTicket },
-  { value: "github", label: "GitHub", icon: IconBrandGithubFilled },
-  { value: "webhook", label: "Webhook", icon: IconWebhook },
-] as const
-
-type Origin = (typeof origins)[number]["value"]
-
-const isOrigin = (value: string): value is Origin => origins.some((origin) => origin.value === value)
-
 const startOfDayAgo = (daysAgo: number) =>
   DateTime.toDateUtc(
     DateTime.startOf(
@@ -421,14 +406,6 @@ const chatProperties = (
     ],
   },
 ]
-
-function useChatAttention(sessionId: string) {
-  const atoms = ChatReact.useAtoms()
-  return useSyncExternalStore(
-    (listener) => atoms.attention.subscribe(() => queueMicrotask(listener)),
-    () => atoms.attention.read(Session.ID.make(sessionId)),
-  )
-}
 
 function ChatStatus(props: { sessionId: string; busy: boolean }) {
   const attention = useChatAttention(props.sessionId) ?? (props.busy ? "running" : "idle")

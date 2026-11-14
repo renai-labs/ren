@@ -1,7 +1,7 @@
 import type { TaskCreateInput } from "@ren/client"
 import { Breadcrumb } from "./breadcrumb.js"
 import { useState, type ReactElement, type ReactNode } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import {
   IconCalendarDue,
@@ -32,7 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { formatDate } from "@ren/ui/time"
 import { PriorityIcon, StatusGlyph, priorityLabelOf, statusOf, labelColor, priorities, statuses } from "./task-meta.js"
 import { Spinner } from "@ren/ui/spinner"
-import { useAgents } from "../lib/use-agents.js"
+import { pickerPageSize } from "../lib/pagination.js"
 import { useLabels } from "../lib/use-labels.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
@@ -192,9 +192,20 @@ function LabelsChip(props: { value: ReadonlyArray<string>; onChange: (labels: st
 
 function TaskChips(props: {
   draft: ReturnType<typeof draftFor>
+  spaceId: string
   onChange: (patch: Partial<ReturnType<typeof draftFor>>) => void
 }) {
-  const agents = useAgents().agents
+  const { api } = RouterContext.useRouterContext()
+  const agents =
+    useQuery({
+      ...api.agent.list.queryOptions({
+        spaceId: props.spaceId,
+        isSubagent: false,
+        page: 1,
+        pageSize: pickerPageSize,
+      }),
+      enabled: props.spaceId !== "",
+    }).data?.items ?? []
   return (
     <div className="flex flex-wrap gap-2 px-4 pt-4 pb-2">
       <Chip
@@ -340,7 +351,7 @@ export function NewTaskDialog(props: {
                 content: props.parent ? (
                   props.parent.identifier
                 ) : (
-                  <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next })} />
+                  <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next, agentId: "none" })} />
                 ),
               },
             ]}
@@ -397,7 +408,7 @@ export function NewTaskDialog(props: {
               )}
             />
           </div>
-          <TaskChips draft={draft} onChange={set} />
+          <TaskChips draft={draft} spaceId={spaceId} onChange={set} />
           <div className="flex items-center justify-end gap-4 px-4 pt-2 pb-4">
             {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
             <label className="flex items-center gap-2 text-xs">

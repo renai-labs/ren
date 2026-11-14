@@ -12,5 +12,10 @@ export const Route = createFileRoute("/_authed/_shell/tasks/")({
       options.context.queryClient.query(allTasksOptions(options.context.client, taskListInput(options.deps))),
     )
   },
-  component: TasksPage,
+  component: HomeTasks,
 })
+
+function HomeTasks() {
+  const navigate = Route.useNavigate()
+  return <TasksPage search={Route.useSearch()} setSearch={(update) => void navigate({ search: update })} />
+}
