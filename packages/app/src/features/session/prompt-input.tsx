@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react"
 import { Composer, ComposerHistory, Mentions, type ChatSession } from "@ren/chat"
+import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
@@ -42,8 +43,10 @@ import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Spinner } from "@ren/ui/spinner"
-import { useUploads, type Target } from "../../lib/use-uploads.js"
-import { DropOverlay, UploadChips } from "./attachments.js"
+import { maxFileBytes, useUploads, type Target } from "../../lib/use-uploads.js"
+import { formatBytes } from "../../lib/format.js"
+import { UploadChips } from "./attachments.js"
+import { DropOverlay } from "../../components/drop-overlay.js"
 import { PastedChip } from "./pasted-chip.js"
 import { ImageSet } from "../../components/image-set.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
@@ -927,7 +930,11 @@ export function PromptInput(props: {
   return (
     <div ref={root} className="relative flex flex-col gap-2">
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
-      <DropOverlay onFiles={attach} />
+      <DropOverlay
+        title="Drop files to attach"
+        detail={`Up to ${Session.maxDriveFiles} files, ${formatBytes(maxFileBytes)} each`}
+        onFiles={attach}
+      />
       <Input
         ref={picker}
         type="file"

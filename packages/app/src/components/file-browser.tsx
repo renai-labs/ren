@@ -295,10 +295,13 @@ function Tree(props: {
   onPin: (path: string) => void
   onMention: ((path: string) => void) | undefined
   onTerminal: ((folder: string) => void) | undefined
+  onUpload: ((folder: string) => void) | undefined
+  onDelete: ((path: string) => void) | undefined
 }) {
   const tree = props.tree
   const root = tree.root
   const copy = useCopy()
+  const pinned = (path: string) => (tree.pinned ?? []).some((name) => path.startsWith(`${name}/`))
   if (!root || !AsyncResult.isSuccess(root))
     return (
       <WorkspacePending
@@ -365,6 +368,24 @@ function Tree(props: {
               }}
             />
           ) : null}
+          {item.kind === "directory" && props.onUpload && !pinned(item.path) ? (
+            <MenuItem
+              label="Upload here"
+              onClick={() => {
+                close()
+                props.onUpload?.(item.path)
+              }}
+            />
+          ) : null}
+          {item.kind === "file" && props.onDelete && !pinned(item.path) ? (
+            <MenuItem
+              label="Delete"
+              onClick={() => {
+                close()
+                props.onDelete?.(item.path)
+              }}
+            />
+          ) : null}
         </>
       )}
     />
@@ -377,6 +398,8 @@ export function FileBrowser(props: {
   onFiles: (files: FileTabs.State) => void
   onMention: ((path: string) => void) | undefined
   onTerminal: ((folder: string) => void) | undefined
+  onUpload?: ((folder: string) => void) | undefined
+  onDelete?: ((path: string) => void) | undefined
   empty: string
   children: ReactNode
 }) {
@@ -392,6 +415,8 @@ export function FileBrowser(props: {
           onPin={(path) => props.onFiles(FileTabs.open(files, path, { pin: true }))}
           onMention={props.onMention}
           onTerminal={props.onTerminal}
+          onUpload={props.onUpload}
+          onDelete={props.onDelete}
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
