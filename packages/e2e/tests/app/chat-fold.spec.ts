@@ -9,7 +9,7 @@ const lines = (label: string, count: number) =>
   Array.from({ length: count }, (_, index) => `${label} ${index + 1}`).join("\n")
 
 async function send(page: import("@playwright/test").Page, input: { typed: string; pasted?: string }) {
-  await page.goto("/app/")
+  await page.goto("/")
   const box = page.getByRole("textbox", { name: "Message" })
   await box.fill(input.typed)
   if (input.pasted)
@@ -41,7 +41,7 @@ test("a member reads more of a long typed message and turns folding off in Prefe
   await send(page, { typed: lines("Short", 15) })
   await expect(page.getByRole("button", { name: "Read more" })).toHaveCount(0)
 
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   const fold = page.getByRole("switch", { name: "Fold long messages" })
   await expect(fold).toBeChecked()
   await fold.click()

@@ -13,7 +13,7 @@ test("an app past the first 100 registry apps opens from Add apps, and its menti
   page,
 }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
+  await page.goto("/")
   const start = page.getByRole("main")
 
   await start.getByRole("button", { name: "Add apps" }).click()
@@ -49,7 +49,7 @@ test("Installed in Apps loads connected apps past the first 100 on scroll", asyn
   for (const app of pages.flatMap((page) => page.items).slice(0, 101))
     await ren["app-profile"].create({ appId: app.id, name: "Mine", slug: "mine", kind: "private" })
 
-  await page.goto("/app/apps")
+  await page.goto("/apps")
   await page.getByRole("tab", { name: "Installed" }).click()
   const installed = page.getByRole("list", { name: "Installed" })
   await expect(page.getByRole("heading", { name: /^Installed\s*101$/ })).toBeVisible()
@@ -79,7 +79,7 @@ test("Add to space offers an existing account even when the accounts load after 
       await route.continue()
     },
   )
-  await page.goto("/app/apps")
+  await page.goto("/apps")
   await page.getByLabel("Search apps").fill("Zeta")
   await page.getByRole("button", { name: "Zeta Notes", exact: true }).click()
   await expect(page.getByRole("heading", { name: "Zeta Notes" })).toBeVisible()

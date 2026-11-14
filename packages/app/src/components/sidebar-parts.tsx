@@ -30,6 +30,7 @@ import {
   IconSearch,
   IconSelector,
   IconSettings,
+  IconWorld,
   type Icon,
 } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -72,7 +73,7 @@ import { PersonAvatar } from "./person-avatar.js"
 import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
-import { docsUrl, founderCallUrl } from "../lib/links.js"
+import { docsUrl, founderCallUrl, websiteUrl } from "../lib/links.js"
 import { origins } from "../lib/sessions.js"
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
@@ -584,6 +585,10 @@ function HelpAndSettings() {
             <DropdownMenuItem onClick={() => platform.openExternal(docsUrl)}>
               <IconBook />
               Documentation
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => platform.openExternal(websiteUrl)}>
+              <IconWorld />
+              Ren website
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>

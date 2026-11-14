@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { appOrigin, appURL, createOrganization, organizationName, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, organizationName, serverURL } from "../lib/servers.js"
 import { Schema } from "effect"
 
 test("the first shell load uses the Ren mark until navigation data arrives", async ({ page }) => {
@@ -12,7 +12,7 @@ test("the first shell load uses the Ren mark until navigation data arrives", asy
     await route.continue()
   })
   try {
-    await page.goto("/app/")
+    await page.goto("/")
     await requested.promise
     await expect(page.getByRole("status", { name: "Loading Ren…", exact: true })).toBeVisible()
     await expect(page.getByRole("status", { name: "Loading navigation", exact: true })).toHaveCount(0)
@@ -31,7 +31,7 @@ test("space navigation keeps cached metadata visible", async ({ page }) => {
   })
   expect(response.ok()).toBe(true)
   const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(page.getByRole("button", { name: "Research", exact: true })).toBeVisible()
   const held = Promise.withResolvers<void>()
   await page.route(
@@ -57,7 +57,7 @@ test("space navigation keeps cached metadata visible", async ({ page }) => {
 
 test("expanding chats keeps the sidebar visible without navigation placeholders", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(page.getByRole("button", { name: "General Space", exact: true })).toBeVisible()
   const held = Promise.withResolvers<void>()
   const requested = Promise.withResolvers<void>()
@@ -85,7 +85,7 @@ test("expanding chats keeps the sidebar visible without navigation placeholders"
 
 test("the sidebar remembers that it was collapsed", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
+  await page.goto("/")
   const navigation = page.getByRole("complementary", { name: "Navigation" })
   await navigation.getByRole("button", { name: "Collapse sidebar" }).click()
   await expect(navigation.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
@@ -105,7 +105,7 @@ test("switches organization and logs out from the profile card", async ({ page }
   })
   expect(created.ok()).toBe(true)
 
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()
   await expect(page.getByRole("option", { name: company })).toHaveAttribute("aria-selected", "true")
   await page.getByRole("option", { name: "Side Project" }).click()
@@ -118,12 +118,12 @@ test("switches organization and logs out from the profile card", async ({ page }
   await expect(dialog).toContainText("You’ll need to sign in again to access Ren.")
   await dialog.getByRole("button", { name: "Log out" }).click()
   await expect(page).toHaveURL(/\/login$/)
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(page).toHaveURL(/\/login\?redirect=/)
 })
 
 test("an unknown page goes to the app", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/somewhere/else")
-  await expect(page).toHaveURL(`${appURL}/`)
+  await page.goto("/somewhere/else")
+  await expect(page).toHaveURL(`${appOrigin}/`)
 })

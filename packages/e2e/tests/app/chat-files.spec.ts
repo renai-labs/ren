@@ -12,7 +12,7 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Plan the launch")
   await message.press("Enter")
@@ -96,7 +96,7 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
 
 test("attachment cards show an icon for the type of file", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Plan the launch")
   await message.press("Enter")

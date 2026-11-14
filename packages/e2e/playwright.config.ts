@@ -11,7 +11,7 @@ export default defineConfig({
   },
   webServer: {
     command: "bun script/serve.ts",
-    url: `http://127.0.0.1:${ports.app}/app/`,
+    url: `http://127.0.0.1:${ports.app}/login`,
     timeout: 120_000,
     gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     reuseExistingServer: !process.env.CI,

@@ -19,14 +19,14 @@ test("a space's tasks group by status, keep the home grouping, and add tasks to 
   })
   expect(seeded.ok()).toBe(true)
 
-  await page.goto("/app/tasks")
+  await page.goto("/tasks")
   await page.getByRole("button", { name: "Display options" }).click()
   await page.getByRole("combobox", { name: "Group by" }).click()
   await page.getByRole("option", { name: "Space", exact: true }).click()
   await page.keyboard.press("Escape")
   await expect(page.getByRole("heading", { level: 2, name: "Flight", exact: true })).toBeVisible()
 
-  await page.goto(`/app/spaces/${space.id}/tasks`)
+  await page.goto(`/spaces/${space.id}/tasks`)
   await expect(page.getByRole("heading", { level: 2, name: "Todo", exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { level: 2, name: "Flight", exact: true })).toHaveCount(0)
   await page.getByRole("button", { name: "Filter tasks" }).click()
@@ -59,7 +59,7 @@ test("a space's tasks group by status, keep the home grouping, and add tasks to 
     "Write the flight plan",
   )
 
-  await page.goto("/app/tasks")
+  await page.goto("/tasks")
   await expect(page.getByRole("heading", { level: 2, name: "Flight", exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { level: 2, name: "Todo", exact: true })).toHaveCount(0)
 })

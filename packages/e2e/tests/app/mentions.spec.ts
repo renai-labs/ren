@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test"
 import { Ren } from "@ren/client"
 import { Session } from "@ren/schema/session"
-import { appURL, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
 
 test("mentions settings shows live connection states and removes the prototype navigation", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/settings/channels")
+  await page.goto("/settings/channels")
   await expect(page.getByRole("heading", { level: 1, name: "@mentions", exact: true })).toBeVisible()
   await expect(page.getByRole("link", { name: "Mentions lab" })).toBeHidden()
   await expect(page.getByText("Connected", { exact: true })).toBeHidden()
-  await page.goto("/app/settings/channels/slack")
+  await page.goto("/settings/channels/slack")
   await expect(page.getByRole("heading", { level: 1, name: "Slack", exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "Disconnect Slack", exact: true })).toBeHidden()
   await expect(page.getByRole("table")).toBeHidden()
@@ -24,7 +24,7 @@ test("closing punctuation stays on the line of the app pill it follows", async (
   const zeta = await ren["app-registry"].get({ idOrSlug: "zz-notes" })
   await ren["app-profile"].create({ appId: zeta.id, name: "Mine", slug: "zz-notes", kind: "private" })
 
-  await page.goto("/app/")
+  await page.goto("/")
   const start = page.getByRole("main")
   const filler = "then ask Ren to open a pull request and write the notes on"
   await start.getByRole("textbox", { name: "Message" }).fill(`${filler} @zz-notes.`)
@@ -58,7 +58,7 @@ test("a member mentions a task and another chat through the @ categories, and th
   const other = Session.ID.create()
   await ren.session.create({ id: other, spaceId })
 
-  await page.goto(`/app/?spaceId=${spaceId}`)
+  await page.goto(`/?spaceId=${spaceId}`)
   const start = page.getByRole("main")
   const message = start.getByRole("textbox", { name: "Message" })
   const mentions = page.getByRole("listbox", { name: "Mentions" })
@@ -90,9 +90,9 @@ test("a member mentions a task and another chat through the @ categories, and th
   const sessionId = new URL(page.url()).pathname.split("/").at(-1) ?? ""
   await expect
     .poll(async () => JSON.stringify(await ren.chat.messages({ id: sessionId })), { timeout: 30_000 })
-    .toContain(`Read [${task.identifier} Fix the login page](${appURL}/tasks/${task.id}) and ${other}`)
+    .toContain(`Read [${task.identifier} Fix the login page](${appOrigin}/tasks/${task.id}) and ${other}`)
 
-  await page.goto(`/app/?spaceId=${spaceId}`)
+  await page.goto(`/?spaceId=${spaceId}`)
   await message.pressSequentially("@")
   await expect(mentions.getByRole("group", { name: "Recent" }).getByRole("option")).toHaveText([
     "New chat",

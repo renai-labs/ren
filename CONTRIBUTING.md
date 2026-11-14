@@ -25,7 +25,7 @@ docker compose up -d
 | `bun run test`                          | Run the tests that cover what changed since `main` |
 | `bun run check:all`, `bun run test:all` | The same for everything                            |
 
-The web app and the API run on separate origins. The app is served under `/app/` (`http://localhost:5173/app/` in development, `https://useren.ai/app/` in production) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`, which includes `/app`.
+The web app and the API run on separate origins. The app is served at the root (`http://localhost:5173/` in development, `https://useren.ai/` in production, where it shares the domain with the site: see `infra/aws/README.md`) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`.
 
 ## Verification
 

@@ -7,7 +7,7 @@ test.describe.configure({ timeout: 90_000 })
 
 test("a reply renders diagrams, math, task lists, right-to-left text, code and callouts", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const marker = await script(page.request, {
     reply: [
       "```mermaid",
@@ -105,7 +105,7 @@ test("a member copies a table as CSV, a list as Markdown and a link from its men
   const marker = await script(page.request, {
     reply: `| a | b |\n| - | - |\n| 1 | 2 |\n\nResults:\n\n- **one** item\n- two items\n\nSee the [migration guide](${url}) for details.`,
   })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill(`Summarise ${marker}`)
   await page.getByRole("button", { name: "Send" }).click()
 
@@ -144,7 +144,7 @@ test("a member's message renders as markdown, shows raw HTML as text and keeps a
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const composer = page.getByRole("textbox", { name: "Message" })
   await composer.fill("**bold**\nsecond line")
   await page.getByRole("button", { name: "Send" }).click()
@@ -177,7 +177,7 @@ test("images in a reply keep a badge row in a row, open a lone image in a lightb
     `[![linked](${pixel})](https://example.com/)`,
   ].join("\n\n")
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Show the badges")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
@@ -213,7 +213,7 @@ test("a footnote and a heading link in a reply scroll the transcript to their ow
   const first = await scripted("first note")
   const second = await scripted("second note")
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill(`${first} first`)
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
@@ -246,7 +246,7 @@ test("a long link breaks inside the column and a short ref stays whole in a narr
   const reply = `Opened ${url}\n\n| Ref | Note |\n| --- | --- |\n| [#337](https://github.com/renai-labs/ren/pull/337) | fixed |`
   await page.setViewportSize({ width: 360, height: 740 })
   await createOrganization(page.request, { name: "Katherine Johnson" })
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("textbox", { name: "Message" }).fill("Link me")
   await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })

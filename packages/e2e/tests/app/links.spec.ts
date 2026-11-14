@@ -31,7 +31,7 @@ test("links in a task comment show a brand mark or a globe, and no icon request 
     if (request.resourceType() === "image") imageHosts.add(new URL(request.url()).host)
   })
   const favicon = page.waitForResponse((response) => response.url().endsWith("/favicons/unreachable.example.org"))
-  await page.goto(`/app/tasks/${task.id}`)
+  await page.goto(`/tasks/${task.id}`)
 
   const github = page.getByRole("link", { name: "the issue", exact: true })
   await expect(github.locator('[data-link-icon="github"]')).toBeVisible({ timeout: 30_000 })

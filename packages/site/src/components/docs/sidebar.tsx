@@ -13,7 +13,7 @@ import {
   IconSelector,
   IconSun,
 } from "@tabler/icons-react"
-import { APP_URL, CALENDLY_URL, GITHUB_URL } from "../../lib/links.js"
+import { OPEN_APP_URL, CALENDLY_URL, GITHUB_URL } from "../../lib/links.js"
 import type { SectionLink } from "../../lib/docs/nav.js"
 import { DocsIcon } from "./icons.js"
 
@@ -104,7 +104,7 @@ export function SidebarFooter() {
     <div className="docs-sidebar-foot">
       <AppearanceRow />
       <div className="flex items-center gap-1">
-        <a href={`${APP_URL}/`} className="docs-foot-row flex-1">
+        <a href={OPEN_APP_URL} className="docs-foot-row flex-1">
           <IconArrowUpRight />
           <span className="flex-1">Open Ren</span>
         </a>

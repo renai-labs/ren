@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import type { APIRequestContext } from "@playwright/test"
 import {
-  appURL,
+  appOrigin,
   createOrganization,
   createUser,
   emailedCode,
@@ -36,11 +36,11 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await page.keyboard.type(code)
 
   await expect(page.getByText("Joined organization")).toBeVisible()
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appOrigin}/`)
   await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Ada Lovelace")
   expect(await organizationName(page.request)).toBe(invitation.organization)
 
-  await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
+  await page.goto(`/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await expect(page.getByRole("heading", { name: "This invitation has already been accepted" })).toBeVisible()
   await expect(page.getByRole("button", { name: "Go to workspace" })).toBeVisible()
 })
@@ -50,13 +50,13 @@ test("a signed-in person declines an invitation", async ({ page, request }) => {
   await createUser(page.request, { name: "Alan Turing", email })
   const invitation = await invite(request, email)
 
-  await page.goto(`/app/invites/accept?id=${invitation.link.searchParams.get("invitationId") ?? ""}`)
+  await page.goto(`/invites/accept?id=${invitation.link.searchParams.get("invitationId") ?? ""}`)
   await expect(
     page.getByRole("heading", { name: `You’ve been invited to join ${invitation.organization}` }),
   ).toBeVisible()
   await expect(page.getByText("Invited by Grace Hopper")).toBeVisible()
   await page.getByRole("button", { name: "No thanks, continue to Ren" }).click()
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appOrigin}/`)
   await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Alan Turing")
 })
 
@@ -65,7 +65,7 @@ test("an invitation for another address offers to switch accounts", async ({ pag
   const email = uniqueEmail("wrong-account")
   await createUser(page.request, { name: "Alan Turing", email })
 
-  await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
+  await page.goto(`/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await page.getByRole("button", { name: "Continue to join" }).click()
   await expect(page.getByText("This invitation is for another email address")).toBeVisible()
   await expect(
@@ -76,7 +76,7 @@ test("an invitation for another address offers to switch accounts", async ({ pag
 })
 
 test("an unknown invitation explains itself", async ({ page }) => {
-  await page.goto("/app/invites/accept?id=inv_unknown")
+  await page.goto("/invites/accept?id=inv_unknown")
   await expect(page.getByRole("heading", { name: "This invitation isn’t valid" })).toBeVisible()
   await page.getByRole("link", { name: "Return to homepage" }).click()
   await expect(page).toHaveURL(/\/login\?redirect=/)
@@ -87,10 +87,10 @@ test("an account with only a pending invitation is sent to it", async ({ page, r
   const invitation = await invite(request, email)
   await createUser(page.request, { name: "Alan Turing", email })
 
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(page).toHaveURL(/\/invites\/accept\?id=.+&redirect=%2F$/)
   await page.getByRole("button", { name: "Continue to join" }).click()
   await expect(page.getByText("Joined organization")).toBeVisible()
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appOrigin}/`)
   expect(await organizationName(page.request)).toBe(invitation.organization)
 })

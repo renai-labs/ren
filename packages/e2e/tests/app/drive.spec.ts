@@ -6,7 +6,7 @@ test("a member browses the Drive as a list: Artifacts and each space first, then
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   const space = (await spaceNames(page.request)).at(0) ?? ""
-  await page.goto("/app/drive")
+  await page.goto("/drive")
   const main = page.getByRole("main")
   await expect(main.getByRole("link", { name: "Artifacts", exact: true })).toBeVisible()
   await expect(main.getByRole("link", { name: space, exact: true })).toBeVisible()
@@ -54,7 +54,7 @@ test("a space's Drive tab is the same list: its Artifacts first, then its files,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   const spaceId = await createSpace(page.request, "Launch")
-  await page.goto(`/app/spaces/${spaceId}/drive`)
+  await page.goto(`/spaces/${spaceId}/drive`)
   const main = page.getByRole("main")
   await expect(main.getByRole("link", { name: "Artifacts", exact: true })).toBeVisible()
   await expect(main.getByText("No files yet.")).toBeVisible()
