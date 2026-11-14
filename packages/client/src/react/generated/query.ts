@@ -71,6 +71,7 @@ import type {
   AppRegistryListInput,
   AppRegistryGetInput,
   AppToolsGetInput,
+  McpInspectMcpInspectInput,
   AgentMembershipListInput,
   AgentMembershipCreateInput,
   AgentMembershipArchiveInput,
@@ -878,6 +879,18 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryKey: ["app-tools", "get", input] as const,
             queryFn: (context) => client["app-tools"]["get"](input, { signal: context.signal }),
           }),
+      },
+    },
+    "mcp-inspect": {
+      mcp: {
+        inspect: {
+          mutationKey: () => ["mcp-inspect", "mcp", "inspect"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["mcp-inspect", "mcp", "inspect"] as const,
+              mutationFn: (input: McpInspectMcpInspectInput) => client["mcp-inspect"]["mcp"]["inspect"](input),
+            }),
+        },
       },
     },
     "agent-membership": {

@@ -911,6 +911,15 @@ const EndpointAppToolsGet = (raw: RawClient["app-tools"]) => (input: AppToolsGet
 
 const adaptGroupAppTools = (raw: RawClient["app-tools"]) => ({ get: EndpointAppToolsGet(raw) })
 
+type McpInspectMcpInspectRequest = Parameters<RawClient["mcp-inspect"]["mcp.inspect"]>[0]
+type McpInspectMcpInspectInput = { readonly url: McpInspectMcpInspectRequest["payload"]["url"] }
+const EndpointMcpInspectMcpInspect = (raw: RawClient["mcp-inspect"]) => (input: McpInspectMcpInspectInput) =>
+  raw["mcp.inspect"]({ payload: { url: input["url"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupMcpInspect = (raw: RawClient["mcp-inspect"]) => ({
+  mcp: { inspect: EndpointMcpInspectMcpInspect(raw) },
+})
+
 type AgentMembershipListRequest = Parameters<RawClient["agent-membership"]["agent-membership.list"]>[0]
 type AgentMembershipListInput = {
   readonly spaceId?: AgentMembershipListRequest["query"]["spaceId"]
@@ -2215,6 +2224,7 @@ const adaptClient = (raw: RawClient) => ({
   "app-profile-reach": adaptGroupAppProfileReach(raw["app-profile-reach"]),
   "app-registry": adaptGroupAppRegistry(raw["app-registry"]),
   "app-tools": adaptGroupAppTools(raw["app-tools"]),
+  "mcp-inspect": adaptGroupMcpInspect(raw["mcp-inspect"]),
   "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
   session: adaptGroupSession(raw["session"]),
   chat: adaptGroupChat(raw["chat"]),

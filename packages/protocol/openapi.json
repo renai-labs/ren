@@ -5808,6 +5808,65 @@
         "summary": "List a registry app’s tools"
       }
     },
+    "/mcp/inspect": {
+      "post": {
+        "tags": ["mcp-inspect"],
+        "operationId": "mcp.inspect",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "McpInspection.Result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpInspection.Result"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read a remote MCP server without signing in: the auth it asks for, what it says about itself, and its tools when it lists them without a sign-in or in its server card.",
+        "summary": "Inspect an MCP server",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpInspection.Input"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/agent-memberships": {
       "get": {
         "tags": ["agent-membership"],
@@ -21513,6 +21572,152 @@
           }
         ]
       },
+      "McpInspection.Auth": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["oauth"]
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "client": {
+                "$ref": "#/components/schemas/McpInspection.Client"
+              }
+            },
+            "required": ["type", "scopes", "client"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["bearer", "basic", "unknown"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "The auth the server asks for: none, a sign-in, a token, a user name and password, or unknown."
+      },
+      "McpInspection.Client": {
+        "type": "string",
+        "enum": ["metadata-document", "registration", "oauth-app"],
+        "description": "How Ren gets an OAuth client: its client metadata document, dynamic registration, or an org OAuth app when the server allows neither."
+      },
+      "McpInspection.Input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "$ref": "#/components/schemas/Primitive.HttpsUrl_3"
+          }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "McpInspection.Result": {
+        "type": "object",
+        "properties": {
+          "reachable": {
+            "type": "boolean"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/McpInspection.Server"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auth": {
+            "$ref": "#/components/schemas/McpInspection.Auth"
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AppListing.Tool"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sorted by name. Null when the server lists its tools only after a sign-in."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["tools-list", "server-card"]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why Ren could not read the server."
+          }
+        },
+        "required": ["reachable", "server", "auth", "tools", "source", "problem"],
+        "additionalProperties": false
+      },
+      "McpInspection.Server": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "websiteUrl": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "description": "What the server says about itself, in its initialize answer or its server card."
+      },
       "Memory.EditInput": {
         "type": "object",
         "properties": {
@@ -22390,6 +22595,9 @@
         "type": "string"
       },
       "Primitive.HttpsUrl_2": {
+        "type": "string"
+      },
+      "Primitive.HttpsUrl_3": {
         "type": "string"
       },
       "Primitive.Slug": {
@@ -29597,6 +29805,9 @@
     },
     {
       "name": "app-tools"
+    },
+    {
+      "name": "mcp-inspect"
     },
     {
       "name": "agent-membership"
