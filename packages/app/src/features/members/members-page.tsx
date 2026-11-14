@@ -273,11 +273,10 @@ export function MembersSettingsPage() {
     queryClient.invalidateQueries({ queryKey: organizationOptions(auth, me.organization.id).queryKey })
   const shownRows = useShown(rows)
   const shownInvitations = useShown(invitations)
-  const links = useQuery({ ...api["organization-invite-link"].list.queryOptions(), enabled: canAdminister })
+  const links =
+    useQuery({ ...api["organization-invite-link"].list.queryOptions(), enabled: canAdminister }).data?.items ?? []
   const shownLinks = useShown(
-    (links.data?.items ?? []).filter((link) =>
-      Search.matches(query, link.createdBy.name, ...link.spaces.map((space) => space.name)),
-    ),
+    links.filter((link) => Search.matches(query, link.createdBy.name, ...link.spaces.map((space) => space.name))),
   )
   const shown = { members: shownRows, invitations: shownInvitations, links: shownLinks }[tab]
   const openTab = (next: string) =>
@@ -361,7 +360,7 @@ export function MembersSettingsPage() {
               Invitations
             </PageTabsTrigger>
             {canAdminister ? (
-              <PageTabsTrigger value="links" count={links.data?.items.length}>
+              <PageTabsTrigger value="links" count={links.length}>
                 Links
               </PageTabsTrigger>
             ) : null}
