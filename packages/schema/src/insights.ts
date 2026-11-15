@@ -24,6 +24,11 @@ export const GroupBy = Schema.Literals([
 ]).annotate({ identifier: "Insights.GroupBy" })
 export type GroupBy = typeof GroupBy.Type
 
+export const EventType = Schema.Literals(["model.call", "sandbox.compute", "api.call"]).annotate({
+  identifier: "Insights.EventType",
+})
+export type EventType = typeof EventType.Type
+
 export const OrderBy = Schema.Literals(["cost", "tokens", "calls", "sessions", "tasksDone"]).annotate({
   identifier: "Insights.OrderBy",
 })
@@ -57,6 +62,9 @@ export const Query = Schema.Struct({
   }),
   payer: Schema.optional(Usage.Payer).annotate({ description: "Task numbers do not change." }),
   kind: Schema.optional(Usage.Kind).annotate({ description: "Task numbers do not change." }),
+  type: Schema.optional(Schema.Array(EventType)).annotate({
+    description: "Usage of these event types: model calls, sandbox compute or tool calls. Task numbers do not change.",
+  }),
   orderBy: OrderBy.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed("cost" as const))).annotate({
     description: "Descending. Only for a grouping that is not time.",
   }),
@@ -92,6 +100,11 @@ export const Cost = Schema.Struct({
     description: "Provider cost on the organization’s own keys, in millionths of a US dollar.",
   }),
   unpricedCalls: Schema.Number.annotate({ description: "Model calls with no cost." }),
+  models: Schema.Number.annotate({ description: "Model calls, on either payer, in millionths of a US dollar." }),
+  compute: Schema.Number.annotate({ description: "Sandbox compute, in millionths of a US dollar." }),
+  tools: Schema.Number.annotate({
+    description: "Tool calls through Ren’s managed apps, in millionths of a US dollar.",
+  }),
 }).annotate({ identifier: "Insights.Cost" })
 
 export interface Row extends Schema.Schema.Type<typeof Row> {}
@@ -109,6 +122,7 @@ export const Row = Schema.Struct({
   errors: Schema.Number,
   tokens: Tokens,
   cost: Cost,
+  computeMs: Schema.Number.annotate({ description: "Sandbox time, in milliseconds." }),
   tasksDone: Schema.NullOr(Schema.Number).annotate({
     description: "Tasks done now, at their latest move to done. Null for model and provider rows.",
   }),

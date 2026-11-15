@@ -114,7 +114,13 @@ const usageQuery = (db: Client, scope: Scope) =>
         ren: total(sql`sum(${events.cost_micro_usd}) filter (where ${events.payer} = 'ren')`),
         customer: total(sql`sum(${events.cost_micro_usd}) filter (where ${events.payer} = 'customer')`),
         unpricedCalls: total(sql`count(*) filter (where ${events.cost_micro_usd} is null)`),
+        models: total(sql`sum(${events.cost_micro_usd}) filter (where ${events.type} = 'model.call')`),
+        compute: total(sql`sum(${events.cost_micro_usd}) filter (where ${events.type} = 'sandbox.compute')`),
+        tools: total(sql`sum(${events.cost_micro_usd}) filter (where ${events.type} = 'api.call')`),
       },
+      computeMs: total(
+        sql`sum((${events.data} ->> 'duration_ms')::bigint) filter (where ${events.type} = 'sandbox.compute')`,
+      ),
     })
     .from(events)
     .leftJoin(members, and(sql`${members.id} = ${person}`, eq(members.organizationId, scope.organizationId)))
@@ -128,6 +134,7 @@ const usageQuery = (db: Client, scope: Scope) =>
         scope.query.model && inArray(field("served_model"), [...scope.query.model]),
         scope.query.payer && eq(events.payer, scope.query.payer),
         scope.query.kind && eq(field("kind"), scope.query.kind),
+        scope.query.type && inArray(events.type, [...scope.query.type]),
       ),
     )
     .groupBy(sql`1`)
@@ -242,7 +249,8 @@ const noSpend = {
   calls: 0,
   errors: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
-  cost: { ren: 0, customer: 0, unpricedCalls: 0 },
+  cost: { ren: 0, customer: 0, unpricedCalls: 0, models: 0, compute: 0, tools: 0 },
+  computeMs: 0,
 }
 
 const measures: Record<Insights.OrderBy, (row: Insights.Row) => number> = {

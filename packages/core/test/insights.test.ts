@@ -102,7 +102,8 @@ describe("Insights", () => {
             calls: 3,
             errors: 1,
             tokens: { input: 3000, output: 300, reasoning: 0, cacheRead: 0, cacheWrite: 15 },
-            cost: { ren: 5000, customer: 5000, unpricedCalls: 1 },
+            cost: { ren: 5000, customer: 5000, unpricedCalls: 1, models: 10_000, compute: 0, tools: 0 },
+            computeMs: 0,
             tasksDone: 0,
             prsMerged: 0,
             prsLinked: 0,
@@ -112,7 +113,7 @@ describe("Insights", () => {
     }).pipe(Effect.provide(Insights.layer)),
   )
 
-  it.live("a sandbox run adds its cost to the space, as its own provider, with no calls, sessions or tokens", () =>
+  it.live("sandbox runs and tool calls cost apart from models, with no calls, sessions or tokens", () =>
     Effect.gen(function* () {
       const insights = yield* Insights.Service
       const o = yield* org
@@ -126,16 +127,38 @@ describe("Insights", () => {
         cost_micro_usd: 269_064,
         data: { sandbox_id: "sbx_1", duration_ms: 1_818_000, vcpu_ms: 14_544_000, memory_mib_ms: 14_893_056_000 },
       })
+      yield* spend(o.factory, from, {
+        source: "ren-integrations",
+        type: "api.call",
+        provider: "exa",
+        cost_micro_usd: 1000,
+        data: { mcp: "exa", tool: "search" },
+      })
 
       const total = yield* insights.query(o.ada, query(o.factory.id, from, to))
-      expect(total.rows.map((row) => [row.sessions, row.calls, row.tokens.input, row.cost.ren])).toEqual([
-        [1, 1, 1000, 274_064],
+      expect(
+        total.rows.map((row) => [row.sessions, row.calls, row.tokens.input, row.cost.ren, row.computeMs, row.cost]),
+      ).toEqual([
+        [
+          1,
+          1,
+          1000,
+          275_064,
+          1_818_000,
+          { ren: 275_064, customer: 0, unpricedCalls: 0, models: 5000, compute: 269_064, tools: 1000 },
+        ],
       ])
       const byProvider = yield* insights.query(o.ada, query(o.factory.id, from, to, { groupBy: "provider" }))
       expect(byProvider.rows.map((row) => [row.key, row.calls, row.cost.ren])).toEqual([
         ["e2b", 0, 269_064],
         ["anthropic", 1, 5000],
+        ["exa", 0, 1000],
       ])
+      const models = yield* insights.query(
+        o.ada,
+        query(o.factory.id, from, to, { groupBy: "provider", type: ["model.call"] }),
+      )
+      expect(models.rows.map((row) => [row.key, row.cost.ren])).toEqual([["anthropic", 5000]])
     }).pipe(Effect.provide(Insights.layer)),
   )
 

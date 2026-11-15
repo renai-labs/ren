@@ -15087,6 +15087,22 @@
             "required": false
           },
           {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Insights.EventType"
+                  }
+                }
+              ],
+              "description": "Usage of these event types: model calls, sandbox compute or tool calls. Task numbers do not change."
+            },
+            "required": false
+          },
+          {
             "name": "orderBy",
             "in": "query",
             "schema": {
@@ -20580,10 +20596,47 @@
                 "enum": ["Infinity", "-Infinity", "NaN"]
               }
             ]
+          },
+          "models": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "compute": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
           }
         },
-        "required": ["ren", "customer", "unpricedCalls"],
+        "required": ["ren", "customer", "unpricedCalls", "models", "compute", "tools"],
         "additionalProperties": false
+      },
+      "Insights.EventType": {
+        "type": "string",
+        "enum": ["model.call", "sandbox.compute", "api.call"]
       },
       "Insights.GroupBy": {
         "type": "string",
@@ -20670,6 +20723,17 @@
           "cost": {
             "$ref": "#/components/schemas/Insights.Cost"
           },
+          "computeMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
           "tasksDone": {
             "anyOf": [
               {
@@ -20724,6 +20788,7 @@
           "errors",
           "tokens",
           "cost",
+          "computeMs",
           "tasksDone",
           "prsMerged",
           "prsLinked"

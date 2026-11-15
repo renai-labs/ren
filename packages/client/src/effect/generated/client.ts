@@ -2177,6 +2177,7 @@ type InsightsQueryInput = {
   readonly model?: InsightsQueryRequest["query"]["model"]
   readonly payer?: InsightsQueryRequest["query"]["payer"]
   readonly kind?: InsightsQueryRequest["query"]["kind"]
+  readonly type?: InsightsQueryRequest["query"]["type"]
   readonly orderBy: InsightsQueryRequest["query"]["orderBy"]
   readonly limit: InsightsQueryRequest["query"]["limit"]
 }
@@ -2193,6 +2194,7 @@ const EndpointInsightsQuery = (raw: RawClient["insights"]) => (input: InsightsQu
       model: input["model"],
       payer: input["payer"],
       kind: input["kind"],
+      type: input["type"],
       orderBy: input["orderBy"],
       limit: input["limit"],
     },
