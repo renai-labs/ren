@@ -1,4 +1,5 @@
 import { SessionTitle } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
 import { SessionPages } from "@ren/client/react"
 import { RelativeTime } from "@ren/util/relative-time"
 import type { SessionInfo } from "@ren/client"
@@ -24,7 +25,7 @@ import {
 } from "../../components/page.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { inboxColumns, origins, useChatAttention } from "../../lib/sessions.js"
+import { inboxColumns, origins } from "../../lib/sessions.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
@@ -45,7 +46,7 @@ const attentionLabels = {
 } as const
 
 export function ChatState(props: { chat: SessionInfo }) {
-  const attention = useChatAttention(props.chat.id) ?? (props.chat.status === "busy" ? "running" : "idle")
+  const attention = ChatReact.useAttention(props.chat.id, { busy: props.chat.status === "busy" })
   const state = attentionLabels[attention]
   return (
     <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">

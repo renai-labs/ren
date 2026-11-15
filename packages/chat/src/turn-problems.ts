@@ -1,34 +1,45 @@
-export type ProblemAction = "try" | "continue" | "model" | "billing" | "providers" | "new" | "stop"
+export * as TurnProblems from "./turn-problems.js"
 
-export interface ProblemHandlers {
+import type { SessionMessage } from "@ren/schema/session/message"
+import { DateTime } from "effect"
+
+export type Action = "try" | "continue" | "model" | "billing" | "providers" | "new" | "stop"
+
+export interface Handlers {
   readonly onTryAgain?: (() => void) | undefined
   readonly onContinue?: (() => void) | undefined
   readonly onChangeModel?: (() => void) | undefined
   readonly onStop?: (() => void) | undefined
 }
 
-interface Problem {
+export interface Problem {
   readonly title: string
   readonly fix: string
-  readonly actions: ReadonlyArray<ProblemAction>
+  readonly actions: ReadonlyArray<Action>
+}
+
+export interface Retrying {
+  readonly title: string
+  readonly text: string
+  readonly at: number
+  readonly attempt: number
 }
 
 const providerLabels: Readonly<Record<string, string>> = { anthropic: "Anthropic", openai: "OpenAI" }
 
 export const providerLabel = (id: string) => providerLabels[id] ?? id.charAt(0).toUpperCase() + id.slice(1)
 
-const resetPhrase = (text: string) => /\b(?:resets?|try again)\s+((?:in|at|on)\s+[^.,;]+)/iu.exec(text)?.[1]?.trim()
+const resetPhrase = (text: string) => /\b(?:resets?|try again)\s+((?:in|at|on)\s+[^.,;]+)/iu.exec(text)?.at(1)?.trim()
 
-type ProblemInput = {
+interface Context {
   readonly kind: string
   readonly text: string
   readonly provider: string
   readonly model: string
   readonly midTurn: boolean
   readonly admin: boolean
+  readonly elsewhere: string
 }
-
-type Context = ProblemInput & { readonly elsewhere: string }
 
 const outOfCredits = (input: Context): Problem => {
   if (input.midTurn)
@@ -165,9 +176,38 @@ const byKind: Readonly<Record<string, (input: Context) => Problem>> = {
   "provider.internal": providerDown,
 }
 
-export function problemOf(input: ProblemInput): Problem {
-  const elsewhere = `pick a model from ${input.provider === "the model provider" ? "another provider" : `a provider other than ${input.provider}`}`
-  const context = { ...input, elsewhere }
+export function of(input: {
+  readonly kind: string
+  readonly text: string
+  readonly assistants: ReadonlyArray<SessionMessage.Assistant>
+  readonly modelNames: ReadonlyMap<string, string>
+  readonly admin: boolean
+}): Problem {
+  const last = input.assistants.at(-1)
+  const provider = providerLabel(last?.model.providerID ?? "the model provider")
+  const context: Context = {
+    kind: input.kind,
+    text: input.text,
+    provider,
+    model: last ? (input.modelNames.get(last.model.id) ?? last.model.id) : "This model",
+    midTurn: input.assistants.some((message) => message.content.some((content) => content.type === "tool")),
+    admin: input.admin,
+    elsewhere: `pick a model from ${provider === "The model provider" ? "another provider" : `a provider other than ${provider}`}`,
+  }
   const found = byText.find((rule) => rule.matches(input.text))?.problem ?? byKind[input.kind]
   return found ? found(context) : { title: "Ren couldn’t finish that reply.", fix: "Try again.", actions: ["try"] }
+}
+
+export function retrying(assistants: ReadonlyArray<SessionMessage.Assistant>): Retrying | undefined {
+  const last = assistants.at(-1)
+  const retry = last?.retry
+  if (!last || !retry) return
+  const provider = providerLabel(last.model.providerID)
+  const busy = retry.error.type === "provider.rate-limit" && !/usage limit|weekly/iu.test(retry.error.message)
+  return {
+    title: busy ? `${provider} is busy right now.` : `${provider} isn’t responding.`,
+    text: retry.error.message,
+    at: DateTime.toEpochMillis(retry.at),
+    attempt: retry.attempt,
+  }
 }

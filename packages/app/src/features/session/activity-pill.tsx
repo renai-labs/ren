@@ -36,20 +36,6 @@ const aligns = { left: "start", center: "center", right: "end" } as const
 
 const justify = { left: "justify-start", center: "justify-center", right: "justify-end" } as const
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
-
-const summary = (items: ReadonlyArray<Family.Activity>) => {
-  const counts = Family.counts(items)
-  return [
-    counts.subagents > 0 && plural(counts.subagents, "subagent"),
-    counts.shells > 0 && plural(counts.shells, "shell"),
-  ]
-    .filter(Boolean)
-    .join(" · ")
-}
-
-const stoppable = (item: Family.Activity) => item.id !== undefined && item.sessionID !== undefined
-
 function Elapsed(props: { className?: string | undefined; millis: number }) {
   return (
     <span className={cn("text-xs text-muted-foreground tabular-nums", props.className)}>
@@ -66,8 +52,11 @@ function RowEnd(props: { item: Family.Activity; label: string; now: number; stop
         <Spinner className="size-3.5" aria-label="Stopping" />
       ) : (
         <>
-          <Elapsed millis={props.now - props.item.started} className={stoppable(props.item) ? hover : undefined} />
-          {stoppable(props.item) ? (
+          <Elapsed
+            millis={props.now - props.item.started}
+            className={Family.stoppable(props.item) ? hover : undefined}
+          />
+          {Family.stoppable(props.item) ? (
             <Button
               variant="ghost"
               size="icon-sm"
@@ -107,16 +96,14 @@ function Row(props: {
         closeOnClick={subagent && item.id !== undefined}
         onClick={props.onSelect}
         onKeyDown={(event) => {
-          if ((event.key !== "Delete" && event.key !== "Backspace") || !stoppable(item)) return
+          if ((event.key !== "Delete" && event.key !== "Backspace") || !Family.stoppable(item)) return
           event.preventDefault()
           props.onStop()
         }}
       >
         {subagent ? <Spinner className="size-3.5" /> : <IconTerminal2 />}
         {subagent ? (
-          <span className="shrink-0 font-medium">
-            {item.agent ? `${item.agent.slice(0, 1).toUpperCase()}${item.agent.slice(1)}` : "Agent"}
-          </span>
+          <span className="shrink-0 font-medium">{item.agent ? Family.agentName(item.agent) : "Agent"}</span>
         ) : null}
         <span className={cn("min-w-0 flex-1 truncate", subagent ? "text-muted-foreground" : "font-mono text-xs/5")}>
           {item.label}
@@ -321,7 +308,7 @@ export function ActivityPill(props: {
             <Button
               variant="outline"
               size="sm"
-              aria-label={summary(items)}
+              aria-label={Family.summary(items)}
               className={cn(
                 "max-w-full rounded-full text-muted-foreground tabular-nums duration-150 ease-out motion-reduce:animate-none",
                 !resting && "animate-in fade-in-0",
@@ -330,12 +317,12 @@ export function ActivityPill(props: {
           }
         >
           <Spinner className="size-3.5" aria-hidden />
-          <span className="truncate">{summary(items)}</span>
+          <span className="truncate">{Family.summary(items)}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           side="top"
           align={aligns[props.align]}
-          aria-label={summary(items)}
+          aria-label={Family.summary(items)}
           className="w-96 max-w-(--available-width)"
         >
           <Panel

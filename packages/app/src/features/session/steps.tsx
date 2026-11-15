@@ -1,5 +1,6 @@
 import { createContext, use, type ReactNode } from "react"
 import {
+  Family,
   PatchFiles,
   TimelineDetail,
   TimelineOpen,
@@ -254,11 +255,6 @@ function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: Re
   )
 }
 
-function shellVerb(tool: SessionMessage.Tool, options: { readonly running: boolean }) {
-  if (!ToolState.backgrounded(tool)) return ToolDisplay.label(tool)
-  return options.running ? "Running in background" : "Ran in background"
-}
-
 function LiveShell(props: { tool: SessionMessage.Tool; shellID: Shell.ID }) {
   const view = useTimeline().view
   const pending = props.tool.state.status === "streaming" || props.tool.state.status === "running"
@@ -272,7 +268,7 @@ function LiveShell(props: { tool: SessionMessage.Tool; shellID: Shell.ID }) {
   return (
     <StepRow
       icon={<toolIcons.command />}
-      verb={shellVerb(props.tool, { running })}
+      verb={ToolDisplay.shellLabel(props.tool, { running })}
       subject={ToolDisplay.subtitle(props.tool)}
       command={ToolDisplay.command(props.tool)}
       running={running}
@@ -283,13 +279,6 @@ function LiveShell(props: { tool: SessionMessage.Tool; shellID: Shell.ID }) {
 }
 
 type Card = ReturnType<typeof ChatReact.useSubagentCard>
-
-function subagentTitle(card: Card) {
-  if (card.needsInput) return "Needs your input"
-  if (card.status === "failed") return "Failed to delegate"
-  if (card.background) return card.status === "running" ? "Running in background" : "Ran in background"
-  return card.status === "running" || card.status === "delegating" ? "Delegating" : "Delegated"
-}
 
 function subagentState(card: Card, tool: SessionMessage.Tool) {
   const failed = card.status === "failed"
@@ -341,7 +330,7 @@ function SubagentStep(props: { tool: SessionMessage.Tool }) {
         >
           <TraceLine status={traceStatus(state)}>
             <TraceIcon>{running ? <Spinner /> : <toolIcons.agent />}</TraceIcon>
-            <TraceTitle className="shrink-0">{subagentTitle(card)}</TraceTitle>
+            <TraceTitle className="shrink-0">{Family.subagentTitle(card)}</TraceTitle>
             <TraceDescription className="min-w-0 shrink truncate">{card.description ?? card.title}</TraceDescription>
             {card.activity && running ? (
               <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{card.activity}</TraceDescription>
@@ -497,33 +486,10 @@ export function StepRuns(props: { steps: ReadonlyArray<Step> }) {
   )
 }
 
-function groupItems(step: Extract<Step, { kind: "group" }>) {
-  return leaves(step.steps).flatMap((item): ToolDisplay.GroupItem[] => {
-    if (item.kind === "reasoning") return [item.content]
-    if (item.kind === "tool") return [item.tool]
-    if (item.kind === "shell") return [{ type: "shell" }]
-    if (item.kind === "notice") return [{ type: "notice" }]
-    return item.kind === "text" ? [{ type: "text", text: item.text }] : []
-  })
-}
-
-function groupTitle(step: Extract<Step, { kind: "group" }>, items: ReadonlyArray<ToolDisplay.GroupItem>) {
-  const count = items.length
-  if (step.type === "read") return count === 1 ? "Explored 1 file" : `Explored ${count} files`
-  if (step.type === "file") return count === 1 ? "Edited 1 file" : `Edited ${count} files`
-  return ToolDisplay.group(items).title
-}
-
-const stepRunning = (step: Step) => {
-  if (step.kind === "reasoning") return step.running
-  if (step.kind === "tool") return ToolDisplay.status(step.tool) === "running"
-  return step.kind === "shell" && step.message.status === "running"
-}
-
 function GroupStep(props: { step: Extract<Step, { kind: "group" }> }) {
   const detail = useTimeline().detail
   const steps = props.step.steps
-  const items = groupItems(props.step)
+  const items = TranscriptBlocks.groupItems(props.step)
   const Icon = { context: IconTool, read: IconFolder, file: IconPencil }[props.step.type]
   const open = props.step.type === "file" && detail.edit.details === "expanded"
   if (ToolDisplay.standsAlone(items)) return steps.map((step) => <StepItem key={step.key} step={step} />)
@@ -531,11 +497,11 @@ function GroupStep(props: { step: Extract<Step, { kind: "group" }> }) {
     <Trace>
       <TraceCollapsible key={String(open)} defaultOpen={open}>
         <TraceCollapsibleTrigger>
-          <TraceLine status={leaves(steps).some(stepRunning) ? "running" : undefined}>
+          <TraceLine status={leaves(steps).some(TranscriptBlocks.running) ? "running" : undefined}>
             <TraceIcon>
               <Icon />
             </TraceIcon>
-            <TraceTitle>{groupTitle(props.step, items)}</TraceTitle>
+            <TraceTitle>{TranscriptBlocks.groupTitle(props.step, items)}</TraceTitle>
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent className="flex flex-col gap-3">
@@ -549,7 +515,7 @@ function GroupStep(props: { step: Extract<Step, { kind: "group" }> }) {
 export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | undefined }) {
   const backgrounded = props.steps.filter((step) => step.kind === "tool" && ToolState.backgrounded(step.tool))
   const steps = props.steps.filter((step) => step.kind !== "tool" || !ToolState.backgrounded(step.tool))
-  const count = leaves(steps).filter((step) => step.kind !== "text").length
+  const count = TranscriptBlocks.count(steps)
   return (
     <Trace>
       {steps.length > 0 ? (

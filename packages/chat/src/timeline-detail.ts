@@ -45,6 +45,8 @@ export const compact = {
 export const presets = [
   {
     id: "everything",
+    label: "Everything",
+    description: "Show all activity separately. Expand shell output, edits, and thinking.",
     value: {
       shell: { placement: "separate", details: "expanded" },
       edit: { placement: "separate", details: "expanded" },
@@ -57,6 +59,8 @@ export const presets = [
   },
   {
     id: "detailed",
+    label: "Detailed",
+    description: "Expand shell output and edits. Show subagents separately and group other activity.",
     value: {
       shell: { placement: "separate", details: "expanded" },
       edit: { placement: "separate", details: "expanded" },
@@ -67,9 +71,16 @@ export const presets = [
       commentary: { placement: "separate" },
     },
   },
-  { id: "compact", value: compact },
+  {
+    id: "compact",
+    label: "Compact",
+    description: "Show subagents separately. Group other activity with details collapsed.",
+    value: compact,
+  },
   {
     id: "quiet",
+    label: "Quiet",
+    description: "Show subagents separately and group edits. Hide other activity.",
     value: {
       shell: { placement: "hidden", details: "collapsed" },
       edit: { placement: "grouped", details: "collapsed" },
@@ -82,6 +93,8 @@ export const presets = [
   },
   {
     id: "text-only",
+    label: "Messages only",
+    description: "Hide all activity.",
     value: {
       shell: { placement: "hidden", details: "collapsed" },
       edit: { placement: "hidden", details: "collapsed" },
@@ -92,7 +105,12 @@ export const presets = [
       commentary: { placement: "separate" },
     },
   },
-] as const satisfies ReadonlyArray<{ readonly id: string; readonly value: Detail }>
+] as const satisfies ReadonlyArray<{
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly value: Detail
+}>
 
 export const preset = (value: Detail) =>
   presets.find((candidate) =>

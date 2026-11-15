@@ -1,4 +1,3 @@
-import { DateTime } from "effect"
 import { flushSync } from "react-dom"
 import {
   useImperativeHandle,
@@ -20,6 +19,7 @@ import {
   TimelineRow,
   TimelineText,
   TranscriptBlocks,
+  TurnProblems,
   type ChatAtoms,
 } from "@ren/chat"
 import { cn } from "cn"
@@ -49,7 +49,6 @@ import { Markdown } from "../../components/markdown.js"
 import { MarkdownScroll } from "../../components/markdown-link.js"
 import { ImageSet } from "../../components/image-set.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
-import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSkeleton } from "../../components/chat-skeleton.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
@@ -126,16 +125,16 @@ function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
 
 function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; context: Context }) {
   const row = props.row
-  const assistants = props.context.turns.get(row.userMessageID) ?? []
-  const last = assistants.at(-1)
   return (
     <TurnProblem
-      kind={row.kind}
+      problem={TurnProblems.of({
+        kind: row.kind,
+        text: row.text,
+        assistants: props.context.turns.get(row.userMessageID) ?? [],
+        modelNames: props.context.modelNames,
+        admin: props.context.admin,
+      })}
       text={row.text}
-      provider={providerLabel(last?.model.providerID ?? "the model provider")}
-      model={last ? (props.context.modelNames.get(last.model.id) ?? last.model.id) : "This model"}
-      midTurn={assistants.some((message) => message.content.some((content) => content.type === "tool"))}
-      admin={props.context.admin}
       handlers={props.context.handlers(row.userMessageID)}
     />
   )
@@ -144,19 +143,9 @@ function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; con
 function RetryRow(props: { row: Extract<TimelineRow.Row, { _tag: "Retry" }>; context: Context }) {
   const row = props.row
   if (props.context.activeMessageID !== row.userMessageID) return null
-  const last = (props.context.turns.get(row.userMessageID) ?? []).at(-1)
-  const retry = last?.retry
-  if (!last || !retry) return null
-  return (
-    <TurnRetrying
-      kind={retry.error.type}
-      text={retry.error.message}
-      provider={providerLabel(last.model.providerID)}
-      at={DateTime.toEpochMillis(retry.at)}
-      attempt={retry.attempt}
-      handlers={props.context.handlers(row.userMessageID)}
-    />
-  )
+  const retrying = TurnProblems.retrying(props.context.turns.get(row.userMessageID) ?? [])
+  if (!retrying) return null
+  return <TurnRetrying retrying={retrying} handlers={props.context.handlers(row.userMessageID)} />
 }
 
 function Separator(props: { children: ReactNode }) {
@@ -222,7 +211,7 @@ function LoadEarlier(props: { onVisible: () => void }) {
 
 interface Context {
   readonly admin: boolean
-  readonly handlers: (userMessageID: string) => ProblemHandlers
+  readonly handlers: (userMessageID: string) => TurnProblems.Handlers
   readonly modelNames: ReadonlyMap<string, string>
   readonly byId: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>

@@ -1,7 +1,7 @@
 export * as ChatReact from "./react.js"
 
 import { RegistryContext, scheduleTask, useAtomMount, useAtomRefresh, useAtomValue } from "@effect/atom-react"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import type { SessionVcs } from "@ren/schema/session/vcs"
@@ -15,6 +15,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useState,
   useSyncExternalStore,
 } from "react"
 import type { ChatAtoms } from "./atoms.js"
@@ -236,6 +237,15 @@ export const useRunningShells = (root: Session.ID) => useAtomValue(useAtoms().ru
 
 export const useShell = (view: Omit<ChatAtoms.ShellView, "running">) => useAtomValue(useAtoms().shell(view))
 
+export function useAttention(sessionId: string, options: { readonly busy: boolean }): Family.Attention {
+  const atoms = useAtoms()
+  const attention = useSyncExternalStore(
+    (listener) => atoms.attention.subscribe(() => queueMicrotask(listener)),
+    () => atoms.attention.read(Session.ID.make(sessionId)),
+  )
+  return attention ?? (options.busy ? "running" : "idle")
+}
+
 export const useStatus = (sessionID: Session.ID) => useAtomValue(useAtoms().status(sessionID))
 
 export const useAction = <A, E, Args extends ReadonlyArray<unknown>>(
@@ -261,3 +271,12 @@ export const usePrompt = (root: Session.ID) =>
       ),
     ),
   )
+
+export function useSecondsUntil(at: number) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  return Math.max(0, Math.ceil((at - now) / 1000))
+}

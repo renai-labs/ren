@@ -13,24 +13,6 @@ import { Preference } from "../../lib/preference.js"
 
 const levels = TimelineDetail.presets.toReversed()
 
-const copy = {
-  "text-only": { label: "Messages only", description: "Hide all activity." },
-  quiet: { label: "Quiet", description: "Show subagents separately and group edits. Hide other activity." },
-  compact: {
-    label: "Compact",
-    description: "Show subagents separately. Group other activity with details collapsed.",
-  },
-  detailed: {
-    label: "Detailed",
-    description: "Expand shell output and edits. Show subagents separately and group other activity.",
-  },
-  everything: {
-    label: "Everything",
-    description: "Show all activity separately. Expand shell output, edits, and thinking.",
-  },
-  custom: { label: "Custom", description: "Uses the advanced settings below." },
-} as const
-
 const categories = [
   { key: "shell", label: "Shell" },
   { key: "edit", label: "Edits" },
@@ -124,7 +106,7 @@ export function TimelineDetailSetting() {
   const setPreference = Preference.useSetPreference()
   const [restore, setRestore] = useState<Partial<Record<TimelineDetail.Category, TimelineDetail.Placement>>>({})
   const preset = TimelineDetail.preset(value)
-  const level = copy[preset?.id ?? "custom"]
+  const level = preset ?? { label: "Custom", description: "Uses the advanced settings below." }
   const change = (next: TimelineDetail.Detail) => setPreference(ChatPreferences.timelineDetail, next)
   return (
     <StackedRow

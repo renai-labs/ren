@@ -272,6 +272,19 @@ export const counts = (items: ReadonlyArray<Pick<Activity, "type">>) => ({
   shells: items.filter((item) => item.type === "shell").length,
 })
 
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`
+
+export const summary = (items: ReadonlyArray<Pick<Activity, "type">>) => {
+  const total = counts(items)
+  return [total.subagents > 0 && plural(total.subagents, "subagent"), total.shells > 0 && plural(total.shells, "shell")]
+    .filter(Boolean)
+    .join(" · ")
+}
+
+export const stoppable = (item: Activity) => Boolean(item.id) && Boolean(item.sessionID)
+
+export const agentName = (agent: string) => agent.slice(0, 1).toUpperCase() + agent.slice(1)
+
 export type Attention = "asking" | "running" | "idle"
 
 export const attention = (state: ChatState.State, sessionID: string): Attention => {
@@ -338,7 +351,7 @@ export const subagent = (state: ChatState.State, parentID: string, tool: Session
   const retry = retrying(state, child, status)
   return {
     child,
-    title: agent ? agent.slice(0, 1).toUpperCase() + agent.slice(1) : "Subagent",
+    title: agent ? agentName(agent) : "Subagent",
     description: string(input.description) ?? child,
     status,
     background,
@@ -347,4 +360,11 @@ export const subagent = (state: ChatState.State, parentID: string, tool: Session
     ...(current && { activity: [ToolDisplay.name(current), ToolDisplay.subtitle(current)].filter(Boolean).join(" ") }),
     ...(retry && { retry }),
   }
+}
+
+export const subagentTitle = (card: Subagent) => {
+  if (card.needsInput) return "Needs your input"
+  if (card.status === "failed") return "Failed to delegate"
+  if (card.background) return card.status === "running" ? "Running in background" : "Ran in background"
+  return card.status === "running" || card.status === "delegating" ? "Delegating" : "Delegated"
 }

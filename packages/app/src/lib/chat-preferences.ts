@@ -1,11 +1,11 @@
 export * as ChatPreferences from "./chat-preferences.js"
 
-import { ComposerHistory, TimelineDetail } from "@ren/chat"
+import { ChatSettings, ComposerHistory } from "@ren/chat"
 import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
 import { Preference } from "./preference.js"
 
-export const timelineDetail = Preference.make("chat.timeline-detail.v1", TimelineDetail.Detail, TimelineDetail.compact)
+export const timelineDetail = Preference.from(ChatSettings.timelineDetail)
 
 export const timelineWidth = Preference.make(
   "chat.timeline-width.v1",
@@ -13,7 +13,7 @@ export const timelineWidth = Preference.make(
   "comfortable",
 )
 
-export const foldTurns = Preference.make("chat.fold-turns.v1", Schema.Boolean, true)
+export const foldTurns = Preference.from(ChatSettings.foldTurns)
 
 export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "queue")
 
@@ -40,7 +40,7 @@ export const notifications = Preference.make(
 )
 
 export type NotificationKind = "finished" | "permissions" | "questions" | "errors"
-export const foldMessages = Preference.make("chat.fold-messages.v1", Schema.Boolean, true)
+export const foldMessages = Preference.from(ChatSettings.foldMessages)
 
 export const model = Preference.make("chat.model.v1", Schema.NullOr(SessionModel.Ref), null)
 
