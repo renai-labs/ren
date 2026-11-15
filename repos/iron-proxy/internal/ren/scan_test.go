@@ -129,3 +129,14 @@ func TestRouteRemovesItsPlaceholder(t *testing.T) {
 		})
 	}
 }
+
+// A brain calls a provider MCP at /<placeholder>/: the request is the
+// upstream itself, which answers a trailing slash with a redirect that has
+// no placeholder.
+func TestRouteOfThePlaceholderAloneIsTheUpstream(t *testing.T) {
+	req := newRequest(t, "POST", "https://backend.composio.dev/ren:MCP_GMAIL/", nil, "")
+	require.NoError(t, apply(req, []Op{{Op: "route", Upstream: "https://backend.composio.dev/tool_router/trs_1/mcp", Placeholder: "ren:MCP_GMAIL"}}))
+	target, err := routeTarget(req, "https://backend.composio.dev/tool_router/trs_1/mcp")
+	require.NoError(t, err)
+	require.Equal(t, "https://backend.composio.dev/tool_router/trs_1/mcp", target.String())
+}
