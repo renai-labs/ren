@@ -221,12 +221,20 @@ export function PageTabsTrigger(props: { value: string; count?: number | undefin
   )
 }
 
-export function Section(props: { title: string; description?: string | undefined; children: ReactNode }) {
+export function Section(props: {
+  title: string
+  description?: string | undefined
+  action?: ReactNode | undefined
+  children: ReactNode
+}) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-medium">{props.title}</h2>
-        {props.description ? <p className="text-xs text-muted-foreground">{props.description}</p> : null}
+    <section className="flex min-w-0 flex-col gap-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-sm font-medium">{props.title}</h2>
+          {props.description ? <p className="text-xs text-muted-foreground">{props.description}</p> : null}
+        </div>
+        {props.action}
       </div>
       {props.children}
     </section>
