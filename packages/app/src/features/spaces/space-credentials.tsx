@@ -26,7 +26,7 @@ import { PageActions, Row, Rows, TableSample, useShapeId } from "../../component
 import { Loading } from "@ren/ui/loading"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useMe } from "../../lib/use-me.js"
-import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
@@ -43,7 +43,7 @@ export function SpaceCredentialsTab() {
   const me = useMe()
   const spaces = useSpaces().spaces
   const [query, setQuery] = useState("")
-  const needle = useDebouncedValue(query.trim(), 250)
+  const needle = Debounce.useValue(query.trim(), 250)
   const [adding, setAdding] = useState(false)
   const [copying, setCopying] = useState(false)
   const keys = useInfiniteQuery({

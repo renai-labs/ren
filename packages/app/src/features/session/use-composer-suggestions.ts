@@ -11,7 +11,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useSpaceApps } from "./use-space-apps.js"
-import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 
 const noApp = { dependsOn: [], mcps: null, skills: null }
 
@@ -173,7 +173,7 @@ const mentionItem = (
 })
 
 function useFileMentions(root: Session.ID | undefined, query: string | undefined) {
-  const text = useDebouncedValue(query ?? "", fileSearchDelay)
+  const text = Debounce.useValue(query ?? "", fileSearchDelay)
   const result = ChatReact.useFiles({ root: root ?? unrooted, query: root ? text : "", type: "file" })
   const [kept, setKept] = useState<ReadonlyArray<Mentions.Item>>([])
   if (AsyncResult.isSuccess(result)) {

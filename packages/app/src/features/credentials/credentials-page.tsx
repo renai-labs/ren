@@ -16,7 +16,7 @@ import { ProfileDialog, type ProfileTarget } from "../../components/profile-dial
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { useApp } from "../../lib/use-app.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
@@ -60,7 +60,7 @@ function CredentialKeys() {
   const me = useMe()
   const spaces = useSpaces().spaces
   const [query, setQuery] = useState("")
-  const needle = useDebouncedValue(query.trim(), 250)
+  const needle = Debounce.useValue(query.trim(), 250)
   const [adding, setAdding] = useState(false)
   const keysShapeId = useShapeId("keys")
   const list = useInfiniteQuery({

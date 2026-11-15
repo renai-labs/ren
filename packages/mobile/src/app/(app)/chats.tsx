@@ -1,8 +1,8 @@
 import { LegendList } from "@legendapp/list/react-native"
-import { SessionPages } from "@ren/client/react"
+import { Debounce, SessionPages } from "@ren/client/react"
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
-import { useDeferredValue, useState } from "react"
+import { useState } from "react"
 import { ActivityIndicator, View } from "react-native"
 import { Button } from "#components/button"
 import { SearchField } from "#components/search-field"
@@ -34,7 +34,7 @@ function Empty(props: { readonly search: string; readonly onClear: () => void; r
 export default function Chats() {
   const router = useRouter()
   const [search, setSearch] = useState("")
-  const needle = useDeferredValue(search.trim())
+  const needle = Debounce.useValue(search.trim(), 250)
   const pages = useInfiniteQuery({
     ...SessionPages.options(Api.client, needle ? { search: needle } : {}),
     placeholderData: keepPreviousData,

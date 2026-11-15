@@ -1,5 +1,6 @@
 export * from "./generated/index.js"
 export { Artifacts } from "./artifacts.js"
+export { Debounce } from "./debounce.js"
 export { DriveQuery } from "./drive-query.js"
 export { Invalidation } from "./invalidation.js"
 export { Seed } from "./seed.js"

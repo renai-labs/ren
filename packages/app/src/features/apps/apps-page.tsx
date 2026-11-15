@@ -17,7 +17,7 @@ import { fromApp, fromRegistry, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { Search } from "@ren/util/search"
 import { RouterContext } from "../../lib/router-context.js"
-import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { AppCategories } from "./app-categories.js"
 import { AppGridSample, CatalogAppRow, CatalogList } from "./catalog.js"
@@ -274,7 +274,7 @@ function AppsHome() {
   const tab = route.useSearch({ select: (search) => search.tab ?? "all" })
   const navigate = route.useNavigate()
   const [query, setQuery] = useState("")
-  const needle = useDebouncedValue(query.trim(), 250)
+  const needle = Debounce.useValue(query.trim(), 250)
   const sheet = useAddSheet()
   return (
     <Page
