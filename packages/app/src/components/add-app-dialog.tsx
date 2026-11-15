@@ -17,7 +17,7 @@ import { fromApp, fromRegistry, hasManaged, type CatalogApp } from "../lib/apps.
 import { errorMessage } from "../lib/errors.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { useSpaces } from "../lib/use-spaces.js"
-import { useDebouncedValue } from "../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { RouterContext } from "../lib/router-context.js"
 import { cn } from "cn"
 
@@ -79,7 +79,7 @@ function AppResults(props: {
   onPick: (app: CatalogApp) => void
 }) {
   const { api, client } = RouterContext.useRouterContext()
-  const needle = useDebouncedValue(props.query.trim(), 200)
+  const needle = Debounce.useValue(props.query.trim(), 200)
   const spaces = useSpaces()
   const addManaged = useAddManaged()
   const [adding, setAdding] = useState<string>()

@@ -31,7 +31,7 @@ import { McpInspect } from "../lib/mcp-inspect.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { Preference } from "../lib/preference.js"
 import { RouterContext } from "../lib/router-context.js"
-import { useDebouncedValue } from "../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { Platform } from "../platform/platform.js"
@@ -88,7 +88,7 @@ function useInspections(draft: AppDraft.Draft) {
       }),
     ),
   ]
-  const settled = useDebouncedValue(urls.join("\n"), 400)
+  const settled = Debounce.useValue(urls.join("\n"), 400)
   const settledUrls = settled ? settled.split("\n") : []
   const queries = useQueries({ queries: settledUrls.map((url) => McpInspect.options(client, url)) })
   const queryOf = (url: string) => queries[settledUrls.indexOf(url)]

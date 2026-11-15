@@ -9,7 +9,7 @@ import { AppRegistryPages } from "../../lib/app-registry.js"
 import { fromRegistry } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Search } from "@ren/util/search"
-import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { AppCategories } from "./app-categories.js"
 import { AppGridSample, CatalogList } from "./catalog.js"
 import { useAddSheet, useRegistryApps } from "./use-catalog.js"
@@ -19,7 +19,7 @@ export function CategoryPage(props: { slug: string }) {
   const category = AppCategories.find(props.slug)
   const shapeId = useShapeId(`category-${category.slug}`)
   const [query, setQuery] = useState("")
-  const needle = useDebouncedValue(query.trim(), 250)
+  const needle = Debounce.useValue(query.trim(), 250)
   const featured = useRegistryApps(category.apps)
   const registry = useInfiniteQuery({
     ...AppRegistryPages.options(client, needle, category.slug),

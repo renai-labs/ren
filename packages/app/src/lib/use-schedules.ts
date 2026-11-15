@@ -3,7 +3,7 @@ import type { ScheduleInfo } from "@ren/client"
 import { keepPreviousData, useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import type { Filters } from "../components/filter-menu.js"
-import { useDebouncedValue } from "./use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useNow } from "./use-now.js"
 import { useSpaces } from "./use-spaces.js"
 import { errorMessage } from "./errors.js"
@@ -27,7 +27,7 @@ export function useSchedules(options: {
   const spaces = useSpaces()
   const now = useNow()
   const [query, setQuery] = useState("")
-  const text = useDebouncedValue(query.trim(), 250)
+  const text = Debounce.useValue(query.trim(), 250)
   const pages = useInfiniteQuery({
     ...Pages.schedules(client, scheduleListInput(search, { text, spaceId: options.spaceId })),
     placeholderData: keepPreviousData,

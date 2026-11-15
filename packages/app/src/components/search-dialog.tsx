@@ -1,6 +1,6 @@
 import { Loading } from "@ren/ui/loading"
 import { SessionTitle } from "@ren/chat"
-import { SessionPages } from "@ren/client/react"
+import { Debounce, SessionPages } from "@ren/client/react"
 import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
@@ -30,7 +30,6 @@ import { settingsSections } from "./settings-sidebar.js"
 import { canAdministerOptions } from "../lib/auth.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { useDebouncedValue } from "../lib/use-debounced-value.js"
 import { useMe } from "../lib/use-me.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
@@ -43,7 +42,7 @@ function ChatResults(props: {
 }) {
   const { api, client } = RouterContext.useRouterContext()
   const me = useMe()
-  const needle = useDebouncedValue(props.query.trim(), 250)
+  const needle = Debounce.useValue(props.query.trim(), 250)
   const recent = useInfiniteQuery(SessionPages.options(client, SessionPages.own(me.user.id)))
   const found = useQuery({
     ...api.session.list.queryOptions({ search: needle, page: 1, pageSize: 20 }),

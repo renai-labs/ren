@@ -5,7 +5,7 @@ import type { FileSystem } from "@ren/schema/file-system"
 import { toast } from "@ren/ui/sonner"
 import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { useDebouncedValue } from "./use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useRefreshOn } from "./use-refresh-on.js"
 
 const searchDelay = 200
@@ -51,7 +51,7 @@ export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string
   const [expanded, setExpanded] = useState<ReadonlyArray<string>>([])
   const [query, setQuery] = useState("")
   const folders = ChatReact.useFolders(root, expanded)
-  const found = ChatReact.useFiles({ root, query: useDebouncedValue(query, searchDelay), type: "file" })
+  const found = ChatReact.useFiles({ root, query: Debounce.useValue(query, searchDelay), type: "file" })
   const diff = ChatReact.useVcsDiff(root, "working")
   const refreshFolder = folders.refresh
   const results = [...folders.results]
