@@ -1,4 +1,4 @@
-appId: ai.ren.app
+appId: ai.ren.app.dev
 ---
 - runFlow: launch.yaml
 - tapOn: New chat

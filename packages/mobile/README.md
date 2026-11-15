@@ -2,7 +2,9 @@
 
 ## App identity and push prerequisites
 
-These are the stable identifiers for internal builds and future store releases. Register push credentials against these values; do not create a separate package ID for APK sharing.
+These are the stable identifiers of the `production` app variant, which the `internal` and `production` EAS profiles build, for team builds and future store releases. Register push credentials against these values; do not create a separate package ID for APK sharing.
+
+The `development` and `preview` variants have their own identifiers (`ai.ren.app.dev` and `ai.ren.app.preview`) and names, so they install beside the team build. Pick one with `APP_VARIANT` (`app.config.ts`): the EAS profiles and `bun run start`, `ios` and `android` set it, and it defaults to `production`. Push credentials and Firebase are registered only for `ai.ren.app`; the other two need their own before push works in them.
 
 | Setting               | Value                                  |
 | --------------------- | -------------------------------------- |
@@ -36,7 +38,7 @@ FCM and direct APK installation do not require a paid Google Play account. iOS p
 
 ## Android team builds
 
-The `internal` EAS profile produces a signed, standalone APK with production Ren URLs and bundled JavaScript. Phones need internet access to Ren, but no Metro server, laptop or USB connection. Direct APK distribution needs no Google Play account. OTA updates are disabled; share a new APK for each update.
+The `internal` EAS profile produces a signed, standalone APK with production Ren URLs and bundled JavaScript. Phones need internet access to Ren, but no Metro server, laptop or USB connection. Direct APK distribution needs no Google Play account. JavaScript changes reach installed APKs as updates (see Publish an update); share a new APK only when the native side changes.
 
 ### Build locally when ready
 
@@ -64,9 +66,30 @@ The result is `packages/mobile/ren-internal.apk`. The profile sets production AP
 2. On Android, download and open the APK. Allow installation from that browser or file manager when prompted.
 3. Open Ren and sign in with an existing Ren account.
 
-This uses the package ID `ai.ren.app`. A locally signed development app with the same ID may need to be uninstalled first because its signing key differs. Uninstalling clears that app's local data and sign-in. Subsequent internal APKs signed with the same keystore install as updates and retain app data.
+This uses the package ID `ai.ren.app`. The development build has its own ID, `ai.ren.app.dev`, so it installs beside this app and neither needs uninstalling. Subsequent internal APKs signed with the same keystore install over it and retain app data.
 
-For each update, build again and share the new APK. There is no automatic updater or Play Store listing.
+There is no Play Store listing.
+
+### Publish an update
+
+`expo-updates` checks for an update when the app launches and applies it on the next cold start, so an installed app shows a change after it is closed and opened twice. An update carries JavaScript and assets only. From `packages/mobile`:
+
+```sh
+bun run update:internal -- --message "Fix the chat list"
+```
+
+Check it on a team phone, then promote the same bundle to the production channel with `bunx eas-cli update:republish --channel internal --destination-channel production`, or publish there directly with `bun run update:production`. The scripts bundle for the production variant with the production URLs, as the `internal` profile builds; a `.env` file does not reach them.
+
+| Profile       | Variant       | Channel       |
+| ------------- | ------------- | ------------- |
+| `development` | `development` | `development` |
+| `preview`     | `preview`     | `preview`     |
+| `internal`    | `production`  | `internal`    |
+| `production`  | `production`  | `production`  |
+
+An update only reaches builds with the same runtime version, a fingerprint of the native side (`fingerprint.config.js`). Build again, instead of publishing, when a native dependency, a config plugin, native config, the Expo SDK or the app identity changes: `APP_VARIANT=production bunx expo-updates fingerprint:generate --platform android` prints the hash to compare with the last build's. The EAS build that follows creates the channel for its profile, if it does not exist yet.
+
+The first build after `expo-updates` was added (and the first after any native change) replaces the old app: install the new internal APK over the previous one, and rebuild every development build once.
 
 ### First-build device check
 
@@ -76,6 +99,7 @@ For each update, build again and share the new APK. There is no automatic update
 - Check keyboard behavior, background/resume and network reconnection.
 - Sign out and back in.
 - For the next build, install over the previous APK and confirm local data is retained.
+- Publish a JavaScript-only update to `internal`, close and open the app twice, and confirm the change appears.
 
 ### Branding
 

@@ -13,12 +13,12 @@ export const webUrl = process.env.EXPO_PUBLIC_REN_APP_URL ?? "https://useren.ai/
 
 const origin = new URL(serverUrl).origin
 
-// oxlint-disable-next-line ren/no-comments -- Better Auth rejects a cookie-bearing POST without a trusted Origin. Its own origin is always trusted; a server with the Expo plugin replaces it with ren:// from `expo-origin`.
+// oxlint-disable-next-line ren/no-comments -- Better Auth rejects a cookie-bearing POST without a trusted Origin. Its own origin is always trusted; a server with the Expo plugin replaces it with the app's scheme from `expo-origin` (`ren://` in production, read from the app config).
 export const client = createAuthClient({
   baseURL: `${serverUrl}/auth`,
   fetchOptions: { headers: { origin }, catchAllError: true },
   plugins: [
-    expoClient({ scheme: "ren", storagePrefix: "ren", storage: { getItem, getItemAsync, setItem, setItemAsync } }),
+    expoClient({ storagePrefix: "ren", storage: { getItem, getItemAsync, setItem, setItemAsync } }),
     emailOTPClient(),
     organizationClient(),
   ],

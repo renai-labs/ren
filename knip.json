@@ -56,7 +56,7 @@
       "entry": ["test/**/*.test.ts", "script/**/*.ts"]
     },
     "packages/mobile": {
-      "entry": ["script/**/*.ts"],
+      "entry": ["script/**/*.ts", "fingerprint.config.js"],
       "ignoreDependencies": [
         "@expo-google-fonts/ibm-plex-mono",
         "@expo-google-fonts/inter",
