@@ -441,7 +441,14 @@ export type InfraProblem = { path: string; message: string }
 
 export type InsightsTokens = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
 
-export type InsightsCost = { ren: number; customer: number; unpricedCalls: number }
+export type InsightsCost = {
+  ren: number
+  customer: number
+  unpricedCalls: number
+  models: number
+  compute: number
+  tools: number
+}
 
 export type HealthInfo = { status: HealthStatus; version: string }
 
@@ -1148,6 +1155,7 @@ export type InsightsRow = {
   errors: number
   tokens: InsightsTokens
   cost: InsightsCost
+  computeMs: number
   tasksDone: number | null
   prsMerged: number | null
   prsLinked: number | null
@@ -14002,6 +14010,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["spaceId"]
@@ -14016,6 +14025,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["from"]
@@ -14030,6 +14040,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["to"]
@@ -14044,6 +14055,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["timezone"]
@@ -14058,6 +14070,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["groupBy"]
@@ -14072,6 +14085,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["userId"]
@@ -14086,6 +14100,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["agent"]
@@ -14100,6 +14115,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["model"]
@@ -14114,6 +14130,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["payer"]
@@ -14128,9 +14145,25 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["kind"]
+  readonly type?: {
+    readonly spaceId?: string | undefined
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["type"]
   readonly orderBy: {
     readonly spaceId?: string | undefined
     readonly from: string
@@ -14142,6 +14175,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["orderBy"]
@@ -14156,6 +14190,7 @@ export type InsightsQueryInput = {
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["limit"]

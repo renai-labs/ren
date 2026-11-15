@@ -2922,6 +2922,7 @@ export function make(options: ClientOptions) {
               model: input["model"],
               payer: input["payer"],
               kind: input["kind"],
+              type: input["type"],
               orderBy: input["orderBy"],
               limit: input["limit"],
             },
