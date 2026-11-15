@@ -12,7 +12,7 @@ type Declaration = AppCatalog.McpEntry["declaration"]
 export const catalog = (
   fingerprint: string,
   mcps: ReadonlyArray<
-    ({ readonly url: string } | { readonly transport: Declaration["transport"] }) & {
+    ({ readonly url: string } | { readonly transport: Declaration["transport"]; readonly url?: string }) & {
       readonly slug: string
       readonly auth?: Declaration["auth"]
       readonly timeouts?: Declaration["timeouts"]
@@ -40,6 +40,7 @@ export const catalog = (
         ? `MCP_${mcp.slug.toUpperCase().replaceAll("-", "_")}__${mcp.profile.slug.toUpperCase().replaceAll("-", "_")}`
         : null,
       ...(mcp.env && { env: mcp.env }),
+      ...("transport" in mcp && mcp.url && { url: mcp.url }),
       declaration: {
         name: "Docs",
         description: "Docs",

@@ -11,10 +11,10 @@ export interface Remote {
   readonly sendsSpeaker: boolean
 }
 
-// oxlint-disable-next-line ren/no-comments -- §6.4 rule 3: a sign-in sends its token as a Bearer placeholder, a bearer or header MCP its pasted field in its header. A basic credential needs no placeholder: the egress sets its header by host. A managed MCP sends the integrations placeholder.
+// oxlint-disable-next-line ren/no-comments -- §6.4 rule 3: a sign-in sends its token as a Bearer placeholder, a bearer or header MCP its pasted field in its header. A basic credential needs no placeholder: the egress sets its header by host. A managed MCP sends the integrations placeholder. A provider MCP names its credential only in its path (rule 4); the egress refuses a placeholder that its route leaves behind.
 const headersOf = (entry: AppCatalog.McpEntry): Readonly<Record<string, string>> => {
   const auth = entry.declaration.auth
-  if (!entry.label) return {}
+  if (!entry.label || entry.declaration.transport.type === "provider") return {}
   if (entry.declaration.transport.type === "managed" || auth.type === "oauth")
     return { Authorization: `Bearer ${Credential.placeholder(entry.label)}` }
   if (auth.type === "bearer") return { Authorization: `Bearer ${Credential.placeholder(entry.label, auth.credential)}` }

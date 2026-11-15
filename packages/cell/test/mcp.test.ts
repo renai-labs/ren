@@ -133,6 +133,24 @@ it.effect(
     }),
 )
 
+it.effect("a provider MCP names its credential only in its path, so the egress can route it", () =>
+  Effect.sync(() => {
+    const catalog = McpPeer.catalog("provider", [
+      {
+        slug: "sheets",
+        transport: { type: "provider", provider: "composio", integration: "googlesheets" },
+        url: "https://backend.composio.dev/ren:MCP_SHEETS__ACME/",
+        auth: { type: "oauth", tokenEndpointAuth: "none" },
+        profile: { slug: "acme", name: "Acme client" },
+      },
+    ])
+    const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: false, speakerHeaders: {} })
+    expect(rendered.map((server) => server.config)).toEqual([
+      new Mcp.RemoteConfig({ type: "remote", url: "https://backend.composio.dev/ren:MCP_SHEETS__ACME/", oauth: false }),
+    ])
+  }),
+)
+
 it.effect("the env note: one line per app with connected env items, in catalog order, the same bytes each time", () =>
   Effect.sync(() => {
     const catalog = McpPeer.catalog("env", [], {
