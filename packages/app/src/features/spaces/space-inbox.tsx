@@ -48,7 +48,7 @@ const attentionLabels = {
   idle: { label: "Idle", icon: IconCircle, className: "text-muted-foreground" },
 } as const
 
-function ChatState(props: { chat: SessionInfo }) {
+export function ChatState(props: { chat: SessionInfo }) {
   const attention = useChatAttention(props.chat.id) ?? (props.chat.status === "busy" ? "running" : "idle")
   const state = attentionLabels[attention]
   return (

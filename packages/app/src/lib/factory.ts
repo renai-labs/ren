@@ -163,4 +163,4 @@ export function realAnalytics(input: {
   }
 }
 
-export const isSoftwareFactory = (space: SpaceInfo) => /software factory/iu.test(space.name)
+export const isSoftwareFactory = (space: SpaceInfo) => space.factory.agents.length > 0
