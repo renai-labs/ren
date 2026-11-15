@@ -1,15 +1,16 @@
 import type { TaskInfo } from "@ren/client"
+import { Tasks } from "@ren/client/react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { buttonVariants } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
-import { formatDateTime, formatRelative } from "@ren/ui/time"
+import { formatDateTime } from "@ren/ui/time"
+import { RelativeTime } from "@ren/util/relative-time"
 import { Row, RowsSample, Section, useShapeId } from "../../components/page.js"
 import { PullRequestIcon } from "../../components/pull-request-icon.js"
 import { StatusIcon } from "../../components/task-meta.js"
 import { Insights } from "../../lib/insights.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { allTasksOptions, taskListInput } from "../../lib/tasks.js"
 import { useNow } from "../../lib/use-now.js"
 import { OverviewRows } from "./overview-rows.js"
 
@@ -31,7 +32,7 @@ function DoneRow(props: { spaceId: string; task: TaskInfo; now: number }) {
             <span className="sr-only">Has a pull request</span>
           </span>
         ) : null}
-        <span title={formatDateTime(task.updatedAt)}>{formatRelative(task.updatedAt, props.now)}</span>
+        <span title={formatDateTime(task.updatedAt)}>{RelativeTime.format(task.updatedAt, props.now)}</span>
       </span>
     </Row>
   )
@@ -42,7 +43,7 @@ export function OverviewRecent(props: { spaceId: string; period: Insights.Period
   const now = useNow()
   const shapeId = useShapeId("overview-recent")
   const since = Date.parse(Insights.windows(props.period, now).current.from)
-  const tasks = useQuery(allTasksOptions(client, taskListInput({}, props.spaceId)))
+  const tasks = useQuery(Tasks.all(client, Tasks.listInput(undefined, props.spaceId)))
   const days = Insights.periods.find((each) => each.value === props.period)?.days
   const rows = (tasks.data?.items ?? [])
     .filter((task) => task.status === "done" && Date.parse(task.updatedAt) >= since)
