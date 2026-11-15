@@ -19,9 +19,12 @@ const tasks = async (filter: string, script: string) =>
     )
   ).flat()
 
-const run = await Bun.$`bun turbo run --output-logs=errors-only ${[
+const mobile = (await Changed.packages(`...[${base}]`)).some((pkg) => pkg.name === "@ren/mobile")
+
+const run = await Bun.$`bun turbo run --continue=dependencies-successful --output-logs=errors-only ${[
   ...(await tasks(`...[${base}]`, "typecheck")),
   ...(await tasks(`[${base}]`, "lint")),
+  ...(mobile ? ["@ren/mobile#check:bundle", "@ren/mobile#check:generated", "@ren/mobile#check:doctor"] : []),
   "//#typecheck:root",
   "//#lint:root",
   "//#lint:rules",
