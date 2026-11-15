@@ -13991,12 +13991,12 @@ export type InfraApplyInput = {
 export type InfraApplyOutput = InfraApplied
 
 export type InsightsQueryInput = {
-  readonly spaceId: {
-    readonly spaceId: string
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14006,11 +14006,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["spaceId"]
   readonly from: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14020,11 +14020,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["from"]
   readonly to: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14034,11 +14034,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["to"]
   readonly timezone: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14048,11 +14048,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["timezone"]
   readonly groupBy: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14062,11 +14062,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["groupBy"]
   readonly userId?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14076,11 +14076,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["userId"]
   readonly agent?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14090,11 +14090,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["agent"]
   readonly model?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14104,11 +14104,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["model"]
   readonly payer?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14118,11 +14118,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["payer"]
   readonly kind?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14132,11 +14132,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["kind"]
   readonly orderBy: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
@@ -14146,11 +14146,11 @@ export type InsightsQueryInput = {
     readonly limit: number
   }["orderBy"]
   readonly limit: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined

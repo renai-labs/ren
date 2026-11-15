@@ -16,6 +16,7 @@ export const GroupBy = Schema.Literals([
   "hour",
   "day",
   "week",
+  "space",
   "member",
   "agent",
   "model",
@@ -36,7 +37,9 @@ export const TimeZone = Schema.String.check(
 
 export interface Query extends Schema.Schema.Type<typeof Query> {}
 export const Query = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Schema.optional(Space.ID).annotate({
+    description: "Without it, the whole organization, which only admins and owners can read.",
+  }),
   from: Schema.DateTimeUtc,
   to: Schema.DateTimeUtc.annotate({ description: "The end of the range, not included." }),
   timezone: TimeZone.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed("UTC"))).annotate({
@@ -95,9 +98,12 @@ export interface Row extends Schema.Schema.Type<typeof Row> {}
 export const Row = Schema.Struct({
   key: Schema.NullOr(Schema.String).annotate({
     description:
-      "The bucket start (ISO, UTC), user ID, agent name, served model or provider. Null for the whole range and for usage that names no one.",
+      "The bucket start (ISO, UTC), space ID, user ID, agent name, served model or provider. Null for the whole range, for usage that names no one, and for usage in no space: calls with a member’s inference key.",
   }),
-  label: Schema.NullOr(Schema.String).annotate({ description: "The user’s name, for a member row." }),
+  label: Schema.NullOr(Schema.String).annotate({
+    description:
+      "The user’s name, for a member row. The space’s name, for a space row: `(archived)` after an archived space, and `Private space · <owner>` for another person’s private space.",
+  }),
   sessions: Schema.Number.annotate({ description: "Root sessions that spent." }),
   calls: Schema.Number,
   errors: Schema.Number,
