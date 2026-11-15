@@ -79,6 +79,7 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 ## Checks
 
 - Run `bun run check` from the repo root. It covers what changed since the branch left `main`; `bun run check:all` covers everything, and the pre-push hook reuses or runs it and attaches it and the latest test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- The mobile checks are Turbo tasks of `@ren/mobile`: `check:bundle` (Metro export, part of `typecheck:all`), `check:generated` (part of `lint:all`) and `check:doctor` (network, uncached, only in `bun run check`). Add new heavy checks the same way, so they run under the memory queue of `lint` and `typecheck`.
 - A package's `test:all` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
 - Typecheck uses project references. A package's `tsconfig.src.json` emits declarations to `node_modules/.ts-dist`, and a dependent reads those instead of the package's source. `tsconfig.tests.json` covers `test` and `script`; `tsconfig.json` lists both. When you add a dependency between packages, add the reference to both files.

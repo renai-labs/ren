@@ -78,7 +78,9 @@ if (
   blocking.some((script) => find(recorded, root, script)?.passed !== true) &&
   (await Bun.$`bun run check:all`.nothrow()).exitCode !== 0
 ) {
-  console.error("signoff: lint or typecheck failed. Fix it and push again.")
+  console.error(
+    "signoff: lint or typecheck failed (the mobile bundle and generated theme count). Fix it and push again.",
+  )
   process.exit(1)
 }
 
