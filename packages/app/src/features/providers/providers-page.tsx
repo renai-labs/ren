@@ -9,8 +9,6 @@ import { toast } from "@ren/ui/sonner"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { cn } from "cn"
 import { Card } from "@ren/ui/card"
-import { Progress } from "@ren/ui/progress"
-import { formatCountdown, formatDateTime } from "@ren/ui/time"
 import { Tabs } from "@ren/ui/tabs"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { ChatGptGuide } from "./chatgpt-guide.js"
@@ -18,7 +16,7 @@ import { EditableText } from "../../components/editable-text.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
-import { useNow } from "../../lib/use-now.js"
+import { SubscriptionMeters } from "../../components/subscription-meters.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -227,7 +225,6 @@ function SubscriptionCard(props: {
   onRemove: () => void
 }) {
   const connection = props.connection
-  const now = useNow()
   return (
     <Card
       className={cn(
@@ -273,28 +270,7 @@ function SubscriptionCard(props: {
           {connection.canReconnect ? "Sign in again to keep using it." : "Usage appears after the first request."}
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {connection.meters.map((meter) => (
-            <li key={meter.key} className="flex flex-col gap-2">
-              <div className="flex items-baseline justify-between gap-3 text-xs">
-                <span className="truncate">{meter.title}</span>
-                <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-                  <span className="font-medium">{meter.percent === null ? "—" : `${meter.percent}%`}</span>
-                  {meter.resetsAt && Date.parse(meter.resetsAt) > now ? (
-                    <span className="text-muted-foreground" title={`Resets ${formatDateTime(meter.resetsAt)}`}>
-                      {formatCountdown(meter.resetsAt, now)}
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-              <Progress
-                value={meter.percent ?? 0}
-                aria-label={meter.title}
-                className="**:data-[slot=progress-indicator]:bg-chart-1 **:data-[slot=progress-track]:bg-secondary"
-              />
-            </li>
-          ))}
-        </ul>
+        <SubscriptionMeters meters={connection.meters} />
       )}
     </Card>
   )

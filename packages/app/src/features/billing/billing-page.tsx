@@ -7,13 +7,12 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@ren/ui/card"
 import { Loading } from "@ren/ui/loading"
-import { Progress } from "@ren/ui/progress"
 import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
 import { formatDate, formatUtcDate } from "@ren/ui/time"
-import { cn } from "cn"
+import { CreditsCard } from "../../components/credits-card.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
 import {
@@ -30,16 +29,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { Pages } from "../../lib/pages.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
-import {
-  dollars,
-  formatMoney,
-  freePlan,
-  invoiceStatus,
-  planName,
-  planPriceCents,
-  remainingPercent,
-  wholeDollars,
-} from "./plan-cards.js"
+import { formatMoney, freePlan, invoiceStatus, planName, planPriceCents, wholeDollars } from "./plan-cards.js"
 import { PlansGrid } from "./plans-grid.js"
 
 const route = getRouteApi("/_authed/_shell/settings/_admin/billing")
@@ -163,35 +153,6 @@ function PlanCard(props: {
           </Button>
         ) : null}
       </CardFooter>
-    </Card>
-  )
-}
-
-function CreditsCard(props: { billing: Summary }) {
-  const available = Math.max(props.billing.availableMicroUsd, 0)
-  const granted = props.billing.grantedMicroUsd > 0
-  const depleted = props.billing.availableMicroUsd <= 0
-  return (
-    <Card>
-      <CardHeader>
-        <CardDescription>Credits</CardDescription>
-        <CardTitle className={cn("text-xl tabular-nums", depleted && "text-destructive")}>
-          {dollars(available)}
-        </CardTitle>
-        {granted ? <CardDescription>of {dollars(props.billing.grantedMicroUsd)} remaining</CardDescription> : null}
-      </CardHeader>
-      {granted ? (
-        <CardFooter className="mt-auto">
-          <Progress
-            value={remainingPercent(available, props.billing.grantedMicroUsd)}
-            aria-label="Credits remaining"
-            className={cn(
-              "w-full **:data-[slot=progress-indicator]:bg-chart-1 **:data-[slot=progress-track]:bg-secondary",
-              depleted && "**:data-[slot=progress-indicator]:bg-destructive",
-            )}
-          />
-        </CardFooter>
-      ) : null}
     </Card>
   )
 }

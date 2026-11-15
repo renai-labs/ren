@@ -51,12 +51,14 @@ export const input = (
 
 export const dollars = (micro: number) => micro / 1_000_000
 
-export const cost = (row: InsightsRow) => row.cost.ren + row.cost.customer
+export const cost = (row: InsightsRow) => row.cost.models + row.cost.compute + row.cost.tools
 
 export const tokens = (row: InsightsRow) =>
   row.tokens.input + row.tokens.output + row.tokens.reasoning + row.tokens.cacheRead + row.tokens.cacheWrite
 
-export function change(current: number, previous: number | undefined) {
-  if (!previous) return
-  return (current - previous) / previous
+export const bucket = (period: Period) => (period === "90d" ? "week" : "day")
+
+export function duration(ms: number) {
+  const minutes = Math.round(ms / 60_000)
+  return minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 6) / 10} h`
 }
