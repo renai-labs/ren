@@ -19,6 +19,7 @@ import { AppProfilePolicy } from "./app/profile-policy.js"
 import { DrivePolicy } from "./drives/policy.js"
 import { MachineTemplatePolicy } from "./machine-templates/policy.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
+import { InsightsPolicy } from "./insights/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
 import { SchedulePolicy } from "./schedule/policy.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -116,6 +117,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...ArtifactPolicy.documents,
   ...InfraPolicy.documents,
   ...BillingPolicy.documents,
+  ...InsightsPolicy.documents,
 ])
 
 export const layer = Layer.effect(

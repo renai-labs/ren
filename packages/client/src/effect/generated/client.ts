@@ -2167,7 +2167,7 @@ const adaptGroupInfra = (raw: RawClient["infra"]) => ({
 
 type InsightsQueryRequest = Parameters<RawClient["insights"]["insights.query"]>[0]
 type InsightsQueryInput = {
-  readonly spaceId: InsightsQueryRequest["query"]["spaceId"]
+  readonly spaceId?: InsightsQueryRequest["query"]["spaceId"]
   readonly from: InsightsQueryRequest["query"]["from"]
   readonly to: InsightsQueryRequest["query"]["to"]
   readonly timezone: InsightsQueryRequest["query"]["timezone"]

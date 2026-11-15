@@ -14971,9 +14971,14 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              ],
+              "description": "Without it, the whole organization, which only admins and owners can read."
             },
-            "required": true
+            "required": false
           },
           {
             "name": "from",
@@ -15149,7 +15154,7 @@
             }
           }
         },
-        "description": "Return what a space spent and finished in a range, as one row for the whole range or one row for each bucket, member, agent, model or provider.",
+        "description": "Return what a space, or the whole organization, spent and finished in a range, as one row for the whole range or one row for each bucket, space, member, agent, model or provider. 403: the organization’s usage, for a member who is not an admin or owner.",
         "summary": "Query insights"
       }
     }
@@ -20582,7 +20587,7 @@
       },
       "Insights.GroupBy": {
         "type": "string",
-        "enum": ["none", "hour", "day", "week", "member", "agent", "model", "provider"]
+        "enum": ["none", "hour", "day", "week", "space", "member", "agent", "model", "provider"]
       },
       "Insights.OrderBy": {
         "type": "string",
@@ -20613,7 +20618,7 @@
                 "type": "null"
               }
             ],
-            "description": "The bucket start (ISO, UTC), user ID, agent name, served model or provider. Null for the whole range and for usage that names no one."
+            "description": "The bucket start (ISO, UTC), space ID, user ID, agent name, served model or provider. Null for the whole range, for usage that names no one, and for usage in no space: calls with a member’s inference key."
           },
           "label": {
             "anyOf": [
@@ -20624,7 +20629,7 @@
                 "type": "null"
               }
             ],
-            "description": "The user’s name, for a member row."
+            "description": "The user’s name, for a member row. The space’s name, for a space row: `(archived)` after an archived space, and `Private space · <owner>` for another person’s private space."
           },
           "sessions": {
             "anyOf": [

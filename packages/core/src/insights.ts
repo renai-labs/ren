@@ -4,19 +4,23 @@ import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import { Insights } from "@ren/schema/insights"
 import { Models } from "@ren/schema/models"
-import type { Space as SpaceSchema } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
 import { and, count, countDistinct, eq, gte, inArray, isNull, lt, type SQL, type SQLWrapper, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Context, DateTime, Effect, Layer, Order, Predicate } from "effect"
+import { Context, DateTime, Effect, Layer, Order, Predicate, Schema } from "effect"
 import type { Actor } from "./actor.js"
 import { Access } from "./access.js"
+import { InsightsPolicy } from "./insights/policy.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export interface Interface {
-  readonly query: (actor: Actor.Info, query: Insights.Query) => Effect.Effect<Insights.Result, Primitive.NotFound>
+  readonly query: (
+    actor: Actor.Info,
+    query: Insights.Query,
+  ) => Effect.Effect<Insights.Result, Primitive.NotFound | Primitive.Forbidden>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Insights") {}
@@ -29,11 +33,11 @@ type Key = SQL<string | null>
 
 interface Scope {
   readonly organizationId: Auth.OrganizationID
-  readonly spaceId: SpaceSchema.ID
   readonly query: Insights.Query
 }
 
 const events = Database.Schema.usage_event
+const spaces = Database.Schema.space
 const tasks = Database.Schema.task
 const trail = Database.Schema.task_event
 const links = Database.Schema.task_link
@@ -67,6 +71,7 @@ const person = sql<string | null>`case when starts_with(${events.member}, ${pers
   then substr(${events.member}, ${personPrefix.length + 1}) else ${events.member} end`
 
 const usageKeys: Partial<Record<Insights.GroupBy, Key>> = {
+  space: sql`${events.space}`,
   member: sql`coalesce(${members.userId}, ${person})`,
   agent: sql`${events.agent}`,
   model: field("served_model"),
@@ -74,6 +79,7 @@ const usageKeys: Partial<Record<Insights.GroupBy, Key>> = {
 }
 
 const taskKeys: Partial<Record<Insights.GroupBy, Key>> = {
+  space: sql`${tasks.space_id}`,
   member: sql`${tasks.owner_id}`,
   agent: sql`${agents.name}`,
 }
@@ -115,7 +121,7 @@ const usageQuery = (db: Client, scope: Scope) =>
     .where(
       and(
         eq(events.organization, scope.organizationId),
-        eq(events.space, scope.spaceId),
+        scope.query.spaceId && eq(events.space, scope.query.spaceId),
         inRange(events.time, scope.query),
         scope.query.userId && inArray(members.userId, [...scope.query.userId]),
         scope.query.agent && inArray(events.agent, [...scope.query.agent]),
@@ -129,7 +135,7 @@ const usageQuery = (db: Client, scope: Scope) =>
 const taskWhere = (scope: Scope) =>
   and(
     eq(tasks.organization_id, scope.organizationId),
-    eq(tasks.space_id, scope.spaceId),
+    scope.query.spaceId && eq(tasks.space_id, scope.query.spaceId),
     scope.query.userId && inArray(tasks.owner_id, [...scope.query.userId]),
     scope.query.agent && inArray(agents.name, [...scope.query.agent]),
   )
@@ -188,6 +194,49 @@ const bucketsQuery = (db: Client, query: Insights.Query, unit: Unit) =>
     ) as bucket`,
   )
 
+const labelsQuery = (
+  db: Client,
+  actor: Actor.Info,
+  groupBy: Insights.GroupBy,
+  ids: ReadonlyArray<string>,
+): Effect.Effect<ReadonlyArray<readonly [string, string]>> => {
+  if (ids.length === 0) return Effect.succeed([])
+  if (groupBy === "member")
+    return db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, [...ids]))
+      .pipe(
+        Effect.map((rows) => rows.map((row) => [row.id, row.name] as const)),
+        Effect.orDie,
+      )
+  if (groupBy !== "space") return Effect.succeed([])
+  return db
+    .select({
+      id: spaces.id,
+      name: spaces.name,
+      kind: spaces.kind,
+      ownerId: spaces.owner_user_id,
+      owner: users.name,
+      archivedAt: spaces.archived_at,
+    })
+    .from(spaces)
+    .leftJoin(users, eq(users.id, spaces.owner_user_id))
+    .where(and(eq(spaces.organization_id, actor.organizationId), inArray(spaces.id, ids.filter(Schema.is(Space.ID)))))
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => {
+          const name =
+            row.kind === "private" && row.ownerId !== actor.userId
+              ? ["Private space", row.owner].filter(Boolean).join(" · ")
+              : row.name
+          return [row.id, row.archivedAt ? `${name} (archived)` : name] as const
+        }),
+      ),
+      Effect.orDie,
+    )
+}
+
 const noSpend = {
   sessions: 0,
   calls: 0,
@@ -220,24 +269,31 @@ export const layer = Layer.effect(
 
     return Service.of({
       query: Effect.fn("Insights.query")(function* (actor: Actor.Info, query: Insights.Query) {
-        const found = (yield* database.db
-          .select({ kind: Database.Schema.space.kind, membershipId: SpaceQueries.membership.id })
-          .from(Database.Schema.space)
-          .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
-          .where(
-            and(
-              eq(Database.Schema.space.id, query.spaceId),
-              eq(Database.Schema.space.organization_id, actor.organizationId),
-              isNull(Database.Schema.space.archived_at),
-            ),
+        if (query.spaceId) {
+          const found = (yield* database.db
+            .select({ kind: spaces.kind, membershipId: SpaceQueries.membership.id })
+            .from(spaces)
+            .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+            .where(
+              and(
+                eq(spaces.id, query.spaceId),
+                eq(spaces.organization_id, actor.organizationId),
+                isNull(spaces.archived_at),
+              ),
+            )
+            .pipe(Effect.orDie)).at(0)
+          if (
+            !found ||
+            !access.isAllowed({ actor, action: SpacePolicy.actions.read, resource: SpacePolicy.resource(found) })
           )
-          .pipe(Effect.orDie)).at(0)
-        if (
-          !found ||
-          !access.isAllowed({ actor, action: SpacePolicy.actions.read, resource: SpacePolicy.resource(found) })
+            return yield* new Primitive.NotFound({ message: "Space not found." })
+        } else if (
+          !access.isAllowed({ actor, action: InsightsPolicy.actions.organization, resource: Access.organization })
         )
-          return yield* new Primitive.NotFound({ message: "Space not found." })
-        const scope = { organizationId: actor.organizationId, spaceId: query.spaceId, query }
+          return yield* new Primitive.Forbidden({
+            message: "Only admins and owners can read the organization’s usage.",
+          })
+        const scope = { organizationId: actor.organizationId, query }
         const unit = unitOf(query.groupBy)
         const withTasks = hasTasks(query.groupBy)
         const results = yield* Effect.all(
@@ -266,16 +322,7 @@ export const layer = Layer.effect(
         if (unit) return { rows: results.buckets.map((row) => rowOf(row.key, null)) }
 
         const keys = [...new Set([...spent.keys(), ...done.keys(), ...linked.keys()])]
-        const userIds = query.groupBy === "member" ? keys.filter(Predicate.isNotNull) : []
-        const names = new Map(
-          userIds.length === 0
-            ? []
-            : (yield* database.db
-                .select({ id: users.id, name: users.name })
-                .from(users)
-                .where(inArray(users.id, userIds))
-                .pipe(Effect.orDie)).map((row) => [row.id, row.name] as const),
-        )
+        const names = new Map(yield* labelsQuery(database.db, actor, query.groupBy, keys.filter(Predicate.isNotNull)))
         return {
           rows: keys
             .map((key) => rowOf(key, (key && names.get(key)) ?? null))
