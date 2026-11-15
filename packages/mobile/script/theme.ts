@@ -21,13 +21,26 @@ const colors = [...theme].flatMap((entry) => {
 const scales = [...theme].filter((entry) => !entry[0].startsWith("--font-") && !entry[1].includes("var("))
 
 const light = block(":root")
+const dark = new Map([...light, ...block("\\.dark")])
+
+const shadows = [...theme].flatMap((entry) => {
+  const variable = /^var\((--[\w-]+)\)$/.exec(entry[1])?.[1]
+  return entry[0].startsWith("--shadow-") &&
+    variable &&
+    [light, dark].every((values) => values.get(variable)?.includes("var(") === false)
+    ? [[entry[0], variable] as const]
+    : []
+})
+
+// oxlint-disable-next-line ren/no-comments -- Tailwind inlines a shadow's value into its utility, so a shadow points at a variable that each theme sets.
+const variables = [...colors, ...shadows.map((shadow) => [shadow[1], shadow[1]] as const)]
 
 const variant = (name: string, values: Map<string, string>) => [
   `    @variant ${name} {`,
-  ...colors.map((color) => {
-    const value = values.get(color[1])
-    if (value === undefined) throw new Error(`The ${name} theme has no ${color[1]}`)
-    return `      ${color[0]}: ${value};`
+  ...variables.map((variable) => {
+    const value = values.get(variable[1])
+    if (value === undefined) throw new Error(`The ${name} theme has no ${variable[1]}`)
+    return `      ${variable[0]}: ${value};`
   }),
   "    }",
 ]
@@ -37,13 +50,14 @@ await Bun.write(
   [
     "@theme {",
     ...scales.map((entry) => `  ${entry[0]}: ${entry[1]};`),
+    ...shadows.map((shadow) => `  ${shadow[0]}: var(${shadow[1]});`),
     ...colors.map((color) => `  ${color[0]}: ${light.get(color[1])};`),
     "}",
     "",
     "@layer theme {",
     "  :root {",
     ...variant("light", light),
-    ...variant("dark", new Map([...light, ...block("\\.dark")])),
+    ...variant("dark", dark),
     "  }",
     "}",
     "",

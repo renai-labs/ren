@@ -5,7 +5,9 @@
     "scheme": "ren",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/android-icon.png",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#f9f9f9",
     "platforms": ["ios", "android"],
     "ios": {
       "bundleIdentifier": "ai.ren.app",
@@ -19,19 +21,25 @@
       "icon": "./assets/android-icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-foreground.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#f9f9f9"
       }
     },
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to pick photos and videos to upload to your drive.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
-          "android": {
-            "backgroundColor": "#000000",
-            "image": "./assets/android-foreground.png",
-            "imageWidth": 200
-          }
+          "backgroundColor": "#f9f9f9",
+          "image": "./assets/android-foreground.png",
+          "imageWidth": 200
         }
       ],
       [

@@ -1,17 +1,20 @@
 import { LegendList } from "@legendapp/list/react-native"
-import { ChatReact } from "@ren/chat/react"
 import { SessionPages } from "@ren/client/react"
-import IconEdit from "@tabler/icons-react-native/IconEdit"
-import IconLogout from "@tabler/icons-react-native/IconLogout"
-import IconMessages from "@tabler/icons-react-native/IconMessages"
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { cn } from "cn"
 import { type Href, useGlobalSearchParams, usePathname, useRouter } from "expo-router"
 import type { ComponentProps } from "react"
 import { Pressable, View } from "react-native"
-import { Button } from "#components/button"
-import { ChatRow } from "#components/chat-row"
+import ChevronRightIcon from "react-native-heroicons/mini/ChevronRightIcon"
+import ClipboardDocumentCheckIcon from "react-native-heroicons/mini/ClipboardDocumentCheckIcon"
+import Cog6ToothIcon from "react-native-heroicons/mini/Cog6ToothIcon"
+import FolderIcon from "react-native-heroicons/mini/FolderIcon"
+import PencilSquareIcon from "react-native-heroicons/mini/PencilSquareIcon"
+import { Avatar } from "#components/avatar"
 import { Icon } from "#components/icon"
+import { OrgSwitcher } from "#components/org-switcher"
 import { Text } from "#components/text"
+import { ChatRow } from "#features/chat/chat-row"
 import { Api } from "#lib/api"
 import { Auth } from "#lib/auth"
 
@@ -25,15 +28,44 @@ function NavRow(props: {
     <Pressable
       role="link"
       aria-current={props.active ? "page" : undefined}
-      className={
-        props.active
-          ? "mx-2 flex-row items-center gap-3 rounded-lg bg-accent px-3 py-2.5"
-          : "mx-2 flex-row items-center gap-3 rounded-lg px-3 py-2.5 active:bg-accent"
-      }
+      className={cn(
+        "mx-2 flex-row items-center gap-3 rounded-lg px-3 py-2.5",
+        props.active ? "bg-sidebar-accent" : "active:bg-sidebar-accent",
+      )}
       onPress={props.onPress}
     >
-      <Icon as={props.icon} className="size-4.5" />
-      <Text className="font-medium">{props.label}</Text>
+      <Icon as={props.icon} className="size-4.5 text-sidebar-foreground/55" />
+      <Text className="text-sidebar-foreground">{props.label}</Text>
+    </Pressable>
+  )
+}
+
+function AccountRow(props: { readonly active: boolean; readonly onPress: () => void }) {
+  const user = useQuery(Auth.sessionOptions).data?.user
+  const name = user?.name || user?.email || ""
+  return (
+    <Pressable
+      role="link"
+      aria-label="Settings"
+      aria-current={props.active ? "page" : undefined}
+      className={cn(
+        "mx-2 min-h-12 flex-row items-center gap-3 rounded-lg p-2",
+        props.active ? "bg-sidebar-accent" : "active:bg-sidebar-accent",
+      )}
+      onPress={props.onPress}
+    >
+      <Avatar name={name} />
+      <View className="flex-1">
+        <Text className="text-sm font-medium text-sidebar-foreground" numberOfLines={1}>
+          {name}
+        </Text>
+        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+          {user?.email ?? ""}
+        </Text>
+      </View>
+      <View className="size-10 items-center justify-center">
+        <Icon as={Cog6ToothIcon} className="size-4.5 text-sidebar-foreground/55" />
+      </View>
     </Pressable>
   )
 }
@@ -42,27 +74,33 @@ function Sidebar(props: { readonly onClose: () => void }) {
   const router = useRouter()
   const pathname = usePathname()
   const openID = useGlobalSearchParams<{ id?: string }>().id
-  const queryClient = useQueryClient()
-  const user = useQuery(Auth.sessionOptions).data?.user
   const pages = useInfiniteQuery(SessionPages.options(Api.client))
   const chats = pages.data?.pages.flatMap((page) => page.items) ?? []
+  const within = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
 
   const go = (href: Href) => {
     router.navigate(href)
     props.onClose()
   }
-  const signOut = async () => {
-    await Auth.client.signOut()
-    ChatReact.forget()
-    await queryClient.resetQueries()
-  }
 
   return (
-    <View className="flex-1 bg-sidebar py-safe">
-      <Text className="px-5 pt-3 pb-4 text-lg font-semibold">Ren</Text>
-      <NavRow icon={IconEdit} label="New chat" active={pathname === "/"} onPress={() => go("/")} />
-      <NavRow icon={IconMessages} label="Chats" active={pathname === "/chats"} onPress={() => go("/chats")} />
-      <Text className="px-5 pt-6 pb-2 text-sm text-muted-foreground">Recent</Text>
+    <View className="flex-1 bg-sidebar py-safe-offset-2">
+      <View className="pb-3">
+        <OrgSwitcher onSwitched={props.onClose} />
+      </View>
+      <NavRow icon={PencilSquareIcon} label="New chat" active={pathname === "/"} onPress={() => go("/")} />
+      <NavRow icon={ClipboardDocumentCheckIcon} label="Tasks" active={within("/tasks")} onPress={() => go("/tasks")} />
+      <NavRow icon={FolderIcon} label="Drive" active={within("/drive")} onPress={() => go("/drive")} />
+      <Pressable
+        role="link"
+        aria-label="All chats"
+        aria-current={pathname === "/chats" ? "page" : undefined}
+        className="mt-4 flex-row items-center gap-1 self-start px-5 py-2 active:opacity-70"
+        onPress={() => go("/chats")}
+      >
+        <Text className="text-sm font-medium text-sidebar-foreground/80">Chats</Text>
+        <Icon as={ChevronRightIcon} className="size-4 text-sidebar-foreground/55" />
+      </Pressable>
       <LegendList
         data={chats}
         keyExtractor={(chat) => chat.id}
@@ -79,21 +117,8 @@ function Sidebar(props: { readonly onClose: () => void }) {
           if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage()
         }}
       />
-      <View className="flex-row items-center gap-3 border-t border-sidebar-border px-4 pt-3">
-        <View className="size-8 items-center justify-center rounded-full bg-secondary">
-          <Text className="text-sm font-medium">{user?.name.charAt(0).toUpperCase() ?? ""}</Text>
-        </View>
-        <View className="flex-1">
-          <Text className="font-medium" numberOfLines={1}>
-            {user?.name ?? ""}
-          </Text>
-          <Text className="text-sm text-muted-foreground" numberOfLines={1}>
-            {user?.email ?? ""}
-          </Text>
-        </View>
-        <Button variant="ghost" size="icon" aria-label="Sign out" onPress={() => void signOut()}>
-          <Icon as={IconLogout} className="text-muted-foreground" />
-        </Button>
+      <View className="border-t border-sidebar-border pt-2">
+        <AccountRow active={pathname === "/settings"} onPress={() => go("/settings")} />
       </View>
     </View>
   )

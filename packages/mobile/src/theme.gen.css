@@ -13,6 +13,7 @@
   --tracking-snug: -0.01em;
   --tracking-heading: -0.015em;
   --container-transcript: 52rem;
+  --shadow-soft: var(--soft-shadow);
   --color-background: #f9f9f9;
   --color-foreground: #1b1b1b;
   --color-card: #ffffff;
@@ -90,6 +91,7 @@
       --color-sidebar-accent-foreground: #1b1b1b;
       --color-sidebar-border: rgba(0, 0, 0, 0.08);
       --color-sidebar-ring: #0065cc;
+      --soft-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.14);
     }
     @variant dark {
       --color-background: #151515;
@@ -128,6 +130,7 @@
       --color-sidebar-accent-foreground: #f1f1f1;
       --color-sidebar-border: rgba(255, 255, 255, 0.08);
       --color-sidebar-ring: #268bff;
+      --soft-shadow: 0 0 #0000;
     }
   }
 }
