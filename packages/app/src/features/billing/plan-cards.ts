@@ -42,8 +42,6 @@ const grouped = (whole: number) => String(whole).replaceAll(/\B(?=(\d{3})+(?!\d)
 
 export const wholeDollars = (cents: number) => `$${grouped(Math.round(cents / 100))}`
 
-export const dollars = (microUsd: number) => `$${(microUsd / microUsdPerUsd).toFixed(2)}`
-
 const creditsLine = (microUsd: number) => `${wholeDollars((microUsd / microUsdPerUsd) * 100)} in credits every month`
 
 function families(plans: ReadonlyArray<BillingPlan>) {
@@ -208,8 +206,3 @@ export const formatMoney = (amountMinorUnits: number, currency: string) =>
   currency === "USD"
     ? `$${grouped(Math.trunc(amountMinorUnits / 100))}.${String(Math.abs(amountMinorUnits) % 100).padStart(2, "0")}`
     : `${(amountMinorUnits / 100).toFixed(2)} ${currency}`
-
-export function remainingPercent(availableMicroUsd: number, grantedMicroUsd: number) {
-  if (!(grantedMicroUsd > 0)) return 0
-  return Math.min(Math.max((availableMicroUsd / grantedMicroUsd) * 100, 0), 100)
-}

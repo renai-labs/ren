@@ -20,7 +20,7 @@ type SpaceSection = { title: string; description?: (space: string) => string; wi
 
 export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly inbox: SpaceSection } = {
   inbox: { title: "Inbox", width: "full" },
-  overview: { title: "Overview", width: "full" },
+  overview: { title: "Overview", width: "wide" },
   tasks: { title: "Tasks", width: "full" },
   drive: { title: "Drive", width: "full" },
   automations: { title: "Automations", width: "full" },
@@ -45,6 +45,7 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
     description: (space) => `The name, description and default model of ${space}.`,
   },
   compute: { title: "Compute", description: (space) => `Machines for ${space}’s brain and tools.` },
+  usage: { title: "Usage", width: "wide" },
   members: { title: "Members", description: (space) => `People who can use ${space}.` },
   apps: { title: "Apps", description: (space) => `Apps every chat in ${space} can use.` },
   repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
@@ -287,6 +288,7 @@ function SettingsPageSkeleton() {
     providers: "Providers",
     channels: "Channels",
     billing: "Billing & plans",
+    usage: "Usage",
     permissions: "Permissions",
   }
   let body = <RowsSample />

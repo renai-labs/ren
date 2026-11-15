@@ -6,6 +6,7 @@ import {
   IconArrowLeft,
   IconBrain,
   IconBuildingFactory2,
+  IconChartBar,
   IconChartPie,
   IconMessagesFilled,
   IconChecklist,
@@ -89,6 +90,7 @@ const spaceGroups = [
     label: "Space",
     items: [
       { value: "compute", label: "Compute", icon: IconCpu, to: "/spaces/$spaceId/compute" },
+      { value: "usage", label: "Usage", icon: IconChartBar, to: "/spaces/$spaceId/usage" },
       { value: "members", label: "Members", icon: IconUsers, to: "/spaces/$spaceId/members" },
       { value: "settings", label: "Settings", icon: IconSettings, to: "/spaces/$spaceId/settings" },
     ],
