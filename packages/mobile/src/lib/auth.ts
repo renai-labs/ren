@@ -16,7 +16,7 @@ const origin = new URL(serverUrl).origin
 // oxlint-disable-next-line ren/no-comments -- Better Auth rejects a cookie-bearing POST without a trusted Origin. Its own origin is always trusted; a server with the Expo plugin replaces it with ren:// from `expo-origin`.
 export const client = createAuthClient({
   baseURL: `${serverUrl}/auth`,
-  fetchOptions: { headers: { origin } },
+  fetchOptions: { headers: { origin }, catchAllError: true },
   plugins: [
     expoClient({ scheme: "ren", storagePrefix: "ren", storage: { getItem, getItemAsync, setItem, setItemAsync } }),
     emailOTPClient(),
