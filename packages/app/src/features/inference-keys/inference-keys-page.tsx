@@ -1,22 +1,21 @@
 import { useState } from "react"
 import type { RenInferenceKey, RenInferenceKeyStatus, RenInferenceKeyUsage } from "@ren/client"
-import { RenInference } from "@ren/schema/ren-inference"
+import type { RenInference } from "@ren/schema/ren-inference"
 import { Session } from "@ren/schema/session"
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
 import { IconArrowLeft, IconChevronRight, IconKey, IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { formatUsd } from "@ren/ui/format"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { toast } from "@ren/ui/sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
 import { formatRelative, formatShortDate } from "@ren/ui/time"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { cn } from "cn"
-import { Schema } from "effect"
 import { EmptyState } from "../../components/empty-state.js"
 import { Page, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "../../components/page.js"
+import { PeriodSelect } from "../../components/period-select.js"
 import { RowMenu, type RowMenuItem } from "../../components/row-menu.js"
 import { StatusBadge, type StatusTone } from "../../components/status-badge.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
@@ -32,8 +31,6 @@ import { KeyUsage } from "./key-usage.js"
 import { dollars, periods } from "./periods.js"
 
 const route = getRouteApi("/_authed/_shell/settings/providers/keys")
-
-const isPeriod = Schema.is(RenInference.Period)
 
 const modelsProbe = Session.ID.create()
 
@@ -190,31 +187,6 @@ function NoRows(props: { columns: number; query: string; onClear: () => void }) 
         "No active keys. Switch to All to see revoked and expired keys."
       )}
     </TableEmpty>
-  )
-}
-
-function PeriodSelect(props: { value: RenInference.Period; onChange: (value: RenInference.Period) => void }) {
-  return (
-    <Select
-      items={periods}
-      value={props.value}
-      onValueChange={(value) => {
-        if (isPeriod(value)) props.onChange(value)
-      }}
-    >
-      <SelectTrigger aria-label="Usage period" className="w-36">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {periods.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
   )
 }
 
@@ -418,7 +390,12 @@ export function InferenceKeysPage() {
             value={search.q ?? ""}
             onChange={(value) => update({ q: value || undefined })}
           />
-          <PeriodSelect value={period} onChange={(value) => update({ period: value })} />
+          <PeriodSelect
+            label="Usage period"
+            value={period}
+            options={periods}
+            onChange={(value) => update({ period: value })}
+          />
           <Button onClick={() => setCreating(true)}>
             <IconPlus data-icon="inline-start" />
             Create key
