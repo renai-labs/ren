@@ -1,5 +1,3 @@
-import { ChatReact } from "@ren/chat/react"
-import { Session } from "@ren/schema/session"
 import {
   IconBrandGithubFilled,
   IconBrandSlack,
@@ -9,7 +7,6 @@ import {
   IconTicket,
   IconWebhook,
 } from "@tabler/icons-react"
-import { useSyncExternalStore } from "react"
 
 export const inboxColumns = ["Chat", "Agent", "Started by", "From", "Last activity"]
 
@@ -26,11 +23,3 @@ export const origins = [
 type Origin = (typeof origins)[number]["value"]
 
 export const isOrigin = (value: string): value is Origin => origins.some((origin) => origin.value === value)
-
-export function useChatAttention(sessionId: string) {
-  const atoms = ChatReact.useAtoms()
-  return useSyncExternalStore(
-    (listener) => atoms.attention.subscribe(() => queueMicrotask(listener)),
-    () => atoms.attention.read(Session.ID.make(sessionId)),
-  )
-}

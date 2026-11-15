@@ -1,5 +1,6 @@
 export * as Preference from "./preference.js"
 
+import type { ChatSettings } from "@ren/chat"
 import { Option, Schema } from "effect"
 import { useSyncExternalStore } from "react"
 import { Platform } from "../platform/platform.js"
@@ -25,6 +26,8 @@ export function make<A>(key: `${string}.v${number}`, schema: Schema.Codec<A>, fa
     write: (storage: Platform.Storage, value: A) => storage.set(key, encode(value)),
   }
 }
+
+export const from = <A>(setting: ChatSettings.Setting<A>) => make(setting.key, setting.schema, setting.fallback)
 
 export type Info<A> = ReturnType<typeof make<A>>
 

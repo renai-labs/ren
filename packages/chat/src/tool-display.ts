@@ -168,8 +168,6 @@ const providers: Readonly<Record<string, string>> = {
 
 const subjectKeys = ["description", "query", "url", "path", "pattern", "name"]
 
-const formatters: { list?: Intl.ListFormat } = {}
-
 const lookup = <A>(table: Readonly<Record<string, A>>, key: string) =>
   Object.hasOwn(table, key) ? table[key] : undefined
 
@@ -202,6 +200,11 @@ export const label = (tool: SessionMessage.Tool) => {
   const state = status(tool)
   if (state === "failed") return lookup(failures, tool.name) ?? action
   return state === "completed" ? (lookup(results, tool.name) ?? action) : action
+}
+
+export const shellLabel = (tool: SessionMessage.Tool, options: { readonly running: boolean }) => {
+  if (!ToolState.backgrounded(tool)) return label(tool)
+  return options.running ? "Running in background" : "Ran in background"
 }
 
 export const webSearchProvider = (provider: unknown) => {
@@ -301,9 +304,9 @@ export const group = (items: ReadonlyArray<GroupItem>) => {
   if (tools.length === 0 && thoughts === 0) return { title: "Updates", count: 0 }
   const total = tools.length || thoughts
   const thought = thoughts === 1 ? "Thought" : "Thoughts"
-  formatters.list ??= new Intl.ListFormat("en", { style: "long", type: "conjunction" })
-  const list = formatters.list
-  return { title: `Used ${total} ${tools.length ? list.format([...new Set(tools)]) : thought}`, count: total }
+  const names = [...new Set(tools)]
+  const list = names.length > 2 ? `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}` : names.join(" and ")
+  return { title: `Used ${total} ${tools.length ? list : thought}`, count: total }
 }
 
 const urlPattern = /https?:\/\/[^\s<>"'`)\]]+/g

@@ -7,6 +7,7 @@ import { ChannelReply } from "./channel-reply.js"
 import { Projection } from "./projection.js"
 import { ShownFile } from "./shown-file.js"
 import { TimelineRow } from "./timeline-row.js"
+import { TimelineText } from "./timeline-text.js"
 import { ToolDisplay } from "./tool-display.js"
 
 export type Step =
@@ -184,3 +185,29 @@ export function withEmptyReplies(
 
 export const leaves = (steps: ReadonlyArray<Step>): ReadonlyArray<Step> =>
   steps.flatMap((step) => (step.kind === "group" ? leaves(step.steps) : [step]))
+
+export const count = (steps: ReadonlyArray<Step>) =>
+  leaves(steps).filter(
+    (step) => step.kind !== "text" && (step.kind !== "notice" || Boolean(TimelineText.notice(step.message))),
+  ).length
+
+export const running = (step: Step) => {
+  if (step.kind === "reasoning") return step.running
+  if (step.kind === "tool") return ToolDisplay.status(step.tool) === "running"
+  return step.kind === "shell" && step.message.status === "running"
+}
+
+export const groupItems = (step: Extract<Step, { kind: "group" }>) =>
+  leaves(step.steps).flatMap((item): ToolDisplay.GroupItem[] => {
+    if (item.kind === "reasoning") return [item.content]
+    if (item.kind === "tool") return [item.tool]
+    if (item.kind === "shell") return [{ type: "shell" }]
+    if (item.kind === "notice") return [{ type: "notice" }]
+    return item.kind === "text" ? [{ type: "text", text: item.text }] : []
+  })
+
+export const groupTitle = (step: Extract<Step, { kind: "group" }>, items: ReadonlyArray<ToolDisplay.GroupItem>) => {
+  if (step.type === "read") return items.length === 1 ? "Explored 1 file" : `Explored ${items.length} files`
+  if (step.type === "file") return items.length === 1 ? "Edited 1 file" : `Edited ${items.length} files`
+  return ToolDisplay.group(items).title
+}

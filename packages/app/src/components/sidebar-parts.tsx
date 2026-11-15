@@ -1,5 +1,6 @@
 import type { SpaceInfo } from "@ren/client"
 import { SessionTitle } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
 import { SessionPages } from "@ren/client/react"
 import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
@@ -73,7 +74,7 @@ import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { isOrigin, origins, useChatAttention } from "../lib/sessions.js"
+import { isOrigin, origins } from "../lib/sessions.js"
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
@@ -403,7 +404,7 @@ const chatProperties = (
 ]
 
 function ChatStatus(props: { sessionId: string; busy: boolean }) {
-  const attention = useChatAttention(props.sessionId) ?? (props.busy ? "running" : "idle")
+  const attention = ChatReact.useAttention(props.sessionId, { busy: props.busy })
   if (attention === "idle") return null
   return (
     <SidebarMenuBadge className="right-2 peer-data-[size=default]/menu-button:top-2">
