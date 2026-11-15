@@ -1,186 +1,46 @@
-import { KeyboardAwareLegendList, useKeyboardChatComposerInset } from "@legendapp/list/keyboard"
-import type { LegendListRef } from "@legendapp/list/react-native"
+import { useKeyboardChatComposerInset } from "@legendapp/list/keyboard"
 import { useAtomRefresh } from "@effect/atom-react"
-import {
-  ChatState,
-  Projection,
-  SessionLive,
-  SessionTitle,
-  TimelineText,
-  ToolDisplay,
-  TranscriptBlocks,
-} from "@ren/chat"
+import { ChatState, Composer, SessionLive, SessionTitle } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionInfo } from "@ren/client"
 import { Seed, SessionPages } from "@ren/client/react"
+import { ErrorText } from "@ren/util/error-text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { AsyncResult } from "effect/reactivity"
 import { useLocalSearchParams } from "expo-router"
 import { Drawer } from "expo-router/drawer"
-import { type ComponentRef, useRef, useState } from "react"
-import { ActivityIndicator, Pressable, View } from "react-native"
-import IconChevronDown from "@tabler/icons-react-native/IconChevronDown"
-import IconChevronRight from "@tabler/icons-react-native/IconChevronRight"
-import IconClock from "@tabler/icons-react-native/IconClock"
-import IconFile from "@tabler/icons-react-native/IconFile"
-import IconFilePencil from "@tabler/icons-react-native/IconFilePencil"
-import IconFileSearch from "@tabler/icons-react-native/IconFileSearch"
-import IconPlug from "@tabler/icons-react-native/IconPlug"
-import IconSubtask from "@tabler/icons-react-native/IconSubtask"
-import IconTerminal2 from "@tabler/icons-react-native/IconTerminal2"
-import IconWorldWww from "@tabler/icons-react-native/IconWorldWww"
 import { useNetworkState } from "expo-network"
+import { type ComponentRef, useRef, useState } from "react"
+import { ActivityIndicator, View } from "react-native"
+import ArrowDownIcon from "react-native-heroicons/mini/ArrowDownIcon"
 import { KeyboardStickyView } from "react-native-keyboard-controller"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { withUniwind } from "uniwind"
 import { Button } from "#components/button"
-import { ChatRequests } from "#components/chat-requests"
-import { Composer } from "#components/composer"
 import { Icon } from "#components/icon"
-import { Markdown } from "#components/markdown"
-import { NewChatButton } from "#components/new-chat-button"
 import { Text } from "#components/text"
+import { ActivityPill } from "#features/chat/activity-pill"
+import { useAttachments } from "#features/chat/attachments"
+import { ChatRequests } from "#features/chat/chat-requests"
+import { PromptInput } from "#features/chat/prompt-input"
+import { QueuedMessages } from "#features/chat/queued-messages"
+import { Transcript, type TranscriptHandle } from "#features/chat/transcript"
 import { Api } from "#lib/api"
-
-const toolIcons = {
-  command: IconTerminal2,
-  file: IconFile,
-  edit: IconFilePencil,
-  search: IconFileSearch,
-  web: IconWorldWww,
-  agent: IconSubtask,
-  tool: IconPlug,
-} satisfies Record<ToolDisplay.Kind, unknown>
-
-function StepRow(props: { readonly step: TranscriptBlocks.Step }) {
-  const step = props.step
-  if (step.kind === "text") return <Markdown text={step.text} streaming={step.streaming} size="sm" />
-  if (step.kind === "shell")
-    return (
-      <View className="flex-row items-center gap-2">
-        <Icon as={IconTerminal2} className="size-4 text-muted-foreground" />
-        <Text className="text-sm font-medium text-muted-foreground">Ran</Text>
-        <Text className="flex-1 font-mono text-xs text-muted-foreground" numberOfLines={1}>
-          {step.message.command}
-        </Text>
-      </View>
-    )
-  if (step.kind !== "tool") return null
-  const status = ToolDisplay.status(step.tool)
-  const subject = [ToolDisplay.subtitle(step.tool), ToolDisplay.matches(step.tool)].filter(Boolean).join(" · ")
-  return (
-    <View className="flex-row items-center gap-2">
-      {status === "running" ? (
-        <ActivityIndicator size="small" className="size-4" />
-      ) : (
-        <Icon
-          as={toolIcons[ToolDisplay.kind(step.tool)]}
-          className={status === "failed" ? "size-4 text-destructive" : "size-4 text-muted-foreground"}
-        />
-      )}
-      <Text
-        className={
-          status === "failed" ? "text-sm font-medium text-destructive" : "text-sm font-medium text-muted-foreground"
-        }
-      >
-        {ToolDisplay.label(step.tool)}
-      </Text>
-      {subject ? (
-        <Text className="flex-1 font-mono text-xs text-muted-foreground" numberOfLines={1}>
-          {subject}
-        </Text>
-      ) : null}
-    </View>
-  )
-}
-
-const worked = (turn: { readonly running: boolean; readonly workedFor: string | undefined }) => {
-  if (turn.running) return "Working"
-  return turn.workedFor ? `Worked for ${turn.workedFor}` : "Worked"
-}
-
-function StepsView(props: {
-  readonly steps: ReadonlyArray<TranscriptBlocks.Step>
-  readonly running: boolean
-  readonly workedFor: string | undefined
-}) {
-  const [open, setOpen] = useState(false)
-  const steps = TranscriptBlocks.leaves(props.steps)
-  const count = steps.filter((step) => step.kind !== "text").length
-  return (
-    <View className="gap-3">
-      <Pressable
-        role="button"
-        aria-expanded={open}
-        className="flex-row items-center gap-2 self-start"
-        onPress={() => setOpen(!open)}
-      >
-        <Icon as={IconClock} className="size-4 text-muted-foreground" />
-        <Text className="text-sm text-muted-foreground">{worked(props)}</Text>
-        <Text className="text-sm text-muted-foreground/70">{count === 1 ? "1 step" : `${count} steps`}</Text>
-        <Icon as={open ? IconChevronDown : IconChevronRight} className="size-4 text-muted-foreground" />
-      </Pressable>
-      {open ? (
-        <View className="gap-2.5 pl-6">
-          {steps.map((step) => (
-            <StepRow key={step.key} step={step} />
-          ))}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
-function SystemRow(props: { readonly row: TranscriptBlocks.Block & { readonly kind: "row" } }) {
-  const row = props.row.row
-  if (row._tag === "Error") return <Text className="text-sm text-destructive">{row.text}</Text>
-  if (row._tag === "Retry") return <Text variant="muted">Retrying…</Text>
-  if (row._tag === "TurnDivider") return <Text variant="muted">Interrupted</Text>
-  if (row._tag === "CompactionQueued") return <Text variant="muted">Session compaction queued</Text>
-  return null
-}
+import { Preferences } from "#lib/preferences"
 
 const StickyView = withUniwind(KeyboardStickyView)
 
 function Header(props: { readonly title: string; readonly status: string | undefined }) {
   return (
     <View className="items-center">
-      <Text className="font-semibold" numberOfLines={1}>
+      <Text className="text-sm text-muted-foreground" numberOfLines={1}>
         {props.title}
       </Text>
-      {props.status ? <Text className="text-xs text-muted-foreground">{props.status}</Text> : null}
+      {props.status ? <Text className="text-xs text-muted-foreground/70">{props.status}</Text> : null}
     </View>
   )
-}
-
-function BlockView(props: {
-  readonly block: TranscriptBlocks.Block
-  readonly status?: ChatState.PendingStatus | undefined
-  readonly running: boolean
-  readonly workedFor: string | undefined
-}) {
-  const block = props.block
-  if (block.kind === "user")
-    return (
-      <View className="max-w-5/6 gap-1 self-end">
-        <View className="rounded-xl rounded-tr-md bg-muted px-4 py-2">
-          <Text className="leading-relaxed">{block.message.text}</Text>
-        </View>
-        {props.status ? (
-          <Text className="self-end text-xs text-muted-foreground">
-            {props.status === "queued" ? "Queued" : "Sending…"}
-          </Text>
-        ) : null}
-      </View>
-    )
-  if (block.kind === "answer") return <Markdown text={block.text} streaming={block.streaming} />
-  if (block.kind === "steps")
-    return <StepsView steps={block.steps} running={props.running} workedFor={props.workedFor} />
-  if (block.kind === "reply") return <Text variant="muted">{ToolDisplay.label(block.tool)}</Text>
-  if (block.kind === "file") return <Text variant="muted">{block.file.name}</Text>
-  if (block.kind !== "row") return null
-  return <SystemRow row={block} />
 }
 
 export default function ChatRoute() {
@@ -195,112 +55,135 @@ function Chat(props: { readonly id: Session.ID }) {
     ...Api.query.session.get.queryOptions({ idOrSlug: id }),
     ...Seed.fromList<SessionInfo>(queryClient, [Api.query.session.list.queryKey(), SessionPages.keys.all()], id),
   }).data
-  const view = ChatReact.useView(id, undefined)
+  const [detail] = Preferences.usePreference(Preferences.timelineDetail)
+  const [fold] = Preferences.usePreference(Preferences.foldTurns)
+  const [foldMessages] = Preferences.usePreference(Preferences.foldMessages)
+  const view = ChatReact.useView(id, undefined, detail)
+  const models = ChatReact.useModels(id)
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(id))
   const loadMore = ChatReact.useAction(id, (opened) => opened.loadMore(id))
-  const offline = useNetworkState().isConnected === false
-  const connection = AsyncResult.getOrElse(view.session.status, () => "connecting")
   const prompt = ChatReact.usePrompt(id)
   const interrupt = ChatReact.useAction(id, (opened) => opened.interrupt)
-  const listRef = useRef<LegendListRef>(null)
+  const retryMessage = ChatReact.useAction(id, (opened, message: SessionMessage.ID) => opened.retryMessage(message))
+  const removeMessage = ChatReact.useAction(id, (opened, message: SessionMessage.ID) => opened.removeMessage(message))
+  const offline = useNetworkState().isConnected === false
+  const connection = AsyncResult.getOrElse(view.session.status, () => "connecting")
+  const insets = useSafeAreaInsets()
+  const transcriptRef = useRef<TranscriptHandle>(null)
   const composerRef = useRef<ComponentRef<typeof View>>(null)
-  const inset = useKeyboardChatComposerInset(listRef, composerRef)
-  const [text, setText] = useState("")
+  const inset = useKeyboardChatComposerInset(transcriptRef, composerRef)
+  const [draft, setDraft] = useState<Composer.Draft>(Composer.empty)
+  const attachments = useAttachments({ sessionId: id, spaceId: info?.spaceId, draft, update: setDraft })
   const [error, setError] = useState("")
-  const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(view.messages.map((message) => [message.id, message]))
-  const blocks = TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(view.rows, byId), {
-    live: () => false,
-    fold: true,
-  })
-  const statuses = ChatState.pendingStatuses(view.state, view.viewed)
-  const turns = Projection.assistantMessagesByParent(view.messages)
-  const activeTurn = view.running ? view.projection?.activeMessageID : undefined
-  const workedFor = (turn: string) => {
-    const user = byId.get(turn)
-    const milliseconds = TimelineText.turnDuration(user?.type === "user" ? user : undefined, turns.get(turn) ?? [])
-    return milliseconds ? TimelineText.duration(milliseconds) : undefined
-  }
-  const more = ChatState.more(view.state, id)
-  const loadingHistory = ChatState.loadingHistory(view.state, id)
+  const [away, setAway] = useState(false)
   const live = SessionLive.of(view.state, id)
   SessionPages.useLive(Api.query, id, live)
   const status = [
     { when: offline, label: "Offline" },
     { when: connection === "reconnecting", label: "Reconnecting…" },
     { when: connection === "connecting", label: "Connecting…" },
-    { when: view.running, label: "Working…" },
   ].find((each) => each.when)?.label
+  const blocked = Boolean(view.permission ?? view.form)
 
-  const send = () => {
-    const message = text.trim()
-    if (!message) return
-    setText("")
+  const attempt = (action: () => Promise<unknown>, fallback: string) => {
     setError("")
-    void prompt({ id: SessionMessage.ID.create(), text: message, delivery: "steer" }).catch(() => {
-      setText(message)
-      setError("Couldn’t send your message. Try again.")
-    })
+    void action().catch((cause: unknown) => setError(ErrorText.of(cause, fallback)))
   }
-  const stop = () => void interrupt().catch(() => setError("Couldn’t stop Ren. Try again."))
+  const resend = (text: string) =>
+    attempt(() => prompt({ id: SessionMessage.ID.create(), text, delivery: "steer" }), "Couldn’t send your message.")
+  const send = () => {
+    const text = Composer.request(draft).text.trim()
+    const submission = Composer.submission(draft, {
+      working: view.running,
+      behavior: "queue",
+      alternative: false,
+      queue: info?.capabilities.queue !== false,
+      current: undefined,
+    })
+    if (!text || !submission) return
+    const messageID = Composer.messageID(draft) ?? SessionMessage.ID.create()
+    setDraft(submission.next)
+    setError("")
+    void prompt({ id: messageID, text, delivery: submission.delivery, files: Composer.files(draft) }).catch(
+      (cause: unknown) => {
+        setDraft((current) => Composer.restore(current, submission.sent, messageID))
+        setError(ErrorText.of(cause, "Couldn’t send your message. Your draft has been kept."))
+      },
+    )
+  }
+  const stop = () => attempt(interrupt, "Couldn’t stop Ren. Try again.")
 
   return (
     <View className="flex-1 bg-background">
       <Drawer.Screen
         options={{
+          headerTitleAlign: "center",
           headerTitle: () => <Header title={SessionTitle.display(live.title ?? info?.title)} status={status} />,
         }}
       />
       {AsyncResult.isFailure(view.session.state) ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
-          <Text className="text-center">Couldn’t open this chat.</Text>
+          <Text className="text-center text-muted-foreground">Ren couldn’t open this chat.</Text>
           <Button variant="outline" onPress={reopen}>
             <Text>Try again</Text>
           </Button>
         </View>
       ) : null}
       {AsyncResult.isSuccess(view.session.state) ? (
-        <KeyboardAwareLegendList
-          ref={listRef}
-          data={blocks}
-          keyExtractor={(block) => block.key}
-          renderItem={(item) => (
-            <View className="px-5 py-3">
-              <BlockView
-                block={item.item}
-                status={item.item.kind === "user" ? statuses.get(item.item.message.id) : undefined}
-                running={item.item.kind === "steps" && item.item.turn === activeTurn}
-                workedFor={item.item.kind === "steps" ? workedFor(item.item.turn) : undefined}
-              />
-            </View>
-          )}
-          estimatedItemSize={80}
-          initialScrollAtEnd
-          alignItemsAtEnd
-          maintainScrollAtEnd
-          maintainVisibleContentPosition
-          contentInsetEndAdjustment={inset.contentInsetEndAdjustment}
-          keyboardDismissMode="interactive"
-          onStartReached={() => {
-            if (more && !loadingHistory) void loadMore().catch(() => setError("Couldn’t load earlier messages."))
-          }}
-          ListHeaderComponent={loadingHistory ? <ActivityIndicator className="py-4" /> : null}
-          ListEmptyComponent={<Text className="p-6 text-center text-muted-foreground">No messages yet.</Text>}
-          ListFooterComponent={
-            view.working ? (
-              <View className="flex-row items-center gap-2 px-5 py-3">
-                <ActivityIndicator size="small" />
-                <Text className="text-sm text-muted-foreground">Working on the next step</Text>
-              </View>
-            ) : null
+        <Transcript
+          root={id}
+          spaceId={info?.spaceId}
+          handle={transcriptRef}
+          inset={inset.contentInsetEndAdjustment}
+          keyboardOffset={insets.bottom}
+          detail={detail}
+          fold={fold}
+          foldMessages={foldMessages}
+          messages={view.messages}
+          rows={view.rows}
+          activeMessageID={view.projection?.activeMessageID}
+          running={view.running}
+          working={view.working}
+          statuses={ChatState.pendingStatuses(view.state, view.viewed)}
+          modelNames={new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))}
+          more={ChatState.more(view.state, id)}
+          loadingHistory={ChatState.loadingHistory(view.state, id)}
+          onLoadMore={() => attempt(loadMore, "Couldn’t load earlier messages.")}
+          onRetry={(message) => attempt(() => retryMessage(message), "Couldn’t send your message.")}
+          onRemove={(message) =>
+            attempt(
+              () =>
+                removeMessage(message).then((item) => {
+                  if (item) setDraft((current) => Composer.recall(current, item))
+                }),
+              "Couldn’t remove your message.",
+            )
           }
+          onResend={resend}
+          onStop={stop}
+          onAway={setAway}
         />
       ) : null}
-      {AsyncResult.isInitial(view.session.state) ? <ActivityIndicator className="mt-8 flex-1" /> : null}
-      <StickyView className="absolute inset-x-0 bottom-0">
-        <View ref={composerRef} onLayout={inset.onComposerLayout} pointerEvents="box-none">
-          <View className="items-end px-5 pb-3" pointerEvents="box-none">
-            <NewChatButton />
+      {AsyncResult.isInitial(view.session.state) ? (
+        <ActivityIndicator colorClassName="accent-muted-foreground" className="mt-8 flex-1" />
+      ) : null}
+      <StickyView className="absolute inset-x-0 bottom-0" offset={{ opened: insets.bottom }} pointerEvents="box-none">
+        {away ? (
+          <View className="items-center pb-3" pointerEvents="box-none">
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-9 rounded-full bg-card shadow-soft dark:shadow-none"
+              aria-label="Scroll to the latest message"
+              onPress={() => transcriptRef.current?.toEnd()}
+            >
+              <Icon as={ArrowDownIcon} className="size-4" />
+            </Button>
           </View>
+        ) : null}
+        <View ref={composerRef} onLayout={inset.onComposerLayout} pointerEvents="box-none" className="pb-safe-offset-6">
+          <ActivityPill root={id} />
+          <QueuedMessages root={id} />
           <ChatRequests
             root={id}
             viewed={view.viewed}
@@ -310,8 +193,21 @@ function Chat(props: { readonly id: Session.ID }) {
             formTitle={view.formTitle}
             formExpired={view.formExpired}
           />
-          {error ? <Text className="bg-background px-4 pt-2 text-sm text-destructive">{error}</Text> : null}
-          <Composer value={text} onChange={setText} onSend={send} onStop={stop} running={view.running} />
+          {error ? (
+            <View className="mx-3 mb-2 rounded-xl border border-border bg-card px-4 py-2">
+              <Text className="text-sm text-destructive">{error}</Text>
+            </View>
+          ) : null}
+          {blocked ? null : (
+            <PromptInput
+              value={draft.text}
+              onChange={(text) => setDraft((current) => Composer.withText(current, text))}
+              onSend={send}
+              onStop={stop}
+              running={view.running}
+              attachments={attachments}
+            />
+          )}
         </View>
       </StickyView>
     </View>

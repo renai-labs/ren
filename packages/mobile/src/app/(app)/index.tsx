@@ -1,73 +1,135 @@
+import { Composer } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
+import type { SpaceInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { ErrorText } from "@ren/util/error-text"
+import { type UseQueryResult, useMutation, useQuery } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
 import { useState } from "react"
 import { ActivityIndicator, View } from "react-native"
-import { KeyboardStickyView } from "react-native-keyboard-controller"
+import { KeyboardAvoidingView } from "react-native-keyboard-controller"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { withUniwind } from "uniwind"
-import { Composer } from "#components/composer"
+import { Logomark } from "#components/logomark"
+import { SpacePicker } from "#components/space-picker"
 import { Text } from "#components/text"
+import { useAttachments } from "#features/chat/attachments"
+import { PromptInput } from "#features/chat/prompt-input"
 import { Api } from "#lib/api"
+import { Preferences } from "#lib/preferences"
 
-const StickyView = withUniwind(KeyboardStickyView)
+const AvoidingView = withUniwind(KeyboardAvoidingView)
+
+function SpaceRow(props: {
+  readonly spaces: UseQueryResult<{ readonly items: ReadonlyArray<SpaceInfo> }>
+  readonly spaceId: string | undefined
+  readonly starting: boolean
+  readonly locked: boolean
+  readonly onChange: (spaceId: string) => void
+}) {
+  const spaces = props.spaces
+  const joined = spaces.data?.items ?? []
+  return (
+    <View className="min-h-11 flex-row items-center gap-2 px-5">
+      {spaces.isPending && spaces.fetchStatus === "paused" ? (
+        <Text className="text-sm text-muted-foreground">You’re offline. Connect to start a chat.</Text>
+      ) : null}
+      {spaces.data?.items.length === 0 ? (
+        <Text className="text-sm text-muted-foreground">Join a space on the web to start a chat.</Text>
+      ) : null}
+      {joined.length > 0 ? (
+        <SpacePicker
+          spaces={joined}
+          spaceId={props.spaceId}
+          disabled={props.starting || props.locked}
+          onChange={props.onChange}
+        />
+      ) : null}
+      {props.starting ? <ActivityIndicator colorClassName="accent-muted-foreground" size="small" /> : null}
+    </View>
+  )
+}
 
 export default function NewChat() {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const atoms = ChatReact.useAtoms()
-  const spaces = useQuery(Api.query.space.list.queryOptions({ joined: true, page: 1, pageSize: 50 }))
-  const space = spaces.data?.items.at(0)
+  const spaces = useQuery(Api.query.space.list.queryOptions({ joined: true, page: 1, pageSize: 100 }))
+  const joined = spaces.data?.items ?? []
+  const [remembered, setRemembered] = Preferences.usePreference(Preferences.homeSpace)
+  const spaceId = (joined.find((space) => space.id === remembered) ?? joined.at(0))?.id
   const prepare = useMutation(Api.query.chat.prepare.mutationOptions())
+  const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(Api.query.session.create.mutationOptions())
   const [sessionId, setSessionId] = useState(() => Session.ID.create())
-  const [text, setText] = useState("")
+  const [draft, setDraft] = useState<Composer.Draft>(Composer.empty)
+  const attachments = useAttachments({ sessionId, spaceId, draft, update: setDraft })
   const [error, setError] = useState("")
 
   const type = (next: string) => {
-    setText(next)
-    if (space && next.trim() && prepare.isIdle) prepare.mutate({ id: space.id })
+    setDraft((current) => Composer.withText(current, next))
+    if (spaceId && next.trim() && !prepared.has(spaceId)) {
+      setPrepared(new Set([...prepared, spaceId]))
+      prepare.mutate({ id: spaceId })
+    }
   }
   const send = () => {
-    const trimmed = text.trim()
-    if (!trimmed || !space || create.isPending) return
-    const message = { id: SessionMessage.ID.create(), text: trimmed }
+    const trimmed = draft.text.trim()
+    if (!trimmed || !spaceId || create.isPending) return
+    const files = Composer.files(draft)
+    const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
     setError("")
     create.mutate(
-      { id: sessionId, spaceId: space.id, message },
+      {
+        id: sessionId,
+        spaceId,
+        message: {
+          id,
+          text: trimmed,
+          ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
+        },
+      },
       {
         onSuccess: () => {
-          atoms.handoff(sessionId, message)
-          setText("")
+          atoms.handoff(sessionId, { id, text: trimmed, ...(files.length > 0 && { files }) })
+          setDraft(Composer.empty)
           setSessionId(Session.ID.create())
           router.navigate({ pathname: "/chat/[id]", params: { id: sessionId } })
         },
-        onError: () => {
+        onError: (cause) => {
           setSessionId(Session.ID.create())
-          setError("Couldn’t start the chat. Try again.")
+          setError(ErrorText.of(cause, "Couldn’t start the chat. Try again."))
         },
       },
     )
   }
 
   return (
-    <View className="flex-1 bg-background">
-      <View className="flex-1 items-center justify-center p-6">
-        {spaces.isPending && spaces.fetchStatus === "paused" ? (
-          <Text className="text-center text-muted-foreground">You’re offline. Connect to start a chat.</Text>
-        ) : null}
-        {spaces.isSuccess && !space ? (
-          <Text className="text-center text-muted-foreground">Join a space on the web to start a chat.</Text>
-        ) : null}
-      </View>
-      <StickyView className="absolute inset-x-0 bottom-0">
-        {error ? <Text className="bg-background px-5 pt-2 text-sm text-destructive">{error}</Text> : null}
-        <View className="flex-row items-center gap-2 bg-background px-5 pt-2">
-          {create.isPending ? <ActivityIndicator size="small" /> : null}
-          {space ? <Text className="text-sm text-muted-foreground">Working in {space.name}</Text> : null}
+    <AvoidingView behavior="padding" keyboardVerticalOffset={-insets.bottom} className="flex-1 bg-background">
+      <View pointerEvents="none" aria-hidden className="flex-1 items-center justify-center p-10">
+        <View className="aspect-[0.875] max-h-72 flex-1 opacity-10">
+          <Logomark outline className="size-full text-foreground" />
         </View>
-        <Composer value={text} onChange={type} onSend={send} onStop={send} running={false} />
-      </StickyView>
-    </View>
+      </View>
+      <View className="gap-1 pb-safe-offset-6">
+        {error ? <Text className="px-5 text-sm text-destructive">{error}</Text> : null}
+        <SpaceRow
+          spaces={spaces}
+          spaceId={spaceId}
+          starting={create.isPending}
+          locked={attachments.files.length + attachments.uploads.length > 0}
+          onChange={setRemembered}
+        />
+        <PromptInput
+          value={draft.text}
+          onChange={type}
+          onSend={send}
+          onStop={send}
+          running={false}
+          attachments={attachments}
+        />
+      </View>
+    </AvoidingView>
   )
 }
