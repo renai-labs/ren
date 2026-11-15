@@ -1,5 +1,6 @@
 export * as Queries from "./queries.js"
 
+import { Invalidation } from "@ren/client/react"
 import { focusManager, MutationCache, onlineManager, QueryClient } from "@tanstack/react-query"
 import { addNetworkStateListener } from "expo-network"
 import { AppState } from "react-native"
@@ -20,7 +21,10 @@ export const client: QueryClient = new QueryClient({
     onSuccess: (_data, _variables, _context, mutation) => {
       const group = mutation.options.mutationKey?.at(0)
       if (typeof group !== "string") return
-      return client.invalidateQueries({ predicate: (query) => query.queryKey.at(0) === group })
+      const affected = Invalidation.affected(group)
+      return client.invalidateQueries({
+        predicate: (query) => affected.some((each) => each === query.queryKey.at(0)),
+      })
     },
   }),
 })

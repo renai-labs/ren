@@ -29,8 +29,8 @@
       "environment": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_REN_URL": "https://api.v2.useren.ai",
-        "EXPO_PUBLIC_REN_APP_URL": "https://v2.useren.ai/app"
+        "EXPO_PUBLIC_REN_URL": "https://api.useren.ai",
+        "EXPO_PUBLIC_REN_APP_URL": "https://useren.ai/app"
       },
       "android": {
         "buildType": "apk"

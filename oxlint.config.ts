@@ -673,7 +673,12 @@ export default defineConfig({
       rules: { "typescript/no-unsafe-assignment": "off" },
     },
     {
-      files: ["**/routes/**/*.tsx", "**/components/**/*.tsx", "**/platform/**/*.tsx"],
+      files: [
+        "**/routes/**/*.tsx",
+        "**/components/**/*.tsx",
+        "**/platform/**/*.tsx",
+        "packages/mobile/src/features/**/*.tsx",
+      ],
       rules: { "react/only-export-components": "off" },
     },
 

@@ -4,12 +4,12 @@ import type { ComponentProps } from "react"
 import { Pressable } from "react-native"
 import { TextClassContext } from "#components/text"
 
-const buttonVariants = cva("shrink-0 flex-row items-center justify-center gap-2 rounded-md", {
+const buttonVariants = cva("shrink-0 flex-row items-center justify-center gap-2 rounded-lg active:scale-97", {
   variants: {
     variant: {
       default: "bg-primary active:bg-primary/90",
-      destructive: "bg-destructive active:bg-destructive/90",
-      outline: "border border-border bg-background active:bg-accent",
+      destructive: "bg-destructive/10 active:bg-destructive/20",
+      outline: "border border-border bg-transparent active:bg-accent",
       secondary: "bg-secondary active:bg-secondary/80",
       ghost: "active:bg-accent",
       link: "",
@@ -30,8 +30,8 @@ const buttonTextVariants = cva("text-base font-medium text-foreground", {
   variants: {
     variant: {
       default: "text-primary-foreground",
-      destructive: "text-primary-foreground",
-      outline: "",
+      destructive: "text-destructive",
+      outline: "text-muted-foreground",
       secondary: "text-secondary-foreground",
       ghost: "",
       link: "text-primary",
