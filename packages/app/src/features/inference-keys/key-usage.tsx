@@ -2,24 +2,13 @@ import type { RenInferenceKeyUsage, RenInferenceModelUsage } from "@ren/client"
 import type { RenInference } from "@ren/schema/ren-inference"
 import { formatCount, formatTokens, formatUsd } from "@ren/ui/format"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
+import { Stat } from "../../components/stat.js"
 import { dollars, noCalls } from "./periods.js"
 
 const tokens = (value: number) => (value === 0 ? "—" : formatTokens(value))
 
 const sum = (lines: ReadonlyArray<RenInferenceModelUsage>, pick: (line: RenInferenceModelUsage) => number) =>
   lines.reduce((total, line) => total + pick(line), 0)
-
-function Stat(props: { label: string; value: string; detail?: string | undefined }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-xs text-muted-foreground">{props.label}</span>
-      <span className="flex items-baseline gap-1.5 text-base font-medium tabular-nums">
-        {props.value}
-        {props.detail ? <span className="text-xs font-normal text-muted-foreground">{props.detail}</span> : null}
-      </span>
-    </div>
-  )
-}
 
 function Totals(props: { usage: RenInferenceKeyUsage }) {
   const usage = props.usage
