@@ -1,16 +1,16 @@
+import { SessionTitle } from "@ren/chat"
 import type { SessionInfo, TaskInfo } from "@ren/client"
+import { SessionPages, Tasks } from "@ren/client/react"
 import { IconAlertTriangle, IconHandStop, IconMessageCircle } from "@tabler/icons-react"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { buttonVariants } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
-import { formatRelative } from "@ren/ui/time"
+import { RelativeTime } from "@ren/util/relative-time"
 import { cn } from "cn"
 import { Row, RowsSample, Section, useShapeId } from "../../components/page.js"
 import { StatusIcon } from "../../components/task-meta.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { sessionTitle, sidebarSessionsOptions } from "../../lib/sessions.js"
-import { allTasksOptions, taskListInput } from "../../lib/tasks.js"
 import { useNow } from "../../lib/use-now.js"
 import { OverviewRows } from "./overview-rows.js"
 import { ChatState } from "./space-inbox.js"
@@ -57,9 +57,9 @@ function TaskRow(props: { spaceId: string; task: TaskInfo }) {
 function ChatRow(props: { chat: SessionInfo; now: number }) {
   return (
     <Row
-      title={sessionTitle(props.chat.title)}
+      title={SessionTitle.display(props.chat.title)}
       media={<IconMessageCircle className="size-4 text-muted-foreground" />}
-      description={`Chat · ${formatRelative(props.chat.updatedAt, props.now)}`}
+      description={`Chat · ${RelativeTime.format(props.chat.updatedAt, props.now)}`}
       render={<Link to="/sessions/$sessionId" params={{ sessionId: props.chat.id }} />}
     >
       <ChatState chat={props.chat} />
@@ -84,8 +84,8 @@ export function OverviewAttention(props: { spaceId: string }) {
   const { client } = RouterContext.useRouterContext()
   const now = useNow()
   const shapeId = useShapeId("overview-attention")
-  const tasks = useQuery(allTasksOptions(client, taskListInput({}, props.spaceId)))
-  const running = useInfiniteQuery(sidebarSessionsOptions(client, { spaceId: [props.spaceId], status: "busy" }))
+  const tasks = useQuery(Tasks.all(client, Tasks.listInput(undefined, props.spaceId)))
+  const running = useInfiniteQuery(SessionPages.options(client, { spaceId: [props.spaceId], status: "busy" }))
   const waiting = attentionTasks(tasks.data?.items ?? [])
   const page = running.data?.pages.at(0)
   const rows = [
