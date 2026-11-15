@@ -167,6 +167,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState<"password" | "code" | null>(null)
+  const address = email.trim()
 
   const signedIn = () => Auth.refreshSession(queryClient)
   const back = () => {
@@ -174,7 +175,7 @@ export default function SignIn() {
     setStep("email")
   }
   const checkEmail = () => {
-    const valid = email.includes("@")
+    const valid = address.includes("@")
     setError(valid ? "" : "Enter a valid email address.")
     return valid
   }
@@ -184,7 +185,7 @@ export default function SignIn() {
   const emailCode = async () => {
     if (!checkEmail()) return
     setPending("code")
-    const result = await sendCode(email)
+    const result = await sendCode(address)
     setPending(null)
     if (!result.error) setStep("code")
     else setError(AuthError.describe(result.error).message)
@@ -192,7 +193,7 @@ export default function SignIn() {
   const signIn = async () => {
     setError("")
     setPending("password")
-    const result = await Auth.client.signIn.email({ email, password })
+    const result = await Auth.client.signIn.email({ email: address, password })
     if (!result.error) {
       await signedIn()
       return
@@ -200,7 +201,7 @@ export default function SignIn() {
     setPending(null)
     const failure = AuthError.describe(result.error)
     setError(failure.message)
-    if (failure.code === "EMAIL_NOT_VERIFIED") open(`verify-email?email=${encodeURIComponent(email)}`)
+    if (failure.code === "EMAIL_NOT_VERIFIED") open(`verify-email?email=${encodeURIComponent(address)}`)
   }
 
   return (
@@ -264,7 +265,7 @@ export default function SignIn() {
               onPress={back}
             >
               <Text numberOfLines={1} className="flex-1">
-                {email}
+                {address}
               </Text>
               <Text className="text-sm text-muted-foreground">Change</Text>
             </Pressable>
@@ -274,7 +275,7 @@ export default function SignIn() {
                 <Text
                   role="link"
                   className="text-sm text-muted-foreground"
-                  onPress={() => open(`forgot-password?email=${encodeURIComponent(email)}`)}
+                  onPress={() => open(`forgot-password?email=${encodeURIComponent(address)}`)}
                 >
                   Forgot your password?
                 </Text>
@@ -298,7 +299,7 @@ export default function SignIn() {
         ) : null}
         {step === "code" ? (
           <View className="gap-4">
-            <CodeStep email={email} onSignedIn={signedIn} />
+            <CodeStep email={address} onSignedIn={signedIn} />
             <BackButton onPress={back} />
           </View>
         ) : null}
