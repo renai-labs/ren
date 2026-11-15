@@ -5,6 +5,7 @@ import { DriveQuery } from "@ren/client/react"
 import { Drive } from "@ren/schema/drive"
 import { FileName } from "@ren/util/file-name"
 import { queryOptions } from "@tanstack/react-query"
+import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto"
 import { Directory, File, Paths, UploadType } from "expo-file-system"
 import { shareAsync } from "expo-sharing"
 import { Api } from "#lib/api"
@@ -20,7 +21,11 @@ export const savedOptions = (target: Target) =>
     queryKey: ["drive", "saved", target] as const,
     queryFn: async () => {
       const link = await Queries.client.query(DriveQuery.link(Api.query, { ...target, disposition: "attachment" }))
-      const folder = new Directory(Paths.cache, "drive")
+      const key = await digestStringAsync(
+        CryptoDigestAlgorithm.SHA256,
+        JSON.stringify([target.spaceId ?? "", target.path]),
+      )
+      const folder = new Directory(Paths.cache, "drive", key)
       folder.create({ idempotent: true, intermediates: true })
       return File.downloadFileAsync(link.url, new File(folder, FileName.base(target.path)), { idempotent: true })
     },
