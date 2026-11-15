@@ -1,6 +1,6 @@
 import "../global.css"
 import { QueryClientProvider, useQuery } from "@tanstack/react-query"
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router"
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from "expo-router"
 import type { Theme } from "expo-router/react-navigation"
 import { hide, preventAutoHideAsync } from "expo-splash-screen"
 import { StatusBar } from "expo-status-bar"
@@ -59,6 +59,17 @@ function Routes() {
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       </Stack.Protected>
     </Stack>
+  )
+}
+
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return (
+    <View className="flex-1 items-center justify-center gap-4 bg-background p-6">
+      <Text className="text-center">Unable to show this screen. Try again.</Text>
+      <Button variant="outline" onPress={() => void props.retry()}>
+        <Text>Try again</Text>
+      </Button>
+    </View>
   )
 }
 
