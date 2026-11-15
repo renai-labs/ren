@@ -1,8 +1,8 @@
-import { Seed } from "@ren/client/react"
+import { Seed, Tasks } from "@ren/client/react"
 import { SkeletonRows } from "../../components/page.js"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { useState, type ReactNode } from "react"
-import type { TaskInfo, TaskUpdateInput } from "@ren/client"
+import type { TaskInfo } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import {
@@ -51,7 +51,6 @@ import { formatDate } from "@ren/ui/time"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { allTasksKey, refreshEvery } from "../../lib/tasks.js"
 import { TaskLink, TasksLink } from "./task-scope.js"
 import { TaskScopeContext } from "./task-scope-context.js"
 import { useAgents } from "../../lib/use-agents.js"
@@ -81,20 +80,11 @@ function PropertySection(props: { title: string; children: ReactNode }) {
   )
 }
 
-type Patch = Omit<TaskUpdateInput, "id">
+type Patch = Tasks.Patch
 
 type Assignment = { agentId?: string | null; ownerId?: string | null; spaceId?: string }
 
 const failed = (title: string) => (error: Error) => toast.error(title, { description: errorMessage(error) })
-
-function pickShown(patch: Patch): Partial<TaskInfo> {
-  return {
-    ...(patch.title && { title: patch.title }),
-    ...(patch.status && { status: patch.status }),
-    ...(patch.priority !== undefined && { priority: patch.priority }),
-    ...(patch.dueAt !== undefined && { dueAt: patch.dueAt }),
-  }
-}
 
 export function TaskPage(props: {
   taskId: string
@@ -107,15 +97,14 @@ export function TaskPage(props: {
   const openSession = props.onOpenSession
   const stored = useSuspenseQuery({
     ...api.task.get.queryOptions({ idOrSlug: props.taskId }),
-    refetchInterval: refreshEvery,
-    ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), allTasksKey()], props.taskId),
+    refetchInterval: Tasks.refreshEvery,
+    ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), Tasks.allKey()], props.taskId),
   }).data
   const update = useMutation(api.task.update.mutationOptions())
   const assign = useMutation(api.task.assign.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
   const [archiving, setArchiving] = useState(false)
-  const pending = update.isPending ? update.variables : undefined
-  const task: TaskInfo = pending ? { ...stored, ...pickShown(pending) } : stored
+  const task = Tasks.withPatch(stored, update.isPending ? update.variables : undefined)
   const change = (patch: Patch) =>
     update.mutate({ id: task.id, ...patch }, { onError: failed("Couldn’t save the task") })
   const reassign = (target: Assignment) =>
@@ -421,7 +410,7 @@ function Subtasks(props: { task: TaskInfo }) {
   const task = props.task
   const listed = useQuery({
     ...api.task.list.queryOptions({ parentId: task.id, includeDone: true, page: 1, pageSize: pickerPageSize }),
-    refetchInterval: refreshEvery,
+    refetchInterval: Tasks.refreshEvery,
   })
   const subtasks = listed.data?.items ?? []
   const total = task.subtasks?.total ?? 0

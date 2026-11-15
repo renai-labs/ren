@@ -1,11 +1,10 @@
 import { useState } from "react"
+import { DriveQuery } from "@ren/client/react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { errorMessage, errorStatus } from "./errors.js"
 import { RouterContext } from "./router-context.js"
-
-const linkLifetime = 10 * 60_000
 
 const inline = (mime: string) =>
   mime.startsWith("image/") ||
@@ -25,11 +24,8 @@ export const playableKind = (mime: string) => {
 
 export const useDriveLink = (spaceId: string | undefined) => {
   const { api } = RouterContext.useRouterContext()
-  return (path: string, disposition: "inline" | "attachment") => ({
-    ...api.drive.download.queryOptions({ ...(spaceId && { spaceId }), path, disposition }),
-    staleTime: linkLifetime,
-    retry: (count: number, error: unknown) => errorStatus(error) !== 404 && count < 1,
-  })
+  return (path: string, disposition: "inline" | "attachment") =>
+    DriveQuery.link(api, { ...(spaceId && { spaceId }), path, disposition })
 }
 
 export function useDriveDownload(spaceId: string | undefined) {

@@ -4,12 +4,12 @@ import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { FileIcon } from "@ren/ui/file-icon"
 import { Spinner } from "@ren/ui/spinner"
+import { DocumentKind } from "@ren/util/document-kind"
 import { FileName } from "@ren/util/file-name"
 import { IconDownload, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { OpenFile } from "../../components/file-browser.js"
 import { Viewer } from "../../components/file-preview/file-preview.js"
-import { kindOf } from "../../components/file-preview/preview.js"
 import { QueryResult } from "../../lib/query-result.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { playableKind, useDriveFile, useDriveLink } from "../../lib/use-drive-file.js"
@@ -46,7 +46,7 @@ export function DriveViewer(props: {
   const name = FileName.base(props.path)
   const file = { path: props.path, name, mime: props.entry?.mime ?? Drive.typeOf(name), size: props.entry?.size ?? 0 }
   const drive = useDriveFile(props.space, file)
-  const kind = kindOf(file)
+  const kind = DocumentKind.of(file)
   const media = file.mime.startsWith("image/") ? "image" : playableKind(file.mime)
   const read = useQuery({
     ...api.files.read.queryOptions({ source: "drive", ...(props.space && { spaceId: props.space }), path: props.path }),

@@ -14,8 +14,9 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/d
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
 import { Loading } from "@ren/ui/loading"
 import type { SessionMessage } from "@ren/schema/session/message"
+import type { DocumentKind } from "@ren/util/document-kind"
 import { errorStatus } from "../../lib/errors.js"
-import { maxPreviewBytes, type Kind } from "./preview.js"
+import { maxPreviewBytes } from "./preview.js"
 
 const views = {
   pdf: lazy(() => import("./pdf.js").then((module) => ({ default: module.PdfView }))),
@@ -193,7 +194,7 @@ function Blocked(props: { reason: keyof typeof notices; onDownload: () => void }
 }
 
 export function Viewer(props: {
-  kind: Kind
+  kind: DocumentKind.Kind
   file: SessionMessage.DriveFile
   bytes: (signal: AbortSignal) => Promise<ArrayBuffer>
   onClose: () => void
@@ -266,7 +267,7 @@ export function Viewer(props: {
 }
 
 export function FilePreview(props: {
-  kind: Kind | undefined
+  kind: DocumentKind.Kind | undefined
   file: SessionMessage.DriveFile
   open: boolean
   onOpenChange: (open: boolean) => void

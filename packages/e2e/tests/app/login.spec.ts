@@ -28,8 +28,7 @@ test("signs in with an emailed code", async ({ page, request }) => {
 
   await page.goto("/app/login")
   await page.getByLabel("Email").fill(email)
-  await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await page.getByRole("button", { name: "Email sign-in code" }).click()
+  await page.getByRole("button", { name: "Email me a sign-in code" }).click()
   await expect(page.getByText("Enter the code sent to")).toBeVisible()
   const code = await emailedCode(request, email)
   await page.getByRole("textbox").first().click()

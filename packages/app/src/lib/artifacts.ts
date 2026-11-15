@@ -1,36 +1,5 @@
 export * as Artifacts from "./artifacts.js"
 
-import type { ArtifactInfo } from "@ren/client"
-import { queryOptions } from "@tanstack/react-query"
-import { pickerPageSize } from "./pagination.js"
-import type { Runtime } from "./runtime.js"
-
-const refreshEvery = 5000
-
-const allKey = (spaceId?: string) =>
-  spaceId === undefined ? (["artifact", "all"] as const) : (["artifact", "all", { spaceId }] as const)
-
-export const allOptions = (client: Runtime.Context["client"], spaceId?: string) =>
-  queryOptions({
-    queryKey: allKey(spaceId),
-    queryFn: async (context) => {
-      const items: ArtifactInfo[] = []
-      for (let page = 1; ; page++) {
-        // oxlint-disable-next-line no-await-in-loop -- pages fetched in order until total reached
-        const result = await client.artifact.list(
-          { ...(spaceId && { spaceId }), page, pageSize: pickerPageSize },
-          { signal: context.signal },
-        )
-        items.push(...result.items)
-        if (page * result.pageSize >= result.total || result.items.length === 0) return items
-      }
-    },
-    refetchInterval: (query) =>
-      query.state.data?.some((artifact) => artifact.pendingDeploymentId !== null) ? refreshEvery : false,
-  })
-
-export const host = (url: string | null) => (url === null ? undefined : URL.parse(url)?.host)
-
 export type Mention = { readonly id: string; readonly title: string }
 
 const whitespace = /\s/

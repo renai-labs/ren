@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react"
 import { Composer, ComposerHistory, Mentions, type ChatSession } from "@ren/chat"
+import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
@@ -999,7 +1000,7 @@ export function PromptInput(props: {
       {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
       <DropOverlay
         title="Drop files to attach"
-        detail={`Up to ${Session.maxDriveFiles} files, ${formatBytes(maxFileBytes)} each`}
+        detail={`Up to ${Session.maxDriveFiles} files, ${formatBytes(Drive.maxUploadBytes)} each`}
         onFiles={attach}
       />
       <Input

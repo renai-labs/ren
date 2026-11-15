@@ -108,6 +108,88 @@ export type Data = typeof Data.Type
 
 export type Kind = Data["_tag"]
 
+type Encoded = typeof Data.Encoded
+
+type Of<Tag extends Kind> = Extract<Encoded, { readonly _tag: Tag }>
+
+export interface Names {
+  readonly agent: (agentId: string | null) => string | undefined
+  readonly person: (userId: string | null) => string | undefined
+  readonly space: (spaceId: string) => string
+}
+
+export const actorName = (actor: typeof Task.Actor.Encoded, names: Names) =>
+  actor.agentId ? (names.agent(actor.agentId) ?? "Agent") : (names.person(actor.userId) ?? "Ren")
+
+const fields = { title: "title", description: "description", priority: "priority", dueAt: "due date" } as const
+
+const assignment = (data: Of<"assigned">, names: Names) => {
+  const moved = data.fromSpaceId === data.toSpaceId ? undefined : `moved it to ${names.space(data.toSpaceId)}`
+  const assignee = names.agent(data.toAgentId) ?? names.person(data.toOwnerId)
+  const changed = data.fromAgentId !== data.toAgentId || data.fromOwnerId !== data.toOwnerId
+  const handoff = Boolean(data.fromAgentId) && Boolean(data.toAgentId)
+  const assigned = assignee ? `${handoff ? "handed off to" : "assigned it to"} ${assignee}` : "removed the assignee"
+  return [changed ? assigned : undefined, moved].filter(Boolean).join(" and ") || "changed the assignment"
+}
+
+const parentChange = (data: Of<"parent">) => {
+  if (!data.to) return "made this a task of its own"
+  return data.from ? "moved this sub-task to another parent" : "made this a sub-task"
+}
+
+const statusChange = (data: Of<"status">) =>
+  `${data.automation ? "merged a pull request and " : ""}changed status from ${Task.statusLabels[data.from]} to ${Task.statusLabels[data.to]}`
+
+const started = (data: Of<"started">, names: Names) =>
+  `started ${names.agent(data.agentId) ?? "an agent"} in ${data.mode === "new" ? "a new" : "the last"} session`
+
+const reviewed = (data: Of<"reviewed">) => (data.decision === "approved" ? "approved the review" : "requested changes")
+
+const labels = (data: Of<"label">) => `changed labels to ${data.to.join(", ") || "none"}`
+
+const links = (data: Of<"link">) => (data.added.length > 0 ? "added a link" : "removed a link")
+
+const plainText = {
+  created: "created the task",
+  archived: "archived the task",
+  review_requested: "requested a human review",
+  finished: "finished the task",
+} as const
+
+const isPlain = (data: Encoded): data is Of<keyof typeof plainText> => data._tag in plainText
+
+const detailedText = (data: Exclude<Encoded, Of<keyof typeof plainText>>, names: Names) => {
+  switch (data._tag) {
+    case "status":
+      return statusChange(data)
+    case "started":
+      return started(data, names)
+    case "assigned":
+      return assignment(data, names)
+    case "reviewed":
+      return reviewed(data)
+    case "field":
+      return `changed the ${fields[data.field]}`
+    case "label":
+      return labels(data)
+    case "link":
+      return links(data)
+    case "parent":
+      return parentChange(data)
+  }
+}
+
+export const describe = (data: Encoded, names: Names) =>
+  isPlain(data) ? plainText[data._tag] : detailedText(data, names)
+
+export const note = (data: Encoded) => {
+  if (data._tag === "review_requested") return data.reason
+  if (data._tag === "reviewed") return data.comment
+  if (data._tag === "assigned") return data.note
+  if (data._tag === "finished") return data.note
+  return null
+}
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,

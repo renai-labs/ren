@@ -19,7 +19,8 @@ import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
-import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
+import { FilterMenu, type Filters } from "../../components/filter-menu.js"
+import { FilterMatch } from "@ren/util/filter-match"
 import { LoadMore } from "../../components/load-more.js"
 import { MembersTable } from "../../components/members-table.js"
 import { Page, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "../../components/page.js"
@@ -31,7 +32,7 @@ import { useMembers } from "../../lib/use-members.js"
 import { useCanAdminister, useOrganization } from "../../lib/use-organization.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
-import { Search } from "../../lib/search.js"
+import { Search } from "@ren/util/search"
 import { useShown } from "../../lib/use-shown.js"
 import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -256,7 +257,7 @@ export function MembersSettingsPage() {
   const [adding, setAdding] = useState<{ id: string; name: string }>()
   const createSpaceMember = useMutation(api["space-member"].create.mutationOptions())
   const rows = members
-    .filter((member) => passes(filters, { role: [member.role] }))
+    .filter((member) => FilterMatch.passes(filters, { role: [member.role] }))
     .filter((member) => Search.matches(query, member.name, member.email))
     .map((member) => ({
       id: member.id,

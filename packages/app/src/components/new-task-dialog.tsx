@@ -1,4 +1,4 @@
-import type { TaskCreateInput } from "@ren/client"
+import { Tasks } from "@ren/client/react"
 import { Breadcrumb } from "./breadcrumb.js"
 import { useState, type ReactElement, type ReactNode } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
@@ -77,17 +77,6 @@ function Chip(props: {
   )
 }
 
-const draftFor = (spaceId: string) => ({
-  spaceId,
-  title: "",
-  description: "",
-  status: "todo",
-  priority: "none",
-  agentId: "none",
-  labels: [] as string[],
-  dueAt: "",
-})
-
 const isBareKey = (event: KeyboardEvent) =>
   !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat && !event.isComposing
 
@@ -102,26 +91,6 @@ export function useNewTaskShortcut(onOpen: () => void) {
     onOpen()
   })
 }
-
-function createStatus(status: string): TaskCreateInput["status"] {
-  if (status === "in_progress" || status === "done" || status === "dismissed") return status
-  return "todo"
-}
-
-const createPriority = (priority: string): Pick<TaskCreateInput, "priority"> =>
-  priority === "high" || priority === "medium" || priority === "low" ? { priority } : {}
-
-const taskInput = (draft: ReturnType<typeof draftFor>, spaceId: string, parentId?: string): TaskCreateInput => ({
-  spaceId,
-  ...(parentId && { parentId }),
-  ...(draft.dueAt && { dueAt: draft.dueAt }),
-  title: draft.title.trim(),
-  ...(draft.description.trim() && { description: draft.description.trim() }),
-  status: createStatus(draft.status),
-  ...createPriority(draft.priority),
-  ...(draft.agentId !== "none" && { agentId: draft.agentId }),
-  ...(draft.labels.length > 0 && { labels: draft.labels }),
-})
 
 function SpaceChip(props: { spaceId: string; onChange: (spaceId: string) => void }) {
   const spaces = useSpaces()
@@ -190,11 +159,7 @@ function LabelsChip(props: { value: ReadonlyArray<string>; onChange: (labels: st
   )
 }
 
-function TaskChips(props: {
-  draft: ReturnType<typeof draftFor>
-  spaceId: string
-  onChange: (patch: Partial<ReturnType<typeof draftFor>>) => void
-}) {
+function TaskChips(props: { draft: Tasks.Draft; spaceId: string; onChange: (patch: Partial<Tasks.Draft>) => void }) {
   const { api } = RouterContext.useRouterContext()
   const agents =
     useQuery({
@@ -322,15 +287,15 @@ export function NewTaskDialog(props: {
   const defaultSpace = fallbackSpace(props.spaceId, spaces.joined)
   const [expanded, setExpanded] = useState(false)
   const [createMore, setCreateMore] = useState(false)
-  const [draft, setDraft] = useState(() => draftFor(defaultSpace))
+  const [draft, setDraft] = useState(() => Tasks.draft(defaultSpace))
   const spaceId = draft.spaceId || defaultSpace
   const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }))
   const mutation = useMutation(api.task.create.mutationOptions())
   const create = () => {
-    mutation.mutate(taskInput(draft, spaceId, props.parent?.id), {
+    mutation.mutate(Tasks.createInput(draft, spaceId, props.parent?.id), {
       onSuccess: (task) => {
         toast.success(`${task.identifier} created`)
-        setDraft(draftFor(spaceId))
+        setDraft(Tasks.draft(spaceId))
         if (!createMore) setOpen(false)
       },
       onError: (error) => toast.error("Could not create the task", { description: errorMessage(error) }),

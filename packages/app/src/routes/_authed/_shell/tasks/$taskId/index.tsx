@@ -1,7 +1,7 @@
+import { Tasks } from "@ren/client/react"
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { Loader } from "../../../../../lib/loader.js"
-import { taskActivityOptions } from "../../../../../lib/tasks.js"
 
 export const Route = createFileRoute("/_authed/_shell/tasks/$taskId/")({
   head: () => ({ meta: [{ title: "Task · Ren" }] }),
@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_authed/_shell/tasks/$taskId/")({
     const context = options.context
     Loader.start(
       context.queryClient.query(context.api.task.get.queryOptions({ idOrSlug: options.params.taskId })),
-      context.queryClient.query(taskActivityOptions(context.client, options.params.taskId)),
+      context.queryClient.query(Tasks.activity(context.client, options.params.taskId)),
     )
   },
 })
