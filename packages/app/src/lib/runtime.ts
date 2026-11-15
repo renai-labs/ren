@@ -1,7 +1,7 @@
 export * as Runtime from "./runtime.js"
 
 import { ClientError, Ren } from "@ren/client"
-import { RenQuery } from "@ren/client/react"
+import { Invalidation, RenQuery } from "@ren/client/react"
 import { hashKey, MutationCache, QueryClient } from "@tanstack/react-query"
 import { createRouter } from "@tanstack/react-router"
 import { RouteSkeleton } from "../components/route-skeleton.js"
@@ -51,7 +51,7 @@ export function make(platform: Platform.Info) {
       onSuccess: (_data, _variables, _context, mutation) => {
         const group = mutation.options.mutationKey?.[0]
         if (typeof group !== "string") return
-        const groups = invalidates[group] ?? [group]
+        const groups = Invalidation.affected(group)
         return queryClient.invalidateQueries({
           predicate: (query) => groups.some((name) => name === query.queryKey[0]),
         })

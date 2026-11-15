@@ -35,15 +35,15 @@ export function LoginPage() {
   const [pending, setPending] = useState<"password" | "code" | null>(null)
   const back = () => {
     setError("")
-    setStep(step === "code" ? "password" : "email")
+    setStep("email")
+  }
+  const checkEmail = () => {
+    const valid = email.includes("@")
+    setError(valid ? "" : "Enter a valid email address.")
+    return valid
   }
   const continueWithEmail = () => {
-    if (!email.includes("@")) {
-      setError("Enter a valid email address.")
-      return
-    }
-    setError("")
-    setStep("password")
+    if (checkEmail()) setStep("password")
   }
   const signIn = async () => {
     setError("")
@@ -62,7 +62,7 @@ export function LoginPage() {
     setError(failure.message)
   }
   const sendCode = async () => {
-    setError("")
+    if (!checkEmail()) return
     setPending("code")
     const result = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
     setPending(null)
@@ -93,16 +93,6 @@ export function LoginPage() {
     return (
       <AuthLayout>
         <FormError>{error}</FormError>
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-10 w-full"
-          disabled={pending !== null}
-          onClick={() => void sendCode()}
-        >
-          {pending === "code" ? <Spinner data-icon="inline-start" /> : <IconMail data-icon="inline-start" />}
-          Email sign-in code
-        </Button>
         <form
           onSubmit={(event) => {
             event.preventDefault()
@@ -189,8 +179,18 @@ export function LoginPage() {
               onChange={(event) => ((value: string) => setEmail(value))(event.currentTarget.value)}
             />
           </Field>
-          <Button type="submit" className="h-10 w-full">
+          <Button type="submit" className="h-10 w-full" disabled={pending !== null}>
             Continue
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-10 w-full"
+            disabled={pending !== null}
+            onClick={() => void sendCode()}
+          >
+            {pending === "code" ? <Spinner data-icon="inline-start" /> : <IconMail data-icon="inline-start" />}
+            Email me a sign-in code
           </Button>
         </FieldGroup>
       </form>

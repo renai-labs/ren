@@ -1,12 +1,12 @@
-import { logomarkPaths } from "../icons/logomark-paths.js"
+import { LogomarkShape } from "@ren/util/logomark-shape"
 
 function LoadingMark() {
   return (
-    <svg viewBox="0 0 876 1003" fill="none" aria-hidden="true" className="h-9 w-auto text-foreground/10">
-      {logomarkPaths.map((d) => (
+    <svg viewBox={LogomarkShape.viewBox} fill="none" aria-hidden="true" className="h-9 w-auto text-foreground/10">
+      {LogomarkShape.paths.map((d) => (
         <path key={d} d={d} fill="currentColor" />
       ))}
-      <path d={logomarkPaths[2]} fill="currentColor" className="animate-logo-progress text-muted-foreground" />
+      <path d={LogomarkShape.paths[2]} fill="currentColor" className="animate-logo-progress text-muted-foreground" />
     </svg>
   )
 }

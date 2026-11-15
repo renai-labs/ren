@@ -215,11 +215,6 @@ function CheckboxOptions(props: {
   )
 }
 
-export const passes = (filters: Filters, values: Record<string, string[]>) =>
-  Object.entries(filters).every(
-    (entry) => entry[1].length === 0 || (values[entry[0]] ?? []).some((value) => entry[1].includes(value)),
-  )
-
 export function FilterChips(props: {
   properties: FilterProperty[]
   value: Filters

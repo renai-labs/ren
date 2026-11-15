@@ -13,9 +13,9 @@ import {
   AttachmentTrigger,
 } from "@ren/ui/attachment"
 import { FileIcon } from "@ren/ui/file-icon"
+import { DocumentKind } from "@ren/util/document-kind"
 import { cn } from "cn"
 import { FilePreview } from "../../components/file-preview/file-preview.js"
-import { kindOf } from "../../components/file-preview/preview.js"
 import { MediaPlayer } from "../../components/media-player.js"
 import { ImageTrigger } from "../../components/image-set.js"
 import { MediaUnavailable } from "../../components/media-unavailable.js"
@@ -72,7 +72,7 @@ function DriveFileChip(props: {
   const file = props.file
   const drive = props.drive
   const thumbnail = drive.image && !drive.deleted ? drive.url : undefined
-  const kind = kindOf(file)
+  const kind = DocumentKind.of(file)
   const [previewing, setPreviewing] = useState(false)
   return (
     <Attachment size="sm" state={drive.deleted ? "error" : "done"}>

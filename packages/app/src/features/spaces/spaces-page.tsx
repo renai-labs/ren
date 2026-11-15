@@ -2,14 +2,15 @@ import type { SpaceInfo } from "@ren/client"
 import { IconEye, IconLock, IconPlus, IconUsers } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Tabs } from "@ren/ui/tabs"
-import { FilterMenu, passes, type Filters } from "../../components/filter-menu.js"
+import { FilterMenu, type Filters } from "../../components/filter-menu.js"
+import { FilterMatch } from "@ren/util/filter-match"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Page, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
 import { Loading } from "@ren/ui/loading"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import { Pages } from "../../lib/pages.js"
-import { Search } from "../../lib/search.js"
+import { Search } from "@ren/util/search"
 import { NewSpaceDialog } from "../../components/new-space-dialog.js"
 import { SpacesTable } from "./spaces-table.js"
 import { useState } from "react"
@@ -46,7 +47,7 @@ export function SpacesPage() {
   const shown = (spaces ?? [])
     .filter((space) => (tab === "all" ? !isPrivate(space) : space.membershipId !== null))
     .filter((space) => Search.matches(query, space.name, space.description))
-    .filter((space) => passes(filters, { visibility: [isPrivate(space) ? "private" : "shared"] }))
+    .filter((space) => FilterMatch.passes(filters, { visibility: [isPrivate(space) ? "private" : "shared"] }))
   return (
     <Page
       title="Spaces"

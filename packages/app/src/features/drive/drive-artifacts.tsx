@@ -1,5 +1,6 @@
 import { useState } from "react"
 import type { ArtifactInfo } from "@ren/client"
+import { Artifacts } from "@ren/client/react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -22,10 +23,9 @@ import { FileRow, FileTable, FileTableSample } from "../../components/file-table
 import { Page, PageActions, TableEmpty, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { WorkspacePending } from "../../components/workspace-pending.js"
-import { Artifacts } from "../../lib/artifacts.js"
 import { QueryResult } from "../../lib/query-result.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Search } from "../../lib/search.js"
+import { Search } from "@ren/util/search"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { ArtifactThumbnail } from "./artifact-thumbnail.js"
 import { DriveCrumbs } from "./drive-crumbs.js"

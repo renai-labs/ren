@@ -15,6 +15,9 @@ const maxNameBytes = 255
 // oxlint-disable-next-line ren/no-comments -- The largest file in a drive, from an upload or from a chat's output; a deployment can set a lower one (DRIVE_MAX_FILE_SIZE).
 export const maxFileBytes = 100 * 1024 * 1024
 
+// oxlint-disable-next-line ren/no-comments -- The largest file the apps let a person upload, a round number under maxFileBytes.
+export const maxUploadBytes = 100_000_000
+
 export const Path = Schema.String.check(Schema.isNonEmpty({ message: "Path is required." }))
   .pipe(
     Schema.decode(SchemaTransformation.transform({ decode: (path) => path.normalize("NFC"), encode: (path) => path })),

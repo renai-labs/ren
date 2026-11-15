@@ -1,9 +1,10 @@
+import { Tasks } from "@ren/client/react"
 import { createFileRoute } from "@tanstack/react-router"
 import { TaskScopeProvider } from "../../../../../../features/tasks/task-scope.js"
 import { TasksPage } from "../../../../../../features/tasks/tasks-page.js"
 import { useSpace } from "../../../../../../features/spaces/use-space.js"
 import { Loader } from "../../../../../../lib/loader.js"
-import { allTasksOptions, taskListInput, TaskSearch } from "../../../../../../lib/tasks.js"
+import { TaskSearch } from "../../../../../../lib/tasks.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/tasks/")({
   head: () => ({ meta: [{ title: "Tasks · Space · Ren" }] }),
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/tasks/")({
   loader: (options) => {
     Loader.start(
       options.context.queryClient.query(
-        allTasksOptions(options.context.client, taskListInput(options.deps, options.params.spaceId)),
+        Tasks.all(options.context.client, Tasks.listInput(options.deps.filters, options.params.spaceId)),
       ),
     )
   },

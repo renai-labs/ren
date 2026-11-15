@@ -1,7 +1,8 @@
+import { Tasks } from "@ren/client/react"
 import { createFileRoute } from "@tanstack/react-router"
 import { TasksPage } from "../../../../features/tasks/tasks-page.js"
 import { Loader } from "../../../../lib/loader.js"
-import { allTasksOptions, taskListInput, TaskSearch } from "../../../../lib/tasks.js"
+import { TaskSearch } from "../../../../lib/tasks.js"
 
 export const Route = createFileRoute("/_authed/_shell/tasks/")({
   head: () => ({ meta: [{ title: "Tasks · Ren" }] }),
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/_authed/_shell/tasks/")({
   loaderDeps: (options) => options.search,
   loader: (options) => {
     Loader.start(
-      options.context.queryClient.query(allTasksOptions(options.context.client, taskListInput(options.deps))),
+      options.context.queryClient.query(Tasks.all(options.context.client, Tasks.listInput(options.deps.filters))),
     )
   },
   component: HomeTasks,

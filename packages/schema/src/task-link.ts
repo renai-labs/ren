@@ -28,6 +28,32 @@ export const Info = Schema.Struct({
   url: Schema.String,
 }).annotate({ identifier: "TaskLink.Info" })
 
+// oxlint-disable-next-line ren/no-comments -- a pattern rather than URL, because React Native's URL has no URL.parse
+const httpUrl = /^https?:\/\/(?:[^@/]+@)?(?<hostname>[^:/?#]+)(?::\d+)?(?<pathname>\/[^?#]*)?/iu
+
+const githubLabel = (pathname: string) => {
+  const parts = pathname.split("/").filter(Boolean)
+  return parts.length >= 4 ? `${parts.at(0)}/${parts.at(1)}#${parts.at(3)}` : pathname.slice(1)
+}
+
+const linearLabel = (pathname: string) =>
+  pathname.split("/").find((part) => /^[A-Z][A-Z0-9]*-\d+$/u.test(part)) ?? "Linear issue"
+
+export const label = (link: { readonly kind: Kind; readonly url: string }) => {
+  const url = httpUrl.exec(link.url)?.groups
+  if (!url) return link.url
+  const pathname = url.pathname ?? "/"
+  if (link.kind === "github_pr" || link.kind === "github_issue") return githubLabel(pathname)
+  if (link.kind === "linear_issue") return linearLabel(pathname)
+  if (link.kind === "slack_thread") return "Slack thread"
+  return (url.hostname ?? "").toLowerCase().replace(/^www\./u, "") + (pathname === "/" ? "" : pathname)
+}
+
+export const shortLabel = (link: { readonly kind: Kind; readonly url: string }) => {
+  const full = label(link)
+  return full === "Slack thread" ? "Slack" : full.replace(/^[^/#]+\/[^#]+#/u, "#")
+}
+
 export interface Ref {
   readonly kind: Kind
   readonly key: string

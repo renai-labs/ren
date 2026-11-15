@@ -4,7 +4,7 @@ import { Field, FieldLabel } from "@ren/ui/field"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
 import { Switch } from "@ren/ui/switch"
 import { cn } from "cn"
-import { Search } from "../lib/search.js"
+import { Search } from "@ren/util/search"
 import { useScrollEdges } from "../lib/use-scroll-edges.js"
 
 export function SpacesField(props: {

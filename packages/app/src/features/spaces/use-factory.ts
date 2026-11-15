@@ -1,9 +1,9 @@
 import type { SpaceInfo } from "@ren/client"
+import { Tasks } from "@ren/client/react"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { SPEND_STAGES, buildAnalytics, gridEnd, gridStart, simulate, type WorkStage } from "@ren/ui/factory-model"
 import { localTimeZone } from "@ren/ui/time"
 import { realAnalytics, realWorld, stageOfAgent } from "../../lib/factory.js"
-import { allTasksOptions } from "../../lib/tasks.js"
 import { useNow } from "../../lib/use-now.js"
 import { spaceAgentsOptions } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -15,7 +15,7 @@ const mock = buildAnalytics(simulate(Date.now()))
 export function useFactory(space: SpaceInfo) {
   const { api, client } = RouterContext.useRouterContext()
   const now = useNow()
-  const tasks = useQuery(allTasksOptions(client, { spaceId: space.id, parentId: "none" }))
+  const tasks = useQuery(Tasks.all(client, { spaceId: space.id, parentId: "none" }))
   const agents = useQuery(spaceAgentsOptions(api, space.id))
   const names = new Map((agents.data?.items ?? []).map((agent) => [agent.id, agent.name]))
   const stages = new Map(

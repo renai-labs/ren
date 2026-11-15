@@ -1,14 +1,14 @@
-import { logomarkPaths } from "./logomark-paths.js"
+import { LogomarkShape } from "@ren/util/logomark-shape"
 
 export function Logomark(props: { className?: string | undefined; outline?: boolean | undefined }) {
   return (
     <svg
-      viewBox={props.outline ? "-3 -3 882 1009" : "0 0 876 1003"}
+      viewBox={props.outline ? LogomarkShape.outlineViewBox : LogomarkShape.viewBox}
       fill="none"
       aria-hidden
       className={props.className}
     >
-      {logomarkPaths.map((d) => (
+      {LogomarkShape.paths.map((d) => (
         <path
           key={d}
           d={d}

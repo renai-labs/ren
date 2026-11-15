@@ -26,7 +26,7 @@ import { DisplayOptions } from "./task-filters.js"
 import { TaskBoard } from "./task-board.js"
 import { PriorityMenu, StatusMenu } from "../../components/task-pickers.js"
 import { errorMessage } from "../../lib/errors.js"
-import { countedTaskProperties, taskProperties, matchesFilters, type TaskLookups } from "./task-properties.js"
+import { countedTaskProperties, taskProperties, type TaskLookups } from "./task-properties.js"
 import {
   LabelBadge,
   PriorityIcon,
@@ -41,18 +41,18 @@ import { formatShortDate } from "@ren/ui/time"
 import { cn } from "cn"
 import { useState, type ComponentType } from "react"
 import type { TaskInfo } from "@ren/client"
+import { Tasks } from "@ren/client/react"
+import { FilterMatch } from "@ren/util/filter-match"
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { useAgents } from "../../lib/use-agents.js"
 import { useLabels } from "../../lib/use-labels.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { allTasksOptions, taskListInput, type TaskSearch } from "../../lib/tasks.js"
+import type { TaskSearch } from "../../lib/tasks.js"
 import { TaskDisplay } from "./task-display.js"
 import { TaskLink } from "./task-scope.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
-
-const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
 type Task = TaskInfo
 
@@ -313,7 +313,7 @@ export function TasksPage(props: {
   const search = props.search
   const spaceId = props.spaceId
   const tasks = useQuery({
-    ...allTasksOptions(client, taskListInput(search, spaceId)),
+    ...Tasks.all(client, Tasks.listInput(search.filters, spaceId)),
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
@@ -342,17 +342,10 @@ export function TasksPage(props: {
   )
   const needle = query.trim().toLowerCase()
   const roots: ReadonlyArray<TaskInfo> = tasks.data?.items ?? []
-  const order = (a: TaskInfo, b: TaskInfo) => {
-    const value =
-      display.orderBy === "priority"
-        ? (priorityRank[a.priority ?? ""] ?? 3) - (priorityRank[b.priority ?? ""] ?? 3)
-        : Date.parse(a.createdAt) - Date.parse(b.createdAt)
-    return display.direction === "asc" ? value : -value
-  }
   const visible = roots
-    .filter((task) => matchesFilters(lookups, task, filters))
+    .filter((task) => FilterMatch.passes(filters, Tasks.filterValues(task)))
     .filter((task) => !needle || `${task.identifier} ${task.title}`.toLowerCase().includes(needle))
-    .toSorted(order)
+    .toSorted(Tasks.order(display))
   const bulk = async (ids: ReadonlyArray<string>, run: (id: string) => Promise<unknown>, done: string) => {
     const results = await Promise.allSettled(ids.map(run))
     const failed = results.filter((result) => result.status === "rejected").length

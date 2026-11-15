@@ -1,11 +1,13 @@
 import { useRef, useState } from "react"
 import type { FileSystemAction, FileSystemEntry } from "@ren/client"
+import { DriveQuery } from "@ren/client/react"
 import { Button } from "@ren/ui/button"
 import { FileIcon } from "@ren/ui/file-icon"
 import { Input } from "@ren/ui/input"
 import { Loading } from "@ren/ui/loading"
 import { toast } from "@ren/ui/sonner"
 import { formatDate } from "@ren/ui/time"
+import { Drive } from "@ren/schema/drive"
 import { FileName } from "@ren/util/file-name"
 import {
   IconBrowser,
@@ -30,9 +32,8 @@ import { errorMessage } from "../../lib/errors.js"
 import { formatBytes } from "../../lib/format.js"
 import { QueryResult } from "../../lib/query-result.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Search } from "../../lib/search.js"
+import { Search } from "@ren/util/search"
 import { useDriveDownload } from "../../lib/use-drive-file.js"
-import { maxFileBytes } from "../../lib/use-uploads.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { DriveCrumbs } from "./drive-crumbs.js"
 import { DriveLink } from "./drive-link.js"
@@ -63,14 +64,14 @@ function Upload(props: {
   const send = platform.upload
   if (!send || !props.actions.includes("upload")) return null
   const upload = (incoming: ReadonlyArray<File>) => {
-    const large = incoming.filter((file) => file.size > maxFileBytes)
+    const large = incoming.filter((file) => file.size > Drive.maxUploadBytes)
     if (large.length > 0)
       toast.error(large.length === 1 ? `${large.at(0)?.name ?? "A file"} is too large` : "Some files are too large", {
-        description: `A file can be at most ${formatBytes(maxFileBytes)}.`,
+        description: `A file can be at most ${formatBytes(Drive.maxUploadBytes)}.`,
       })
     const names = new Set(props.taken)
     const named = incoming
-      .filter((file) => file.size <= maxFileBytes)
+      .filter((file) => file.size <= Drive.maxUploadBytes)
       .map((file) => {
         const path = FileName.free(`${props.folder}${file.name}`, names)
         names.add(path)
@@ -101,7 +102,7 @@ function Upload(props: {
       </PageActions>
       <DropOverlay
         title="Drop files to upload"
-        detail={`Into ${props.folder || "the top folder"}, up to ${formatBytes(maxFileBytes)} each`}
+        detail={`Into ${props.folder || "the top folder"}, up to ${formatBytes(Drive.maxUploadBytes)} each`}
         onFiles={upload}
       />
       <Input
@@ -243,7 +244,7 @@ function EntryRow(props: {
 
 function Listing(props: { home: DriveSearch.Home; space: string | undefined; folder: string; query: string }) {
   const { api } = RouterContext.useRouterContext()
-  const listed = useQuery(api.files.list.queryOptions(DriveSearch.listInput(props)))
+  const listed = useQuery(api.files.list.queryOptions(DriveQuery.listInput(props)))
   const shapeId = useShapeId("drive-files")
   const data = listed.data
   const shown = (data?.entries ?? []).filter((entry) => Search.matches(props.query, FileName.base(entry.path)))
@@ -292,7 +293,7 @@ function DriveFiles(props: {
 }) {
   const { api } = RouterContext.useRouterContext()
   const navigate = useNavigate()
-  const listed = useQuery(api.files.list.queryOptions(DriveSearch.listInput(props)))
+  const listed = useQuery(api.files.list.queryOptions(DriveQuery.listInput(props)))
   const [query, setQuery] = useState("")
   const data = listed.data
   return (

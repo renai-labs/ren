@@ -26,6 +26,15 @@ export const actionable: ReadonlyArray<Status> = ["todo", "in_progress"]
 export const Priority = Schema.Literals(["low", "medium", "high"]).annotate({ identifier: "Task.Priority" })
 export type Priority = typeof Priority.Type
 
+export const statusLabels = {
+  todo: "Todo",
+  in_progress: "In progress",
+  done: "Done",
+  dismissed: "Dismissed",
+} as const satisfies Record<Status, string>
+
+export const priorityLabels = { high: "High", medium: "Medium", low: "Low" } as const satisfies Record<Priority, string>
+
 export const StartMode = Schema.Literals(["new", "continue"]).annotate({
   identifier: "Task.StartMode",
   description:

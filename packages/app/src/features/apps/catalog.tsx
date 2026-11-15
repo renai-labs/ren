@@ -5,7 +5,7 @@ import { AppGrid, AppRow, AppRowSample, AppSection } from "../../components/app-
 import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
 import { needsAttention, type CatalogApp } from "../../lib/apps.js"
-import { Search } from "../../lib/search.js"
+import { Search } from "@ren/util/search"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
 
 export function CatalogAppRow(props: { app: CatalogApp; onAdd: (app: CatalogApp) => void }) {
