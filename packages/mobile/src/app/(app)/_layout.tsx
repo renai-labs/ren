@@ -3,6 +3,7 @@ import { ChatReact } from "@ren/chat/react"
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { Storage } from "expo-sqlite/kv-store"
 import { Drawer } from "expo-router/drawer"
+import { headerOptions, MenuButton } from "#components/header-button"
 import { Sidebar } from "#components/sidebar"
 import { Auth } from "#lib/auth"
 import { Lifecycle } from "#lib/lifecycle"
@@ -26,11 +27,19 @@ export default function AppLayout() {
         <Drawer
           backBehavior="history"
           drawerContent={(drawer) => <Sidebar onClose={() => drawer.navigation.closeDrawer()} />}
-          screenOptions={{ headerShadowVisible: false, drawerType: "front" }}
+          screenOptions={{
+            ...headerOptions,
+            headerLeft: () => <MenuButton />,
+            drawerType: "front",
+            drawerStyle: { borderTopRightRadius: 16, borderBottomRightRadius: 16, overflow: "hidden" },
+          }}
         >
           <Drawer.Screen name="index" options={{ title: "New chat" }} />
           <Drawer.Screen name="chats" options={{ title: "Chats" }} />
           <Drawer.Screen name="chat/[id]" options={{ title: "" }} />
+          <Drawer.Screen name="tasks" options={{ title: "Tasks", headerShown: false }} />
+          <Drawer.Screen name="drive" options={{ title: "Drive", headerShown: false }} />
+          <Drawer.Screen name="settings" options={{ title: "Settings" }} />
         </Drawer>
       </ChatReact.Provider>
     </RegistryContext>
