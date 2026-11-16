@@ -5,7 +5,8 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { IconAlertCircle } from "@tabler/icons-react"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
@@ -43,10 +44,13 @@ type Space = ReturnType<typeof useSpaces>["joined"][number]
 
 const staleMessage = "The app changed. Reload before saving."
 
+const nameConflict = /slug already exists|name of its space/u
+
 const failureOf = (error: unknown): Failure => {
   const message = errorMessage(error)
   if (errorStatus(error) !== 409) return { at: "footer", message }
-  return message === staleMessage ? { at: "stale", message } : { at: "name", message }
+  if (message === staleMessage) return { at: "stale", message }
+  return nameConflict.test(message) ? { at: "name", message } : { at: "footer", message }
 }
 
 const fieldPaths = (path: string) =>
@@ -286,33 +290,49 @@ function Header(props: { title: string; mode: Mode; blocked: boolean; onMode: (m
   )
 }
 
+function Failed(props: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="flex animate-in items-start gap-2 border-t bg-destructive/5 px-5 py-3 text-sm text-destructive duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0"
+    >
+      <IconAlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <p className="min-w-0 text-pretty [overflow-wrap:anywhere]">{props.message}</p>
+    </div>
+  )
+}
+
 function Footer(props: {
   start: ReactNode
   failure: Failure | undefined
+  inForm: boolean
   onReload: (() => void) | undefined
   busy: boolean
   label: string
   onClose: () => void
 }) {
+  const shown = props.failure && (props.failure.at !== "name" || !props.inForm) ? props.failure : undefined
   return (
-    <DialogFooter className="m-0 items-center gap-3 px-5 sm:justify-between">
-      {props.start}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {props.failure && props.failure.at !== "name" ? <FieldError>{props.failure.message}</FieldError> : null}
-        {props.failure?.at === "stale" && props.onReload ? (
-          <Button type="button" variant="outline" onClick={props.onReload}>
-            Reload
+    <>
+      {shown ? <Failed key={shown.message} message={shown.message} /> : null}
+      <DialogFooter className="m-0 items-center gap-3 px-5 sm:justify-between">
+        {props.start}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {props.failure?.at === "stale" && props.onReload ? (
+            <Button type="button" variant="outline" onClick={props.onReload}>
+              Reload
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" onClick={props.onClose}>
+            Cancel
           </Button>
-        ) : null}
-        <Button type="button" variant="ghost" onClick={props.onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={props.busy}>
-          {props.busy ? <Spinner data-icon="inline-start" /> : null}
-          {props.label}
-        </Button>
-      </div>
-    </DialogFooter>
+          <Button type="submit" disabled={props.busy}>
+            {props.busy ? <Spinner data-icon="inline-start" /> : null}
+            {props.label}
+          </Button>
+        </div>
+      </DialogFooter>
+    </>
   )
 }
 
@@ -495,12 +515,19 @@ function Editor(props: {
         </CustomAppForm>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col px-5 pt-1 pb-5">
-          <SpecEditor text={spec.text} onChange={spec.setText} />
+          <SpecEditor
+            text={spec.text}
+            onChange={(text) => {
+              spec.setText(text)
+              setFailure((previous) => (previous?.at === "stale" ? previous : undefined))
+            }}
+          />
         </div>
       )}
       <Footer
         start={editing ? <span /> : <SpaceSelect spaces={spaces} value={ownerId} onChange={setOwnerId} />}
         failure={failure}
+        inForm={inForm}
         onReload={reloadOf(failure, props.onReload, (latest) => {
           setDraft({ ...AppDraft.fromSource(latest), slug: latest.slug })
           setRevision(latest.revision)
