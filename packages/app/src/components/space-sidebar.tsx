@@ -8,7 +8,7 @@ import {
   IconBuildingFactory2,
   IconChartPie,
   IconMessagesFilled,
-  IconChecklist,
+  IconSubtask,
   IconCube,
   IconFileText,
   IconFolder,
@@ -58,7 +58,7 @@ const spaceGroups = [
     items: [
       { value: "inbox", label: "Inbox", icon: IconInbox, to: "/spaces/$spaceId" },
       { value: "overview", label: "Overview", icon: IconChartPie, to: "/spaces/$spaceId/overview" },
-      { value: "tasks", label: "Tasks", icon: IconChecklist, to: "/spaces/$spaceId/tasks" },
+      { value: "tasks", label: "Tasks", icon: IconSubtask, to: "/spaces/$spaceId/tasks" },
       { value: "drive", label: "Drive", icon: IconFolder, to: "/spaces/$spaceId/drive" },
       { value: "automations", label: "Automations", icon: IconWebhook, to: "/spaces/$spaceId/automations" },
     ],
