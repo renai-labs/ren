@@ -190,6 +190,31 @@ it.effect("the env note: one line per app with connected env items, in catalog o
   }),
 )
 
+it.effect("a bundle in the catalog tells the agent which apps an @mention of it means", () =>
+  Effect.sync(() => {
+    const catalog = McpPeer.catalog("env", [], {
+      apps: [
+        {
+          appId: App.ID.create(),
+          appSlug: "sales-kit",
+          name: "Sales Kit",
+          includes: ["apollo", "attio", "gmail", "google-calendar"],
+          profiles: [{ slug: "sales", name: "Sales · Sales Kit", kind: "shared", env: {} }],
+        },
+        {
+          appId: App.ID.create(),
+          appSlug: "gmail",
+          name: "Gmail",
+          profiles: [{ slug: "sales", name: "Sales · Sales Kit", kind: "shared", env: {} }],
+        },
+      ],
+    })
+    expect(OpenCodeMcp.notes(Option.some(catalog))).toEqual([
+      "@sales-kit (Sales Kit) is a bundle of the apps apollo, attio, gmail, google-calendar: it has no tools of its own. When someone mentions it, use the tools of those apps, and ask them to connect any of those apps this chat cannot use.",
+    ])
+  }),
+)
+
 it.effect("after a failure, retries come at 10 s, 1 min and 5 min, and stop once no server is down", () =>
   Effect.gen(function* () {
     const at: Array<number> = []

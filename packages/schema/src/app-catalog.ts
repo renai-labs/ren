@@ -21,6 +21,11 @@ export const AppEntry = Schema.Struct({
   appId: App.ID,
   appSlug: Primitive.Slug,
   name: Primitive.Name,
+  includes: Schema.optionalKey(
+    Schema.Array(Primitive.Slug).annotate({
+      description: "For an app that includes other apps (a bundle): the slugs of the apps it depends on.",
+    }),
+  ),
   profiles: Schema.Array(
     Schema.Struct({
       slug: AppProfile.Slug,

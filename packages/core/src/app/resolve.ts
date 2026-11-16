@@ -224,30 +224,37 @@ export const layer = Layer.effect(
         egress: found.egress,
       })
       return {
-        apps: ordered.map((row) => ({
-          appId: row.id,
-          appSlug: row.slug,
-          name: row.name,
-          profiles: found.reached
-            .filter((profile) => profile.appId === row.id)
-            .map((profile) => ({
-              slug: profile.slug,
-              name: profile.name,
-              kind: profile.kind,
-              env: Object.fromEntries(
-                ProfileItems.declared(
-                  { mcps: row.mcps, skills: row.skills, requiredCredentials: row.required_credentials },
-                  profile.slug,
-                ).flatMap((item) =>
-                  "env" in item.item &&
-                  !skipped(row.id, "env", item.item.env) &&
-                  labels.has(`${profile.id}/${item.label}`)
-                    ? [[item.item.env, item.label]]
-                    : [],
+        apps: ordered.map((row) => {
+          const includes = (found.claims.members.get(row.id)?.dependsOn ?? []).flatMap((id) => {
+            const dependency = apps.get(id)
+            return dependency ? [dependency.slug] : []
+          })
+          return {
+            appId: row.id,
+            appSlug: row.slug,
+            name: row.name,
+            ...(includes.length > 0 && { includes: includes.toSorted() }),
+            profiles: found.reached
+              .filter((profile) => profile.appId === row.id)
+              .map((profile) => ({
+                slug: profile.slug,
+                name: profile.name,
+                kind: profile.kind,
+                env: Object.fromEntries(
+                  ProfileItems.declared(
+                    { mcps: row.mcps, skills: row.skills, requiredCredentials: row.required_credentials },
+                    profile.slug,
+                  ).flatMap((item) =>
+                    "env" in item.item &&
+                    !skipped(row.id, "env", item.item.env) &&
+                    labels.has(`${profile.id}/${item.label}`)
+                      ? [[item.item.env, item.label]]
+                      : [],
+                  ),
                 ),
-              ),
-            })),
-        })),
+              })),
+          }
+        }),
         mcps: selected.mcps,
         skills: ordered.flatMap((row) =>
           Object.entries(row.skills)
