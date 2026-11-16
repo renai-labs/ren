@@ -70,10 +70,11 @@ const isSlug = Schema.is(AppProfile.Slug)
 export const installDependencies = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   id: AppProfile.ID,
-  into: { readonly spaceIds: ReadonlyArray<Space.ID>; readonly allSpaces: boolean },
+  into: { readonly spaceIds: ReadonlyArray<Space.ID>; readonly allSpaces: boolean; readonly name?: string },
 ) {
   const row = (yield* transaction.select().from(profiles).where(eq(profiles.id, id))).at(0)
   if (!row) return
+  const base = into.name ?? row.name
   const edges = Database.Schema.app_dependency
   const tree = new Set<App.ID>()
   let pending: ReadonlyArray<App.ID> = [row.app_id]
@@ -138,8 +139,8 @@ export const installDependencies = Effect.fnUntraced(function* (
             name:
               Array.from({ length: names.size + 1 }, (_, index) => {
                 const suffix = index === 0 ? "" : ` ${index + 1}`
-                return `${row.name.slice(0, Primitive.maximumNameLength - suffix.length).trimEnd()}${suffix}`
-              }).find((candidate) => !names.has(candidate.toLowerCase())) ?? row.name,
+                return `${base.slice(0, Primitive.maximumNameLength - suffix.length).trimEnd()}${suffix}`
+              }).find((candidate) => !names.has(candidate.toLowerCase())) ?? base,
             kind: row.kind,
             user_id: row.user_id,
             all_spaces: values.all_spaces,
@@ -169,6 +170,37 @@ export const installDependencies = Effect.fnUntraced(function* (
       const created = yield* create({ all_spaces: false })
       yield* transaction.insert(listed).values(missing.map((space_id) => ({ profile_id: created, space_id })))
     }),
+    { discard: true },
+  )
+})
+
+// oxlint-disable-next-line ren/no-comments -- A space added to an existing profile gets its dependencies one space at a time, named after that space ("Customer Success · Sales Kit"), not after the space the profile was first made for.
+export const installDependenciesInEach = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  id: AppProfile.ID,
+  spaceIds: ReadonlyArray<Space.ID>,
+) {
+  if (!spaceIds.length) return
+  const row = (yield* transaction
+    .select({ name: Database.Schema.app.name })
+    .from(profiles)
+    .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, profiles.app_id))
+    .where(eq(profiles.id, id))).at(0)
+  if (!row) return
+  const named = new Map(
+    (yield* transaction
+      .select({ id: spaces.id, name: spaces.name })
+      .from(spaces)
+      .where(inArray(spaces.id, [...spaceIds]))).map((space) => [space.id, space.name]),
+  )
+  yield* Effect.forEach(
+    spaceIds,
+    (spaceId) =>
+      installDependencies(transaction, id, {
+        spaceIds: [spaceId],
+        allSpaces: false,
+        ...(named.has(spaceId) && { name: `${named.get(spaceId)} · ${row.name}` }),
+      }),
     { discard: true },
   )
 })
@@ -802,7 +834,9 @@ export const layer = Layer.effect(
               .where(and(eq(listed.profile_id, row.id), inArray(listed.space_id, [...remove])))
           if (typeof input.allSpaces === "boolean")
             yield* transaction.update(profiles).set({ all_spaces: input.allSpaces }).where(eq(profiles.id, row.id))
-          yield* installDependencies(transaction, row.id, { spaceIds: add, allSpaces: input.allSpaces === true })
+          if (input.allSpaces === true)
+            yield* installDependencies(transaction, row.id, { spaceIds: add, allSpaces: true })
+          else yield* installDependenciesInEach(transaction, row.id, add)
           yield* touch(transaction, row.id)
           const left = yield* transaction
             .select({ space: listed.space_id })
@@ -1051,7 +1085,7 @@ export const layer = Layer.effect(
               .set({ kind: "shared", user_id: null, updated_at: sql`now()` })
               .where(eq(profiles.id, row.id))
             yield* transaction.insert(listed).values({ profile_id: row.id, space_id: input.spaceId })
-            yield* installDependencies(transaction, row.id, { spaceIds: [input.spaceId], allSpaces: false })
+            yield* installDependenciesInEach(transaction, row.id, [input.spaceId])
             return {
               info: yield* infoOf(transaction, actor, row.id),
               labels: yield* labelsOf(transaction, row.id),

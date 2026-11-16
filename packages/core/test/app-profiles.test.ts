@@ -364,7 +364,7 @@ it.live(
 )
 
 it.live(
-  "an app added to another space or to every space installs its apps there too, numbered when the name is taken",
+  "an app added to another space installs its apps there named after that space, and every space numbers taken names",
   () =>
     Effect.gen(function* () {
       const profiles = yield* AppProfiles.Service
@@ -407,8 +407,8 @@ it.live(
         ["other", "Other"],
         ["sales", "Sales"],
         ["sales-2", "Sales 2"],
-        ["sales-3", "Sales 3"],
-        ["sales-4", "Sales 4"],
+        ["sales-3", "Design · suite"],
+        ["sales-4", "Sales 3"],
       ])
     }),
 )
