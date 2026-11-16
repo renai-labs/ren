@@ -89,12 +89,12 @@ import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
 export const sidebarRow =
-  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-8 gap-1 rounded-md p-1 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:mx-1.25 [&>svg]:my-0.75 [&_svg]:size-4.5"
+  "h-8 gap-1 rounded-md p-1 text-sm font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:mx-1.25 [&>svg]:my-0.75 [&_svg]:size-4.5"
 
 export const sidebarMenu = "gap-px group-data-[collapsible=icon]:gap-1"
 
 const iconButton =
-  "size-8 text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
+  "size-8 text-sidebar-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
 
 const shortcut = /Mac|iPhone|iPad/u.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"
 
@@ -106,7 +106,7 @@ function SearchButton(props: { onSearch: () => void }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            className="text-sidebar-foreground/55 hover:text-sidebar-foreground"
+            className="text-sidebar-foreground hover:text-sidebar-foreground"
             aria-label="Search"
             onClick={props.onSearch}
           />
@@ -188,7 +188,7 @@ export function Section(props: {
             size="sm"
             aria-expanded={props.open}
             onClick={props.onToggle}
-            className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-medium text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
+            className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-bold text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
           >
             {props.label}
             <IconChevronRight
@@ -200,7 +200,7 @@ export function Section(props: {
             />
           </Button>
         ) : null}
-        {!props.onToggle ? <span className="text-sm font-medium text-sidebar-foreground/80">{props.label}</span> : null}
+        {!props.onToggle ? <span className="text-sm font-bold text-sidebar-foreground/80">{props.label}</span> : null}
         <span className="flex-1" />
         <span className="flex items-center">{props.actions}</span>
       </div>
@@ -290,7 +290,7 @@ export function SpaceEntry(props: {
                 variant: "ghost",
                 size: "icon-sm",
                 className:
-                  "text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent",
+                  "text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent",
               })}
             >
               <IconPlus data-weight="heavy" />
@@ -298,7 +298,7 @@ export function SpaceEntry(props: {
           ) : null}
           <RowMenu
             side="right"
-            className="text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
+            className="text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
             label={`${props.space.name} actions`}
             items={[
               ...(isPersonal(props.space)

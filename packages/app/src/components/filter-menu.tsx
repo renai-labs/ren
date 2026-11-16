@@ -58,7 +58,7 @@ export const sameFilters = (left: Filters, right: Filters) =>
   })
 
 export const sidebarAction =
-  "size-5 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
+  "size-5 rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
 
 const row = "h-9 gap-3 px-3 data-highlighted:[&_svg]:text-foreground! data-popup-open:[&_svg]:text-foreground!"
 const marked = "h-9 gap-2 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"

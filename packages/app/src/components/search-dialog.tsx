@@ -6,7 +6,7 @@ import {
   IconApps,
   IconBook,
   IconCalendar,
-  IconChecklist,
+  IconSubtask,
   IconCube,
   IconEdit,
   IconLock,
@@ -101,7 +101,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
   const external = (url: string) => () => platform.openExternal(url)
   const actions = [
     { label: "New chat", icon: IconEdit, run: () => navigate({ to: "/" }) },
-    { label: "Open tasks", icon: IconChecklist, run: () => navigate({ to: "/tasks" }) },
+    { label: "Open tasks", icon: IconSubtask, run: () => navigate({ to: "/tasks" }) },
     { label: "Open spaces", icon: IconCube, run: () => navigate({ to: "/spaces" }) },
     { label: "Open apps", icon: IconApps, run: () => navigate({ to: "/apps" }) },
     { label: "Open settings", icon: IconSettings, run: () => navigate({ to: "/settings/preferences" }) },
