@@ -108,30 +108,42 @@ const namespaces = (apps: Option.Option<AppCatalog.Info>, options: { readonly lo
       : [],
   )
 
+// oxlint-disable-next-line ren/no-comments -- A bundle has no tools of its own: @<bundle> means the apps it includes, so the agent uses their tools and asks to connect the ones it lacks.
+const bundleNotes = (catalog: AppCatalog.Catalog) =>
+  catalog.apps.flatMap((app) =>
+    app.includes?.length
+      ? [
+          `@${app.appSlug} (${app.name}) is a bundle of the apps ${app.includes.join(", ")}: it has no tools of its own. When someone mentions it, use the tools of those apps, and ask them to connect any of those apps this chat cannot use.`,
+        ]
+      : [],
+  )
+
 // oxlint-disable-next-line ren/no-comments -- §6.4 rule 9 (P47): the env keys of each app's profiles, from the catalog only and in its order, so one catalog gives the same bytes (INV-34).
+const envNotes = (catalog: AppCatalog.Catalog) =>
+  catalog.apps.flatMap((app) => {
+    const profiles = app.profiles.flatMap((profile) => {
+      const first = Object.keys(profile.env).at(0)
+      const example = first && profile.env[first]
+      if (!first || !example) return []
+      return [{ name: profile.name, suffix: example.slice(first.length), example }]
+    })
+    return profiles.length
+      ? [
+          `${app.appSlug} profiles: ${profiles
+            .map((profile, index) =>
+              index === 0
+                ? `${profile.name} → keys end in \`${profile.suffix}\` (\`${profile.example}\`)`
+                : `${profile.name} → \`${profile.suffix}\``,
+            )
+            .join("; ")}. Env keys exist only with the suffix.`,
+        ]
+      : []
+  })
+
 export const notes = (apps: Option.Option<AppCatalog.Info>) =>
   Option.match(catalogOf(apps), {
     onNone: () => [],
-    onSome: (catalog) =>
-      catalog.apps.flatMap((app) => {
-        const profiles = app.profiles.flatMap((profile) => {
-          const first = Object.keys(profile.env).at(0)
-          const example = first && profile.env[first]
-          if (!first || !example) return []
-          return [{ name: profile.name, suffix: example.slice(first.length), example }]
-        })
-        return profiles.length
-          ? [
-              `${app.appSlug} profiles: ${profiles
-                .map((profile, index) =>
-                  index === 0
-                    ? `${profile.name} → keys end in \`${profile.suffix}\` (\`${profile.example}\`)`
-                    : `${profile.name} → \`${profile.suffix}\``,
-                )
-                .join("; ")}. Env keys exist only with the suffix.`,
-            ]
-          : []
-      }),
+    onSome: (catalog) => [...envNotes(catalog), ...bundleNotes(catalog)],
   })
 
 const isDown = (status: string) => status === "failed" || status === "needs_auth"
