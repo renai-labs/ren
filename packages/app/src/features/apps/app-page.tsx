@@ -43,7 +43,7 @@ import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { fromRegistry, listsSpace, statusOf, type CatalogApp, type Status } from "../../lib/apps.js"
+import { fromRegistry, isBundle, listsSpace, statusOf, type CatalogApp, type Status } from "../../lib/apps.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Seed } from "../../lib/seed.js"
@@ -74,7 +74,11 @@ function AppAccounts(props: { app: CatalogApp; onProfile: (target: ProfileTarget
         </Button>
       }
       profiles={profiles}
-      empty={`No accounts yet. One account holds every sign-in and key ${props.app.name} needs.`}
+      empty={
+        isBundle(props.app)
+          ? "Not in a space yet."
+          : `No accounts yet. One account holds every sign-in and key ${props.app.name} needs.`
+      }
       onOpen={(each) => props.onProfile({ appId: each.appId, profileId: each.id, edit: true })}
     />
   )

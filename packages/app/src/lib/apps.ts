@@ -30,6 +30,15 @@ export const statusAction: Record<Status, string | undefined> = {
   missing: "Connect",
 }
 
+export const isBundle = (app: Pick<CatalogApp, "dependsOn" | "mcps" | "skills">) =>
+  app.dependsOn.length > 0 && Object.keys(app.mcps ?? {}).length === 0 && Object.keys(app.skills ?? {}).length === 0
+
+export const waitsForUser = (status: Status | "absent") =>
+  status === "missing" || status === "expired" || status === "absent"
+
+export const listNames = (names: ReadonlyArray<string>) =>
+  names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
+
 export const hasManaged = (app: Pick<CatalogApp, "mcps">) =>
   Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed")
 

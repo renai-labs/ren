@@ -48,8 +48,9 @@ import { ConfirmDialog } from "./confirm-dialog.js"
 import { Row, Rows } from "./page.js"
 import { SpacesField } from "./spaces-field.js"
 import { Platform } from "../platform/platform.js"
-import { useApp } from "../lib/use-app.js"
+import { useApp, useApps } from "../lib/use-app.js"
 import { useAppProfiles } from "../lib/use-app-profiles.js"
+import { useBundleParts, type BundlePart } from "../lib/use-bundle-parts.js"
 import { useMembers } from "../lib/use-members.js"
 import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -59,7 +60,9 @@ import { plural } from "../lib/format.js"
 import {
   gaps,
   hasManaged,
+  isBundle,
   lastSpaceWarning,
+  listNames,
   listsSpace,
   reachedSpaces,
   signsIn,
@@ -488,7 +491,131 @@ function SpaceAccounts(props: StateProps) {
   )
 }
 
+const previewCaption = (part: BundlePart, from: Target) => {
+  if (part.status !== "absent") return `Already in ${from.name}`
+  if (hasManaged(part.app)) return "Ren credits"
+  return signsInFirst(part.app, undefined) ? "Needs sign-in" : "Ready"
+}
+
+const addedCaption = (part: BundlePart, from: Target) => {
+  if (part.status === "absent") return `Not in ${from.name}`
+  if (part.status === "expired") return "Sign-in expired"
+  if (part.status === "missing") return "Needs sign-in"
+  if (part.status === "credits") return "Ren credits"
+  const holder = part.here.flatMap((profile) => profile.items).find((item) => item.holder)?.holder
+  return holder ? `Connected as ${holder.name}` : "Connected"
+}
+
+const partAction = (status: BundlePart["status"]) => {
+  if (status === "absent") return "Add"
+  if (status === "expired") return "Reconnect"
+  return status === "missing" ? "Connect" : undefined
+}
+
+function BundleApps(props: {
+  parts: ReadonlyArray<BundlePart>
+  pending: boolean
+  count: number
+  from: Target
+  added: boolean
+}) {
+  const [opened, setOpened] = useState<string>()
+  return (
+    <section className="flex w-full flex-col gap-1 text-left" aria-label="Apps">
+      <h3 className="text-sm font-medium">
+        Apps
+        <span className="ml-1.5 text-muted-foreground tabular-nums">{props.count}</span>
+      </h3>
+      {props.pending ? (
+        <SkeletonRows count={props.count} label="Loading apps" />
+      ) : (
+        <ul className="-mx-2 flex flex-col">
+          {props.parts.map((part) => {
+            const action = props.added ? partAction(part.status) : undefined
+            const status = part.status === "absent" ? "missing" : part.status
+            return (
+              <li key={part.app.id} className="flex min-h-14 items-center gap-3 p-2">
+                <AppIcon name={part.app.name} description={part.app.description} icon={part.app.icon} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm" title={part.app.name}>
+                    {part.app.name}
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    {props.added ? <StatusDot status={status} /> : null}
+                    <span className="truncate">
+                      {props.added ? addedCaption(part, props.from) : previewCaption(part, props.from)}
+                    </span>
+                  </span>
+                </span>
+                {action ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    aria-label={`${action} ${part.app.name}`}
+                    onClick={() => setOpened(part.app.id)}
+                  >
+                    {action}
+                  </Button>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {opened ? <ProfileDialog appId={opened} from={props.from} onClose={() => setOpened(undefined)} /> : null}
+    </section>
+  )
+}
+
+const bundleSummary = (parts: ReadonlyArray<BundlePart>) => {
+  const signIn = parts.filter((part) => part.status === "missing" || part.status === "expired").length
+  const absent = parts.filter((part) => part.status === "absent").length
+  if (signIn + absent === 0) return <StatusLine status="connected">Ready</StatusLine>
+  return (
+    <StatusLine status="missing">
+      {[
+        signIn > 0 ? `${plural(signIn, "app")} ${signIn === 1 ? "needs" : "need"} sign-in` : "",
+        absent > 0 ? `${plural(absent, "app")} missing` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+    </StatusLine>
+  )
+}
+
+function BundleState(props: StateProps) {
+  const bundle = useBundleParts(props.app, props.from)
+  return (
+    <Screen
+      app={props.app}
+      title={props.title}
+      description={bundle.pending ? "Checking apps" : bundleSummary(bundle.parts)}
+      onSubmit={props.onClose}
+      action={
+        <Button type="submit" className={primary}>
+          Done
+        </Button>
+      }
+    >
+      <BundleApps
+        parts={bundle.parts}
+        pending={bundle.pending}
+        count={props.app.dependsOn.length}
+        from={props.from}
+        added
+      />
+    </Screen>
+  )
+}
+
 function WorkingState(props: StateProps) {
+  if (isBundle(props.app)) return <BundleState {...props} />
+  return <WorkingAccounts {...props} />
+}
+
+function WorkingAccounts(props: StateProps) {
   const holder = props.here
     .filter((profile) => gaps(profile).length === 0)
     .flatMap((profile) => profile.items)
@@ -514,6 +641,9 @@ function WorkingState(props: StateProps) {
     </Screen>
   )
 }
+
+const addsLine = (props: { app: App }) =>
+  isBundle(props.app) ? `Adds ${plural(props.app.dependsOn.length, "app")}` : undefined
 
 function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> }) {
   const [picked, setPicked] = useState<string>()
@@ -562,7 +692,7 @@ function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> 
     <Screen
       app={props.app}
       title={props.title}
-      description={<StatusLine status={props.status}>{statusLabel[props.status]}</StatusLine>}
+      description={addsLine(props) ?? <StatusLine status={props.status}>{statusLabel[props.status]}</StatusLine>}
       onSubmit={() => {
         if (!from.private && from.members > 1) setConfirming(true)
         else addHere(choice)
@@ -571,7 +701,7 @@ function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> 
         <>
           {button}
           <Button type="button" variant="ghost" className={secondary} onClick={() => props.onMode("reuse")}>
-            Connect new
+            {isBundle(props.app) ? "New account" : "Connect new"}
           </Button>
         </>
       }
@@ -699,6 +829,39 @@ const signsInFirst = (app: App, reuse: AppProfile | undefined) => {
   )
 }
 
+function BundlePreview(props: {
+  app: App
+  from: Target
+  parts: { pending: boolean; parts: ReadonlyArray<BundlePart> }
+}) {
+  if (!isBundle(props.app)) return null
+  return (
+    <BundleApps
+      parts={props.parts.parts}
+      pending={props.parts.pending}
+      count={props.app.dependsOn.length}
+      from={props.from}
+      added={false}
+    />
+  )
+}
+
+const newStepCopy = (input: {
+  from: Target
+  start: "add" | "connect"
+  bundle: { count: number; adds: ReadonlyArray<string> } | undefined
+}) => {
+  const who = input.from.private
+    ? "Only you can use this account."
+    : `Everyone in ${input.from.name} can use this account.`
+  if (!input.bundle) return { label: input.start === "add" ? `Add to ${input.from.name}` : "Connect", note: who }
+  return {
+    label: `Add to ${input.from.name}`,
+    note: input.bundle.adds.length > 0 ? "Each app’s account gets this name." : who,
+    description: `Adds ${plural(input.bundle.count, "app")}`,
+  }
+}
+
 function NewStep(
   props: StateProps & {
     reuse: AppProfile | undefined
@@ -715,6 +878,17 @@ function NewStep(
   const app = props.app
   const from = props.from
   const reuse = props.reuse
+  const parts = useBundleParts(app, from)
+  const copy = newStepCopy({
+    from,
+    start: props.start,
+    bundle: isBundle(app)
+      ? {
+          count: app.dependsOn.length,
+          adds: parts.parts.filter((part) => part.status === "absent").map((part) => part.app.name),
+        }
+      : undefined,
+  })
   const accountName =
     name ??
     reuse?.name ??
@@ -754,14 +928,14 @@ function NewStep(
     <Screen
       app={app}
       title={props.title}
-      description={<StatusLine status={status}>{statusLabel[status]}</StatusLine>}
+      description={copy.description ?? <StatusLine status={status}>{statusLabel[status]}</StatusLine>}
       onSubmit={submit}
       action={
         <>
           {error ? <FieldError className="text-center">{errorMessage(error)}</FieldError> : null}
           <Button type="submit" className={primary} disabled={pending || !accountName.trim()}>
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            {props.start === "add" ? `Add to ${from.name}` : "Connect"}
+            {copy.label}
           </Button>
           <Button type="button" variant="ghost" className={secondary} onClick={props.onClose}>
             Cancel
@@ -772,10 +946,9 @@ function NewStep(
       <Field className="w-full text-left">
         <FieldLabel htmlFor="profile-name">Account name</FieldLabel>
         <Input id="profile-name" required value={accountName} onChange={(event) => setName(event.target.value)} />
-        <FieldDescription>
-          {from.private ? "Only you can use this account." : `Everyone in ${from.name} can use this account.`}
-        </FieldDescription>
+        <FieldDescription>{copy.note}</FieldDescription>
       </Field>
+      <BundlePreview app={app} from={from} parts={parts} />
     </Screen>
   )
 }
@@ -848,7 +1021,7 @@ function SpacesStep(props: { app: App; newAccount: boolean; onPick: (space: From
 }
 
 function Screen(props: {
-  app: Pick<App, "name" | "icon">
+  app: Pick<App, "name" | "icon"> & { readonly description?: string | null }
   title: string
   description?: ReactNode
   children?: ReactNode
@@ -871,6 +1044,7 @@ function Screen(props: {
           <EmptyMedia className="mb-3">
             <AppIcon
               name={props.app.name}
+              description={props.app.description}
               icon={props.app.icon}
               className="size-20 rounded-[--spacing(5.5)] text-3xl shadow-sm ring-1 ring-foreground/10"
             />
@@ -971,6 +1145,8 @@ function EditStep(props: {
   const profile = props.profile
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const edit = useEditProfile(profile, props.onDone)
+  const included = useApps(props.app.dependsOn)
+  const names = props.app.dependsOn.map((slug) => included.of(slug)?.name ?? slug)
   return (
     <Screen
       app={props.app}
@@ -1006,6 +1182,9 @@ function EditStep(props: {
             onPick={edit.setPicked}
             {...(profile.canShareEverySpace && { every: { checked: edit.every, onChange: edit.setEvery } })}
           />
+        ) : null}
+        {edit.shared && names.length > 0 ? (
+          <FieldDescription className="-mt-4 text-left">New spaces also get {listNames(names)}.</FieldDescription>
         ) : null}
       </FieldGroup>
     </Screen>
