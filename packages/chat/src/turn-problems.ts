@@ -72,7 +72,11 @@ const byText: ReadonlyArray<{
   readonly matches: (text: string) => boolean
   readonly problem: (input: Context) => Problem
 }> = [
-  { matches: (text) => /budget/iu.test(text) && /exceed/iu.test(text), problem: outOfCredits },
+  {
+    matches: (text) =>
+      /out of ren credits|insufficient_credits/iu.test(text) || (/budget/iu.test(text) && /exceed/iu.test(text)),
+    problem: outOfCredits,
+  },
   { matches: (text) => /usage limit|weekly limit|plan limit/iu.test(text), problem: usageLimit },
   {
     matches: (text) =>
