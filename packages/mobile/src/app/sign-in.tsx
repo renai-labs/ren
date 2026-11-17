@@ -108,11 +108,11 @@ export default function SignIn() {
               onChangeText={setPassword}
               placeholder="Your password"
               invalid={error !== ""}
-              editable={pending === null}
+              editable={!pending}
               onSubmitEditing={() => void signIn()}
             />
           </Field>
-          <Button disabled={pending !== null} onPress={() => void signIn()}>
+          <Button disabled={Boolean(pending)} onPress={() => void signIn()}>
             {pending === "password" ? (
               <ActivityIndicator size="small" colorClassName="accent-primary-foreground" />
             ) : null}
@@ -147,10 +147,10 @@ export default function SignIn() {
             onSubmitEditing={continueWithEmail}
           />
         </Field>
-        <Button disabled={pending !== null} onPress={continueWithEmail}>
+        <Button disabled={Boolean(pending)} onPress={continueWithEmail}>
           <Text>Continue</Text>
         </Button>
-        <Button variant="secondary" disabled={pending !== null} onPress={() => void emailCode()}>
+        <Button variant="secondary" disabled={Boolean(pending)} onPress={() => void emailCode()}>
           {pending === "code" ? (
             <ActivityIndicator size="small" colorClassName="accent-secondary-foreground" />
           ) : (

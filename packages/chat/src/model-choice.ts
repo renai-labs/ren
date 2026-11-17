@@ -29,7 +29,7 @@ export const efforts = (model: Choice) =>
 export const defaultEffort = (options: ReadonlyArray<string>, variant: string | undefined) => {
   if (variant && options.includes(variant)) return variant
   if (options.includes("medium")) return "medium"
-  return options[0]
+  return options.at(0)
 }
 
 export const pick = (
@@ -52,7 +52,7 @@ export const choose = (model: Choice, variant: string | undefined): SessionModel
   return { id: model.id, providerID: model.providerID, ...(chosen && { variant: chosen }) }
 }
 
-const versionOf = (name: string) => Number.parseFloat(/(\d+(?:\.\d+)?)/u.exec(name)?.[1] ?? "0")
+const versionOf = (name: string) => Number.parseFloat(/(\d+(?:\.\d+)?)/u.exec(name)?.at(1) ?? "0")
 
 const newest = (models: ReadonlyArray<Choice>, pattern: RegExp) =>
   models

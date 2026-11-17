@@ -222,7 +222,7 @@ export function useFileMentions(root: Session.ID | undefined, query: string | un
     const next = result.value.map(Mentions.fromFile)
     if (next.length !== kept.length || next.some((item, index) => item.id !== kept[index]?.id)) setKept(next)
   }
-  const active = root !== undefined && query !== undefined && query !== ""
+  const active = Boolean(root && query)
   return {
     items: active ? kept : [],
     searching: active && (text !== query || AsyncResult.isWaiting(result)),

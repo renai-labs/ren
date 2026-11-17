@@ -33,7 +33,7 @@ export function useApps(api: Api, idsOrSlugs: ReadonlyArray<string>) {
     }),
   )
   return {
-    pending: queries.some((query, index) => listed[index] === undefined && query.isPending),
+    pending: queries.some((query, index) => !listed[index] && query.isPending),
     of: (idOrSlug: string) => found.get(idOrSlug),
   }
 }
@@ -50,7 +50,7 @@ export function useSpace(
   const space = input.space
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: spaceId ?? "" }),
-    enabled: spaceId !== undefined,
+    enabled: Boolean(spaceId),
     refetchOnWindowFocus: "always",
     retry: false,
   })
@@ -58,7 +58,7 @@ export function useSpace(
   const apps = useApps(api, [...profiles.map((profile) => profile.appId), ...(input.appIds ?? [])])
   const here = (appId: string) => profiles.filter((profile) => profile.appId === appId)
   return {
-    pending: (spaceId !== undefined && reach.isPending) || apps.pending,
+    pending: (Boolean(spaceId) && reach.isPending) || apps.pending,
     profiles,
     here,
     app: apps.of,

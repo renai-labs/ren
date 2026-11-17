@@ -76,6 +76,7 @@ export const make = (options: Options) => {
     runtime: Atom.runtime(fetchLayer(options.chatFetch)),
     sender: { userId: options.userId },
     ...(options.lifecycle && { lifecycle: options.lifecycle }),
+    // ast-grep-ignore: no-nullish-comparison -- a flushInterval of 0 is a real value
     ...(options.flushInterval !== undefined && { connection: { flushInterval: options.flushInterval } }),
     access: (sessionID: Session.ID, input: { readonly unreachable: boolean }) =>
       ren.pipe(

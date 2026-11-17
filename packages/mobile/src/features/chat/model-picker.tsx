@@ -29,7 +29,7 @@ const logos: Readonly<Record<string, number>> = { Anthropic: claude, OpenAI: cha
 
 function ProviderMark(props: { readonly model: Pick<Choice, "providerID" | "id"> }) {
   const logo = logos[ModelChoice.vendorOf(props.model)]
-  return logo === undefined ? null : <Image source={logo} aria-hidden className="size-4 rounded-sm" />
+  return logo ? <Image source={logo} aria-hidden className="size-4 rounded-sm" /> : null
 }
 
 function ModelRow(props: {

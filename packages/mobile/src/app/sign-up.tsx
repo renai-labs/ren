@@ -7,7 +7,7 @@ import { Button } from "#components/button"
 import { Input } from "#components/input"
 import { Text } from "#components/text"
 import { AuthLayout, BackButton, Field, FooterLink, FormError } from "#features/auth/auth-layout"
-import { PasswordInput } from "#features/auth/password-input"
+import { NewPasswordInput } from "#features/auth/password-input"
 import { SocialButtons } from "#features/auth/social-buttons"
 import { Auth } from "#lib/auth"
 
@@ -59,7 +59,7 @@ export default function SignUp() {
       } else setError(failure.message)
       return
     }
-    if (result.data.token === null) {
+    if (!result.data.token) {
       setPending(false)
       router.push({ pathname: "/verify-email", params: { email: address } })
       return
@@ -76,8 +76,7 @@ export default function SignUp() {
             <Input value={address} readOnly aria-label="Email" className="border-transparent bg-muted" />
           </Field>
           <Field label="Password" hint={AuthForm.passwordHint}>
-            <PasswordInput
-              isNew
+            <NewPasswordInput
               value={password}
               onChangeText={setPassword}
               placeholder="Create a password"

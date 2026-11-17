@@ -134,9 +134,12 @@ export const candidates = (listings: ReadonlyArray<Listing>, known: ReadonlySet<
 export const rows = (listed: ReadonlyArray<Row>, picked: ReadonlyMap<string, Picked>): ReadonlyArray<Row> => {
   const listedKeys = new Set(listed.map((row) => row.key))
   return [
-    ...[...picked.entries()]
-      .filter((entry) => !listedKeys.has(entry[0]))
-      .map((entry) => ({ key: entry[0], name: nameOf(entry[1].parsed.repository), picked: entry[1] })),
+    ...[...picked.keys()]
+      .filter((key) => !listedKeys.has(key))
+      .flatMap((key) => {
+        const each = picked.get(key)
+        return each ? [{ key, name: nameOf(each.parsed.repository), picked: each }] : []
+      }),
     ...listed.map((row) => ({ ...row, picked: picked.get(row.key) ?? row.picked })),
   ]
 }

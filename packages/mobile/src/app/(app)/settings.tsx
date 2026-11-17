@@ -103,12 +103,12 @@ function TimelineDetailRow() {
   )
 }
 
-const updateStatus = (updates: ReturnType<typeof useUpdates>, checked: boolean) => {
+const updateStatus = (updates: ReturnType<typeof useUpdates>, options: { readonly checked: boolean }) => {
   if (updates.isUpdatePending) return "Restart to update"
   if (updates.isDownloading) return "Downloading…"
   if (updates.isChecking) return "Checking…"
   if (updates.checkError) return "Couldn’t check. Try again"
-  return checked ? "Up to date" : "Check for updates"
+  return options.checked ? "Up to date" : "Check for updates"
 }
 
 function AboutRows() {
@@ -143,7 +143,7 @@ function AboutRows() {
                 .then(() => setChecked(true))
             }}
           >
-            <Text className="font-medium text-link">{updateStatus(updates, checked)}</Text>
+            <Text className="font-medium text-link">{updateStatus(updates, { checked })}</Text>
           </Pressable>
         </>
       ) : null}

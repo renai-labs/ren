@@ -1,19 +1,25 @@
-import { useState } from "react"
+import { useState, type ComponentProps } from "react"
 import { Pressable, View } from "react-native"
 import EyeIcon from "react-native-heroicons/mini/EyeIcon"
 import EyeSlashIcon from "react-native-heroicons/mini/EyeSlashIcon"
 import { Icon } from "#components/icon"
 import { Input } from "#components/input"
 
-export function PasswordInput(props: {
+interface PasswordInputProps {
   readonly value: string
   readonly onChangeText: (value: string) => void
   readonly placeholder: string
-  readonly isNew?: boolean
   readonly invalid: boolean
   readonly editable: boolean
   readonly onSubmitEditing: () => void
-}) {
+}
+
+function PasswordField(
+  props: PasswordInputProps & {
+    readonly autoComplete: ComponentProps<typeof Input>["autoComplete"]
+    readonly textContentType: ComponentProps<typeof Input>["textContentType"]
+  },
+) {
   const [shown, setShown] = useState(false)
   return (
     <View className="justify-center">
@@ -30,8 +36,8 @@ export function PasswordInput(props: {
         autoFocus
         secureTextEntry={!shown}
         autoCapitalize="none"
-        autoComplete={props.isNew === true ? "new-password" : "current-password"}
-        textContentType={props.isNew === true ? "newPassword" : "password"}
+        autoComplete={props.autoComplete}
+        textContentType={props.textContentType}
         returnKeyType="go"
       />
       <Pressable
@@ -45,4 +51,12 @@ export function PasswordInput(props: {
       </Pressable>
     </View>
   )
+}
+
+export function PasswordInput(props: PasswordInputProps) {
+  return <PasswordField {...props} autoComplete="current-password" textContentType="password" />
+}
+
+export function NewPasswordInput(props: PasswordInputProps) {
+  return <PasswordField {...props} autoComplete="new-password" textContentType="newPassword" />
 }

@@ -12,12 +12,12 @@ import { LoadMore } from "../../components/load-more.js"
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
 import { Page, PageActions, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { AppRegistryPages } from "../../lib/app-registry.js"
+import { AppRegistryLists } from "../../lib/app-registry.js"
 import { fromApp, fromRegistry, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { Search } from "@ren/util/search"
 import { RouterContext } from "../../lib/router-context.js"
-import { Debounce } from "@ren/client/react"
+import { AppRegistryPages, Debounce } from "@ren/client/react"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { AppCategories } from "./app-categories.js"
 import { AppGridSample, CatalogAppRow, CatalogList } from "./catalog.js"
@@ -161,7 +161,7 @@ function OrganizationApps(props: { query: string; onAdd: (app: CatalogApp) => vo
 function ManagedApps(props: { query: string; onAdd: (app: CatalogApp) => void }) {
   const { api } = RouterContext.useRouterContext()
   const shapeId = useShapeId("managed")
-  const registry = useQuery(AppRegistryPages.all(api))
+  const registry = useQuery(AppRegistryLists.all(api))
   const apps = (registry.data?.items ?? [])
     .filter((app) => app.managed)
     .map(fromRegistry)

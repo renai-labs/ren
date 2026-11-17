@@ -68,9 +68,9 @@ function StatusDot(props: { readonly status: Apps.Status }) {
   )
 }
 
-const newLabel = (hasExisting: boolean, managed: boolean) => {
-  if (hasExisting) return "Connect a new account"
-  return managed ? "Connect my own" : "Connect"
+const newLabel = (plan: Pick<ReturnType<typeof Apps.connectPlan>, "reuse" | "managed">) => {
+  if (plan.reuse) return "Connect a new account"
+  return plan.managed ? "Connect my own" : "Connect"
 }
 
 function intro(input: {
@@ -147,7 +147,7 @@ function ConnectChoices(props: {
       ? undefined
       : {
           key: "new",
-          label: newLabel(reuse !== undefined, plan.managed),
+          label: newLabel(plan),
           run: () => make().then(signIn),
         },
   ]
@@ -164,12 +164,12 @@ function ConnectChoices(props: {
       <Text variant="muted">{intro({ app, from, status: props.status, plan })}</Text>
       <View className="gap-2 pt-2">
         {choices
-          .filter((choice) => choice !== undefined)
+          .filter((choice): choice is Choice => Boolean(choice))
           .map((choice, index) => (
             <Button
               key={choice.key}
               variant={index === 0 ? "default" : "secondary"}
-              disabled={pending !== undefined}
+              disabled={Boolean(pending)}
               onPress={() => run(choice)}
             >
               {pending === choice.key ? <ActivityIndicator size="small" /> : null}

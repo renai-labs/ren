@@ -3,6 +3,7 @@ import { useAtomRefresh } from "@effect/atom-react"
 import { ChatState, Composer, SessionLive, SessionTitle } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
+import type { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionInfo } from "@ren/client"
@@ -80,8 +81,6 @@ function ChatHeader(props: {
 }) {
   const router = useRouter()
   const title = SessionTitle.display(props.title ?? props.info?.title)
-  const tokens = props.usage?.tokens
-  const percent = props.usage?.percent
   const offline = useNetworkState().isConnected === false
   const spaceId = props.info?.spaceId
   const space = useQuery({
@@ -106,9 +105,11 @@ function ChatHeader(props: {
             <ChatActions
               sessionId={props.id}
               title={title}
-              canRename={props.info?.capabilities.rename !== false}
-              canCompact={props.info?.capabilities.compact !== false}
-              usage={tokens === undefined ? undefined : { tokens, percent }}
+              capabilities={{
+                rename: props.info?.capabilities.rename !== false,
+                compact: props.info?.capabilities.compact !== false,
+              }}
+              usage={props.usage && { tokens: props.usage.tokens, percent: props.usage.percent }}
               model={props.model}
               onArchived={() => router.navigate("/")}
             />
@@ -132,7 +133,7 @@ function ChatComposer(props: {
   readonly id: Session.ID
   readonly spaceId: string | undefined
   readonly running: boolean
-  readonly canQueue: boolean
+  readonly capabilities: SessionCapabilities.Info | undefined
   readonly models: ReturnType<typeof useSessionModel>
   readonly handle: Ref<DraftHandle>
   readonly onSent: () => void
@@ -159,7 +160,7 @@ function ChatComposer(props: {
       working: props.running,
       behavior: "queue",
       alternative: false,
-      queue: props.canQueue,
+      queue: props.capabilities?.queue !== false,
       current: models.model,
     })
     if (!text || !submission) return
@@ -351,7 +352,7 @@ function Chat(props: { readonly id: Session.ID }) {
               id={id}
               spaceId={info?.spaceId}
               running={view.running}
-              canQueue={info?.capabilities.queue !== false}
+              capabilities={info?.capabilities}
               models={models}
               handle={draftRef}
               onSent={() => {

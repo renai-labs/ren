@@ -49,7 +49,7 @@ function RingPrimitive(props: { readonly percent: number | undefined; readonly c
   const fill = Math.min(100, props.percent ?? 0) / 100
   return (
     <View aria-hidden className="absolute inset-0 -rotate-90">
-      <Svg viewBox="0 0 40 40" width={40} height={40} {...(props.color !== undefined && { color: props.color })}>
+      <Svg viewBox="0 0 40 40" width={40} height={40} {...(props.color && { color: props.color })}>
         <Circle cx={20} cy={20} r={radius} fill="none" stroke="currentColor" strokeOpacity={0.15} strokeWidth={2.5} />
         {fill > 0 ? (
           <Circle
@@ -100,6 +100,7 @@ function ContextSummary(props: { readonly sessionId: Session.ID; readonly usage:
     <View className="mx-5 mb-2 gap-1.5 rounded-xl bg-muted px-4 py-3">
       <Row
         label="Context"
+        // ast-grep-ignore: no-nullish-comparison, -- 0% is a real context percentage
         value={`${NumberFormat.count(usage.tokens)}${usage.percent === undefined ? "" : ` (${usage.percent}%)`}`}
       />
       <Row label="Cost" value={cost.data ? spent : "—"} />
@@ -176,8 +177,7 @@ function RenameForm(props: { readonly sessionId: Session.ID; readonly title: str
 function ChatActions(props: {
   readonly sessionId: Session.ID
   readonly title: string
-  readonly canRename: boolean
-  readonly canCompact: boolean
+  readonly capabilities: { readonly rename: boolean; readonly compact: boolean }
   readonly usage: Usage | undefined
   readonly model: SessionModel.Ref | undefined
   readonly onArchived: () => void
@@ -238,10 +238,10 @@ function ChatActions(props: {
       icon: threadIcons[thread.provider],
       onPress: () => openBrowserAsync(thread.url),
     })),
-    ...(usage && props.canCompact
+    ...(usage && props.capabilities.compact
       ? [{ label: "Compact chat", icon: ArrowsPointingInIcon, onPress: () => compact(props.model) }]
       : []),
-    ...(props.canRename
+    ...(props.capabilities.rename
       ? [
           {
             label: "Rename chat",
@@ -266,6 +266,7 @@ function ChatActions(props: {
     <>
       <HeaderButton
         icon={EllipsisVerticalIcon}
+        // ast-grep-ignore: no-nullish-comparison, -- 0% is a real context percentage
         label={usage?.percent === undefined ? "Chat actions" : `Chat actions, context ${usage.percent}% used`}
         onPress={() => setOpen(true)}
       >

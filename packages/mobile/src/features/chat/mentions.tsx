@@ -46,7 +46,7 @@ export function useMentions(input: {
   const files = ChatReact.useFileMentions(input.root, query)
   const space = useQuery({
     ...Api.query.space.get.queryOptions({ idOrSlug: input.spaceId ?? "" }),
-    enabled: input.spaceId !== undefined,
+    enabled: Boolean(input.spaceId),
   })
   const accounts = SpaceApps.useAccounts(Api.query, slugOf)
   const appItems = apps.apps.map(Mentions.fromApp)
@@ -65,10 +65,12 @@ export function useMentions(input: {
     space: space.data,
     appIds: mentioned.map((app) => app.id),
   })
-  const grouped = query === undefined ? [] : Mentions.group(query, { apps: appItems, repositories, files: files.items })
+  // ast-grep-ignore: no-nullish-comparison, -- an empty query is a bare @, which lists every connector
+  const mentioning = query !== undefined
+  const grouped = mentioning ? Mentions.group(query, { apps: appItems, repositories, files: files.items }) : []
   const searching = apps.searching || files.searching
   const suggestions: Suggestions = {
-    open: !closed && query !== undefined && (grouped.length > 0 || searching),
+    open: !closed && mentioning && (grouped.length > 0 || searching),
     searching,
     items: grouped.map((entry) => ({
       value: Mentions.key(entry.item),

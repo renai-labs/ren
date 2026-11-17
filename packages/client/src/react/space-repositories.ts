@@ -12,7 +12,7 @@ export function useReferences(api: Api, spaceId: string) {
   const current = settings.data?.settings
   const references = current?.references ?? []
   return {
-    pending: current === undefined,
+    pending: !current,
     references,
     saving: update.isPending,
     error: update.error,
