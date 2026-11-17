@@ -1,6 +1,7 @@
 import { TimelineDetail } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { ErrorText } from "@ren/util/error-text"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Constants from "expo-constants"
 import { isEnabled, useUpdates } from "expo-updates"
 import { useState, type ReactNode } from "react"
@@ -13,6 +14,7 @@ import { OrgSwitcher } from "#components/org-switcher"
 import { Segmented } from "#components/segmented"
 import { Sheet } from "#components/sheet"
 import { Text } from "#components/text"
+import { Api } from "#lib/api"
 import { AppUpdates } from "#lib/app-updates"
 import { Auth } from "#lib/auth"
 import { Preferences } from "#lib/preferences"
@@ -167,6 +169,27 @@ export default function Settings() {
       { text: "Cancel", style: "cancel" },
       { text: "Log out", style: "destructive", onPress: () => void logOut() },
     ])
+  const deletion = useMutation(Api.query.me.requestDeletion.mutationOptions())
+  const deleteAccount = () =>
+    deletion.mutate(undefined, {
+      onSuccess: () => {
+        Alert.alert(
+          "We’ve received your request",
+          "Your account will be deleted, and we’ll email you again when it’s done.",
+        )
+        void logOut()
+      },
+      onError: (error) => Alert.alert("Couldn’t delete your account", ErrorText.of(error)),
+    })
+  const confirmDeleteAccount = () =>
+    Alert.alert(
+      "Delete your account?",
+      "You’ll be signed out everywhere and can’t sign in again. Ren deletes your account and its data within 7 days, and emails you when it’s done.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete account", style: "destructive", onPress: deleteAccount },
+      ],
+    )
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-6 px-4 pt-2 pb-safe-offset-6">
@@ -208,6 +231,15 @@ export default function Settings() {
           onPress={confirmLogOut}
         >
           <Text className="font-medium text-destructive">Log out</Text>
+        </Pressable>
+        <View className="mx-4 h-px bg-border" />
+        <Pressable
+          role="button"
+          disabled={deletion.isPending}
+          className="min-h-12 flex-row items-center px-4 py-3 active:bg-accent"
+          onPress={confirmDeleteAccount}
+        >
+          <Text className="font-medium text-destructive">Delete account</Text>
         </Pressable>
       </Section>
       <Section title="About">
