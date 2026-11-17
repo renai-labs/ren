@@ -376,11 +376,16 @@ const bundleStatus = (
   mention: MentionStatus,
   app: CatalogApp | undefined,
   partOf: (slug: string) => { readonly app: CatalogApp; readonly status: Status | "absent" } | undefined,
-  added: boolean,
-  space: string | undefined,
+  place: { readonly added: boolean; readonly space: string | undefined },
 ): MentionStatus => {
   if (!app || !isBundle(app)) return mention
-  if (!added) return { ...mention, status: "missing", label: space ? `Not in ${space}` : "Not added", action: "Add" }
+  if (!place.added)
+    return {
+      ...mention,
+      status: "missing",
+      label: place.space ? `Not in ${place.space}` : "Not added",
+      action: "Add",
+    }
   const found = app.dependsOn.flatMap((slug) => {
     const part = partOf(slug)
     return part ? [part] : []
@@ -427,8 +432,7 @@ function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, 
             if (!part) return
             return { app: part, status: space.here(part.id).length === 0 ? "absent" : space.status(part.id) }
           },
-          space.here(app.id).length > 0,
-          space.from?.name,
+          { added: space.here(app.id).length > 0, space: space.from?.name },
         ),
       )
   return {
