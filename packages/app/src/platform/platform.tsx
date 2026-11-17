@@ -37,6 +37,8 @@ interface Base {
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
+  // oxlint-disable-next-line ren/no-comments -- Storage for this window alone, such as its tabs: it lasts across reloads but is not shared with other windows.
+  readonly windowStorage?: Omit<Storage, "subscribe">
   readonly drafts?: Drafts
   readonly chatCache?: ChatCache
   readonly openExternal: (url: string) => void

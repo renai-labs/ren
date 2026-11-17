@@ -27,9 +27,11 @@ import { TimeZonePicker } from "../../components/time-zone-picker.js"
 import { AppearancePreferences } from "../../lib/appearance-preferences.js"
 import { TimelineDetailSetting } from "./timeline-detail-setting.js"
 import { TypographySection } from "./typography-section.js"
+import { LayoutSetting } from "./layout-setting.js"
 
 const resettable = [
   AppearancePreferences.theme,
+  AppearancePreferences.layout,
   AppearancePreferences.uiFont,
   AppearancePreferences.uiSize,
   AppearancePreferences.codeFont,
@@ -147,7 +149,7 @@ export function PreferencesPage() {
         ]}
       </Rows>
       <Section title="Appearance">
-        <Rows>{[<ThemePicker key="theme" />]}</Rows>
+        <Rows>{[<ThemePicker key="theme" />, <LayoutSetting key="layout" />]}</Rows>
       </Section>
       <TypographySection />
       <Section title="Timeline">
