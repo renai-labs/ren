@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import { authRequest, makeApp, sessionCookie } from "./lib/app.js"
+import { authRequest, call, makeApp, sessionCookie, signUp } from "./lib/app.js"
 
 const app = makeApp()
 
@@ -44,6 +44,82 @@ test("the sign-in providers need no login, and GitHub and Slack are not ones whe
   expect(answered.status).toBe(200)
   expect(await answered.json()).toEqual({ items: ["google"] })
 })
+
+test.each(["ren", "ren-dev", "ren-preview"])(
+  "the %s mobile app, which sends no Origin header, signs in, calls Ren and signs out with its stored cookie",
+  async (scheme) => {
+    const email = `ada-${crypto.randomUUID()}@acme.test`
+    await signUp(app, email)
+    const mobile = (path: string, cookie?: string) =>
+      new Request(`http://localhost:4000${path}`, {
+        method: path.startsWith("/auth/") ? "POST" : "GET",
+        headers: {
+          "content-type": "application/json",
+          "expo-origin": `${scheme}://192.168.1.20:8081`,
+          ...(cookie && { cookie }),
+        },
+        ...(path.startsWith("/auth/") && {
+          body: JSON.stringify(path === "/auth/sign-out" ? {} : { email, password: "correct horse battery staple" }),
+        }),
+      })
+    const cookie = sessionCookie(await app.handler(mobile("/auth/sign-in/email")))
+    expect((await app.handler(mobile("/me", cookie))).status).toBe(200)
+    expect((await app.handler(mobile("/auth/sign-out", cookie))).status).toBe(200)
+    expect((await app.handler(mobile("/me", cookie))).status).toBe(401)
+  },
+)
+
+const mobileSocial = (scheme: string, provider: string) =>
+  new Request("http://localhost:4000/auth/sign-in/social", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://localhost:4000", "expo-origin": `${scheme}://` },
+    body: JSON.stringify({
+      provider,
+      callbackURL: `${scheme}:///`,
+      newUserCallbackURL: `${scheme}:///`,
+      errorCallbackURL: `${scheme}:///`,
+    }),
+  })
+
+test.each(["ren", "ren-dev", "ren-preview"])("the %s mobile app can start Sign in with Google", async (scheme) => {
+  const started = await app.handler(mobileSocial(scheme, "google"))
+  expect(started.status).toBe(200)
+  expect(new URL((await started.json()).url).origin).toBe("https://accounts.google.com")
+})
+
+test.each(["ren", "ren-dev", "ren-preview"])(
+  "the %s mobile app signs in with Slack in the browser and gets its session back on the app's own link",
+  async (scheme) => {
+    const started = await withSlack.handler(mobileSocial(scheme, "slack"))
+    const authorize = new URL((await started.json()).url)
+    const oauthState = started.headers
+      .getSetCookie()
+      .map((cookie) => cookie.split(";")[0] ?? "")
+      .find((cookie) => cookie.includes(".oauth_state="))
+      ?.split("=")
+      .slice(1)
+      .join("=")
+    const slack = `https://slack.com${authorize.pathname}${authorize.search}`
+    const proxy = await withSlack.handler(
+      new Request(
+        `http://localhost:4000/auth/expo-authorization-proxy?${new URLSearchParams({
+          authorizationURL: slack,
+          ...(oauthState && { oauthState }),
+        })}`,
+      ),
+    )
+    expect(proxy.headers.get("location")).toBe(slack)
+    const callback = await withSlack.handler(
+      new Request(`http://localhost:4000/auth/callback/slack?code=ana&state=${authorize.searchParams.get("state")}`, {
+        headers: { cookie: sessionCookie(proxy) },
+      }),
+    )
+    const back = new URL(callback.headers.get("location") ?? "")
+    expect(back.href.startsWith(`${scheme}:///`)).toBe(true)
+    const session = back.searchParams.get("cookie")?.match(/[\w.-]*session_token=[^;]+/)?.[0] ?? ""
+    expect((await call(withSlack, session, "GET", "/me")).status).toBe(200)
+  },
+)
 
 test("Sign in with Slack keeps the account as team:user, since a Slack user id is unique only in its workspace", async () => {
   expect(await (await withSlack.handler(new Request("http://localhost:4000/sign-in-providers"))).json()).toEqual({
