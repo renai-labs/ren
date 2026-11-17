@@ -313,7 +313,6 @@ const tailwindRules = {
   "better-tailwindcss/no-deprecated-classes": "error",
   "better-tailwindcss/no-unnecessary-whitespace": "error",
   "better-tailwindcss/no-concatenated-classes": "error",
-  "better-tailwindcss/enforce-shorthand-classes": "error",
   "better-tailwindcss/enforce-consistent-class-order": "error",
   "better-tailwindcss/enforce-consistent-variable-syntax": "error",
   "better-tailwindcss/enforce-consistent-important-position": "error",
@@ -360,6 +359,26 @@ const pulseClass = {
   pattern: `${anyVariant}animate-pulse$`,
   message: "Use `Skeleton` from @ren/ui for loading placeholders.",
 }
+
+const checkedByTypeScript = [
+  "eslint/constructor-super",
+  "eslint/getter-return",
+  "eslint/no-class-assign",
+  "eslint/no-const-assign",
+  "eslint/no-dupe-class-members",
+  "eslint/no-dupe-keys",
+  "eslint/no-func-assign",
+  "eslint/no-import-assign",
+  "eslint/no-new-native-nonconstructor",
+  "eslint/no-obj-calls",
+  "eslint/no-setter-return",
+  "eslint/no-this-before-super",
+  "eslint/no-unsafe-negation",
+  "eslint/no-unused-private-class-members",
+  "eslint/no-unused-vars",
+  "eslint/valid-typeof",
+  "react/jsx-no-duplicate-props",
+]
 
 const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
 const mobileTailwind = {
@@ -621,28 +640,16 @@ export default defineConfig({
     "jsx-a11y/scope": "error",
     "jsx-a11y/tabindex-no-positive": "error",
 
-    ...tailwindRules,
-    "better-tailwindcss/no-restricted-classes": [
-      "error",
-      {
-        restrict: [
-          importantClass,
-          rawArbitraryValue,
-          motionClass,
-          viewportUnitClass,
-          readingOrderClass,
-          fontSmoothingClass,
-          colorRoleClass,
-          spaceClass,
-        ],
-      },
-    ],
-
     "no-restricted-globals": ["error", reflect],
     "no-restricted-properties": ["error", jsonParse],
     "no-restricted-imports": ["error", { patterns: [vendored] }],
   },
   overrides: [
+    {
+      files: ["**/*.ts", "**/*.tsx"],
+      excludeFiles: ["oxlint.config.ts"],
+      rules: Object.fromEntries(checkedByTypeScript.map((rule) => [rule, "off"])),
+    },
     {
       files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
       rules: {
@@ -740,6 +747,27 @@ export default defineConfig({
     {
       files: ["packages/util/src/**"],
       rules: { "no-restricted-globals": ["error", reflect, ...serverGlobals] },
+    },
+    {
+      files: ["packages/{app,ui,site,mobile}/**"],
+      rules: {
+        ...tailwindRules,
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            restrict: [
+              importantClass,
+              rawArbitraryValue,
+              motionClass,
+              viewportUnitClass,
+              readingOrderClass,
+              fontSmoothingClass,
+              colorRoleClass,
+              spaceClass,
+            ],
+          },
+        ],
+      },
     },
     {
       files: ["packages/ui/src/**", "packages/app/src/**"],
