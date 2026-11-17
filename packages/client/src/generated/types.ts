@@ -9062,18 +9062,27 @@ export type CredentialConnectCredentialConnectInput = {
   readonly profileId: {
     readonly profileId: string
     readonly item: { readonly mcp: string }
-    readonly reconnect?: boolean | undefined
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
   }["profileId"]
   readonly item: {
     readonly profileId: string
     readonly item: { readonly mcp: string }
-    readonly reconnect?: boolean | undefined
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
   }["item"]
   readonly reconnect?: {
     readonly profileId: string
     readonly item: { readonly mcp: string }
-    readonly reconnect?: boolean | undefined
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
   }["reconnect"]
+  readonly returnTo?: {
+    readonly profileId: string
+    readonly item: { readonly mcp: string }
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
+  }["returnTo"]
 }
 
 export type CredentialConnectCredentialConnectOutput = WriteResultRedirect | CredentialInfo

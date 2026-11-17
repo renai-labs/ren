@@ -61,6 +61,7 @@ type Settled =
 export type Outcome = Settled & {
   readonly app: Option.Option<{ readonly name: string; readonly icon: string | null }>
   readonly space: Option.Option<string>
+  readonly returnTo: Option.Option<string>
 }
 
 export interface Interface {
@@ -384,6 +385,7 @@ export const layer = Layer.effect(
       const existing = yield* existingOf(found.profile.id, label)
       if (Option.isSome(existing) && !input.reconnect) return yield* store.get(actor, existing.value.id)
       const credentialId = Option.match(existing, { onNone: () => Credential.ID.create(), onSome: (row) => row.id })
+      const returnTo = input.returnTo ?? null
       const madeFor = ProfileItems.madeFor(declaration)
       const transport = declaration.transport
       if (transport.type === "provider")
@@ -399,6 +401,7 @@ export const layer = Layer.effect(
           integration: transport.integration,
           state: Random.token(32),
           callbackUrl,
+          returnTo,
         })
       const target = targetOf(declaration)
       if (Result.isFailure(target)) return yield* target.failure
@@ -461,6 +464,7 @@ export const layer = Layer.effect(
           state,
           code_verifier: verifier,
           scope: scopes.join(" "),
+          return_to: returnTo,
           client_info: yield* seal(actor.organizationId, "oauth_session", id, Schema.encodeSync(ClientJson)(client)),
           ...sessionDiscovery(endpoints.success),
           expires_at: expiresAt,
@@ -664,11 +668,12 @@ export const layer = Layer.effect(
           reason: consumed.failure,
           app: Option.none(),
           space: Option.none(),
+          returnTo: Option.none(),
         } satisfies Outcome
       const taken = consumed.success
       const shown = yield* shownOf(taken.profile_id)
       const settled: Settled = yield* settle(taken, input, now, browser)
-      return { ...settled, ...shown } satisfies Outcome
+      return { ...settled, ...shown, returnTo: Option.fromNullishOr(taken.return_to) } satisfies Outcome
     }, Observability.Trace.connectorCallback)
 
     const settle = Effect.fnUntraced(function* (

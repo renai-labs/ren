@@ -451,6 +451,7 @@ export const ConnectInput = Schema.Struct({
   profileId: AppIdentity.ProfileID,
   item: Schema.Struct({ mcp: Primitive.Slug }),
   reconnect: Schema.optional(Schema.Boolean),
+  returnTo: Schema.optional(Auth.MobileReturnTo),
 }).annotate({ identifier: "Credential.ConnectInput" })
 
 export const RequirementKind = Schema.Literals(["oauth", "provider", "fields", "env"]).annotate({

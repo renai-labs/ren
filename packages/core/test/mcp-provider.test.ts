@@ -26,6 +26,18 @@ const sent = (path: string, method = "POST") =>
   server.requests.filter((request) => request.path === path && request.method === method)
 
 describe("Composio connect (§10, test 20 and 21)", () => {
+  it.live("a connect that names where to return gets it back from the callback", () =>
+    Effect.gen(function* () {
+      server.activeAfterReads = 1
+      const found = yield* ComposioTest.setup()
+      const started = yield* ComposioTest.connect(found, { returnTo: "ren:///connected" })
+      expect(yield* ComposioTest.callback(started.state)).toMatchObject({
+        ok: true,
+        returnTo: Option.some("ren:///connected"),
+      })
+    }),
+  )
+
   it.live(
     "the Composio user is the credential id; the session pins the account and turns off what the agent must not have",
     () =>

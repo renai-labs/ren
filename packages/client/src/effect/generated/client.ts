@@ -1747,11 +1747,17 @@ type CredentialConnectCredentialConnectInput = {
   readonly profileId: CredentialConnectCredentialConnectRequest["payload"]["profileId"]
   readonly item: CredentialConnectCredentialConnectRequest["payload"]["item"]
   readonly reconnect?: CredentialConnectCredentialConnectRequest["payload"]["reconnect"]
+  readonly returnTo?: CredentialConnectCredentialConnectRequest["payload"]["returnTo"]
 }
 const EndpointCredentialConnectCredentialConnect =
   (raw: RawClient["credential-connect"]) => (input: CredentialConnectCredentialConnectInput) =>
     raw["credential.connect"]({
-      payload: { profileId: input["profileId"], item: input["item"], reconnect: input["reconnect"] },
+      payload: {
+        profileId: input["profileId"],
+        item: input["item"],
+        reconnect: input["reconnect"],
+        returnTo: input["returnTo"],
+      },
     }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupCredentialConnect = (raw: RawClient["credential-connect"]) => ({

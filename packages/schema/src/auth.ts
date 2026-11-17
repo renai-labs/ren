@@ -47,6 +47,21 @@ export const cliClient = {
   application_type: "native",
 } as const
 
+export const mobileSchemes = ["ren", "ren-dev", "ren-preview"] as const
+
+export const MobileReturnTo = Schema.String.pipe(
+  Schema.check(
+    Schema.makeFilter(
+      (value) =>
+        (URL.canParse(value) && mobileSchemes.some((scheme) => new URL(value).protocol === `${scheme}:`)) ||
+        `Use a link into the Ren app, which starts with ${mobileSchemes.map((scheme) => `${scheme}://`).join(", ")}.`,
+    ),
+  ),
+).annotate({
+  identifier: "Auth.MobileReturnTo",
+  description: "A link into the Ren mobile app, where the browser returns when a sign-in ends.",
+})
+
 export const SignInProvider = Schema.Literals(["google", "github", "slack"]).annotate({
   identifier: "Auth.SignInProvider",
 })
