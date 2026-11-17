@@ -15,6 +15,8 @@
     "android": "APP_VARIANT=development expo run:android",
     "ios": "APP_VARIANT=development expo run:ios",
     "build:android:internal": "bunx eas-cli build --local --platform android --profile internal --output ./ren-internal.apk",
+    "build:android:production": "bunx eas-cli build --local --platform android --profile production --output ./ren-production.aab",
+    "submit:android": "bunx eas-cli submit --platform android --profile production --path ./ren-production.aab",
     "update:internal": "APP_VARIANT=production EXPO_PUBLIC_REN_URL=https://api.useren.ai EXPO_PUBLIC_REN_APP_URL=https://useren.ai/app EXPO_UNSTABLE_METRO_OPTIMIZE_GRAPH=1 EXPO_UNSTABLE_TREE_SHAKING=1 bunx eas-cli update --environment production --channel internal",
     "update:production": "APP_VARIANT=production EXPO_PUBLIC_REN_URL=https://api.useren.ai EXPO_PUBLIC_REN_APP_URL=https://useren.ai/app EXPO_UNSTABLE_METRO_OPTIMIZE_GRAPH=1 EXPO_UNSTABLE_TREE_SHAKING=1 bunx eas-cli update --environment production --channel production",
     "generate": "bun run script/theme.ts",
