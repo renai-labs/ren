@@ -122,10 +122,9 @@ export const Spec = Schema.Struct({
       }
       const apps = [...owners.apps.values()].flatMap((owned) => owned.slice(0, 1))
       return [
-        ...App.dependencyCycles(new Map(apps.map((owned) => [owned.name, owned.app]))).map((cycle) => ({
-          path: ["spaces"],
-          issue: `App dependency cycle: ${cycle}.`,
-        })),
+        ...App.dependencyIssues(new Map(apps.map((owned) => [owned.name, owned.app])))
+          .filter((issue) => issue.kind !== "missing")
+          .map((issue) => ({ path: ["spaces"], issue: App.describeIssue(issue) })),
         ...(["agents", "apps"] as const).flatMap((kind) =>
           [...owners[kind]].flatMap(([name, owned]) =>
             owned.slice(1).map((duplicate) => ({

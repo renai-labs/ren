@@ -29,7 +29,7 @@ import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Search } from "../../lib/search.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useApp, useApps } from "../../lib/use-app.js"
-import { fromApp, source, type CatalogApp } from "../../lib/apps.js"
+import { fromApp, isBundle, listNames, source, statusOf, waitsForUser, type CatalogApp } from "../../lib/apps.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -83,8 +83,13 @@ function useRemoveApp(space: { id: string; name: string; kind: string; membershi
     if (space.kind === "private") return "ownPrivate"
     return space.membershipId ? "joined" : "shared"
   })()
-  return (row: { app: CatalogApp; profiles: ReadonlyArray<AppProfileInfo> }): RowMenuItem | undefined => {
+  return (row: {
+    app: CatalogApp
+    profiles: ReadonlyArray<AppProfileInfo>
+    partOf?: ReadonlyArray<string>
+  }): RowMenuItem | undefined => {
     const app = row.app
+    const bundles = row.partOf ?? []
     const listed = row.profiles.filter(
       (profile) =>
         profile.kind === "shared" && !profile.allSpaces && profile.spaces.some((each) => each.id === space.id),
@@ -93,6 +98,7 @@ function useRemoveApp(space: { id: string; name: string; kind: string; membershi
     if (removable.length === 0) return undefined
     const locked = listed.filter((profile) => !profile.canRemove.includes(shape))
     const everywhere = row.profiles.filter((profile) => profile.allSpaces)
+    const warning = bundles.length > 0 ? `${listNames(bundles)} will show “Needs ${app.name}”.` : ""
     const notes = [
       everywhere.length > 0
         ? `${names(everywhere)} ${everywhere.length === 1 ? "stays because it is" : "stay because they are"} in every space.`
@@ -109,7 +115,10 @@ function useRemoveApp(space: { id: string; name: string; kind: string; membershi
           kept ? `${space.name} stops using ${names(removable)}.` : `The agent in ${space.name} loses ${app.name}.`,
           "Accounts with a sign-in are kept.",
           ...notes,
-        ].join(" "),
+          warning,
+        ]
+          .filter(Boolean)
+          .join(" "),
         action: `Remove ${app.name}`,
       },
       onSelect: () =>
@@ -216,13 +225,51 @@ export function SpaceAppsTab() {
   const reached = reach.data?.profiles ?? []
   const byApp = Map.groupBy(reached, (each) => each.appId)
   const catalog = useApps([...byApp.keys()])
+  const bundled = [...byApp.keys()].flatMap((appId) => catalog.of(appId)?.dependsOn ?? [])
+  const dependencies = useApps(bundled)
+  const nested = useApps(bundled.flatMap((slug) => dependencies.of(slug)?.dependsOn ?? []))
   const app = useApp(opened).app
   const here: ReadonlyArray<AppProfileInfo> = app ? (byApp.get(app.id) ?? []) : []
   const from = { spaceId: space.id, name: space.name, members: space.memberCount, private: space.kind === "private" }
+  const installed = [...byApp.keys()].flatMap((appId) => {
+    const each = catalog.of(appId)
+    return each ? [each] : []
+  })
+  const partOf = (slug: string) =>
+    installed.filter((bundle) => bundle.dependsOn.includes(slug)).map((bundle) => bundle.name)
+  const bundleOf = (each: CatalogApp, profiles: ReadonlyArray<AppProfileInfo>) => {
+    if (!isBundle(each) || profiles.some((profile) => profile.items.length > 0)) return
+    const parts = each.dependsOn.flatMap((slug) => {
+      const part = dependencies.of(slug)
+      return part ? [part] : []
+    })
+    const signIn = parts.filter((part) => {
+      const here = byApp.get(part.id)
+      return here !== undefined && waitsForUser(statusOf(part, here))
+    })
+    return { total: each.dependsOn.length, signIn }
+  }
   const rows = [...byApp].flatMap(([appId, profiles]) => {
     const each = catalog.of(appId)
     return each
-      ? [{ app: each, profiles, usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", ") }]
+      ? [
+          {
+            app: each,
+            profiles,
+            bundle: bundleOf(each, profiles),
+            partOf: partOf(each.slug),
+            usedIn: [...new Set(profiles.map((one) => source(one, space.id)))].join(", "),
+            needs: [
+              ...new Set([
+                ...each.dependsOn,
+                ...each.dependsOn.flatMap((slug) => dependencies.of(slug)?.dependsOn ?? []),
+              ]),
+            ].flatMap((slug) => {
+              const needed = dependencies.of(slug) ?? nested.of(slug)
+              return needed && !byApp.has(needed.id) ? [needed] : []
+            }),
+          },
+        ]
       : []
   })
   const shown = useShown(rows.filter((row) => Search.matches(query, row.app.name, row.app.description, row.usedIn)))
@@ -270,6 +317,7 @@ export function SpaceAppsTab() {
                 empty={<NoApps query={query} space={space.name} onAdd={() => setAdding(true)} />}
                 onOpen={setOpened}
                 onNew={(appId) => setProfile({ appId, from, newAccount: true })}
+                onAdd={(appId) => setProfile({ appId, from })}
                 remove={remove}
               />
             )}

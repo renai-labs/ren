@@ -1,6 +1,5 @@
 import { createContext, use, useRef, useState } from "react"
 import type { McpInspectionResult } from "@ren/client"
-import { useQuery } from "@tanstack/react-query"
 import {
   IconBook,
   IconCheck,
@@ -14,17 +13,9 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
-import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@ren/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyDescription } from "@ren/ui/empty"
 import {
   Field,
@@ -49,8 +40,6 @@ import { AppIcon } from "./app-icon.js"
 import { ToolGroup } from "./app-list.js"
 import { AppDraft } from "../lib/app-draft.js"
 import { McpInspect } from "../lib/mcp-inspect.js"
-import { pickerPageSize } from "../lib/pagination.js"
-import { RouterContext } from "../lib/router-context.js"
 import { SkillFolder } from "../lib/skill-folder.js"
 import { FileDrop } from "../platform/file-drop.js"
 
@@ -987,58 +976,6 @@ export function IdentitySection() {
   )
 }
 
-function DependsOn() {
-  const form = useForm()
-  const { api } = RouterContext.useRouterContext()
-  const apps = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
-  const picked = form.state.draft.dependsOn
-  const taken = new Set(picked)
-  const options = (apps.data?.items ?? []).filter((app) => app.id !== form.state.appId && !taken.has(app.slug))
-  const set = (dependsOn: ReadonlyArray<string>) => form.actions.change((draft) => ({ ...draft, dependsOn }))
-  return (
-    <Field>
-      <FieldLabel>Depends on</FieldLabel>
-      <div className="flex flex-wrap items-center gap-2">
-        {picked.map((slug) => (
-          <Badge key={slug} variant="secondary" className="gap-1 pr-0.5">
-            {slug}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Remove ${slug}`}
-              className="size-4"
-              onClick={() => set(picked.filter((each) => each !== slug))}
-            >
-              <IconX />
-            </Button>
-          </Badge>
-        ))}
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
-            <IconPlus data-icon="inline-start" />
-            Add app
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-72 w-64">
-            <DropdownMenuGroup>
-              {options.length === 0 ? (
-                <DropdownMenuItem disabled>No other apps in your org</DropdownMenuItem>
-              ) : (
-                options.map((app) => (
-                  <DropdownMenuItem key={app.id} onClick={() => set([...picked, app.slug])}>
-                    <AppIcon name={app.name} icon={app.icon} size="sm" />
-                    <span className="min-w-0 flex-1 truncate">{app.name}</span>
-                  </DropdownMenuItem>
-                ))
-              )}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </Field>
-  )
-}
-
 const packageKinds = ["apt", "npm", "pip", "go"] as const
 
 const stages = ["startup", "catalog", "execution"] as const
@@ -1110,7 +1047,7 @@ export function AdvancedSection() {
   const webhooks = Object.keys(draft.webhooks ?? {}).length
   const set = (patch: Partial<AppDraft.Draft>) => form.actions.change((each) => ({ ...each, ...patch }))
   const hasProblem = form.state.problems.some((problem) =>
-    ["environment", "dependsOn", "requiredCredentials"].some((path) => problem.path.startsWith(path)),
+    ["environment", "requiredCredentials"].some((path) => problem.path.startsWith(path)),
   )
   return (
     <Disclosure label="Advanced" defaultOpen={hasProblem}>
@@ -1126,7 +1063,6 @@ export function AdvancedSection() {
         />
         <FieldDescription className={hint}>One per line. They run in order after the packages.</FieldDescription>
       </Field>
-      <DependsOn />
       <RowsField
         label="Secrets"
         rows={draft.secrets}

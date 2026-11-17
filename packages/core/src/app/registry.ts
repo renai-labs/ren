@@ -124,9 +124,8 @@ const dependencyApps = Effect.fnUntraced(function* (transaction: Database.Transa
     )
   }
   const issue = App.dependencyIssues(graph).at(0)
-  if (issue?.kind === "missing")
-    return yield* new Primitive.NotFound({ message: `Missing dependency: ${issue.path.join(" -> ")}.` })
-  if (issue) return yield* new Primitive.Conflict({ message: `Dependency cycle: ${issue.path.join(" -> ")}.` })
+  if (issue?.kind === "missing") return yield* new Primitive.NotFound({ message: App.describeIssue(issue) })
+  if (issue) return yield* new Primitive.Conflict({ message: App.describeIssue(issue) })
   const visible = new Set(
     outside.size
       ? (yield* transaction
@@ -273,7 +272,11 @@ export const layer = Layer.effect(
                       ),
                     ),
                   )
-                yield* AppValidation.writeDependencies(transaction, { id: appId, slug: publication.slug }, dependencies)
+                yield* AppValidation.writeDependencies(
+                  transaction,
+                  { id: appId, slug: publication.slug, organization_id: null },
+                  dependencies,
+                )
                 ids.set(publication.slug, appId)
                 return { appId, revision: 1, isMetadataChanged: true, isExecutionChanged: true }
               })

@@ -37,7 +37,7 @@ import { Separator } from "@ren/ui/separator"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Spinner } from "@ren/ui/spinner"
 import { maxFileBytes, useUploads, type Target } from "../../lib/use-uploads.js"
-import { formatBytes } from "../../lib/format.js"
+import { formatBytes, plural } from "../../lib/format.js"
 import { UploadChips } from "./attachments.js"
 import { DropOverlay } from "../../components/drop-overlay.js"
 import { PastedChip } from "./pasted-chip.js"
@@ -61,7 +61,16 @@ import { ProfileDialog, useAddManaged, type ProfileTarget } from "../../componen
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
 import { StatusDot } from "../../components/app-list.js"
-import { statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
+import {
+  isBundle,
+  listNames,
+  statusAction,
+  statusLabel,
+  waitsForUser,
+  type CatalogApp,
+  type Status,
+} from "../../lib/apps.js"
+import { useApps } from "../../lib/use-app.js"
 import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
@@ -301,10 +310,15 @@ function AppStatusItem(props: {
   )
 }
 
-function MentionChips(props: {
-  space: ReturnType<typeof useSpaceApps>
-  statuses: ReadonlyArray<{ app: Composer.MentionedApp; status: Status }>
-}) {
+type MentionStatus = {
+  readonly app: Composer.MentionedApp
+  readonly status: Status
+  readonly label?: string | undefined
+  readonly title?: string | undefined
+  readonly action?: string | undefined
+}
+
+function MentionChips(props: { space: ReturnType<typeof useSpaceApps>; statuses: ReadonlyArray<MentionStatus> }) {
   const [connecting, setConnecting] = useState<ProfileTarget>()
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
   const space = props.space
@@ -314,17 +328,18 @@ function MentionChips(props: {
   return (
     <div className="ml-auto flex flex-wrap justify-end gap-1">
       {shown.map((each) => {
-        const action = isReady(each.status) ? undefined : statusAction[each.status]
+        const action = isReady(each.status) ? undefined : (each.action ?? statusAction[each.status])
         return (
           <span
             key={each.app.id}
+            title={each.title}
             className="flex h-8 items-center gap-2 rounded-full border bg-card pr-1 pl-1.5 text-sm"
           >
-            <AppIcon name={each.app.name} icon={each.app.icon} size="sm" />
+            <AppIcon name={each.app.name} description={each.app.description} icon={each.app.icon} size="sm" />
             <span className="font-medium">{each.app.name}</span>
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <StatusDot status={each.status} />
-              {statusLabel[each.status]}
+              {each.label ?? statusLabel[each.status]}
             </span>
             {action ? (
               <Button
@@ -349,15 +364,65 @@ function MentionChips(props: {
   )
 }
 
+const bundleStatus = (
+  mention: MentionStatus,
+  app: CatalogApp | undefined,
+  partOf: (slug: string) => { readonly app: CatalogApp; readonly status: Status | "absent" } | undefined,
+  added: boolean,
+  space: string | undefined,
+): MentionStatus => {
+  if (!app || !isBundle(app)) return mention
+  if (!added) return { ...mention, status: "missing", label: space ? `Not in ${space}` : "Not added", action: "Add" }
+  const found = app.dependsOn.flatMap((slug) => {
+    const part = partOf(slug)
+    return part ? [part] : []
+  })
+  const absent = found.filter((part) => part.status === "absent").map((part) => part.app.name)
+  const waiting = found.filter((part) => waitsForUser(part.status)).map((part) => part.app.name)
+  if (absent.length > 0)
+    return {
+      ...mention,
+      status: "missing",
+      label: absent.length === 1 ? `Needs ${absent.join("")}` : `Needs ${plural(absent.length, "app")}`,
+      title: `Needs ${listNames(absent)}`,
+      action: "Connect",
+    }
+  if (waiting.length === 0) return { ...mention, status: "connected" }
+  return {
+    ...mention,
+    status: "missing",
+    label: `${waiting.length} ${waiting.length === 1 ? "needs" : "need"} sign-in`,
+    title: `${listNames(waiting)} ${waiting.length === 1 ? "needs" : "need"} sign-in`,
+    action: "Connect",
+  }
+}
+
 function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, text: string) {
   const mentioned = suggest?.mentioned(text) ?? []
   const [adding, setAdding] = useState(false)
-  const space = useSpaceApps(
-    spaceId,
-    mentioned.map((app) => app.id),
-  )
+  const full = useApps(mentioned.map((app) => app.id))
+  const partSlugs = mentioned.flatMap((app) => full.of(app.id)?.dependsOn ?? [])
+  const parts = useApps(partSlugs)
+  const space = useSpaceApps(spaceId, [
+    ...mentioned.map((app) => app.id),
+    ...partSlugs.flatMap((slug) => parts.of(slug)?.id ?? []),
+  ])
   const addManaged = useAddManaged()
-  const statuses = space.pending ? [] : mentioned.map((app) => ({ app, status: space.status(app.id) }))
+  const statuses = space.pending
+    ? []
+    : mentioned.map((app) =>
+        bundleStatus(
+          { app, status: space.status(app.id) },
+          full.of(app.id),
+          (slug) => {
+            const part = parts.of(slug)
+            if (!part) return
+            return { app: part, status: space.here(part.id).length === 0 ? "absent" : space.status(part.id) }
+          },
+          space.here(app.id).length > 0,
+          space.from?.name,
+        ),
+      )
   return {
     space,
     statuses,

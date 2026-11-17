@@ -3,7 +3,8 @@ import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
-import { fromApp, fromRegistry, hasManaged, mentionColor, type Status } from "../../lib/apps.js"
+import { fromApp, fromRegistry, hasManaged, isBundle, mentionColor, type Status } from "../../lib/apps.js"
+
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
@@ -11,6 +12,8 @@ import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useSpaceApps } from "./use-space-apps.js"
 import { useDebouncedValue } from "../../lib/use-debounced-value.js"
+
+const noApp = { dependsOn: [], mcps: null, skills: null }
 
 const groupSize = 5
 const fileSearchDelay = 250
@@ -216,7 +219,7 @@ function useSuggestions(input: {
           mentionItem(
             entry,
             appById.get(entry.item.id)?.icon,
-            entry.item.kind === "app" && input.spaceId
+            entry.item.kind === "app" && input.spaceId && !isBundle(space.app(entry.item.id) ?? noApp)
               ? space.status(entry.item.id, { managed: apps.managed(entry.item.id) })
               : undefined,
           ),

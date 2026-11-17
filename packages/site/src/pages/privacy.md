@@ -2,7 +2,7 @@
 layout: ../layouts/legal.astro
 title: Privacy Policy
 description: "Learn how Ren AI protects your data and privacy when using our AI agent orchestration platform."
-updated: April 3, 2026
+updated: November 16, 2026
 ---
 
 ## 1. Introduction
@@ -95,12 +95,22 @@ Your information may be transferred to and processed in countries other than you
 
 Our services are not intended for individuals under the age of 18. We do not knowingly collect personal information from children.
 
-## 12. Changes to This Policy
+## 12. Shopify Stores
+
+This section applies when a merchant installs the Ren AI app from the Shopify App Store or connects a Shopify store to Ren.
+
+- **What we access:** With the merchant's approval, Ren AI has read-only access to the store's products, inventory, orders from the last 60 days, and customers. We do not request customers' names, email addresses, phone numbers or postal addresses. Ren AI never creates, changes or deletes anything in the store.
+- **How we use it:** We read store data only to answer the questions that the merchant and their team ask in Ren. We do not sell it, use it for advertising, or use it to train models.
+- **What we store:** We keep the store's access tokens, encrypted, so that Ren can read the store. Store data that Ren reads to answer a question appears in that chat in Ren, and the merchant's team can delete it.
+- **Retention and deletion:** When a merchant uninstalls Ren AI, we delete the store's access tokens and Ren stops reading the store. When Shopify sends us a request to delete a store's or a customer's data, or to report the data we hold about a customer, we complete it within 30 days. Merchants and their customers can also send these requests to support@renai.build.
+- **Customer consent:** Ren AI does not track visitors to a store, add scripts to it, or contact its customers, so it does not collect customer consent.
+
+## 13. Changes to This Policy
 
 We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the updated policy on our website and updating the "Last updated" date.
 
-## 13. Contact Us
+## 14. Contact Us
 
 If you have questions about this Privacy Policy or our data practices, please contact us at:
 
-**Email:** shrey@renai.com
+**Email:** support@renai.build
