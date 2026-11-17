@@ -36,7 +36,7 @@ Work deferred during scaffolding. Pick items up when they become relevant, and m
 - [ ] Typecheck profiling scripts (`typecheck:profile`) once typecheck gets slow.
 - [ ] Add `patches/` + `patchedDependencies` the first time a dependency needs a patch (ren-v1 already patches `@standard-community/standard-openapi`).
 - [ ] Flesh out the `ren-dev` skill once the server, logs and DB workflow exist.
-- [ ] Move to TypeScript 7 (stable `tsc` is native) once `@astrojs/check` supports it (its peer range is `^5 || ^6`). Then decide whether to drop `@typescript/native-preview`.
+- [ ] Move to TypeScript 7 (stable `tsc` is native) once `@astrojs/check` supports it (its peer range is `^5 || ^6`). Then decide whether `typecheck` should move from `tsrs` to `tsc`.
 - [ ] Bump `effect` / `@effect/*` together with a `repos/effect` subtree pull.
 - [ ] Drizzle RC: `db.execute` is typed as an array but returns `{ rows }` at runtime. Re-check on the next drizzle-orm upgrade.
 

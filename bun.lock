@@ -10,14 +10,13 @@
         "@ren/test-harness": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
         "eslint-plugin-better-tailwindcss": "4.9.0",
         "husky": "9.1.7",
         "knip": "6.40.0",
         "oxfmt": "catalog:",
         "oxlint": "1.93.0",
-        "tsrs": "0.25.0-ts7.1.0-beta",
+        "tsrs": "catalog:",
         "turbo": "2.11.7",
       },
     },
@@ -79,10 +78,10 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "@vitejs/plugin-react": "catalog:",
         "babel-plugin-react-compiler": "catalog:",
         "tailwindcss": "catalog:",
+        "tsrs": "catalog:",
         "vite": "catalog:",
       },
     },
@@ -98,7 +97,7 @@
         "@effect/platform-bun": "catalog:",
         "@ren/executor": "workspace:*",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/cell": {
@@ -129,8 +128,8 @@
         "@ren/executor": "workspace:*",
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "e2b": "2.19.4",
+        "tsrs": "catalog:",
         "wrangler": "catalog:",
       },
     },
@@ -139,6 +138,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@ren/client": "workspace:*",
+        "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
         "diff": "catalog:",
         "effect": "catalog:",
@@ -148,8 +148,8 @@
         "@ren/cell": "workspace:*",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "react": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "@effect/atom-react": "catalog:",
@@ -178,7 +178,7 @@
         "@ren/httpapi-codegen": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/client": {
@@ -194,9 +194,9 @@
         "@tanstack/react-query": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
         "react": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "@tanstack/react-query": "catalog:",
@@ -242,7 +242,7 @@
         "@ren/executor": "workspace:*",
         "@ren/opencode-transcript": "workspace:*",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/db": {
@@ -256,8 +256,8 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "drizzle-kit": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/e2e": {
@@ -281,8 +281,8 @@
         "@ren/server": "workspace:*",
         "@ren/util": "workspace:*",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/egress-api": {
@@ -294,7 +294,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/executor": {
@@ -309,7 +309,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/hand-api": {
@@ -321,7 +321,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/host-api": {
@@ -333,7 +333,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/httpapi-codegen": {
@@ -346,7 +346,7 @@
       "devDependencies": {
         "@effect/platform-bun": "catalog:",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/mobile": {
@@ -409,7 +409,7 @@
       "devDependencies": {
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
         "typescript": "~6.0.3",
       },
     },
@@ -424,7 +424,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/protocol": {
@@ -436,8 +436,8 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "oxfmt": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/schema": {
@@ -450,7 +450,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/sdk": {
@@ -461,7 +461,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/server": {
@@ -495,10 +495,10 @@
         "@ren/executor": "workspace:*",
         "@ren/hand-api": "workspace:*",
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "auth": "catalog:",
         "jose": "catalog:",
         "oxfmt": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/site": {
@@ -529,7 +529,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "sharp": "catalog:",
         "tailwindcss": "catalog:",
         "typescript": "catalog:",
@@ -544,7 +543,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/test-harness": {
@@ -552,7 +551,7 @@
       "version": "0.0.0",
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/ui": {
@@ -585,9 +584,9 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
-        "@typescript/native-preview": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "react": "catalog:",
@@ -602,7 +601,7 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "repos/iron-proxy": {
@@ -687,7 +686,6 @@
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitejs/plugin-react": "6.1.2",
     "astro": "7.3.6",
     "auth": "1.7.7",
@@ -764,6 +762,7 @@
     "tailwind-merge": "3.7.0",
     "tailwindcss": "4.3.3",
     "tldts": "7.4.18",
+    "tsrs": "0.25.0-ts7.1.0-beta",
     "tw-animate-css": "1.4.0",
     "typescript": "5.9.3",
     "ulid": "3.0.2",
@@ -2412,22 +2411,6 @@
     "@types/yargs": ["@types/yargs@17.0.35", "", { "dependencies": { "@types/yargs-parser": "*" } }, "sha512-qUHkeCyQFxMXg79wQfTtfndEC+N9ZZg76HJftDJp+qH2tV7Gj4OJi7l+PiWwJ+pWtW8GwSmqsDj/oymhrTWXjg=="],
 
     "@types/yargs-parser": ["@types/yargs-parser@21.0.3", "", {}, "sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ=="],
-
-    "@typescript/native-preview": ["@typescript/native-preview@7.0.0-dev.20260707.2", "", { "optionalDependencies": { "@typescript/native-preview-darwin-arm64": "7.0.0-dev.20260707.2", "@typescript/native-preview-darwin-x64": "7.0.0-dev.20260707.2", "@typescript/native-preview-linux-arm": "7.0.0-dev.20260707.2", "@typescript/native-preview-linux-arm64": "7.0.0-dev.20260707.2", "@typescript/native-preview-linux-x64": "7.0.0-dev.20260707.2", "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260707.2", "@typescript/native-preview-win32-x64": "7.0.0-dev.20260707.2" }, "bin": { "tsgo": "bin/tsgo" } }, "sha512-oUGp+Rep/hqMhPunyinsALUwSlzHINSxitifPiSaeqoKOKD2OlR9NE3TaPqwsl4NlGslsOSUXI1JotWQzpYCPg=="],
-
-    "@typescript/native-preview-darwin-arm64": ["@typescript/native-preview-darwin-arm64@7.0.0-dev.20260707.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-wny2pgKjGbiZtnOIHVa3tXC1UfDqxNEFzyPGmiqybedG8hipG2Nfp0l5UxbaKCjkLacUpH/W5bP2hBOMVhCOzg=="],
-
-    "@typescript/native-preview-darwin-x64": ["@typescript/native-preview-darwin-x64@7.0.0-dev.20260707.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-Afc7M5zOwo+GpfcYwz5Z8HMB2tPVsui7nNIqEuuFB73MPdVqNn/Wmpe4tP4MRri0AtJnJknoHBaTJ/VDAp/Jhw=="],
-
-    "@typescript/native-preview-linux-arm": ["@typescript/native-preview-linux-arm@7.0.0-dev.20260707.2", "", { "os": "linux", "cpu": "arm" }, "sha512-hJm/UOqZTr9FHmR7uNm8VGX4oKtfWk0Jem0zPeJFNC8ckGUfSBueyiEYMZB+XmRc1aG4x1E46y3CplP4CLHvGQ=="],
-
-    "@typescript/native-preview-linux-arm64": ["@typescript/native-preview-linux-arm64@7.0.0-dev.20260707.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-iITBa2WjjTI5N9t5l7Z4KoOSI+2zBlhbvFzsD/f8qX8QoKjz/Y4DPyBDgezYi8nkqjjksbgSOJ3/ykzhwrB9cg=="],
-
-    "@typescript/native-preview-linux-x64": ["@typescript/native-preview-linux-x64@7.0.0-dev.20260707.2", "", { "os": "linux", "cpu": "x64" }, "sha512-du0dzi6y97Po5vDNdPJTyyijHCpaS22JLRnKZEJXBDaO9gCIymOv/5QQokFRuOlQm0bWl3i9PF4OVdGP6uAOQA=="],
-
-    "@typescript/native-preview-win32-arm64": ["@typescript/native-preview-win32-arm64@7.0.0-dev.20260707.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-SsAwfhyHJ1akgBc+99z4+hwdbHsdWaKB8EwCNIMA6JfSLMeUjffrYvxu+vfMyxVtOVOz7RrRXRoiDiu4a2sCtg=="],
-
-    "@typescript/native-preview-win32-x64": ["@typescript/native-preview-win32-x64@7.0.0-dev.20260707.2", "", { "os": "win32", "cpu": "x64" }, "sha512-DL4u27stv0fo71sVhOzHSwE+YMZsbBijVI+kg5dLDLilSH79WFTJ8RSQ46vJrCMt+Gjlv/JOZP1PuLJDfioYeQ=="],
 
     "@ungap/structured-clone": ["@ungap/structured-clone@1.4.0", "", {}, "sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ=="],
 

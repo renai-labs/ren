@@ -17,7 +17,7 @@
   },
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b"
+    "typecheck": "tsrs -b"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -27,7 +27,7 @@
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@typescript/native-preview": "catalog:",
+    "tsrs": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

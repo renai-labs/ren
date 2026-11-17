@@ -11,7 +11,7 @@
   "scripts": {
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --only-failures",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b",
+    "typecheck": "tsrs -b",
     "test:all": "bun ../../script/signoff/record.ts bun test --only-failures"
   },
   "dependencies": {
@@ -20,6 +20,6 @@
   },
   "devDependencies": {
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "tsrs": "catalog:"
   }
 }
