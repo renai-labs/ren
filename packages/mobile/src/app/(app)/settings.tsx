@@ -2,15 +2,18 @@ import { TimelineDetail } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import Constants from "expo-constants"
+import { isEnabled, useUpdates } from "expo-updates"
 import { useState, type ReactNode } from "react"
 import { Alert, Pressable, ScrollView, Switch, View } from "react-native"
 import CheckIcon from "react-native-heroicons/mini/CheckIcon"
 import ChevronRightIcon from "react-native-heroicons/mini/ChevronRightIcon"
 import { Avatar } from "#components/avatar"
 import { Icon } from "#components/icon"
+import { OrgSwitcher } from "#components/org-switcher"
 import { Segmented } from "#components/segmented"
 import { Sheet } from "#components/sheet"
 import { Text } from "#components/text"
+import { AppUpdates } from "#lib/app-updates"
 import { Auth } from "#lib/auth"
 import { Preferences } from "#lib/preferences"
 
@@ -100,6 +103,54 @@ function TimelineDetailRow() {
   )
 }
 
+const updateStatus = (updates: ReturnType<typeof useUpdates>, checked: boolean) => {
+  if (updates.isUpdatePending) return "Restart to update"
+  if (updates.isDownloading) return "Downloading…"
+  if (updates.isChecking) return "Checking…"
+  if (updates.checkError) return "Couldn’t check. Try again"
+  return checked ? "Up to date" : "Check for updates"
+}
+
+function AboutRows() {
+  const updates = useUpdates()
+  const [checked, setChecked] = useState(false)
+  const running = updates.currentlyRunning
+  const build = running.isEmbeddedLaunch
+    ? "Built in"
+    : `Update ${running.updateId?.slice(0, 8) ?? ""}${running.createdAt ? ` · ${running.createdAt.toLocaleDateString()}` : ""}`
+  return (
+    <>
+      <View className="min-h-12 flex-row items-center gap-3 px-4 py-3">
+        <Text className="flex-1">Version</Text>
+        <Text className="text-muted-foreground">{Constants.expoConfig?.version ?? ""}</Text>
+      </View>
+      {isEnabled ? (
+        <>
+          <View className="mx-4 h-px bg-border" />
+          <View className="min-h-12 flex-row items-center gap-3 px-4 py-3">
+            <Text className="flex-1">Running</Text>
+            <Text className="text-muted-foreground">{build}</Text>
+          </View>
+          <View className="mx-4 h-px bg-border" />
+          <Pressable
+            role="button"
+            disabled={updates.isChecking || updates.isDownloading}
+            className="min-h-12 flex-row items-center px-4 py-3 active:bg-accent"
+            onPress={() => {
+              if (updates.isUpdatePending) return void AppUpdates.apply()
+              void AppUpdates.fetchLatest()
+                .catch(() => undefined)
+                .then(() => setChecked(true))
+            }}
+          >
+            <Text className="font-medium text-link">{updateStatus(updates, checked)}</Text>
+          </Pressable>
+        </>
+      ) : null}
+    </>
+  )
+}
+
 export default function Settings() {
   const queryClient = useQueryClient()
   const user = useQuery(Auth.sessionOptions).data?.user
@@ -149,6 +200,8 @@ export default function Settings() {
           </View>
         </View>
         <View className="mx-4 h-px bg-border" />
+        <OrgSwitcher />
+        <View className="mx-4 h-px bg-border" />
         <Pressable
           role="button"
           className="min-h-12 flex-row items-center px-4 py-3 active:bg-accent"
@@ -157,9 +210,9 @@ export default function Settings() {
           <Text className="font-medium text-destructive">Log out</Text>
         </Pressable>
       </Section>
-      <Text variant="muted" className="text-center">
-        Version {Constants.expoConfig?.version ?? ""}
-      </Text>
+      <Section title="About">
+        <AboutRows />
+      </Section>
     </ScrollView>
   )
 }

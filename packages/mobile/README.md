@@ -38,7 +38,7 @@ FCM and direct APK installation do not require a paid Google Play account. iOS p
 
 ## Android team builds
 
-The `internal` EAS profile produces a signed, standalone APK with production Ren URLs and bundled JavaScript. Phones need internet access to Ren, but no Metro server, laptop or USB connection. Direct APK distribution needs no Google Play account. JavaScript changes reach installed APKs as updates (see Publish an update); share a new APK only when the native side changes.
+The `internal` EAS profile produces a signed, standalone APK with production Ren URLs and bundled JavaScript. Phones need internet access to Ren, but no Metro server, laptop or USB connection. Direct APK distribution needs no Google Play account. JavaScript changes reach installed APKs as updates (see Publish an update); share a new APK only when the native side changes. Share only APKs from `bun run build:android:internal`: a plain `./gradlew assembleRelease` build has no update channel, so it never receives updates.
 
 ### Build locally when ready
 
@@ -72,7 +72,7 @@ There is no Play Store listing.
 
 ### Publish an update
 
-`expo-updates` checks for an update when the app launches and applies it on the next cold start, so an installed app shows a change after it is closed and opened twice. An update carries JavaScript and assets only. From `packages/mobile`:
+The app checks for an update when it launches and when it returns to the foreground (at most every 15 minutes), and downloads it in the background. It applies the update on the next cold start, or when it is reopened after 5 minutes or more in the background, so it never reloads in use. Settings, About, shows the running update and checks on demand. An update carries JavaScript and assets only. From `packages/mobile`:
 
 ```sh
 bun run update:internal -- --message "Fix the chat list"

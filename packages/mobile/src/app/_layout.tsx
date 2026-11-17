@@ -13,6 +13,7 @@ import { SafeAreaListener } from "react-native-safe-area-context"
 import { Uniwind, useCSSVariable, useUniwind, withUniwind } from "uniwind"
 import { Button } from "#components/button"
 import { Text } from "#components/text"
+import { AppUpdates } from "#lib/app-updates"
 import { Auth } from "#lib/auth"
 import { Preferences } from "#lib/preferences"
 import { Queries } from "#lib/queries"
@@ -74,6 +75,7 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
+  AppUpdates.useAutoApply()
   const dark = useUniwind().theme === "dark"
   const base = dark ? DarkTheme : DefaultTheme
   const background = useCSSVariable("--color-background")
