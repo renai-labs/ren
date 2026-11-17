@@ -23,7 +23,14 @@ const pollFor = 20
 
 const accountsPage = { page: 1, pageSize: 100 } as const
 
-const visit = (url: string) => openAuthSessionAsync(url, createURL("connected"))
+const returnTo = () => createURL("connected")
+
+const visit = async (url: string) => {
+  const result = await openAuthSessionAsync(url, returnTo())
+  if (result.type !== "success") return
+  const back = new URL(result.url).searchParams
+  if (back.get("status") === "failed") throw new Error(back.get("reason") ?? "Couldn’t connect. Try again.")
+}
 
 const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
 
@@ -118,6 +125,7 @@ function ConnectChoices(props: {
       profileId: account.id,
       item: { mcp: next.mcp },
       ...(next.status !== "missing" && { reconnect: true }),
+      returnTo: returnTo(),
     })
     if ("redirectUrl" in result) await visit(result.redirectUrl)
   }
