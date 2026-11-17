@@ -7,3 +7,4 @@ The live chat runtime, ported from OpenCode's client (`packages/client/src/solid
 - `ChatSession` owns one root session's connection, reads and sends. `ChatAtoms` exposes it to the UI; `ChatReact` has the hooks.
 - When you port an OpenCode behaviour, inspect its implementation and tests. Preserve ordering, cancellation, pagination and reconnect behavior; port its test with it and keep OpenCode's test name. Use the existing typed client for transport and keep Ren-specific translation at the adapter boundary.
 - Schema types count as class instances for `typescript/no-misused-spread`; files that update them disable that rule at the top with the reason.
+- `@ren/protocol` is a dependency with no import: the declarations `tsrs` emits for `ChatSession` name `@ren/protocol/errors` through `@ren/client`, and without it TypeScript 7.1 reports TS2883 (not portable). Knip's `ignoreDependencies` keeps it.

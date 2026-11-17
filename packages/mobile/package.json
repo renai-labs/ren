@@ -25,7 +25,7 @@
     "check:doctor": "bunx expo-doctor",
     "check:generated": "bun run generate && git diff --exit-code -- src/theme.gen.css",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b"
+    "typecheck": "tsrs -b"
   },
   "dependencies": {
     "@better-auth/expo": "catalog:",
@@ -84,7 +84,7 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
-    "@typescript/native-preview": "catalog:",
+    "tsrs": "catalog:",
     "typescript": "~6.0.3"
   }
 }

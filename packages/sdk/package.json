@@ -17,13 +17,13 @@
   },
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b"
+    "typecheck": "tsrs -b"
   },
   "dependencies": {
     "@ren/client": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "tsrs": "catalog:"
   }
 }
