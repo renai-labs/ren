@@ -26,7 +26,15 @@
       "outputs": []
     },
     "//#lint:rules": {
-      "inputs": ["packages/**/*.{ts,tsx}", "script/**", "!**/node_modules/**", "!**/generated/**", "!**/*.gen.ts"],
+      "inputs": [
+        "packages/**/*.{ts,tsx}",
+        "script/**",
+        "!**/node_modules/**",
+        "!**/generated/**",
+        "!**/*.gen.ts",
+        "!packages/e2e/.runs/**",
+        "!**/.astro/**"
+      ],
       "outputs": []
     },
     "//#lint:unused": {
@@ -38,6 +46,19 @@
       "outputs": []
     },
     "@ren/mobile#check:bundle": {
+      "dependsOn": ["^transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!maestro/**",
+        "!**/*.md",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
+      "env": ["EXPO_PUBLIC_*"],
+      "outputs": []
+    },
+    "@ren/mobile#check:bundle:fast": {
       "dependsOn": ["^transit"],
       "inputs": [
         "$TURBO_DEFAULT$",

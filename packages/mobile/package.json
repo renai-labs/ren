@@ -21,6 +21,7 @@
     "update:production": "APP_VARIANT=production EXPO_PUBLIC_REN_URL=https://api.useren.ai EXPO_PUBLIC_REN_APP_URL=https://useren.ai/app EXPO_UNSTABLE_METRO_OPTIMIZE_GRAPH=1 EXPO_UNSTABLE_TREE_SHAKING=1 bunx eas-cli update --environment production --channel production",
     "generate": "bun run script/theme.ts",
     "check:bundle": "expo export --platform ios --platform android --output-dir node_modules/.cache/expo-export",
+    "check:bundle:fast": "expo export --platform ios --platform android --no-bytecode --output-dir node_modules/.cache/expo-export-fast",
     "check:doctor": "bunx expo-doctor",
     "check:generated": "bun run generate && git diff --exit-code -- src/theme.gen.css",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
