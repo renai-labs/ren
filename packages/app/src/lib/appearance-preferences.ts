@@ -9,6 +9,7 @@ export const uiFonts = [
   { value: "sf-pro", label: "SF Pro", family: "SF Pro Variable" },
   { value: "inter", label: "Inter", family: "Inter Variable" },
   { value: "geist", label: "Geist", family: "Geist Variable" },
+  { value: "allo", label: "Allo", family: "Allo Variable" },
 ] as const
 
 export const codeFonts = [

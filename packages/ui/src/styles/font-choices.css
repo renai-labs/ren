@@ -6,3 +6,12 @@
 @import "@fontsource-variable/geist-mono/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
+
+/* Allo by Josh Puckett, SIL Open Font License 1.1 (fonts/allo-OFL.txt). The variable font with its roundness fixed at fully round (ROND 100) by fontTools' instancer; weight and optical size stay variable. */
+@font-face {
+  font-family: "Allo Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/allo.woff2") format("woff2");
+}

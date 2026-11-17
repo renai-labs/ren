@@ -134,7 +134,7 @@
 @theme inline {
   --font-sans: var(--user-font-sans,) "SF Pro Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
-  --font-avatar: ui-rounded, "SF Pro Rounded", "SF Pro Variable", system-ui, sans-serif;
+  --font-avatar: ui-rounded, "SF Pro Rounded", var(--font-sans);
   --font-mono: var(--user-font-mono,) "IBM Plex Mono", ui-monospace, monospace;
 
   --radius-sm: 4px;
