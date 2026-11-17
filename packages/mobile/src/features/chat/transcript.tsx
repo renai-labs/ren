@@ -13,8 +13,9 @@ import {
 import { Channel } from "@ren/schema/channel"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import { type Ref, useImperativeHandle, useRef } from "react"
+import { type Ref, useImperativeHandle, useRef, useState } from "react"
 import { ActivityIndicator, View } from "react-native"
+import { Appear } from "#components/appear"
 import { CopyButton } from "#components/copy-button"
 import { Markdown } from "#components/markdown"
 import { Text } from "#components/text"
@@ -217,6 +218,8 @@ function Transcript(props: {
     turns,
     activeTurn,
   )
+  const [initial, setInitial] = useState<ReadonlySet<string>>(() => new Set(blocks.map((block) => block.key)))
+  if (initial.size === 0 && blocks.length > 0) setInitial(new Set(blocks.map((block) => block.key)))
   const context: Context = {
     spaceId: props.spaceId,
     byId,
@@ -240,15 +243,23 @@ function Transcript(props: {
         data={blocks}
         extraData={context}
         keyExtractor={(block) => block.key}
-        renderItem={(item) => (
-          <View className="px-5 py-3">
-            <Block block={item.item} context={context} />
-          </View>
-        )}
-        estimatedItemSize={80}
+        renderItem={(item) =>
+          initial.size > 0 && !initial.has(item.item.key) && item.index >= blocks.length - 2 ? (
+            <Appear className="px-5 py-3">
+              <Block block={item.item} context={context} />
+            </Appear>
+          ) : (
+            <View className="px-5 py-3">
+              <Block block={item.item} context={context} />
+            </View>
+          )
+        }
+        estimatedItemSize={120}
+        drawDistance={1000}
+        scrollEventThrottle={32}
         initialScrollAtEnd
         alignItemsAtEnd
-        maintainScrollAtEnd
+        maintainScrollAtEnd={{ animated: true }}
         maintainVisibleContentPosition
         contentInsetEndAdjustment={props.inset}
         keyboardOffset={props.keyboardOffset}

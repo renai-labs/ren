@@ -3,18 +3,17 @@ import { ErrorText } from "@ren/util/error-text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
 import { useState } from "react"
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native"
+import { ActivityIndicator, Pressable, ScrollView } from "react-native"
 import CheckIcon from "react-native-heroicons/mini/CheckIcon"
 import ChevronUpDownIcon from "react-native-heroicons/mini/ChevronUpDownIcon"
 import { Avatar } from "#components/avatar"
 import { Icon } from "#components/icon"
-import { Logomark } from "#components/logomark"
 import { Sheet } from "#components/sheet"
 import { Text } from "#components/text"
 import { Api } from "#lib/api"
 import { Auth } from "#lib/auth"
 
-function OrgSwitcher(props: { readonly onSwitched: () => void }) {
+function OrgSwitcher() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -40,24 +39,21 @@ function OrgSwitcher(props: { readonly onSwitched: () => void }) {
     setSwitching(undefined)
     setOpen(false)
     router.navigate("/")
-    props.onSwitched()
   }
 
   return (
     <>
       <Pressable
         role="button"
-        aria-label={`Switch organization (current: ${current?.name ?? "none"})`}
-        className="mx-2 min-h-11 flex-row items-center gap-2 rounded-lg px-1.5 active:bg-sidebar-accent"
+        aria-label={`Organization: ${current?.name ?? "none"}`}
+        className="min-h-12 flex-row items-center gap-3 px-4 py-3 active:bg-accent"
         onPress={() => setOpen(true)}
       >
-        <View className="size-8 items-center justify-center">
-          <Logomark className="size-4.5 text-sidebar-foreground" />
-        </View>
-        <Text className="flex-1 text-base font-semibold text-sidebar-foreground" numberOfLines={1}>
-          {current?.name ?? "Ren"}
+        <Text className="flex-1">Organization</Text>
+        <Text className="shrink text-muted-foreground" numberOfLines={1}>
+          {current?.name ?? ""}
         </Text>
-        <Icon as={ChevronUpDownIcon} className="size-4.5 text-sidebar-foreground/55" />
+        <Icon as={ChevronUpDownIcon} className="size-4.5 text-muted-foreground" />
       </Pressable>
       <Sheet open={open} onClose={() => setOpen(false)}>
         <Text role="heading" aria-level={2} className="px-5 pb-2 text-base font-semibold">

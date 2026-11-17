@@ -1,14 +1,15 @@
-import { Composer } from "@ren/chat"
+import { Composer, ModelChoice } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { SpaceInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { ErrorText } from "@ren/util/error-text"
+import { Equal } from "effect"
 import { type UseQueryResult, useMutation, useQuery } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
 import { useState } from "react"
 import { ActivityIndicator, View } from "react-native"
-import { KeyboardAvoidingView } from "react-native-keyboard-controller"
+import { KeyboardStickyView } from "react-native-keyboard-controller"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { withUniwind } from "uniwind"
 import { Logomark } from "#components/logomark"
@@ -19,7 +20,7 @@ import { PromptInput } from "#features/chat/prompt-input"
 import { Api } from "#lib/api"
 import { Preferences } from "#lib/preferences"
 
-const AvoidingView = withUniwind(KeyboardAvoidingView)
+const StickyView = withUniwind(KeyboardStickyView)
 
 function SpaceRow(props: {
   readonly spaces: UseQueryResult<{ readonly items: ReadonlyArray<SpaceInfo> }>
@@ -65,6 +66,9 @@ export default function NewChat() {
   const [sessionId, setSessionId] = useState(() => Session.ID.create())
   const [draft, setDraft] = useState<Composer.Draft>(Composer.empty)
   const attachments = useAttachments({ sessionId, spaceId, draft, update: setDraft })
+  const catalog = useQuery(Api.query.chat.models.queryOptions({ id: sessionId, ...(spaceId && { spaceId }) })).data
+  const models = catalog?.models ?? []
+  const model = ModelChoice.pick(models, [draft.model, catalog?.default])
   const [error, setError] = useState("")
 
   const type = (next: string) => {
@@ -79,6 +83,7 @@ export default function NewChat() {
     if (!trimmed || !spaceId || create.isPending) return
     const files = Composer.files(draft)
     const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
+    const chosen = Equal.equals(model, catalog?.default) ? undefined : model
     setError("")
     create.mutate(
       {
@@ -89,6 +94,7 @@ export default function NewChat() {
           text: trimmed,
           ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
         },
+        ...(chosen && { model: chosen }),
       },
       {
         onSuccess: () => {
@@ -106,13 +112,13 @@ export default function NewChat() {
   }
 
   return (
-    <AvoidingView behavior="padding" keyboardVerticalOffset={-insets.bottom} className="flex-1 bg-background">
+    <View className="flex-1 bg-background">
       <View pointerEvents="none" aria-hidden className="flex-1 items-center justify-center p-10">
         <View className="aspect-[0.875] max-h-72 flex-1 opacity-10">
           <Logomark outline className="size-full text-foreground" />
         </View>
       </View>
-      <View className="gap-1 pb-safe-offset-6">
+      <StickyView offset={{ opened: insets.bottom }} className="gap-1 pb-safe-offset-6">
         {error ? <Text className="px-5 text-sm text-destructive">{error}</Text> : null}
         <SpaceRow
           spaces={spaces}
@@ -128,8 +134,14 @@ export default function NewChat() {
           onStop={send}
           running={false}
           attachments={attachments}
+          model={{
+            models,
+            value: model,
+            disabled: create.isPending,
+            onChange: (next) => setDraft((current) => Composer.withModel(current, next)),
+          }}
         />
-      </View>
-    </AvoidingView>
+      </StickyView>
+    </View>
   )
 }

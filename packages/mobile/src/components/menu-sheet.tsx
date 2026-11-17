@@ -1,14 +1,17 @@
 import { ErrorText } from "@ren/util/error-text"
 import { cn } from "cn"
 import { createContext, use, useState, type ComponentProps, type ReactNode } from "react"
-import { ActivityIndicator, Pressable, View } from "react-native"
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native"
 import { Button } from "#components/button"
 import { Icon } from "#components/icon"
 import { Sheet } from "#components/sheet"
 import { Text } from "#components/text"
 
 interface MenuItem {
+  readonly key?: string
+  readonly group?: string
   readonly label: string
+  readonly detail?: string
   readonly icon: ComponentProps<typeof Icon>["as"]
   readonly onPress?: () => unknown
   readonly disabled?: boolean
@@ -22,9 +25,50 @@ function useMenuSheet() {
   return use(MenuSheetContext)
 }
 
+function GroupStart(props: { readonly group: string | undefined; readonly previous: MenuItem | undefined }) {
+  if (props.previous !== undefined && props.group === props.previous.group) return null
+  return (
+    <>
+      {props.previous ? <View className="my-1 h-px bg-border" /> : null}
+      {props.group ? (
+        <Text className="px-5 pt-2 pb-1 text-xs font-medium text-muted-foreground">{props.group}</Text>
+      ) : null}
+    </>
+  )
+}
+
+function MenuRow(props: {
+  readonly item: MenuItem
+  readonly previous: MenuItem | undefined
+  readonly pending: string | undefined
+  readonly onPress: () => void
+}) {
+  const item = props.item
+  const muted = item.disabled === true || (props.pending !== undefined && props.pending !== item.label)
+  return (
+    <View>
+      <GroupStart group={item.group} previous={props.previous} />
+      <Pressable
+        role="menuitem"
+        disabled={item.disabled === true || props.pending !== undefined}
+        className={cn("min-h-12 flex-row items-center gap-3 px-5 active:bg-accent", muted && "opacity-50")}
+        onPress={props.onPress}
+      >
+        <Icon as={item.icon} className={cn("size-5", item.confirm ? "text-destructive" : "text-muted-foreground")} />
+        <Text className={cn("flex-1", item.confirm && "text-destructive")} numberOfLines={1}>
+          {item.label}
+        </Text>
+        {item.detail ? <Text className="text-sm text-muted-foreground">{item.detail}</Text> : null}
+        {props.pending === item.label ? <ActivityIndicator size="small" /> : null}
+      </Pressable>
+    </View>
+  )
+}
+
 function MenuSheet(props: {
   readonly open: boolean
   readonly title: string
+  readonly header?: ReactNode
   readonly items: ReadonlyArray<MenuItem>
   readonly onClose: () => void
 }) {
@@ -77,25 +121,18 @@ function MenuSheet(props: {
           <Text className="px-5 pb-2 text-sm text-muted-foreground" numberOfLines={1}>
             {props.title}
           </Text>
-          {props.items.map((item) => (
-            <Pressable
-              key={item.label}
-              role="menuitem"
-              disabled={item.disabled === true || Boolean(pending)}
-              className={cn(
-                "min-h-12 flex-row items-center gap-3 px-5 active:bg-accent",
-                (item.disabled === true || (pending && pending !== item.label)) && "opacity-50",
-              )}
-              onPress={() => (item.confirm || item.panel ? setChosen(item) : run(item))}
-            >
-              <Icon
-                as={item.icon}
-                className={cn("size-5", item.confirm ? "text-destructive" : "text-muted-foreground")}
+          {props.header}
+          <ScrollView>
+            {props.items.map((item, index) => (
+              <MenuRow
+                key={item.key ?? item.label}
+                item={item}
+                previous={props.items[index - 1]}
+                pending={pending}
+                onPress={() => (item.confirm || item.panel ? setChosen(item) : run(item))}
               />
-              <Text className={cn("flex-1", item.confirm && "text-destructive")}>{item.label}</Text>
-              {pending === item.label ? <ActivityIndicator size="small" /> : null}
-            </Pressable>
-          ))}
+            ))}
+          </ScrollView>
           {failure ? <Text className="px-5 pt-2 text-sm text-destructive">{failure}</Text> : null}
         </>
       )}

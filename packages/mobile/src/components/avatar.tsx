@@ -5,15 +5,18 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg"
 import { useCSSVariable } from "uniwind"
 import { Text } from "#components/text"
 
-function Avatar(props: { readonly name: string; readonly size?: "sm" }) {
+function Avatar(props: { readonly name: string; readonly size?: "sm" | "lg" }) {
   const small = props.size === "sm"
+  const large = props.size === "lg"
   const from = useCSSVariable("--color-avatar-from")
   const to = useCSSVariable("--color-avatar-to")
   return (
     <View
       className={cn(
         "items-center justify-center overflow-hidden rounded-full bg-avatar-to",
-        small ? "size-5" : "size-8",
+        small && "size-5",
+        large && "size-12",
+        !small && !large && "size-8",
       )}
     >
       {typeof from === "string" && typeof to === "string" ? (
@@ -29,7 +32,14 @@ function Avatar(props: { readonly name: string; readonly size?: "sm" }) {
           </Svg>
         </View>
       ) : null}
-      <Text className={cn("font-semibold text-avatar-foreground", small ? "text-2xs" : "text-xs")}>
+      <Text
+        className={cn(
+          "font-semibold text-avatar-foreground",
+          small && "text-2xs",
+          large && "text-base",
+          !small && !large && "text-xs",
+        )}
+      >
         {Initials.of(props.name)}
       </Text>
     </View>

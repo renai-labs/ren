@@ -39,6 +39,8 @@ export const foldTurns = from(ChatSettings.foldTurns)
 
 export const foldMessages = from(ChatSettings.foldMessages)
 
+export const model = from(ChatSettings.model)
+
 export const homeSpace = make("chat.home-space.v1", Schema.NullOr(Schema.String), null)
 
 export const themes = ["light", "dark", "system"] as const

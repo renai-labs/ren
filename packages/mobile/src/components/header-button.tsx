@@ -2,13 +2,15 @@ import { useNavigation } from "expo-router"
 import { DrawerActions } from "expo-router/react-navigation"
 import type { ComponentProps, ReactNode } from "react"
 import { Pressable, View } from "react-native"
-import Bars3Icon from "react-native-heroicons/mini/Bars3Icon"
+import Bars3Icon from "react-native-heroicons/outline/Bars3Icon"
 import { Icon } from "#components/icon"
 
 function HeaderButton(props: {
   readonly icon: ComponentProps<typeof Icon>["as"]
   readonly label: string
   readonly dot?: boolean
+  readonly strokeWidth?: number
+  readonly children?: ReactNode
   readonly onPress: () => void
 }) {
   return (
@@ -19,7 +21,12 @@ function HeaderButton(props: {
       className="size-10 items-center justify-center rounded-full active:bg-accent"
       onPress={props.onPress}
     >
-      <Icon as={props.icon} className="size-5.5" />
+      {props.children}
+      {props.strokeWidth === undefined ? (
+        <Icon as={props.icon} className="size-5.5" />
+      ) : (
+        <Icon as={props.icon} className="size-6" strokeWidth={props.strokeWidth} />
+      )}
       {props.dot === true ? <View className="absolute top-1.5 right-1.5 size-2 rounded-full bg-ring" /> : null}
     </Pressable>
   )
@@ -35,6 +42,7 @@ function MenuButton() {
     <View className="-ms-1.75">
       <HeaderButton
         icon={Bars3Icon}
+        strokeWidth={2}
         label="Open menu"
         onPress={() => navigation.dispatch(DrawerActions.toggleDrawer())}
       />

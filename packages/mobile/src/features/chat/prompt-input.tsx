@@ -2,16 +2,23 @@ import ArrowUpIcon from "react-native-heroicons/mini/ArrowUpIcon"
 import PlusIcon from "react-native-heroicons/mini/PlusIcon"
 import StopIcon from "react-native-heroicons/mini/StopIcon"
 import { cn } from "cn"
-import { useState } from "react"
-import { View } from "react-native"
+import { type ComponentProps, type ComponentRef, type ReactNode, type RefObject, useRef, useState } from "react"
+import { type TextInput, View } from "react-native"
 import { TextField } from "#components/input"
+import { Morph } from "#components/appear"
 import { Button } from "#components/button"
 import { Icon } from "#components/icon"
 import { type Attachments, UploadChips } from "#features/chat/attachments"
 import { MenuSheet } from "#components/menu-sheet"
+import { ModelPicker } from "#features/chat/model-picker"
 
-function AddAttachment(props: { readonly attachments: Attachments }) {
-  const [adding, setAdding] = useState(false)
+function AddAttachment(props: { readonly attachments: Attachments; readonly onOpenChange: (open: boolean) => void }) {
+  const [sheet, setSheet] = useState(false)
+  const adding = sheet
+  const setAdding = (next: boolean) => {
+    setSheet(next)
+    props.onOpenChange(next)
+  }
   return (
     <>
       <Button
@@ -37,11 +44,12 @@ function AddAttachment(props: { readonly attachments: Attachments }) {
 function SendButton(props: {
   readonly blank: boolean
   readonly running: boolean
-  readonly uploading: boolean
+  readonly attachments: Attachments | undefined
   readonly onSend: () => void
   readonly onStop: () => void
 }) {
   const stopping = props.running && props.blank
+  const uploading = (props.attachments?.uploads.length ?? 0) > 0
   return (
     <Button
       variant={props.blank && !stopping ? "secondary" : "default"}
@@ -49,9 +57,9 @@ function SendButton(props: {
       className="rounded-full"
       hitSlop={4}
       aria-label={stopping ? "Stop" : "Send"}
-      aria-disabled={(props.blank && !stopping) || props.uploading}
-      accessibilityHint={props.uploading ? "Wait for the files to upload" : undefined}
-      disabled={props.uploading && !stopping}
+      aria-disabled={(props.blank && !stopping) || uploading}
+      accessibilityHint={uploading ? "Wait for the files to upload" : undefined}
+      disabled={uploading && !stopping}
       onPress={() => {
         if (stopping) props.onStop()
         else if (!props.blank) props.onSend()
@@ -62,6 +70,34 @@ function SendButton(props: {
   )
 }
 
+type ModelProps = Omit<ComponentProps<typeof ModelPicker>, "onOpenChange">
+
+function Toolbar(props: {
+  readonly add: ReactNode
+  readonly send: ReactNode
+  readonly model: ModelProps | undefined
+  readonly field: RefObject<ComponentRef<typeof TextInput> | null>
+  readonly onHold: (holding: boolean) => void
+}) {
+  return (
+    <View className="flex-row items-center gap-1 px-2 pb-2">
+      {props.add}
+      <View className="flex-1 flex-row items-center">
+        {props.model ? (
+          <ModelPicker
+            {...props.model}
+            onOpenChange={(open) => {
+              props.onHold(open)
+              if (!open) props.field.current?.focus()
+            }}
+          />
+        ) : null}
+      </View>
+      {props.send}
+    </View>
+  )
+}
+
 function PromptInput(props: {
   readonly value: string
   readonly onChange: (value: string) => void
@@ -69,30 +105,49 @@ function PromptInput(props: {
   readonly onStop: () => void
   readonly running: boolean
   readonly attachments?: Attachments
+  readonly model?: ModelProps
   readonly placeholder?: string
 }) {
+  const field = useRef<ComponentRef<typeof TextInput>>(null)
+  const [focused, setFocused] = useState(false)
+  const [holding, setHolding] = useState(false)
+  const expandable = Boolean(props.attachments ?? props.model)
+  const expanded = expandable && (focused || holding)
+  const add = props.attachments ? <AddAttachment attachments={props.attachments} onOpenChange={setHolding} /> : null
+  const send = (
+    <SendButton
+      blank={props.value.trim() === ""}
+      running={props.running}
+      attachments={props.attachments}
+      onSend={props.onSend}
+      onStop={props.onStop}
+    />
+  )
   return (
-    <View className="mx-3 rounded-4xl border border-transparent bg-card shadow-soft dark:border-border dark:shadow-none">
-      {props.attachments ? <UploadChips attachments={props.attachments} /> : null}
-      <View className={cn("min-h-14 flex-row items-end gap-2 py-2 pr-2", props.attachments ? "pl-2" : "pl-5")}>
-        {props.attachments ? <AddAttachment attachments={props.attachments} /> : null}
+    <Morph
+      className={cn(
+        "mx-3 border border-black/10 bg-card shadow-soft dark:border-white/15 dark:shadow-none",
+        expanded ? "rounded-3xl" : "rounded-4xl",
+      )}
+    >
+      <UploadChips attachments={props.attachments} />
+      <View className={cn("min-h-14 flex-row items-end gap-2 py-2 pr-2", expandable ? "pl-2" : "pl-3")}>
+        {expanded ? null : add}
         <TextField
-          className="max-h-40 min-h-10 flex-1 py-2 text-base"
+          ref={field}
+          className="max-h-40 min-h-10 flex-1 p-2 text-base"
           value={props.value}
           onChangeText={props.onChange}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={props.placeholder ?? "Ask anything"}
           aria-label="Message"
           multiline
         />
-        <SendButton
-          blank={props.value.trim() === ""}
-          running={props.running}
-          uploading={(props.attachments?.uploads.length ?? 0) > 0}
-          onSend={props.onSend}
-          onStop={props.onStop}
-        />
+        {expanded ? null : send}
       </View>
-    </View>
+      {expanded ? <Toolbar add={add} send={send} model={props.model} field={field} onHold={setHolding} /> : null}
+    </Morph>
   )
 }
 

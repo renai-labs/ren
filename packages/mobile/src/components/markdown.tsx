@@ -38,9 +38,9 @@ function Markdown(props: { readonly text: string; readonly streaming?: boolean; 
   const chart6 = string(useCSSVariable("--color-chart-6"))
   const sans = string(useCSSVariable("--font-sans"))
   const mono = string(useCSSVariable("--font-mono"))
-  const size = props.size === "sm" ? 14 : 16
+  const size = props.size === "sm" ? 13 : 15
   const gap = Math.round(size * 0.75)
-  const body = { fontSize: size, lineHeight: Math.round(size * 1.7), color: foreground, fontFamily: sans }
+  const body = { fontSize: size, lineHeight: Math.round(size * 1.6), color: foreground, fontFamily: sans }
   const heading = (fontSize: number, emphasis: "high" | "low") => ({
     fontSize,
     lineHeight: Math.round(fontSize * 1.3),
