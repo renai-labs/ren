@@ -19,6 +19,7 @@ import { Appear } from "#components/appear"
 import { CopyButton } from "#components/copy-button"
 import { Markdown } from "#components/markdown"
 import { Text } from "#components/text"
+import { AppConnectCard } from "#features/chat/app-connect"
 import { DriveFileCards } from "#features/chat/attachments"
 import { Steps, StepRuns, StepsProvider } from "#features/chat/steps"
 import { TurnProblem, TurnRetrying } from "#features/chat/turn-problem"
@@ -38,6 +39,7 @@ interface Context {
   readonly onRemove: (id: SessionMessage.ID) => void
   readonly onResend: (text: string) => void
   readonly onStop: () => void
+  readonly onConnected: (app: string) => void
 }
 
 function Separator(props: { readonly children: string }) {
@@ -169,7 +171,19 @@ function Block(props: { readonly block: TranscriptBlocks.Block; readonly context
   if (block.kind === "reply") return <Reply tool={block.tool} />
   if (block.kind === "empty") return <Marker>Ren sent an empty response.</Marker>
   if (block.kind === "file") return <DriveFileCards spaceId={context.spaceId} files={[block.file]} />
-  if (block.kind === "connect") return null
+  if (block.kind === "connect")
+    return (
+      <View className="gap-2">
+        {block.connects.map((connect) => (
+          <AppConnectCard
+            key={`${connect.appId}:${connect.spaceId}`}
+            appId={connect.appId}
+            spaceId={connect.spaceId}
+            onConnected={context.onConnected}
+          />
+        ))}
+      </View>
+    )
   return <SystemRow row={block.row} context={context} />
 }
 
@@ -200,6 +214,7 @@ function Transcript(props: {
   readonly onRemove: (id: SessionMessage.ID) => void
   readonly onResend: (text: string) => void
   readonly onStop: () => void
+  readonly onConnected: (app: string) => void
   readonly onAway: (away: boolean) => void
 }) {
   const list = useRef<LegendListRef>(null)
@@ -236,6 +251,7 @@ function Transcript(props: {
     onRemove: props.onRemove,
     onResend: props.onResend,
     onStop: props.onStop,
+    onConnected: props.onConnected,
   }
   return (
     <StepsProvider root={props.root} detail={props.detail}>

@@ -1,15 +1,19 @@
 export * as Auth from "./auth.js"
 
 import { expoClient } from "@better-auth/expo/client"
+import type { Auth as AuthSchema } from "@ren/schema/auth"
 import { hashKey, type QueryClient, queryOptions } from "@tanstack/react-query"
 import { createAuthClient } from "better-auth/client"
 import { emailOTPClient, organizationClient } from "better-auth/client/plugins"
 import { fetch } from "expo/fetch"
 import { getItem, getItemAsync, setItem, setItemAsync } from "expo-secure-store"
+import { openBrowserAsync } from "expo-web-browser"
 
 export const serverUrl = process.env.EXPO_PUBLIC_REN_URL ?? "https://api.useren.ai"
 
 export const webUrl = process.env.EXPO_PUBLIC_REN_APP_URL ?? "https://useren.ai/app"
+
+export const openWeb = (path: string) => void openBrowserAsync(new URL(path, `${webUrl}/`).href)
 
 const origin = new URL(serverUrl).origin
 
@@ -47,6 +51,19 @@ export const organizationsOptions = queryOptions({
 export const refreshSession = async (queryClient: QueryClient) => {
   await queryClient.refetchQueries({ queryKey: sessionOptions.queryKey, exact: true })
   queryClient.removeQueries({ predicate: (query) => query.queryHash !== hashKey(sessionOptions.queryKey) })
+}
+
+// oxlint-disable-next-line ren/no-comments -- The Expo plugin opens the provider in the system browser and resolves once it returns to the app scheme (`/` becomes `ren:///`, `ren-dev:///` or `ren-preview:///`). An error redirects there too, so the browser always closes; the session cookie exists only when the sign-in worked.
+export const signInWithProvider = async (queryClient: QueryClient, provider: AuthSchema.SignInProvider) => {
+  const result = await client.signIn.social({
+    provider,
+    callbackURL: "/",
+    newUserCallbackURL: "/",
+    errorCallbackURL: "/",
+  })
+  if (result.error) return result.error
+  if ((await client.getCookie()).includes("session_token=")) await refreshSession(queryClient)
+  return null
 }
 
 const target = (resource: RequestInfo | URL) =>

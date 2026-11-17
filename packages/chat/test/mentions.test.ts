@@ -46,6 +46,11 @@ describe("Mentions tokens", () => {
     })
     expect(Mentions.insertFile("", "src/app.ts", 0)).toEqual({ text: "@  src/app.ts ", cursor: 14 })
   })
+  test("inserts an app at the cursor like a file", () => {
+    const app = Mentions.fromApp({ id: "app_1", slug: "github", name: "GitHub", description: "" })
+    expect(Mentions.insertAt("Review", app, 6)).toEqual({ text: "Review @  GitHub ", cursor: 17 })
+    expect(Mentions.insertAt("", app, 0)).toEqual({ text: "@  GitHub ", cursor: 10 })
+  })
   test("replaces the @query with the mention and one space, and puts the caret after it", () => {
     expect(Mentions.insert("Ask @gen", general, 4, 8)).toEqual({ text: "Ask @  General ", cursor: 15 })
     expect(Mentions.insert("Ask @gen about it", general, 4, 8)).toEqual({ text: "Ask @  General about it", cursor: 14 })
@@ -84,5 +89,65 @@ describe("Mentions tokens", () => {
       skills: [{ id: "release-notes", mention: { start: 33, end: 47, text: "@release-notes" } }],
     })
     expect(Mentions.resolve("Plain text", [])).toEqual({ text: "Plain text" })
+  })
+})
+
+describe("Mentions on a keyboard without key events", () => {
+  const text = "Ask @  General now"
+  const found = Mentions.tokens(text, [general])
+
+  test("a character deleted inside a mention removes the whole mention and the space after it", () => {
+    expect(Mentions.unmention(text, "Ask @  Genera now", found)).toEqual({ text: "Ask now", cursor: 4 })
+    expect(Mentions.unmention(text, "Ask @ General now", found)).toEqual({ text: "Ask now", cursor: 4 })
+  })
+
+  test("a deletion that spans a mention and more removes all of it", () => {
+    expect(Mentions.unmention(text, "Ask  now", found)).toEqual({ text: "Ask now", cursor: 4 })
+    expect(Mentions.unmention(text, "As", found)).toEqual({ text: "As", cursor: 2 })
+  })
+
+  test("leaves typing, deletions outside a mention and the space after a mention alone", () => {
+    expect(Mentions.unmention(text, "Ask @  General nowx", found)).toBeUndefined()
+    expect(Mentions.unmention(text, "Ask @  General no", found)).toBeUndefined()
+    expect(Mentions.unmention(text, "Ask @  Generalnow", found)).toBeUndefined()
+    expect(Mentions.unmention(text, "sk @  General now", found)).toBeUndefined()
+    expect(Mentions.unmention(text, "Ask @  Generaq now", found)).toBeUndefined()
+  })
+})
+
+describe("Mentions groups", () => {
+  const app = (name: string) => Mentions.fromApp({ id: `app_${name}`, slug: name, name, description: "" })
+  const repository = Mentions.fromRepository({
+    alias: "gitweb",
+    repository: "https://github.com/ren/web",
+    description: "",
+  })
+
+  test("names the apps and repositories by label or handle, and takes every file the search found", () => {
+    const apps = [app("GitHub"), app("Linear"), app("Gitea")]
+    const files = [plan, Mentions.fromFile({ path: "src/app.ts", type: "file" })]
+    expect(
+      Mentions.group("git", { apps, repositories: [repository], files }).map((entry) => [entry.group, entry.item.id]),
+    ).toEqual([
+      ["Apps", "app_GitHub"],
+      ["Apps", "app_Gitea"],
+      ["Repositories", "gitweb"],
+      ["Files", "docs/plan.md"],
+      ["Files", "src/app.ts"],
+    ])
+    expect(repository.label).toBe("ren/web")
+  })
+
+  test("shows at most five of each group", () => {
+    const apps = Array.from({ length: 8 }, (_, index) => app(`app-${index}`))
+    const files = Array.from({ length: 8 }, (_, index) => Mentions.fromFile({ path: `f${index}.ts`, type: "file" }))
+    const listed = Mentions.group("", { apps, repositories: [], files })
+    expect(listed.filter((entry) => entry.group === "Apps")).toHaveLength(5)
+    expect(listed.filter((entry) => entry.group === "Files")).toHaveLength(5)
+  })
+
+  test("finds a file mention that is already in the text by its pill", () => {
+    const found = Mentions.scan("Read @  src/app.ts and @  General", [general])
+    expect(found.map((token) => Mentions.key(token.item))).toEqual(["file:src/app.ts", "agent:general"])
   })
 })

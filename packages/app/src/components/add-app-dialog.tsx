@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { IconChevronRight, IconPlus, IconSearch } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
@@ -11,13 +10,11 @@ import { CustomAppDialog } from "./custom-app-dialog.js"
 import { LoadMore } from "./load-more.js"
 import { useAddManaged } from "./profile-dialog.js"
 import { Loading } from "@ren/ui/loading"
-import { AppRegistryPages } from "../lib/app-registry.js"
 import { Search } from "@ren/util/search"
-import { fromApp, fromRegistry, hasManaged, type CatalogApp } from "../lib/apps.js"
+import type { CatalogApp } from "../lib/apps.js"
 import { errorMessage } from "../lib/errors.js"
-import { pickerPageSize } from "../lib/pagination.js"
 import { useSpaces } from "../lib/use-spaces.js"
-import { Debounce } from "@ren/client/react"
+import { AppRegistryPages } from "@ren/client/react"
 import { RouterContext } from "../lib/router-context.js"
 import { cn } from "cn"
 
@@ -78,23 +75,16 @@ function AppResults(props: {
   added: ReadonlySet<string>
   onPick: (app: CatalogApp) => void
 }) {
-  const { api, client } = RouterContext.useRouterContext()
-  const needle = Debounce.useValue(props.query.trim(), 200)
+  const context = RouterContext.useRouterContext()
   const spaces = useSpaces()
   const addManaged = useAddManaged()
   const [adding, setAdding] = useState<string>()
-  const pages = useInfiniteQuery(AppRegistryPages.options(client, needle))
-  const apps = useQuery(api.app.list.queryOptions({ page: 1, pageSize: pickerPageSize }))
-  const listed = (pages.data?.pages ?? []).flatMap((page) => page.items)
-  const own = (apps.data?.items ?? [])
-    .map(fromApp)
-    .filter((app) => Search.matches(props.query, app.name, app.description))
-  const managed = new Set([
-    ...listed.filter((app) => app.managed).map((app) => app.id),
-    ...own.filter(hasManaged).map((app) => app.id),
-  ])
-  const found = [...own, ...listed.map(fromRegistry)].filter((app) => !props.added.has(app.id))
-  const loading = pages.isPending || apps.isPending
+  const search = AppRegistryPages.useSearch(
+    { client: context.client, api: context.api, query: props.query, added: props.added },
+    Search.matches,
+  )
+  const found = search.found
+  const loading = search.loading
   const space = spaces.space(props.space.id)
   const add = (app: CatalogApp) => {
     setAdding(app.id)
@@ -119,7 +109,7 @@ function AppResults(props: {
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-4"
     >
       {loading ? <AppRowsSample count={8} /> : null}
-      {!loading && found.length === 0 && !pages.hasNextPage ? (
+      {!loading && found.length === 0 && !search.more ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
           {Search.empty(props.query, `${props.space.name} has every app`)}
         </p>
@@ -129,19 +119,14 @@ function AppResults(props: {
           key={app.id}
           app={app}
           space={props.space.name}
-          managed={managed.has(app.id)}
+          managed={search.managed(app.id)}
           adding={adding === app.id}
           onPick={props.onPick}
           onAdd={add}
         />
       ))}
-      <LoadMore
-        more={pages.hasNextPage}
-        onMore={() => {
-          if (!pages.isFetchingNextPage) void pages.fetchNextPage()
-        }}
-      />
-      {pages.isFetchingNextPage ? <AppRowsSample count={3} /> : null}
+      <LoadMore more={search.more} onMore={search.loadMore} />
+      {search.loadingMore ? <AppRowsSample count={3} /> : null}
     </div>
   )
 }

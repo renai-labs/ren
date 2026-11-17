@@ -58,6 +58,21 @@ export const fromApp = (app: {
   ...(app.description && { description: app.description }),
 })
 
+// oxlint-disable-next-line ren/no-comments -- The path after the host, as owner/repo; a nested path (GitLab groups) stays whole.
+export const repositoryName = (repository: string) => repository.replace(/^https:\/\/[^/]+\//u, "")
+
+export const fromRepository = (reference: {
+  readonly alias: string
+  readonly repository: string
+  readonly description: string
+}): Item => ({
+  kind: "repository",
+  id: reference.alias,
+  label: repositoryName(reference.repository),
+  handle: reference.alias,
+  description: reference.description || reference.repository,
+})
+
 const named = (item: Item, query: string) =>
   [item.label, item.handle].some((value) => value.toLowerCase().includes(query.toLowerCase()))
 
@@ -76,6 +91,26 @@ export const suggest = (input: {
     ...input.apps.filter((item) => named(item, input.query)),
   ]
   return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
+}
+
+const groupSize = 5
+
+export type Group = "Apps" | "Repositories" | "Files"
+
+export const group = (
+  query: string,
+  lists: {
+    readonly apps: ReadonlyArray<Item>
+    readonly repositories: ReadonlyArray<Item>
+    readonly files: ReadonlyArray<Item>
+  },
+): ReadonlyArray<{ readonly item: Item; readonly group: Group }> => {
+  const listed = (items: ReadonlyArray<Item>) => items.filter((item) => named(item, query)).slice(0, groupSize)
+  return [
+    ...listed(lists.apps).map((item) => ({ item, group: "Apps" as const })),
+    ...listed(lists.repositories).map((item) => ({ item, group: "Repositories" as const })),
+    ...lists.files.slice(0, groupSize).map((item) => ({ item, group: "Files" as const })),
+  ]
 }
 
 export const fileDragType = "application/x-ren-file"
@@ -112,6 +147,14 @@ export const tokens = (input: string, items: ReadonlyArray<Item>): ReadonlyArray
     .toSorted((left, right) => left.start - right.start)
 }
 
+const filePill = /(?<=^|\s)@ {2}([^\s@]*[./][^\s@]*)/g
+
+export const scan = (input: string, items: ReadonlyArray<Item>) =>
+  tokens(input, [
+    ...items,
+    ...Array.from(input.matchAll(filePill), (match) => fromFile({ path: match[1] ?? "", type: "file" })),
+  ])
+
 export const insert = (input: string, item: Item, start: number, cursor: number) => {
   const before = input.slice(0, start)
   const rest = input.slice(cursor)
@@ -119,16 +162,14 @@ export const insert = (input: string, item: Item, start: number, cursor: number)
   return { text: before + inserted + rest, cursor: before.length + inserted.length }
 }
 
-export const insertFile = (input: string, path: string, cursor: number) => {
+export const insertAt = (input: string, item: Item, cursor: number) => {
   const padded = cursor > 0 && !space.test(input.charAt(cursor - 1))
   const at = padded ? cursor + 1 : cursor
-  return insert(
-    padded ? `${input.slice(0, cursor)} ${input.slice(cursor)}` : input,
-    fromFile({ path, type: "file" }),
-    at,
-    at,
-  )
+  return insert(padded ? `${input.slice(0, cursor)} ${input.slice(cursor)}` : input, item, at, at)
 }
+
+export const insertFile = (input: string, path: string, cursor: number) =>
+  insertAt(input, fromFile({ path, type: "file" }), cursor)
 
 export const remove = (
   input: string,
@@ -142,6 +183,24 @@ export const remove = (
   if (!token) return
   const trailing = input.charAt(token.end) === " " ? 1 : 0
   return { text: input.slice(0, token.start) + input.slice(token.end + trailing), cursor: token.start }
+}
+
+export const unmention = (previous: string, next: string, found: ReadonlyArray<Token>) => {
+  if (next.length >= previous.length) return
+  const prefix = Array.from({ length: next.length }, (_, index) => next.charAt(index)).findIndex(
+    (character, index) => character !== previous.charAt(index),
+  )
+  const start = prefix === -1 ? next.length : prefix
+  const suffix = Array.from({ length: next.length - start }, (_, index) =>
+    next.charAt(next.length - 1 - index),
+  ).findIndex((character, index) => character !== previous.charAt(previous.length - 1 - index))
+  const end = previous.length - (suffix === -1 ? next.length - start : suffix)
+  if (start + (previous.length - end) !== next.length) return
+  const token = found.find((each) => start < each.end && end > each.start)
+  if (!token) return
+  const from = Math.min(start, token.start)
+  const to = Math.max(end, token.end + (previous.charAt(token.end) === " " ? 1 : 0))
+  return { text: previous.slice(0, from) + previous.slice(to), cursor: from }
 }
 
 export interface Resolved {

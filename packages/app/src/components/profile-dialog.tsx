@@ -1,7 +1,8 @@
 import { SkeletonRows } from "./page.js"
 import { useState, type ReactNode } from "react"
-import type { AppProfileInfo, AppProfileItem, SpaceInfo } from "@ren/client"
+import { Apps, type AppProfileInfo, type AppProfileItem, type SpaceInfo } from "@ren/client"
 import { Credential } from "@ren/schema/credential"
+import { SpaceApps } from "@ren/client/react"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
@@ -77,7 +78,7 @@ import { RouterContext } from "../lib/router-context.js"
 
 type App = CatalogApp
 type AppProfile = AppProfileInfo
-type From = { spaceId: string; name: string; members: number; private?: boolean }
+type From = Apps.From
 type Mode = "resolve" | "reuse" | "fresh"
 
 export type ProfileTarget = {
@@ -89,52 +90,9 @@ export type ProfileTarget = {
   newAccount?: boolean | undefined
 }
 
-const freeSlug = (name: string, taken: ReadonlySet<string>) => {
-  const base = slugOf(name) || "account"
-  if (!taken.has(base)) return base
-  const number = Array.from({ length: taken.size + 1 }, (_, index) => index + 2).find(
-    (candidate) => !taken.has(`${base}-${candidate}`),
-  )
-  return `${base}-${number}`
-}
-
-function defaultName(input: {
-  from: From | undefined
-  only: boolean
-  picked: ReadonlySet<string>
-  spaces: ReadonlyArray<{ id: string; name: string }>
-  others: ReadonlyArray<AppProfile>
-  app: App
-  user: string
-}) {
-  const first = input.user.split(" ").at(0)
-  if (input.only || input.from?.private) return [input.app.name, first].join(" · ")
-  const targets = input.from ? [input.from.spaceId] : [...input.picked]
-  const chosen = input.spaces.filter((space) => input.picked.has(space.id))
-  const space = input.from?.name ?? (chosen.length === 1 ? chosen.at(0)?.name : undefined)
-  const isFirst = !input.others.some(
-    (other) =>
-      other.kind === "shared" && (other.allSpaces || other.spaces.some((listed) => targets.includes(listed.id))),
-  )
-  return [space, input.app.name, isFirst ? undefined : first].filter(Boolean).join(" · ")
-}
-
 export function useAddManaged() {
   const { api } = RouterContext.useRouterContext()
-  const user = useMe().user.name
-  const accounts = useAppProfiles([])
-  const create = useMutation(api["app-profile"].create.mutationOptions())
-  return async (app: App, from: From) => {
-    const others = await accounts.load(app.id)
-    const name = defaultName({ from, only: false, picked: new Set(), spaces: [], others, app, user })
-    await create.mutateAsync({
-      appId: app.id,
-      name,
-      slug: freeSlug(name, new Set(others.map((profile) => profile.slug))),
-      kind: from.private ? "private" : "shared",
-      ...(!from.private && { spaceIds: [from.spaceId] }),
-    })
-  }
+  return SpaceApps.useAccounts(api, slugOf).addManaged
 }
 
 const slideIn = "animate-in duration-250 ease-out fade-in-0 slide-in-from-right-4 motion-reduce:slide-in-from-right-0"
@@ -423,12 +381,8 @@ function AddStep(props: {
   const from = targetOf(props.from, space)
   const others = listed.of(app.id).filter((each) => each.id !== known?.id)
   const profiles = known ? [...others, known] : others
-  const reaches = (profile: AppProfile) =>
-    profile.kind === "private" ? from.private && profile.userId === me : listsSpace(profile, from.spaceId)
-  const usable = (profile: AppProfile) =>
-    profile.kind === "private"
-      ? profile.userId === me && !from.private
-      : profile.canAdd.includes(from.private ? "ownPrivate" : "joined")
+  const reaches = (profile: AppProfile) => Apps.reaches(profile, from, me)
+  const usable = (profile: AppProfile) => Apps.usable(profile, from, me)
   const here = profiles.filter(reaches)
   const expired = here.find((profile) => profile.items.some((item) => item.status === "reconnect"))
   const elsewhere = profiles.filter((profile) => !expired && !reaches(profile) && gaps(profile).length === 0)
@@ -824,9 +778,7 @@ function LockedState(props: StateProps & { locked: AppProfile }) {
 
 const signsInFirst = (app: App, reuse: AppProfile | undefined) => {
   if (reuse) return reuse.items.length === 1 && reuse.items.some(signsIn)
-  return Object.values(app.mcps ?? {}).some(
-    (mcp) => mcp.transport.type !== "managed" && (mcp.auth.type === "oauth" || mcp.transport.type === "provider"),
-  )
+  return Apps.signsInFirst(app)
 }
 
 function BundlePreview(props: {
@@ -892,7 +844,7 @@ function NewStep(
   const accountName =
     name ??
     reuse?.name ??
-    defaultName({ from, only: from.private, picked: new Set(), spaces: [], others: props.others, app, user })
+    Apps.defaultName({ from, only: from.private, picked: new Set(), spaces: [], others: props.others, app, user })
   const status = statusOf(
     app,
     props.here.filter((profile) => profile.id === reuse?.id),
@@ -917,7 +869,7 @@ function NewStep(
       {
         appId: app.id,
         name: trimmed,
-        slug: freeSlug(trimmed, new Set(props.others.map((each) => each.slug))),
+        slug: Apps.freeSlug(trimmed, new Set(props.others.map((each) => each.slug)), slugOf),
         kind: from.private ? "private" : "shared",
         ...(!from.private && { spaceIds: [from.spaceId] }),
       },

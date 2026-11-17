@@ -1,5 +1,6 @@
 export * as ChatReact from "./react.js"
 
+import { Debounce } from "@ren/client/react"
 import { RegistryContext, scheduleTask, useAtomMount, useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -23,6 +24,7 @@ import type { ChatSession } from "./chat-session.js"
 import { ChatState } from "./chat-state.js"
 import { Family } from "./family.js"
 import { ChatHost } from "./host.js"
+import { Mentions } from "./mentions.js"
 import { SessionTitle } from "./session-title.js"
 import type { TimelineDetail } from "./timeline-detail.js"
 import type { TimelineRow } from "./timeline-row.js"
@@ -207,6 +209,25 @@ export const useSkills = (sessionID: Session.ID) => useAtomValue(useAtoms().skil
 export const useCommands = (sessionID: Session.ID) => useAtomValue(useAtoms().commands(sessionID))
 
 export const useFiles = (search: ChatAtoms.FileQuery) => useAtomValue(useAtoms().files(search))
+
+const unrooted = Session.ID.create()
+
+const fileSearchDelay = 250
+
+export function useFileMentions(root: Session.ID | undefined, query: string | undefined) {
+  const text = Debounce.useValue(query ?? "", fileSearchDelay)
+  const result = useFiles({ root: root ?? unrooted, query: root ? text : "", type: "file" })
+  const [kept, setKept] = useState<ReadonlyArray<Mentions.Item>>([])
+  if (AsyncResult.isSuccess(result)) {
+    const next = result.value.map(Mentions.fromFile)
+    if (next.length !== kept.length || next.some((item, index) => item.id !== kept[index]?.id)) setKept(next)
+  }
+  const active = root !== undefined && query !== undefined && query !== ""
+  return {
+    items: active ? kept : [],
+    searching: active && (text !== query || AsyncResult.isWaiting(result)),
+  }
+}
 
 const useRefreshable = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>) => ({
   result: useAtomValue(atom),

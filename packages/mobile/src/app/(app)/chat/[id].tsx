@@ -29,6 +29,8 @@ import { useAttachments } from "#features/chat/attachments"
 import { ChatActions } from "#features/chat/chat-actions"
 import { ChatRequests } from "#features/chat/chat-requests"
 import { useSessionModel } from "#features/chat/model-picker"
+import { MentionedApps } from "#features/chat/app-connect"
+import { useMentions } from "#features/chat/mentions"
 import { PromptInput } from "#features/chat/prompt-input"
 import { QueuedMessages } from "#features/chat/queued-messages"
 import { Transcript, type TranscriptHandle } from "#features/chat/transcript"
@@ -140,6 +142,13 @@ function ChatComposer(props: {
   const prompt = ChatReact.usePrompt(props.id)
   const [draft, setDraft] = useState<Composer.Draft>(Composer.empty)
   const attachments = useAttachments({ sessionId: props.id, spaceId: props.spaceId, draft, update: setDraft })
+  const mentions = useMentions({
+    root: props.id,
+    spaceId: props.spaceId,
+    draft,
+    update: setDraft,
+    onError: props.onError,
+  })
   const models = props.models
   useImperativeHandle(props.handle, (): DraftHandle => ({
     recall: (item) => setDraft((current) => Composer.recall(current, item)),
@@ -157,29 +166,39 @@ function ChatComposer(props: {
     const messageID = Composer.messageID(draft) ?? SessionMessage.ID.create()
     setDraft(submission.next)
     props.onSent()
-    void prompt({
-      id: messageID,
-      text,
-      delivery: submission.delivery,
-      files: Composer.files(draft),
-      ...models.selection,
-    }).catch((cause: unknown) => {
-      setDraft((current) => Composer.restore(current, submission.sent, messageID))
-      props.onError(ErrorText.of(cause, "Couldn’t send your message. Your draft has been kept."))
-    })
+    void mentions
+      .prepare()
+      .then(() =>
+        prompt({
+          id: messageID,
+          delivery: submission.delivery,
+          files: Composer.files(draft),
+          ...mentions.resolve(text),
+          ...models.selection,
+        }),
+      )
+      .catch((cause: unknown) => {
+        setDraft((current) => Composer.restore(current, submission.sent, messageID))
+        props.onError(ErrorText.of(cause, "Couldn’t send your message. Your draft has been kept."))
+      })
   }
   return (
-    <PromptInput
-      value={draft.text}
-      onChange={(text) => setDraft((current) => Composer.withText(current, text))}
-      onSend={send}
-      onStop={props.onStop}
-      running={props.running}
-      attachments={attachments}
-      {...(models.choosable && {
-        model: { models: models.models, value: models.model, onChange: models.choose },
-      })}
-    />
+    <>
+      <MentionedApps spaceId={props.spaceId} apps={mentions.mentioned} />
+      <PromptInput
+        value={draft.text}
+        onChange={mentions.change}
+        onSend={send}
+        onStop={props.onStop}
+        running={props.running}
+        attachments={attachments}
+        suggest={mentions.suggestions}
+        {...(props.spaceId && { space: { id: props.spaceId, onMentionApp: mentions.mention } })}
+        {...(models.choosable && {
+          model: { models: models.models, value: models.model, onChange: models.choose },
+        })}
+      />
+    </>
   )
 }
 
@@ -224,6 +243,17 @@ function Chat(props: { readonly id: Session.ID }) {
     )
   }
   const stop = () => attempt(interrupt, "Couldn’t stop Ren. Try again.")
+  const connected = (app: string) =>
+    attempt(
+      () =>
+        prompt({
+          id: SessionMessage.ID.create(),
+          text: `I connected ${app}.`,
+          delivery: Composer.delivery("queue", { working: view.running }),
+          ...models.selection,
+        }),
+      "Couldn’t send your message.",
+    )
 
   return (
     <View className="flex-1 bg-background">
@@ -276,6 +306,7 @@ function Chat(props: { readonly id: Session.ID }) {
           }
           onResend={resend}
           onStop={stop}
+          onConnected={connected}
           onAway={setAway}
         />
       ) : null}
