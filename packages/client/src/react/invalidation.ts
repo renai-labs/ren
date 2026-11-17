@@ -15,6 +15,7 @@ const groups: Readonly<Record<string, ReadonlyArray<string>>> = {
   "channel-mapping": ["channel-mapping", "channel-connect"],
   "channel-install": ["channel-install", "channel-mapping", "channel-connect"],
   chat: [],
+  me: [],
   memory: ["memory", "files"],
   files: ["files", "memory"],
 }
