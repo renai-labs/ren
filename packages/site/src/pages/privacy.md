@@ -78,7 +78,7 @@ Depending on your location, you may have the following rights:
 
 - Access and receive a copy of your personal data
 - Correct inaccurate or incomplete information
-- Request deletion of your personal data
+- Request deletion of your personal data, or [delete your account](/delete-account/) yourself
 - Object to or restrict certain processing activities
 - Data portability
 - Withdraw consent where processing is based on consent
