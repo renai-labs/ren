@@ -17,7 +17,10 @@ const platformImports = {
   regex: `^(node:|bun(:|$)|(${builtinModules.filter((name) => !name.startsWith("node:")).join("|")})(/|$))`,
   message: "This module is browser-safe. Node and Bun APIs belong in the host or platform layer.",
 }
-const only = (packages: ReadonlyArray<string>) => ["@ren/**", ...packages.map((name) => `!@ren/${name}/**`)]
+const only = (packages: ReadonlyArray<string>) => [
+  "@ren/**",
+  ...packages.flatMap((name) => [`!@ren/${name}`, `!@ren/${name}/**`]),
+]
 const chatImports = [
   vendored,
   platformImports,
@@ -133,15 +136,18 @@ const packageBoundaries: ReadonlyArray<{
 ]
 
 const contains = (outer: string, inner: string) => outer.endsWith("/**") && inner.startsWith(outer.slice(0, -2))
-const inheritedPatterns = (boundary: (typeof packageBoundaries)[number]) =>
-  packageBoundaries.flatMap((each) =>
-    each === boundary || boundary.files.every((file) => each.files.some((outer) => contains(outer, file)))
-      ? [
-          ...(each.regex === undefined ? [] : [{ regex: each.regex, message: each.message }]),
-          ...(each.group === undefined ? [] : [{ group: [...each.group], message: each.message }]),
-        ]
-      : [],
+// oxlint-disable-next-line ren/no-comments -- In Oxlint 1.93.0 an import that matches a negation (`!@ren/x`) in a `group` pattern is allowed for every pattern after it, so the regex patterns go first.
+const inheritedPatterns = (boundary: (typeof packageBoundaries)[number]) => {
+  const inherited = packageBoundaries.filter(
+    (each) => each === boundary || boundary.files.every((file) => each.files.some((outer) => contains(outer, file))),
   )
+  return [
+    ...inherited.flatMap((each) => (each.regex === undefined ? [] : [{ regex: each.regex, message: each.message }])),
+    ...inherited.flatMap((each) =>
+      each.group === undefined ? [] : [{ group: [...each.group], message: each.message }],
+    ),
+  ]
+}
 
 const reactApis = [
   "useMemo",
@@ -327,11 +333,6 @@ const rawArbitraryValue = {
   message: "Raw values bypass the design tokens. Use a token class, or `var(--ren-*)` inside the arbitrary value.",
 }
 const anyVariant = "^(?:[^:]*:)*"
-const motionClass = {
-  pattern: `${anyVariant}(?:transition(?!-(?:standard|extended|none)$)(?:-.+)?|duration-.+|ease-.+|delay-.+)$`,
-  message:
-    "Motion goes through the tokens in motion.css: `transition-standard`, `transition-extended` or `transition-none`.",
-}
 const viewportUnitClass = {
   pattern: `${anyVariant}(?:min-|max-)?[hw]-screen$`,
   message: "`100vw` includes the scrollbar and `100vh` sits behind mobile browser toolbars. Use `w-full` or `h-dvh`.",
@@ -758,7 +759,6 @@ export default defineConfig({
             restrict: [
               importantClass,
               rawArbitraryValue,
-              motionClass,
               viewportUnitClass,
               readingOrderClass,
               fontSmoothingClass,
@@ -896,7 +896,7 @@ export default defineConfig({
         "no-restricted-imports": restrictedImports(reactApis, reactMessage, [
           ...browserPatterns,
           {
-            regex: "^@ren/(?!client(/|$)|chat(/|$)|schema(/|$)|util(/|$))",
+            group: only(["client", "chat", "schema", "util"]),
             message:
               "The mobile app depends on client, chat, schema and util only. Move shared logic out of @ren/app into the package that owns it.",
           },
