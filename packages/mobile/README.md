@@ -78,6 +78,8 @@ The app checks for an update when it launches and when it returns to the foregro
 bun run update:internal -- --message "Fix the chat list"
 ```
 
+Publish from a checkout with no `android/` or `ios/` folder, such as a fresh `git worktree add --detach`. The runtime version is a fingerprint of the native project, and a generated `android/` folder, which `bun run android` leaves behind, changes it: the update then targets a runtime no installed app has, and never arrives. `APP_VARIANT=production bunx expo-updates fingerprint:generate --platform android` prints the hash; an installed APK's is in its `assets/fingerprint`.
+
 Check it on a team phone, then promote the same bundle to the production channel with `bunx eas-cli update:republish --channel internal --destination-channel production`, or publish there directly with `bun run update:production`. The scripts bundle for the production variant with the production URLs, as the `internal` profile builds; a `.env` file does not reach them.
 
 | Profile       | Variant       | Channel       |
