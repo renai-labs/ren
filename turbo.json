@@ -36,20 +36,11 @@
       "outputs": []
     },
     "//#lint:unused": {
-      "inputs": [
-        "packages/**",
-        "script/**",
-        "knip.json",
-        "package.json",
-        "bun.lock",
-        "oxlint.config.ts",
-        ".opencode/plugins/**",
-        "!**/node_modules/**"
-      ],
+      "inputs": ["$TURBO_DEFAULT$", "!docs/**", "!specs/**", "!**/*.md"],
       "outputs": []
     },
     "//#format:check": {
-      "inputs": ["**", "!**/node_modules/**", "!.turbo/**"],
+      "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
     "@ren/mobile#check:bundle": {

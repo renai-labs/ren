@@ -20,11 +20,16 @@ const tasks = async (filter: string, script: string) =>
   ).flat()
 
 const mobile = (await Changed.packages(`...[${base}]`)).some((pkg) => pkg.name === "@ren/mobile")
+const dependencies =
+  (
+    await Bun.$`git diff --name-only ${base} -- bun.lock package.json packages/mobile/package.json packages/mobile/app.config.ts packages/mobile/eas.json packages/mobile/metro.config.ts`.text()
+  ).trim() !== ""
 
 const run = await Bun.$`bun turbo run --continue=dependencies-successful --output-logs=errors-only ${[
   ...(await tasks(`...[${base}]`, "typecheck")),
   ...(await tasks(`[${base}]`, "lint")),
-  ...(mobile ? ["@ren/mobile#check:bundle", "@ren/mobile#check:generated", "@ren/mobile#check:doctor"] : []),
+  ...(mobile ? ["@ren/mobile#check:bundle", "@ren/mobile#check:generated"] : []),
+  ...(dependencies ? ["@ren/mobile#check:doctor"] : []),
   "//#typecheck:root",
   "//#lint:root",
   "//#lint:rules",
