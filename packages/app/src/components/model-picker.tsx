@@ -41,16 +41,16 @@ export const modelSetting = (model: SessionModel.Ref): ModelSetting => ({
   ...(model.variant && { variant: model.variant }),
 })
 
+// oxlint-disable-next-line ren/no-comments -- The first pick the catalog lists, with its effort spelled out: a model shown as "Medium" is sent as medium, never left to the brain's own default. A chat's own effort stays as it is.
 export function pickModel(
   models: ReadonlyArray<Choice>,
   picks: ReadonlyArray<SessionModel.Ref | null | undefined>,
 ): SessionModel.Ref | undefined {
   const found = picks.find((pick) => pick && models.some((model) => modelKey(model) === modelKey(pick)))
-  if (found) return found
-  const first = models.at(0)
-  if (!first) return undefined
-  const variant = first.variants.find((each) => each.id === "medium")?.id ?? first.variants.at(0)?.id
-  return { id: first.id, providerID: first.providerID, ...(variant && { variant }) }
+  const choice = found ? models.find((model) => modelKey(model) === modelKey(found)) : models.at(0)
+  if (!choice) return undefined
+  const variant = found?.variant ?? defaultEffort(effortsOf(choice), undefined)
+  return { id: choice.id, providerID: choice.providerID, ...(variant && { variant }) }
 }
 
 function ProviderIcon(props: { model: Pick<Choice, "providerID" | "id"> }) {

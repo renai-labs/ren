@@ -65,6 +65,7 @@
   --diff-deletion-word: color-mix(in srgb, var(--chart-4) 30%, transparent);
 
   --radius: 8px;
+  --shimmer-duration: 1.2s;
 
   --sidebar: #f2f2f2;
   --sidebar-foreground: #464646;

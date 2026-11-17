@@ -55,11 +55,15 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         activeMessageID={chat.activeMessageID}
         busy={chat.busy}
         working={chat.working}
+        starting={chat.starting}
+        asking={chat.blocked}
+        simple={chat.simple}
+        waiting={chat.waiting}
         statuses={chat.statuses}
         viewer={chat.viewer}
         people={chat.people}
         more={chat.more}
-        loading={chat.rows.length === 0 && (chat.loading || chat.more || chat.loadingHistory)}
+        loading={chat.opening}
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
         find={find}
@@ -121,7 +125,7 @@ function ChatComposer(props: {
         <ActivityPill
           key={chat.root}
           root={chat.root}
-          items={chat.activity}
+          items={chat.simple ? chat.activity.filter((item) => !item.blocking) : chat.activity}
           align={chat.backgroundActivity}
           composer={column}
           onOpenChild={chat.openChild}
@@ -153,6 +157,7 @@ function ChatComposer(props: {
           onSubmit={chat.send}
           onChooseModel={chat.canChooseModel ? () => chat.setPicking(true) : undefined}
           boot={chat.bootStatus}
+          preparing={chat.preparing}
           onRetry={chat.retry}
           onRetryNow={chat.retryNow}
           running={chat.running}
@@ -349,6 +354,7 @@ export function ChatPage() {
             maximized={maximized}
             onMaximize={setMaximized}
             onMention={mentionFile}
+            running={chat.busy}
             onClose={() => {
               setPanel(false)
               setMaximized(false)

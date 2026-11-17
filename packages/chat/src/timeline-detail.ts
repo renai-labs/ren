@@ -108,6 +108,9 @@ export const preset = (value: Detail) =>
     }),
   )
 
+// oxlint-disable-next-line ren/no-comments -- The levels whose running turn is one line of what the agent does now; Detailed and Everything show each step as it happens.
+export const live = (value: Detail) => ["compact", "quiet", "text-only"].includes(preset(value)?.id ?? "")
+
 export const category = (content: SessionMessage.Content): Category | undefined => {
   if (content.type === "text") return undefined
   if (content.type === "reasoning") return "thinking"

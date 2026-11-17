@@ -340,7 +340,7 @@ export const submission = (
     retry: retryID(draft),
     ...(model && { model }),
     sent: Struct.omit(draft, ["retry", "messageId", "chat", "mode"]),
-    next: chosen === "queue" && draft.model ? { ...empty, model: draft.model } : empty,
+    next: draft.model ? { ...empty, model: draft.model } : empty,
   }
 }
 

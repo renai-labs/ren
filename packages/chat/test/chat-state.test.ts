@@ -220,3 +220,30 @@ test("an unsent prompt is unsent, not starting", () => {
   expect(ChatState.pending(Outbox.rollback(stalled, sessionID, id), sessionID)).toEqual([])
   expect(Outbox.rollback(stalled, sessionID, id).stalled.has(id)).toBe(false)
 })
+
+describe("ChatState.model", () => {
+  const state = (list: ReadonlyArray<SessionMessage.Info>, info?: object): ChatState.State => ({
+    ...ChatState.empty,
+    messages: { [sessionID]: list },
+    ...(info && { info: { [sessionID]: Fixture.session(sessionID, info) } }),
+  })
+
+  test("the chat's model is its newest reply's or switch's until the brain reports its own", () => {
+    const switched = Fixture.message({
+      id: "msg_5",
+      type: "model-switched",
+      model: { id: "next", providerID: "provider", variant: "high" },
+      time: { created: 5 },
+    })
+    expect(ChatState.model(state([Fixture.user("msg_1", 1)]), sessionID)).toBeUndefined()
+    expect(ChatState.model(state(messages), sessionID)).toEqual(Fixture.model)
+    expect(ChatState.model(state([...messages, switched]), sessionID)).toEqual({
+      id: "next",
+      providerID: "provider",
+      variant: "high",
+    })
+    expect(
+      ChatState.model(state([...messages, switched], { model: { id: "own", providerID: "provider" } }), sessionID),
+    ).toEqual({ id: "own", providerID: "provider" })
+  })
+})

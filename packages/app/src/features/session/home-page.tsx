@@ -7,7 +7,6 @@ import { RepositoriesPicker } from "./repositories-picker.js"
 import { useState } from "react"
 import { Composer } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
-import { Equal } from "effect"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -48,9 +47,9 @@ export function HomePage(props: {
   const [sent, setSent] = useState<Composer.Draft>()
   const [picking, setPicking] = useState(false)
   const history = Drafts.useHistory()
+  const writeDraft = Drafts.useWrite()
   const models = useModels(sessionId, spaceId)
   const model = pickModel(models.models, [draft.model, models.fallback])
-  const chosen = Equal.equals(model, models.fallback) ? undefined : model
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
@@ -74,7 +73,7 @@ export function HomePage(props: {
   }
   const send = () => {
     const trimmed = Composer.message(draft).trim()
-    if (!trimmed || !spaceId || create.isPending) return
+    if (!trimmed || !spaceId || create.isPending || modelsLoading) return
     const files = Composer.files(draft)
     const message = {
       id: Composer.messageID(draft) ?? SessionMessage.ID.create(),
@@ -84,10 +83,11 @@ export function HomePage(props: {
     setSent(draft)
     history.prepend(draft)
     create.mutate(
-      { id: sessionId, spaceId, message, ...(chosen && { model: chosen }) },
+      { id: sessionId, spaceId, message, ...(model && { model }) },
       {
         onSuccess: () => {
           setDraft(Composer.empty)
+          if (draft.model && model) writeDraft(Drafts.session(sessionId), Composer.withModel(Composer.empty, model))
           handoff(platform, me.user.id, sessionId, {
             id: message.id,
             text: message.text,

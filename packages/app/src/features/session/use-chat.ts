@@ -1,6 +1,14 @@
 import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
-import { ChatState, ClientCommand, Composer, SessionTasks, type ChatSession, type Family } from "@ren/chat"
+import {
+  ChatState,
+  ClientCommand,
+  Composer,
+  SessionTasks,
+  TimelineDetail,
+  type ChatSession,
+  type Family,
+} from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -142,6 +150,36 @@ function bootStatusOf(
     : { _tag: "Reconnecting" }
 }
 
+const openingOf = (
+  state: ChatState.State,
+  view: { readonly viewed: Session.ID; readonly rows: ReadonlyArray<unknown>; readonly loading: boolean },
+) =>
+  view.rows.length === 0 &&
+  (view.loading || ChatState.more(state, view.viewed) || ChatState.loadingHistory(state, view.viewed))
+
+// oxlint-disable-next-line ren/no-comments -- Opening a chat starts its computer in the background, and the chat reads fine meanwhile. "Starting your computer" shows only while a message waits for it: the first message of a new chat, or one sent before the computer is ready.
+const startupOf = (
+  state: ChatState.State,
+  view: { readonly viewed: Session.ID; readonly rows: ReadonlyArray<unknown>; readonly loading: boolean },
+  input: {
+    readonly boot: PromptInputBoot | { readonly _tag: "Ready" } | undefined
+    readonly statuses: ReadonlyMap<string, ChatState.PendingStatus>
+  },
+) => {
+  const opening = openingOf(state, view)
+  const boot = input.boot?._tag
+  const last = ChatState.messages(state, view.viewed).at(-1)
+  const waiting =
+    boot !== "Failed" &&
+    boot !== "Stopped" &&
+    ((last?.type === "user" && !state.stalled.has(last.id)) || [...input.statuses.values()].includes("starting"))
+  const starting = waiting && (boot === undefined || boot === "Checking" || boot === "Starting")
+  return { opening, waiting, starting, preparing: starting || opening }
+}
+
+const liveTimeline = (options: { readonly fold: boolean; readonly detail: TimelineDetail.Detail }) =>
+  options.fold && TimelineDetail.live(options.detail)
+
 const childOf = (
   options: { readonly child?: string | undefined; readonly onChild?: unknown },
   local: Session.ID | undefined,
@@ -237,10 +275,8 @@ export function useChat(
   const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
   const models = ChatReact.useModels(root)
-  const catalog = useModels(root)
+  const catalog = useModels(root, spaceId)
   const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
-  const saved = Preference.usePreference(ChatPreferences.model)
-  const setPreference = Preference.useSetPreference()
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
   const history = Drafts.useHistory()
@@ -292,13 +328,15 @@ export function useChat(
   Notify.useChatNotifications({ root, title, running, ...notificationsOf(state, root) })
   useChatCacheBridge(root, bridgeOf(info, { running }))
 
-  const model = pickModel(modelList, [saved, info?.model])
+  const chatModel = ChatState.model(state, root)
+  const model = pickModel(modelList, [draft.model, chatModel, catalog.fallback])
+  const switchTo = Composer.switching(draft, chatModel)
   const suggestions = useChatSuggestions({
     root,
     capabilities: info?.capabilities,
     messages: view.messages,
     reverted,
-    model,
+    model: switchTo,
     spaceId,
     mentions: Composer.mentions(draft),
     canChooseModel: abilities.canChooseModel,
@@ -309,6 +347,7 @@ export function useChat(
     rename,
     apps: () => setAppsOpen(true),
   })
+  const statuses = statusesOf(state, view.viewed)
   const bootStatus = bootStatusOf(
     { status: connection, retryAt: AsyncResult.getOrElse(view.session.retryAt, () => 0) },
     boot,
@@ -322,6 +361,7 @@ export function useChat(
     viewer: viewerOf(me.user),
     fold,
     detail,
+    simple: liveTimeline({ fold, detail }),
     foldMessages,
     bootStatus,
     blocked,
@@ -335,7 +375,8 @@ export function useChat(
     background: backgroundWork,
     backgroundActivity,
     working: view.working,
-    statuses: statusesOf(state, view.viewed),
+    ...startupOf(state, view, { boot, statuses }),
+    statuses,
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
     modelNames: new Map(modelList.map((each) => [each.id, each.name])),
     more: ChatState.more(state, view.viewed),
@@ -375,7 +416,7 @@ export function useChat(
     picking,
     setPicking,
     chooseModel: (next: SessionModel.Ref) => {
-      setPreference(ChatPreferences.model, next)
+      kept.update((current) => Composer.withModel(current, next))
     },
     quote: quoteOf({
       child,
@@ -384,7 +425,7 @@ export function useChat(
       canQueue: abilities.canQueue,
       running,
       followUp: ChatPreferences.followUp.read(platform.storage),
-      model,
+      model: switchTo,
       update: kept.update,
       send: (request) => suggestions.run(request, prompt),
     }),
@@ -411,13 +452,13 @@ export function useChat(
         behavior: ChatPreferences.followUp.read(platform.storage),
         alternative: options.alternative,
         queue: abilities.canQueue,
-        current: model,
+        current: chatModel,
       })
       if (!submission) return
       void platform.requestNotifications?.()
       history.prepend(submission.sent)
       setDraft(submission.next)
-      const selection = { delivery: submission.delivery, ...(model && { model }) }
+      const selection = { delivery: submission.delivery, ...(submission.model && { model: submission.model }) }
       void suggestions
         .run({ ...request, id, text, ...selection, files: Composer.files(draft) }, prompt)
         .catch((error: unknown) => {
@@ -433,12 +474,15 @@ export function useChat(
         id: SessionMessage.ID.create(),
         text: `I connected ${app}.`,
         delivery: running ? ChatPreferences.followUp.read(platform.storage) : "steer",
-        ...(model && { model }),
+        ...(switchTo && { model: switchTo }),
       }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
     resend: (text: string) =>
-      void prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }).catch(
-        (error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }),
-      ),
+      void prompt({
+        id: SessionMessage.ID.create(),
+        text,
+        delivery: "steer",
+        ...(switchTo && { model: switchTo }),
+      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
     retryUnsent: (id: SessionMessage.ID) =>
       void retryMessage(id).catch((error: unknown) =>
         toast.error("Could not send your message", { description: errorMessage(error) }),
@@ -472,7 +516,14 @@ export function useChat(
       setReverting(true)
       const request = Composer.request({ ...Composer.fromMessage(message), text })
       void revert(message.id)
-        .then(() => prompt({ id: SessionMessage.ID.create(), ...request, delivery: "steer", ...(model && { model }) }))
+        .then(() =>
+          prompt({
+            id: SessionMessage.ID.create(),
+            ...request,
+            delivery: "steer",
+            ...(switchTo && { model: switchTo }),
+          }),
+        )
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
         .finally(() => setReverting(false))
     },
@@ -488,7 +539,7 @@ export function useChat(
         (error: unknown) => toast.error("Could not undo the last message", { description: errorMessage(error) }),
       ),
     compact: () =>
-      void compact(model).catch((error: unknown) =>
+      void compact(switchTo).catch((error: unknown) =>
         toast.error("Could not compact the chat", { description: errorMessage(error) }),
       ),
     restore: () =>
@@ -512,5 +563,36 @@ export function useChat(
           },
         },
       ),
+  }
+}
+
+// oxlint-disable-next-line ren/no-comments -- A subagent's chat, read only, for the workspace panel: the same transcript as a chat, without a composer, notifications or the chat's own state.
+export function useSubagentChat(root: Session.ID, child: Session.ID) {
+  const me = useMe()
+  const detail = Preference.usePreference(ChatPreferences.timelineDetail)
+  const fold = Preference.usePreference(ChatPreferences.foldTurns)
+  const foldMessages = Preference.usePreference(ChatPreferences.foldMessages)
+  const view = useView(root, child, detail)
+  const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(child))
+  return {
+    view: { root, sessionID: child },
+    messages: view.messages,
+    rows: view.rows,
+    activeMessageID: view.projection?.activeMessageID,
+    busy: view.running,
+    working: view.working,
+    statuses: statusesOf(view.state, child),
+    viewer: viewerOf(me.user),
+    more: ChatState.more(view.state, child),
+    loading: view.loading,
+    loadingHistory: ChatState.loadingHistory(view.state, child),
+    loadMore: () =>
+      void loadMore().catch((error: unknown) =>
+        toast.error("Could not load earlier messages", { description: errorMessage(error) }),
+      ),
+    fold,
+    detail,
+    foldMessages,
+    simple: liveTimeline({ fold, detail }),
   }
 }

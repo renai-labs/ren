@@ -157,7 +157,7 @@ export function PreferencesPage() {
             <SwitchRow
               key="fold-turns"
               title="Fold finished turns"
-              description="Collapse the steps into “Worked for…”."
+              description="Collapse the steps into “Worked for…”. With Compact, Quiet or Messages only, a running turn shows one line of what Ren does now."
               preference={ChatPreferences.foldTurns}
             />,
             <SwitchRow key="fold-messages" title="Fold long messages" preference={ChatPreferences.foldMessages} />,

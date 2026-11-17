@@ -6,6 +6,7 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconChevronDown,
   IconChevronRight,
+  IconCheck,
   IconClock,
   IconCopy,
   IconPencil,
@@ -15,6 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { FileIcon } from "@ren/ui/file-icon"
 import { QuoteCards } from "./quote.js"
 import {
@@ -135,17 +137,37 @@ function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: 
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- As shadcn's copy buttons do: the icon turns into a check for two seconds, and a screen reader hears "Copied".
 export function CopyButton(props: { text: string }) {
+  const write = Platform.usePlatform().writeClipboardText
+  const [copied, setCopied] = useState(false)
+  if (!write) return null
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      className="text-muted-foreground"
-      aria-label="Copy"
-      onClick={() => void navigator.clipboard.writeText(props.text)}
-    >
-      <IconCopy />
-    </Button>
+    <>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        data-copied={copied || undefined}
+        className="text-muted-foreground data-copied:text-foreground"
+        aria-label={copied ? "Copied" : "Copy"}
+        onClick={() =>
+          void write(props.text).then(() => {
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 2000)
+          })
+        }
+      >
+        <span
+          key={String(copied)}
+          className="flex animate-in duration-150 ease-out fade-in-0 zoom-in-75 motion-reduce:animate-none"
+        >
+          {copied ? <IconCheck /> : <IconCopy />}
+        </span>
+      </Button>
+      <span aria-live="polite" className="sr-only">
+        {copied ? "Copied" : ""}
+      </span>
+    </>
   )
 }
 
@@ -382,9 +404,6 @@ function UserText(props: {
 }
 
 const statusLabels: Partial<Record<ChatState.PendingStatus, string>> = {
-  starting: "Pending",
-  steering: "Pending",
-  stranded: "Pending",
   unreachable: "Can’t reach Ren. Trying again…",
   unsent: "Not sent",
 }
@@ -402,7 +421,7 @@ function UserFooter(props: {
   const label = props.status && statusLabels[props.status]
   const unsent = props.status === "unsent"
   return (
-    <MessageFooter className="justify-end gap-1">
+    <MessageFooter className="justify-end gap-1 px-0">
       {label ? (
         <span className={cn("px-1 text-xs", unsent ? "text-destructive" : "text-muted-foreground")}>{label}</span>
       ) : null}
@@ -416,7 +435,7 @@ function UserFooter(props: {
           Remove
         </Button>
       ) : null}
-      <span className="flex items-center gap-1 transition-opacity duration-150 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:group-focus-within/message:opacity-100 pointer-fine:group-hover/message:opacity-100">
+      <span className="-mr-1.25 flex items-center gap-1 transition-opacity duration-150 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:group-focus-within/message:opacity-100 pointer-fine:group-hover/message:opacity-100">
         <time
           dateTime={props.sentAt}
           title={formatInZone(props.sentAt, timeZone)}
@@ -438,6 +457,26 @@ function UserFooter(props: {
         <CopyButton text={props.text} />
       </span>
     </MessageFooter>
+  )
+}
+
+function QueuedMark() {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users reach the tooltip that explains the icon
+            tabIndex={0}
+            className="flex animate-in rounded-sm duration-200 ease-out fade-in-0 outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:animate-none"
+          />
+        }
+      >
+        <IconClock aria-hidden className="size-3.5" />
+        <span className="sr-only">Queued</span>
+      </TooltipTrigger>
+      <TooltipContent>Queued. Ren reads it after the current step.</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -468,7 +507,10 @@ export function UserMessage(props: {
         </Avatar>
       </MessageAvatar>
       <MessageContent className={props.editing ? "w-full" : undefined}>
-        <MessageHeader className="px-0">{props.person.name}</MessageHeader>
+        <MessageHeader className="gap-1.5 px-0">
+          {props.status === "steering" ? <QueuedMark /> : null}
+          {props.person.name}
+        </MessageHeader>
         {props.message.schedule ? <ScheduleOrigin schedule={props.message.schedule} spaceId={props.spaceId} /> : null}
         {props.message.webhook ? <WebhookOrigin webhook={props.message.webhook} spaceId={props.spaceId} /> : null}
         {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}

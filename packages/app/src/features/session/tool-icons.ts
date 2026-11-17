@@ -3,8 +3,8 @@ import {
   IconFile,
   IconFilePencil,
   IconFileSearch,
+  IconGhostFilled,
   IconPlug,
-  IconSubtask,
   IconTerminal2,
   IconWorldWww,
   type Icon,
@@ -16,6 +16,6 @@ export const toolIcons: Record<ToolDisplay.Kind, Icon> = {
   edit: IconFilePencil,
   search: IconFileSearch,
   web: IconWorldWww,
-  agent: IconSubtask,
+  agent: IconGhostFilled,
   tool: IconPlug,
 }

@@ -166,7 +166,7 @@ export const make = (
           items: yield* readAll(found.data, Translate.message),
           cursor: {
             ...(found.cursor.previous && { previous: found.cursor.previous }),
-            ...(found.cursor.next && { next: found.cursor.next }),
+            ...(found.cursor.next && !(page.limit && found.data.length < page.limit) && { next: found.cursor.next }),
           },
         }
       }),

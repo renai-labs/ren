@@ -76,6 +76,14 @@ export const drop = <V>(record: Readonly<Record<string, V>>, id: string): Readon
 export const messages = (state: State, sessionID: string): ReadonlyArray<SessionMessage.Info> =>
   state.messages[sessionID] ?? none
 
+// oxlint-disable-next-line ren/no-comments -- The model a chat runs on: the brain's own word once it answers; before that, the newest reply's or switch's in its history.
+export const model = (state: State, sessionID: string) =>
+  state.info[sessionID]?.model ??
+  messages(state, sessionID).findLast(
+    (message): message is SessionMessage.Assistant | SessionMessage.ModelSwitched =>
+      message.type === "assistant" || message.type === "model-switched",
+  )?.model
+
 export const pending = (state: State, sessionID: string): ReadonlyArray<SessionInbox.Info> =>
   state.pending[sessionID] ?? none
 

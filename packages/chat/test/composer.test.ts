@@ -152,11 +152,11 @@ describe("Composer submission", () => {
     )
   })
 
-  test("a steer carries the picked model and clears it; a queued prompt keeps it for later", () => {
+  test("a picked model stays picked after a send, until the person picks another; a steer carries it", () => {
     const picked = { ...draft("Next"), model: { id: "b", providerID: "p" } }
     const steer = Composer.submission(picked, options)
     expect(steer?.model).toEqual({ id: "b", providerID: "p" })
-    expect(steer?.next).toEqual(Composer.empty)
+    expect(steer?.next).toEqual({ ...Composer.empty, model: { id: "b", providerID: "p" } })
     const queue = Composer.submission(picked, { ...options, alternative: true })
     expect(queue?.model).toBeUndefined()
     expect(queue?.next).toEqual({ ...Composer.empty, model: { id: "b", providerID: "p" } })

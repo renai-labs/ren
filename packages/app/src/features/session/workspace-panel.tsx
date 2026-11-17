@@ -20,19 +20,19 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { ChangesTab } from "./workspace-changes.js"
-import { ProgressTab } from "./workspace-progress.js"
+import { ActivityTab } from "./workspace-activity.js"
 import { FilesTab } from "./workspace-files.js"
 import { BrowserTab, ComputerTab } from "./workspace-streams.js"
 import { TerminalTab } from "./workspace-terminal.js"
 
-type Kind = "computer" | "browser" | "files" | "changes" | "progress" | "terminal"
+type Kind = "computer" | "browser" | "files" | "changes" | "activity" | "terminal"
 
 const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; icon: Icon; many?: boolean }> = [
   { kind: "computer", label: "Computer", description: "Watch and control Ren’s computer", icon: IconDeviceDesktop },
   { kind: "browser", label: "Browser", description: "See the pages Ren opens", icon: IconWorld },
   { kind: "files", label: "Files", description: "Browse files in this workspace", icon: IconFiles },
   { kind: "changes", label: "Changes", description: "See what changed in this workspace", icon: IconFileDiff },
-  { kind: "progress", label: "Progress", description: "Understand Ren’s history and actions", icon: IconTimeline },
+  { kind: "activity", label: "Activity", description: "See every step Ren took in this chat", icon: IconTimeline },
   {
     kind: "terminal",
     label: "Terminal",
@@ -48,6 +48,7 @@ export type PanelTarget =
   | { readonly kind: "terminal"; readonly folder?: string }
   | { readonly kind: "files"; readonly path: string; readonly line?: number | undefined }
   | { readonly kind: "changes"; readonly path: string }
+  | { readonly kind: "activity"; readonly turn?: string }
 
 export type PanelRequest = PanelTarget & { readonly id: string }
 
@@ -161,13 +162,21 @@ function TabBody(props: {
   messages: ReadonlyArray<SessionMessage.Info>
   onMention: ((path: string) => void) | undefined
   onTerminal: (folder: string) => void
+  running: boolean
 }) {
   const request = props.tab.request
   switch (props.tab.kind) {
     case "changes":
       return <ChangesTab root={props.root} messages={props.messages} request={request} />
-    case "progress":
-      return <ProgressTab messages={props.messages} />
+    case "activity":
+      return (
+        <ActivityTab
+          root={props.root}
+          messages={props.messages}
+          request={request?.kind === "activity" ? request : undefined}
+          running={props.running}
+        />
+      )
     case "computer":
       return <ComputerTab />
     case "browser":
@@ -201,13 +210,19 @@ export function WorkspacePanel(props: {
   onMaximize: (maximized: boolean) => void
   onClose: () => void
   onMention: ((path: string) => void) | undefined
+  running: boolean
 }) {
   const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
   const [active, setActive] = useState<string>()
   const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
   const [handled, setHandled] = useState<string>()
   const pick = (kind: Kind, request?: PanelRequest) => {
-    const next = openTab(tabs, current, kind, request)
+    const next = openTab(
+      tabs,
+      current,
+      kind,
+      request ?? (kind === "activity" ? { kind: "activity", id: crypto.randomUUID() } : undefined),
+    )
     setTabs(next.tabs)
     setActive(next.active)
   }
@@ -282,6 +297,7 @@ export function WorkspacePanel(props: {
               root={props.root}
               messages={props.messages}
               onMention={props.onMention}
+              running={props.running}
               onTerminal={(folder) => pick("terminal", { kind: "terminal", folder, id: crypto.randomUUID() })}
             />
           </TabsContent>

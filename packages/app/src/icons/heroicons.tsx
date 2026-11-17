@@ -113,6 +113,7 @@ import {
   SignalIcon,
   SparklesIcon,
   Squares2X2Icon,
+  SquaresPlusIcon,
   StopIcon,
   SunIcon,
   SwatchIcon,
@@ -159,6 +160,13 @@ const wrap = (Hero: ComponentType<SVGProps<SVGSVGElement>>, weight = 0) => {
     )
   }
   return HeroIcon
+}
+
+const SquaresPlus = wrap(SquaresPlusIcon)
+
+// oxlint-disable-next-line ren/no-comments -- Heroicons puts the plus in the bottom-right square; Ren's Apps grid gets it top right, so the icon flips vertically. The plus is symmetric, so only its square moves.
+export function IconLayoutGridAdd({ className, ...rest }: Props) {
+  return <SquaresPlus className={["-scale-y-100", className].filter(Boolean).join(" ")} {...rest} />
 }
 
 const lobes = [
@@ -283,6 +291,7 @@ export const IconLanguage = wrap(LanguageIcon)
 export const IconLayoutDashboard = wrap(Squares2X2Icon)
 export const IconLayoutGrid = wrap(BuildingStorefrontIcon)
 export const IconLayoutGridFilled = wrap(Squares2X2Icon)
+
 export const IconLayoutKanban = wrap(ViewColumnsIcon)
 export const IconLifebuoy = wrap(LifebuoyIcon)
 export const IconLink = wrap(LinkIcon)

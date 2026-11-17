@@ -16,6 +16,7 @@ import type { Suggest } from "./use-composer-suggestions.js"
 import { toast } from "@ren/ui/sonner"
 import {
   IconApps,
+  IconLayoutGridAdd,
   IconArrowUp,
   IconChevronRight,
   IconFile,
@@ -29,15 +30,7 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import { GitHubMark } from "../../icons/brands.js"
-import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@ren/ui/attachment"
+import { AttachmentGroup } from "@ren/ui/attachment"
 import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
@@ -71,7 +64,6 @@ import { StatusDot } from "../../components/app-list.js"
 import { statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
 import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
-import { useStep } from "../../lib/use-step.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
 import { Drafts } from "../../lib/drafts.js"
@@ -179,7 +171,7 @@ function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open:
     return (
       <>
         <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" onClick={() => setAdding(true)}>
-          <IconApps />
+          <IconLayoutGridAdd />
           Add apps
         </InputGroupButton>
         {dialogs}
@@ -401,7 +393,7 @@ function RetryCountdown(props: { retryAt: number }) {
 }
 
 function PromptInputStatus(props: {
-  boot: PromptInputBoot
+  boot: Exclude<PromptInputBoot, { readonly _tag: "Checking" | "Starting" }>
   onRetry?: (() => void) | undefined
   onRetryNow?: (() => void) | undefined
 }) {
@@ -444,47 +436,11 @@ function PromptInputStatus(props: {
         </Button>
       </div>
     )
-  if (props.boot._tag === "Checking")
-    return (
-      <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 animate-in items-center gap-2 text-xs text-muted-foreground delay-1000 duration-200 fade-in-0 fill-mode-backwards">
-        <IconLoader2 className="size-3.5 animate-spin" />
-        Connecting…
-      </span>
-    )
-  if (props.boot._tag === "Reconnecting")
-    return (
-      <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-        <IconLoader2 className="size-3.5 animate-spin" />
-        Reconnecting…
-      </span>
-    )
   return (
-    <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0">
-      <BootLine />
+    <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+      <IconLoader2 className="size-3.5 animate-spin" />
+      Reconnecting…
     </span>
-  )
-}
-
-const bootPhrases = [
-  "Waking Ren up",
-  "Pulling up a chair",
-  "Laying out the tools",
-  "Reading the room",
-  "Sharpening pencils",
-  "Almost there",
-]
-
-function BootLine() {
-  const index = useStep({ last: bootPhrases.length - 1, everyMs: 2400 })
-  return (
-    <output className="flex items-center gap-2 text-sm text-muted-foreground">
-      <span
-        key={index}
-        className="shimmer animate-in duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none motion-reduce:shimmer-none"
-      >
-        {bootPhrases[index]}…
-      </span>
-    </output>
   )
 }
 
@@ -500,7 +456,7 @@ function ShellPrefix(props: { active: boolean }) {
   )
 }
 
-const placeholder = (input: { readonly status: PromptInputBoot | undefined; readonly shell: boolean }) => {
+const placeholder = (input: { readonly status: unknown; readonly shell: boolean }) => {
   if (input.status) return ""
   return input.shell ? "e.g. git status" : "Ask anything, @ to mention"
 }
@@ -513,23 +469,24 @@ function QuoteChips(props: {
   return (
     <>
       {props.quotes.map((quote) => (
-        <Attachment key={quote.id} size="sm" className="max-w-60">
-          <AttachmentMedia>
-            <IconQuote />
-          </AttachmentMedia>
-          <AttachmentContent>
-            <AttachmentTitle title={quote.text}>{quote.text}</AttachmentTitle>
-          </AttachmentContent>
-          <AttachmentActions>
-            <AttachmentAction
-              aria-label="Remove quote"
-              disabled={props.disabled}
-              onClick={() => props.onRemove(quote.id)}
-            >
-              <IconX />
-            </AttachmentAction>
-          </AttachmentActions>
-        </Attachment>
+        <div
+          key={quote.id}
+          title={quote.text}
+          className="flex max-w-72 min-w-0 animate-in items-start gap-2 rounded-lg bg-muted/50 py-1.5 pr-1 pl-2.5 text-sm text-muted-foreground duration-150 ease-out fade-in-0 zoom-in-95 motion-reduce:animate-none"
+        >
+          <IconQuote aria-hidden className="mt-0.75 size-3.5 shrink-0" />
+          <span className="line-clamp-2 min-w-0 flex-1 leading-5 whitespace-pre-wrap">{quote.text}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Remove quote"
+            disabled={props.disabled}
+            className="-my-0.75 shrink-0 text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5"
+            onClick={() => props.onRemove(quote.id)}
+          >
+            <IconX />
+          </Button>
+        </div>
       ))}
     </>
   )
@@ -618,18 +575,23 @@ function SendButton(props: {
   shell: boolean
   sending: boolean
   booting: boolean
+  uploading: boolean
   onClick: () => void
 }) {
   return (
     <InputGroupButton
-      variant={!props.blank || props.stop ? "default" : "secondary"}
+      variant={!props.booting && (!props.blank || props.stop) ? "default" : "secondary"}
       size="icon-sm"
-      className={cn("rounded-full", props.booting && "pointer-events-none opacity-50")}
-      aria-disabled={props.booting || undefined}
+      className={cn(
+        "rounded-full",
+        props.booting && "pointer-events-none",
+        props.uploading && "pointer-events-none opacity-50",
+      )}
+      aria-disabled={props.booting || props.uploading || undefined}
       aria-label={sendLabel(props)}
       onClick={props.onClick}
     >
-      <SendIcon sending={props.sending} stop={props.stop} shell={props.shell} />
+      <SendIcon sending={props.sending || props.booting} stop={props.stop} shell={props.shell} />
     </InputGroupButton>
   )
 }
@@ -645,17 +607,18 @@ const textareaClass = (layout: { home: boolean; marked: boolean; shell: boolean 
 function composerState(
   props: {
     readonly boot?: PromptInputBoot | undefined
+    readonly preparing?: boolean | undefined
     readonly running?: boolean | undefined
     readonly sending?: boolean | undefined
     readonly onStop?: (() => void) | undefined
   },
   draft: { readonly blank: boolean; readonly adding: boolean; readonly shell: boolean },
 ) {
-  const booting = props.boot?._tag === "Starting"
+  const boot = props.boot
   return {
-    booting,
+    booting: props.preparing === true,
     sending: props.sending === true || draft.adding,
-    status: props.boot && (draft.blank || booting) ? props.boot : undefined,
+    status: boot && boot._tag !== "Checking" && boot._tag !== "Starting" && draft.blank ? boot : undefined,
     stop: Boolean(props.running && draft.blank && props.onStop && !draft.shell),
   }
 }
@@ -790,6 +753,7 @@ export function PromptInput(props: {
   spaceId: string | undefined
   model: ReactNode
   boot?: PromptInputBoot | undefined
+  preparing?: boolean | undefined
   onRetry?: (() => void) | undefined
   onRetryNow?: (() => void) | undefined
   running?: boolean | undefined
@@ -855,7 +819,8 @@ export function PromptInput(props: {
       stop={state.stop}
       shell={shell}
       sending={state.sending}
-      booting={booting || uploading}
+      booting={booting}
+      uploading={uploading}
       onClick={() => submit({ alternative: false })}
     />
   )
@@ -1070,8 +1035,7 @@ export function PromptInput(props: {
           }}
           placeholder={placeholder({ status, shell })}
           aria-label={shell ? "Command" : "Message"}
-          readOnly={state.sending || booting}
-          aria-busy={booting || undefined}
+          readOnly={state.sending}
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
           autoFocus
           rows={1}

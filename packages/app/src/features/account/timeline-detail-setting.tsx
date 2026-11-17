@@ -18,7 +18,7 @@ const copy = {
   quiet: { label: "Quiet", description: "Show subagents separately and group edits. Hide other activity." },
   compact: {
     label: "Compact",
-    description: "Show subagents separately. Group other activity with details collapsed.",
+    description: "While Ren works, show one line of what it does now. Group finished activity with details collapsed.",
   },
   detailed: {
     label: "Detailed",

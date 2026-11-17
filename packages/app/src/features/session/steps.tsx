@@ -547,21 +547,41 @@ function GroupStep(props: { step: Extract<Step, { kind: "group" }> }) {
   )
 }
 
-export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | undefined }) {
+const workedTitle = (workedFor: string | undefined) => (workedFor ? `Worked for ${workedFor}` : "Worked")
+
+const stepCount = (count: number) => (count === 1 ? "1 step" : `${count} steps`)
+
+export function Steps(props: {
+  steps: ReadonlyArray<Step>
+  workedFor: string | undefined
+  onOpen?: (() => void) | undefined
+}) {
   const backgrounded = props.steps.filter((step) => step.kind === "tool" && ToolState.backgrounded(step.tool))
   const steps = props.steps.filter((step) => step.kind !== "tool" || !ToolState.backgrounded(step.tool))
   const count = leaves(steps).filter((step) => step.kind !== "text").length
   return (
     <Trace>
-      {steps.length > 0 ? (
+      {steps.length > 0 && props.onOpen ? (
+        // oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the turn in Activity, and Trace styles its button
+        <button type="button" aria-label="Open this turn in Activity" onClick={props.onOpen}>
+          <TraceLine>
+            <TraceIcon>
+              <IconClock />
+            </TraceIcon>
+            <TraceTitle>{workedTitle(props.workedFor)}</TraceTitle>
+            <TraceDescription>{stepCount(count)}</TraceDescription>
+          </TraceLine>
+        </button>
+      ) : null}
+      {steps.length > 0 && !props.onOpen ? (
         <TraceCollapsible>
           <TraceCollapsibleTrigger>
             <TraceLine>
               <TraceIcon>
                 <IconClock />
               </TraceIcon>
-              <TraceTitle>{props.workedFor ? `Worked for ${props.workedFor}` : "Worked"}</TraceTitle>
-              <TraceDescription>{count === 1 ? "1 step" : `${count} steps`}</TraceDescription>
+              <TraceTitle>{workedTitle(props.workedFor)}</TraceTitle>
+              <TraceDescription>{stepCount(count)}</TraceDescription>
             </TraceLine>
           </TraceCollapsibleTrigger>
           <TraceCollapsibleContent className="flex flex-col gap-3">

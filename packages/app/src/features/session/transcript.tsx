@@ -1,9 +1,11 @@
 import { DateTime } from "effect"
 import { flushSync } from "react-dom"
 import {
+  use,
   useImperativeHandle,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -13,6 +15,7 @@ import {
   type WheelEvent,
 } from "react"
 import {
+  Activity,
   ChannelReply,
   ChatState,
   Projection,
@@ -49,7 +52,9 @@ import { MarkdownScroll } from "../../components/markdown-link.js"
 import { ImageSet } from "../../components/image-set.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
-import { MessagesSkeleton } from "../../components/chat-skeleton.js"
+import { MessagesSpinner } from "../../components/chat-skeleton.js"
+import { LiveActivity, type LiveLine } from "./live-activity.js"
+import { OpenPanel } from "./open-panel.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { useMentionedApps } from "../../lib/use-app.js"
@@ -73,6 +78,10 @@ export interface TranscriptProps {
   readonly activeMessageID: string | undefined
   readonly busy: boolean
   readonly working: boolean
+  readonly starting?: boolean | undefined
+  readonly asking?: boolean | undefined
+  readonly simple?: boolean | undefined
+  readonly waiting?: boolean | undefined
   readonly statuses: ReadonlyMap<string, ChatState.PendingStatus>
   readonly viewer: Person & { readonly id: string }
   readonly people: ReadonlyMap<string, Person>
@@ -318,6 +327,34 @@ function AnswerBlock(props: {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- In the one-line timeline a finished turn's "Worked for" opens that turn in Activity; with more detail it expands in place.
+function TurnSteps(props: {
+  block: Extract<TranscriptBlocks.Block, { kind: "steps" }>
+  folded: boolean
+  simple: boolean
+  workedFor: string | undefined
+}) {
+  const openPanel = use(OpenPanel)
+  const turn = props.block.turn
+  return (
+    <Message>
+      <MessageContent>
+        {props.folded ? (
+          <Steps
+            steps={props.block.steps}
+            workedFor={props.workedFor}
+            onOpen={props.simple && openPanel ? () => openPanel({ kind: "activity", turn }) : undefined}
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <StepRuns steps={props.block.steps} />
+          </div>
+        )}
+      </MessageContent>
+    </Message>
+  )
+}
+
 function BlockView(props: {
   block: TranscriptBlocks.Block
   transcript: TranscriptProps
@@ -341,17 +378,12 @@ function BlockView(props: {
     )
   if (block.kind === "steps")
     return (
-      <Message>
-        <MessageContent>
-          {props.transcript.fold && props.activeTurn !== block.turn ? (
-            <Steps steps={block.steps} workedFor={props.workedFor(block.turn)} />
-          ) : (
-            <div className="flex flex-col gap-3">
-              <StepRuns steps={block.steps} />
-            </div>
-          )}
-        </MessageContent>
-      </Message>
+      <TurnSteps
+        block={block}
+        folded={props.transcript.fold && props.activeTurn !== block.turn}
+        simple={props.transcript.simple === true}
+        workedFor={props.workedFor(block.turn)}
+      />
     )
   if (block.kind === "answer")
     return (
@@ -405,7 +437,7 @@ function History(props: { loading: boolean; onLoadMore: () => void }) {
   return (
     <div className="absolute inset-x-0 top-0 flex h-6 items-center justify-center text-xs text-muted-foreground">
       {props.loading ? (
-        <output className="flex items-center gap-2">
+        <output className="flex animate-in items-center gap-2 delay-300 duration-200 fade-in-0 fill-mode-backwards motion-reduce:animate-none">
           <Spinner />
           Loading earlier messages
         </output>
@@ -416,13 +448,84 @@ function History(props: { loading: boolean; onLoadMore: () => void }) {
   )
 }
 
-function WorkingMarker(props: { busy: boolean; working: boolean; background: TranscriptProps["background"] }) {
-  if (!props.busy && !props.working) return null
-  const labelled = props.working || props.background?.blocking === true
+const markerOf = (props: TranscriptProps, live: { readonly busy: boolean }) => {
+  if (props.starting) return { label: "Starting your computer", labelled: true }
+  if (!live.busy && !props.working) return props.waiting ? { label: "Working on the next step", labelled: true } : null
+  return { label: "Working on the next step", labelled: props.working || props.background?.blocking === true }
+}
+
+// oxlint-disable-next-line ren/no-comments -- With the live line, a running turn's steps and the text between them wait until the turn ends, then fold into "Worked for" with the answer below.
+const shownBlocks = (
+  blocks: ReadonlyArray<TranscriptBlocks.Block>,
+  live: { readonly simple: boolean; readonly turn: string | undefined },
+) =>
+  live.simple && live.turn
+    ? blocks.filter((block) => !((block.kind === "steps" || block.kind === "answer") && block.turn === live.turn))
+    : blocks
+
+const liveLine = (
+  props: TranscriptProps,
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
+): LiveLine => {
+  if (props.starting) return { text: "Starting your computer", kind: "starting" }
+  if (props.asking) return { text: "Waiting for your answer", kind: "waiting" }
+  return Activity.current(turns.get(props.activeMessageID ?? "") ?? [])
+}
+
+// oxlint-disable-next-line ren/no-comments -- Only a turn that runs feeds the line its calls: before the brain takes a new message, the chat still points at the previous turn, whose last call must not show again.
+const lastCall = (props: TranscriptProps, turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>) =>
+  props.busy && !props.starting && !props.asking
+    ? Activity.last(turns.get(props.activeMessageID ?? "") ?? [])
+    : undefined
+
+function LiveMarker(props: {
+  transcript: TranscriptProps
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+  busy: boolean
+}) {
+  const openPanel = use(OpenPanel)
+  const transcript = props.transcript
+  if (!markerOf(transcript, { busy: props.busy })) return null
+  const turn = transcript.activeMessageID
+  const active = transcript.busy || transcript.working || transcript.starting === true || transcript.waiting === true
+  return (
+    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
+    <MessageScrollerItem messageId="working" aria-hidden={!active} className={cn(!active && "invisible")}>
+      <LiveActivity
+        line={liveLine(transcript, props.turns)}
+        last={lastCall(transcript, props.turns)}
+        onOpen={openPanel && turn ? () => openPanel({ kind: "activity", turn }) : undefined}
+      />
+    </MessageScrollerItem>
+  )
+}
+
+function TurnMarker(props: {
+  simple: boolean
+  transcript: TranscriptProps
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+  busy: boolean
+}) {
+  if (props.simple) return <LiveMarker transcript={props.transcript} turns={props.turns} busy={props.busy} />
+  return (
+    <WorkingMarker marker={markerOf(props.transcript, { busy: props.busy })} background={props.transcript.background} />
+  )
+}
+
+function WorkingMarker(props: { marker: ReturnType<typeof markerOf>; background: TranscriptProps["background"] }) {
+  if (!props.marker) return null
+  const labelled = props.marker.labelled
+  const label = props.marker.label
   return (
     // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
     <MessageScrollerItem messageId="working">
-      <Marker className={cn(props.background && "min-h-6.5")}>
+      <Marker
+        key={label}
+        className={cn(
+          "animate-in duration-200 ease-out fade-in-0 motion-reduce:animate-none",
+          props.background && "min-h-6.5",
+        )}
+      >
         <MarkerContent
           aria-hidden={!labelled}
           className={cn(
@@ -430,7 +533,7 @@ function WorkingMarker(props: { busy: boolean; working: boolean; background: Tra
             !labelled && "w-0 overflow-hidden opacity-0",
           )}
         >
-          Working on the next step
+          {label}
         </MarkerContent>
         {props.background ? (
           <Button
@@ -515,11 +618,9 @@ export function Transcript(props: TranscriptProps) {
   const follow = useFollow(props.activeMessageID)
   if (props.loading)
     return (
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {props.more && !props.loadingHistory ? <LoadEarlier onVisible={props.onLoadMore} /> : null}
-        <div className="mx-auto w-full max-w-(--container-chat) p-6">
-          <MessagesSkeleton />
-        </div>
+        <MessagesSpinner />
       </div>
     )
   return (
@@ -588,7 +689,10 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     turns,
     activeTurn,
   )
-  const easing = useEasedSend(blocks)
+  const simple = props.simple === true
+  const shown = shownBlocks(blocks, { simple, turn: activeTurn })
+  const live = props.busy || watched.live(props.activeMessageID)
+  const easing = useEasedSend(shown)
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(
     blocks.flatMap((block) => (block.kind === "answer" ? [[block.turn, block.key] as const] : [])),
@@ -611,7 +715,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
           preserveScrollOnPrepend
           pinEnd={follow.following && props.find === undefined}
           data-easing={easing}
-          className="relative scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
+          className="relative scrollbar-gutter-both outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
           onWheel={(event: WheelEvent<HTMLDivElement>) => {
             if (event.deltaY < 0) pause(event.currentTarget)
             else if (atBottom(event.currentTarget)) toEnd()
@@ -627,8 +731,12 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
           }}
           onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
             const viewport = event.currentTarget
+            viewport.dataset.pointer = ""
             if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
               pause(event.currentTarget)
+          }}
+          onBlur={(event: FocusEvent<HTMLDivElement>) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) delete event.currentTarget.dataset.pointer
           }}
           onScroll={(event: UIEvent<HTMLDivElement>) => {
             const viewport = event.currentTarget
@@ -639,7 +747,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
         >
           {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
           <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
-            {blocks.map((block, index) => (
+            {shown.map((block, index) => (
               <MessageScrollerItem
                 key={block.key}
                 messageId={block.key}
@@ -647,7 +755,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
                 scrollAnchor={block.kind === "user"}
                 className={cn(
                   block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
-                  index >= blocks.length - liveItems && "[content-visibility:visible]",
+                  index >= shown.length - liveItems && "[content-visibility:visible]",
                 )}
               >
                 <BlockView
@@ -667,11 +775,7 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
                 <EmptyState>{props.empty}</EmptyState>
               </MessageScrollerItem>
             ) : null}
-            <WorkingMarker
-              busy={props.busy || watched.live(props.activeMessageID)}
-              working={props.working}
-              background={props.background}
-            />
+            <TurnMarker simple={simple} transcript={props} turns={turns} busy={live} />
           </MessageScrollerContent>
         </MessageScrollerViewport>
         {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
