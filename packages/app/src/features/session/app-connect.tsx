@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Apps } from "@ren/client"
 import { IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
@@ -7,8 +8,6 @@ import { StatusDot } from "../../components/app-list.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
 import { connectTarget, useSpaceApps } from "./use-space-apps.js"
-
-const rank: Record<Status, number> = { expired: 0, missing: 0, credits: 1, connected: 2 }
 
 function ConnectCard(props: {
   app: Pick<CatalogApp, "name" | "icon" | "source">
@@ -72,7 +71,7 @@ export function AppConnectCard(props: {
           onClose={() => {
             setTarget(undefined)
             void space.refresh(app.id).then((after) => {
-              if (rank[after] > rank[target.before]) props.onConnected?.(app.name)
+              if (Apps.improved(target.before, after)) props.onConnected?.(app.name)
             })
           }}
         />

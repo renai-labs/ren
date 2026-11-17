@@ -240,6 +240,7 @@ function Listing(props: {
   const [menu, setMenu] = useState<{ readonly entry: FileSystemEntry; readonly open: boolean }>()
   const pages = props.pages
   const shown = props.entries.filter((entry) => Search.matches(props.query, FileName.base(entry.path)))
+  const rows = rowsOf({ place: props.place, query: props.query, spaces: props.spaces, shown })
   const refresh = async () => {
     setPulling(true)
     await pages.refetch()
@@ -248,7 +249,7 @@ function Listing(props: {
   return (
     <>
       <LegendList
-        data={rowsOf({ place: props.place, query: props.query, spaces: props.spaces, shown })}
+        data={rows}
         keyExtractor={keyOf}
         renderItem={(item) => (
           <ListRow row={item.item} place={props.place} onMenu={(entry) => setMenu({ entry, open: true })} />
@@ -265,7 +266,7 @@ function Listing(props: {
         ListFooterComponent={
           <>
             {pages.isFetchingNextPage ? <ActivityIndicator className="py-4" /> : null}
-            {shown.length === 0 && !pages.hasNextPage ? (
+            {rows.length === 0 && !pages.isPending && !pages.hasNextPage ? (
               <Text className="p-6 text-center text-muted-foreground">
                 {Search.empty(props.query, props.place.folder ? "This folder is empty." : "No files yet.")}
               </Text>

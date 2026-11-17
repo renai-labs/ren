@@ -1,11 +1,12 @@
-import type { AppInfo, AppProfileInfo, AppRegistryInfo, CredentialInfo } from "@ren/client"
+import { Apps, type AppProfileInfo, type CredentialInfo } from "@ren/client"
 import { Slug } from "@ren/util/slug"
 
 type AppProfile = AppProfileInfo
 type Credential = CredentialInfo
 type CredentialOwner = CredentialInfo["owner"]
 
-const required = (profile: AppProfile) => profile.items.filter((item) => !item.optional)
+export type Status = Apps.Status
+export type CatalogApp = Apps.CatalogApp
 
 export const gaps = (profile: AppProfile) => [
   ...required(profile)
@@ -81,15 +82,12 @@ export const source = (profile: AppProfile, spaceId: string) => {
 
 export const categoryLabel = (slug: string) => slug.charAt(0).toUpperCase() + slug.slice(1).replaceAll("-", " ")
 
-export const listsSpace = (profile: AppProfile, spaceId: string) =>
-  profile.allSpaces || profile.spaces.some((space) => space.id === spaceId)
+export const listsSpace = Apps.listsSpace
 
 export const lastSpaceWarning = (profile: AppProfile) =>
   `No other space uses “${profile.name}”. Ren keeps it in Settings while it has a sign-in, and deletes it if it has none.`
 
 export const slugOf = (name: string) => Slug.of(name, 32)
-
-export const signsIn = (item: AppProfile["items"][number]) => item.kind === "oauth" || item.kind === "provider"
 
 export const ownerLabel = (
   owner: CredentialOwner,

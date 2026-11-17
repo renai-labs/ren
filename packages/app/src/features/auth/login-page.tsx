@@ -1,4 +1,4 @@
-import { AuthError } from "@ren/client"
+import { AuthError, AuthForm } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { IconMail } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -38,9 +38,9 @@ export function LoginPage() {
     setStep("email")
   }
   const checkEmail = () => {
-    const valid = email.includes("@")
-    setError(valid ? "" : "Enter a valid email address.")
-    return valid
+    const failure = AuthForm.emailError(email)
+    setError(failure)
+    return failure === ""
   }
   const continueWithEmail = () => {
     if (checkEmail()) setStep("password")

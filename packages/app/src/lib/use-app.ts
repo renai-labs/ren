@@ -1,38 +1,11 @@
-import { Seed } from "@ren/client/react"
+import { Seed, SpaceApps } from "@ren/client/react"
 import type { AppInfo, AppRegistryInfo } from "@ren/client"
-import { useQueries, useQuery } from "@tanstack/react-query"
-import { fromApp, fromRegistry, type CatalogApp } from "./apps.js"
+import { useQuery } from "@tanstack/react-query"
+import { fromApp } from "./apps.js"
 import { RouterContext } from "./router-context.js"
 
-export function useApps(idsOrSlugs: ReadonlyArray<string>) {
-  const { api, queryClient } = RouterContext.useRouterContext()
-  const unique = [...new Set(idsOrSlugs)]
-  const listed = unique.map((idOrSlug) =>
-    Seed.fromList<AppRegistryInfo>(
-      queryClient,
-      [api["app-registry"].list.queryKey().slice(0, 1)],
-      idOrSlug,
-    ).initialData(),
-  )
-  const queries = useQueries({
-    queries: unique.map((idOrSlug) => ({
-      ...api.app.get.queryOptions({ idOrSlug }),
-      ...Seed.fromList<AppInfo>(queryClient, [api.app.list.queryKey()], idOrSlug),
-    })),
-  })
-  const found = new Map(
-    unique.flatMap((idOrSlug, index): ReadonlyArray<readonly [string, CatalogApp]> => {
-      const own = queries[index]?.data
-      const registry = listed[index]
-      if (own) return [[idOrSlug, { ...fromApp(own), listing: registry?.listing ?? null }]]
-      return registry ? [[idOrSlug, fromRegistry(registry)]] : []
-    }),
-  )
-  return {
-    pending: queries.some((query, index) => listed[index] === undefined && query.isPending),
-    of: (idOrSlug: string) => found.get(idOrSlug),
-  }
-}
+export const useApps = (idsOrSlugs: ReadonlyArray<string>) =>
+  SpaceApps.useApps(RouterContext.useRouterContext().api, idsOrSlugs)
 
 export function useApp(idOrSlug: string | undefined) {
   const { api, queryClient } = RouterContext.useRouterContext()

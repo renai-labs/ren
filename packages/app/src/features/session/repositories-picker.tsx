@@ -1,6 +1,8 @@
 import { useState } from "react"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { IconChevronDown, IconPlus } from "@tabler/icons-react"
+import { Repositories } from "@ren/chat"
+import { SpaceRepositories } from "@ren/client/react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -14,28 +16,22 @@ import {
 import { toast } from "@ren/ui/sonner"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
 import { GitHubMark } from "../../icons/brands.js"
-import { Repositories } from "../../lib/repositories.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 export function RepositoriesDialog(props: { spaceId: string; onClose: () => void }) {
   const { api } = RouterContext.useRouterContext()
-  const settings = useQuery(api["space-settings"].get.queryOptions({ idOrSlug: props.spaceId }))
-  const update = useMutation(api["space-settings"].update.mutationOptions())
-  const current = settings.data?.settings
-  if (!current) return null
-  const references = current.references ?? []
+  const space = SpaceRepositories.useReferences(api, props.spaceId)
+  if (space.pending) return null
   return (
     <AddRepositoriesDialog
-      existing={references}
-      saving={update.isPending}
-      error={update.error}
+      existing={space.references}
+      saving={space.saving}
+      error={space.error}
       onAdd={(added) =>
-        update
-          .mutateAsync({ id: props.spaceId, settings: { ...current, references: [...references, ...added] } })
-          .then(() => {
-            toast.success(added.length > 1 ? `${added.length} repositories added` : "Repository added")
-            props.onClose()
-          })
+        space.add(added).then(() => {
+          toast.success(added.length > 1 ? `${added.length} repositories added` : "Repository added")
+          props.onClose()
+        })
       }
       onClose={props.onClose}
     />

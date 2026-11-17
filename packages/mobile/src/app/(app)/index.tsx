@@ -16,6 +16,8 @@ import { Logomark } from "#components/logomark"
 import { SpacePicker } from "#components/space-picker"
 import { Text } from "#components/text"
 import { useAttachments } from "#features/chat/attachments"
+import { MentionedApps } from "#features/chat/app-connect"
+import { useMentions } from "#features/chat/mentions"
 import { PromptInput } from "#features/chat/prompt-input"
 import { Api } from "#lib/api"
 import { Preferences } from "#lib/preferences"
@@ -70,9 +72,12 @@ export default function NewChat() {
   const models = catalog?.models ?? []
   const model = ModelChoice.pick(models, [draft.model, catalog?.default])
   const [error, setError] = useState("")
+  const [preparing, setPreparing] = useState(false)
+  const mentions = useMentions({ root: undefined, spaceId, draft, update: setDraft, onError: setError })
+  const starting = create.isPending || preparing
 
   const type = (next: string) => {
-    setDraft((current) => Composer.withText(current, next))
+    mentions.change(next)
     if (spaceId && next.trim() && !prepared.has(spaceId)) {
       setPrepared(new Set([...prepared, spaceId]))
       prepare.mutate({ id: spaceId })
@@ -80,35 +85,42 @@ export default function NewChat() {
   }
   const send = () => {
     const trimmed = draft.text.trim()
-    if (!trimmed || !spaceId || create.isPending) return
+    if (!trimmed || !spaceId || starting) return
     const files = Composer.files(draft)
     const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
     const chosen = Equal.equals(model, catalog?.default) ? undefined : model
+    const text = mentions.resolve(trimmed).text
     setError("")
-    create.mutate(
-      {
-        id: sessionId,
-        spaceId,
-        message: {
-          id,
-          text: trimmed,
-          ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
-        },
-        ...(chosen && { model: chosen }),
-      },
-      {
-        onSuccess: () => {
-          atoms.handoff(sessionId, { id, text: trimmed, ...(files.length > 0 && { files }) })
-          setDraft(Composer.empty)
-          setSessionId(Session.ID.create())
-          router.navigate({ pathname: "/chat/[id]", params: { id: sessionId } })
-        },
-        onError: (cause) => {
-          setSessionId(Session.ID.create())
-          setError(ErrorText.of(cause, "Couldn’t start the chat. Try again."))
-        },
-      },
-    )
+    setPreparing(true)
+    void mentions
+      .prepare()
+      .then(() =>
+        create.mutate(
+          {
+            id: sessionId,
+            spaceId,
+            message: {
+              id,
+              text,
+              ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
+            },
+            ...(chosen && { model: chosen }),
+          },
+          {
+            onSuccess: () => {
+              atoms.handoff(sessionId, { id, text, ...(files.length > 0 && { files }) })
+              setDraft(Composer.empty)
+              setSessionId(Session.ID.create())
+              router.navigate({ pathname: "/chat/[id]", params: { id: sessionId } })
+            },
+            onError: (cause) => {
+              setSessionId(Session.ID.create())
+              setError(ErrorText.of(cause, "Couldn’t start the chat. Try again."))
+            },
+          },
+        ),
+      )
+      .finally(() => setPreparing(false))
   }
 
   return (
@@ -123,10 +135,11 @@ export default function NewChat() {
         <SpaceRow
           spaces={spaces}
           spaceId={spaceId}
-          starting={create.isPending}
+          starting={starting}
           locked={attachments.files.length + attachments.uploads.length > 0}
           onChange={setRemembered}
         />
+        <MentionedApps spaceId={spaceId} apps={mentions.mentioned} />
         <PromptInput
           value={draft.text}
           onChange={type}
@@ -134,10 +147,12 @@ export default function NewChat() {
           onStop={send}
           running={false}
           attachments={attachments}
+          suggest={mentions.suggestions}
+          {...(spaceId && { space: { id: spaceId, onMentionApp: mentions.mention } })}
           model={{
             models,
             value: model,
-            disabled: create.isPending,
+            disabled: starting,
             onChange: (next) => setDraft((current) => Composer.withModel(current, next)),
           }}
         />
