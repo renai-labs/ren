@@ -11,20 +11,21 @@ Ren is made by Ren AI. You can delete your Ren account at any time, on the web o
 
 **On the web**
 
-1. Sign in at [useren.ai/app](https://useren.ai/app).
-2. Open **Settings**, then **Preferences**.
-3. Under **Account**, select **Delete my account**.
-4. Confirm.
+- Sign in at [useren.ai/app](https://useren.ai/app).
+- Open [Settings → Preferences](https://useren.ai/app/settings/preferences).
+- Under **Account**, select **Delete my account**.
+- Confirm.
 
 **In the mobile app**
 
-1. Open **Settings**.
-2. Under **Account**, tap **Delete account**.
-3. Confirm.
+- Open **Settings**.
+- Under **Account**, tap **Delete account**.
+- Confirm.
 
-If you are the only owner of an organization that has other members, make another member an owner first.
+**Before you start**
 
-If you can't sign in, email [support@renai.build](mailto:support@renai.build) from the address on your account, and we'll delete it for you.
+- If you are the only owner of an organization that has other members, make another member an owner first, in [Settings → Members](https://useren.ai/app/settings/members).
+- If you can't sign in, email [support@renai.build](mailto:support@renai.build) from the address on your account, and we'll delete it for you.
 
 ## What happens next
 
