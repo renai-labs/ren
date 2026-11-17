@@ -101,3 +101,56 @@ describe("GET /me", () => {
     expect(await privateSpaces()).toHaveLength(0)
   })
 })
+
+describe("POST /me/deletion", () => {
+  const requestDeletion = (cookie: string) =>
+    app.handler(new Request("http://localhost:4000/me/deletion", { method: "POST", headers: { cookie } }))
+
+  test("signs the user out everywhere and blocks signing in again", async () => {
+    const email = "deleted@gmail.com"
+    const first = sessionCookie(await signUp(app, email, "Ada"))
+    const second = sessionCookie(
+      await app.handler(authRequest("/sign-in/email", { email, password: "correct horse battery staple" })),
+    )
+    expect((await me(second)).status).toBe(200)
+
+    expect((await requestDeletion(first)).status).toBe(204)
+
+    expect((await me(first)).status).toBe(401)
+    expect((await me(second)).status).toBe(401)
+    const blocked = await app.handler(
+      authRequest("/sign-in/email", { email, password: "correct horse battery staple" }),
+    )
+    expect(blocked.status).toBe(403)
+    expect(await blocked.json()).toMatchObject({
+      message: "This account is being deleted. Contact support@renai.build.",
+    })
+  })
+
+  test("refuses while the user is the only owner of an organization with other members", async () => {
+    const owner = sessionCookie(await signUp(app, "sole-owner@gmail.com", "Ada"))
+    const joiner = sessionCookie(await signUp(app, "teammate@gmail.com", "Grace"))
+    const team = await (
+      await app.handler(authRequest("/organization/create", { name: "Owned", slug: "owned" }, owner))
+    ).json()
+    const invitation = await (
+      await app.handler(
+        authRequest(
+          "/organization/invite-member",
+          { email: "teammate@gmail.com", role: "member", organizationId: team.id },
+          owner,
+        ),
+      )
+    ).json()
+    await app.handler(authRequest("/organization/accept-invitation", { invitationId: invitation.id }, joiner))
+
+    const refused = await requestDeletion(owner)
+
+    expect(refused.status).toBe(409)
+    expect(await refused.json()).toMatchObject({
+      message:
+        "You’re the only owner of Owned. Make another member an owner before you delete your account, or contact support@renai.build.",
+    })
+    expect((await me(owner)).status).toBe(200)
+  })
+})

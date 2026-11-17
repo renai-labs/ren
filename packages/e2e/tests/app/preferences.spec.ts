@@ -1,7 +1,16 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, createUser, password, serverURL, signIn, uniqueEmail } from "../lib/servers.js"
+import {
+  appOrigin,
+  createOrganization,
+  createUser,
+  lastEmail,
+  password,
+  serverURL,
+  signIn,
+  uniqueEmail,
+} from "../lib/servers.js"
 
 test("renames the account and picks a theme", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("rename") })
@@ -40,6 +49,22 @@ test("changes the password", async ({ page, request }) => {
   await expect(dialog).toBeHidden()
   await expect(page.getByText("Password changed")).toBeVisible()
   expect((await signIn(request, { email, password: "second password" })).ok()).toBe(true)
+})
+
+test("deletes the account, signs out and can't sign in again", async ({ page, request }) => {
+  const email = uniqueEmail("delete")
+  await createUser(page.request, { name: "Ada Lovelace", email })
+  await page.goto("/app/settings/preferences")
+  await page.getByRole("button", { name: "Delete my account" }).click()
+  const dialog = page.getByRole("dialog", { name: "Delete your account?" })
+  await expect(dialog).toContainText("within 7 days")
+
+  await dialog.getByRole("button", { name: "Delete account" }).click()
+
+  await expect(page.getByText("We’ve received your request")).toBeVisible()
+  await expect(page).toHaveURL(/\/app\/login/)
+  await lastEmail(request, email, "We’ve received your request to delete your Ren account")
+  expect((await signIn(request, { email, password })).status()).toBe(403)
 })
 
 test("the timeline width sets the chat column and leaves the home composer alone", async ({ page }) => {

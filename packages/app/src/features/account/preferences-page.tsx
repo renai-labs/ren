@@ -9,6 +9,7 @@ import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { useMe } from "../../lib/use-me.js"
+import { useSignOut } from "../../lib/use-sign-out.js"
 import { errorMessage } from "../../lib/errors.js"
 import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
@@ -79,7 +80,10 @@ export function PreferencesPage() {
     onError: (error) => toast.error("Couldn’t change your photo", { description: errorMessage(error) }),
   })
   const navigate = useNavigate()
+  const signOut = useSignOut()
+  const deletion = useMutation(api.me.requestDeletion.mutationOptions())
   const [leaving, setLeaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const user = me.user
   const organization = me.organization
   const leave = async () => {
@@ -92,6 +96,17 @@ export function PreferencesPage() {
     resetSession(queryClient)
     await navigate({ to: "/" })
   }
+  const deleteAccount = () =>
+    deletion
+      .mutateAsync(undefined, {
+        onError: (error) => toast.error("Couldn’t delete your account", { description: errorMessage(error) }),
+      })
+      .then(async () => {
+        toast.success("We’ve received your request", {
+          description: "Your account will be deleted, and we’ll email you again when it’s done.",
+        })
+        await signOut()
+      })
   const changeNotification = async (
     key: ChatPreferences.NotificationKind | "sound",
     change: { readonly enabled: boolean },
@@ -262,6 +277,29 @@ export function PreferencesPage() {
             action: "Leave",
           }}
           onConfirm={leave}
+        />
+      </Section>
+      <Section title="Account">
+        <Rows>
+          {[
+            <Row key="delete" title="Delete account" description="Ren deletes your account and its data within 7 days.">
+              <Button variant="outline" size="sm" onClick={() => setDeleting(true)}>
+                Delete my account
+              </Button>
+            </Row>,
+          ]}
+        </Rows>
+        <ConfirmDialog
+          open={deleting}
+          onOpenChange={setDeleting}
+          confirmation={{
+            title: "Delete your account?",
+            description:
+              "You’ll be signed out everywhere and can’t sign in again. Ren deletes your account and its data within 7 days, and emails you when it’s done.",
+            action: "Delete account",
+            working: "Deleting…",
+          }}
+          onConfirm={deleteAccount}
         />
       </Section>
     </Page>

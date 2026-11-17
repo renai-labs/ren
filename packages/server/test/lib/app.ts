@@ -19,6 +19,7 @@ import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Intake } from "@ren/core/intake"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -137,7 +138,7 @@ export const services = Layer.mergeAll(
   ChannelNotice.layerLog,
   TaskCard.layerNone,
   SlackTaskCard.layerNone,
-  Mailer.layer,
+  AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,

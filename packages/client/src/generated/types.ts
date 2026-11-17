@@ -1878,6 +1878,14 @@ export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly m
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnauthorizedError"
 
+export type ConflictError = {
+  readonly _tag: "ConflictError"
+  readonly message: string
+  readonly resource?: string | undefined
+}
+export const isConflictError = (value: unknown): value is ConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
+
 export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
 export const isForbiddenError = (value: unknown): value is ForbiddenError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
@@ -1898,14 +1906,6 @@ export type InvalidRequestError = {
 export const isInvalidRequestError = (value: unknown): value is InvalidRequestError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidRequestError"
 
-export type ConflictError = {
-  readonly _tag: "ConflictError"
-  readonly message: string
-  readonly resource?: string | undefined
-}
-export const isConflictError = (value: unknown): value is ConflictError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
-
 export type UnavailableError = {
   readonly _tag: "UnavailableError"
   readonly message: string
@@ -1921,6 +1921,8 @@ export const isTooLargeError = (value: unknown): value is TooLargeError =>
 export type HealthGetOutput = HealthInfo
 
 export type MeGetOutput = AuthMe
+
+export type MeRequestDeletionOutput = void
 
 export type InvitationPreviewInput = { readonly id: { readonly id: string }["id"] }
 

@@ -2,7 +2,7 @@
 layout: ../layouts/legal.astro
 title: Privacy Policy
 description: "Learn how Ren AI protects your data and privacy when using our AI agent orchestration platform."
-updated: November 16, 2026
+updated: November 17, 2026
 ---
 
 ## 1. Introduction
@@ -70,7 +70,7 @@ We implement industry-standard security measures to protect your information, in
 
 ## 7. Data Retention
 
-We retain your information for as long as your account is active or as needed to provide services. You may request deletion of your data at any time, and we will process such requests in accordance with applicable laws.
+We retain your information for as long as your account is active or as needed to provide services. You may request deletion of your data at any time, and we will process such requests in accordance with applicable laws. To delete your account and its data, follow the steps on [Delete your Ren account](/delete-account/).
 
 ## 8. Your Rights and Choices
 

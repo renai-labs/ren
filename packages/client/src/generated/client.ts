@@ -1,6 +1,7 @@
 import type {
   HealthGetOutput,
   MeGetOutput,
+  MeRequestDeletionOutput,
   InvitationPreviewInput,
   InvitationPreviewOutput,
   SpaceListInput,
@@ -444,6 +445,11 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<MeGetOutput>(
           { method: "GET", path: `/me`, successStatus: 200, declaredStatuses: [401], empty: false },
+          requestOptions,
+        ),
+      requestDeletion: (requestOptions?: RequestOptions) =>
+        request<MeRequestDeletionOutput>(
+          { method: "POST", path: `/me/deletion`, successStatus: 204, declaredStatuses: [401, 409], empty: true },
           requestOptions,
         ),
     },

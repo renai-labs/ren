@@ -83,6 +83,7 @@ import {
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
+import { useSignOut } from "../lib/use-sign-out.js"
 import { isPersonal } from "../lib/use-pinned-spaces.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
@@ -508,8 +509,9 @@ export function ChatsList(props: { path: string; filters: Filters; filtered: boo
 }
 
 function UserRow() {
-  const { auth, platform, queryClient } = RouterContext.useRouterContext()
+  const { auth, queryClient } = RouterContext.useRouterContext()
   const navigate = useNavigate()
+  const signOut = useSignOut()
   const me = useMe()
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -587,13 +589,7 @@ function UserRow() {
           description: "You’ll need to sign in again to access Ren.",
           action: "Log out",
         }}
-        onConfirm={async () => {
-          await auth.signOut()
-          platform.analytics?.reset()
-          await platform.chatCache?.forget()
-          resetSession(queryClient)
-          await navigate({ to: "/login" })
-        }}
+        onConfirm={signOut}
       />
     </>
   )
