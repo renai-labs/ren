@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { Redacted, Schema } from "effect"
+import { Exit, Redacted, Schema } from "effect"
+import { AppProfile } from "../src/app-profile.js"
 import { Credential } from "../src/credential.js"
 
 const isLabel = Schema.is(Credential.Label)
@@ -74,5 +75,32 @@ describe("Credential.CreateInput", () => {
       value: { type: "key", value: "sk_live_1" },
     })
     expect(decoded.value.type === "key" && Redacted.value(decoded.value.value)).toBe("sk_live_1")
+  })
+})
+
+describe("Credential.ConnectInput", () => {
+  const decodeConnect = Schema.decodeUnknownExit(Credential.ConnectInput)
+  const base = { profileId: AppProfile.ID.create(), item: { mcp: "linear" } }
+  test("a connect may name a link into the mobile app to return to, with any host, and nothing else", () => {
+    expect(
+      [
+        undefined,
+        "ren:///connected",
+        "ren-dev:///connected",
+        "ren-dev://192.168.1.6:8081/connected",
+        "ren-preview:///connected",
+      ].map((returnTo) => Exit.isSuccess(decodeConnect({ ...base, ...(returnTo && { returnTo }) }))),
+    ).toEqual([true, true, true, true, true])
+    expect(
+      [
+        "https://evil.test",
+        "http://localhost:8081/connected",
+        "javascript:alert(1)",
+        "ren-evil:///connected",
+        "exp://192.168.1.6:8081/connected",
+        "/connected",
+        "",
+      ].map((returnTo) => Exit.isSuccess(decodeConnect({ ...base, returnTo }))),
+    ).toEqual([false, false, false, false, false, false, false])
   })
 })

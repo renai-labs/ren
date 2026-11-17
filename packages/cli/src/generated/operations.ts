@@ -2049,9 +2049,9 @@ export const CredentialConnect = (input: Command.Command.Config.Infer<typeof Com
   Operation.run(
     ClientApi.groups["credential-connect"].endpoints["credential.connect"],
     {
-      payload: { profileId: input["profileId"], reconnect: input["reconnect"] },
+      payload: { profileId: input["profileId"], reconnect: input["reconnect"], returnTo: input["returnTo"] },
       input: input["input"],
-      labels: { profileId: "--profile", reconnect: "--reconnect" },
+      labels: { profileId: "--profile", reconnect: "--reconnect", returnTo: "--return-to" },
       lookups: {
         profileId: (client, value) =>
           client["app-profile"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),

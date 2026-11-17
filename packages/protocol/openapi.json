@@ -16814,6 +16814,9 @@
         "type": "string",
         "pattern": "^mem_"
       },
+      "Auth.MobileReturnTo": {
+        "type": "string"
+      },
       "Auth.Organization": {
         "type": "object",
         "properties": {
@@ -17840,6 +17843,16 @@
             "anyOf": [
               {
                 "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "returnTo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.MobileReturnTo"
               },
               {
                 "type": "null"

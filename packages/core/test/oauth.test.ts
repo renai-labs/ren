@@ -110,13 +110,14 @@ const second = Effect.fnUntraced(function* (found: Found, slug: string) {
 
 const connect = Effect.fnUntraced(function* (
   found: Found,
-  options: { readonly profileId?: AppProfile.ID; readonly reconnect?: boolean } = {},
+  options: { readonly profileId?: AppProfile.ID; readonly reconnect?: boolean; readonly returnTo?: string } = {},
 ) {
   const service = yield* OAuth.Service
   const result = yield* service.connect(found.actor, {
     profileId: options.profileId ?? found.profile.id,
     item: { mcp: "linear" },
     ...(options.reconnect && { reconnect: true }),
+    ...(options.returnTo && { returnTo: options.returnTo }),
   })
   if (!("redirectUrl" in result)) return yield* Effect.die(new Error("expected a redirect"))
   return new URL(result.redirectUrl)
@@ -349,8 +350,40 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           reason: "StateInvalid: used",
           app: Option.none(),
           space: Option.none(),
+          returnTo: Option.none(),
         })
       }),
+  )
+
+  it.live("a connect that names where to return keeps it with the session, and the callback gives it back", () =>
+    Effect.gen(function* () {
+      yield* reset()
+      const service = yield* OAuth.Service
+      const database = yield* Database.Service
+      const found = yield* setup()
+      const returnTo = "ren-dev:///connected"
+      const approved = yield* connect(found, { returnTo })
+      const returnToOf = (state: string | null) =>
+        database.db
+          .select({ return_to: Database.Schema.oauth_session.return_to })
+          .from(Database.Schema.oauth_session)
+          .where(eq(Database.Schema.oauth_session.state, state ?? ""))
+      expect(yield* returnToOf(approved.searchParams.get("state"))).toEqual([{ return_to: returnTo }])
+      expect(
+        yield* service.callback({ state: approved.searchParams.get("state") ?? "", code: "c1" }, Option.none()),
+      ).toMatchObject({ ok: true, returnTo: Option.some(returnTo) })
+      const denied = yield* connect(yield* setup(), { returnTo: "ren-preview://192.168.1.6:8081/connected" })
+      expect(
+        yield* service.callback(
+          { state: denied.searchParams.get("state") ?? "", error: "access_denied" },
+          Option.none(),
+        ),
+      ).toMatchObject({ ok: false, returnTo: Option.some("ren-preview://192.168.1.6:8081/connected") })
+      const plain = yield* connect(yield* setup())
+      expect(
+        yield* service.callback({ state: plain.searchParams.get("state") ?? "", code: "c1" }, Option.none()),
+      ).toMatchObject({ ok: true, returnTo: Option.none() })
+    }),
   )
 
   it.live(

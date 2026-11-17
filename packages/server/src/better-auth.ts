@@ -86,7 +86,7 @@ export const mcpScope = "ren"
 
 export const organizationClaim = "ren_org"
 
-const mobileOrigins = ["ren://", "ren-dev://", "ren-preview://"]
+const mobileOrigins = Auth.mobileSchemes.map((scheme) => `${scheme}://`)
 
 const ActiveOrganization = Schema.Struct({ activeOrganizationId: Schema.String })
 

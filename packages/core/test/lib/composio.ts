@@ -87,7 +87,7 @@ export const setup = Effect.fnUntraced(function* () {
 
 export const connect = Effect.fnUntraced(function* (
   found: Effect.Success<ReturnType<typeof setup>>,
-  options: { readonly reconnect?: boolean } = {},
+  options: { readonly reconnect?: boolean; readonly returnTo?: string } = {},
 ) {
   const oauth = yield* OAuth.Service
   const database = yield* Database.Service
@@ -95,6 +95,7 @@ export const connect = Effect.fnUntraced(function* (
     profileId: found.profile.id,
     item: { mcp: "gmail" },
     ...(options.reconnect && { reconnect: true }),
+    ...(options.returnTo && { returnTo: options.returnTo }),
   })
   if (!("redirectUrl" in result)) return yield* Effect.die(new Error("expected a redirect"))
   const session = (yield* database.db

@@ -90,6 +90,13 @@ export const layer = HttpRouter.use((router) =>
           Option.map(session, (found) => found.user.id),
         )
         const name = Option.match(outcome.app, { onNone: () => "The app", onSome: (app) => app.name })
+        if (Option.isSome(outcome.returnTo)) {
+          const back = new URL(outcome.returnTo.value)
+          back.searchParams.set("status", outcome.ok ? "connected" : "failed")
+          if (!outcome.ok) back.searchParams.set("reason", sentence(outcome.reason))
+          if (Option.isSome(outcome.app)) back.searchParams.set("app", outcome.app.value.name)
+          return HttpServerResponse.redirect(back.href, { status: 302 })
+        }
         if (!outcome.ok)
           return page(template, {
             ok: false,

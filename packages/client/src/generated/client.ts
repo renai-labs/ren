@@ -2385,7 +2385,12 @@ export function make(options: ClientOptions) {
             {
               method: "POST",
               path: `/credentials/connect`,
-              body: { profileId: input["profileId"], item: input["item"], reconnect: input["reconnect"] },
+              body: {
+                profileId: input["profileId"],
+                item: input["item"],
+                reconnect: input["reconnect"],
+                returnTo: input["returnTo"],
+              },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404, 409],
               empty: false,

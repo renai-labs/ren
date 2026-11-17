@@ -954,6 +954,10 @@ export const FilesDelete = {
 export const CredentialConnect = {
   profileId: Flag.String("profile").pipe(Flag.optional, Flag.withDescription("App profile slug or ID")),
   reconnect: Flag.Boolean("reconnect").pipe(Flag.optional),
+  returnTo: Flag.String("return-to").pipe(
+    Flag.optional,
+    Flag.withDescription("A link into the Ren mobile app, where the browser returns when a sign-in ends."),
+  ),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
