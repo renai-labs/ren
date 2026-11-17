@@ -469,6 +469,7 @@ const extra: ReadonlyArray<EmitCli.Command> = [
   { operation: "billing.change-plan", path: ["billing", "change-plan"] },
   { operation: "billing.cancel", path: ["billing", "cancel"] },
   { operation: "billing.portal", path: ["billing", "portal"] },
+  { operation: "feedback.report", path: ["feedback"], arguments: ["message"] },
 ]
 
 const elsewhere = new Map([

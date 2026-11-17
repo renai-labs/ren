@@ -22,6 +22,7 @@ import { ChannelEventRun } from "@ren/core/channel-event-run"
 import { Intake } from "@ren/core/intake"
 import { IntakeThreads } from "@ren/core/intake-threads"
 import { MachineTemplates } from "@ren/core/machine-templates"
+import { Feedback } from "@ren/core/feedback"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
 import { Favicon } from "@ren/core/favicon"
@@ -78,6 +79,7 @@ import { ChannelRoutes } from "./channel-routes.js"
 import { WebhookRoutes } from "./webhook-routes.js"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
+import { FeedbackHandler } from "./handlers/api/feedback.js"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InfraHandler } from "./handlers/api/infra.js"
 import { InsightsHandler } from "./handlers/api/insights.js"
@@ -231,6 +233,7 @@ export const layer = Layer.mergeAll(
         SignInHandler,
         InfraHandler,
         InsightsHandler,
+        FeedbackHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Compression]),
       Layer.provide([
@@ -245,6 +248,7 @@ export const layer = Layer.mergeAll(
         Memory.layer,
         FileSystem.layer.pipe(Layer.provide(Memory.layer)),
         Insights.layer,
+        Feedback.layer,
         settingsAndAgents,
         InfraSpecs.layer.pipe(
           Layer.provide([

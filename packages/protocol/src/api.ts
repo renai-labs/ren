@@ -15,6 +15,7 @@ import { CredentialConnectGroup } from "./groups/credential-connect.js"
 import { OAuthAppGroup } from "./groups/oauth-app.js"
 import { OAuthSessionGroup } from "./groups/oauth-session.js"
 import { DriveGroup } from "./groups/drive.js"
+import { FeedbackGroup } from "./groups/feedback.js"
 import { FilesGroup } from "./groups/files.js"
 import { MachineTemplateGroup } from "./groups/machine-template.js"
 import { MachineProviderGroup } from "./groups/machine-provider.js"
@@ -93,6 +94,7 @@ export const Api = HttpApi.make("server")
   .add(SignInGroup)
   .add(InfraGroup)
   .add(InsightsGroup)
+  .add(FeedbackGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

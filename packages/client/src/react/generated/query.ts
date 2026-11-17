@@ -169,6 +169,7 @@ import type {
   InfraPlanInput,
   InfraApplyInput,
   InsightsQueryInput,
+  FeedbackReportInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -1879,6 +1880,16 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["insights", "query", input] as const,
             queryFn: (context) => client["insights"]["query"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    feedback: {
+      report: {
+        mutationKey: () => ["feedback", "report"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["feedback", "report"] as const,
+            mutationFn: (input: FeedbackReportInput) => client["feedback"]["report"](input),
           }),
       },
     },
