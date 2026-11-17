@@ -7,7 +7,7 @@ import { rehypeCode, remarkHeading } from "fumadocs-core/mdx-plugins"
 import { rehypeAutolinkHeadings } from "./src/lib/docs/rehype-autolink.ts"
 
 export default defineConfig({
-  site: "https://v2.useren.ai",
+  site: "https://useren.ai",
   output: "static",
   compressHTML: true,
   prefetch: { prefetchAll: true, defaultStrategy: "hover" },

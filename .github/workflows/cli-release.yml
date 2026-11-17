@@ -41,7 +41,7 @@ jobs:
     env:
       BUMP: ${{ inputs.bump }}
       VERSION: ${{ inputs.version }}
-      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://v2.useren.ai' }}
+      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://useren.ai' }}
     steps:
       - name: Choose version
         id: version
@@ -89,7 +89,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.version }}
       RELEASE_TARGET: ${{ matrix.target }}
-      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://v2.useren.ai' }}
+      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://useren.ai' }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -134,7 +134,7 @@ jobs:
       MINIMUM: ${{ inputs.minimum }}
       DEPLOY: ${{ vars.DEPLOY_NAME }}
       DISTRIBUTION: ${{ vars.APP_DISTRIBUTION_ID }}
-      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://v2.useren.ai' }}
+      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://useren.ai' }}
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093

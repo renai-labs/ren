@@ -51,7 +51,7 @@ The CLI's OAuth client ID is `Auth.cliClient.client_id` in `@ren/schema`. The se
 After the first release is published:
 
 ```sh
-export REN2_HOST_URL="https://v2.useren.ai"
+export REN2_HOST_URL="https://useren.ai"
 curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash
 ```
 
@@ -85,7 +85,7 @@ dist/
     ren2-<platform>-<arch>.sha256
 ```
 
-Run the `cli release` GitHub workflow with a stable version (`X.Y.Z`). It builds and tests all four targets natively, uploads immutable artifacts under `/ren2/releases/`, then publishes the installer and `latest.txt`. Existing release versions cannot be overwritten. It uses the `v2-prod` environment's AWS deployment role, app bucket and CloudFront distribution. `REN2_HOST_URL` is an environment variable there, defaulting to `https://v2.useren.ai`.
+Run the `cli release` GitHub workflow with a stable version (`X.Y.Z`). It builds and tests all four targets natively, uploads immutable artifacts under `/ren2/releases/`, then publishes the installer and `latest.txt`. Existing release versions cannot be overwritten. It uses the `v2-prod` environment's AWS deployment role, app bucket and CloudFront distribution. `REN2_HOST_URL` is an environment variable there, defaulting to `https://useren.ai`.
 
 The npm package is private until its publication name and install format are decided.
 

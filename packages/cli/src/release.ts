@@ -12,4 +12,4 @@ export const version = typeof REN2_VERSION === "string" ? REN2_VERSION : pkg.ver
 
 export const apiUrl = typeof REN2_API_URL === "string" ? REN2_API_URL : "http://localhost:4000"
 
-export const host = typeof REN2_RELEASE_HOST === "string" ? REN2_RELEASE_HOST : "https://v2.useren.ai"
+export const host = typeof REN2_RELEASE_HOST === "string" ? REN2_RELEASE_HOST : "https://useren.ai"
