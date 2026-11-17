@@ -1,11 +1,11 @@
 import { Preference } from "../../lib/preference.js"
 import { PromptInput } from "./prompt-input.js"
 import { Logomark } from "../../icons/logomark.js"
-import { ModelPicker, pickModel } from "../../components/model-picker.js"
+import { ModelPicker } from "../../components/model-picker.js"
 import { WorkingIn } from "./working-in.js"
 import { RepositoriesPicker } from "./repositories-picker.js"
 import { useState } from "react"
-import { Composer } from "@ren/chat"
+import { Composer, ModelChoice } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
 import { Equal } from "effect"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
@@ -49,7 +49,7 @@ export function HomePage(props: {
   const [picking, setPicking] = useState(false)
   const history = Drafts.useHistory()
   const models = useModels(sessionId, spaceId)
-  const model = pickModel(models.models, [draft.model, models.fallback])
+  const model = ModelChoice.pick(models.models, [draft.model, models.fallback])
   const chosen = Equal.equals(model, models.fallback) ? undefined : model
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())

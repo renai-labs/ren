@@ -1,5 +1,6 @@
 export * as ChatSettings from "./chat-settings.js"
 
+import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
 import { TimelineDetail } from "./timeline-detail.js"
 
@@ -20,3 +21,5 @@ export const timelineDetail = setting("chat.timeline-detail.v1", TimelineDetail.
 export const foldTurns = setting("chat.fold-turns.v1", Schema.Boolean, true)
 
 export const foldMessages = setting("chat.fold-messages.v1", Schema.Boolean, true)
+
+export const model = setting("chat.model.v1", Schema.NullOr(SessionModel.Ref), null)

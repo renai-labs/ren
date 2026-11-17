@@ -1,10 +1,11 @@
+import { ModelChoice } from "@ren/chat"
 import type { SettingsInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
-import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
+import { ModelPicker, modelRef, modelSetting } from "../../components/model-picker.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { useMe } from "../../lib/use-me.js"
@@ -75,7 +76,7 @@ export function GeneralSettingsPage() {
           <Row key="model" title="Default model" description="New chats start with it unless a space sets its own.">
             <ModelPicker
               models={models}
-              value={pickModel(models, [current.model && modelRef(current.model)])}
+              value={ModelChoice.pick(models, [current.model && modelRef(current.model)])}
               disabled={!canUpdate}
               onChange={(next) => void saveSettings({ model: modelSetting(next) })}
             />

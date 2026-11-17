@@ -1,9 +1,10 @@
+import { ModelChoice } from "@ren/chat"
 import type { ReactNode } from "react"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { EditableText } from "../../components/editable-text.js"
-import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
+import { ModelPicker, modelRef, modelSetting } from "../../components/model-picker.js"
 import { Row, Rows } from "../../components/page.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useMe } from "../../lib/use-me.js"
@@ -22,7 +23,7 @@ function DefaultModel(props: { settings: ReturnType<typeof useSpaceSettings> }) 
     <ModelPicker
       models={models.data?.models ?? []}
       loading={models.isPending || props.settings.loading}
-      value={pickModel(
+      value={ModelChoice.pick(
         models.data?.models ?? [],
         [props.settings.current.model, organization.data?.settings.model].map((model) => model && modelRef(model)),
       )}

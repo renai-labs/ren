@@ -1,3 +1,4 @@
+import { ModelChoice } from "@ren/chat"
 import { Seed } from "@ren/client/react"
 import { createContext, use, useRef, useState, type ReactNode } from "react"
 import type { AgentInfo, SettingsInfo } from "@ren/client"
@@ -18,7 +19,7 @@ import { Switch } from "@ren/ui/switch"
 import { Textarea } from "@ren/ui/textarea"
 import { formatDate } from "@ren/ui/time"
 import { Equal, Result, Schema, Struct } from "effect"
-import { ModelPicker, modelRef, modelSetting, pickModel } from "../../components/model-picker.js"
+import { ModelPicker, modelRef, modelSetting } from "../../components/model-picker.js"
 import { Page, Row, Rows, ToolbarSection } from "../../components/page.js"
 import { PermissionRules } from "../../components/permission-rules.js"
 import { RowMenu } from "../../components/row-menu.js"
@@ -247,7 +248,7 @@ function ModelRow() {
   const space = useQuery(api["space-settings"].get.queryOptions({ idOrSlug: form.state.spaceId }))
   const organization = useQuery(api["organization-settings"].get.queryOptions({ idOrSlug: useMe().organization.id }))
   const choices = models.data?.models ?? []
-  const fallback = pickModel(
+  const fallback = ModelChoice.pick(
     choices,
     [space.data?.settings.model, organization.data?.settings.model].map((model) => model && modelRef(model)),
   )

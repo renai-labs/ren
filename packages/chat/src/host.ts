@@ -3,7 +3,7 @@ export * as ChatHost from "./host.js"
 import { Ren } from "@ren/client/effect"
 import type { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, Option, Predicate, Schema } from "effect"
+import { type Duration, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { Atom } from "effect/reactivity"
 import { ChatAtoms } from "./atoms.js"
@@ -34,6 +34,7 @@ export interface Options {
   readonly fetch?: typeof globalThis.fetch | undefined
   readonly chatFetch?: typeof globalThis.fetch | undefined
   readonly lifecycle?: ((listener: (event: ChatAtoms.Lifecycle) => void) => () => void) | undefined
+  readonly flushInterval?: Duration.Input | undefined
 }
 
 const Kept = Schema.fromJsonString(Schema.Array(Outbox.Kept))
@@ -75,6 +76,7 @@ export const make = (options: Options) => {
     runtime: Atom.runtime(fetchLayer(options.chatFetch)),
     sender: { userId: options.userId },
     ...(options.lifecycle && { lifecycle: options.lifecycle }),
+    ...(options.flushInterval !== undefined && { connection: { flushInterval: options.flushInterval } }),
     access: (sessionID: Session.ID, input: { readonly unreachable: boolean }) =>
       ren.pipe(
         Effect.flatMap((client) =>

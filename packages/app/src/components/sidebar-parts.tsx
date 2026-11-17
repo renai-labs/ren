@@ -1,11 +1,10 @@
 import type { SpaceInfo } from "@ren/client"
 import { SessionTitle } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
-import { SessionPages } from "@ren/client/react"
+import { ChatFilters, SessionPages } from "@ren/client/react"
 import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { DateTime } from "effect"
 import { toast } from "@ren/ui/sonner"
 import { cn } from "cn"
 import {
@@ -74,7 +73,7 @@ import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { isOrigin, origins } from "../lib/sessions.js"
+import { origins } from "../lib/sessions.js"
 import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
@@ -343,30 +342,7 @@ export function SpaceEntry(props: {
   )
 }
 
-const days = { today: 0, week: 7, month: 30 } as const
-
-const startOfDayAgo = (daysAgo: number) =>
-  DateTime.toDateUtc(
-    DateTime.startOf(
-      DateTime.subtract(DateTime.makeZonedUnsafe(DateTime.nowUnsafe(), { timeZone: DateTime.zoneMakeLocal() }), {
-        days: daysAgo,
-      }),
-      "day",
-    ),
-  ).toISOString()
-
-const chatFilter = (filters: Filters, userId: string): SessionPages.Filter => {
-  const status = filters.status?.length === 1 ? filters.status.at(0) : undefined
-  const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
-  const origin = (filters.origin ?? []).filter(isOrigin)
-  return {
-    ...SessionPages.own(userId),
-    ...(filters.space?.length && { spaceId: filters.space }),
-    ...((status === "idle" || status === "busy") && { status }),
-    ...(origin.length > 0 && { origin }),
-    ...(updated && { from: startOfDayAgo(days[updated]) }),
-  }
-}
+const rangeIcons = { today: IconCalendarEvent, week: IconCalendarWeek, month: IconCalendarMonth } as const
 
 const chatProperties = (
   spaces: ReadonlyArray<{ id: string; name: string; kind?: string | undefined }>,
@@ -383,10 +359,11 @@ const chatProperties = (
     label: "Status",
     any: "Any",
     icon: IconActivity,
-    options: [
-      { value: "busy", label: "Working", icon: IconProgress },
-      { value: "idle", label: "Idle", icon: IconCircle },
-    ],
+    options: ChatFilters.statuses.map((status) => ({
+      value: status.value,
+      label: status.label,
+      icon: status.value === "busy" ? IconProgress : IconCircle,
+    })),
   },
   { key: "origin", label: "Started from", any: "Anywhere", icon: IconRoute, options: [...origins] },
   {
@@ -395,11 +372,11 @@ const chatProperties = (
     any: "Any time",
     icon: IconCalendar,
     single: true,
-    options: [
-      { value: "today", label: "Today", icon: IconCalendarEvent },
-      { value: "week", label: "Past 7 days", icon: IconCalendarWeek },
-      { value: "month", label: "Past 30 days", icon: IconCalendarMonth },
-    ],
+    options: ChatFilters.updated.map((range) => ({
+      value: range.value,
+      label: range.label,
+      icon: rangeIcons[range.value],
+    })),
   },
 ]
 
@@ -462,7 +439,7 @@ export function ChatsList(props: { path: string; filters: Filters; filtered: boo
   const { client } = RouterContext.useRouterContext()
   const me = useMe()
   const chatPages = useInfiniteQuery({
-    ...SessionPages.options(client, chatFilter(props.filters, me.user.id)),
+    ...SessionPages.options(client, ChatFilters.toFilter(props.filters, me.user.id)),
     placeholderData: keepPreviousData,
   })
   const chats = chatPages.data?.pages.flatMap((page) => page.items) ?? []

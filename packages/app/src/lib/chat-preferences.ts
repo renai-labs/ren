@@ -1,7 +1,6 @@
 export * as ChatPreferences from "./chat-preferences.js"
 
 import { ChatSettings, ComposerHistory } from "@ren/chat"
-import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
 import { Preference } from "./preference.js"
 
@@ -42,7 +41,7 @@ export const notifications = Preference.make(
 export type NotificationKind = "finished" | "permissions" | "questions" | "errors"
 export const foldMessages = Preference.from(ChatSettings.foldMessages)
 
-export const model = Preference.make("chat.model.v1", Schema.NullOr(SessionModel.Ref), null)
+export const model = Preference.from(ChatSettings.model)
 
 export const homeSpace = Preference.make("chat.home-space.v1", Schema.NullOr(Schema.String), null)
 
