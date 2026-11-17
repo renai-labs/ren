@@ -6,7 +6,7 @@ import { Preference } from "./preference.js"
 
 const kept = 200
 
-// oxlint-disable-next-line ren/no-comments -- The height each HTML page in a chat last measured, kept across reloads, so a page in an old chat opens at its own height and the chat around it does not jump when it loads.
+// oxlint-disable-next-line ren/no-comments -- The height each HTML page in a chat last measured, and the width and height of each image in a chat, kept across reloads. A page or image in an old chat opens at its own size, so the chat around it does not jump when it loads.
 const stored = Preference.make("chat.page-heights.v1", Schema.Record(Schema.String, Schema.Number), {})
 
 const memory = new Map<string, number>()

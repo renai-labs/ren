@@ -46,7 +46,12 @@ const byKind = new Map(kinds.map((each) => [each.kind, each]))
 
 export type PanelTarget =
   | { readonly kind: "terminal"; readonly folder?: string }
-  | { readonly kind: "files"; readonly path: string; readonly line?: number | undefined }
+  | {
+      readonly kind: "files"
+      readonly path: string
+      readonly line?: number | undefined
+      readonly drive?: { readonly spaceId: string | undefined; readonly file: SessionMessage.DriveFile } | undefined
+    }
   | { readonly kind: "changes"; readonly path: string }
   | { readonly kind: "activity"; readonly turn?: string }
 

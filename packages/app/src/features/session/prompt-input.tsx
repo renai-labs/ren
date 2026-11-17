@@ -19,7 +19,6 @@ import {
   IconLayoutGridAdd,
   IconArrowUp,
   IconChevronRight,
-  IconFile,
   IconQuote,
   IconLoader2,
   IconPaperclip,
@@ -32,6 +31,7 @@ import {
 import { GitHubMark } from "../../icons/brands.js"
 import { AttachmentGroup } from "@ren/ui/attachment"
 import { Avatar } from "@ren/ui/avatar"
+import { FileIcon } from "@ren/ui/file-icon"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
@@ -533,7 +533,7 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
               >
                 {item.kind === "command" ? <IconTerminal2 /> : null}
                 {item.kind === "repository" ? <GitHubMark /> : null}
-                {item.kind === "file" ? <IconFile /> : null}
+                {item.kind === "file" ? <FileIcon name={item.label} /> : null}
                 {item.kind === "app" ? (
                   <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
                 ) : null}

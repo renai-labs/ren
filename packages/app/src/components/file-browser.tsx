@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ComponentProps, type ReactNode } from "react"
+import { Fragment, lazy, Suspense, useState, type ComponentProps, type ReactNode } from "react"
 import { FileTabs, Mentions } from "@ren/chat"
 import type { FileSystem } from "@ren/schema/file-system"
 import { IconDots, IconFile, IconFiles, IconX } from "@tabler/icons-react"
@@ -63,11 +63,11 @@ function Crumbs(props: { path: string; onFolder: (folder: string) => void }) {
       <BreadcrumbList className="flex-nowrap gap-1 font-mono text-xs sm:gap-1">
         {parts.map((part, index) => (
           // oxlint-disable-next-line react/no-array-index-key -- a segment's position in the path is its identity
-          <BreadcrumbItem key={index} className="min-w-0 gap-1">
-            {index === parts.length - 1 ? (
-              <BreadcrumbPage className="truncate">{part}</BreadcrumbPage>
-            ) : (
-              <>
+          <Fragment key={index}>
+            <BreadcrumbItem className="min-w-0 gap-1">
+              {index === parts.length - 1 ? (
+                <BreadcrumbPage className="truncate">{part}</BreadcrumbPage>
+              ) : (
                 <BreadcrumbLink
                   render={
                     <Button
@@ -80,10 +80,10 @@ function Crumbs(props: { path: string; onFolder: (folder: string) => void }) {
                 >
                   {part}
                 </BreadcrumbLink>
-                <BreadcrumbSeparator />
-              </>
-            )}
-          </BreadcrumbItem>
+              )}
+            </BreadcrumbItem>
+            {index === parts.length - 1 ? null : <BreadcrumbSeparator />}
+          </Fragment>
         ))}
       </BreadcrumbList>
     </Breadcrumb>
@@ -104,8 +104,8 @@ function Unsupported(props: { file: FileSystem.Content }) {
   return (
     <Empty className="flex-1">
       <EmptyHeader>
-        <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
-          <IconFile />
+        <EmptyMedia className="[&_svg]:size-6">
+          <FileIcon name={FileName.base(props.file.path)} mime={props.file.mime} />
         </EmptyMedia>
         <EmptyTitle>No preview</EmptyTitle>
         <EmptyDescription>This file is not text ({props.file.mime}).</EmptyDescription>
@@ -173,8 +173,8 @@ export function OpenFile(props: {
       return (
         <Empty className="flex-1">
           <EmptyHeader>
-            <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
-              <IconFile />
+            <EmptyMedia className="[&_svg]:size-6">
+              <FileIcon name={FileName.base(props.tab.path)} />
             </EmptyMedia>
             <EmptyTitle>No file at {props.tab.path}</EmptyTitle>
             <EmptyDescription>It may have been moved or deleted.</EmptyDescription>

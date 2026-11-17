@@ -50,7 +50,7 @@ import {
   useMessageScroller,
 } from "@ren/ui/message-scroller"
 import { Spinner } from "@ren/ui/spinner"
-import { DriveFileCards } from "./attachments.js"
+import { FileOutputs } from "./file-outputs.js"
 import { QuoteSelection, type QuoteProps } from "./quote.js"
 import { Markdown } from "../../components/markdown.js"
 import { MarkdownScroll } from "../../components/markdown-link.js"
@@ -435,7 +435,7 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent>
-          <DriveFileCards spaceId={props.transcript.spaceId} files={[block.file]} />
+          <FileOutputs spaceId={props.transcript.spaceId} files={[block.file]} />
         </MessageContent>
       </Message>
     )
@@ -464,6 +464,22 @@ const markerOf = (props: TranscriptProps, live: { readonly busy: boolean }) => {
 }
 
 type LiveSlot = { readonly kind: "live"; readonly key: string; readonly turn: string }
+
+// oxlint-disable-next-line ren/no-comments -- Files a turn shows one after another render as one group, in one row.
+type FilesGroup = {
+  readonly kind: "files"
+  readonly key: string
+  readonly files: ReadonlyArray<SessionMessage.DriveFile>
+}
+
+const groupFiles = (blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot>) =>
+  blocks.reduce<Array<TranscriptBlocks.Block | LiveSlot | FilesGroup>>((grouped, block) => {
+    const last = grouped.at(-1)
+    if (block.kind !== "file") grouped.push(block)
+    else if (last?.kind === "files") grouped[grouped.length - 1] = { ...last, files: [...last.files, block.file] }
+    else grouped.push({ kind: "files", key: block.key, files: [block.file] })
+    return grouped
+  }, [])
 
 // oxlint-disable-next-line ren/no-comments -- With the live line, a running turn's text streams in place and its steps wait in Activity. The line takes the place of the turn's first step, or sits right below its message before it has one, which is where its "Worked for" line lands, so it turns into that line in place when the turn ends and never follows the answer. An answer with nothing done before it has no line.
 const shownBlocks = (
@@ -740,7 +756,7 @@ const freshMs = 2000
 
 // oxlint-disable-next-line ren/no-comments -- Only a message sent in this view anchors the scroller, which brings it to the top, and makes the chat follow again. It must show as it is sent: a message that waited in the queue shows when its turn starts, long after it was sent, and the person may have scrolled away since. The scroller also jumps to any anchor it has not shown yet whenever one row replaces another, so a message from history must never be one.
 function useSentAnchor(
-  blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot>,
+  blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot | FilesGroup>,
   statuses: ReadonlyMap<string, ChatState.PendingStatus>,
 ) {
   const users = blocks.filter((block) => block.kind === "user")
@@ -888,7 +904,7 @@ function TranscriptScroller(input: {
     activeTurn,
   )
   const simple = props.simple === true
-  const shown = shownBlocks(blocks, { simple, ...liveOf(props, blocks, turns) })
+  const shown = groupFiles(shownBlocks(blocks, { simple, ...liveOf(props, blocks, turns) }))
   const live = props.busy || watched.live(props.activeMessageID)
   const sent = useSentAnchor(shown, props.statuses)
   const easing = useSendGlide(sent)
@@ -982,7 +998,13 @@ function TranscriptScroller(input: {
                   from + index >= shown.length - liveItems && "[content-visibility:visible]",
                 )}
               >
-                {block.kind === "live" ? (
+                {block.kind === "files" ? (
+                  <Message>
+                    <MessageContent>
+                      <FileOutputs spaceId={props.spaceId} files={block.files} />
+                    </MessageContent>
+                  </Message>
+                ) : block.kind === "live" ? (
                   <Message>
                     <MessageContent>
                       <TurnLine transcript={props} turns={turns} />
