@@ -4,26 +4,31 @@ import { ChatState, Composer, SessionLive, SessionTitle } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
+import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionInfo } from "@ren/client"
 import { Seed, SessionPages } from "@ren/client/react"
 import { ErrorText } from "@ren/util/error-text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { AsyncResult } from "effect/reactivity"
-import { useLocalSearchParams } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import { Drawer } from "expo-router/drawer"
 import { useNetworkState } from "expo-network"
-import { type ComponentRef, useRef, useState } from "react"
+import { type ComponentRef, type Ref, useImperativeHandle, useRef, useState } from "react"
 import { ActivityIndicator, View } from "react-native"
 import ArrowDownIcon from "react-native-heroicons/mini/ArrowDownIcon"
 import { KeyboardStickyView } from "react-native-keyboard-controller"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { withUniwind } from "uniwind"
+import { Appear } from "#components/appear"
 import { Button } from "#components/button"
+import { HeaderActions } from "#components/header-button"
 import { Icon } from "#components/icon"
 import { Text } from "#components/text"
 import { ActivityPill } from "#features/chat/activity-pill"
 import { useAttachments } from "#features/chat/attachments"
+import { ChatActions } from "#features/chat/chat-actions"
 import { ChatRequests } from "#features/chat/chat-requests"
+import { useSessionModel } from "#features/chat/model-picker"
 import { PromptInput } from "#features/chat/prompt-input"
 import { QueuedMessages } from "#features/chat/queued-messages"
 import { Transcript, type TranscriptHandle } from "#features/chat/transcript"
@@ -32,20 +37,150 @@ import { Preferences } from "#lib/preferences"
 
 const StickyView = withUniwind(KeyboardStickyView)
 
-function Header(props: { readonly title: string; readonly status: string | undefined }) {
+const dots = {
+  offline: { label: "Offline", className: "bg-destructive" },
+  reconnecting: { label: "Reconnecting", className: "bg-chart-3" },
+  connecting: { label: "Connecting", className: "bg-chart-3" },
+  working: { label: "Working", className: "bg-chart-2" },
+} as const
+
+function Header(props: {
+  readonly title: string
+  readonly space: string | undefined
+  readonly status: keyof typeof dots | undefined
+}) {
+  const dot = props.status ? dots[props.status] : undefined
   return (
-    <View className="items-center">
-      <Text className="text-sm text-muted-foreground" numberOfLines={1}>
+    <View className="max-w-60">
+      <Text className="text-lg font-medium" numberOfLines={1}>
         {props.title}
       </Text>
-      {props.status ? <Text className="text-xs text-muted-foreground/70">{props.status}</Text> : null}
+      {props.space || dot ? (
+        <View className="flex-row items-center gap-1.5">
+          {dot ? <View role="img" aria-label={dot.label} className={`size-1.5 rounded-full ${dot.className}`} /> : null}
+          <Text className="shrink text-xs text-muted-foreground" numberOfLines={1}>
+            {props.space ?? ""}
+          </Text>
+        </View>
+      ) : null}
     </View>
+  )
+}
+
+function ChatHeader(props: {
+  readonly id: Session.ID
+  readonly title: string | undefined
+  readonly info: SessionInfo | undefined
+  readonly connection: string
+  readonly running: boolean
+  readonly usage: ChatReact.ContextUsage | undefined
+  readonly model: SessionModel.Ref | undefined
+}) {
+  const router = useRouter()
+  const title = SessionTitle.display(props.title ?? props.info?.title)
+  const tokens = props.usage?.tokens
+  const percent = props.usage?.percent
+  const offline = useNetworkState().isConnected === false
+  const spaceId = props.info?.spaceId
+  const space = useQuery({
+    ...Api.query.space.get.queryOptions({ idOrSlug: spaceId ?? "" }),
+    enabled: Boolean(spaceId),
+  })
+  const status = (
+    [
+      { when: offline, status: "offline" },
+      { when: props.connection === "reconnecting", status: "reconnecting" },
+      { when: props.connection === "connecting", status: "connecting" },
+      { when: props.running, status: "working" },
+    ] as const
+  ).find((each) => each.when)?.status
+  return (
+    <Drawer.Screen
+      options={{
+        headerTitleAlign: "left",
+        headerTitle: () => <Header title={title} space={space.data?.name} status={status} />,
+        headerRight: () => (
+          <HeaderActions>
+            <ChatActions
+              sessionId={props.id}
+              title={title}
+              canRename={props.info?.capabilities.rename !== false}
+              canCompact={props.info?.capabilities.compact !== false}
+              usage={tokens === undefined ? undefined : { tokens, percent }}
+              model={props.model}
+              onArchived={() => router.navigate("/")}
+            />
+          </HeaderActions>
+        ),
+      }}
+    />
   )
 }
 
 export default function ChatRoute() {
   const id = Session.ID.make(useLocalSearchParams<{ id: string }>().id)
   return <Chat key={id} id={id} />
+}
+
+interface DraftHandle {
+  readonly recall: (item: Parameters<typeof Composer.recall>[1]) => void
+}
+
+function ChatComposer(props: {
+  readonly id: Session.ID
+  readonly spaceId: string | undefined
+  readonly running: boolean
+  readonly canQueue: boolean
+  readonly models: ReturnType<typeof useSessionModel>
+  readonly handle: Ref<DraftHandle>
+  readonly onSent: () => void
+  readonly onError: (message: string) => void
+  readonly onStop: () => void
+}) {
+  const prompt = ChatReact.usePrompt(props.id)
+  const [draft, setDraft] = useState<Composer.Draft>(Composer.empty)
+  const attachments = useAttachments({ sessionId: props.id, spaceId: props.spaceId, draft, update: setDraft })
+  const models = props.models
+  useImperativeHandle(props.handle, (): DraftHandle => ({
+    recall: (item) => setDraft((current) => Composer.recall(current, item)),
+  }))
+  const send = () => {
+    const text = Composer.request(draft).text.trim()
+    const submission = Composer.submission(draft, {
+      working: props.running,
+      behavior: "queue",
+      alternative: false,
+      queue: props.canQueue,
+      current: models.model,
+    })
+    if (!text || !submission) return
+    const messageID = Composer.messageID(draft) ?? SessionMessage.ID.create()
+    setDraft(submission.next)
+    props.onSent()
+    void prompt({
+      id: messageID,
+      text,
+      delivery: submission.delivery,
+      files: Composer.files(draft),
+      ...models.selection,
+    }).catch((cause: unknown) => {
+      setDraft((current) => Composer.restore(current, submission.sent, messageID))
+      props.onError(ErrorText.of(cause, "Couldn’t send your message. Your draft has been kept."))
+    })
+  }
+  return (
+    <PromptInput
+      value={draft.text}
+      onChange={(text) => setDraft((current) => Composer.withText(current, text))}
+      onSend={send}
+      onStop={props.onStop}
+      running={props.running}
+      attachments={attachments}
+      {...(models.choosable && {
+        model: { models: models.models, value: models.model, onChange: models.choose },
+      })}
+    />
+  )
 }
 
 function Chat(props: { readonly id: Session.ID }) {
@@ -59,67 +194,47 @@ function Chat(props: { readonly id: Session.ID }) {
   const [fold] = Preferences.usePreference(Preferences.foldTurns)
   const [foldMessages] = Preferences.usePreference(Preferences.foldMessages)
   const view = ChatReact.useView(id, undefined, detail)
-  const models = ChatReact.useModels(id)
+  const models = useSessionModel(id, view.state.info[id])
   const reopen = useAtomRefresh(ChatReact.useAtoms().session(id))
   const loadMore = ChatReact.useAction(id, (opened) => opened.loadMore(id))
   const prompt = ChatReact.usePrompt(id)
+  const draftRef = useRef<DraftHandle>(null)
   const interrupt = ChatReact.useAction(id, (opened) => opened.interrupt)
   const retryMessage = ChatReact.useAction(id, (opened, message: SessionMessage.ID) => opened.retryMessage(message))
   const removeMessage = ChatReact.useAction(id, (opened, message: SessionMessage.ID) => opened.removeMessage(message))
-  const offline = useNetworkState().isConnected === false
-  const connection = AsyncResult.getOrElse(view.session.status, () => "connecting")
   const insets = useSafeAreaInsets()
   const transcriptRef = useRef<TranscriptHandle>(null)
   const composerRef = useRef<ComponentRef<typeof View>>(null)
   const inset = useKeyboardChatComposerInset(transcriptRef, composerRef)
-  const [draft, setDraft] = useState<Composer.Draft>(Composer.empty)
-  const attachments = useAttachments({ sessionId: id, spaceId: info?.spaceId, draft, update: setDraft })
   const [error, setError] = useState("")
   const [away, setAway] = useState(false)
   const live = SessionLive.of(view.state, id)
   SessionPages.useLive(Api.query, id, live)
-  const status = [
-    { when: offline, label: "Offline" },
-    { when: connection === "reconnecting", label: "Reconnecting…" },
-    { when: connection === "connecting", label: "Connecting…" },
-  ].find((each) => each.when)?.label
   const blocked = Boolean(view.permission ?? view.form)
 
   const attempt = (action: () => Promise<unknown>, fallback: string) => {
     setError("")
     void action().catch((cause: unknown) => setError(ErrorText.of(cause, fallback)))
   }
-  const resend = (text: string) =>
-    attempt(() => prompt({ id: SessionMessage.ID.create(), text, delivery: "steer" }), "Couldn’t send your message.")
-  const send = () => {
-    const text = Composer.request(draft).text.trim()
-    const submission = Composer.submission(draft, {
-      working: view.running,
-      behavior: "queue",
-      alternative: false,
-      queue: info?.capabilities.queue !== false,
-      current: undefined,
-    })
-    if (!text || !submission) return
-    const messageID = Composer.messageID(draft) ?? SessionMessage.ID.create()
-    setDraft(submission.next)
-    setError("")
-    void prompt({ id: messageID, text, delivery: submission.delivery, files: Composer.files(draft) }).catch(
-      (cause: unknown) => {
-        setDraft((current) => Composer.restore(current, submission.sent, messageID))
-        setError(ErrorText.of(cause, "Couldn’t send your message. Your draft has been kept."))
-      },
+  const resend = (text: string) => {
+    transcriptRef.current?.toEnd()
+    attempt(
+      () => prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...models.selection }),
+      "Couldn’t send your message.",
     )
   }
   const stop = () => attempt(interrupt, "Couldn’t stop Ren. Try again.")
 
   return (
     <View className="flex-1 bg-background">
-      <Drawer.Screen
-        options={{
-          headerTitleAlign: "center",
-          headerTitle: () => <Header title={SessionTitle.display(live.title ?? info?.title)} status={status} />,
-        }}
+      <ChatHeader
+        id={id}
+        title={live.title}
+        info={info}
+        connection={AsyncResult.getOrElse(view.session.status, () => "connecting")}
+        running={view.running}
+        usage={view.contextUsage}
+        model={models.model}
       />
       {AsyncResult.isFailure(view.session.state) ? (
         <View className="flex-1 items-center justify-center gap-3 p-6">
@@ -145,7 +260,7 @@ function Chat(props: { readonly id: Session.ID }) {
           running={view.running}
           working={view.working}
           statuses={ChatState.pendingStatuses(view.state, view.viewed)}
-          modelNames={new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))}
+          modelNames={new Map(models.models.map((each) => [each.id, each.name]))}
           more={ChatState.more(view.state, id)}
           loadingHistory={ChatState.loadingHistory(view.state, id)}
           onLoadMore={() => attempt(loadMore, "Couldn’t load earlier messages.")}
@@ -154,7 +269,7 @@ function Chat(props: { readonly id: Session.ID }) {
             attempt(
               () =>
                 removeMessage(message).then((item) => {
-                  if (item) setDraft((current) => Composer.recall(current, item))
+                  if (item) draftRef.current?.recall(item)
                 }),
               "Couldn’t remove your message.",
             )
@@ -170,15 +285,17 @@ function Chat(props: { readonly id: Session.ID }) {
       <StickyView className="absolute inset-x-0 bottom-0" offset={{ opened: insets.bottom }} pointerEvents="box-none">
         {away ? (
           <View className="items-center pb-3" pointerEvents="box-none">
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-9 rounded-full bg-card shadow-soft dark:shadow-none"
-              aria-label="Scroll to the latest message"
-              onPress={() => transcriptRef.current?.toEnd()}
-            >
-              <Icon as={ArrowDownIcon} className="size-4" />
-            </Button>
+            <Appear className="rounded-full" rise={false}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-9 rounded-full bg-card shadow-soft dark:shadow-none"
+                aria-label="Scroll to the latest message"
+                onPress={() => transcriptRef.current?.toEnd()}
+              >
+                <Icon as={ArrowDownIcon} className="size-4" />
+              </Button>
+            </Appear>
           </View>
         ) : null}
         <View ref={composerRef} onLayout={inset.onComposerLayout} pointerEvents="box-none" className="pb-safe-offset-6">
@@ -194,18 +311,24 @@ function Chat(props: { readonly id: Session.ID }) {
             formExpired={view.formExpired}
           />
           {error ? (
-            <View className="mx-3 mb-2 rounded-xl border border-border bg-card px-4 py-2">
+            <Appear className="mx-3 mb-2 rounded-xl border border-border bg-card px-4 py-2">
               <Text className="text-sm text-destructive">{error}</Text>
-            </View>
+            </Appear>
           ) : null}
           {blocked ? null : (
-            <PromptInput
-              value={draft.text}
-              onChange={(text) => setDraft((current) => Composer.withText(current, text))}
-              onSend={send}
-              onStop={stop}
+            <ChatComposer
+              id={id}
+              spaceId={info?.spaceId}
               running={view.running}
-              attachments={attachments}
+              canQueue={info?.capabilities.queue !== false}
+              models={models}
+              handle={draftRef}
+              onSent={() => {
+                setError("")
+                transcriptRef.current?.toEnd()
+              }}
+              onError={setError}
+              onStop={stop}
             />
           )}
         </View>

@@ -12,6 +12,7 @@ import CheckIcon from "react-native-heroicons/mini/CheckIcon"
 import GlobeAltIcon from "react-native-heroicons/mini/GlobeAltIcon"
 import ShieldExclamationIcon from "react-native-heroicons/mini/ShieldExclamationIcon"
 import { useKeyboardState } from "react-native-keyboard-controller"
+import { Appear } from "#components/appear"
 import { Button } from "#components/button"
 import { CodeBlock } from "#components/code-block"
 import { Icon } from "#components/icon"
@@ -26,7 +27,7 @@ function Card(props: {
   readonly children: ReactNode
 }) {
   return (
-    <View className="mx-3 mb-2 gap-2">
+    <Appear className="mx-3 mb-2 gap-2">
       {props.from ? (
         <View className="flex-row items-center gap-2 px-1">
           <Icon as={IconGhostFilled} className="size-4 text-muted-foreground" />
@@ -42,7 +43,7 @@ function Card(props: {
         {props.children}
         {props.error ? <Text className="text-sm text-destructive">{props.error}</Text> : null}
       </View>
-    </View>
+    </Appear>
   )
 }
 

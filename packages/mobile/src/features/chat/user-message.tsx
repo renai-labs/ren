@@ -35,7 +35,7 @@ function Bubble(props: { readonly message: SessionMessage.User; readonly fold: b
     >
       <Text
         selectable
-        className="leading-relaxed"
+        className="text-md leading-6"
         numberOfLines={long && !open ? 12 : undefined}
         onTextLayout={(event) => {
           if (event.nativeEvent.lines.length > foldAbove) setTall(true)

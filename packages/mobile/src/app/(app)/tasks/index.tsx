@@ -24,7 +24,8 @@ import { Button } from "#components/button"
 import { Icon } from "#components/icon"
 import { SearchField } from "#components/search-field"
 import { Text } from "#components/text"
-import { filterProperties, isFiltered, TaskDisplaySheet, TaskFilterChips } from "#features/tasks/task-filters"
+import { FilterChips, isFiltered } from "#components/filters"
+import { filterProperties, TaskDisplaySheet } from "#features/tasks/task-filters"
 import {
   displayPreference,
   failed,
@@ -282,7 +283,7 @@ export default function TasksScreen() {
           />
         </View>
       ) : null}
-      <TaskFilterChips
+      <FilterChips
         properties={properties}
         filters={filters}
         onChange={(next) => setDisplay({ ...display, filters: next })}

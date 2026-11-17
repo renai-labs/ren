@@ -222,9 +222,12 @@ function UploadChip(props: {
   )
 }
 
-function UploadChips(props: { readonly attachments: Attachments; readonly disabled?: boolean | undefined }) {
+function UploadChips(props: {
+  readonly attachments: Attachments | undefined
+  readonly disabled?: boolean | undefined
+}) {
   const attachments = props.attachments
-  if (attachments.files.length + attachments.uploads.length === 0) return null
+  if (!attachments || attachments.files.length + attachments.uploads.length === 0) return null
   return (
     <ScrollView
       horizontal

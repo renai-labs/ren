@@ -1,8 +1,8 @@
 import { cn } from "cn"
-import type { ComponentProps, Ref } from "react"
+import type { ComponentProps } from "react"
 import { TextInput } from "react-native"
 
-type TextFieldProps = ComponentProps<typeof TextInput> & { readonly ref?: Ref<TextInput> }
+type TextFieldProps = ComponentProps<typeof TextInput>
 
 function TextField({ className, ...props }: TextFieldProps) {
   return (

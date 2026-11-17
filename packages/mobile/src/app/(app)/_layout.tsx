@@ -20,6 +20,7 @@ export default function AppLayout() {
     fetch: Auth.sessionFetch,
     chatFetch: Auth.sessionFetch,
     lifecycle: Lifecycle.listen,
+    flushInterval: "64 millis",
   })
   return (
     <RegistryContext value={chat.registry}>
@@ -31,7 +32,7 @@ export default function AppLayout() {
             ...headerOptions,
             headerLeft: () => <MenuButton />,
             drawerType: "front",
-            drawerStyle: { borderTopRightRadius: 16, borderBottomRightRadius: 16, overflow: "hidden" },
+            drawerStyle: { backgroundColor: "transparent" },
           }}
         >
           <Drawer.Screen name="index" options={{ title: "New chat" }} />

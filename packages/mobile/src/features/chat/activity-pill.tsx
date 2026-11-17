@@ -9,6 +9,7 @@ import { useEffect, useState } from "react"
 import { ActivityIndicator, ScrollView, View } from "react-native"
 import CommandLineIcon from "react-native-heroicons/mini/CommandLineIcon"
 import StopIcon from "react-native-heroicons/mini/StopIcon"
+import { Appear } from "#components/appear"
 import { Button } from "#components/button"
 import { Icon } from "#components/icon"
 import { Sheet } from "#components/sheet"
@@ -127,11 +128,11 @@ function ActivityPill(props: { readonly root: Session.ID }) {
     )
   }
   return (
-    <>
+    <Appear className="mx-3 mb-2 self-start">
       <Button
         variant="outline"
         size="sm"
-        className="mx-3 mb-2 self-start rounded-full bg-card shadow-soft dark:shadow-none"
+        className="rounded-full bg-card shadow-soft dark:shadow-none"
         aria-label={`${Family.summary(items)}. Show background work`}
         onPress={() => setOpen(true)}
       >
@@ -147,7 +148,7 @@ function ActivityPill(props: { readonly root: Session.ID }) {
       >
         <Panel items={items} stopping={stopping} error={error} onStop={stop} />
       </Sheet>
-    </>
+    </Appear>
   )
 }
 

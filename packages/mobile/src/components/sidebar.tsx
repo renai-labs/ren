@@ -7,14 +7,14 @@ import type { ComponentProps } from "react"
 import { Pressable, View } from "react-native"
 import ChevronRightIcon from "react-native-heroicons/mini/ChevronRightIcon"
 import ClipboardDocumentCheckIcon from "react-native-heroicons/mini/ClipboardDocumentCheckIcon"
-import Cog6ToothIcon from "react-native-heroicons/mini/Cog6ToothIcon"
 import FolderIcon from "react-native-heroicons/mini/FolderIcon"
-import PencilSquareIcon from "react-native-heroicons/mini/PencilSquareIcon"
+import MagnifyingGlassIcon from "react-native-heroicons/mini/MagnifyingGlassIcon"
 import { Avatar } from "#components/avatar"
 import { Icon } from "#components/icon"
-import { OrgSwitcher } from "#components/org-switcher"
+import { Logomark } from "#components/logomark"
 import { Text } from "#components/text"
 import { ChatRow } from "#features/chat/chat-row"
+import { NewChatButton } from "#features/chat/new-chat-button"
 import { Api } from "#lib/api"
 import { Auth } from "#lib/auth"
 
@@ -40,38 +40,24 @@ function NavRow(props: {
   )
 }
 
-function AccountRow(props: { readonly active: boolean; readonly onPress: () => void }) {
+function ProfileButton(props: { readonly onPress: () => void }) {
   const user = useQuery(Auth.sessionOptions).data?.user
-  const name = user?.name || user?.email || ""
   return (
     <Pressable
       role="link"
       aria-label="Settings"
-      aria-current={props.active ? "page" : undefined}
-      className={cn(
-        "mx-2 min-h-12 flex-row items-center gap-3 rounded-lg p-2",
-        props.active ? "bg-sidebar-accent" : "active:bg-sidebar-accent",
-      )}
+      hitSlop={4}
+      className="rounded-full shadow-soft active:opacity-80 dark:shadow-none"
       onPress={props.onPress}
     >
-      <Avatar name={name} />
-      <View className="flex-1">
-        <Text className="text-sm font-medium text-sidebar-foreground" numberOfLines={1}>
-          {name}
-        </Text>
-        <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-          {user?.email ?? ""}
-        </Text>
-      </View>
-      <View className="size-10 items-center justify-center">
-        <Icon as={Cog6ToothIcon} className="size-4.5 text-sidebar-foreground/55" />
-      </View>
+      <Avatar size="lg" name={user?.name || user?.email || ""} />
     </Pressable>
   )
 }
 
 function Sidebar(props: { readonly onClose: () => void }) {
   const router = useRouter()
+
   const pathname = usePathname()
   const openID = useGlobalSearchParams<{ id?: string }>().id
   const pages = useInfiniteQuery(SessionPages.options(Api.client))
@@ -79,28 +65,39 @@ function Sidebar(props: { readonly onClose: () => void }) {
   const within = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
 
   const go = (href: Href) => {
-    router.navigate(href)
     props.onClose()
+    router.navigate(href)
   }
 
   return (
-    <View className="flex-1 bg-sidebar py-safe-offset-2">
-      <View className="pb-3">
-        <OrgSwitcher onSwitched={props.onClose} />
+    <View className="flex-1 rounded-r-2xl bg-sidebar py-safe-offset-2">
+      <View className="mx-5 flex-row items-center gap-2 pt-3 pb-4">
+        <Logomark className="size-6 text-sidebar-foreground" />
+        <Text className="text-2xl font-semibold text-sidebar-foreground">Ren</Text>
       </View>
-      <NavRow icon={PencilSquareIcon} label="New chat" active={pathname === "/"} onPress={() => go("/")} />
       <NavRow icon={ClipboardDocumentCheckIcon} label="Tasks" active={within("/tasks")} onPress={() => go("/tasks")} />
       <NavRow icon={FolderIcon} label="Drive" active={within("/drive")} onPress={() => go("/drive")} />
-      <Pressable
-        role="link"
-        aria-label="All chats"
-        aria-current={pathname === "/chats" ? "page" : undefined}
-        className="mt-4 flex-row items-center gap-1 self-start px-5 py-2 active:opacity-70"
-        onPress={() => go("/chats")}
-      >
-        <Text className="text-sm font-medium text-sidebar-foreground/80">Chats</Text>
-        <Icon as={ChevronRightIcon} className="size-4 text-sidebar-foreground/55" />
-      </Pressable>
+      <View className="mt-4 flex-row items-center justify-between pr-3">
+        <Pressable
+          role="link"
+          aria-label="All chats"
+          aria-current={pathname === "/chats" ? "page" : undefined}
+          className="flex-row items-center gap-1 px-5 py-2 active:opacity-70"
+          onPress={() => go("/chats")}
+        >
+          <Text className="text-sm font-medium text-sidebar-foreground/80">Chats</Text>
+          <Icon as={ChevronRightIcon} className="size-4 text-sidebar-foreground/55" />
+        </Pressable>
+        <Pressable
+          role="link"
+          aria-label="Search chats"
+          hitSlop={4}
+          className="size-9 items-center justify-center rounded-full bg-card shadow-soft active:bg-sidebar-accent dark:bg-sidebar-accent dark:shadow-none"
+          onPress={() => go("/chats")}
+        >
+          <Icon as={MagnifyingGlassIcon} className="size-4.5 text-sidebar-foreground" />
+        </Pressable>
+      </View>
       <LegendList
         data={chats}
         keyExtractor={(chat) => chat.id}
@@ -112,13 +109,18 @@ function Sidebar(props: { readonly onClose: () => void }) {
           />
         )}
         estimatedItemSize={44}
+        contentContainerClassName="pb-24"
         recycleItems
         onEndReached={() => {
           if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage()
         }}
       />
-      <View className="border-t border-sidebar-border pt-2">
-        <AccountRow active={pathname === "/settings"} onPress={() => go("/settings")} />
+      <View
+        className="absolute inset-x-0 bottom-0 flex-row items-center justify-between px-4 pb-safe-offset-4"
+        pointerEvents="box-none"
+      >
+        <ProfileButton onPress={() => go("/settings")} />
+        <NewChatButton onPress={props.onClose} />
       </View>
     </View>
   )
