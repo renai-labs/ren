@@ -2,6 +2,7 @@ export * as Auth from "./auth.js"
 
 import { fetchClientMetadataResource } from "@better-auth/cimd/node"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { Mailer } from "@ren/core/mailer"
@@ -72,6 +73,7 @@ export const layer = Layer.effect(
     const database = yield* AuthDatabase.Service
     const mailer = yield* Mailer.Service
     const signupGuard = yield* SignupGuard.Service
+    const accountDeletion = yield* AccountDeletion.Service
     const provisioning = yield* SpaceProvisioning.Service
     const inferenceRemoval = yield* RenInferenceRemoval.Service
     const billingEnrollment = yield* BillingEnrollment.Service
@@ -137,6 +139,7 @@ export const layer = Layer.effect(
         checkAccountCreation: (email) => runPromise(signupGuard.checkAccountCreation(email)),
         hasVerifiedAlias: (email) => runPromise(signupGuard.hasVerifiedAlias(email)),
       },
+      accountDeletion: { isArchived: (userId) => runPromise(accountDeletion.isArchived(Auth.UserID.make(userId))) },
       provisioning: {
         createInitialMemberships: (organizationId, user) =>
           runPromise(
@@ -174,6 +177,7 @@ export const layer = Layer.effect(
         }),
       )
       if (!member?.user) return Option.none<AuthenticatedSession>()
+      if (yield* accountDeletion.isArchived(Auth.UserID.make(caller.userId))) return Option.none<AuthenticatedSession>()
       const user: typeof Auth.User.Encoded = member.user
       return Option.some<AuthenticatedSession>({
         user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
@@ -186,6 +190,7 @@ export const layer = Layer.effect(
       getSession: Effect.fn("Auth.getSession")(function* (headers: Headers) {
         const session = yield* Effect.promise(() => auth.api.getSession({ headers }))
         if (!session) return Option.none()
+        if (yield* accountDeletion.isArchived(Auth.UserID.make(session.user.id))) return Option.none()
         const user: typeof Auth.User.Encoded = session.user
         return Option.some({
           user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),

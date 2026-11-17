@@ -18,6 +18,7 @@ import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Integrations } from "@ren/core/integrations"
 import { Billing } from "@ren/core/billing"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { Hands } from "@ren/core/hands"
@@ -93,7 +94,7 @@ HttpRouter.serve(Routes.layer).pipe(
     ChannelNotice.layerLog,
     TaskCard.layerNone,
     SlackTaskCard.layerNone,
-    Mailer.layer,
+    AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),

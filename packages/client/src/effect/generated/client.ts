@@ -20,7 +20,13 @@ const adaptGroupHealth = (raw: RawClient["health"]) => ({ get: EndpointHealthGet
 
 const EndpointMeGet = (raw: RawClient["me"]) => () => raw["me.get"]({}).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupMe = (raw: RawClient["me"]) => ({ get: EndpointMeGet(raw) })
+const EndpointMeRequestDeletion = (raw: RawClient["me"]) => () =>
+  raw["me.requestDeletion"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupMe = (raw: RawClient["me"]) => ({
+  get: EndpointMeGet(raw),
+  requestDeletion: EndpointMeRequestDeletion(raw),
+})
 
 type InvitationPreviewRequest = Parameters<RawClient["invitation"]["invitation.preview"]>[0]
 type InvitationPreviewInput = { readonly id: InvitationPreviewRequest["params"]["id"] }

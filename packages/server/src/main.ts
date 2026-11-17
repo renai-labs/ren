@@ -37,6 +37,7 @@ import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Integrations } from "@ren/core/integrations"
 import { Deployment } from "@ren/core/deployment"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -222,7 +223,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       ),
       ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer)),
     ).pipe(Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])))),
-    Mailer.layer,
+    AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),

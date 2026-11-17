@@ -5,6 +5,7 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { expo } from "@better-auth/expo"
 import { mcp } from "@better-auth/mcp"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import type { SpaceProvisioning } from "@ren/core/space/provisioning"
@@ -50,6 +51,7 @@ export interface Input {
     readonly checkAccountCreation: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
     readonly hasVerifiedAlias: (email: string) => Promise<boolean>
   }
+  readonly accountDeletion: { readonly isArchived: (userId: string) => Promise<boolean> }
   readonly provisioning: {
     readonly createInitialMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly activatePendingMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
@@ -180,6 +182,18 @@ const provisionOrganization =
         .catch((error: unknown) => input.logFailure("Billing enrollment failed to start", error, session.userId))
     }
     return { data: { ...session, activeOrganizationId: organization.id } }
+  }
+
+const refuseArchived =
+  (input: Input) =>
+  async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(
+    session: Session,
+    ctx: GenericEndpointContext | null,
+  ) => {
+    if (await input.accountDeletion.isArchived(session.userId)) {
+      throw new APIError("FORBIDDEN", { message: `This account is being deleted. Contact ${AccountDeletion.support}.` })
+    }
+    return provisionOrganization(input)(session, ctx)
   }
 
 const guardRequests = (input: Input) =>
@@ -374,7 +388,7 @@ export const make = (input: Input) => {
       user: { create: { before: guardAccountCreation(input) } },
       session: {
         create: {
-          before: provisionOrganization(input),
+          before: refuseArchived(input),
           after: async (session) => input.github?.sync(session.userId),
         },
       },

@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Billing } from "@ren/core/billing"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
@@ -50,6 +51,7 @@ const billing = Layer.succeed(
 const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>
   Auth.layer.pipe(
     Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
+    Layer.provideMerge(AccountDeletion.layer),
     Layer.provideMerge(EgressControl.layerNone),
     Layer.provideMerge(
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
@@ -422,6 +424,7 @@ describe("Auth", () => {
             checkAccountCreation: (email) => Effect.runPromise(guard.checkAccountCreation(email)),
             hasVerifiedAlias: (email) => Effect.runPromise(guard.hasVerifiedAlias(email)),
           },
+          accountDeletion: { isArchived: () => Promise.resolve(false) },
           provisioning: {
             createInitialMemberships: () => Promise.resolve(),
             activatePendingMemberships: () => Promise.resolve(),

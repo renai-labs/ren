@@ -474,6 +474,7 @@ const extra: ReadonlyArray<EmitCli.Command> = [
 const elsewhere = new Map([
   ["health.get", "ren2 health"],
   ["me.get", "ren2 whoami"],
+  ["me.requestDeletion", "A person deletes their account from Settings in the app, after a confirmation."],
   ["infra.plan", "ren2 infra plan"],
   ["infra.apply", "ren2 infra apply"],
   ["infra.pull", "ren2 infra pull"],

@@ -192,6 +192,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["me"]["get"]({ signal: context.signal }),
           }),
       },
+      requestDeletion: {
+        mutationKey: () => ["me", "requestDeletion"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["me", "requestDeletion"] as const,
+            mutationFn: () => client["me"]["requestDeletion"](),
+          }),
+      },
     },
     invitation: {
       preview: {

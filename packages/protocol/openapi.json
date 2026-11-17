@@ -67,6 +67,48 @@
         "summary": "Get the signed-in user"
       }
     },
+    "/me/deletion": {
+      "post": {
+        "tags": ["me"],
+        "operationId": "me.requestDeletion",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive the signed-in user’s account, sign them out everywhere and email them that Ren received the request. The account cannot sign in again, and Ren deletes its data within 7 days. Asking again sends no second email. Fails with a conflict while the user is the only owner of an organization that has other members.",
+        "summary": "Request deletion of the signed-in account"
+      }
+    },
     "/invitations/{id}/preview": {
       "get": {
         "tags": ["invitation"],
