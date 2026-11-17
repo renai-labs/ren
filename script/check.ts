@@ -27,12 +27,29 @@ const dependencies =
 
 const run = await Bun.$`bun turbo run --continue=dependencies-successful --output-logs=errors-only ${[
   ...(await tasks(`...[${base}]`, "typecheck")),
-  ...(await tasks(`[${base}]`, "lint")),
   ...(mobile ? ["@ren/mobile#check:bundle", "@ren/mobile#check:generated"] : []),
   ...(dependencies ? ["@ren/mobile#check:doctor"] : []),
   "//#typecheck:root",
-  "//#lint:root",
   "//#lint:rules",
   "//#format:check",
 ]}`.nothrow()
-process.exitCode = run.exitCode
+
+const changed = [
+  ...(await Bun.$`git diff --name-only ${base}`.text()).split("\n"),
+  ...(await Bun.$`git ls-files --others --exclude-standard`.text()).split("\n"),
+].filter((file) => file !== "")
+const everything = changed.some(
+  (file) =>
+    file === "oxlint.config.ts" ||
+    file === "tsconfig.base.json" ||
+    file === "bun.lock" ||
+    file.startsWith("script/oxlint/"),
+)
+const lintPaths = everything
+  ? []
+  : [
+      ...(await Changed.packages(`[${base}]`)).map((pkg) => pkg.path).filter((each) => each.startsWith("packages/")),
+      ...(changed.some((file) => file.startsWith("script/")) ? ["script"] : []),
+    ]
+const lint = everything || lintPaths.length > 0 ? await Bun.$`bun script/lint.ts ${lintPaths}`.nothrow() : undefined
+process.exitCode = run.exitCode === 0 ? (lint?.exitCode ?? 0) : run.exitCode

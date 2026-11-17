@@ -21,14 +21,8 @@
     "transit": {
       "dependsOn": ["^transit"]
     },
-    "lint": {
-      "dependsOn": ["^typecheck"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts", "$TURBO_ROOT$/script/oxlint/**"],
-      "outputs": []
-    },
     "//#lint:root": {
-      "dependsOn": ["//#typecheck:root"],
-      "inputs": ["script/**", "oxlint.config.ts", "tsconfig.json"],
+      "inputs": ["$TURBO_DEFAULT$", "!docs/**", "!specs/**", "!**/*.md"],
       "outputs": []
     },
     "//#lint:rules": {
