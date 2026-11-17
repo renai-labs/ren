@@ -191,7 +191,7 @@
   "devDependencies": {
     "@ren/test-harness": "workspace:*",
     "@ast-grep/cli": "0.45.3",
-    "@oxlint/plugins": "1.87.0",
+    "@oxlint/plugins": "1.93.0",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
@@ -200,8 +200,8 @@
     "husky": "9.1.7",
     "knip": "6.40.0",
     "oxfmt": "catalog:",
-    "oxlint": "1.87.0",
-    "oxlint-tsgolint": "7.0.2003",
+    "oxlint": "1.93.0",
+    "tsrs": "0.25.0-ts7.1.0-beta",
     "turbo": "2.11.7"
   },
   "trustedDependencies": [

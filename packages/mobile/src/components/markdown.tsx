@@ -54,7 +54,7 @@ function Markdown(props: { readonly text: string; readonly streaming?: boolean; 
   return (
     <EnrichedMarkdownText
       markdown={Fences.mapProse(TexMath.rewrite(props.text), (prose) =>
-        prose.replace(loneDollar, (match) => (match === "$" ? "\\$" : match)),
+        prose.replaceAll(loneDollar, (match) => (match === "$" ? "\\$" : match)),
       )}
       flavor="github"
       streamingAnimation={props.streaming === true}

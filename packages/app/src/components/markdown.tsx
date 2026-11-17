@@ -558,7 +558,7 @@ export function Markdown(props: {
           linkSafety={{ enabled: false }}
           icons={streamdownIcons}
         >
-          {Fences.mapProse(mentionLinks(text, apps), (prose) => prose.replace(imageLine, "$1\n"))}
+          {Fences.mapProse(mentionLinks(text, apps), (prose) => prose.replaceAll(imageLine, "$1\n"))}
         </Streamdown>
       </div>
     </MarkdownContext>

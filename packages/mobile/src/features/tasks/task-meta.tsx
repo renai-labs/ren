@@ -25,7 +25,7 @@ const crossPath = "M4.75 4.75 9.25 9.25M9.25 4.75 4.75 9.25"
 
 function ClosedRing(props: GlyphProps & { readonly path: string }) {
   const shown = glyph(props)
-  const mask = `ring${useId().replace(nonWord, "")}`
+  const mask = `ring${useId().replaceAll(nonWord, "")}`
   return (
     <Svg viewBox="-1 -1 16 16" width={shown.size} height={shown.size}>
       <Mask id={mask}>

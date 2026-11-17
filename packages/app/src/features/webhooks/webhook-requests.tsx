@@ -251,7 +251,7 @@ function JsonValue(props: { value: unknown; keys: ReadonlyArray<string>; editabl
   if (Array.isArray(value) || (typeof value === "object" && value !== null))
     return (
       <ul className="flex flex-col gap-0.5 border-l pl-3">
-        {Object.entries(value).map((entry) => (
+        {Object.entries(value).map((entry: [string, unknown]) => (
           <li key={entry[0]} className="flex min-w-0 flex-col">
             <span className="text-muted-foreground">{entry[0]}</span>
             <JsonValue value={entry[1]} keys={[...props.keys, entry[0]]} editable={props.editable} />
