@@ -11,7 +11,7 @@ import { createUser, password, serverURL, signIn, uniqueEmail } from "./lib/serv
 
 const cli = fileURLToPath(new URL("../../cli/src/index.ts", import.meta.url))
 
-const ren2 = (args: ReadonlyArray<string>, env: Record<string, string> = {}) =>
+const ren = (args: ReadonlyArray<string>, env: Record<string, string> = {}) =>
   promisify(execFile)("bun", [cli, ...args], { env: { ...process.env, REN_URL: serverURL, ...env } })
 
 const Stored = Schema.fromJsonString(
@@ -22,7 +22,7 @@ const Me = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ user: Schema.Struct({ email: Schema.String }) })),
 )
 
-test("ren2 manages a space and its members by slug", async ({ request }) => {
+test("ren manages a space and its members by slug", async ({ request }) => {
   const email = uniqueEmail("cli-space")
   await createUser(request, { name: "Grace Hopper", email })
   const token = (await signIn(request, { email, password })).headers()["set-auth-token"] ?? ""
@@ -38,32 +38,32 @@ test("ren2 manages a space and its members by slug", async ({ request }) => {
     ),
   )
 
-  const created = Space((await ren2(["space", "create", "--name", "Docs", "--slug", "docs"], env)).stdout)
-  expect(Space((await ren2(["spaces", "get", "docs"], env)).stdout).id).toBe(created.id)
+  const created = Space((await ren(["space", "create", "--name", "Docs", "--slug", "docs"], env)).stdout)
+  expect(Space((await ren(["spaces", "get", "docs"], env)).stdout).id).toBe(created.id)
   const input = JSON.stringify({ name: "Docs Team", description: "Draft" })
-  const updated = await ren2(["space", "update", "docs", "--input", input, "--description", "Writes the docs"], env)
+  const updated = await ren(["space", "update", "docs", "--input", input, "--description", "Writes the docs"], env)
   expect(Space(updated.stdout)).toMatchObject({ id: created.id, name: "Docs Team", description: "Writes the docs" })
 
-  const members = await ren2(["space", "member", "list", "docs"], env)
+  const members = await ren(["space", "member", "list", "docs"], env)
   const Page = Schema.Struct({ items: Schema.Array(Schema.Unknown), total: Schema.Number })
   expect(Schema.decodeUnknownSync(Schema.fromJsonString(Page))(members.stdout).total).toBeGreaterThan(0)
-  const pretty = await ren2(["space", "list", "--output", "pretty"], env)
+  const pretty = await ren(["space", "list", "--output", "pretty"], env)
   expect(pretty.stdout).toMatch(/^ID +SLUG +NAME/u)
   expect(pretty.stdout).toContain("docs")
   expect(pretty.stdout).toMatch(/Page 1 of 1, \d+ total\.\n$/u)
 
-  await expect(ren2(["space", "update", "docs", "--name", ""], env)).rejects.toMatchObject({
+  await expect(ren(["space", "update", "docs", "--name", ""], env)).rejects.toMatchObject({
     code: 1,
     stderr: expect.stringContaining('"path":"--name"'),
   })
-  await ren2(["space", "archive", "docs"], env)
-  await expect(ren2(["space", "get", "docs"], env)).rejects.toMatchObject({
+  await ren(["space", "archive", "docs"], env)
+  await expect(ren(["space", "get", "docs"], env)).rejects.toMatchObject({
     stderr: expect.stringContaining('"type":"NotFoundError"'),
   })
 })
 
-test("ren2 health reports server health", async () => {
-  const result = await ren2(["health"])
+test("ren health reports server health", async () => {
+  const result = await ren(["health"])
   const health = Schema.Struct({ status: Schema.String, version: Schema.String })
   expect(Schema.decodeUnknownSync(Schema.fromJsonString(health))(result.stdout)).toEqual({
     status: "ok",
@@ -71,10 +71,10 @@ test("ren2 health reports server health", async () => {
   })
 })
 
-test("ren2 signs in through the browser, refreshes its session and signs out", async ({ page }) => {
+test("ren signs in through the browser, refreshes its session and signs out", async ({ page }) => {
   const email = uniqueEmail("cli")
   await createUser(page.request, { name: "Ada Lovelace", email })
-  const config = await mkdtemp(join(tmpdir(), "ren2-e2e-"))
+  const config = await mkdtemp(join(tmpdir(), "ren-e2e-"))
   const env = { XDG_CONFIG_HOME: config }
 
   const login = spawn("bun", [cli, "login", "--no-browser"], {
@@ -94,24 +94,24 @@ test("ren2 signs in through the browser, refreshes its session and signs out", a
   await expect(page.getByText("You can close this tab.")).toBeVisible()
   expect(await exited).toBe(0)
   expect(Me(stdout.join("")).user.email).toBe(email)
-  expect(Me((await ren2(["whoami"], env)).stdout).user.email).toBe(email)
+  expect(Me((await ren(["whoami"], env)).stdout).user.email).toBe(email)
 
-  const file = join(config, "ren2", "credentials.json")
+  const file = join(config, "ren", "credentials.json")
   const signedIn = Schema.decodeUnknownSync(Stored)(await readFile(file, "utf8"))
   const session = signedIn[serverURL] ?? {}
   await writeFile(file, JSON.stringify({ [serverURL]: { ...session, expiresAt: 0 } }))
-  expect(Me((await ren2(["whoami"], env)).stdout).user.email).toBe(email)
+  expect(Me((await ren(["whoami"], env)).stdout).user.email).toBe(email)
   const refreshed = Schema.decodeUnknownSync(Stored)(await readFile(file, "utf8"))[serverURL] ?? {}
   expect(refreshed["refreshToken"]).not.toBe(session["refreshToken"])
   expect(refreshed["expiresAt"]).toBeGreaterThan(Date.now())
 
   const loggedOut = Schema.Struct({ server: Schema.String, loggedOut: Schema.Boolean })
-  expect(Schema.decodeUnknownSync(Schema.fromJsonString(loggedOut))((await ren2(["logout"], env)).stdout)).toEqual({
+  expect(Schema.decodeUnknownSync(Schema.fromJsonString(loggedOut))((await ren(["logout"], env)).stdout)).toEqual({
     server: serverURL,
     loggedOut: true,
   })
-  await expect(ren2(["whoami", "--output", "pretty"], env)).rejects.toMatchObject({
+  await expect(ren(["whoami", "--output", "pretty"], env)).rejects.toMatchObject({
     code: 1,
-    stderr: `Not logged in to ${serverURL}. Run ren2 login.\n`,
+    stderr: `Not logged in to ${serverURL}. Run ren login.\n`,
   })
 })

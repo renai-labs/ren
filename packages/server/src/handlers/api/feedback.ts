@@ -14,7 +14,7 @@ export const FeedbackHandler = HttpApiBuilder.group(Api, "feedback", (handlers) 
       Effect.gen(function* () {
         const actor = yield* Primitive.currentActor
         const mcp = Option.isSome(yield* Effect.serviceOption(McpCaller))
-        const client = ((yield* HttpServerRequest.HttpServerRequest).headers["user-agent"] ?? "").startsWith("ren2/")
+        const client = ((yield* HttpServerRequest.HttpServerRequest).headers["user-agent"] ?? "").startsWith("ren/")
           ? "cli"
           : "api"
         yield* feedback.report({

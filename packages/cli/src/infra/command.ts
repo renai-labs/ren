@@ -135,11 +135,11 @@ export const gate = (
     }
   if (options.interactive) return { kind: "confirm" }
   if (!options.digest)
-    return { kind: "refuse", message: "Without a terminal, apply needs --plan <digest> from ren2 infra plan." }
+    return { kind: "refuse", message: "Without a terminal, apply needs --plan <digest> from ren infra plan." }
   if (options.digest !== plan.digest)
     return {
       kind: "refuse",
-      message: `The plan has changed since digest ${options.digest}. Run ren2 infra plan again.`,
+      message: `The plan has changed since digest ${options.digest}. Run ren infra plan again.`,
     }
   const archives = plan.changes.filter((change) => change.action === "archive" && applies(change)).length
   if (archives > 0 && !options.allowArchive)
@@ -240,13 +240,13 @@ export const refusal = (
     "",
     "To merge them with git, pull on the commit of your last pull, then merge it:",
     `  git switch -c ren-live ${options.commit || "<commit of your last pull>"}`,
-    `  ren2 infra pull ${options.folder}`,
+    `  ren infra pull ${options.folder}`,
     `  git add -A ${options.folder}`,
     '  git commit -m "pull from Ren"',
     "  git switch -",
     "  git merge ren-live",
     "",
-    "Or keep your folder and pass --force to ren2 infra apply.",
+    "Or keep your folder and pass --force to ren infra apply.",
   ].join("\n")
 
 export const pull = Effect.fn("InfraCommand.pull")(function* (

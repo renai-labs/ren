@@ -221,7 +221,7 @@ export const HarnessOperation = Schema.Union([
   }),
 ]).annotate({
   identifier: "RenInference.HarnessOperation",
-  description: "One edit of a harness config file. The secret is `${REN_INFERENCE_KEY}`; `ren2` puts the key there.",
+  description: "One edit of a harness config file. The secret is `${REN_INFERENCE_KEY}`; `ren` puts the key there.",
 })
 export type HarnessOperation = typeof HarnessOperation.Type
 

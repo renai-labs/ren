@@ -38,7 +38,7 @@ export const subcommands = [
     ),
   ),
   Command.make("sync").pipe(
-    Command.withDescription("Set up each harness that ren2 set up here again, with the live model list"),
+    Command.withDescription("Set up each harness that ren set up here again, with the live model list"),
     Command.withHandler(() => Effect.flatMap(Effect.promise(setup), (module) => module.InferenceSetup.sync())),
   ),
 ]

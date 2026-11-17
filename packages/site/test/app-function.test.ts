@@ -54,6 +54,10 @@ describe("a page", () => {
   ])("%s %o is served from %s", (uri, options, file) => expect(request(uri, options)).toMatchObject({ uri: file }))
 })
 
-test.each(["/app/assets/index-abc.js", "/ren2/install.sh", "/og-image.png"])("the file %s is served as is", (uri) =>
-  expect(request(uri)).toMatchObject({ uri }),
+test.each(["/app/assets/index-abc.js", "/ren/install.sh", "/ren/releases/1.0.0/ren-darwin-arm64", "/og-image.png"])(
+  "the file %s is served as is",
+  (uri) => expect(request(uri)).toMatchObject({ uri }),
 )
+
+test("/install serves the CLI installer, even to a signed-in browser", () =>
+  expect(request("/install", { signedIn: true })).toMatchObject({ uri: "/ren/install.sh" }))

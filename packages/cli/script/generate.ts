@@ -473,12 +473,12 @@ const extra: ReadonlyArray<EmitCli.Command> = [
 ]
 
 const elsewhere = new Map([
-  ["health.get", "ren2 health"],
-  ["me.get", "ren2 whoami"],
+  ["health.get", "ren health"],
+  ["me.get", "ren whoami"],
   ["me.requestDeletion", "A person deletes their account from Settings in the app, after a confirmation."],
-  ["infra.plan", "ren2 infra plan"],
-  ["infra.apply", "ren2 infra apply"],
-  ["infra.pull", "ren2 infra pull"],
+  ["infra.plan", "ren infra plan"],
+  ["infra.apply", "ren infra apply"],
+  ["infra.pull", "ren infra pull"],
   ["session.create", "A new session needs an ID the client makes; it comes with the chat commands."],
   ["chat.access", "Chat commands, which stream."],
   ["chat.messages", "Chat commands, which stream."],
@@ -491,8 +491,8 @@ const elsewhere = new Map([
   ["join-link.preview", "The join page shows a space invite link to the person who opens it."],
   ["join-link.accept", "The join page adds the person to the space, then opens it."],
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
-  ["ren-inference.key.secret", "ren2 inference setup"],
-  ["ren-inference.harness-plan", "ren2 inference setup"],
+  ["ren-inference.key.secret", "ren inference setup"],
+  ["ren-inference.harness-plan", "ren inference setup"],
   ["drive.startUpload", "The upload posts its file to the bucket with the returned form; the app does it."],
   ["app.request-connect", "An agent asks the person to connect an app; the chat shows the card."],
 ])

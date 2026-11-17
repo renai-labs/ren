@@ -29,7 +29,7 @@ const fields = () =>
     ?.fields?.map((field) => field.text)
 
 describe("feedback.report", () => {
-  it.live("marks feedback from the ren2 CLI apart from other API callers, as the signed-in person", () =>
+  it.live("marks feedback from the ren CLI apart from other API callers, as the signed-in person", () =>
     Effect.gen(function* () {
       const api = yield* ApiFixture.Service
       const owner = yield* ApiFixture.owner()
@@ -43,7 +43,7 @@ describe("feedback.report", () => {
             }),
           ),
         )
-      expect((yield* send({ "user-agent": "ren2/1.2.3" })).status).toBe(204)
+      expect((yield* send({ "user-agent": "ren/1.2.3" })).status).toBe(204)
       expect(fields()).toEqual(["*Via*\nCLI", expect.stringContaining("*User*\n"), "*Org*\nNorthstar"])
       expect((yield* send({})).status).toBe(204)
       expect(fields()?.at(0)).toBe("*Via*\nAPI")

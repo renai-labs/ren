@@ -41,7 +41,7 @@ jobs:
     env:
       BUMP: ${{ inputs.bump }}
       VERSION: ${{ inputs.version }}
-      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://useren.ai' }}
+      REN_HOST_URL: ${{ vars.REN_HOST_URL || 'https://useren.ai' }}
     steps:
       - name: Choose version
         id: version
@@ -51,7 +51,7 @@ jobs:
           if [ -n "$VERSION" ]; then
             next="$VERSION"
           else
-            status=$(curl -sS -o latest.txt -w '%{http_code}' "$REN2_HOST_URL/ren2/latest.txt")
+            status=$(curl -sS -o latest.txt -w '%{http_code}' "$REN_HOST_URL/ren/latest.txt")
             case "$status" in
               200) latest=$(tr -d '[:space:]' < latest.txt) ;;
               403 | 404) latest=0.0.0 ;;
@@ -66,7 +66,7 @@ jobs:
             esac
           fi
           [[ "$next" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Use a stable version: X.Y.Z' >&2; exit 1; }
-          echo "Releasing ren2 v$next"
+          echo "Releasing ren v$next"
           echo "version=$next" >>"$GITHUB_OUTPUT"
 
   build:
@@ -89,7 +89,7 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.version.outputs.version }}
       RELEASE_TARGET: ${{ matrix.target }}
-      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://useren.ai' }}
+      REN_HOST_URL: ${{ vars.REN_HOST_URL || 'https://useren.ai' }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -107,16 +107,16 @@ jobs:
       - name: Build
         working-directory: packages/cli
         env:
-          REN2_API_URL: ${{ vars.REN_API_URL }}
+          REN_API_URL: ${{ vars.REN_API_URL }}
         run: |
-          test -n "$REN2_API_URL" || { echo 'Set REN_API_URL in the v2-prod environment' >&2; exit 1; }
+          test -n "$REN_API_URL" || { echo 'Set REN_API_URL in the v2-prod environment' >&2; exit 1; }
           bun run build --version "$RELEASE_VERSION" --target "$RELEASE_TARGET"
-          test "$("dist/releases/$RELEASE_VERSION/ren2-$RELEASE_TARGET" --version)" = "ren2 v$RELEASE_VERSION"
+          test "$("dist/releases/$RELEASE_VERSION/ren-$RELEASE_TARGET" --version)" = "ren v$RELEASE_VERSION"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ren2-${{ matrix.target }}
+          name: ren-${{ matrix.target }}
           path: packages/cli/dist/
           if-no-files-found: error
           retention-days: 7
@@ -134,12 +134,12 @@ jobs:
       MINIMUM: ${{ inputs.minimum }}
       DEPLOY: ${{ vars.DEPLOY_NAME }}
       DISTRIBUTION: ${{ vars.APP_DISTRIBUTION_ID }}
-      REN2_HOST_URL: ${{ vars.REN2_HOST_URL || 'https://useren.ai' }}
+      REN_HOST_URL: ${{ vars.REN_HOST_URL || 'https://useren.ai' }}
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: ren2-*
+          pattern: ren-*
           path: dist
           merge-multiple: true
 
@@ -155,18 +155,18 @@ jobs:
         run: |
           set -euo pipefail
           bucket="$DEPLOY-app-$(aws sts get-caller-identity --query Account --output text)"
-          prefix="ren2/releases/$RELEASE_VERSION/"
+          prefix="ren/releases/$RELEASE_VERSION/"
           count=$(aws s3api list-objects-v2 --bucket "$bucket" --prefix "$prefix" --query KeyCount --output text --no-paginate)
           test "$count" = 0 || { echo 'Release already exists' >&2; exit 1; }
           (cd "dist/releases/$RELEASE_VERSION" && sha256sum --check ./*.sha256)
           aws s3 sync "dist/releases/$RELEASE_VERSION/" "s3://$bucket/$prefix" --cache-control 'public, max-age=31536000, immutable' --only-show-errors
-          aws s3 cp dist/install.sh "s3://$bucket/ren2/install.sh" --content-type text/x-shellscript --cache-control no-cache --only-show-errors
+          aws s3 cp dist/install.sh "s3://$bucket/ren/install.sh" --content-type text/x-shellscript --cache-control no-cache --only-show-errors
           if [ -f dist/oauth-client.json ]; then
-            aws s3 cp dist/oauth-client.json "s3://$bucket/ren2/oauth-client.json" --content-type application/json --cache-control 'public, max-age=3600' --only-show-errors
+            aws s3 cp dist/oauth-client.json "s3://$bucket/ren/oauth-client.json" --content-type application/json --cache-control 'public, max-age=3600' --only-show-errors
           fi
-          printf '%s\n' "$RELEASE_VERSION" | aws s3 cp - "s3://$bucket/ren2/latest.txt" --content-type text/plain --cache-control no-cache --only-show-errors
+          printf '%s\n' "$RELEASE_VERSION" | aws s3 cp - "s3://$bucket/ren/latest.txt" --content-type text/plain --cache-control no-cache --only-show-errors
           if [ "$MINIMUM" = true ]; then
-            printf '%s\n' "$RELEASE_VERSION" | aws s3 cp - "s3://$bucket/ren2/minimum.txt" --content-type text/plain --cache-control no-cache --only-show-errors
+            printf '%s\n' "$RELEASE_VERSION" | aws s3 cp - "s3://$bucket/ren/minimum.txt" --content-type text/plain --cache-control no-cache --only-show-errors
           fi
-          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths /ren2/install.sh /ren2/latest.txt /ren2/minimum.txt /ren2/oauth-client.json --query Invalidation.Status --output text
-          printf 'Install: curl -fsSL %s/ren2/install.sh | bash\n' "$REN2_HOST_URL"
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths /ren/install.sh /ren/latest.txt /ren/minimum.txt /ren/oauth-client.json --query Invalidation.Status --output text
+          printf 'Install: curl -fsSL %s/ren/install.sh | bash\n' "$REN_HOST_URL"
