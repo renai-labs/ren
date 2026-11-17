@@ -225,12 +225,7 @@ function PromptInput(props: {
   return (
     <>
       <SuggestionList suggest={props.suggest} />
-      <Morph
-        className={cn(
-          "mx-3 border border-black/10 bg-card shadow-soft dark:border-white/15 dark:shadow-none",
-          expanded ? "rounded-3xl" : "rounded-4xl",
-        )}
-      >
+      <Morph className={cn("mx-3 bg-card shadow-soft dark:shadow-none", expanded ? "rounded-3xl" : "rounded-4xl")}>
         <UploadChips attachments={props.attachments} />
         <View className={cn("min-h-14 flex-row items-end gap-2 py-2 pr-2", expandable ? "pl-2" : "pl-3")}>
           {expanded ? null : add}
