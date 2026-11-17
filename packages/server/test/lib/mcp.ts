@@ -18,7 +18,7 @@ const clientMetadata = {
   application_type: "native",
 }
 
-type App = ReturnType<typeof makeApp>
+type App = Pick<ReturnType<typeof makeApp>, "handler">
 
 const json =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
