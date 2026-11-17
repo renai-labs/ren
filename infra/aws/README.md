@@ -102,7 +102,7 @@ The deploy workflow runs in the environment that `github_environment` names:
 | Variable | `APP_DISTRIBUTION_ID` | output `app_distribution_id`                                                                  |
 | Variable | `EGRESS_INSTANCE_ID`  | output `egress_instance_id`                                                                   |
 | Variable | `REN_API_URL`         | `https://api.<domain>`                                                                        |
-| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://v2.useren.ai`                                          |
+| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://useren.ai`                                             |
 | Variable | `E2B_TEMPLATE_NAME`   | the brain template's name                                                                     |
 | Variable | `E2B_OWNER`           | the owner tag, the same as `E2B_OWNER` of the server                                          |
 | Variable | `POSTHOG_PROJECT_KEY` | the PostHog project's `phc_` token, which is public; unset, the site and the app send nothing |

@@ -25,7 +25,7 @@ const target = Schema.decodeUnknownSync(Schema.Literals(["darwin-arm64", "darwin
   args.values.target,
 )
 const name = `ren2-${target}`
-const host = new URL(process.env.REN2_HOST_URL ?? "https://v2.useren.ai")
+const host = new URL(process.env.REN2_HOST_URL ?? "https://useren.ai")
 if (
   !["http:", "https:"].includes(host.protocol) ||
   host.pathname !== "/" ||
