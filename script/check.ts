@@ -27,7 +27,7 @@ const dependencies =
 
 const run = await Bun.$`bun turbo run --continue=dependencies-successful --output-logs=errors-only ${[
   ...(await tasks(`...[${base}]`, "typecheck")),
-  ...(mobile ? ["@ren/mobile#check:bundle", "@ren/mobile#check:generated"] : []),
+  ...(mobile ? ["@ren/mobile#check:bundle:fast", "@ren/mobile#check:generated"] : []),
   ...(dependencies ? ["@ren/mobile#check:doctor"] : []),
   "//#typecheck:root",
   "//#lint:rules",
