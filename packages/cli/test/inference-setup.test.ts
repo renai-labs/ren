@@ -19,7 +19,7 @@ const ren = Bun.serve({
       return Response.json({ models: [{ slug: "openai/gpt-6-luna" }, { slug: "anthropic/claude-opus-5-5" }] })
     const present = (key: { id: string; secret: string; createdAt: string }) => ({
       id: key.id,
-      name: "ren2 on test",
+      name: "ren on test",
       prefix: key.secret.slice(0, 12),
       status: "active",
       owner: { memberId: "mem_me", name: "Ada" },
@@ -84,13 +84,13 @@ const ren = Bun.serve({
 
 afterAll(() => ren.stop(true))
 
-const home = await mkdtemp(join(tmpdir(), "ren2-home-"))
+const home = await mkdtemp(join(tmpdir(), "ren-home-"))
 const config = join(home, ".config")
 const opencode = join(home, ".config/opencode/opencode.jsonc")
 const original = '{\n  // my own settings\n  "model": "mine/big"\n}\n'
 await Bun.write(opencode, original)
 await Bun.write(
-  join(config, "ren2/credentials.json"),
+  join(config, "ren/credentials.json"),
   JSON.stringify({
     [`http://127.0.0.1:${ren.port}`]: { accessToken: "a", refreshToken: "r", expiresAt: Date.now() + 3_600_000 },
   }),
@@ -99,7 +99,7 @@ await Bun.write(
 // oxlint-disable-next-line ren/no-comments -- A `codex` on PATH that reports a version, so setup asks the base URL for Codex's model list.
 await Bun.write(join(home, "bin/codex"), '#!/bin/sh\necho "codex-cli 0.166.0"\n', { mode: 0o755 })
 
-const ren2 = async (args: ReadonlyArray<string>) => {
+const cli = async (args: ReadonlyArray<string>) => {
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../src/index.ts", import.meta.url)), ...args], {
     env: {
       ...process.env,
@@ -120,30 +120,30 @@ const ren2 = async (args: ReadonlyArray<string>) => {
   return { code, stdout, stderr }
 }
 
-describe("ren2 inference setup", () => {
+describe("ren inference setup", () => {
   test("writes the harness file and inference.json, reuses the key on a second run, and --undo restores the file", async () => {
-    const first = await ren2(["inference", "setup", "opencode", "--yes", "--output", "json"])
+    const first = await cli(["inference", "setup", "opencode", "--yes", "--output", "json"])
     expect(first.code).toBe(0)
     const written = await Bun.file(opencode).text()
     expect(written).toContain("// my own settings")
     expect(written).toContain('"apiKey": "sk-ren-secret-1"')
     expect(first.stderr).not.toContain("sk-ren-secret-1")
-    expect(await Bun.file(join(config, "ren2/inference.json")).json()).toEqual({
+    expect(await Bun.file(join(config, "ren/inference.json")).json()).toEqual({
       harnesses: [{ harnessId: "opencode", keyId: "ifk_1", withOptional: false, time: expect.any(String) }],
     })
 
-    const second = await ren2(["inference", "setup", "opencode", "--yes", "--output", "json"])
+    const second = await cli(["inference", "setup", "opencode", "--yes", "--output", "json"])
     expect(second.code).toBe(0)
     expect(created).toEqual(["ifk_1"])
     expect(await Bun.file(opencode).text()).toBe(written)
 
-    const undone = await ren2(["inference", "setup", "--undo", "--yes", "--output", "json"])
+    const undone = await cli(["inference", "setup", "--undo", "--yes", "--output", "json"])
     expect(undone.code).toBe(0)
     expect(await Bun.file(opencode).text()).toBe(original)
   })
 
   test("writes Codex's model list from the base URL and points Ren's profile at it", async () => {
-    const result = await ren2(["inference", "setup", "codex", "--yes", "--output", "json"])
+    const result = await cli(["inference", "setup", "codex", "--yes", "--output", "json"])
     expect(result.code).toBe(0)
     expect(await Bun.file(join(home, ".codex/ren-models.json")).json()).toEqual({
       models: [{ slug: "openai/gpt-6-luna" }, { slug: "anthropic/claude-opus-5-5" }],

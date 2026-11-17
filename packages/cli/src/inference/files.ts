@@ -113,7 +113,7 @@ const writeAtomic = Effect.fnUntraced(function* (path: string, text: string, opt
   const existing = (yield* fs.exists(path)) ? (yield* fs.stat(path)).mode & 0o777 : null
   // ast-grep-ignore: no-nullish-comparison, -- a mode of 0 is a mode.
   const mode = existing === null || options.secret ? 0o600 : existing
-  const temp = join(dirname(path), `.ren2-${process.pid}-${yield* Clock.currentTimeMillis}.tmp`)
+  const temp = join(dirname(path), `.ren-${process.pid}-${yield* Clock.currentTimeMillis}.tmp`)
   yield* fs.writeFileString(temp, text, { mode })
   yield* fs.chmod(temp, mode)
   yield* fs.rename(temp, path)
@@ -128,7 +128,7 @@ const restore = Effect.fnUntraced(function* (manifest: Manifest) {
   return manifest.entries.map((entry) => entry.target)
 })
 
-// oxlint-disable-next-line ren/no-comments -- Backs up each file first, in ren2's config folder and never beside the original, then writes. A failed write restores the backup.
+// oxlint-disable-next-line ren/no-comments -- Backs up each file first, in ren's config folder and never beside the original, then writes. A failed write restores the backup.
 export const write = Effect.fnUntraced(function* (harness: string, entries: ReadonlyArray<Entry>) {
   const fs = yield* FileSystem.FileSystem
   const createdAt = new Date(yield* Clock.currentTimeMillis).toISOString()

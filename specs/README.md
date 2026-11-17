@@ -24,7 +24,7 @@ Generated clients follow the protocol `HttpApi`.
 | [app/spaces.md](app/spaces.md)                                       | Inbox usage, task-card review actions, the chat panel on `FileSystem`, search across spaces                                     |
 | [tasks.md](tasks.md)                                                 | Handoff to the next agent, drag and drop, review start as a flag, dashboard                                                     |
 | [chat-list.md](chat-list.md)                                         | The app's chat filters, webhook chats, stable pages, search at scale                                                            |
-| [cli.md](cli.md)                                                     | `ren2 api`, connection profiles, device login, chat and streaming                                                               |
+| [cli.md](cli.md)                                                     | `ren api`, connection profiles, device login, chat and streaming                                                                |
 | [infra.md](infra.md)                                                 | Apply of webhooks, environments and timezones; listings                                                                         |
 | [usage.md](usage.md)                                                 | The billing check, reconciliation, an automated usage e2e case, the PostHog and billing loops, cleanup of finished durable runs |
 | [runtime/README.md](runtime/README.md)                               | The `FeatureFlags` service and the flag list                                                                                    |

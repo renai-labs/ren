@@ -115,7 +115,7 @@ const keyFor = Effect.fnUntraced(function* (client: Connection.Client, options: 
     if (Option.isSome(read)) return { id: key.id, secret: read.value.secret, baseUrl: read.value.baseUrl, made: false }
   }
   if (!options.create) return { id: undefined, secret: HarnessFiles.placeholder, baseUrl: listed.baseUrl, made: false }
-  const created = yield* client["ren-inference"].key.create({ name: `ren2 on ${hostname()}`, expiresIn: "never" })
+  const created = yield* client["ren-inference"].key.create({ name: `ren on ${hostname()}`, expiresIn: "never" })
   return { id: created.id, secret: created.secret, baseUrl: created.baseUrl, made: true }
 })
 
@@ -208,7 +208,7 @@ const run = Effect.fnUntraced(function* (options: Options) {
       written.entries.length === 0
         ? "Nothing to change: the harness already uses Ren."
         : `Set up ${options.harnessId}.`,
-      ...(written.dir ? [`Backed up to ${written.dir}. Undo with ren2 inference setup --undo.`] : []),
+      ...(written.dir ? [`Backed up to ${written.dir}. Undo with ren inference setup --undo.`] : []),
       `Check it: ${checks[options.harnessId]}`,
     ].join("\n"),
   )
@@ -245,7 +245,7 @@ export const setup = Effect.fn("InferenceSetup.setup")(function* (input: {
 export const sync = Effect.fn("InferenceSetup.sync")(function* () {
   const output = yield* Output.Service
   const state = yield* readState
-  if (state.harnesses.length === 0) return yield* fail("ren2 has set up no harness here. Run ren2 inference setup.")
+  if (state.harnesses.length === 0) return yield* fail("ren has set up no harness here. Run ren inference setup.")
   for (const entry of state.harnesses)
     yield* run({
       harnessId: entry.harnessId,

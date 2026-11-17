@@ -57,7 +57,7 @@ test("a result or an error larger than a pipe's buffer arrives whole in each for
 })
 
 test("interrupting as soon as a command starts releases its scope without an error report", async () => {
-  const root = await mkdtemp(join(tmpdir(), "ren2-runtime-"))
+  const root = await mkdtemp(join(tmpdir(), "ren-runtime-"))
   const released = join(root, "released")
   const child = Bun.spawn([process.execPath, fileURLToPath(new URL("./lib/runtime.ts", import.meta.url)), released], {
     stdin: "ignore",

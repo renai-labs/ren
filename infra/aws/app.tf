@@ -37,8 +37,8 @@ resource "aws_cloudfront_origin_access_control" "app" {
   signing_protocol                  = "sigv4"
 }
 
-# A path under /ren2/ (CLI releases) or with a file extension is a file and goes to the bucket; the
-# app's files sit under /app/. The app's pages are at the root, so any other path under /app is an old
+# /install is the CLI installer, /ren/install.sh. A path under /ren/ (CLI releases) or with a file
+# extension is a file and goes to the bucket; the app's files sit under /app/. The app's pages are at the root, so any other path under /app is an old
 # link: it redirects to the same page without /app and sets the signed-in hint, because whoever opens it
 # wants the app. A site section gets that directory's index and /home the landing page. / gets the app
 # when the app has set the hint cookie and the landing page when it has not. Every other path is a page

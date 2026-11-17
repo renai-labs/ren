@@ -6,7 +6,7 @@
   "type": "module",
   "license": "UNLICENSED",
   "bin": {
-    "ren2": "./src/index.ts"
+    "ren": "./src/index.ts"
   },
   "exports": {
     "./*": "./src/*.ts"

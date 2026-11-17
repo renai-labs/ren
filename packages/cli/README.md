@@ -1,6 +1,6 @@
 # @renai-labs/cli
 
-The `ren2` command-line interface.
+The `ren` command-line interface.
 
 ## What belongs here
 
@@ -30,9 +30,9 @@ Help, version and local spec validation work without a connection.
 
 ## Sign in
 
-`ren2 login` opens the browser for OAuth with PKCE and a loopback callback on `127.0.0.1`. You choose the organization on the consent page; to switch organizations, run `ren2 login` again. `--no-browser` prints the URL only.
+`ren login` opens the browser for OAuth with PKCE and a loopback callback on `127.0.0.1`. You choose the organization on the consent page; to switch organizations, run `ren login` again. `--no-browser` prints the URL only.
 
-Credentials live in `$XDG_CONFIG_HOME/ren2/credentials.json` (default `~/.config/ren2`), mode `0600`, keyed by server origin, and are sent only to that server. Access tokens last an hour and refresh automatically. `ren2 logout` revokes the refresh token and removes the credential.
+Credentials live in `$XDG_CONFIG_HOME/ren/credentials.json` (default `~/.config/ren`), mode `0600`, keyed by server origin, and are sent only to that server. Access tokens last an hour and refresh automatically. `ren logout` revokes the refresh token and removes the credential.
 
 `REN_TOKEN` overrides stored credentials, for CI. Released binaries default to the production API; `REN_URL` selects another server.
 
@@ -48,23 +48,22 @@ The CLI's OAuth client ID is `Auth.cliClient.client_id` in `@ren/schema`. The se
 
 ## Install
 
-After the first release is published:
-
 ```sh
-export REN2_HOST_URL="https://useren.ai"
-curl -fsSL "${REN2_HOST_URL}/ren2/install.sh" | bash
+curl -fsSL https://useren.ai/install | bash
 ```
 
-Pass `--version <version>` to pin a release or `--no-modify-path` to leave shell config alone. The installer verifies SHA-256 and the executable's version before replacing `~/.ren2/bin/ren2`. macOS and glibc Linux are supported on arm64 and x64. Bun and Node are not required.
+`/install` serves `/ren/install.sh`. To install from another release host, set `REN_HOST_URL` and fetch `$REN_HOST_URL/ren/install.sh`.
 
-In a terminal, the installer runs `ren2 login`; `--no-init` skips it.
+Pass `--version <version>` to pin a release or `--no-modify-path` to leave shell config alone. The installer verifies SHA-256 and the executable's version before replacing `~/.ren/bin/ren`. macOS and glibc Linux are supported on arm64 and x64. Bun and Node are not required.
 
-`ren2 upgrade` installs the latest release, and `ren2 upgrade 0.2.0` a specific one. It checks the SHA-256 and the new executable's version before it replaces itself, so a failed upgrade keeps the working binary. Once a day, a terminal session prints `ren2 vX.Y.Z is available` after a command. The check never runs for JSON output, in CI or with `REN2_NO_UPDATE_CHECK=1`, and it never delays a command by more than a second.
+In a terminal, the installer runs `ren login`; `--no-init` skips it.
+
+`ren upgrade` installs the latest release, and `ren upgrade 0.2.0` a specific one. It checks the SHA-256 and the new executable's version before it replaces itself, so a failed upgrade keeps the working binary. Once a day, a terminal session prints `ren vX.Y.Z is available` after a command. The check never runs for JSON output, in CI or with `REN_NO_UPDATE_CHECK=1`, and it never delays a command by more than a second.
 
 Shell completions:
 
 ```sh
-ren2 --completions zsh > "${fpath[1]}/_ren2"   # bash, zsh, fish or sh
+ren --completions zsh > "${fpath[1]}/_ren"   # bash, zsh, fish or sh
 ```
 
 ## Build and release
@@ -75,19 +74,19 @@ bun run build --version 0.1.0 --target linux-x64
 bun run test
 ```
 
-Builds use the current platform by default. `--outdir` defaults to `dist`. `REN2_HOST_URL` sets the default release host of the generated installer and of `ren2 upgrade`, and overrides it at installation or upgrade time. `REN2_API_URL` sets the binary's default API (default `http://localhost:4000`); the release workflow uses the environment's `REN_API_URL`.
+Builds use the current platform by default. `--outdir` defaults to `dist`. `REN_HOST_URL` sets the default release host of the generated installer and of `ren upgrade`, and overrides it at installation or upgrade time. `REN_API_URL` sets the binary's default API (default `http://localhost:4000`); the release workflow takes it from the environment's `REN_API_URL` variable.
 
 ```text
 dist/
   install.sh
   releases/<version>/
-    ren2-<platform>-<arch>
-    ren2-<platform>-<arch>.sha256
+    ren-<platform>-<arch>
+    ren-<platform>-<arch>.sha256
 ```
 
-Run the `cli release` GitHub workflow with a stable version (`X.Y.Z`). It builds and tests all four targets natively, uploads immutable artifacts under `/ren2/releases/`, then publishes the installer and `latest.txt`. Existing release versions cannot be overwritten. It uses the `v2-prod` environment's AWS deployment role, app bucket and CloudFront distribution. `REN2_HOST_URL` is an environment variable there, defaulting to `https://useren.ai`.
+Run the `cli release` GitHub workflow with a stable version (`X.Y.Z`). It builds and tests all four targets natively, uploads immutable artifacts under `/ren/releases/`, then publishes the installer and `latest.txt`. Existing release versions cannot be overwritten. It uses the `v2-prod` environment's AWS deployment role, app bucket and CloudFront distribution. `REN_HOST_URL` is an environment variable there, defaulting to `https://useren.ai`.
 
-The npm package is private until its publication name and install format are decided.
+The npm package is private. ren-v1 published its CLI as `@renai-labs/cli` 0.x on npm; this CLI replaces it and ships only through the installer.
 
 ## Architecture
 
@@ -103,18 +102,18 @@ The npm package is private until its publication name and install format are dec
 
 ## Resource commands
 
-Every SDK operation is a command, named the way large platform CLIs name theirs: `ren2 <noun> [<sub-noun>] <verb> [<resource>] [flags]`.
+Every SDK operation is a command, named the way large platform CLIs name theirs: `ren <noun> [<sub-noun>] <verb> [<resource>] [flags]`.
 
 ```sh
-ren2 space list
-ren2 space create --name Docs --slug docs
-ren2 space update docs --description "Writes the docs"
-ren2 space member add docs --email ada@example.com
-ren2 task create --space docs --title "Fix the build" --labels ci,urgent
-ren2 task comment add <task> --body "On it"
-ren2 schedule run nightly
+ren space list
+ren space create --name Docs --slug docs
+ren space update docs --description "Writes the docs"
+ren space member add docs --email ada@example.com
+ren task create --space docs --title "Fix the build" --labels ci,urgent
+ren task comment add <task> --body "On it"
+ren schedule run nightly
 ```
 
-A slug works wherever an ID does. Plural nouns are accepted (`ren2 spaces list`). Nested fields come through `--input` (JSON, `@file` or `@-`), and flags override it.
+A slug works wherever an ID does. Plural nouns are accepted (`ren spaces list`). Nested fields come through `--input` (JSON, `@file` or `@-`), and flags override it.
 
 The names come from the table in `script/generate.ts`. After a change to `@ren/protocol` or the table, run `bun run generate` from the repo root. Generation fails while an SDK operation is neither in the table nor listed with the command that covers it, so a new endpoint is never silently missing.

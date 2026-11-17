@@ -2,7 +2,7 @@
 
 Terraform for one Ren deployment on AWS. The deploy workflow (`.github/workflows/deploy.yml`) releases code into it.
 
-The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren2/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
+The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
 
 The site and the app share the domain's root. The bucket holds the site's files at its root and the app's under `/app/`; the CloudFront function in `app-function.js` picks one for each page, and `packages/site/test/app-function.test.ts` tests it. Site sections (`/docs`, `/pricing` and the rest of the list in `app-function.js`) and `/home` get the site. `/` gets the app when the browser has the `ren_signed_in` cookie, which the app sets while someone is signed in, and the landing page otherwise. Any other page gets the app. An old link under `/app` redirects to the same page without `/app`. Set the server's `APP_URL` to the domain's root, with no `/app`.
 
@@ -108,7 +108,7 @@ The deploy workflow runs in the environment that `github_environment` names:
 | Variable | `APP_DISTRIBUTION_ID` | output `app_distribution_id`                                                                  |
 | Variable | `EGRESS_INSTANCE_ID`  | output `egress_instance_id`                                                                   |
 | Variable | `REN_API_URL`         | `https://api.<domain>`                                                                        |
-| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://useren.ai`                                             |
+| Variable | `REN_HOST_URL`        | CLI release origin, currently `https://useren.ai`                                             |
 | Variable | `E2B_TEMPLATE_NAME`   | the brain template's name                                                                     |
 | Variable | `E2B_OWNER`           | the owner tag, the same as `E2B_OWNER` of the server                                          |
 | Variable | `POSTHOG_PROJECT_KEY` | the PostHog project's `phc_` token, which is public; unset, the site and the app send nothing |

@@ -31,7 +31,7 @@ export const layer = Layer.effect(
     const read = Effect.gen(function* () {
       if (!(yield* fs.exists(file))) return {}
       return yield* Schema.decodeEffect(Stored)(yield* fs.readFileString(file)).pipe(
-        Effect.mapError(() => new Error(`Invalid credentials in ${file}. Run ren2 login.`)),
+        Effect.mapError(() => new Error(`Invalid credentials in ${file}. Run ren login.`)),
       )
     })
     const write = Effect.fn("Credentials.write")(function* (stored: typeof Stored.Type) {

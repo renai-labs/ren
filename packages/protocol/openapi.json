@@ -23477,7 +23477,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "One edit of a harness config file. The secret is `${REN_INFERENCE_KEY}`; `ren2` puts the key there."
+        "description": "One edit of a harness config file. The secret is `${REN_INFERENCE_KEY}`; `ren` puts the key there."
       },
       "RenInference.HarnessPlan": {
         "type": "object",

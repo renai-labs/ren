@@ -26,7 +26,11 @@ function handler(event) {
       cookies: cookies,
     }
   }
-  if (uri.startsWith("/ren2/") || file) {
+  if (uri === "/install") {
+    request.uri = "/ren/install.sh"
+    return request
+  }
+  if (uri.startsWith("/ren/") || file) {
     return request
   }
   if (uri === "/") {
