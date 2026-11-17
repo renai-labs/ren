@@ -52,11 +52,21 @@
       "environment": "production",
       "channel": "production",
       "env": {
-        "APP_VARIANT": "production"
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_REN_URL": "https://api.useren.ai",
+        "EXPO_PUBLIC_REN_APP_URL": "https://useren.ai/app"
+      },
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

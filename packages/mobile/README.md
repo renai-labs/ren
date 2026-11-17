@@ -101,6 +101,17 @@ The first build after `expo-updates` was added (and the first after any native c
 - For the next build, install over the previous APK and confirm local data is retained.
 - Publish a JavaScript-only update to `internal`, close and open the app twice, and confirm the change appears.
 
+## Google Play
+
+The `production` profile builds an Android App Bundle on the `production` channel. EAS keeps the upload key; Google Play App Signing keeps the key that signs what users install, so a Play install cannot update over an internal APK. From `packages/mobile`:
+
+```sh
+bun run build:android:production
+bun run submit:android
+```
+
+`submit:android` uploads to the Internal testing track as a draft release; publish it from Play Console. Google accepts API uploads only after the first bundle for the app was uploaded by hand in Play Console. `eas submit` reads the Google service account key from EAS credentials (`bunx eas-cli credentials --platform android`, Google Service Account). Later JavaScript changes reach Play installs through `bun run update:production`.
+
 ### Branding
 
 The Android icons reuse `packages/site/public/ren_logo_dark.svg`. `assets/android-icon.png` is a square black launcher icon; `assets/android-foreground.png` contains the white mark on a transparent canvas with padding for Android adaptive masks. The splash uses the same mark on black.
