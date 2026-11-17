@@ -68,6 +68,7 @@ export interface Options<R, ER> {
   readonly cache?: (sessionID: Session.ID) => ChatCache.Cache
   readonly sender?: SessionMessage.Sender
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
+  readonly connection?: ChatSession.Options["connection"]
 }
 
 export const handoffLimit = 40
@@ -118,6 +119,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
             ...(handed && { handoff: handed }),
             ...(options.outbox && { outbox: options.outbox(sessionID) }),
             ...(options.cache && { cache: options.cache(sessionID) }),
+            ...(options.connection && { connection: options.connection }),
           })
           yield* opened.open(sessionID).pipe(
             Effect.andThen(opened.enrich(sessionID)),

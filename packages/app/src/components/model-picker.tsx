@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { IconChevronDown } from "@tabler/icons-react"
 import type { SessionModel as ModelSetting } from "@ren/client"
-import type { SessionModel } from "@ren/schema/session/model"
+import { ModelChoice } from "@ren/chat"
+import { SessionModel } from "@ren/schema/session/model"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,15 +20,9 @@ import { InputGroupButton } from "@ren/ui/input-group"
 import { Loading } from "@ren/ui/loading"
 import { MenuSearch } from "./menu-search.js"
 import { ProviderMark } from "./provider-mark.js"
-import { modelKey } from "../lib/format.js"
 import { cn } from "cn"
 
 type Choice = SessionModel.Choice
-
-const providerName: Record<string, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-}
 
 export const modelRef = (model: ModelSetting): SessionModel.Ref => ({
   id: model.modelId,
@@ -41,83 +36,15 @@ export const modelSetting = (model: SessionModel.Ref): ModelSetting => ({
   ...(model.variant && { variant: model.variant }),
 })
 
-export function pickModel(
-  models: ReadonlyArray<Choice>,
-  picks: ReadonlyArray<SessionModel.Ref | null | undefined>,
-): SessionModel.Ref | undefined {
-  const found = picks.find((pick) => pick && models.some((model) => modelKey(model) === modelKey(pick)))
-  if (found) return found
-  const first = models.at(0)
-  if (!first) return undefined
-  const variant = first.variants.find((each) => each.id === "medium")?.id ?? first.variants.at(0)?.id
-  return { id: first.id, providerID: first.providerID, ...(variant && { variant }) }
-}
-
 function ProviderIcon(props: { model: Pick<Choice, "providerID" | "id"> }) {
-  const vendor = props.model.id.split("/").at(0) ?? ""
-  return (
-    <ProviderMark provider={providerName[props.model.providerID] ?? providerName[vendor] ?? props.model.providerID} />
-  )
+  return <ProviderMark provider={ModelChoice.vendorOf(props.model)} />
 }
-
-const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
-
-const effortOrder = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
-
-const effortRank = (id: string) => {
-  const index = effortOrder.indexOf(id)
-  return index === -1 ? effortOrder.length : index
-}
-
-const effortLabel = (id: string) => (id === "xhigh" ? "Extra high" : capitalize(id))
-
-const effortsOf = (model: Choice) =>
-  model.variants.map((each) => each.id).toSorted((a, b) => effortRank(a) - effortRank(b))
-
-const versionOf = (name: string) => Number.parseFloat(/(\d+(?:\.\d+)?)/u.exec(name)?.[1] ?? "0")
-
-const newest = (models: ReadonlyArray<Choice>, pattern: RegExp) =>
-  models
-    .filter((model) => pattern.test(model.name))
-    .reduce<Choice | undefined>(
-      (best, model) => (!best || versionOf(model.name) > versionOf(best.name) ? model : best),
-      undefined,
-    )
-
-interface Featured {
-  readonly label: string
-  readonly hint: string
-  readonly effort: string
-  readonly model: Choice
-}
-
-const featuredOf = (models: ReadonlyArray<Choice>): ReadonlyArray<Featured> =>
-  [
-    {
-      label: "Recommended",
-      hint: "Best balance of speed and quality",
-      effort: "medium",
-      model: newest(models, /gpt.*sol/iu) ?? newest(models, /sonnet/iu),
-    },
-    {
-      label: "Smartest",
-      hint: "Most capable for hard problems",
-      effort: "xhigh",
-      model: newest(models, /opus/iu) ?? newest(models, /gpt.*astra/iu),
-    },
-    {
-      label: "Fastest",
-      hint: "Quick answers for simple work",
-      effort: "low",
-      model: newest(models, /haiku/iu) ?? newest(models, /gpt.*luna/iu),
-    },
-  ].flatMap((each) => (each.model ? [{ ...each, model: each.model }] : []))
 
 interface Picker {
   readonly models: ReadonlyArray<Choice>
   readonly current: Choice
   readonly variant: string | undefined
-  readonly featured: ReadonlyArray<Featured>
+  readonly featured: ReadonlyArray<ModelChoice.Featured>
   readonly providers: ReadonlyArray<string>
   readonly isCurrent: (model: Choice) => boolean
   readonly pick: (model: Choice, variant?: string) => void
@@ -128,23 +55,17 @@ const usePicker = (
   value: SessionModel.Ref | undefined,
   onChange: (model: SessionModel.Ref) => void,
 ): Picker | undefined => {
-  const key = value ? modelKey(value) : undefined
-  const current = models.find((model) => modelKey(model) === key)
+  const current = ModelChoice.find(models, value)
   if (!current) return undefined
   const variant = value?.variant ?? current.variants.at(0)?.id
-  const featured = featuredOf(models)
   return {
     models,
     current,
     variant,
-    featured,
+    featured: ModelChoice.featured(models),
     providers: [...new Set(models.map((model) => model.providerID))],
-    isCurrent: (model) => modelKey(model) === key,
-    pick: (model, next) => {
-      const efforts = effortsOf(model)
-      const chosen = next ?? defaultEffort(efforts, variant)
-      onChange({ id: model.id, providerID: model.providerID, ...(chosen && { variant: chosen }) })
-    },
+    isCurrent: (model) => model === current,
+    pick: (model, next) => onChange(ModelChoice.choose(model, next ?? variant)),
   }
 }
 
@@ -156,7 +77,7 @@ function TriggerLabel(props: { picker: Picker; effort?: boolean | undefined }) {
       {props.effort !== false && props.picker.variant ? (
         <>
           <span aria-hidden>·</span>
-          {effortLabel(props.picker.variant)}
+          {ModelChoice.effortLabel(props.picker.variant)}
         </>
       ) : null}
       <IconChevronDown />
@@ -168,12 +89,6 @@ const triggerClass = "ml-auto pr-1.5 font-normal text-muted-foreground"
 
 const listHeight = "h-80 overflow-y-auto overscroll-contain scrollbar-thin"
 
-function defaultEffort(efforts: ReadonlyArray<string>, variant: string | undefined) {
-  if (variant && efforts.includes(variant)) return variant
-  if (efforts.includes("medium")) return "medium"
-  return efforts[0]
-}
-
 function FeaturedModels(props: { picker: Picker; match: (model: Choice) => boolean }) {
   const featured = props.picker.featured.filter((each) => props.match(each.model))
   if (featured.length === 0) return null
@@ -183,7 +98,10 @@ function FeaturedModels(props: { picker: Picker; match: (model: Choice) => boole
         <DropdownMenuItem
           key={each.label}
           onClick={() =>
-            props.picker.pick(each.model, effortsOf(each.model).includes(each.effort) ? each.effort : undefined)
+            props.picker.pick(
+              each.model,
+              ModelChoice.efforts(each.model).includes(each.effort) ? each.effort : undefined,
+            )
           }
           className="items-center gap-2.5 py-2"
         >
@@ -213,12 +131,12 @@ function ClassicLook(props: {
   const row = (model: Choice) =>
     model.variants.length === 0 ? (
       // ast-grep-ignore: require-item-group -- rows render inside each provider's DropdownMenuGroup
-      <DropdownMenuItem key={modelKey(model)} onClick={() => picker.pick(model)}>
+      <DropdownMenuItem key={SessionModel.key(model)} onClick={() => picker.pick(model)}>
         <ProviderIcon model={model} />
         {model.name}
       </DropdownMenuItem>
     ) : (
-      <DropdownMenuSub key={modelKey(model)}>
+      <DropdownMenuSub key={SessionModel.key(model)}>
         <DropdownMenuSubTrigger>
           <ProviderIcon model={model} />
           {model.name}
@@ -228,9 +146,9 @@ function ClassicLook(props: {
             value={picker.isCurrent(model) ? (picker.variant ?? "") : ""}
             onValueChange={(value: string) => picker.pick(model, value)}
           >
-            {effortsOf(model).map((effort) => (
+            {ModelChoice.efforts(model).map((effort) => (
               <DropdownMenuRadioItem key={effort} value={effort} closeOnClick>
-                {effortLabel(effort)}
+                {ModelChoice.effortLabel(effort)}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -254,7 +172,7 @@ function ClassicLook(props: {
             if (models.length === 0) return null
             return (
               <DropdownMenuGroup key={provider}>
-                <DropdownMenuLabel>{providerName[provider] ?? provider}</DropdownMenuLabel>
+                <DropdownMenuLabel>{ModelChoice.providerName(provider)}</DropdownMenuLabel>
                 {models.map((model) => row(model))}
               </DropdownMenuGroup>
             )

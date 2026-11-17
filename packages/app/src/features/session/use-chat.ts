@@ -5,6 +5,7 @@ import {
   ChatState,
   ClientCommand,
   Composer,
+  ModelChoice,
   SessionLive,
   SessionTasks,
   SessionTitle,
@@ -23,7 +24,6 @@ import { toast } from "@ren/ui/sonner"
 import { Preference } from "../../lib/preference.js"
 import type { PromptInputBoot } from "./prompt-input.js"
 import { quoteOf } from "./use-chat-quote.js"
-import { pickModel } from "../../components/model-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useModels } from "../../lib/use-models.js"
@@ -271,7 +271,7 @@ export function useChat(
   Notify.useChatNotifications({ root, title, running, ...notificationsOf(state, root) })
   SessionPages.useLive(api, root, SessionLive.of(state, root))
 
-  const model = pickModel(modelList, [saved, info?.model])
+  const model = ModelChoice.pick(modelList, [saved, info?.model])
   const suggestions = useChatSuggestions({
     root,
     capabilities: info?.capabilities,

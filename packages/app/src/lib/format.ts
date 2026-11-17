@@ -1,4 +1,5 @@
 import { Bytes } from "@ren/util/bytes"
+import { NumberFormat } from "@ren/util/number-format"
 
 export const initials = (name: string) =>
   name
@@ -27,15 +28,8 @@ export const formText = (form: FormData, name: string) => {
 
 export const formatBytes = Bytes.format
 
-export const formatCount = (value: number) => String(Math.round(value)).replaceAll(/\B(?=(\d{3})+(?!\d))/gu, ",")
+export const formatCount = NumberFormat.count
 
-export function formatTokens(tokens: number) {
-  if (tokens < 1000) return String(tokens)
-  if (tokens < 999_500) return `${Number((tokens / 1000).toFixed(tokens < 10_000 ? 1 : 0))}k`
-  return `${Number((tokens / 1_000_000).toFixed(1))}M`
-}
+export const formatTokens = NumberFormat.tokens
 
-export function formatMicroUsd(micro: number) {
-  const dollars = micro / 1_000_000
-  return dollars < 0.01 ? "<$0.01" : `$${dollars.toFixed(2)}`
-}
+export const formatMicroUsd = NumberFormat.microUsd

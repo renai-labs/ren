@@ -1,3 +1,4 @@
+import { ContextLevel } from "@ren/chat"
 import type { ChatReact } from "@ren/chat/react"
 import { useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
@@ -7,14 +8,15 @@ import { cn } from "cn"
 import { formatCount, formatMicroUsd, formatTokens } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
 
-const amberFrom = 70
-const redFrom = 90
+const rings: Readonly<Record<ContextLevel.Level, string>> = {
+  normal: "text-muted-foreground",
+  filling: "text-chart-3",
+  full: "text-destructive",
+}
 
 const toneOf = (percent: number | undefined) => {
-  if (percent === undefined) return { ring: "text-muted-foreground", words: undefined }
-  if (percent >= redFrom) return { ring: "text-destructive", words: "Compact soon" }
-  if (percent >= amberFrom) return { ring: "text-chart-3", words: "Context is filling up" }
-  return { ring: "text-muted-foreground", words: undefined }
+  const level = ContextLevel.of(percent)
+  return { ring: rings[level], words: ContextLevel.words[level] }
 }
 
 function Ring(props: { percent: number | undefined; className: string }) {

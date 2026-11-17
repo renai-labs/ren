@@ -7,19 +7,22 @@ import {
   IconTicket,
   IconWebhook,
 } from "@tabler/icons-react"
+import { ChatFilters } from "@ren/client/react"
 
 export const inboxColumns = ["Chat", "Agent", "Started by", "From", "Last activity"]
 
-export const origins = [
-  { value: "chat", label: "Chat", icon: IconMessageCircle },
-  { value: "task", label: "Task", icon: IconSubtask },
-  { value: "schedule", label: "Schedule", icon: IconClock },
-  { value: "slack", label: "Slack", icon: IconBrandSlack },
-  { value: "linear", label: "Linear", icon: IconTicket },
-  { value: "github", label: "GitHub", icon: IconBrandGithubFilled },
-  { value: "webhook", label: "Webhook", icon: IconWebhook },
-] as const
+const originIcons = {
+  chat: IconMessageCircle,
+  task: IconSubtask,
+  schedule: IconClock,
+  slack: IconBrandSlack,
+  linear: IconTicket,
+  github: IconBrandGithubFilled,
+  webhook: IconWebhook,
+} as const
 
-type Origin = (typeof origins)[number]["value"]
-
-export const isOrigin = (value: string): value is Origin => origins.some((origin) => origin.value === value)
+export const origins = ChatFilters.origins.map((origin) => ({
+  value: origin.value,
+  label: origin.label,
+  icon: originIcons[origin.value],
+}))

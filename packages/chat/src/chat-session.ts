@@ -119,7 +119,9 @@ export interface Options {
   readonly sender?: SessionMessage.Sender
   readonly handoff?: Handoff
   readonly autoApprove?: boolean
-  readonly connection?: Partial<Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay">>
+  readonly connection?: Partial<
+    Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay" | "flushInterval">
+  >
   readonly onError?: (error: unknown) => Effect.Effect<void>
 }
 
