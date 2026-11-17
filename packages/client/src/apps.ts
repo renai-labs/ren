@@ -19,6 +19,7 @@ export type CatalogApp = {
   readonly ownerSpaceId: string | null
   readonly mcps: AppInfo["mcps"] | null
   readonly skills: AppInfo["skills"] | null
+  readonly dependsOn: ReadonlyArray<string>
   readonly listing: AppRegistryInfo["listing"] | null
 }
 
@@ -42,9 +43,17 @@ export const gaps = (profile: Profile) => [
   ...required(profile)
     .filter((item) => item.status !== "ok")
     .map((item) => item.name),
-  ...profile.links.filter((link) => link.profileId === null).map(() => "Dependency"),
   ...profile.oauthApps.filter((gate) => !gate.isConfigured).map((gate) => gate.name),
 ]
+
+export const isBundle = (app: Pick<CatalogApp, "dependsOn" | "mcps" | "skills">) =>
+  app.dependsOn.length > 0 && Object.keys(app.mcps ?? {}).length === 0 && Object.keys(app.skills ?? {}).length === 0
+
+export const waitsForUser = (status: Status | "absent") =>
+  status === "missing" || status === "expired" || status === "absent"
+
+export const listNames = (names: ReadonlyArray<string>) =>
+  names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
 
 export const hasManaged = (app: Pick<CatalogApp, "mcps">) =>
   Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed")
@@ -98,6 +107,7 @@ export const fromApp = (app: AppInfo): CatalogApp => ({
   ownerSpaceId: app.ownerSpaceId,
   mcps: app.mcps,
   skills: app.skills,
+  dependsOn: app.dependsOn ?? [],
   listing: null,
 })
 
@@ -112,6 +122,7 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
   ownerSpaceId: null,
   mcps: null,
   skills: null,
+  dependsOn: [],
   listing: app.listing,
 })
 

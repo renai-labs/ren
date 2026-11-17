@@ -3,21 +3,13 @@ import { ClientCommand, Composer, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { AsyncResult } from "effect/reactivity"
-import { fromApp, fromRegistry, hasManaged, isBundle, mentionColor, type Status } from "../../lib/apps.js"
-
-import { pageSize, pickerPageSize } from "../../lib/pagination.js"
+import { MentionSources } from "@ren/client/react"
+import { isBundle, mentionColor, type Status } from "../../lib/apps.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
 import { RouterContext } from "../../lib/router-context.js"
 import { useSpaceApps } from "./use-space-apps.js"
-import { Debounce } from "@ren/client/react"
 
 const noApp = { dependsOn: [], mcps: null, skills: null }
-
-const groupSize = 5
-const fileSearchDelay = 250
-const unrooted = Session.ID.create()
-type Items = ReadonlyArray<Mentions.Item>
-const filePill = /(?<=^|\s)@ {2}([^\s@]*[./][^\s@]*)/g
 
 interface SuggestionItem {
   readonly value: string

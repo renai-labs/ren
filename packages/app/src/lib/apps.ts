@@ -8,54 +8,17 @@ type CredentialOwner = CredentialInfo["owner"]
 export type Status = Apps.Status
 export type CatalogApp = Apps.CatalogApp
 
-export const gaps = (profile: AppProfile) => [
-  ...required(profile)
-    .filter((item) => item.status !== "ok")
-    .map((item) => item.name),
-  ...profile.oauthApps.filter((gate) => !gate.isConfigured).map((gate) => gate.name),
-]
-
-export type Status = "expired" | "connected" | "credits" | "missing"
-
-export const statusLabel: Record<Status, string> = {
-  expired: "Needs sign-in",
-  connected: "Connected",
-  credits: "Ren credits",
-  missing: "Not connected",
-}
-
-export const statusAction: Record<Status, string | undefined> = {
-  expired: "Reconnect",
-  connected: undefined,
-  credits: "Connect my own",
-  missing: "Connect",
-}
-
-export const isBundle = (app: Pick<CatalogApp, "dependsOn" | "mcps" | "skills">) =>
-  app.dependsOn.length > 0 && Object.keys(app.mcps ?? {}).length === 0 && Object.keys(app.skills ?? {}).length === 0
-
-export const waitsForUser = (status: Status | "absent") =>
-  status === "missing" || status === "expired" || status === "absent"
-
-export const listNames = (names: ReadonlyArray<string>) =>
-  names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
-
-export const hasManaged = (app: Pick<CatalogApp, "mcps">) =>
-  Object.values(app.mcps ?? {}).some((mcp) => mcp.transport.type === "managed")
-
-export const statusOf = (app: Pick<CatalogApp, "mcps">, profiles: ReadonlyArray<AppProfile>): Status => {
-  if (profiles.some((profile) => profile.items.some((item) => item.status === "reconnect"))) return "expired"
-  if (profiles.some((profile) => gaps(profile).length === 0)) return "connected"
-  const signedIn = new Set(
-    profiles.flatMap((profile) =>
-      profile.items.flatMap((item) => ("mcp" in item.item && item.status === "ok" ? [item.item.mcp] : [])),
-    ),
-  )
-  const managed = Object.values(app.mcps ?? {}).flatMap((mcp) =>
-    mcp.transport.type === "managed" ? [mcp.transport] : [],
-  )
-  return managed.some((transport) => !transport.replaces || !signedIn.has(transport.replaces)) ? "credits" : "missing"
-}
+export const statusLabel = Apps.statusLabel
+export const statusAction = Apps.statusAction
+export const gaps = Apps.gaps
+export const hasManaged = Apps.hasManaged
+export const isBundle = Apps.isBundle
+export const waitsForUser = Apps.waitsForUser
+export const listNames = Apps.listNames
+export const statusOf = Apps.statusOf
+export const signsIn = Apps.signsIn
+export const fromApp = Apps.fromApp
+export const fromRegistry = Apps.fromRegistry
 
 const countGaps = (profiles: ReadonlyArray<AppProfile>) =>
   profiles.reduce((total, profile) => total + gaps(profile).length, 0)
@@ -116,53 +79,5 @@ export const usedIn = (profiles: ReadonlyArray<AppProfile>) => {
   )
   return names.size ? [...names].join(", ") : "Not in any space"
 }
-
-export type CatalogApp = {
-  readonly id: string
-  readonly slug: string
-  readonly name: string
-  readonly description: string
-  readonly icon: string | null
-  readonly brandColor: string | null
-  readonly source: "registry" | "custom"
-  readonly ownerSpaceId: string | null
-  readonly mcps: AppInfo["mcps"] | null
-  readonly skills: AppInfo["skills"] | null
-  readonly dependsOn: ReadonlyArray<string>
-  readonly listing: AppRegistryInfo["listing"] | null
-}
-
-const brandColorOf = (app: object) =>
-  "brandColor" in app && typeof app.brandColor === "string" ? app.brandColor : null
-
-export const fromApp = (app: AppInfo): CatalogApp => ({
-  brandColor: brandColorOf(app),
-  id: app.id,
-  slug: app.slug,
-  name: app.name,
-  description: app.description,
-  icon: app.icon,
-  source: app.organizationId === null ? "registry" : "custom",
-  ownerSpaceId: app.ownerSpaceId,
-  mcps: app.mcps,
-  skills: app.skills,
-  dependsOn: app.dependsOn ?? [],
-  listing: null,
-})
-
-export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
-  brandColor: brandColorOf(app),
-  id: app.id,
-  slug: app.slug,
-  name: app.name,
-  description: app.description,
-  icon: app.icon,
-  source: "registry",
-  ownerSpaceId: null,
-  mcps: null,
-  skills: null,
-  dependsOn: [],
-  listing: app.listing,
-})
 
 export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"
