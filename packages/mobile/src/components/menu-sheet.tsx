@@ -26,7 +26,7 @@ function useMenuSheet() {
 }
 
 function GroupStart(props: { readonly group: string | undefined; readonly previous: MenuItem | undefined }) {
-  if (props.previous !== undefined && props.group === props.previous.group) return null
+  if (props.previous && props.group === props.previous.group) return null
   return (
     <>
       {props.previous ? <View className="my-1 h-px bg-border" /> : null}
@@ -44,13 +44,13 @@ function MenuRow(props: {
   readonly onPress: () => void
 }) {
   const item = props.item
-  const muted = item.disabled === true || (props.pending !== undefined && props.pending !== item.label)
+  const muted = item.disabled === true || (Boolean(props.pending) && props.pending !== item.label)
   return (
     <View>
       <GroupStart group={item.group} previous={props.previous} />
       <Pressable
         role="menuitem"
-        disabled={item.disabled === true || props.pending !== undefined}
+        disabled={item.disabled === true || Boolean(props.pending)}
         className={cn("min-h-12 flex-row items-center gap-3 px-5 active:bg-accent", muted && "opacity-50")}
         onPress={props.onPress}
       >

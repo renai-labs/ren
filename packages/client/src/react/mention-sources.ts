@@ -22,10 +22,12 @@ export function useApps(
   input: { readonly query: string | undefined; readonly mentions: ReadonlyArray<App> },
 ) {
   const query = input.query
+  // ast-grep-ignore: no-nullish-comparison, -- an empty query still searches the registry
+  const searchable = query !== undefined
   const own = useQuery(api.app.list.queryOptions({ page: 1, pageSize: ownSize }))
   const found = useQuery({
     ...api["app-registry"].list.queryOptions({ page: 1, pageSize: searchSize, ...(query && { query }) }),
-    enabled: query !== undefined,
+    enabled: searchable,
     placeholderData: keepPreviousData,
   })
   const ownApps = (own.data?.items ?? []).map(Apps.fromApp)
@@ -34,16 +36,14 @@ export function useApps(
     ...(found.data?.items ?? []).filter((app) => app.managed).map((app) => app.id),
   ])
   const byId = new Map<string, App>(
-    [
-      ...ownApps,
-      ...input.mentions,
-      ...(query === undefined ? [] : (found.data?.items ?? []).map(Apps.fromRegistry)),
-    ].map((app) => [app.id, app]),
+    [...ownApps, ...input.mentions, ...(searchable ? (found.data?.items ?? []).map(Apps.fromRegistry) : [])].map(
+      (app) => [app.id, app],
+    ),
   )
   return {
     byId,
     apps: [...byId.values()],
-    searching: query !== undefined && found.isFetching,
+    searching: searchable && found.isFetching,
     managed: (appId: string) => managed.has(appId),
     mentionOf: (appId: string): App | undefined => {
       const app = byId.get(appId)
@@ -64,7 +64,7 @@ export function useApps(
 export function useRepositories(api: ReturnType<typeof RenQuery.make>, spaceId: string | undefined) {
   const settings = useQuery({
     ...api["space-settings"].get.queryOptions({ idOrSlug: spaceId ?? "" }),
-    enabled: spaceId !== undefined,
+    enabled: Boolean(spaceId),
   })
   return settings.data?.settings.references ?? []
 }

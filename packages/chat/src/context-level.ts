@@ -3,7 +3,7 @@ export * as ContextLevel from "./context-level.js"
 export type Level = "normal" | "filling" | "full"
 
 export function of(percent: number | undefined): Level {
-  if (percent === undefined) return "normal"
+  if (!percent) return "normal"
   if (percent >= 90) return "full"
   if (percent >= 70) return "filling"
   return "normal"

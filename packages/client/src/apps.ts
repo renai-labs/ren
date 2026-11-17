@@ -94,7 +94,7 @@ export const fromApp = (app: AppInfo): CatalogApp => ({
   name: app.name,
   description: app.description,
   icon: app.icon,
-  source: app.organizationId === null ? "registry" : "custom",
+  source: app.organizationId ? "custom" : "registry",
   ownerSpaceId: app.ownerSpaceId,
   mcps: app.mcps,
   skills: app.skills,
@@ -144,14 +144,14 @@ export const connectPlan = (input: {
   const expired = open?.items.some((item) => item.status === "reconnect") === true
   return {
     open,
-    reuse: expired
-      ? undefined
-      : input.accounts.find(
-          (profile) =>
-            !reaches(profile, input.target, input.userId) &&
-            gaps(profile).length === 0 &&
-            usable(profile, input.target, input.userId),
-        ),
+    ...(!expired && {
+      reuse: input.accounts.find(
+        (profile) =>
+          !reaches(profile, input.target, input.userId) &&
+          gaps(profile).length === 0 &&
+          usable(profile, input.target, input.userId),
+      ),
+    }),
     managed: here.length === 0 && hasManaged(input.app),
   }
 }

@@ -1,8 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
+import { AppRegistryPages } from "@ren/client/react"
 import { Schema } from "effect"
 import { AppCategories } from "../../../../features/apps/app-categories.js"
 import { AppsPage } from "../../../../features/apps/apps-page.js"
-import { AppRegistryPages } from "../../../../lib/app-registry.js"
+import { AppRegistryLists } from "../../../../lib/app-registry.js"
 import { Loader } from "../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/apps/")({
@@ -25,9 +26,9 @@ export const Route = createFileRoute("/_authed/_shell/apps/")({
     if (category)
       Loader.start(context.queryClient.infiniteQuery(AppRegistryPages.options(context.client, "", category)))
     if (options.deps.tab === "managed" && !category)
-      Loader.start(context.queryClient.query(AppRegistryPages.all(context.api)))
+      Loader.start(context.queryClient.query(AppRegistryLists.all(context.api)))
     if (featured.length > 0 && (category || !options.deps.tab))
-      Loader.start(context.queryClient.query(AppRegistryPages.bySlugs(context.api, featured)))
+      Loader.start(context.queryClient.query(AppRegistryLists.bySlugs(context.api, featured)))
   },
   component: AppsPage,
 })

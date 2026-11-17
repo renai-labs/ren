@@ -200,7 +200,7 @@ function PromptInput(props: {
   const [holding, setHolding] = useState(false)
   const [adding, setAdding] = useState(false)
   const expandable = Boolean(props.attachments ?? props.model)
-  const add = props.attachments && (
+  const add = props.attachments ? (
     <AddMenu
       attachments={props.attachments}
       space={props.space}
@@ -211,7 +211,7 @@ function PromptInput(props: {
         setHolding(next)
       }}
     />
-  )
+  ) : null
   const expanded = expandable && (focused || holding)
   const send = (
     <SendButton

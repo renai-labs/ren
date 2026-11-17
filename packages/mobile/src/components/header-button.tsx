@@ -22,10 +22,10 @@ function HeaderButton(props: {
       onPress={props.onPress}
     >
       {props.children}
-      {props.strokeWidth === undefined ? (
-        <Icon as={props.icon} className="size-5.5" />
-      ) : (
+      {props.strokeWidth ? (
         <Icon as={props.icon} className="size-6" strokeWidth={props.strokeWidth} />
+      ) : (
+        <Icon as={props.icon} className="size-5.5" />
       )}
       {props.dot === true ? <View className="absolute top-1.5 right-1.5 size-2 rounded-full bg-ring" /> : null}
     </Pressable>

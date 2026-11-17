@@ -38,7 +38,7 @@ function PastedRow(props: {
   return (
     <Pressable
       role="button"
-      disabled={problem !== undefined}
+      disabled={Boolean(problem)}
       className={cn("min-h-12 flex-row items-center gap-3 px-5 active:bg-accent", problem && "opacity-60")}
       onPress={props.onAdd}
     >

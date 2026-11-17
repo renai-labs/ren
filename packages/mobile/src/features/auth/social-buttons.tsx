@@ -24,7 +24,7 @@ export function SocialButtons(props: { readonly onError: (message: string) => vo
       <Button
         key={provider}
         variant="secondary"
-        disabled={pending !== null}
+        disabled={Boolean(pending)}
         onPress={() => {
           props.onError("")
           setPending(provider)

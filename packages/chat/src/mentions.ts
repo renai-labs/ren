@@ -152,7 +152,7 @@ const filePill = /(?<=^|\s)@ {2}([^\s@]*[./][^\s@]*)/g
 export const scan = (input: string, items: ReadonlyArray<Item>) =>
   tokens(input, [
     ...items,
-    ...Array.from(input.matchAll(filePill), (match) => fromFile({ path: match[1] ?? "", type: "file" })),
+    ...Array.from(input.matchAll(filePill), (match) => fromFile({ path: match.at(1) ?? "", type: "file" })),
   ])
 
 export const insert = (input: string, item: Item, start: number, cursor: number) => {
