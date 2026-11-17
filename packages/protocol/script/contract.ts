@@ -16,6 +16,7 @@ const exceptions = new Map([
     "Reads a remote MCP server live, before any app declares it: not a stored record, which no primitive operation addresses.",
   ],
   ["health", "Server status for clients and load balancers."],
+  ["feedback", "Sends a person’s or an agent’s feedback to the Ren team, and stores no record."],
   ["me", "The signed-in user and their active organization."],
   [
     "memory",

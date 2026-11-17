@@ -14208,3 +14208,7 @@ export type InsightsQueryInput = {
 }
 
 export type InsightsQueryOutput = InsightsResult
+
+export type FeedbackReportInput = { readonly message: { readonly message: string }["message"] }
+
+export type FeedbackReportOutput = void

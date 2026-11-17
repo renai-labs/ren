@@ -22,7 +22,10 @@ export class Service extends Context.Service<
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const http = yield* HttpClient.HttpClient
+    const http = HttpClient.mapRequest(
+      yield* HttpClient.HttpClient,
+      HttpClientRequest.setHeader("user-agent", `ren2/${Release.version}`),
+    )
     const fs = yield* FileSystem.FileSystem
     const credentials = yield* Credentials.Service
     const url = process.env.REN_URL ?? Release.apiUrl

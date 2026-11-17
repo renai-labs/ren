@@ -2214,6 +2214,13 @@ const EndpointInsightsQuery = (raw: RawClient["insights"]) => (input: InsightsQu
 
 const adaptGroupInsights = (raw: RawClient["insights"]) => ({ query: EndpointInsightsQuery(raw) })
 
+type FeedbackReportRequest = Parameters<RawClient["feedback"]["feedback.report"]>[0]
+type FeedbackReportInput = { readonly message: FeedbackReportRequest["payload"]["message"] }
+const EndpointFeedbackReport = (raw: RawClient["feedback"]) => (input: FeedbackReportInput) =>
+  raw["feedback.report"]({ payload: { message: input["message"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupFeedback = (raw: RawClient["feedback"]) => ({ report: EndpointFeedbackReport(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -2265,6 +2272,7 @@ const adaptClient = (raw: RawClient) => ({
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
   infra: adaptGroupInfra(raw["infra"]),
   insights: adaptGroupInsights(raw["insights"]),
+  feedback: adaptGroupFeedback(raw["feedback"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

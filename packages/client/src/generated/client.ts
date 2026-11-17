@@ -350,6 +350,8 @@ import type {
   InfraApplyOutput,
   InsightsQueryInput,
   InsightsQueryOutput,
+  FeedbackReportInput,
+  FeedbackReportOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -2940,6 +2942,20 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    feedback: {
+      report: (input: FeedbackReportInput, requestOptions?: RequestOptions) =>
+        request<FeedbackReportOutput>(
+          {
+            method: "POST",
+            path: `/feedback`,
+            body: { message: input["message"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 503],
+            empty: true,
           },
           requestOptions,
         ),

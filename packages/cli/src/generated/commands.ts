@@ -1060,6 +1060,13 @@ export const BillingCancel = {}
 
 export const BillingPortal = {}
 
+export const FeedbackReport = {
+  message: Argument.String("message").pipe(
+    Argument.withDescription("The feedback in plain words: what happened, what was expected, and what would help."),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
 export const commands = [
   Command.make("space").pipe(
     Command.withDescription("Manage spaces"),
@@ -2229,5 +2236,11 @@ export const commands = [
         Command.withHandler(() => Effect.flatMap(Effect.promise(operations), (module) => module.BillingPortal())),
       ),
     ]),
+  ),
+  Command.make("feedback", FeedbackReport).pipe(
+    Command.withDescription("Send feedback to the Ren team"),
+    Command.withHandler((input) =>
+      Effect.flatMap(Effect.promise(operations), (module) => module.FeedbackReport(input)),
+    ),
   ),
 ] as const

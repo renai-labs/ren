@@ -15,7 +15,10 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/test/ApiFixture") {}
 
-export const layerWith = (options: { readonly observability?: Layer.Layer<never> }) =>
+export const layerWith = (options: {
+  readonly observability?: Layer.Layer<never>
+  readonly config?: Readonly<Record<string, string>>
+}) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {

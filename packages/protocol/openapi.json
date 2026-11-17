@@ -15215,6 +15215,75 @@
         "description": "Return what a space, or the whole organization, spent and finished in a range, as one row for the whole range or one row for each bucket, space, member, agent, model or provider. 403: the organization’s usage, for a member who is not an admin or owner.",
         "summary": "Query insights"
       }
+    },
+    "/feedback": {
+      "post": {
+        "tags": ["feedback"],
+        "operationId": "feedback.report",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Send feedback about Ren to the Ren team: a bug, something confusing, a missing feature or something that works well. Send it when the person asks you to, or when Ren itself gets in the way of their task and the team should know. The team sees who sent it, from which organization, and, from a chat, the space, agent and chat. Nobody replies here.",
+        "summary": "Send feedback to the Ren team",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": ["message"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -30085,6 +30154,9 @@
     },
     {
       "name": "insights"
+    },
+    {
+      "name": "feedback"
     }
   ]
 }

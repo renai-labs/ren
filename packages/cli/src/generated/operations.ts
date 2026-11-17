@@ -2248,3 +2248,10 @@ export const BillingPortal = () =>
   Operation.run(ClientApi.groups["billing"].endpoints["billing.portal"], { labels: {} }, (client) =>
     client["billing"]["portal"](),
   )
+
+export const FeedbackReport = (input: Command.Command.Config.Infer<typeof Commands.FeedbackReport>) =>
+  Operation.run(
+    ClientApi.groups["feedback"].endpoints["feedback.report"],
+    { payload: { message: input["message"] }, input: input["input"], labels: { message: "<message>" } },
+    (client, request) => client["feedback"]["report"]({ ...request.payload }),
+  )
