@@ -103,7 +103,6 @@ import {
   PlusIcon,
   PowerIcon,
   PresentationChartLineIcon,
-  PuzzlePieceIcon,
   QuestionMarkCircleIcon,
   QueueListIcon,
   RectangleStackIcon,
@@ -211,7 +210,7 @@ export const IconAlertCircle = wrap(ExclamationCircleIcon)
 export const IconAlertOctagon = wrap(ExclamationCircleIcon)
 export const IconAlertTriangle = wrap(ExclamationTriangleIcon)
 export const IconAntennaBars5 = wrap(SignalIcon)
-export const IconApps = wrap(PuzzlePieceIcon)
+export const IconApps = wrap(Squares2X2Icon)
 export const IconArchive = wrap(ArchiveBoxIcon)
 export const IconArrowBackUp = wrap(ArrowUturnLeftIcon)
 export const IconArrowDown = wrap(ArrowDownIcon)

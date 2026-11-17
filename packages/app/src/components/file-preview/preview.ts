@@ -9,19 +9,21 @@ export type PreviewProps = {
   onError: () => void
 }
 
-export type Kind = "pdf" | "docx" | "pptx" | "xlsx"
+export type Kind = "pdf" | "docx" | "pptx" | "xlsx" | "csv"
 
 const byMime: Readonly<Record<string, Kind>> = {
   "application/pdf": "pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "text/csv": "csv",
+  "text/tab-separated-values": "csv",
 }
 
-const office = ["docx", "pptx", "xlsx"] as const
+const byExtension: Readonly<Record<string, Kind>> = { docx: "docx", pptx: "pptx", xlsx: "xlsx", csv: "csv", tsv: "csv" }
 
 export const kindOf = (file: { readonly name: string; readonly mime: string }) =>
-  byMime[file.mime] ?? office.find((extension) => file.name.toLowerCase().endsWith(`.${extension}`))
+  byMime[file.mime] ?? byExtension[file.name.toLowerCase().split(".").at(-1) ?? ""]
 
 export const maxFitWidth = 880
 export const maxPreviewBytes = 50 * 1024 * 1024

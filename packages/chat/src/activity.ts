@@ -7,7 +7,7 @@ import { ToolState } from "./tool-state.js"
 
 export interface Line {
   readonly text: string
-  readonly kind: ToolDisplay.Kind | "thinking" | "writing"
+  readonly kind: ToolDisplay.Kind | "thinking"
   readonly app?: string
 }
 
@@ -247,27 +247,19 @@ export const of = (tool: SessionMessage.Tool): Line => {
 
 const thinking: Line = { text: "Thinking", kind: "thinking" }
 
-// oxlint-disable-next-line ren/no-comments -- The one line a running turn shows: its newest call that still runs, once the model has written its line or the call has started; otherwise text that streams is writing, and anything else is the model deciding its next step.
 const unwritten = (tool: SessionMessage.Tool) => tool.state.status === "streaming" && !activity(tool)
 
-const shown = (content: SessionMessage.Content): content is SessionMessage.Tool =>
+// oxlint-disable-next-line ren/no-comments -- A call Activity lists: one the person can see, once the model has written its line or the call has started.
+export const listed = (content: SessionMessage.Content): content is SessionMessage.Tool =>
   content.type === "tool" && !ToolDisplay.hidden(content) && !unwritten(content)
 
-// oxlint-disable-next-line ren/no-comments -- The newest call of a turn whose line can show, ended or not: a call that starts and ends between two updates still gets its moment on screen.
-export const last = (turn: ReadonlyArray<SessionMessage.Assistant>) => {
-  const call = turn.flatMap((message) => message.content).findLast(shown)
-  return call ? { id: call.id, line: of(call) } : undefined
-}
-
-export const current = (turn: ReadonlyArray<SessionMessage.Assistant>): Line => {
-  const contents = turn.flatMap((message) => message.content)
-  const call = contents.findLast(
-    (content): content is SessionMessage.Tool =>
-      content.type === "tool" && ToolDisplay.status(content) === "running" && !ToolDisplay.hidden(content),
-  )
-  if (call) return unwritten(call) ? thinking : of(call)
-  const last = turn.at(-1)
-  return last && !last.time.completed && last.content.at(-1)?.type === "text"
-    ? { text: "Writing", kind: "writing" }
-    : thinking
+// oxlint-disable-next-line ren/no-comments -- The one line a running turn shows, in step with Activity: the newest step it lists. A call reads as its line until the next step; thinking reads as thinking, and so does a turn with no step yet. Writing the answer is not a step: an answer with nothing done before it has no line.
+export const current = (turn: ReadonlyArray<SessionMessage.Assistant>): Line | undefined => {
+  const newest = turn
+    .flatMap((message) => message.content)
+    .findLast((content) => content.type === "reasoning" || listed(content))
+  if (newest?.type === "tool") return of(newest)
+  if (newest) return thinking
+  const latest = turn.at(-1)
+  return latest && !latest.time.completed && latest.content.at(-1)?.type === "text" ? undefined : thinking
 }

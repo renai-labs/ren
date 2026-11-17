@@ -123,22 +123,21 @@ describe("current activity", () => {
     )
   })
 
-  test("the last call of a turn is known by its id even after it ended, but not while its line is unwritten", () => {
-    const first = done("shell", { command: "whoami", activity: "Checking current user" })
-    expect(Activity.last([turn([first])])).toEqual({
-      id: "tool_shell_done",
-      line: { text: "Checking current user", kind: "command" },
-    })
-    expect(Activity.last([turn([first, streaming("shell", '{"command":"da')])])?.id).toBe("tool_shell_done")
-    expect(Activity.last([turn([{ type: "text", text: "Hi" }])])).toBeUndefined()
+  test("the line is the newest step Activity lists: a call stays until the next step, and thinking after it is thinking", () => {
+    const read = done("read", { filePath: "notes.md", activity: "Reading the notes" })
+    const thought: SessionMessage.Content = { type: "reasoning", text: "**Checking**" }
+    expect(Activity.current([])).toEqual({ text: "Thinking", kind: "thinking" })
+    expect(Activity.current([turn([read])])).toEqual(Activity.of(read))
+    expect(Activity.current([turn([read, thought])])).toEqual({ text: "Thinking", kind: "thinking" })
+    expect(Activity.current([turn([thought, read])])).toEqual(Activity.of(read))
   })
 
-  test("between calls the turn is thinking, and streaming text is writing", () => {
-    expect(Activity.current([])).toEqual({ text: "Thinking", kind: "thinking" })
-    expect(Activity.current([turn([done("read")])])).toEqual({ text: "Thinking", kind: "thinking" })
-    expect(Activity.current([turn([done("read"), { type: "text", text: "Here" }])])).toEqual({
-      text: "Writing",
-      kind: "writing",
-    })
+  test("writing the answer is not an activity, so the line keeps the newest step", () => {
+    const read = done("read", { filePath: "notes.md", activity: "Reading the notes" })
+    expect(Activity.current([turn([read, { type: "text", text: "Here" }])])).toEqual(Activity.of(read))
+  })
+
+  test("an answer that streams with nothing done before it has no line", () => {
+    expect(Activity.current([turn([{ type: "text", text: "Here" }])])).toBeUndefined()
   })
 })

@@ -96,7 +96,7 @@ function Ripples(props: { children: ReactNode }) {
 
 const art = {
   "404": (
-    <PageCard badge={<IconSearch className="text-chart-1" />}>
+    <PageCard badge={<IconSearch className="text-link" />}>
       <Code>404</Code>
     </PageCard>
   ),
@@ -106,7 +106,7 @@ const art = {
     </PageCard>
   ),
   "429": (
-    <PageCard stacked badge={<IconHourglassFilled className="text-chart-1" />}>
+    <PageCard stacked badge={<IconHourglassFilled className="text-link" />}>
       <Code>429</Code>
     </PageCard>
   ),

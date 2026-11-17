@@ -44,3 +44,7 @@ export const foldMessages = Preference.make("chat.fold-messages.v1", Schema.Bool
 export const homeSpace = Preference.make("chat.home-space.v1", Schema.NullOr(Schema.String), null)
 
 export const shellHistory = Preference.make("chat.shell-history.v1", Schema.Array(ComposerHistory.Entry), [])
+
+export const modelFavorites = Preference.make("chat.model-favorites.v1", Schema.Array(Schema.String), [])
+
+export const modelRecent = Preference.make("chat.model-recent.v1", Schema.Array(Schema.String), [])

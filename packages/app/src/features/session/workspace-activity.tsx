@@ -28,7 +28,6 @@ import { DiffFile } from "./diff-file.js"
 import { toolIcons } from "./tool-icons.js"
 
 type Item =
-  | { readonly kind: "text"; readonly key: string; readonly text: string }
   | {
       readonly kind: "thinking"
       readonly key: string
@@ -61,15 +60,14 @@ const thinkingOf = (message: SessionMessage.Assistant, content: SessionMessage.R
   }
 }
 
+// oxlint-disable-next-line ren/no-comments -- Activity is the work Ren did, not what it said: its replies and the text between steps stay in the chat.
 const itemsOf = (message: SessionMessage.Info): ReadonlyArray<Item> => {
   if (message.type === "shell") return [{ kind: "shell", key: message.id, message }]
   if (message.type !== "assistant") return []
   return message.content.flatMap((content, index): ReadonlyArray<Item> => {
     const key = `${message.id}:${index}`
-    if (content.type === "text") return content.text.trim() ? [{ kind: "text", key, text: content.text.trim() }] : []
     if (content.type === "reasoning") return [thinkingOf(message, content, key)]
-    if (content.type !== "tool" || ToolDisplay.hidden(content)) return []
-    return [{ kind: "tool", key, tool: content }]
+    return Activity.listed(content) ? [{ kind: "tool", key, tool: content }] : []
   })
 }
 
@@ -113,20 +111,6 @@ function StepIcon(props: { tool: SessionMessage.Tool | undefined }) {
 function Connector(props: { last: boolean }) {
   if (props.last) return null
   return <div aria-hidden className="absolute top-6 bottom-0 left-3 w-px -translate-x-1/2 bg-border" />
-}
-
-function TextStep(props: { text: string; last: boolean }) {
-  return (
-    <div className="relative pb-2">
-      <Connector last={props.last} />
-      <div className="flex gap-1.5">
-        <div aria-hidden className="grid size-6 flex-none place-items-center">
-          <div className="size-1.5 rounded-full bg-border" />
-        </div>
-        <Markdown className="min-w-0 flex-1 py-0.5 text-sm/5 text-muted-foreground">{props.text}</Markdown>
-      </div>
-    </div>
-  )
 }
 
 const thoughtTitle = (item: Extract<Item, { kind: "thinking" }>) => {
@@ -177,7 +161,9 @@ function ThinkingStep(props: { item: Extract<Item, { kind: "thinking" }>; last: 
         <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">{title}</div>
       )}
       {text && !open ? (
-        <p className="line-clamp-3 mask-b-from-40% pl-7.5 text-sm/5 text-muted-foreground/90 italic">{text}</p>
+        <Markdown className="max-h-15 overflow-hidden mask-b-from-40% pl-7.5 text-sm/5 text-muted-foreground/90 italic">
+          {text}
+        </Markdown>
       ) : null}
       {text && open ? <Markdown className="pl-7.5 text-sm/5 text-muted-foreground">{text}</Markdown> : null}
     </div>
@@ -293,7 +279,6 @@ function Steps(props: {
 }) {
   return props.items.map((item, index) => {
     const last = props.closed && index === props.items.length - 1
-    if (item.kind === "text") return <TextStep key={item.key} text={item.text} last={last} />
     if (item.kind === "thinking") return <ThinkingStep key={item.key} item={item} last={last} />
     return (
       <ToolStep
@@ -444,7 +429,7 @@ const located = (turns: ReadonlyArray<Turn>, view: View) => {
   const step = owner?.items.find((item) => item.key === view.step)
   return {
     turn: view.turn ? turns.find((each) => each.id === view.turn) : owner,
-    step: step?.kind === "text" || step?.kind === "thinking" ? undefined : step,
+    step: step?.kind === "thinking" ? undefined : step,
   }
 }
 
@@ -466,12 +451,13 @@ function Timeline(props: {
         onOpenAgent={(id, title) => props.onOpenAgent(id, title, shown.id)}
       />
     )
-  return props.turns.map((turn, index) => (
+  const worked = props.turns.filter((turn) => turn.items.length > 0)
+  return worked.map((turn, index) => (
     <section key={turn.id} aria-label={turn.prompt || "Ren’s own work"}>
       <TurnHeader turn={turn} onOpen={() => props.onTurn(turn.id)} />
       <Steps
         items={turn.items}
-        closed={!props.live || index < props.turns.length - 1}
+        closed={!props.live || index < worked.length - 1}
         onOpen={props.onStep}
         onOpenAgent={(id, title) => props.onOpenAgent(id, title, turn.id)}
       />

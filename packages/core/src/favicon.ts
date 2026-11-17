@@ -43,26 +43,66 @@ const icon = (bytes: Uint8Array) => {
 
 const redirects = new Set([301, 302, 303, 307, 308])
 
+export const maximumPageBytes = 512 * 1024
+
+// oxlint-disable-next-line ren/no-comments -- Many sites, such as Wikipedia, Reddit and Stack Overflow, refuse a request that does not say what sent it.
+const userAgent = "Mozilla/5.0 (compatible; Ren/1.0; favicon fetcher)"
+
+const attribute = (tag: string, name: string) =>
+  new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "iu").exec(tag)?.slice(1).find(Boolean)
+
+// oxlint-disable-next-line ren/no-comments -- The icons a page declares in its <link> tags, browser icons before Apple's touch icons. An SVG or a mask icon is skipped: Ren refuses SVG, which could run script from its origin.
+const declared = (html: string, base: URL) =>
+  [...html.matchAll(/<link\b[^>]*>/giu)]
+    .map((match) => match.at(0) ?? "")
+    .map((tag) => ({ rel: attribute(tag, "rel")?.toLowerCase() ?? "", href: attribute(tag, "href") }))
+    .filter((link) => /(?:^|\s)(?:icon|apple-touch-icon)(?:\s|$)/u.test(link.rel) && link.href)
+    .toSorted((a, b) => Number(a.rel.includes("apple")) - Number(b.rel.includes("apple")))
+    .flatMap((link) => {
+      const url = URL.parse(link.href ?? "", base)
+      return url?.protocol === "https:" && !url.pathname.toLowerCase().endsWith(".svg") ? [url] : []
+    })
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const oauthFetch = yield* OAuthFetch.Service
     const fetching = yield* Semaphore.make(6)
 
-    const download = Effect.fn("Favicon.download")(function* (host: string) {
-      let url = new URL(`https://${host}/favicon.ico`)
+    // oxlint-disable-next-line ren/no-comments -- Follows redirects by hand, on the default port of a public host only, so a site cannot point Ren at a private address.
+    const follow = Effect.fn("Favicon.follow")(function* (start: URL, accept: string) {
+      let url = start
       for (let hop = 0; hop <= maximumRedirects; hop++) {
+        if (url.port !== "" || !PublicHost.isPublic(url.hostname)) return Option.none<Response>()
         const response = yield* Effect.tryPromise((signal) =>
-          oauthFetch.fetch(url, { redirect: "manual", signal, headers: { accept: "image/*" } }),
+          oauthFetch.fetch(url, { redirect: "manual", signal, headers: { accept, "user-agent": userAgent } }),
         )
         const location = redirects.has(response.status) ? response.headers.get("location") : null
-        if (!location)
-          return response.ok
-            ? icon(new Uint8Array(yield* Effect.tryPromise(() => response.arrayBuffer())))
-            : Option.none()
+        if (!location) return response.ok ? Option.some({ response, url }) : Option.none()
         const next = URL.parse(location, url)
-        if (next?.port !== "") return Option.none<Icon>()
+        if (!next) return Option.none()
         url = next
+      }
+      return Option.none()
+    })
+
+    const image = Effect.fn("Favicon.image")(function* (url: URL) {
+      const found = yield* follow(url, "image/*")
+      if (Option.isNone(found)) return Option.none<Icon>()
+      return icon(new Uint8Array(yield* Effect.tryPromise(() => found.value.response.arrayBuffer())))
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- /favicon.ico first; a site without one, such as app.notion.com, names its icon in the <link> tags of its page.
+    const download = Effect.fn("Favicon.download")(function* (host: string) {
+      const root = yield* image(new URL(`https://${host}/favicon.ico`))
+      if (Option.isSome(root)) return root
+      const page = yield* follow(new URL(`https://${host}/`), "text/html")
+      if (Option.isNone(page)) return Option.none<Icon>()
+      const bytes = new Uint8Array(yield* Effect.tryPromise(() => page.value.response.arrayBuffer()))
+      const html = new TextDecoder().decode(bytes.subarray(0, maximumPageBytes))
+      for (const url of declared(html, page.value.url).slice(0, 3)) {
+        const found = yield* image(url)
+        if (Option.isSome(found)) return found
       }
       return Option.none<Icon>()
     })
@@ -70,7 +110,7 @@ export const layer = Layer.effect(
     const cache = yield* Cache.makeWith(
       (host: string) =>
         fetching
-          .withPermit(download(host).pipe(Effect.timeout(Duration.seconds(3))))
+          .withPermit(download(host).pipe(Effect.timeout(Duration.seconds(5))))
           .pipe(Effect.catch(() => Effect.succeed(Option.none<Icon>()))),
       {
         capacity: 1_000,

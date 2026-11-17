@@ -7,7 +7,7 @@ import { RepositoriesPicker } from "./repositories-picker.js"
 import { useState } from "react"
 import { Composer } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
-import { getRouteApi, useNavigate } from "@tanstack/react-router"
+import { getRouteApi, useNavigate, useRouter } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
@@ -16,7 +16,7 @@ import { useMe } from "../../lib/use-me.js"
 import { useModels } from "../../lib/use-models.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
-import { handoff } from "../../lib/chat.js"
+import { startChat } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
 import { Artifacts } from "../../lib/artifacts.js"
@@ -34,6 +34,7 @@ export function HomePage(props: {
   const { api, platform } = RouterContext.useRouterContext()
   const me = useMe()
   const navigate = useNavigate()
+  const router = useRouter()
   const spaces = useSpaces().joined
   const search = route.useSearch()
   const remembered = Preference.usePreference(ChatPreferences.homeSpace)
@@ -49,7 +50,7 @@ export function HomePage(props: {
   const history = Drafts.useHistory()
   const writeDraft = Drafts.useWrite()
   const models = useModels(sessionId, spaceId)
-  const model = pickModel(models.models, [draft.model, models.fallback])
+  const model = pickModel(models.models, [(sent ?? draft).model, models.fallback])
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
@@ -69,6 +70,7 @@ export function HomePage(props: {
     if (spaceId && !Composer.isBlank(next) && !prepared.has(spaceId)) {
       setPrepared(new Set([...prepared, spaceId]))
       prepare.mutate({ id: spaceId })
+      void router.loadRouteChunk(router.routesById["/_authed/_shell/sessions/$sessionId/"])
     }
   }
   const send = () => {
@@ -82,32 +84,25 @@ export function HomePage(props: {
     }
     setSent(draft)
     history.prepend(draft)
-    create.mutate(
-      { id: sessionId, spaceId, message, ...(model && { model }) },
-      {
-        onSuccess: () => {
-          setDraft(Composer.empty)
-          if (draft.model && model) writeDraft(Drafts.session(sessionId), Composer.withModel(Composer.empty, model))
-          handoff(platform, me.user.id, sessionId, {
-            id: message.id,
-            text: message.text,
-            ...(files.length > 0 && { files }),
-          })
-          ComposerMotion.leave()
-          void navigate({ to: "/sessions/$sessionId", params: { sessionId } })
-        },
-        onError: (error) => {
-          history.remove(draft)
-          setSent(undefined)
-          const next = Session.ID.create()
-          setSessionId(next)
-          kept.update((current) =>
-            current.chat ? Composer.withChat(current, { spaceId: current.chat.spaceId, sessionId: next }) : current,
-          )
-          toast.error("Could not start the chat", { description: errorMessage(error) })
-        },
-      },
-    )
+    const created = create.mutateAsync({ id: sessionId, spaceId, message, ...(model && { model }) })
+    startChat(platform, me.user.id, sessionId, {
+      spaceId,
+      created,
+      message: { id: message.id, text: message.text, ...(files.length > 0 && { files }) },
+    })
+    setDraft(Composer.empty)
+    if (draft.model && model) writeDraft(Drafts.session(sessionId), Composer.withModel(Composer.empty, model))
+    ComposerMotion.leave()
+    void navigate({ to: "/sessions/$sessionId", params: { sessionId } })
+    created.catch((error: unknown) => {
+      history.remove(draft)
+      setSent(undefined)
+      const next = Session.ID.create()
+      setSessionId(next)
+      setDraft(draft.chat ? Composer.withChat(draft, { spaceId: draft.chat.spaceId, sessionId: next }) : draft)
+      toast.error("Could not start the chat", { description: errorMessage(error) })
+      if (router.state.location.pathname.endsWith(sessionId)) void navigate({ to: "/", search })
+    })
   }
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center px-6 pt-4">

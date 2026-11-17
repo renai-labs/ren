@@ -1,8 +1,12 @@
 import { DateTime } from "effect"
 import { flushSync } from "react-dom"
 import {
+  startTransition,
   use,
+  useEffect,
+  useEffectEvent,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type FocusEvent,
@@ -10,6 +14,7 @@ import {
   type PointerEvent,
   type ReactNode,
   type Ref,
+  type RefObject,
   type TouchEvent,
   type UIEvent,
   type WheelEvent,
@@ -317,11 +322,15 @@ function AnswerBlock(props: {
             />
           </BubbleContent>
         </Bubble>
-        {props.copy ? (
-          <MessageFooter>
+        {props.copy === undefined ? null : (
+          <MessageFooter
+            aria-hidden={props.copy === "" || undefined}
+            inert={props.copy === ""}
+            className={cn(props.copy === "" && "invisible")}
+          >
             <CopyButton text={props.copy} />
           </MessageFooter>
-        ) : null}
+        )}
       </MessageContent>
     </Message>
   )
@@ -454,48 +463,75 @@ const markerOf = (props: TranscriptProps, live: { readonly busy: boolean }) => {
   return { label: "Working on the next step", labelled: props.working || props.background?.blocking === true }
 }
 
-// oxlint-disable-next-line ren/no-comments -- With the live line, a running turn's steps and the text between them wait until the turn ends, then fold into "Worked for" with the answer below.
+type LiveSlot = { readonly kind: "live"; readonly key: string; readonly turn: string }
+
+// oxlint-disable-next-line ren/no-comments -- With the live line, a running turn's text streams in place and its steps wait in Activity. The line takes the place of the turn's first step, or sits right below its message before it has one, which is where its "Worked for" line lands, so it turns into that line in place when the turn ends and never follows the answer. An answer with nothing done before it has no line.
 const shownBlocks = (
   blocks: ReadonlyArray<TranscriptBlocks.Block>,
-  live: { readonly simple: boolean; readonly turn: string | undefined },
-) =>
-  live.simple && live.turn
-    ? blocks.filter((block) => !((block.kind === "steps" || block.kind === "answer") && block.turn === live.turn))
-    : blocks
+  live: { readonly simple: boolean; readonly turn: string | undefined; readonly line: boolean },
+): ReadonlyArray<TranscriptBlocks.Block | LiveSlot> => {
+  const turn = live.turn
+  if (!live.simple || !turn || !live.line) return blocks
+  const step = blocks.findIndex((block) => block.kind === "steps" && block.turn === turn)
+  const at = step === -1 ? blocks.findIndex((block) => block.kind === "user" && block.message.id === turn) + 1 : step
+  if (at === 0) return blocks
+  const slot: LiveSlot = { kind: "live", key: `live:${turn}`, turn }
+  return [...blocks.slice(0, at), slot, ...blocks.slice(at)].filter(
+    (block) => !(block.kind === "steps" && block.turn === turn),
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- The turn whose slot shows the live line: the one that runs or, while the computer starts or a message waits for it, the newest message, which Ren has not taken yet.
+const liveOf = (
+  props: TranscriptProps,
+  blocks: ReadonlyArray<TranscriptBlocks.Block>,
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
+) => {
+  const waiting = props.starting === true || props.waiting === true
+  const newest = blocks.findLast((block) => block.kind === "user")
+  const pending = waiting && newest?.kind === "user" ? newest.message.id : undefined
+  return { turn: props.busy ? props.activeMessageID : pending, line: liveLine(props, turns) !== undefined }
+}
 
 const liveLine = (
   props: TranscriptProps,
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
-): LiveLine => {
+): LiveLine | undefined => {
   if (props.starting) return { text: "Starting your computer", kind: "starting" }
   if (props.asking) return { text: "Waiting for your answer", kind: "waiting" }
   return Activity.current(turns.get(props.activeMessageID ?? "") ?? [])
 }
 
-// oxlint-disable-next-line ren/no-comments -- Only a turn that runs feeds the line its calls: before the brain takes a new message, the chat still points at the previous turn, whose last call must not show again.
-const lastCall = (props: TranscriptProps, turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>) =>
-  props.busy && !props.starting && !props.asking
-    ? Activity.last(turns.get(props.activeMessageID ?? "") ?? [])
-    : undefined
+function TurnLine(props: {
+  transcript: TranscriptProps
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+}) {
+  const openPanel = use(OpenPanel)
+  const transcript = props.transcript
+  const turn = transcript.activeMessageID
+  const line = liveLine(transcript, props.turns)
+  if (!line) return null
+  return (
+    <LiveActivity line={line} onOpen={openPanel && turn ? () => openPanel({ kind: "activity", turn }) : undefined} />
+  )
+}
 
+// oxlint-disable-next-line ren/no-comments -- Only the room of the live line at the end, never the line: the activity of a turn never follows its output, so the line shows only in its slot below the message. The room keeps the end still when a turn starts or ends.
 function LiveMarker(props: {
   transcript: TranscriptProps
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   busy: boolean
 }) {
-  const openPanel = use(OpenPanel)
   const transcript = props.transcript
   if (!markerOf(transcript, { busy: props.busy })) return null
-  const turn = transcript.activeMessageID
-  const active = transcript.busy || transcript.working || transcript.starting === true || transcript.waiting === true
   return (
     // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
-    <MessageScrollerItem messageId="working" aria-hidden={!active} className={cn(!active && "invisible")}>
-      <LiveActivity
-        line={liveLine(transcript, props.turns)}
-        last={lastCall(transcript, props.turns)}
-        onOpen={openPanel && turn ? () => openPanel({ kind: "activity", turn }) : undefined}
-      />
+    <MessageScrollerItem messageId="working" aria-hidden className="invisible">
+      <Message>
+        <MessageContent>
+          <TurnLine transcript={transcript} turns={props.turns} />
+        </MessageContent>
+      </Message>
     </MessageScrollerItem>
   )
 }
@@ -561,11 +597,164 @@ function WorkingMarker(props: { marker: ReturnType<typeof markerOf>; background:
 
 const liveItems = 20
 
-function useEasedSend(blocks: ReadonlyArray<TranscriptBlocks.Block>) {
-  const sent = blocks.filter((block) => block.kind === "user").length
-  const [opened, setOpened] = useState(sent)
-  if (sent < opened) setOpened(sent)
-  return sent > opened && blocks.at(-1)?.kind === "user" ? "" : undefined
+const firstRows = 12
+
+// oxlint-disable-next-line ren/no-comments -- A chat opens with its newest rows, so it shows at once; the rest render in a transition right after, above the fold, where the scroller keeps the view still. Find needs every row.
+function useOpening(count: number, options: { readonly all: boolean; readonly at?: number | undefined }) {
+  const [opened, setOpened] = useState(false)
+  useEffect(() => {
+    startTransition(() => setOpened(true))
+  }, [])
+  if (opened || options.all || options.at === -1) return 0
+  return Math.max(0, Math.min(options.at ?? count, count - firstRows))
+}
+
+interface Spot {
+  readonly row: string
+  readonly offset: number
+}
+
+// oxlint-disable-next-line ren/no-comments -- Where each chat was left: the rows at the top of the view and how far each sat from the top. A chat left at its end has no place and opens at its end. Rows, not pixels, so the place holds while rows load around it.
+const places = new Map<string, ReadonlyArray<Spot> | undefined>()
+
+const placeOf = (viewport: HTMLElement): ReadonlyArray<Spot> | undefined => {
+  if (atBottom(viewport)) return undefined
+  const top = viewport.getBoundingClientRect().top
+  const rows = [...viewport.querySelectorAll<HTMLElement>("[data-message-id]")].filter((row) => {
+    const id = row.dataset.messageId ?? ""
+    return id !== "working" && !id.startsWith("live:") && row.getBoundingClientRect().bottom > top + 1
+  })
+  const spots = rows
+    .slice(0, 3)
+    .flatMap((row) =>
+      row.dataset.messageId ? [{ row: row.dataset.messageId, offset: row.getBoundingClientRect().top - top }] : [],
+    )
+  return spots.length > 0 ? spots : undefined
+}
+
+const rowOf = (blocks: ReadonlyArray<{ readonly key: string }>, place: ReadonlyArray<Spot>) => {
+  const found = place.map((spot) => blocks.findIndex((block) => block.key === spot.row)).filter((index) => index >= 0)
+  return found.length > 0 ? Math.min(...found) : -1
+}
+
+const placeInputs = ["wheel", "touchstart", "keydown", "pointerdown"] as const
+
+const givingUpMs = 3000
+
+const settleMs = 200
+
+// oxlint-disable-next-line ren/no-comments -- Holds the chat where the person is while it does not follow its end: the row at the top stays put as rows load, grow or get replaced above and below it. A chat opened where it was left stays hidden until its row is there, loading older pages for it; it gives up after a few seconds and shows the chat's end.
+function useKeptPlace(
+  viewport: RefObject<HTMLDivElement | null>,
+  place: ReadonlyArray<Spot> | undefined,
+  options: {
+    readonly session: string
+    readonly following: boolean
+    readonly more: boolean
+    readonly loading: boolean
+    readonly onLoadMore: () => void
+  },
+) {
+  const older = useEffectEvent(() => {
+    if (options.more && !options.loading) options.onLoadMore()
+  })
+  const free = useEffectEvent(() => !options.following)
+  const session = options.session
+  useLayoutEffect(() => {
+    const element = viewport.current
+    const content = element?.querySelector("[data-slot=message-scroller-content]")
+    if (!element || !content) return
+    const opening = { place }
+    const motion = { moving: false, timer: 0, top: element.scrollTop }
+    const still = () => {
+      motion.moving = false
+    }
+    const moved = () => {
+      motion.top = element.scrollTop
+      motion.moving = true
+      window.clearTimeout(motion.timer)
+      motion.timer = window.setTimeout(still, settleMs)
+    }
+    element.addEventListener("scroll", moved, { passive: true })
+    element.addEventListener("scrollend", still)
+    const reveal = () => element.removeAttribute("data-placing")
+    const hold = () => {
+      // oxlint-disable-next-line ren/no-comments -- A jump moves the view before its scroll event arrives, and the browser's own anchoring moves it to keep a row still: either way the place is not current, so it waits for the scroll.
+      if (!opening.place && Math.abs(element.scrollTop - motion.top) > 1) return moved()
+      const spots = opening.place ?? (free() && !motion.moving ? places.get(session) : undefined)
+      if (!spots) return
+      const rows = [...element.querySelectorAll<HTMLElement>("[data-message-id]")]
+      const spot = spots.find((each) => rows.some((row) => row.dataset.messageId === each.row))
+      const row = spot && rows.find((each) => each.dataset.messageId === spot.row)
+      if (!spot || !row) {
+        if (element.hasAttribute("data-placing")) older()
+        return
+      }
+      const delta = row.getBoundingClientRect().top - element.getBoundingClientRect().top - spot.offset
+      if (Math.abs(delta) > 0.5) element.scrollTop += delta
+      motion.top = element.scrollTop
+      reveal()
+    }
+    if (place) element.setAttribute("data-placing", "")
+    hold()
+    const observer = new ResizeObserver(hold)
+    observer.observe(content)
+    observer.observe(element)
+    const timer = window.setTimeout(reveal, givingUpMs)
+    const settle = () => {
+      opening.place = undefined
+      window.clearTimeout(timer)
+      reveal()
+      for (const type of placeInputs) window.removeEventListener(type, settle, { capture: true })
+    }
+    for (const type of placeInputs) window.addEventListener(type, settle, { capture: true, passive: true })
+    return () => {
+      settle()
+      observer.disconnect()
+      window.clearTimeout(motion.timer)
+      element.removeEventListener("scroll", moved)
+      element.removeEventListener("scrollend", still)
+    }
+  }, [viewport, place, session])
+}
+
+const glideMs = 600
+
+// oxlint-disable-next-line ren/no-comments -- A sent message glides to the top, and only that move eases: a row that lands above it later, such as the model it switched to, must not set the chat sliding again.
+function useSendGlide(sent: string | undefined) {
+  const [gliding, setGliding] = useState<string>()
+  const [seen, setSeen] = useState(sent)
+  if (sent !== seen) {
+    setSeen(sent)
+    setGliding(sent)
+  }
+  useEffect(() => {
+    if (!gliding) return
+    const timer = window.setTimeout(() => setGliding(undefined), glideMs)
+    return () => window.clearTimeout(timer)
+  }, [gliding])
+  return gliding ? "" : undefined
+}
+
+const freshMs = 2000
+
+// oxlint-disable-next-line ren/no-comments -- Only a message sent in this view anchors the scroller, which brings it to the top, and makes the chat follow again. It must show as it is sent: a message that waited in the queue shows when its turn starts, long after it was sent, and the person may have scrolled away since. The scroller also jumps to any anchor it has not shown yet whenever one row replaces another, so a message from history must never be one.
+function useSentAnchor(
+  blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot>,
+  statuses: ReadonlyMap<string, ChatState.PendingStatus>,
+) {
+  const users = blocks.filter((block) => block.kind === "user")
+  const [opened] = useState(() => new Set(users.map((block) => block.key)))
+  const [queued, setQueued] = useState<ReadonlySet<string>>(() => new Set())
+  const [fresh, setFresh] = useState<ReadonlyMap<string, boolean>>(() => new Map())
+  const waiting = [...statuses.keys()].filter((id) => !queued.has(id))
+  if (waiting.length > 0) setQueued(new Set([...queued, ...waiting]))
+  const last = users.at(-1)
+  const sentNow = (message: SessionMessage.User) =>
+    !queued.has(message.id) && DateTime.toEpochMillis(message.time.created) > Date.now() - freshMs
+  if (last && !opened.has(last.key) && !fresh.has(last.key))
+    setFresh(new Map([...fresh, [last.key, sentNow(last.message)]]))
+  return last && fresh.get(last.key) === true ? last.key : undefined
 }
 
 function useWatchedTurns(running: string | undefined) {
@@ -581,15 +770,15 @@ const bottomSlack = 8
 const atBottom = (viewport: HTMLElement) =>
   viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= bottomSlack
 
-function useFollow(turn: string | undefined) {
-  const [paused, setPaused] = useState<{ readonly turn: string | undefined }>()
-  const following = paused === undefined || paused.turn !== turn
+// oxlint-disable-next-line ren/no-comments -- Once the person scrolls away from the end, the chat stays where they left it until they send a message or come back to the end; a turn that starts on its own, from the queue or another member, does not pull them down.
+function useFollow(options: { readonly paused: boolean }) {
+  const [paused, setPaused] = useState(options.paused)
   return {
-    following,
+    following: !paused,
     pause: () => {
-      if (following) flushSync(() => setPaused({ turn }))
+      if (!paused) flushSync(() => setPaused(true))
     },
-    resume: () => setPaused(undefined),
+    resume: () => setPaused(false),
   }
 }
 
@@ -615,8 +804,11 @@ function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMess
 }
 
 export function Transcript(props: TranscriptProps) {
-  const follow = useFollow(props.activeMessageID)
-  if (props.loading)
+  const [place] = useState(() => places.get(props.view.sessionID))
+  const follow = useFollow({ paused: place !== undefined })
+  const [shown, setShown] = useState(false)
+  if (!props.loading && !shown) setShown(true)
+  if (props.loading && !shown)
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {props.more && !props.loadingHistory ? <LoadEarlier onVisible={props.onLoadMore} /> : null}
@@ -632,7 +824,7 @@ export function Transcript(props: TranscriptProps) {
         onOpenChild={props.onOpenChild}
       >
         <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
-          <TranscriptScroller transcript={props} follow={follow} />
+          <TranscriptScroller transcript={props} follow={follow} place={place} />
         </MessageScrollerProvider>
       </StepsProvider>
     </ImageSet>
@@ -652,12 +844,18 @@ function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Transcri
   )
 }
 
-function TranscriptScroller(input: { transcript: TranscriptProps; follow: ReturnType<typeof useFollow> }) {
+function TranscriptScroller(input: {
+  transcript: TranscriptProps
+  follow: ReturnType<typeof useFollow>
+  place: ReadonlyArray<Spot> | undefined
+}) {
   const props = input.transcript
   const follow = input.follow
+  const place = input.place
   const scroller = useMessageScroller()
   const touchY = useRef(0)
   const lastTop = useRef(0)
+  const lastHeight = useRef(0)
   const pause = (viewport: HTMLElement) => {
     if ((viewport.querySelector<HTMLElement>("[data-message-scroller-spacer]")?.offsetHeight ?? 0) > 0) return
     follow.pause()
@@ -690,9 +888,25 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     activeTurn,
   )
   const simple = props.simple === true
-  const shown = shownBlocks(blocks, { simple, turn: activeTurn })
+  const shown = shownBlocks(blocks, { simple, ...liveOf(props, blocks, turns) })
   const live = props.busy || watched.live(props.activeMessageID)
-  const easing = useEasedSend(shown)
+  const sent = useSentAnchor(shown, props.statuses)
+  const easing = useSendGlide(sent)
+  const resume = useEffectEvent(() => follow.resume())
+  useEffect(() => {
+    if (sent) resume()
+  }, [sent])
+  const from = useOpening(shown.length, {
+    all: props.find !== undefined,
+    at: place && rowOf(shown, place),
+  })
+  useKeptPlace(viewport, place, {
+    session: props.view.sessionID,
+    following: follow.following && props.find === undefined,
+    more: props.more,
+    loading: props.loadingHistory,
+    onLoadMore: props.onLoadMore,
+  })
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(
     blocks.flatMap((block) => (block.kind === "answer" ? [[block.turn, block.key] as const] : [])),
@@ -702,8 +916,11 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
     const milliseconds = TimelineText.turnDuration(user?.type === "user" ? user : undefined, turns.get(turn) ?? [])
     return milliseconds === undefined ? undefined : TimelineText.duration(milliseconds)
   }
-  const copyOf = (turn: string, key: string) =>
-    lastAnswer.get(turn) === key && activeTurn !== turn ? TimelineText.copyText(turns.get(turn) ?? [])?.text : undefined
+  // oxlint-disable-next-line ren/no-comments -- A running turn's last answer keeps an empty footer, so the copy button arrives without pushing anything.
+  const copyOf = (turn: string, key: string) => {
+    if (lastAnswer.get(turn) !== key) return undefined
+    return activeTurn === turn ? "" : TimelineText.copyText(turns.get(turn) ?? [])?.text
+  }
   const empty =
     props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
   return (
@@ -712,10 +929,11 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
         <QuoteSelection quote={props.quote} root={viewport} />
         <MessageScrollerViewport
           ref={viewport}
+          data-scroll-restoration-id="transcript"
           preserveScrollOnPrepend
           pinEnd={follow.following && props.find === undefined}
           data-easing={easing}
-          className="relative scrollbar-gutter-both outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
+          className="relative scrollbar-gutter-both data-placing:invisible outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth motion-reduce:scroll-auto"
           onWheel={(event: WheelEvent<HTMLDivElement>) => {
             if (event.deltaY < 0) pause(event.currentTarget)
             else if (atBottom(event.currentTarget)) toEnd()
@@ -741,33 +959,47 @@ function TranscriptScroller(input: { transcript: TranscriptProps; follow: Return
           onScroll={(event: UIEvent<HTMLDivElement>) => {
             const viewport = event.currentTarget
             const down = viewport.scrollTop > lastTop.current
+            const up = viewport.scrollTop < lastTop.current - 1 && viewport.scrollHeight >= lastHeight.current
             lastTop.current = viewport.scrollTop
+            lastHeight.current = viewport.scrollHeight
+            if (viewport.hasAttribute("data-placing")) return
+            places.set(props.view.sessionID, placeOf(viewport))
+            // oxlint-disable-next-line ren/no-comments -- The scroller only ever moves itself down, and a shrink moves the view up with the height: an upward move at the same height is the person's, from the rail or the scrollbar.
+            if (up) pause(viewport)
             if (!follow.following && down && atBottom(viewport)) toEnd()
           }}
         >
-          {props.more ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
+          {props.more && from === 0 ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
           <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
-            {shown.map((block, index) => (
+            {shown.slice(from).map((block, index) => (
               <MessageScrollerItem
                 key={block.key}
                 messageId={block.key}
                 data-row-key={block.key}
-                scrollAnchor={block.kind === "user"}
+                scrollAnchor={block.key === sent}
                 className={cn(
                   block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
-                  index >= shown.length - liveItems && "[content-visibility:visible]",
+                  from + index >= shown.length - liveItems && "[content-visibility:visible]",
                 )}
               >
-                <BlockView
-                  block={block}
-                  transcript={props}
-                  context={context}
-                  editing={editing}
-                  onEditing={setEditing}
-                  activeTurn={activeTurn}
-                  copyOf={copyOf}
-                  workedFor={workedFor}
-                />
+                {block.kind === "live" ? (
+                  <Message>
+                    <MessageContent>
+                      <TurnLine transcript={props} turns={turns} />
+                    </MessageContent>
+                  </Message>
+                ) : (
+                  <BlockView
+                    block={block}
+                    transcript={props}
+                    context={context}
+                    editing={editing}
+                    onEditing={setEditing}
+                    activeTurn={activeTurn}
+                    copyOf={copyOf}
+                    workedFor={workedFor}
+                  />
+                )}
               </MessageScrollerItem>
             ))}
             {empty ? (

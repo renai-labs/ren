@@ -102,7 +102,8 @@ export function make(platform: Platform.Info) {
     defaultPendingMinMs: 500,
     defaultPendingComponent: RouteSkeleton,
     defaultErrorComponent: RouteError,
-    scrollRestoration: true,
+    // oxlint-disable-next-line ren/no-comments -- A chat keeps its own scroll: it opens at its end. The router would otherwise carry the last page's scroll offset onto the chat's scroller, which then jumps.
+    scrollRestoration: (options) => !options.location.pathname.includes("/sessions/"),
     parseSearch: OAuthSearch.parse,
     stringifySearch: OAuthSearch.stringify,
   })

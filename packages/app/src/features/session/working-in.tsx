@@ -37,46 +37,48 @@ export function WorkingIn(props: {
     },
   ].filter((group) => group.spaces.length > 0)
   return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (!open) setQuery("")
-      }}
-    >
-      <DropdownMenuTrigger
-        disabled={props.disabled}
-        render={
-          <Button
-            variant="ghost"
-            className="ml-1 self-start px-1 font-normal text-muted-foreground aria-expanded:bg-transparent"
-            aria-label={`Destination: ${spaceName(props.spaceId)}`}
-          />
-        }
+    <span className="ml-2 flex items-center gap-0.5 self-start text-sm text-muted-foreground">
+      Working in
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (!open) setQuery("")
+        }}
       >
-        Working in
-        <IconCube />
-        <span className="text-foreground">{spaceName(props.spaceId)}</span>
-        <IconChevronDown />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-72">
-        <MenuSearch value={query} onChange={setQuery} placeholder="Search spaces…" />
-        {groups.length === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-muted-foreground">No spaces match “{query.trim()}”</p>
-        ) : null}
-        <DropdownMenuRadioGroup value={props.spaceId ?? ""} onValueChange={(next: string) => props.onChange(next)}>
-          {groups.map((group, index) => (
-            <DropdownMenuGroup key={group.label}>
-              {index > 0 ? <DropdownMenuSeparator /> : null}
-              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-              {group.spaces.map((space) => (
-                <DropdownMenuRadioItem key={space.id} value={space.id} closeOnClick>
-                  <IconCube />
-                  <span className="min-w-0 flex-1 truncate">{space.name}</span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuGroup>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={props.disabled}
+          render={
+            <Button
+              variant="ghost"
+              className="px-1 font-normal text-muted-foreground"
+              aria-label={`Destination: ${spaceName(props.spaceId)}`}
+            />
+          }
+        >
+          <IconCube />
+          <span className="text-foreground">{spaceName(props.spaceId)}</span>
+          <IconChevronDown />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="w-72">
+          <MenuSearch value={query} onChange={setQuery} placeholder="Search spaces…" />
+          {groups.length === 0 ? (
+            <p className="px-2 py-6 text-center text-sm text-muted-foreground">No spaces match “{query.trim()}”</p>
+          ) : null}
+          <DropdownMenuRadioGroup value={props.spaceId ?? ""} onValueChange={(next: string) => props.onChange(next)}>
+            {groups.map((group, index) => (
+              <DropdownMenuGroup key={group.label}>
+                {index > 0 ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                {group.spaces.map((space) => (
+                  <DropdownMenuRadioItem key={space.id} value={space.id} closeOnClick>
+                    <IconCube />
+                    <span className="min-w-0 flex-1 truncate">{space.name}</span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuGroup>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
   )
 }

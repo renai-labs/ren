@@ -30,7 +30,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { useComposerSuggestions } from "./use-composer-suggestions.js"
 import { childTitle, notificationsOf, useView } from "./chat-view.js"
 import { Seed } from "../../lib/seed.js"
-import { sessionKeys, useChatCacheBridge } from "../../lib/chat.js"
+import { sessionKeys, useChatCacheBridge, useStartingChat } from "../../lib/chat.js"
 import { sessionTitle } from "../../lib/sessions.js"
 import { Notify } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
@@ -154,8 +154,8 @@ const openingOf = (
   state: ChatState.State,
   view: { readonly viewed: Session.ID; readonly rows: ReadonlyArray<unknown>; readonly loading: boolean },
 ) =>
-  view.rows.length === 0 &&
-  (view.loading || ChatState.more(state, view.viewed) || ChatState.loadingHistory(state, view.viewed))
+  view.loading ||
+  (view.rows.length === 0 && (ChatState.more(state, view.viewed) || ChatState.loadingHistory(state, view.viewed)))
 
 // oxlint-disable-next-line ren/no-comments -- Opening a chat starts its computer in the background, and the chat reads fine meanwhile. "Starting your computer" shows only while a message waits for it: the first message of a new chat, or one sent before the computer is ready.
 const startupOf = (
@@ -259,9 +259,11 @@ export function useChat(
   const root = Session.ID.make(params.sessionId)
   const [localChild, setLocalChild] = useState<Session.ID>()
   const child = childOf(options, localChild)
+  const start = useStartingChat(root)
   const stored = useQuery({
     ...api.session.get.queryOptions({ idOrSlug: params.sessionId }),
     ...Seed.fromList<SessionInfo>(queryClient, [api.session.list.queryKey(), sessionKeys.infinite()], params.sessionId),
+    enabled: start?.done !== false,
   })
   const detail = Preference.usePreference(ChatPreferences.timelineDetail)
   const fold = Preference.usePreference(ChatPreferences.foldTurns)
@@ -271,7 +273,7 @@ export function useChat(
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
   const title = sessionTitle(info?.title ?? stored.data?.title)
-  const spaceId = stored.data?.spaceId
+  const spaceId = stored.data?.spaceId ?? start?.spaceId
   const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
   const models = ChatReact.useModels(root)

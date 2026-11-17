@@ -127,10 +127,16 @@ export function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap
   }, [])
 }
 
+// oxlint-disable-next-line ren/no-comments -- A turn folds into one "Worked for", where its work starts: what Ren shows between steps, such as a file or an app to connect, follows it, and the answer comes last. An answer folds in only when Ren worked after it. A notice is not work: an answer cut off and continued after "The previous response was interrupted" stays in the chat.
 export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn: string) => boolean; fold: boolean }) {
   if (!options.fold) return blocks
+  const groups = new Map<string, Extract<Block, { kind: "steps" }>>()
   const lastSteps = new Map(
-    blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
+    blocks.flatMap((block, index) =>
+      block.kind === "steps" && leaves(block.steps).some((step) => step.kind !== "notice")
+        ? [[block.turn, index] as const]
+        : [],
+    ),
   )
   return blocks.reduce<Block[]>((grouped, block, index) => {
     if (
@@ -145,9 +151,14 @@ export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn:
       block.kind === "steps"
         ? block.steps
         : [{ kind: "text", key: block.key, text: block.text, streaming: block.streaming }]
-    const group = grouped.at(-1)
-    if (group?.kind === "steps" && group.turn === block.turn) group.steps.push(...items)
-    else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
+    const group = groups.get(block.turn)
+    if (group) {
+      group.steps.push(...items)
+      return grouped
+    }
+    const created = { kind: "steps" as const, key: block.key, turn: block.turn, steps: [...items] }
+    groups.set(block.turn, created)
+    grouped.push(created)
     return grouped
   }, [])
 }

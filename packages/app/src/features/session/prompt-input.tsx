@@ -31,7 +31,7 @@ import {
 } from "@tabler/icons-react"
 import { GitHubMark } from "../../icons/brands.js"
 import { AttachmentGroup } from "@ren/ui/attachment"
-import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
+import { Avatar } from "@ren/ui/avatar"
 import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
@@ -61,18 +61,10 @@ import { ProfileDialog, useAddManaged, type ProfileTarget } from "../../componen
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
 import { StatusDot } from "../../components/app-list.js"
-import {
-  isBundle,
-  listNames,
-  statusAction,
-  statusLabel,
-  waitsForUser,
-  type CatalogApp,
-  type Status,
-} from "../../lib/apps.js"
+import { isBundle, statusAction, statusLabel, waitsForUser, type CatalogApp, type Status } from "../../lib/apps.js"
 import { useApps } from "../../lib/use-app.js"
 import { errorMessage } from "../../lib/errors.js"
-import { connectTarget, isReady, useSpaceApps } from "./use-space-apps.js"
+import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
 import { Drafts } from "../../lib/drafts.js"
@@ -151,7 +143,7 @@ function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open:
     const app = space.app(appId)
     return app ? [{ app, status: space.status(appId), here: space.here(appId) }] : []
   })
-  const shown = apps.slice(0, 3)
+  const only = apps.length === 1 ? apps[0] : undefined
   const expired = apps.filter((each) => each.status === "expired").length
   const dialogs = (
     <>
@@ -181,7 +173,7 @@ function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open:
       <>
         <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" onClick={() => setAdding(true)}>
           <IconLayoutGridAdd />
-          Add apps
+          Add Apps
         </InputGroupButton>
         {dialogs}
       </>
@@ -193,26 +185,22 @@ function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open:
           render={
             <InputGroupButton
               size="sm"
-              className="-ml-1 font-normal"
+              className="-ml-1 font-normal text-muted-foreground data-popup-open:text-foreground"
               aria-label={`Apps: ${apps.map((each) => each.app.name).join(", ")}${expired ? `, ${expired} ${statusLabel.expired.toLowerCase()}` : ""}`}
             />
           }
         >
-          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:bg-card *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
-            {shown.map((each) => (
-              // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-              <Avatar key={each.app.id} size="sm" className="data-[size=sm]:size-5">
-                <AppAvatarImage src={each.app.icon ?? undefined} />
-                <AppAvatarFallback name={each.app.name} />
-              </Avatar>
-            ))}
-            {apps.length > shown.length ? (
-              <AvatarGroupCount className="size-5 text-2xs group-has-data-[size=sm]/avatar-group:size-5">
-                +{apps.length - shown.length}
-              </AvatarGroupCount>
+          <span className="relative">
+            {only ? (
+              <AppIcon name={only.app.name} icon={only.app.icon} size="sm" className="size-4 rounded-sm" />
+            ) : (
+              <IconApps />
+            )}
+            {expired ? (
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-chart-3 ring-2 ring-card" />
             ) : null}
-          </AvatarGroup>
-          {expired ? <StatusDot status="expired" /> : null}
+          </span>
+          {only ? only.app.name : plural(apps.length, "app")}
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
@@ -313,88 +301,20 @@ function AppStatusItem(props: {
 type MentionStatus = {
   readonly app: Composer.MentionedApp
   readonly status: Status
-  readonly label?: string | undefined
-  readonly title?: string | undefined
-  readonly action?: string | undefined
-}
-
-function MentionChips(props: { space: ReturnType<typeof useSpaceApps>; statuses: ReadonlyArray<MentionStatus> }) {
-  const [connecting, setConnecting] = useState<ProfileTarget>()
-  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
-  const space = props.space
-  const from = space.from
-  const shown = props.statuses.filter((each) => !isReady(each.status) || opened.has(each.app.id))
-  if (shown.length === 0 || !from) return null
-  return (
-    <div className="ml-auto flex flex-wrap justify-end gap-1">
-      {shown.map((each) => {
-        const action = isReady(each.status) ? undefined : (each.action ?? statusAction[each.status])
-        return (
-          <span
-            key={each.app.id}
-            title={each.title}
-            className="flex h-8 items-center gap-2 rounded-full border bg-card pr-1 pl-1.5 text-sm"
-          >
-            <AppIcon name={each.app.name} description={each.app.description} icon={each.app.icon} size="sm" />
-            <span className="font-medium">{each.app.name}</span>
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <StatusDot status={each.status} />
-              {each.label ?? statusLabel[each.status]}
-            </span>
-            {action ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="rounded-full"
-                onClick={() => {
-                  setOpened((previous) => new Set([...previous, each.app.id]))
-                  setConnecting(
-                    connectTarget({ appId: each.app.id, status: each.status, here: space.here(each.app.id) }, from),
-                  )
-                }}
-              >
-                {action}
-              </Button>
-            ) : null}
-          </span>
-        )
-      })}
-      {connecting ? <ProfileDialog {...connecting} onClose={() => setConnecting(undefined)} /> : null}
-    </div>
-  )
 }
 
 const bundleStatus = (
   mention: MentionStatus,
   app: CatalogApp | undefined,
   partOf: (slug: string) => { readonly app: CatalogApp; readonly status: Status | "absent" } | undefined,
-  added: boolean,
-  space: string | undefined,
+  options: { readonly added: boolean },
 ): MentionStatus => {
   if (!app || !isBundle(app)) return mention
-  if (!added) return { ...mention, status: "missing", label: space ? `Not in ${space}` : "Not added", action: "Add" }
-  const found = app.dependsOn.flatMap((slug) => {
+  const ready = app.dependsOn.every((slug) => {
     const part = partOf(slug)
-    return part ? [part] : []
+    return !part || (part.status !== "absent" && !waitsForUser(part.status))
   })
-  const absent = found.filter((part) => part.status === "absent").map((part) => part.app.name)
-  const waiting = found.filter((part) => waitsForUser(part.status)).map((part) => part.app.name)
-  if (absent.length > 0)
-    return {
-      ...mention,
-      status: "missing",
-      label: absent.length === 1 ? `Needs ${absent.join("")}` : `Needs ${plural(absent.length, "app")}`,
-      title: `Needs ${listNames(absent)}`,
-      action: "Connect",
-    }
-  if (waiting.length === 0) return { ...mention, status: "connected" }
-  return {
-    ...mention,
-    status: "missing",
-    label: `${waiting.length} ${waiting.length === 1 ? "needs" : "need"} sign-in`,
-    title: `${listNames(waiting)} ${waiting.length === 1 ? "needs" : "need"} sign-in`,
-    action: "Connect",
-  }
+  return { ...mention, status: options.added && ready ? "connected" : "missing" }
 }
 
 function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, text: string) {
@@ -419,8 +339,7 @@ function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, 
             if (!part) return
             return { app: part, status: space.here(part.id).length === 0 ? "absent" : space.status(part.id) }
           },
-          space.here(app.id).length > 0,
-          space.from?.name,
+          { added: space.here(app.id).length > 0 },
         ),
       )
   return {
@@ -520,6 +439,21 @@ function ShellPrefix(props: { active: boolean }) {
     </span>
   )
 }
+
+// oxlint-disable-next-line ren/no-comments -- A web address in the draft shows as a link, as it will once sent. Punctuation that ends a sentence is not part of it.
+const linksOf = (text: string) =>
+  [...text.matchAll(/https?:\/\/[^\s<>"'`]+/gu)].map((match) => {
+    const url = (match.at(0) ?? "").replace(/[.,;:!?)\]}'"]+$/u, "")
+    return {
+      start: match.index,
+      end: match.index + url.length,
+      label: url,
+      icon: null,
+      color: "var(--link)",
+      file: false,
+      link: true,
+    }
+  })
 
 const placeholder = (input: { readonly status: unknown; readonly shell: boolean }) => {
   if (input.status) return ""
@@ -940,7 +874,7 @@ export function PromptInput(props: {
   ComposerMotion.useComposer(root, { placement: props.placement })
   const artifact = props.artifact
   const ranges = Artifacts.mentionRanges(text, artifact)
-  const marks = [
+  const mentioned = [
     ...(suggest?.marks(text) ?? []).filter(
       (mark) => !ranges.some((range) => mark.start < range.end && mark.end > range.start),
     ),
@@ -952,6 +886,10 @@ export function PromptInput(props: {
       color: "var(--primary)",
       file: false,
     })),
+  ]
+  const marks = [
+    ...mentioned,
+    ...linksOf(text).filter((link) => !mentioned.some((mark) => link.start < mark.end && link.end > mark.start)),
   ].toSorted((a, b) => a.start - b.start)
   const attachments =
     Composer.files(draft).length + uploads.uploads.length + Composer.quotes(draft).length + draft.pasted.length > 0
@@ -973,10 +911,7 @@ export function PromptInput(props: {
           event.target.value = ""
         }}
       />
-      <div className="flex flex-wrap items-center gap-1 empty:hidden">
-        {props.header}
-        <MentionChips space={mentions.space} statuses={mentions.statuses} />
-      </div>
+      <div className="flex flex-wrap items-center gap-1 empty:hidden">{props.header}</div>
       {repositories && props.spaceId ? (
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}

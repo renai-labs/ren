@@ -10,7 +10,6 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
 import { Loading } from "@ren/ui/loading"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -22,6 +21,7 @@ const views = {
   docx: lazy(() => import("./docx.js").then((module) => ({ default: module.DocxView }))),
   pptx: lazy(() => import("./pptx.js").then((module) => ({ default: module.PptxView }))),
   xlsx: lazy(() => import("./xlsx.js").then((module) => ({ default: module.XlsxView }))),
+  csv: lazy(() => import("./xlsx.js").then((module) => ({ default: module.CsvView }))),
 }
 
 const zoomSteps = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
@@ -262,34 +262,5 @@ export function Viewer(props: {
       ) : null}
       {!blocked && !loaded.data ? <Pending /> : null}
     </>
-  )
-}
-
-export function FilePreview(props: {
-  kind: Kind | undefined
-  file: SessionMessage.DriveFile
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  bytes: (signal: AbortSignal) => Promise<ArrayBuffer>
-  onDownload: () => void
-}) {
-  if (!props.kind) return null
-  return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[min(90vh,--spacing(260))] w-[min(96vw,--spacing(380))] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
-      >
-        <DialogTitle className="sr-only">{props.file.name}</DialogTitle>
-        <DialogDescription className="sr-only">Preview of {props.file.name}</DialogDescription>
-        <Viewer
-          kind={props.kind}
-          file={props.file}
-          bytes={props.bytes}
-          onClose={() => props.onOpenChange(false)}
-          onDownload={props.onDownload}
-        />
-      </DialogContent>
-    </Dialog>
   )
 }

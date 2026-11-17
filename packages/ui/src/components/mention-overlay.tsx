@@ -22,6 +22,7 @@ export interface MentionMark {
   readonly icon: string | null
   readonly color: string
   readonly file: boolean
+  readonly link?: boolean
 }
 
 interface Box {
@@ -88,8 +89,14 @@ export function MentionOverlay(props: {
         className="wrap-break-word whitespace-pre-wrap text-foreground"
         style={{ ...box.style, transform: `translateY(${-box.scroll}px)` }}
       >
-        {nodes.map((node) =>
-          node.mark ? (
+        {nodes.map((node) => {
+          if (node.mark?.link)
+            return (
+              <span key={node.key} style={{ color: node.mark.color }}>
+                {node.text}
+              </span>
+            )
+          return node.mark ? (
             <span key={node.key} className="relative" style={{ color: node.mark.color }}>
               <span className="invisible">{node.text.slice(0, node.text.length - node.mark.label.length)}</span>
               {node.mark.file ? (
@@ -105,8 +112,8 @@ export function MentionOverlay(props: {
             </span>
           ) : (
             <span key={node.key}>{node.text}</span>
-          ),
-        )}
+          )
+        })}
       </div>
     </div>
   )

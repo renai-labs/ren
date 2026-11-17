@@ -54,6 +54,17 @@ const contextUsageOf = (
   }
 }
 
+// oxlint-disable-next-line ren/no-comments -- A chat shows once it has its history: read, cached or saved, or a message of ours on its way. Rows that only events brought, such as a notice, would show alone and then get pushed down by the history above them.
+const showable = (state: ChatState.State, sessionID: string) => {
+  const messages = state.messages[sessionID]
+  if (messages === undefined) return false
+  return (
+    state.loaded.has(sessionID) ||
+    state.partial.has(sessionID) ||
+    messages.some((message) => state.outbox.has(message.id))
+  )
+}
+
 export function useView(root: Session.ID, child: Session.ID | undefined, detail: TimelineDetail.Detail) {
   const session = ChatReact.useSession(root, { child, detail })
   const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
@@ -67,7 +78,7 @@ export function useView(root: Session.ID, child: Session.ID | undefined, detail:
     state,
     viewed,
     projection,
-    loading: state.messages[viewed] === undefined && !AsyncResult.isFailure(session.state),
+    loading: !AsyncResult.isFailure(session.state) && !showable(state, viewed),
     messages: ChatState.messages(state, viewed),
     contextUsage: contextUsageOf(state, viewed, models),
     rows: projection?.rows ?? noRows,

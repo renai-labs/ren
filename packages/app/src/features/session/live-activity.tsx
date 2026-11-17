@@ -1,6 +1,5 @@
 import type { Activity } from "@ren/chat"
-import { IconArrowUpRight, IconBrain, IconDeviceDesktop, IconHandStop, IconPencil } from "@tabler/icons-react"
-import { useState } from "react"
+import { IconArrowUpRight, IconBrain, IconDeviceDesktop, IconHandStop } from "@tabler/icons-react"
 import { cn } from "cn"
 import { AppIcon } from "../../components/app-icon.js"
 import { useApp } from "../../lib/use-app.js"
@@ -16,7 +15,6 @@ export interface LiveLine {
 const icons = {
   ...toolIcons,
   thinking: IconBrain,
-  writing: IconPencil,
   starting: IconDeviceDesktop,
   waiting: IconHandStop,
 }
@@ -30,17 +28,9 @@ function LineIcon(props: { line: LiveLine }) {
   return <Icon className="size-4" />
 }
 
-// oxlint-disable-next-line ren/no-comments -- The one line a running turn shows: what Ren does now, in plain words. Each call gets its moment even when it ends between two updates; then the line shows the current state. The icon stays still, the words shimmer, and each line holds long enough to read.
-export function LiveActivity(props: {
-  line: LiveLine
-  last?: { readonly id: string; readonly line: LiveLine } | undefined
-  onOpen?: (() => void) | undefined
-}) {
-  const [seen, setSeen] = useState(() => props.last?.id)
-  const last = props.last
-  const fresh = last && last.id !== seen ? last : undefined
-  const line = useSteady(fresh?.line ?? props.line, { key: keyOf, minMs: 700 })
-  if (fresh && keyOf(line) === keyOf(fresh.line)) setSeen(fresh.id)
+// oxlint-disable-next-line ren/no-comments -- The one line a running turn shows: the newest step in Activity, in plain words, so the chat and Activity always agree. The icon stays still, the words shimmer, and a line holds just long enough not to blink.
+export function LiveActivity(props: { line: LiveLine; onOpen?: (() => void) | undefined }) {
+  const line = useSteady(props.line, { key: keyOf, minMs: 300 })
   const content = (
     <>
       <span

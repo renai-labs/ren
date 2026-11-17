@@ -48,6 +48,46 @@ function cacheFor(cache: Platform.ChatCache, userId: string) {
   })
 }
 
+// oxlint-disable-next-line ren/no-comments -- A chat opens the moment its first message is sent, while Ren still creates the session: its reads wait for that, and the chat shows "Starting your computer" meanwhile.
+type Start = { readonly spaceId: string; readonly created: Promise<void>; readonly done: boolean }
+
+const starts = new Map<Session.ID, Start>()
+
+const startListeners = new Set<() => void>()
+
+const setStart = (sessionID: Session.ID, start: Start) => {
+  starts.delete(sessionID)
+  starts.set(sessionID, start)
+  for (const key of [...starts.keys()].slice(0, Math.max(0, starts.size - ChatAtoms.handoffLimit))) starts.delete(key)
+  for (const listener of startListeners) listener()
+}
+
+const subscribeStarts = (listener: () => void) => {
+  startListeners.add(listener)
+  return () => startListeners.delete(listener)
+}
+
+export const startingChat = (sessionID: Session.ID) => starts.get(sessionID)
+
+export function useStartingChat(sessionID: Session.ID) {
+  return useSyncExternalStore(subscribeStarts, () => starts.get(sessionID))
+}
+
+export function startChat(
+  platform: Platform.Info,
+  userId: string,
+  sessionID: Session.ID,
+  input: { readonly spaceId: string; readonly created: Promise<unknown>; readonly message: ChatSession.Handoff },
+) {
+  const created = input.created.then(
+    () => undefined,
+    () => undefined,
+  )
+  setStart(sessionID, { spaceId: input.spaceId, created, done: false })
+  void created.then(() => setStart(sessionID, { spaceId: input.spaceId, created, done: true }))
+  handoff(platform, userId, sessionID, input.message)
+}
+
 function makeAtoms(platform: Platform.Info, userId: string) {
   const server = Layer.mergeAll(
     FetchHttpClient.layer,
@@ -59,7 +99,8 @@ function makeAtoms(platform: Platform.Info, userId: string) {
     sender: { userId },
     ...(platform.onLifecycle && { lifecycle: platform.onLifecycle }),
     access: (sessionID: Session.ID, input: { readonly unreachable: boolean }) =>
-      Ren.make({ baseUrl: platform.serverUrl }).pipe(
+      Effect.promise(() => starts.get(sessionID)?.created ?? Promise.resolve()).pipe(
+        Effect.andThen(Ren.make({ baseUrl: platform.serverUrl })),
         Effect.flatMap((ren) =>
           ren.chat.access({ id: sessionID, ...(input.unreachable && { unreachable: "true" as const }) }),
         ),
@@ -150,7 +191,7 @@ export function useCurrentChat(platform: Platform.Info, userId: string): Chat {
   return chat
 }
 
-export function handoff(platform: Platform.Info, userId: string, sessionID: Session.ID, message: ChatSession.Handoff) {
+function handoff(platform: Platform.Info, userId: string, sessionID: Session.ID, message: ChatSession.Handoff) {
   chatFor(platform, userId).atoms.handoff(sessionID, message)
 }
 

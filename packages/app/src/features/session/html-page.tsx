@@ -1,35 +1,16 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import type { SessionMessage } from "@ren/schema/session/message"
-import {
-  IconAlertTriangle,
-  IconArrowsMaximize,
-  IconDots,
-  IconDownload,
-  IconFileCode,
-  IconFileOff,
-  IconMinus,
-  IconPlus,
-  IconRefresh,
-  IconX,
-} from "@tabler/icons-react"
+import { IconArrowsDiagonal, IconDownload, IconMinus, IconPlus, IconX } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
-import { Alert, AlertAction, AlertTitle } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Card } from "@ren/ui/card"
-import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { Dialog, DialogContent, DialogTitle } from "@ren/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
-import { Skeleton } from "@ren/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { cn } from "cn"
 import { errorStatus } from "../../lib/errors.js"
 import { useDriveFile } from "../../lib/use-drive-file.js"
 import { usePageFrame } from "../../lib/use-page-frame.js"
+import { PageHeights } from "../../lib/page-heights.js"
+import { Platform } from "../../platform/platform.js"
 import { HtmlPageBridge } from "./html-page-bridge.js"
 
 const zoomSteps: ReadonlyArray<number> = [50, 75, 100, 125, 150, 200]
@@ -39,125 +20,124 @@ interface Image {
   readonly alt: string
 }
 
+// oxlint-disable-next-line ren/no-comments -- As T3 Code shows a page: no frame or title, as wide as the reply and as tall as the page, so the page never scrolls inside the chat.
 function PageFrame(props: {
+  id: string
   title: string
   srcdoc: string
   zoom: number
-  fill?: boolean | undefined
   onImage: (image: Image) => void
 }) {
-  const [setFrame, ready] = usePageFrame({ zoom: props.zoom, onImage: props.onImage })
+  const storage = Platform.usePlatform().storage
+  const [setFrame, ready] = usePageFrame({
+    zoom: props.zoom,
+    onImage: props.onImage,
+    onHeight: (height) => PageHeights.set(storage, props.id, height),
+  })
   const [loaded, setLoaded] = useState<string>()
   const [left, setLeft] = useState(false)
   if (left)
     return (
-      <Alert className={cn("rounded-none border-0", props.fill && "min-h-0 flex-1")}>
-        <IconAlertTriangle />
-        <AlertTitle>Blocked: this page tried to open another site</AlertTitle>
-      </Alert>
+      <p className="flex h-20 items-center justify-center text-xs text-muted-foreground">
+        Blocked: this page tried to open another site
+      </p>
     )
   return (
-    <div className={cn("relative bg-background", props.fill && "min-h-0 flex-1")}>
-      {ready ? null : <Skeleton className="absolute inset-0 rounded-none" />}
-      <iframe
-        ref={setFrame}
-        title={props.title}
-        srcDoc={props.srcdoc}
-        sandbox="allow-scripts allow-forms"
-        referrerPolicy="no-referrer"
-        allow=""
-        onLoad={() => (loaded === props.srcdoc ? setLeft(true) : setLoaded(props.srcdoc))}
-        className={cn(
-          "block w-full border-0 transition-opacity duration-150 ease-out motion-reduce:transition-none",
-          props.fill ? "h-full max-h-full" : "h-60 max-h-[70vh] min-h-30",
-          ready ? "opacity-100" : "opacity-0",
-        )}
-      />
-    </div>
+    <iframe
+      ref={setFrame}
+      title={props.title}
+      srcDoc={props.srcdoc}
+      sandbox="allow-scripts allow-forms"
+      referrerPolicy="no-referrer"
+      allow=""
+      onLoad={() => (loaded === props.srcdoc ? setLeft(true) : setLoaded(props.srcdoc))}
+      // oxlint-disable-next-line react/forbid-dom-props -- the height this page measured last time, until it measures itself again
+      style={{ height: PageHeights.get(storage, props.id) }}
+      className={cn(
+        "block h-20 min-h-20 w-full border-0 transition-opacity duration-150 ease-out motion-reduce:transition-none",
+        ready ? "opacity-100" : "opacity-0",
+      )}
+    />
   )
 }
 
-function PageHeader(props: {
+function FullScreen(props: {
+  id: string
   title: string
-  zoom?: { level: number; onChange: (level: number) => void }
-  children: React.ReactNode
+  srcdoc: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onDownload: () => void
+  onImage: (image: Image) => void
 }) {
-  const zoom = props.zoom
-  const index = zoom ? zoomSteps.indexOf(zoom.level) : -1
+  const [zoom, setZoom] = useState(100)
+  const close = useRef<HTMLButtonElement>(null)
+  const index = zoomSteps.indexOf(zoom)
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b px-3">
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">{props.title}</span>
-      {zoom ? (
-        <>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Zoom out"
-            disabled={index <= 0}
-            onClick={() => zoom.onChange(zoomSteps[index - 1] ?? zoom.level)}
-          >
-            <IconMinus />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-12 px-0 tabular-nums"
-            aria-label="Reset zoom"
-            onClick={() => zoom.onChange(100)}
-          >
-            {zoom.level}%
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Zoom in"
-            disabled={index >= zoomSteps.length - 1}
-            onClick={() => zoom.onChange(zoomSteps[index + 1] ?? zoom.level)}
-          >
-            <IconPlus />
-          </Button>
-        </>
-      ) : null}
-      {props.children}
-    </div>
-  )
-}
-
-function PageFailure(props: { error: unknown; onRetry: () => void }) {
-  const missing = errorStatus(props.error) === 404
-  return (
-    <Alert variant={missing ? "default" : "destructive"} className="py-2.5">
-      {missing ? <IconFileOff /> : <IconAlertTriangle />}
-      <AlertTitle>{missing ? "This page is not in the drive" : "Couldn’t load the page"}</AlertTitle>
-      <AlertAction className="top-1 right-1">
-        <Button variant="ghost" size="sm" onClick={props.onRetry}>
-          <IconRefresh data-icon="inline-start" />
-          Retry
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        initialFocus={close}
+        overlayClassName="bg-black/80 dark:bg-black/80"
+        className="w-[min(92vw,--spacing(294))] max-w-none gap-2 bg-transparent p-0 shadow-none sm:max-w-none"
+      >
+        <DialogTitle className="sr-only">{props.title}</DialogTitle>
+        <Button
+          ref={close}
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close"
+          className="absolute -top-9 right-0 text-white/80 hover:bg-white/10 hover:text-white"
+          onClick={() => props.onOpenChange(false)}
+        >
+          <IconX />
         </Button>
-      </AlertAction>
-    </Alert>
-  )
-}
-
-function PageMenu(props: { source: boolean; onSource: () => void; onDownload: () => void }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="More" />}>
-        <IconDots />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={props.onDownload}>
-            <IconDownload />
-            Download HTML
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={props.onSource}>
-            <IconFileCode />
-            {props.source ? "Show page" : "Open as source"}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <div className="max-h-[min(86vh,calc(100vh-(--spacing(40))))] scrollbar-thin overflow-y-auto overscroll-contain rounded-lg bg-background p-4 shadow-dialog">
+          <PageFrame
+            id={`${props.id}:full`}
+            title={props.title}
+            srcdoc={props.srcdoc}
+            zoom={zoom}
+            onImage={props.onImage}
+          />
+        </div>
+        <div className="flex min-w-0 items-center justify-center gap-3 text-xs text-white/80">
+          <span className="truncate">{props.title}</span>
+          <div className="flex shrink-0 items-center gap-1 [&_button]:text-white/80 [&_button]:hover:bg-white/10 [&_button]:hover:text-white">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Zoom out"
+              disabled={index <= 0}
+              onClick={() => setZoom(zoomSteps[index - 1] ?? zoom)}
+            >
+              <IconMinus />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-12 px-0 tabular-nums"
+              aria-label="Reset zoom"
+              onClick={() => setZoom(100)}
+            >
+              {zoom}%
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Zoom in"
+              disabled={index >= zoomSteps.length - 1}
+              onClick={() => setZoom(zoomSteps[index + 1] ?? zoom)}
+            >
+              <IconPlus />
+            </Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Download HTML" onClick={props.onDownload}>
+              <IconDownload />
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -176,45 +156,8 @@ function ImageDialog(props: { image: Image | undefined; onClose: () => void }) {
   )
 }
 
-function PageBody(props: {
-  title: string
-  page: { html: string; srcdoc: string }
-  source: boolean
-  full: boolean
-  onFull: (full: boolean) => void
-  onImage: (image: Image) => void
-}) {
-  const [zoom, setZoom] = useState(100)
-  return (
-    <>
-      {props.source ? (
-        <CodeBlock size="sm" className="rounded-none">
-          <CodeBlockContent wrap className="max-h-[70vh]">
-            {props.page.html}
-          </CodeBlockContent>
-        </CodeBlock>
-      ) : (
-        <PageFrame title={props.title} srcdoc={props.page.srcdoc} zoom={100} onImage={props.onImage} />
-      )}
-      <Dialog open={props.full} onOpenChange={props.onFull}>
-        <DialogContent
-          showCloseButton={false}
-          className="inset-4 flex size-auto max-w-none translate-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
-        >
-          <DialogTitle className="sr-only">{props.title}</DialogTitle>
-          <PageHeader title={props.title} zoom={{ level: zoom, onChange: setZoom }}>
-            <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => props.onFull(false)}>
-              <IconX />
-            </Button>
-          </PageHeader>
-          <PageFrame title={props.title} srcdoc={props.page.srcdoc} zoom={zoom} fill onImage={props.onImage} />
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
 export function HtmlPage(props: { spaceId: string | undefined; file: SessionMessage.DriveFile }) {
+  const platform = Platform.usePlatform()
   const drive = useDriveFile(props.spaceId, props.file)
   const page = useQuery({
     // ast-grep-ignore: no-query-key-literal -- reads the page's bytes through its signed drive link, not the API
@@ -232,31 +175,62 @@ export function HtmlPage(props: { spaceId: string | undefined; file: SessionMess
       script.textContent = HtmlPageBridge.script
       doc.head.prepend(meta, script)
       return {
-        html,
         srcdoc: `<!doctype html>${doc.documentElement.outerHTML}`,
         title: doc.title.trim() || props.file.name,
       }
     },
   })
   const [full, setFull] = useState(false)
-  const [source, setSource] = useState(false)
   const [image, setImage] = useState<Image>()
-  if (page.isError) return <PageFailure error={page.error} onRetry={() => void page.refetch()} />
+  const id = `${props.file.path}:${props.file.size}`
   const title = page.data?.title ?? props.file.name
-  return (
-    <Card size="sm" className="w-full gap-0 rounded-lg py-0">
-      <PageHeader title={title}>
-        <Button variant="ghost" size="icon-sm" aria-label="Full screen" onClick={() => setFull(true)}>
-          <IconArrowsMaximize />
+  if (page.isError)
+    return (
+      <p className="flex h-20 items-center justify-center gap-1 text-xs text-muted-foreground">
+        {errorStatus(page.error) === 404 ? `${title} is not in the drive` : `Unable to load ${title}`}
+        <Button variant="ghost" size="sm" onClick={() => void page.refetch()}>
+          Retry
         </Button>
-        <PageMenu source={source} onSource={() => setSource(!source)} onDownload={drive.download} />
-      </PageHeader>
+      </p>
+    )
+  return (
+    <div className="group/page relative w-full">
       {page.data ? (
-        <PageBody title={title} page={page.data} source={source} full={full} onFull={setFull} onImage={setImage} />
+        <>
+          <PageFrame id={id} title={title} srcdoc={page.data.srcdoc} zoom={100} onImage={setImage} />
+          <div className="absolute end-2 top-2 flex gap-1 opacity-0 transition-opacity duration-150 group-hover/page:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="secondary"
+                    size="icon-sm"
+                    aria-label="Open full screen"
+                    className="bg-background/70 shadow-sm backdrop-blur-sm"
+                    onClick={() => setFull(true)}
+                  />
+                }
+              >
+                <IconArrowsDiagonal />
+              </TooltipTrigger>
+              <TooltipContent side="left">Open full screen</TooltipContent>
+            </Tooltip>
+          </div>
+          <FullScreen
+            id={id}
+            title={title}
+            srcdoc={page.data.srcdoc}
+            open={full}
+            onOpenChange={setFull}
+            onDownload={drive.download}
+            onImage={setImage}
+          />
+        </>
       ) : (
-        <Skeleton className="h-60 rounded-none" />
+        // oxlint-disable-next-line react/forbid-dom-props -- keeps the page's last height while its bytes load
+        <div className="h-20" style={{ height: PageHeights.get(platform.storage, id) }} />
       )}
       <ImageDialog image={image} onClose={() => setImage(undefined)} />
-    </Card>
+    </div>
   )
 }

@@ -6,16 +6,16 @@ import {
   IconGhostFilled,
   IconPlug,
   IconTerminal2,
-  IconWorldWww,
   type Icon,
 } from "@tabler/icons-react"
+import { IconWorld } from "../../icons/heroicons.js"
 
 export const toolIcons: Record<ToolDisplay.Kind, Icon> = {
   command: IconTerminal2,
   file: IconFile,
   edit: IconFilePencil,
   search: IconFileSearch,
-  web: IconWorldWww,
+  web: IconWorld,
   agent: IconGhostFilled,
   tool: IconPlug,
 }

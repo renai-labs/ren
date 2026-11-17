@@ -24,20 +24,24 @@ function MessageScroller({ className, ...props }: React.ComponentProps<typeof Me
   )
 }
 
+const endSlack = 8
+
+// oxlint-disable-next-line ren/no-comments -- Keeps a scroller that rests at its end there while its content or size changes, in the same frame, so nothing paints off the end first. It attaches before the first paint and starts pinned, as a chat opens at its end; only a scroll that leaves the end unpins it, not the primitive's own glide to the end.
 function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>, options: { readonly enabled: boolean }) {
   const pinning = React.useEffectEvent(() => options.enabled)
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const element = viewport.current
     const content = element?.querySelector("[data-slot=message-scroller-content]")
     if (!element || !content || typeof ResizeObserver === "undefined") return
     const gap = () => element.scrollHeight - element.scrollTop - element.clientHeight
-    const state = { atEnd: gap() <= 1 }
+    const state = { atEnd: true }
     const onScroll = () => {
-      state.atEnd = gap() <= 1
+      if (element.hasAttribute("data-autoscrolling")) return
+      state.atEnd = gap() <= endSlack
     }
     const observer = new ResizeObserver(() => {
       const spacer = element.querySelector<HTMLElement>("[data-message-scroller-spacer]")
-      if (pinning() && state.atEnd && (spacer?.offsetHeight ?? 0) === 0 && gap() > 1)
+      if (pinning() && state.atEnd && (spacer?.offsetHeight ?? 0) === 0 && gap() > 0.5)
         element.scrollTop = element.scrollHeight
     })
     element.addEventListener("scroll", onScroll, { passive: true })

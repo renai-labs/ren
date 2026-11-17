@@ -234,7 +234,7 @@ function MarkdownTable({ node: _node, className, children, ...props }: Component
 }
 
 const callouts = {
-  note: { label: "Note", Icon: IconInfoCircle, tone: "text-chart-1" },
+  note: { label: "Note", Icon: IconInfoCircle, tone: "text-link" },
   tip: { label: "Tip", Icon: IconBulb, tone: "text-chart-2" },
   important: { label: "Important", Icon: IconMessageReport, tone: "text-chart-6" },
   warning: { label: "Warning", Icon: IconAlertTriangle, tone: "text-chart-3" },

@@ -275,7 +275,7 @@ function useSuggestions(input: {
           end: token.end,
           label: token.item.label,
           icon: app?.icon ?? null,
-          color: mentionColor(app),
+          color: mentionColor,
           file: token.item.kind === "file",
         }
       }),

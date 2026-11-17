@@ -167,4 +167,4 @@ export const fromRegistry = (app: AppRegistryInfo): CatalogApp => ({
   listing: app.listing,
 })
 
-export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"
+export const mentionColor = "var(--link)"

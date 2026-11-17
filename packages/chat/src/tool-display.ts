@@ -131,7 +131,7 @@ const kinds: Readonly<Record<string, Kind>> = {
   apply_patch: "edit",
   grep: "search",
   glob: "search",
-  websearch: "search",
+  websearch: "web",
   tool_search: "search",
   webfetch: "web",
   kernel_browser_curl: "web",

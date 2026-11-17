@@ -14,8 +14,8 @@ import {
 } from "@ren/ui/attachment"
 import { FileIcon } from "@ren/ui/file-icon"
 import { cn } from "cn"
-import { FilePreview } from "../../components/file-preview/file-preview.js"
-import { kindOf } from "../../components/file-preview/preview.js"
+import { useNavigate } from "@tanstack/react-router"
+import { DriveFilePreview } from "../../components/file-preview/drive-file-view.js"
 import { MediaPlayer } from "../../components/media-player.js"
 import { ImageTrigger } from "../../components/image-set.js"
 import { MediaUnavailable } from "../../components/media-unavailable.js"
@@ -60,10 +60,19 @@ function DriveFileCard(props: {
   const drive = useDriveFile(props.spaceId, props.file)
   if (drive.image && drive.deleted && !props.onRemove)
     return <MediaUnavailable reason="Not in the drive" title={props.file.name} />
-  return <DriveFileChip file={props.file} drive={drive} disabled={props.disabled} onRemove={props.onRemove} />
+  return (
+    <DriveFileChip
+      spaceId={props.spaceId}
+      file={props.file}
+      drive={drive}
+      disabled={props.disabled}
+      onRemove={props.onRemove}
+    />
+  )
 }
 
 function DriveFileChip(props: {
+  spaceId: string | undefined
   file: SessionMessage.DriveFile
   drive: ReturnType<typeof useDriveFile>
   disabled?: boolean | undefined
@@ -72,7 +81,7 @@ function DriveFileChip(props: {
   const file = props.file
   const drive = props.drive
   const thumbnail = drive.image && !drive.deleted ? drive.url : undefined
-  const kind = kindOf(file)
+  const navigate = useNavigate()
   const [previewing, setPreviewing] = useState(false)
   return (
     <Attachment size="sm" state={drive.deleted ? "error" : "done"}>
@@ -84,7 +93,7 @@ function DriveFileChip(props: {
         </AttachmentDescription>
       </AttachmentContent>
       {drive.deleted || thumbnail ? null : (
-        <AttachmentTrigger aria-label={`Open ${file.name}`} onClick={kind ? () => setPreviewing(true) : drive.open} />
+        <AttachmentTrigger aria-label={`Open ${file.name}`} onClick={() => setPreviewing(true)} />
       )}
       <AttachmentActions>
         {drive.deleted || props.onRemove ? null : (
@@ -98,13 +107,12 @@ function DriveFileChip(props: {
           </AttachmentAction>
         ) : null}
       </AttachmentActions>
-      <FilePreview
-        kind={kind}
+      <DriveFilePreview
+        space={props.spaceId}
         file={file}
         open={previewing}
         onOpenChange={setPreviewing}
-        bytes={drive.bytes}
-        onDownload={drive.download}
+        onFolder={(folder) => void navigate({ to: "/drive", search: { space: props.spaceId, folder } })}
       />
     </Attachment>
   )

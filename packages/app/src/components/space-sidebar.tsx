@@ -15,7 +15,7 @@ import {
   IconFolder,
   IconInbox,
   IconKey,
-  IconLayoutGridFilled,
+  IconApps,
   IconLock,
   IconSelector,
   IconSettings,
@@ -79,7 +79,7 @@ const spaceGroups = [
     id: "connections",
     label: "Connections",
     items: [
-      { value: "apps", label: "Apps", icon: IconLayoutGridFilled, to: "/spaces/$spaceId/apps" },
+      { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
       { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
       { value: "credentials", label: "Secrets", icon: IconKey, to: "/spaces/$spaceId/credentials" },
       { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },

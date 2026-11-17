@@ -23,7 +23,7 @@ function ConnectCard(props: {
         <span className="flex items-center gap-1 font-medium">
           <span className="truncate">{props.app.name}</span>
           {props.app.source === "registry" ? (
-            <IconRosetteDiscountCheckFilled aria-label="Verified" className="size-4 shrink-0 text-chart-1" />
+            <IconRosetteDiscountCheckFilled aria-label="Verified" className="size-4 shrink-0 text-link" />
           ) : null}
         </span>
         <span className="flex items-center gap-2 truncate text-sm text-muted-foreground">
