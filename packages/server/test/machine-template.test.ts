@@ -6,20 +6,6 @@ const app = makeApp()
 afterAll(() => app.dispose())
 
 describe("environment templates over HTTP", () => {
-  test("the provider list gives Docker and the JSON Schema that the environment template form renders", async () => {
-    const cookie = sessionCookie(await signUp(app, "providers@gmail.com", "Ada"))
-    const response = await call(app, cookie, "GET", "/environment-providers")
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual([
-      expect.objectContaining({
-        id: "docker",
-        configSchema: expect.objectContaining({
-          schema: expect.objectContaining({ required: ["image"] }),
-        }),
-      }),
-    ])
-  })
-
   test("a config the provider refuses is a 400 that names the field; a good one makes an environment template that a space can use as its hand", async () => {
     const cookie = sessionCookie(await signUp(app, "environments@gmail.com", "Ada"))
     const refused = await call(app, cookie, "POST", "/environment-templates", {

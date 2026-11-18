@@ -199,9 +199,16 @@ it.effect("refreshes a token in its last five minutes, once for many concurrent 
   Effect.gen(function* () {
     const url = yield* TestHand.url
     const opens = yield* Ref.make(0)
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
     const environments = yield* environmentsWith(
       opening(() =>
-        Ref.update(opens, (count) => count + 1).pipe(
+        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
+          Effect.tap((count) =>
+            count === 1
+              ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release)))
+              : Effect.void,
+          ),
           Effect.andThen(Clock.currentTimeMillis),
           Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 900_000 })),
         ),
@@ -212,10 +219,17 @@ it.effect("refreshes a token in its last five minutes, once for many concurrent 
     yield* connection.client["executor.hello"]()
     expect(yield* Ref.get(opens)).toBe(1)
     yield* TestClock.adjust(Duration.seconds(2))
-    yield* Effect.all(
-      Array.from({ length: 10 }, () => connection.client["executor.hello"]()),
-      { concurrency: "unbounded" },
+    const call = Effect.scoped(connect(environments)).pipe(
+      Effect.flatMap((current) => current.client["executor.hello"]()),
     )
+    const parent = yield* Effect.forkScoped(call)
+    yield* Deferred.await(entered)
+    const subagent = yield* Effect.forkScoped(call)
+    yield* Deferred.succeed(release, undefined)
+    expect([(yield* Fiber.join(parent)).environmentId, (yield* Fiber.join(subagent)).environmentId]).toEqual([
+      environmentId,
+      environmentId,
+    ])
     expect(yield* Ref.get(opens)).toBe(2)
     yield* connection.client["executor.hello"]()
     expect(yield* Ref.get(opens)).toBe(2)
@@ -244,54 +258,42 @@ it.effect("a 20-second token refreshes in its last third, not on every call", ()
   }),
 )
 
-it.effect("keeps using a token it could not refresh while Ren does not answer, and asks Ren once in 30 seconds", () =>
-  Effect.gen(function* () {
-    const url = yield* TestHand.url
-    const opens = yield* Ref.make(0)
-    const environments = yield* environmentsWith(
-      opening((id) =>
-        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
-          Effect.flatMap((count) =>
-            count === 0
-              ? Clock.currentTimeMillis.pipe(
-                  Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })),
-                )
-              : Effect.fail(renDown(id)),
-          ),
-        ),
-      ),
-    )
-    const connection = yield* connect(environments)
-    yield* TestClock.adjust(Duration.minutes(7))
-    yield* Effect.forEach(Array.from({ length: 100 }), () => connection.client["executor.hello"](), { discard: true })
-    expect(yield* Ref.get(opens)).toBe(2)
-    yield* TestClock.adjust(Duration.seconds(29))
-    yield* connection.client["executor.hello"]()
-    expect(yield* Ref.get(opens)).toBe(2)
-    yield* TestClock.adjust(Duration.seconds(2))
-    yield* connection.client["executor.hello"]()
-    expect(yield* Ref.get(opens)).toBe(3)
-    expect(yield* connect(environments)).toBe(connection)
-  }),
-)
-
 it.effect(
-  "fails clearly once a token expires while Ren is down, and works again on the first try after the backoff",
+  "keeps using a token it could not refresh while Ren does not answer, asks Ren once in 30 seconds, and fails clearly once the token expires",
   () =>
     Effect.gen(function* () {
       const url = yield* TestHand.url
+      const opens = yield* Ref.make(0)
       const isDown = yield* Ref.make(false)
       const environments = yield* environmentsWith(
         opening((id) =>
-          Effect.gen(function* () {
-            if (yield* Ref.get(isDown)) return yield* renDown(id)
-            return yield* accessAt(url, { issuedAt: yield* Clock.currentTimeMillis, lifetimeMs: 600_000 })
-          }),
+          Ref.update(opens, (count) => count + 1).pipe(
+            Effect.andThen(Ref.get(isDown)),
+            Effect.flatMap((down) =>
+              down
+                ? Effect.fail(renDown(id))
+                : Clock.currentTimeMillis.pipe(
+                    Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })),
+                  ),
+            ),
+          ),
         ),
       )
-      yield* connect(environments)
+      const connection = yield* connect(environments)
       yield* Ref.set(isDown, true)
-      yield* TestClock.adjust(Duration.minutes(11))
+      yield* TestClock.adjust(Duration.minutes(7))
+      yield* Effect.forEach(Array.from({ length: 100 }), () => connection.client["executor.hello"](), {
+        discard: true,
+      })
+      expect(yield* Ref.get(opens)).toBe(2)
+      yield* TestClock.adjust(Duration.seconds(29))
+      yield* connection.client["executor.hello"]()
+      expect(yield* Ref.get(opens)).toBe(2)
+      yield* TestClock.adjust(Duration.seconds(2))
+      yield* connection.client["executor.hello"]()
+      expect(yield* Ref.get(opens)).toBe(3)
+      expect(yield* connect(environments)).toBe(connection)
+      yield* TestClock.adjust(Duration.minutes(4))
       const error = yield* connect(environments).pipe(Effect.flip)
       expect([error.reason, error.message]).toEqual(["ren_unavailable", "Ren does not answer: connection refused"])
       yield* Ref.set(isDown, false)
@@ -329,25 +331,28 @@ it.effect(
 )
 
 it.live(
-  "a sandbox that does not answer fails the call once, and the next call asks Ren and reaches the new sandbox",
+  "a sandbox that does not answer fails the call once, and each next call asks Ren to check the machine until it reaches the new sandbox",
   () =>
     Effect.gen(function* () {
       const relay = yield* Relay.make(Relay.portOf(yield* TestHand.url))
       const second = yield* machine({ environmentId, workspace: elsewhere })
       const current = yield* Ref.make(yield* accessAt(relay.url))
-      const opens = yield* Ref.make(0)
+      const asked = yield* Ref.make<ReadonlyArray<boolean>>([])
       const environments = yield* environmentsWith(
-        opening(() => Ref.update(opens, (count) => count + 1).pipe(Effect.andThen(Ref.get(current)))),
+        opening((_id, options) =>
+          Ref.update(asked, (all) => [...all, options.unreachable]).pipe(Effect.andThen(Ref.get(current))),
+        ),
       )
       const connection = yield* connect(environments)
       yield* relay.refuse(true)
       yield* relay.cut
-      yield* Ref.set(current, yield* accessAt(second, { root: elsewhere, generation: 2 }))
       const failed = yield* connection.client["process.spawn"]({ command: "true", arguments: [] }).pipe(Effect.flip)
       expect(HandClient.isNoAnswer(failed)).toBe(true)
-      expect(yield* Ref.get(opens)).toBe(1)
+      expect(yield* Ref.get(asked)).toEqual([false])
+      expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("unreachable")
+      yield* Ref.set(current, yield* accessAt(second, { root: elsewhere, generation: 2 }))
       const next = yield* connect(environments)
-      expect([yield* which(next), yield* Ref.get(opens)]).toEqual([elsewhere, 2])
+      expect([yield* which(next), yield* Ref.get(asked)]).toEqual([elsewhere, [false, true, true]])
     }),
 )
 
@@ -600,23 +605,6 @@ it.live("a session that has no access or a dead sandbox leaves the connection of
   }),
 )
 
-it.live("after its environment gave no answer, a session's next access asks Ren to check the machine", () =>
-  Effect.gen(function* () {
-    const relay = yield* Relay.make(Relay.portOf(yield* TestHand.url))
-    const access = yield* accessAt(relay.url)
-    const asked = yield* Ref.make<ReadonlyArray<boolean>>([])
-    const environments = yield* environmentsWith(
-      opening((_id, options) => Ref.update(asked, (all) => [...all, options.unreachable]).pipe(Effect.as(access))),
-    )
-    const connection = yield* environments.connect(sessionId)
-    yield* relay.refuse(true)
-    yield* relay.cut
-    yield* connection.client["files.stat"]({ path: folder() }).pipe(Effect.flip)
-    expect((yield* environments.connect(sessionId).pipe(Effect.flip)).reason).toBe("unreachable")
-    expect(yield* Ref.get(asked)).toEqual([false, true])
-  }),
-)
-
 it.effect("a connection outlives its token and still reaches the processes it started", () =>
   Effect.gen(function* () {
     const sandbox = yield* Probe.make()
@@ -762,42 +750,6 @@ it.effect("a refresh that ends after a failed call closed the connection leaves 
     yield* Fiber.join(refresh)
     expect(yield* connect(subject.environments)).toBe(fresh)
     expect(yield* which(fresh)).toBe(elsewhere)
-  }),
-)
-
-it.effect("a subagent shares its parent's session: two calls during a refresh cause one refresh and both succeed", () =>
-  Effect.gen(function* () {
-    const url = yield* TestHand.url
-    const opens = yield* Ref.make(0)
-    const entered = yield* Deferred.make<void>()
-    const release = yield* Deferred.make<void>()
-    const environments = yield* environmentsWith(
-      opening(() =>
-        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
-          Effect.tap((count) =>
-            count === 1
-              ? Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release)))
-              : Effect.void,
-          ),
-          Effect.andThen(Clock.currentTimeMillis),
-          Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 900_000 })),
-        ),
-      ),
-    )
-    yield* connect(environments)
-    yield* TestClock.adjust(Duration.minutes(11))
-    const call = Effect.scoped(connect(environments)).pipe(
-      Effect.flatMap((connection) => connection.client["executor.hello"]()),
-    )
-    const parent = yield* Effect.forkScoped(call)
-    yield* Deferred.await(entered)
-    const subagent = yield* Effect.forkScoped(call)
-    yield* Deferred.succeed(release, undefined)
-    expect([(yield* Fiber.join(parent)).environmentId, (yield* Fiber.join(subagent)).environmentId]).toEqual([
-      environmentId,
-      environmentId,
-    ])
-    expect(yield* Ref.get(opens)).toBe(2)
   }),
 )
 

@@ -196,23 +196,29 @@ it.live("an installed text skill is listed and loads once by tool and by mention
   }),
 )
 
-it.live("a mentioned skill's files reach the environment at the first environment call after it loads", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* opened.begin()
-    const marker = crypto.randomUUID()
-    yield* opened.harness.configure({
-      apps: Option.some(catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) })),
-    })
-    const mentioned = sent(yield* session.mention("forms"))
-    const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(mentioned)?.[1] ?? ""
-    expect([base.startsWith(join(folder(session.sessionId), ".ren", "skills", "forms")), yield* opened.opens]).toEqual([
-      true,
-      0,
-    ])
-    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
-    expect(yield* opened.opens).toBe(1)
-  }),
+it.live(
+  "a mentioned skill's files reach the environment at the first environment call after it loads, and come back at the next call when deleted there",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* opened.begin()
+      const marker = crypto.randomUUID()
+      yield* opened.harness.configure({
+        apps: Option.some(
+          catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) }),
+        ),
+      })
+      const mentioned = sent(yield* session.mention("forms"))
+      const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(mentioned)?.[1] ?? ""
+      expect([
+        base.startsWith(join(folder(session.sessionId), ".ren", "skills", "forms")),
+        yield* opened.opens,
+      ]).toEqual([true, 0])
+      expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
+      expect(yield* opened.opens).toBe(1)
+      yield* Effect.promise(() => rm(base, { recursive: true, force: true }))
+      expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
+    }),
 )
 
 it.live(
@@ -276,21 +282,6 @@ it.live("parallel environment calls wait for a loaded skill's files", () =>
     expect(results).toHaveLength(2)
     for (const message of results) expect(JSON.stringify(message.content)).toContain("copied")
     expect((yield* github.requests).filter((request) => request.startsWith("/api/repos/"))).toHaveLength(1)
-  }),
-)
-
-it.live("a loaded skill's files deleted on the environment come back at the next turn", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* opened.begin()
-    const marker = crypto.randomUUID()
-    yield* opened.harness.configure({
-      apps: Option.some(catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) })),
-    })
-    const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(sent(yield* session.mention("forms")))?.[1] ?? ""
-    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
-    yield* Effect.promise(() => rm(base, { recursive: true, force: true }))
-    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
   }),
 )
 

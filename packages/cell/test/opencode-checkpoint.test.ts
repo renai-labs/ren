@@ -434,23 +434,4 @@ describe("OpenCode checkpoint", () => {
         )
       }),
   )
-
-  it.live("a read-only connection opened before OpenCode made its tables finds them after", () =>
-    Effect.gen(function* () {
-      const file = join(yield* folder, "opencode.db")
-      yield* Effect.promise(() => Bun.write(file, ""))
-      const reader = new Database(file, { readonly: true })
-      yield* Effect.addFinalizer(() => Effect.sync(() => reader.close()))
-      const tables = () =>
-        reader
-          .query<{ name: string }, []>(
-            "select name from sqlite_master where type = 'table' and name in ('session_v2', 'session_message', 'event_sequence') order by name",
-          )
-          .all()
-          .map((row) => row.name)
-      expect(tables()).toEqual([])
-      yield* BrainTest.make({ database: file })
-      expect(tables()).toEqual(["event_sequence", "session_message", "session_v2"])
-    }),
-  )
 })

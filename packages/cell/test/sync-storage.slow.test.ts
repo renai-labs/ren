@@ -55,16 +55,13 @@ const fetched = (bytes: number) => ({
 })
 
 describe("S4-04: large message rows in a Durable Object", () => {
-  test.each([2_000_000, 3_000_000])(
-    "a tool output of %d bytes leaves a small row, because OpenCode cuts each tool output over 50 KB",
-    async (bytes) => {
-      const sizes = await large(fetched(bytes))
-      expect({ outcome: sizes.session.idle_outcome, small: largest(sizes) < 2_000 }).toEqual({
-        outcome: "succeeded",
-        small: true,
-      })
-    },
-  )
+  test("a tool output of 3,000,000 bytes leaves a small row, because OpenCode cuts each tool output over 50 KB", async () => {
+    const sizes = await large(fetched(3_000_000))
+    expect({ outcome: sizes.session.idle_outcome, small: largest(sizes) < 2_000 }).toEqual({
+      outcome: "succeeded",
+      small: true,
+    })
+  })
 
   test("model text of 2 MB: OpenCode writes a 2 MB row, and the turn succeeds", async () => {
     const sizes = await large({ reply: "b".repeat(2_000_000) })

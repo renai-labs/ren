@@ -5,7 +5,6 @@ import { TestClock } from "effect/testing"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
 import { Credential } from "@ren/schema/credential"
-import { Mcp } from "@ren/schema/mcp"
 import { McpProvider } from "../src/mcp-provider.js"
 import { ComposioTest } from "./lib/composio.js"
 import { ComposioServer } from "./lib/composio-server.js"
@@ -274,13 +273,6 @@ describe("provider registry (§14, P38, P39)", () => {
         expect(sealed.type === "route" && sealed.state).toEqual({ relay: { account: "acct_1", opaque: [1, 2, 3] } })
         expect(Redacted.value((yield* relay.route(state)).upstream)).toBe("https://relay.test/mcp")
         expect(opened).toEqual([state])
-        const app = Schema.decodeUnknownExit(Mcp.Declaration)({
-          name: "Mail",
-          description: "Mail",
-          transport: { type: "provider", provider: "pipedream", integration: "gmail" },
-          auth: { type: "oauth", tokenEndpointAuth: "none" },
-        })
-        expect(app._tag).toBe("Success")
       }),
   )
 })

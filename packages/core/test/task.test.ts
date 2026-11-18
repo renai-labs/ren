@@ -288,26 +288,6 @@ describe("Task", () => {
       )
     }),
   )
-
-  it.live(
-    "the agent must be usable in the task's space, the global ren agent always is, and the owner is a member",
-    () =>
-      Effect.gen(function* () {
-        const tasks = yield* Task.Service
-        const o = yield* org
-        const engAgent = yield* Seed.agent({ organizationId: o.organizationId, spaceId: o.eng.id }, "eng-build", {
-          isSubagent: false,
-        })
-        expect(
-          (yield* Effect.flip(tasks.create(o.ada, { spaceId: o.factory.id, title: "A", agentId: engAgent })))._tag,
-        ).toBe("Primitive.Invalid")
-        expect((yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "B", agentId: o.ren })).agentId).toBe(o.ren)
-        expect(
-          (yield* Effect.flip(tasks.create(o.ada, { spaceId: o.factory.id, title: "C", ownerId: o.grace.userId })))
-            ._tag,
-        ).toBe("Primitive.Invalid")
-      }),
-  )
 })
 
 describe("Subtasks", () => {

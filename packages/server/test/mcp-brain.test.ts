@@ -10,6 +10,7 @@ import { Space } from "@ren/schema/space"
 import { Clock, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpRouter } from "effect/http"
 import { Routes } from "../src/routes.js"
+import { SlackMcp } from "../src/slack-mcp.js"
 import { environment, hostToken, services, sign } from "./lib/app.js"
 import { result } from "./lib/mcp.js"
 
@@ -32,15 +33,17 @@ const send = Effect.fnUntraced(function* (
   headers: Record<string, string>,
   method: string,
   params: Record<string, unknown> = {},
+  path = "/mcp",
 ) {
   const http = yield* HttpClient.HttpClient
   const response = yield* http.execute(
-    HttpClientRequest.post("/mcp").pipe(
+    HttpClientRequest.post(path).pipe(
       HttpClientRequest.setHeaders({
         accept: "application/json, text/event-stream",
         "mcp-protocol-version": "2026-07-28",
         "mcp-method": method,
         ...(typeof params.name === "string" && { "mcp-name": params.name }),
+        ...(typeof params.uri === "string" && { "mcp-name": params.uri }),
         ...headers,
       }),
       HttpClientRequest.bodyJsonUnsafe({ jsonrpc: "2.0", id: 1, method, params: { ...params, _meta: meta } }),
@@ -49,6 +52,9 @@ const send = Effect.fnUntraced(function* (
   const text = yield* response.text
   return { status: response.status, text }
 })
+
+const slack = (headers: Record<string, string>, method: string, params: Record<string, unknown> = {}) =>
+  send(headers, method, params, SlackMcp.path)
 
 const tool = Effect.fnUntraced(function* (
   headers: Record<string, string>,
@@ -211,5 +217,33 @@ describe("Ren MCP for a brain", () => {
       )
       expect(response.status).toBe(401)
     }),
+  )
+})
+
+describe("Slack MCP", () => {
+  it.live(
+    "serves the Slack tools and guides to a brain's chat only, and a call where Slack is off is a tool error with the reason",
+    () =>
+      Effect.gen(function* () {
+        yield* Seed.ren()
+        const owner = yield* Seed.owner()
+        const sessionId = yield* Seed.session(owner)
+        const headers = {
+          authorization: `Bearer ${yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)}`,
+          [HostMcp.sessionHeader]: sessionId,
+        }
+        expect((yield* slack({ authorization: headers.authorization }, "tools/list")).status).toBe(401)
+        const listed = yield* slack(headers, "tools/list")
+        expect(listed.status).toBe(200)
+        expect(listed.text).toContain('"name":"send_message"')
+        expect(listed.text).not.toContain('"name":"me_get"')
+        const guide = yield* slack(headers, "resources/read", { uri: "slack://guides/messaging" })
+        expect(guide.text).toContain("# Writing Slack messages")
+        const called = yield* slack(headers, "tools/call", { name: "list_user_channels", arguments: {} })
+        expect(yield* Effect.promise(() => result(new Response(called.text)))).toMatchObject({
+          isError: true,
+          content: [{ type: "text", text: "Slack is not set up on this Ren server." }],
+        })
+      }),
   )
 })

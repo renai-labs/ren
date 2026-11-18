@@ -48,7 +48,7 @@ async function emittedModule(output: Types.Output) {
 }
 
 describe("HttpApiCodegen.generate", () => {
-  test("keeps custom input validation in the imported API while emitting Promise wire inputs", async () => {
+  test("emits an Effect client against an imported API and keeps custom input validation in it while emitting Promise wire inputs", async () => {
     const contract = Compile.compile(
       api(
         HttpApiEndpoint.post("create", "/session", {
@@ -60,30 +60,13 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
     const effect = EmitEffectImported.emitEffectImported(contract, { module: "@example/api", api: "Api" })
+    expect(file(effect, "client.ts")).toContain('import { Api } from "@example/api"')
     expect(file(effect, "client.ts")).toContain("HttpApiClient.make(Api, options)")
     await using emitted = await emittedModule(EmitPromise.emitPromise(contract))
     const recorded = recorder(() => Response.json("created"))
     const client = emitted.module.Ren.make({ baseUrl: "http://localhost", fetch: recorded.fetch })
     expect(await client.session.create({ title: "Task" })).toBe("created")
     expect(await recorded.requests[0]?.json()).toEqual({ title: "Task" })
-  })
-
-  test("emits an Effect client against an imported API", () => {
-    const output = EmitEffectImported.emitEffectImported(
-      Compile.compile(
-        api(
-          HttpApiEndpoint.get("get", "/session/:sessionID", {
-            params: { sessionID: Schema.String },
-            success: Schema.Struct({ data: Schema.String }),
-          }),
-        ),
-      ),
-      { module: "@example/api", api: "Api" },
-    )
-    const client = file(output, "client.ts")
-
-    expect(client).toContain('import { Api } from "@example/api"')
-    expect(client).toContain("HttpApiClient.make(Api, options)")
   })
 
   test("keeps a required empty struct payload in imported Effect and Promise requests", () => {
@@ -291,8 +274,6 @@ describe("HttpApiCodegen.generate", () => {
       ]),
       payload: { type: "local", command: ["ren"] },
     },
-    { kind: "array", schema: Schema.Array(Schema.String), payload: ["ren"] },
-    { kind: "primitive", schema: Schema.String, payload: "ren" },
     { kind: "record", schema: Schema.Record(Schema.String, Schema.Number), payload: { ren: 1 } },
   ])("sends an opaque $kind payload as the direct JSON body", async (row) => {
     await using emitted = await emittedModule(

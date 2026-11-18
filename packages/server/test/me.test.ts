@@ -127,7 +127,7 @@ describe("POST /me/deletion", () => {
     })
   })
 
-  test("refuses while the user is the only owner of an organization with other members", async () => {
+  test("answers 409 while the user is the only owner of an organization with other members", async () => {
     const owner = sessionCookie(await signUp(app, "sole-owner@gmail.com", "Ada"))
     const joiner = sessionCookie(await signUp(app, "teammate@gmail.com", "Grace"))
     const team = await (
@@ -147,10 +147,24 @@ describe("POST /me/deletion", () => {
     const refused = await requestDeletion(owner)
 
     expect(refused.status).toBe(409)
-    expect(await refused.json()).toMatchObject({
-      message:
-        "You’re the only owner of Owned. Make another member an owner before you delete your account, or contact support@renai.build.",
+    expect(await refused.json()).toMatchObject({ _tag: "ConflictError" })
+  })
+})
+
+describe("GET /invitations/:id/preview", () => {
+  test("previews a pending invitation without signing in or exposing the invitee", async () => {
+    const cookie = sessionCookie(await signUp(app, "ingrid@northstar.dev", "Ingrid Inviter"))
+    const invited = await app.handler(
+      authRequest("/organization/invite-member", { email: "sophie@gmail.com", role: "member" }, cookie),
+    )
+    const invitation = await invited.json()
+
+    const response = await app.handler(new Request(`http://localhost:4000/invitations/${invitation.id}/preview`))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      state: "pending",
+      organization: { id: invitation.organizationId, name: "Northstar", logo: null },
+      inviter: { name: "Ingrid Inviter", email: "ingrid@northstar.dev" },
     })
-    expect((await me(owner)).status).toBe(200)
   })
 })

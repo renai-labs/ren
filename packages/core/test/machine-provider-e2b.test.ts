@@ -209,30 +209,33 @@ describe("E2BSandbox with an egress", () => {
     }),
   )
 
-  it.live("this Ren sees only the sandboxes of its E2B_OWNER, so its cleanup never destroys another Ren's", () =>
-    Effect.gen(function* () {
-      const provider = yield* BrainProvider.first
-      seen.length = 0
-      expect((yield* provider.list).map((each) => each.binding)).toEqual([
-        { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
-      ])
-      yield* provider.create({
-        labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
-        config: {},
-        variables: {},
-        image: Option.none(),
-        network: MachineProvider.unrestricted,
-      })
-      const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
-      expect(JSON.parse(create?.body ?? "{}").metadata).toEqual({
-        owner: "ren-test-a",
-        brain: "brn_03",
-        generation: "1",
-        kind: "brain",
-        organization: "org_01",
-        space: "spc_01",
-      })
-    }),
+  it.live(
+    "this Ren sees only the sandboxes of its E2B_OWNER, so its cleanup never destroys another Ren's, and without an egress a create sends no network config",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* BrainProvider.first
+        seen.length = 0
+        expect((yield* provider.list).map((each) => each.binding)).toEqual([
+          { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
+        ])
+        yield* provider.create({
+          labels: { kind: "brain", id: Brain.ID.make("brn_03"), generation: 1, ...owner },
+          config: {},
+          variables: {},
+          image: Option.none(),
+          network: MachineProvider.unrestricted,
+        })
+        const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
+        expect(JSON.parse(create?.body ?? "{}").metadata).toEqual({
+          owner: "ren-test-a",
+          brain: "brn_03",
+          generation: "1",
+          kind: "brain",
+          organization: "org_01",
+          space: "spc_01",
+        })
+        expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
+      }),
   )
 
   it.live("a create that finds its sandbox paused resumes it before the network update, and makes no other", () =>
@@ -251,22 +254,6 @@ describe("E2BSandbox with an egress", () => {
           .filter((request) => request.path.startsWith("/sandboxes"))
           .map((request) => `${request.method} ${request.path}`),
       ).toEqual(["POST /sandboxes/sbx_1/connect", "PUT /sandboxes/sbx_1/network"])
-    }),
-  )
-
-  it.live("without an egress, a create sends no network config", () =>
-    Effect.gen(function* () {
-      const provider = yield* BrainProvider.first
-      seen.length = 0
-      yield* provider.create({
-        labels: { kind: "brain", id: Brain.ID.make("brn_02"), generation: 1, ...owner },
-        config: {},
-        variables: {},
-        image: Option.none(),
-        network: MachineProvider.unrestricted,
-      })
-      const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
-      expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
     }),
   )
 })

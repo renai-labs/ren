@@ -77,10 +77,10 @@ bun typecheck
 - `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, first with scripted snapshots, then with the in-process OpenCode harness.
 - `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
 - `host-access.test.ts`: `HostAccess`, the cell's Ren Host API `HandAccess`, against a fake Ren (`test/lib/ren.ts`).
-- `workspace-driver.test.ts`: the OpenCode `ren` driver's file and error mapping.
+- `workspace-driver.test.ts`: the OpenCode `ren` driver's errors and file size limits.
 - `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`, `sync.test.ts`: Ren's ownership, decisions and transformations.
 - `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.
-- `crash.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
-- `hand-lifecycle-cell.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.
+- `crash.slow.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
+- `hand-lifecycle-cell.slow.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.
 
 Integration processes are acquired and released by scoped layers.

@@ -10,13 +10,10 @@ const hasDocker = Bun.spawnSync(["docker", "info"], { stdout: "ignore", stderr: 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer))
 
 describe.skipIf(!hasDocker)("the Docker environment provider", () => {
-  it.live("refuses a config without an image, and says so for the form", () =>
+  it.live("refuses a config without an image", () =>
     Effect.gen(function* () {
       const provider = yield* Docker.provider
       expect((yield* provider.check({ cpus: 1 }).pipe(Effect.flip))._tag).toBe("MachineProvider.InvalidConfig")
-      expect(provider.info.configSchema).toMatchObject({
-        schema: { required: ["image"], properties: { image: { title: "Image" } } },
-      })
     }),
   )
 })

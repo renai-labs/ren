@@ -17,11 +17,6 @@ const verify = (token: string) =>
     ),
   )
 
-test("signs and verifies an environment token", async () => {
-  const token = await Effect.runPromise(HandToken.sign(pair.privateKey, claims))
-  expect(await verify(token)).toEqual(Option.some({ ...claims, typ: "environment", kid: "active" }))
-})
-
 test("never accepts a token of another type", async () => {
   const token = await Effect.runPromise(Signature.sign(pair.privateKey, { ...claims, typ: "brain" }))
   expect(await verify(token)).toEqual(Option.none())

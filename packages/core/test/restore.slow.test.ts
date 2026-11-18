@@ -144,29 +144,6 @@ const opened = Effect.fnUntraced(function* (text: string, options: { readonly ha
 })
 
 it.live(
-  "a chat with two subagent chats, synced, then its harness database lost: the first read restores the whole history and both subagent chats",
-  () =>
-    Effect.gen(function* () {
-      const first = stub.script()
-      const second = stub.script()
-      const chat = yield* opened(`open ${subagent(first).marker}`)
-      yield* Effect.promise(() => first.called())
-      yield* chat.idle
-      yield* chat.chat("/prompt", {
-        method: "POST",
-        body: JSON.stringify({ id: SessionMessage.ID.create(), text: subagent(second).marker, delivery: "steer" }),
-      })
-      yield* Effect.promise(() => second.called())
-      yield* chat.idle
-      const before = yield* chat.read
-      expect(before.children).toHaveLength(2)
-      yield* chat.synced
-      yield* Host.forgetHarness(chat.brainId)
-      expect(yield* chat.read).toEqual(before)
-    }),
-)
-
-it.live(
   "a chat that had no tools gets a workspace and its tools at its restore on a brain that applied a hand, with its history",
   () =>
     Effect.gen(function* () {

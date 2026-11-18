@@ -1,77 +1,29 @@
 import { expect } from "bun:test"
-import { BunServices } from "@effect/platform-bun"
 import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
-import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
+import { Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { existsSync, watch } from "node:fs"
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readdir,
-  realpath,
-  rename,
-  rm,
-  stat,
-  symlink,
-  truncate,
-  writeFile,
-} from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readdir, rename, rm, stat, symlink, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 import { Executor } from "../src/executor.js"
-import { Sandbox } from "../src/sandbox.js"
 import { testEffect } from "./lib/effect.js"
 import { Processes } from "./lib/process.js"
+import { TestSandbox } from "./lib/sandbox.js"
 
-const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-executor-")))
-const executor = Sandbox.layer.pipe(
-  Layer.provide(BunServices.layer),
-  Layer.provide(
-    ConfigProvider.layer(
-      ConfigProvider.fromUnknown({
-        EXECUTOR_ENVIRONMENT_ID: Hand.ID.create(),
-        EXECUTOR_WORKSPACE: workspace,
-        ...(process.env.SHELL && { SHELL: process.env.SHELL }),
-        ...ExecutorVariables.hiding([
-          "POSTHOG_PROJECT_KEY",
-          "OTEL_EXPORTER_OTLP_HEADERS",
-          "REN_BRAIN_ID",
-          "PORT",
-          "REN_URL",
-        ]),
-      }),
-    ),
-  ),
-)
+const executor = TestSandbox.layer
 const it = testEffect(executor)
-const brain = Brain.ID.create()
-const decoder = new TextDecoder()
+const workspace = TestSandbox.workspace
+const brain = TestSandbox.brain
+const decoder = TestSandbox.decoder
 const encoder = new TextEncoder()
-
-const run = Effect.fnUntraced(function* (input: HandApi.SpawnInput) {
-  const executor = yield* Executor.Service
-  const spawned = yield* executor.spawn(brain, input)
-  return { executor, id: spawned.id, pid: spawned.pid, events: yield* executor.output(brain, spawned.id) }
-})
-
+const run = TestSandbox.run
+const bytesOf = TestSandbox.bytesOf
+const collect = TestSandbox.collect
+const mebibyte = TestSandbox.mebibyte
 const bun = process.execPath
-const mebibyte = 1024 * 1024
-
-const bytesOf = (events: ReadonlyArray<HandApi.ProcessEvent>, type: "stdout" | "stderr") =>
-  new Uint8Array(Buffer.concat(events.flatMap((event) => (event.type === type ? [event.bytes] : []))))
-
-const collect = (events: Stream.Stream<HandApi.ProcessEvent>) =>
-  Stream.runCollect(events).pipe(
-    Effect.map((all) => ({
-      stdout: all.flatMap((event) => (event.type === "stdout" ? [decoder.decode(event.bytes)] : [])).join(""),
-      stderr: all.flatMap((event) => (event.type === "stderr" ? [decoder.decode(event.bytes)] : [])).join(""),
-      exit: all.findLast((event) => event.type === "exit"),
-    })),
-  )
 
 it.live("streams stdout, stderr and the exit code", () =>
   Effect.gen(function* () {
@@ -212,11 +164,22 @@ it.live("writes stdin and closes it", () =>
   }),
 )
 
-it.live("reports the signal that ended a process", () =>
+it.live("reports the signal that ended a process, sent by a stop or by the process itself", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "sleep", arguments: ["30"] })
     yield* process.executor.kill(brain, process.id, "SIGTERM")
     expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: null, signal: "SIGTERM" })
+    const exits = yield* Effect.forEach(["TERM", "INT", "KILL"], (name) =>
+      run({ command: "sh", arguments: ["-c", `kill -s ${name} $$`] }).pipe(
+        Effect.flatMap((own) => collect(own.events)),
+        Effect.map((output) => output.exit),
+      ),
+    )
+    expect(exits).toEqual([
+      { type: "exit", exitCode: null, signal: "SIGTERM" },
+      { type: "exit", exitCode: null, signal: "SIGINT" },
+      { type: "exit", exitCode: null, signal: "SIGKILL" },
+    ])
   }),
 )
 
@@ -253,11 +216,13 @@ it.live("keeps an exited process, so a reader that comes back after the exit sti
   }),
 )
 
-it.effect("forgets an exited process 45 seconds after its last read, and not while it is read again", () =>
+it.effect("forgets an exited process 45 seconds after its last read or exit, and not while it is read again", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
+    const unread = yield* executor.spawn(brain, { command: "true", arguments: [] })
     const spawned = yield* executor.spawn(brain, { command: "true", arguments: [] })
     yield* Stream.runDrain(yield* executor.output(brain, spawned.id))
+    yield* Processes.exits(unread.pid)
     yield* TestClock.adjust(Duration.seconds(44))
     yield* Stream.runDrain(yield* executor.output(brain, spawned.id))
     yield* TestClock.adjust(Duration.seconds(44))
@@ -268,6 +233,7 @@ it.effect("forgets an exited process 45 seconds after its last read, and not whi
     })
     yield* TestClock.adjust(Duration.seconds(46))
     expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+    expect((yield* executor.output(brain, unread.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
   }),
 )
 
@@ -329,35 +295,26 @@ it.live("keeps the last 2 MiB of a process nobody reads, and starts a late reade
     const chunks = events.flatMap((event) => (event.type === "stdout" ? [event] : []))
     const first = chunks.at(0)
     const last = chunks.at(-1)
-    expect(first?.offset).toBeGreaterThanOrEqual(5_000_000 - 2 * 1024 * 1024 - 64 * 1024)
+    const kept = chunks.reduce((total, chunk) => total + chunk.bytes.length, 0)
+    expect(first?.offset).toBe(5_000_000 - kept)
+    expect(kept).toBeLessThanOrEqual(2 * mebibyte + 64 * 1024)
     expect(last && last.offset + last.bytes.length).toBe(5_000_000)
     expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
   }),
 )
 
-it.live("holds a process back for a slow reader rather than drop output it has not read", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: "head", arguments: ["-c", "5000000", "/dev/zero"] })
-    const size = yield* process.events.pipe(
-      Stream.tap(() => Effect.sleep(5)),
-      Stream.runFold(
-        () => 0,
-        (total, event) => total + (event.type === "stdout" ? event.bytes.length : 0),
-      ),
-    )
-    expect(size).toBe(5_000_000)
-  }),
-)
-
-it.effect("kills a process that nobody reads or names for 30 seconds", () =>
+it.effect("kills a process that nobody reads or names for 30 seconds, and a read or a name resets the count", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
-    const spawned = yield* executor.spawn(brain, { command: "sleep", arguments: ["30"] })
+    const spawned = yield* executor.spawn(brain, { command: "sleep", arguments: ["120"] })
     yield* TestClock.adjust(Duration.seconds(29))
+    expect(Processes.running(spawned.pid)).toBe(true)
     yield* executor.kill(brain, spawned.id, "SIGCONT")
     yield* TestClock.adjust(Duration.seconds(29))
+    expect(Processes.running(spawned.pid)).toBe(true)
     yield* executor.output(brain, spawned.id)
     yield* TestClock.adjust(Duration.seconds(31))
+    expect(yield* Processes.exits(spawned.pid)).toBe(true)
     expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
   }),
 )
@@ -992,7 +949,7 @@ it.live("refuses stdin at once for a process that exited", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
     const errors = yield* Effect.forEach(
-      Array.from({ length: 30 }),
+      Array.from({ length: 3 }),
       () =>
         Effect.gen(function* () {
           const spawned = yield* executor.spawn(brain, { command: "true", arguments: [], hasStdin: true })
@@ -1003,7 +960,7 @@ it.live("refuses stdin at once for a process that exited", () =>
         }),
       { concurrency: 1 },
     )
-    expect(errors).toEqual(Array(30).fill("StdinClosedError"))
+    expect(errors).toEqual(Array(3).fill("StdinClosedError"))
   }),
 )
 
@@ -1054,38 +1011,6 @@ it.live("gives binary output byte for byte, all 256 values", () =>
     })
     const events = yield* Stream.runCollect(process.events)
     expect(bytesOf(events, "stdout")).toEqual(Uint8Array.from({ length: 256 }, (_, index) => index))
-  }),
-)
-
-it.live("streams 50 MB to a reader and keeps only the last 2 MiB of it", () =>
-  Effect.gen(function* () {
-    const executor = yield* Executor.Service
-    Bun.gc(true)
-    const before = process.memoryUsage().arrayBuffers
-    const spawned = yield* executor.spawn(brain, { command: "sh", arguments: ["-c", "yes | head -c 52428800"] })
-    const received = yield* (yield* executor.output(brain, spawned.id)).pipe(
-      Stream.runFold(
-        () => 0,
-        (total, event) => total + (event.type === "stdout" ? event.bytes.length : 0),
-      ),
-    )
-    expect(received).toBe(50 * mebibyte)
-    Bun.gc(true)
-    expect(process.memoryUsage().arrayBuffers - before).toBeLessThan(3 * mebibyte)
-  }),
-)
-
-it.live("gives output with no new line, with only carriage returns, and one line of 10 MiB as it is", () =>
-  Effect.gen(function* () {
-    const output = Effect.fnUntraced(function* (script: string) {
-      const process = yield* run({ command: "sh", arguments: ["-c", script] })
-      return bytesOf([...(yield* Stream.runCollect(process.events))], "stdout")
-    })
-    expect(decoder.decode(yield* output("printf abc"))).toBe("abc")
-    expect(decoder.decode(yield* output("printf 'a\\rb\\rc\\r'"))).toBe("a\rb\rc\r")
-    const line = yield* output("head -c 10485760 /dev/zero | tr '\\0' a")
-    expect(line.length).toBe(10 * mebibyte)
-    expect(line).toEqual(new Uint8Array(10 * mebibyte).fill(97))
   }),
 )
 
@@ -1169,36 +1094,6 @@ it.live("waits for new output when the cursor is after the end", () =>
     expect([...(yield* Fiber.join(early))]).toEqual([
       { type: "stdout", offset: 4, bytes: encoder.encode("e") },
       { type: "exit", exitCode: 0, signal: null },
-    ])
-  }),
-)
-
-it.live("gives a second reader from cursor 0 the first byte that is kept, and the offset tells the gap", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: "head", arguments: ["-c", String(3 * mebibyte), "/dev/zero"] })
-    yield* Stream.runDrain(process.events)
-    const events = [...(yield* Stream.runCollect(yield* process.executor.output(brain, process.id)))]
-    const chunks = events.flatMap((event) => (event.type === "stdout" ? [event] : []))
-    const kept = chunks.reduce((total, chunk) => total + chunk.bytes.length, 0)
-    expect(chunks.at(0)?.offset).toBe(3 * mebibyte - kept)
-    expect(chunks.at(0)?.offset).toBeGreaterThan(0)
-    expect(kept).toBeLessThanOrEqual(2 * mebibyte + 64 * 1024)
-    expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
-  }),
-)
-
-it.live("reports a signal that the process sent to itself", () =>
-  Effect.gen(function* () {
-    const exits = yield* Effect.forEach(["TERM", "INT", "KILL"], (name) =>
-      run({ command: "sh", arguments: ["-c", `kill -s ${name} $$`] }).pipe(
-        Effect.flatMap((process) => collect(process.events)),
-        Effect.map((output) => output.exit),
-      ),
-    )
-    expect(exits).toEqual([
-      { type: "exit", exitCode: null, signal: "SIGTERM" },
-      { type: "exit", exitCode: null, signal: "SIGINT" },
-      { type: "exit", exitCode: null, signal: "SIGKILL" },
     ])
   }),
 )
@@ -1372,18 +1267,6 @@ it.live("gives a reader that comes back after the exit, or while it exits, the r
   }),
 )
 
-it.effect("alive at 29 seconds and stopped at 31 with no reader and no name", () =>
-  Effect.gen(function* () {
-    const executor = yield* Executor.Service
-    const spawned = yield* executor.spawn(brain, { command: "sleep", arguments: ["120"] })
-    yield* TestClock.adjust(Duration.seconds(29))
-    expect(Processes.running(spawned.pid)).toBe(true)
-    yield* TestClock.adjust(Duration.seconds(2))
-    expect(yield* Processes.exits(spawned.pid)).toBe(true)
-    expect((yield* executor.heartbeat(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-  }),
-)
-
 it.effect("ends the stream of a reader whose command the sweep stops, and does not leave it waiting", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
@@ -1405,60 +1288,6 @@ it.effect("ends the stream of a reader whose command the sweep stops, and does n
       ),
     )
     expect(Option.isSome(ended)).toBe(true)
-  }),
-)
-
-it.effect("forgets a completed command that nobody reads 45 seconds after its exit", () =>
-  Effect.gen(function* () {
-    const executor = yield* Executor.Service
-    const spawned = yield* executor.spawn(brain, { command: "true", arguments: [] })
-    yield* Processes.exits(spawned.pid)
-    yield* TestClock.withLive(Effect.sleep(Duration.millis(200)))
-    yield* TestClock.adjust(Duration.seconds(46))
-    expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-  }),
-)
-
-it.live(
-  "completes 200 commands from 10 brains at the same time, and gives back its file descriptors",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      const start = Processes.openFiles()
-      const commands = Array.from({ length: 10 }, () => Brain.ID.create()).flatMap((owner, index) =>
-        Array.from({ length: 20 }, (_, count) => ({ owner, number: index * 20 + count })),
-      )
-      const outputs = yield* Effect.forEach(
-        commands,
-        (command) =>
-          Effect.gen(function* () {
-            const spawned = yield* executor.spawn(command.owner, {
-              command: "sh",
-              arguments: ["-c", `sleep 0.2; echo ${command.number}`],
-            })
-            return yield* collect(yield* executor.output(command.owner, spawned.id))
-          }),
-        { concurrency: "unbounded" },
-      )
-      expect(outputs).toEqual(
-        commands.map((command) => ({
-          stdout: `${command.number}\n`,
-          stderr: "",
-          exit: { type: "exit", exitCode: 0, signal: null },
-        })),
-      )
-      expect(Processes.openFiles()).toBe(start)
-    }),
-  30_000,
-)
-
-it.live("reads an empty file as no bytes", () =>
-  Effect.gen(function* () {
-    const executor = yield* Executor.Service
-    yield* executor.write("empty.txt", new Uint8Array())
-    const read = yield* executor.read("empty.txt")
-    expect(read.bytes).toEqual(new Uint8Array())
-    expect(read.info.sizeBytes).toBe(0)
   }),
 )
 

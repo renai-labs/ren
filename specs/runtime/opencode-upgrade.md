@@ -80,7 +80,7 @@ Redo these in PR 2 (patch: `~/.ren-backups/backup-2.2.5/`).
 ### U3. Restore tests in core
 
 - [x] Fix Done: on 2.2.6 only "a chat whose root never committed…" fails, as on `main`.
-- `cell/test/hand-lifecycle-cell.test.ts` under Wrangler (`bun run test:cloudflare`): 18 tests fail on `main` at 1a6a06fc2 too (2026-11-07). "a command that prints 64 MiB keeps workerd's memory bounded" fails only under load. Not in `test:opencode`.
+- `cell/test/hand-lifecycle-cell.slow.test.ts` under Wrangler (`bun run test:cloudflare`): 18 tests fail on `main` at 1a6a06fc2 too (2026-11-07). "a command that prints 64 MiB keeps workerd's memory bounded" fails only under load. Not in `test:opencode`.
 - `cell/test/tool-parity.slow.test.ts`: "J30 a command with no timeout and no output for 35 seconds…" (`Shell.NotFoundError` after about 5 seconds). Fails on `main` at 1a6a06fc2 too (2026-11-07). It is the only failure in `bun run test:opencode` for `cell`.
 - `core/test/restore.slow.test.ts`: "a chat whose root never committed in Ren but whose subagent chat did…" (the subagent's message is missing) and "on a new sandbox the first request is a prompt to a chat that needs a restore…" (a tool reads `workspace/ses_other/f.txt`, not the chat's own folder). Both pass on `main`.
 - Re-run after U2 and U4. If they still fail, find the cause; the second may be a `transfer.import` or location change (`harness.ts:663` assumes the import route drops the workspace link; not verified on new).

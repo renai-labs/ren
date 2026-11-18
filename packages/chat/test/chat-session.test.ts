@@ -66,6 +66,46 @@ const shape = (messages: ReadonlyArray<ChatState.State["messages"][string][numbe
     }),
   }))
 
+const counting = (brain: Brain, reads: Array<string>) =>
+  FetchHttpClient.layer.pipe(
+    Layer.provide(
+      Layer.succeed(
+        FetchHttpClient.Fetch,
+        Object.assign(
+          (input: string | URL | Request, init?: RequestInit) => {
+            const url = new URL(input instanceof Request ? input.url : String(input))
+            if (url.pathname.endsWith("/message")) reads.push(url.search)
+            return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
+          },
+          { preconnect: fetch.preconnect },
+        ),
+      ),
+    ),
+  )
+
+const tenTurns = (brain: Brain) =>
+  Effect.gen(function* () {
+    const first = yield* open(brain)
+    yield* first.open(brain.id)
+    yield* Effect.forEach(
+      Array.from({ length: 10 }, (_, index) => index + 1),
+      (turns) =>
+        first
+          .prompt({ text: stub.script().marker })
+          .pipe(
+            Effect.andThen(
+              ChatTest.until(
+                first.state,
+                (state) =>
+                  settled(brain.id)(state) &&
+                  ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === turns,
+              ),
+            ),
+          ),
+      { discard: true },
+    )
+  })
+
 test("a prompt shows at once, streams its turn, and the live transcript equals a fresh read", () =>
   ChatTest.live(
     Effect.gen(function* () {
@@ -208,51 +248,18 @@ test("the boot is Checking until Ren answers access, then Starting", () =>
     }),
   ))
 
-test("a saved page that holds only the newest messages makes the brain's read stop at its oldest message, not read the whole history (#253)", () =>
+test("a saved page that holds only the newest messages makes the brain's read stop at its oldest message, and messages a prompt put in the chat before its first read do not make it walk the whole history either (#253)", () =>
   ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      const first = yield* open(brain)
-      yield* first.open(brain.id)
-      yield* Effect.forEach(
-        Array.from({ length: 10 }, (_, index) => index + 1),
-        (turns) =>
-          first
-            .prompt({ text: stub.script().marker })
-            .pipe(
-              Effect.andThen(
-                ChatTest.until(
-                  first.state,
-                  (state) =>
-                    settled(brain.id)(state) &&
-                    ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === turns,
-                ),
-              ),
-            ),
-        { discard: true },
-      )
+      yield* tenTurns(brain)
       const all = (yield* brain.chat.session["session.messages"]({
         params: { sessionID: brain.id },
         query: { limit: 200 },
       })).items.length
       const ready = { value: false }
       const reads: Array<string> = []
-      const logging = FetchHttpClient.layer.pipe(
-        Layer.provide(
-          Layer.succeed(
-            FetchHttpClient.Fetch,
-            Object.assign(
-              (input: string | URL | Request, init?: RequestInit) => {
-                const url = new URL(input instanceof Request ? input.url : String(input))
-                if (url.pathname.endsWith("/message")) reads.push(url.search)
-                return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
-              },
-              { preconnect: fetch.preconnect },
-            ),
-          ),
-        ),
-      )
       const chat = yield* ChatSession.make({
         sessionID: brain.id,
         access: () =>
@@ -269,7 +276,7 @@ test("a saved page that holds only the newest messages makes the brain's read st
         saved: (query) =>
           brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: { limit: query.limit } }),
         sender: { userId: "user_1" },
-      }).pipe(Effect.provide(logging))
+      }).pipe(Effect.provide(counting(brain, reads)))
       yield* chat.open(brain.id).pipe(Effect.forkChild)
       const saved = yield* ChatTest.until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
       const shown = ChatState.messages(saved, brain.id).map((message) => message.id)
@@ -281,6 +288,17 @@ test("a saved page that holds only the newest messages makes the brain's read st
       expect(shown.filter((id) => !loaded.includes(id))).toEqual([])
       expect(loaded.length).toBeLessThan(all)
       expect(reads.filter((search) => search.includes("cursor=")).length).toBeLessThanOrEqual(1)
+      const handed: Array<string> = []
+      const handoff = yield* ChatSession.make({
+        sessionID: brain.id,
+        access,
+        handoff: { id: SessionMessage.ID.create(), text: stub.script().marker },
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(counting(brain, handed)))
+      yield* handoff.open(brain.id)
+      yield* ChatTest.until(handoff.state, settled(brain.id))
+      expect(handed.filter((search) => search.includes("cursor="))).toEqual([])
+      expect(ChatState.more(yield* SubscriptionRef.get(handoff.state), brain.id)).toBe(true)
     }),
   ))
 
@@ -335,111 +353,15 @@ test("a chat in the device cache paints before Ren gives access, the brain's rea
     }),
   ))
 
-test("messages an event or a prompt put in the chat before its first read do not make the read walk the whole history", () =>
-  ChatTest.live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      const first = yield* open(brain)
-      yield* first.open(brain.id)
-      yield* Effect.forEach(
-        Array.from({ length: 10 }, (_, index) => index + 1),
-        (turns) =>
-          first
-            .prompt({ text: stub.script().marker })
-            .pipe(
-              Effect.andThen(
-                ChatTest.until(
-                  first.state,
-                  (state) =>
-                    settled(brain.id)(state) &&
-                    ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === turns,
-                ),
-              ),
-            ),
-        { discard: true },
-      )
-      const reads: Array<string> = []
-      const chat = yield* ChatSession.make({
-        sessionID: brain.id,
-        access,
-        handoff: { id: SessionMessage.ID.create(), text: stub.script().marker },
-        sender: { userId: "user_1" },
-      }).pipe(
-        Effect.provide(
-          FetchHttpClient.layer.pipe(
-            Layer.provide(
-              Layer.succeed(
-                FetchHttpClient.Fetch,
-                Object.assign(
-                  (input: string | URL | Request, init?: RequestInit) => {
-                    const url = new URL(input instanceof Request ? input.url : String(input))
-                    if (url.pathname.endsWith("/message")) reads.push(url.search)
-                    return brain.chatFetch(
-                      `${url.pathname}${url.search}`,
-                      input instanceof Request ? input : (init ?? {}),
-                    )
-                  },
-                  { preconnect: fetch.preconnect },
-                ),
-              ),
-            ),
-          ),
-        ),
-      )
-      yield* chat.open(brain.id)
-      yield* ChatTest.until(chat.state, settled(brain.id))
-      expect(reads.filter((search) => search.includes("cursor="))).toEqual([])
-      expect(ChatState.more(yield* SubscriptionRef.get(chat.state), brain.id)).toBe(true)
-    }),
-  ))
-
 test("after the whole history is loaded, a re-read on reconnect reads only the newest page and keeps the older messages", () =>
   ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      const first = yield* open(brain)
-      yield* first.open(brain.id)
-      yield* Effect.forEach(
-        Array.from({ length: 10 }, (_, index) => index + 1),
-        (turns) =>
-          first
-            .prompt({ text: stub.script().marker })
-            .pipe(
-              Effect.andThen(
-                ChatTest.until(
-                  first.state,
-                  (state) =>
-                    settled(brain.id)(state) &&
-                    ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === turns,
-                ),
-              ),
-            ),
-        { discard: true },
-      )
+      yield* tenTurns(brain)
       const reads: Array<string> = []
       const chat = yield* ChatSession.make({ sessionID: brain.id, access, sender: { userId: "user_1" } }).pipe(
-        Effect.provide(
-          FetchHttpClient.layer.pipe(
-            Layer.provide(
-              Layer.succeed(
-                FetchHttpClient.Fetch,
-                Object.assign(
-                  (input: string | URL | Request, init?: RequestInit) => {
-                    const url = new URL(input instanceof Request ? input.url : String(input))
-                    if (url.pathname.endsWith("/message")) reads.push(url.search)
-                    return brain.chatFetch(
-                      `${url.pathname}${url.search}`,
-                      input instanceof Request ? input : (init ?? {}),
-                    )
-                  },
-                  { preconnect: fetch.preconnect },
-                ),
-              ),
-            ),
-          ),
-        ),
+        Effect.provide(counting(brain, reads)),
       )
       yield* chat.open(brain.id)
       yield* ChatTest.until(chat.status, (status) => status === "connected")
@@ -843,23 +765,26 @@ test("the chat parks when the brain ends an idle stream, and a prompt wakes it",
     }),
   ))
 
-test("a prompt to a chat whose space was shut down starts it again once, then is delivered", () =>
+test.each([
+  ["space was shut down", { status: "stopped" as const }, "Stopped"],
+  ["start failed", { status: "failed" as const, reason: "no capacity" }, "Failed"],
+] as const)("a prompt to a chat whose %s starts it again once, then is delivered", (_name, blocked, boot) =>
   ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      const space = { stopped: true, restarts: 0 }
+      const space = { blocked: true, restarts: 0 }
       const chat = yield* ChatSession.make({
         sessionID: brain.id,
-        access: () => (space.stopped ? Effect.succeed({ status: "stopped" as const }) : access()),
+        access: () => (space.blocked ? Effect.succeed(blocked) : access()),
         restart: Effect.sync(() => {
           space.restarts += 1
-          space.stopped = false
+          space.blocked = false
         }),
         sender: { userId: "user_1" },
       }).pipe(Effect.provide(http(brain)))
       yield* chat.open(brain.id).pipe(Effect.ignore)
-      expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe("Stopped")
+      expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe(boot)
       yield* chat.prompt({ text: stub.script({ reply: "started again" }).marker })
       const done = yield* ChatTest.until(chat.state, settled(brain.id))
       expect([
@@ -867,33 +792,8 @@ test("a prompt to a chat whose space was shut down starts it again once, then is
         ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
       ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
     }),
-  ))
-
-test("a prompt to a chat whose start failed starts it again once, then is delivered", () =>
-  ChatTest.live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      const space = { failed: true, restarts: 0 }
-      const chat = yield* ChatSession.make({
-        sessionID: brain.id,
-        access: () => (space.failed ? Effect.succeed({ status: "failed" as const, reason: "no capacity" }) : access()),
-        restart: Effect.sync(() => {
-          space.restarts += 1
-          space.failed = false
-        }),
-        sender: { userId: "user_1" },
-      }).pipe(Effect.provide(http(brain)))
-      yield* chat.open(brain.id).pipe(Effect.ignore)
-      expect((yield* SubscriptionRef.get(chat.boot))._tag).toBe("Failed")
-      yield* chat.prompt({ text: stub.script({ reply: "started again" }).marker })
-      const done = yield* ChatTest.until(chat.state, settled(brain.id))
-      expect([
-        space.restarts,
-        ChatState.messages(done, brain.id).find((message) => message.type === "assistant"),
-      ]).toMatchObject([1, { content: [{ type: "text", text: "started again" }] }])
-    }),
-  ))
+  ),
+)
 
 test("a chat whose start failed starts again on retry, without a new session, and sends the message kept while it failed", () =>
   ChatTest.live(

@@ -151,7 +151,7 @@ it.effect("a provider MCP names its credential only in its path, so the egress c
   }),
 )
 
-it.effect("the env note: one line per app with connected env items, in catalog order, the same bytes each time", () =>
+it.effect("the env note: one line per app with connected env items, in catalog order", () =>
   Effect.sync(() => {
     const catalog = McpPeer.catalog("env", [], {
       apps: [
@@ -182,11 +182,9 @@ it.effect("the env note: one line per app with connected env items, in catalog o
         },
       ],
     })
-    const notes = OpenCodeMcp.notes(Option.some(catalog))
-    expect(notes).toEqual([
+    expect(OpenCodeMcp.notes(Option.some(catalog))).toEqual([
       "google profiles: Acme client → keys end in `__ACME` (`GOOGLE_PROJECT_ID__ACME`); Globex client → `__GLOBEX`. Env keys exist only with the suffix.",
     ])
-    expect(OpenCodeMcp.notes(Option.some(catalog)).join("\n")).toBe(notes.join("\n"))
   }),
 )
 

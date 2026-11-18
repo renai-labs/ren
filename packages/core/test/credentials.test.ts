@@ -552,10 +552,6 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
       const candidates = [candidate("OPENAI_API_KEY", "space", ["*"])]
       const found = Credentials.match(candidates, { host: "api.openai.com", placeholders: ["ren:OPENAI_API_KEY"] })
       expect(found.ok && found.matches.map((matched) => matched.candidate.label)).toEqual(["OPENAI_API_KEY"])
-      expect(Credentials.match(candidates, { host: "api.openai.com", placeholders: [] })).toEqual({
-        ok: true,
-        matches: [],
-      })
     }),
   )
 

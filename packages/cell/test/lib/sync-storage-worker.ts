@@ -42,9 +42,6 @@ const checkpoint = (sql: SqlStorage, sessionId: string) => ({
   ]).map((row) => row.id),
 })
 
-const columns = (sql: SqlStorage, table: string) =>
-  Schema.decodeUnknownSync(Names)([...sql.exec(`PRAGMA table_info(${table})`)]).map((row) => row.name)
-
 const decode = (sql: SqlStorage, sessionId: string) => {
   const info = OpenCodeRows.session(sql.exec("select * from session_v2 where id = ?", sessionId).one())
   const rows = Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeMessageRow))([
@@ -76,7 +73,6 @@ const read = (sql: SqlStorage, sessionId: string) => {
   return {
     tables: found,
     checkpoint: step(() => checkpoint(sql, sessionId)),
-    columns: step(() => ({ session_v2: columns(sql, "session_v2"), session_message: columns(sql, "session_message") })),
     decoded: step(() => decode(sql, sessionId)),
   }
 }

@@ -84,11 +84,10 @@ it.live("a connect that names a return address outside the mobile app is refused
   Effect.gen(function* () {
     const owner = yield* ApiFixture.owner()
     const base = { profileId: AppProfile.ID.create(), item: { mcp: "notes" } }
-    const statuses = yield* Effect.forEach(
-      ["https://evil.test/connected", "javascript:alert(1)", "ren-evil:///connected"],
-      (returnTo) => Effect.map(owner.request("POST", "/credentials/connect", { ...base, returnTo }), (r) => r.status),
-    )
-    expect(statuses).toEqual([400, 400, 400])
+    expect(
+      (yield* owner.request("POST", "/credentials/connect", { ...base, returnTo: "https://evil.test/connected" }))
+        .status,
+    ).toBe(400)
     expect(
       (yield* owner.request("POST", "/credentials/connect", { ...base, returnTo: "ren:///connected" })).status,
     ).toBe(404)

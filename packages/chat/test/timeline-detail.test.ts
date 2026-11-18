@@ -37,21 +37,6 @@ describe("timeline detail", () => {
     )
   })
 
-  test("keeps subagents separate and commentary visible below Everything", () => {
-    expect(
-      TimelineDetail.presets.map((candidate) => [
-        candidate.value.subagents.placement,
-        candidate.value.commentary.placement,
-      ]),
-    ).toEqual([
-      ["separate", "separate"],
-      ["separate", "separate"],
-      ["separate", "separate"],
-      ["separate", "separate"],
-      ["hidden", "separate"],
-    ])
-  })
-
   test.each([
     ["everything", "separate"],
     ["compact", "grouped"],

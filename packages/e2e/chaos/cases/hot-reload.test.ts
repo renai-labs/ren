@@ -92,16 +92,20 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       }
     }, 300_000)
 
-    test("C5: 200 writes in one second to one space give each brain a few pulls, not 200", async () => {
-      await started()
-      const pulled = current().renProxy.count(pulls)
-      const writing = Date.now()
-      await Promise.all(Array.from({ length: 200 }, (_, index) => instruct(`Storm ${index}.`)))
-      expect(Date.now() - writing).toBeLessThan(5000)
-      // ast-grep-ignore: no-test-sleep -- the pushes of the storm settle within a pull time
-      await Bun.sleep(3000)
-      expect(current().renProxy.count(pulls) - pulled).toBeLessThan(20)
-    }, 300_000)
+    test.skipIf(Platform.slow !== undefined)(
+      "C5: 200 writes in one second to one space give each brain a few pulls, not 200",
+      async () => {
+        await started()
+        const pulled = current().renProxy.count(pulls)
+        const writing = Date.now()
+        await Promise.all(Array.from({ length: 200 }, (_, index) => instruct(`Storm ${index}.`)))
+        expect(Date.now() - writing).toBeLessThan(5000)
+        // ast-grep-ignore: no-test-sleep -- the pushes of the storm settle within a pull time
+        await Bun.sleep(3000)
+        expect(current().renProxy.count(pulls) - pulled).toBeLessThan(20)
+      },
+      300_000,
+    )
 
     test("C6: after the server's LISTEN connection is cut, the server listens again and pushes the next write", async () => {
       const session = await started()
@@ -172,7 +176,9 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
 
     const actions = ["write", "write", "turn", "drop-pushes", "ren-down", "restart-cell", "archive-other"] as const
 
-    test.each(Array.from({ length: sequences }, (_, index) => Wait.seed + 300 + index))(
+    test
+      .skipIf(Platform.slow !== undefined)
+      .each(Array.from({ length: sequences }, (_, index) => Wait.seed + 300 + index))(
       `seed %i: ${length} actions, then 30 s quiet: the brain has the last write, and every chat is idle (I1, I3, I7)`,
       async (seed) => {
         const stack = current()

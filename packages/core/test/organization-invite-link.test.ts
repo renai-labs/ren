@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import { Effect, Layer, Ref } from "effect"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
+import { Invitation } from "../src/invitation.js"
 import { OrganizationInviteLink } from "../src/organization-invite-link.js"
 import { Space } from "../src/space.js"
 import { SpaceJoinRequest } from "../src/space/join-request.js"
@@ -22,6 +23,7 @@ const it = testEffect(
     SpaceJoinRequest.layer,
     OrganizationInviteLink.layer,
     SpaceProvisioning.layer,
+    Invitation.layer,
   ).pipe(Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)), Layer.provideMerge(Testing.layer)),
 )
 
@@ -201,6 +203,29 @@ describe("OrganizationInviteLink", () => {
       const joined = yield* links.accept(grace.userId, link.token, () => Effect.void)
       expect(joined.spaceId).not.toBe(design.id)
       expect((yield* links.preview(link.token)).spaces.map((space) => space.name)).toEqual(["General Space"])
+    }),
+  )
+})
+
+describe("Invitation.preview", () => {
+  it.live("identifies expired, accepted and otherwise unavailable invitations", () =>
+    Effect.gen(function* () {
+      const invitations = yield* Invitation.Service
+      const organizationId = yield* Seed.organization()
+      const inviterId = (yield* Seed.user()).id
+      const previews = yield* Effect.forEach(
+        [{ expiresAt: new Date(Date.now() - 60_000) }, { status: "accepted" }, { status: "canceled" }],
+        (invitation) =>
+          Effect.flatMap(Seed.invitation({ organizationId, inviterId, ...invitation }), invitations.preview),
+      )
+      expect(previews.map((preview) => preview.state)).toEqual(["expired", "accepted", "unavailable"])
+    }),
+  )
+
+  it.live("returns an invalid state for an unknown invitation", () =>
+    Effect.gen(function* () {
+      const invitations = yield* Invitation.Service
+      expect(yield* invitations.preview("inv_unknown")).toEqual({ state: "invalid", organization: null, inviter: null })
     }),
   )
 })

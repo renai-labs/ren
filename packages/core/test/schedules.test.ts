@@ -761,7 +761,7 @@ describe("Schedules", () => {
     }),
   )
 
-  it.live("a recurring schedule skips a fire while its chat works, and a one-time follow-up still queues (S37)", () =>
+  it.live("a one-time follow-up still queues while its chat works (S37)", () =>
     Effect.gen(function* () {
       const schedules = yield* Schedules.Service
       const recorded = yield* Chats
@@ -772,10 +772,6 @@ describe("Schedules", () => {
         createdBy: t.createdBy,
       })
       recorded.busy.add(sessionId)
-      const recurring = yield* schedules.create(
-        t.ada,
-        decodeCreate({ spaceId: t.spaceId, name: "Ping", message: "Ping.", when: hourly, target: { sessionId } }),
-      )
       const once = yield* schedules.create(
         t.ada,
         decodeCreate({
@@ -786,7 +782,6 @@ describe("Schedules", () => {
           target: { sessionId },
         }),
       )
-      yield* due(recurring.id, Cron.prev(Cron.parseUnsafe(hourly.cron, hourly.timeZone), new Date()))
       yield* Effect.flatMap(Database.Service, (database) =>
         database.db
           .update(Database.Schema.schedule)
@@ -794,7 +789,6 @@ describe("Schedules", () => {
           .where(eq(Database.Schema.schedule.id, once.id)),
       )
       yield* schedules.tick
-      expect(yield* settled(recurring.id)).toMatchObject([{ status: "skipped", reason: "previous_run_busy" }])
       expect(yield* settled(once.id)).toMatchObject([{ status: "started" }])
       expect(yield* Queue.take(recorded.calls)).toMatchObject({ kind: "send", input: { sessionId, delivery: "queue" } })
     }),

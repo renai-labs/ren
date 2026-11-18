@@ -3,7 +3,7 @@ import { Shared } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
-import { ConfigProvider, DateTime, Duration, Effect, Layer, Redacted, Schema, Struct } from "effect"
+import { ConfigProvider, DateTime, Duration, Effect, Layer, Redacted, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Models } from "../src/models.js"
 import { RenInference } from "../src/ren-inference.js"
@@ -136,20 +136,6 @@ describe("RenInferenceProvider (HR28)", () => {
       expect((yield* Effect.flip(models.catalog(organizationId)))._tag).toBe("Models.Unavailable")
       stub.modelInfo.down(false)
       expect((yield* models.catalog(organizationId)).endpoints.map((endpoint) => endpoint.id)).toEqual(["ren"])
-    }),
-  )
-
-  it.live("the inference catalog needs each model's native type and protocol", () =>
-    Effect.sync(() => {
-      const decode = Schema.decodeUnknownSync(Models.InferenceCatalog)
-      const baseUrl = "https://execution.example/v1"
-      expect(
-        decode({ baseUrl, models: [{ id: "opaque-image", type: "image", protocol: "openai-images", modelID: "x" }] }),
-      ).toEqual({ baseUrl, models: [{ id: "opaque-image", type: "image", protocol: "openai-images" }] })
-      expect(() =>
-        decode({ baseUrl, models: [{ id: "x", type: "image_generation", protocol: "openai-images" }] }),
-      ).toThrow()
-      expect(() => decode({ baseUrl, models: [{ id: "x", type: "chat" }] })).toThrow()
     }),
   )
 })

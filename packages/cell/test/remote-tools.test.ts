@@ -27,7 +27,6 @@ import {
 } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath, rm, stat } from "node:fs/promises"
-import { createServer, type Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Env } from "../src/env.js"
@@ -35,6 +34,7 @@ import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
+import { FrozenSandbox } from "./lib/frozen-sandbox.js"
 import { McpPeer } from "./lib/mcp.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
@@ -332,11 +332,17 @@ it.live(
     Effect.gen(function* () {
       const opened = yield* open()
       const session = yield* begin(opened)
-      yield* session.turn(stub.script(), 1)
+      const held = stub.script({ hold: true })
+      yield* session.send(held)
+      yield* Effect.promise(() => held.called())
+      expect((yield* opened.harness.sessions).find((state) => String(state.id) === session.sessionId)?.active).toBe(
+        true,
+      )
       expect(yield* opened.opens).toBe(0)
       expect((yield* Effect.promise(() => stat(folder(session.sessionId)).catch(() => undefined))) === undefined).toBe(
         true,
       )
+      held.release()
       yield* session.turn(stub.script(shell("pwd")))
       expect(yield* opened.opens).toBe(1)
       expect((yield* Effect.promise(() => stat(folder(session.sessionId)))).isDirectory()).toBe(true)
@@ -374,21 +380,6 @@ it.live("runs a subagent's tools on its parent session's sandbox", () =>
     )
     expect(child.calls.length).toBeGreaterThanOrEqual(2)
     expect(yield* text(join(folder(session.sessionId), file))).toBe("42\n")
-  }),
-)
-
-it.live("interrupting a turn kills its command on the sandbox", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
-    const pid = yield* Pid.read(pidFile)
-    const own = (yield* opened.harness.sessions).find((state) => String(state.id) === session.sessionId)
-    expect(own).toBeDefined()
-    if (!own) return
-    yield* own.interrupt
-    expect(yield* Processes.exits(pid)).toBe(true)
   }),
 )
 
@@ -902,55 +893,6 @@ it.live("a helper of a session with no environment has no file or shell tools", 
   }),
 )
 
-it.live(
-  "removing a session's access lets a running command finish, fails a call with no access once the token is due for refresh, and access back restores tools",
-  () =>
-    Effect.gen(function* () {
-      const opened = yield* open()
-      const session = yield* begin(opened)
-      const access = yield* accessTo(yield* TestHand.url, session.sessionId)
-      yield* opened.memory.set(
-        session.sessionId,
-        yield* TestHand.access({
-          url: yield* TestHand.url,
-          environmentId,
-          brain: Brain.ofSession(session.sessionId),
-          directory: folder(session.sessionId),
-          lifetimeMs: 6_000,
-        }),
-      )
-      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-      const running = stub.script(
-        shell(`echo $$ > ${pidFile}; while [ ! -e ${pidFile}.go ]; do sleep 0.01; done; echo finished`),
-      )
-      yield* session.send(running)
-      yield* Pid.read(pidFile)
-      yield* opened.memory.remove(session.sessionId)
-      yield* Effect.promise(() => Bun.write(`${pidFile}.go`, ""))
-      const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
-      const refused = yield* refusedTurn(session).pipe(
-        Effect.repeat({
-          until: (attempt) => attempt.result.includes("No access to an environment"),
-          schedule: Schedule.spaced(500),
-        }),
-        Effect.timeout("15 seconds"),
-      )
-      yield* opened.memory.set(session.sessionId, access)
-      const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
-      expect({
-        finished,
-        ran: refused.ran,
-        noAccess: refused.result.includes("No access to an environment"),
-        back,
-      }).toEqual({
-        finished: JSON.stringify("finished\n"),
-        ran: false,
-        noAccess: true,
-        back: JSON.stringify("back\n"),
-      })
-    }),
-)
-
 it.live("a tool call fails clearly while the sandbox is down, and the next one works once it is back", () =>
   Effect.gen(function* () {
     const relay = yield* Relay.make(Relay.portOf(yield* TestHand.url))
@@ -970,39 +912,6 @@ it.live("a tool call fails clearly while the sandbox is down, and the next one w
     expect(yield* opened.opens).toBe(2)
   }),
 )
-
-const frozenSandbox = Effect.gen(function* () {
-  const machinePort = Relay.portOf(yield* TestHand.url)
-  const relay = yield* Relay.make(machinePort)
-  const sockets = new Set<Socket>()
-  const hole = yield* Effect.acquireRelease(
-    Effect.promise(async () => {
-      const server = createServer((socket) => sockets.add(socket))
-      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
-      return server
-    }),
-    (server) =>
-      Effect.promise(
-        () =>
-          new Promise<void>((resolve) => {
-            for (const socket of sockets) socket.destroy()
-            server.close(() => resolve())
-          }),
-      ),
-  )
-  const address = hole.address()
-  const holePort = typeof address === "object" && address !== null ? address.port : 0
-  return {
-    url: relay.url,
-    freeze: relay.freeze.pipe(Effect.andThen(relay.target(holePort))),
-    thaw: relay.target(machinePort),
-  }
-})
-
-const idle = (opened: Opened, sessionId: Session.ID) =>
-  opened.harness.sessions.pipe(
-    Effect.map((states) => states.find((state) => String(state.id) === sessionId)?.active === false),
-  )
 
 it.live("closing the host while a tool call waits for access completes, and the tool call ends", () =>
   Effect.gen(function* () {
@@ -1028,7 +937,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const opened = yield* open()
-      const frozen = yield* frozenSandbox
+      const frozen = yield* FrozenSandbox.make
       yield* frozen.freeze
       yield* begin(opened, { url: frozen.url }).pipe(Effect.timeout("5 seconds"))
       expect(yield* opened.opens).toBe(0)
@@ -1036,51 +945,6 @@ it.live(
       const result = lastToolResult(yield* other.turn(stub.script(shell("echo ok"))))
       expect([result, yield* opened.opens]).toEqual([JSON.stringify("ok\n"), 1])
     }),
-)
-
-it.live("an interrupt during a command on a frozen sandbox ends in the kill's limit and leaves the session idle", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const frozen = yield* frozenSandbox
-    const session = yield* begin(opened, { url: frozen.url })
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
-    const pid = yield* Pid.read(pidFile)
-    yield* frozen.freeze
-    const own = (yield* opened.harness.sessions).find((state) => String(state.id) === session.sessionId)
-    expect(own).toBeDefined()
-    if (!own) return
-    const startedAt = performance.now()
-    yield* own.interrupt.pipe(
-      Effect.andThen(own.wait(12_000)),
-      Effect.ensuring(Effect.sync(() => void Bun.spawnSync(["kill", "-9", String(pid)]))),
-    )
-    expect(performance.now() - startedAt).toBeLessThan(10_000)
-    expect(yield* idle(opened, session.sessionId)).toBe(true)
-  }),
-)
-
-it.live("closing the host during a command on a frozen sandbox completes in its limit, and a later turn works", () =>
-  Effect.gen(function* () {
-    const frozen = yield* frozenSandbox
-    const scope = yield* Scope.make()
-    const first = yield* open().pipe(Scope.provide(scope))
-    const session = yield* begin(first, { url: frozen.url })
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
-    const pid = yield* Pid.read(pidFile)
-    yield* frozen.freeze
-    const startedAt = performance.now()
-    yield* Scope.close(scope, Exit.void).pipe(
-      Effect.timeout("12 seconds"),
-      Effect.ensuring(Effect.sync(() => void Bun.spawnSync(["kill", "-9", String(pid)]))),
-    )
-    expect(performance.now() - startedAt).toBeLessThan(10_000)
-    yield* frozen.thaw
-    const second = yield* open()
-    const later = yield* begin(second, { url: frozen.url })
-    expect(lastToolResult(yield* later.turn(stub.script(shell("echo back"))))).toBe(JSON.stringify("back\n"))
-  }),
 )
 
 it.live("a command that leaves a child holding stdout returns in the time of the local shell", () =>
@@ -1101,22 +965,6 @@ it.live("a command that leaves a child holding stdout returns in the time of the
     const remoteMs = performance.now() - remoteStart
     expect(result).toContain("done")
     expect(Math.abs(remoteMs - localMs)).toBeLessThan(3000)
-  }),
-)
-
-it.live("opening the host and reading its sessions as the alarm does contact neither Ren nor the sandbox", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    const script = stub.script({ hold: true })
-    yield* session.send(script)
-    yield* Effect.promise(() => script.called())
-    expect(yield* idle(opened, session.sessionId)).toBe(false)
-    expect(yield* opened.opens).toBe(0)
-    expect((yield* Effect.promise(() => stat(folder(session.sessionId)).catch(() => undefined))) === undefined).toBe(
-      true,
-    )
-    script.release()
   }),
 )
 

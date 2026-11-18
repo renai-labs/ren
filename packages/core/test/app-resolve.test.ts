@@ -238,7 +238,7 @@ it.live("a registry publish that clashes leaves out the newer app's part and rep
     const profiles = yield* AppProfiles.Service
     const organizationId = yield* Seed.organization()
     const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
-    const kit = yield* ProfilesFixture.app(root, root.personal, "mail-kit", {
+    yield* ProfilesFixture.app(root, root.personal, "mail-kit", {
       mcps: { gmail: ProfilesFixture.remote("Gmail", { type: "none" }) },
     })
     const publication = (fields: Record<string, unknown>) =>
@@ -275,7 +275,6 @@ it.live("a registry publish that clashes leaves out the newer app's part and rep
       "mail-kit/gmail",
     ])
     expect((yield* profiles.get(root, profile.id)).skipped).toEqual([{ kind: "mcps", slug: "gmail", also: "mail-kit" }])
-    expect(kit.id).toBeDefined()
   }),
 )
 

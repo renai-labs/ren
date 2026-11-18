@@ -108,3 +108,37 @@ export const org = Effect.gen(function* () {
   })
   return { organizationId, prefix: slug.toUpperCase(), ren, ada, grace, admin, factory, eng, agent, agentIn }
 })
+
+export const governed = Effect.gen(function* () {
+  const spaces = yield* Space.Service
+  const o = yield* org
+  const session = (agentId: Agent.ID) =>
+    Seed.session({ organizationId: o.organizationId, spaceId: o.factory.id, createdBy: o.ada.userId }).pipe(
+      Effect.map((sessionId) => actingAs(o.ada, o.factory.id, agentId, sessionId)),
+    )
+  const plan = yield* o.agent("plan")
+  const build = yield* o.agent("build")
+  const review = yield* o.agent("review")
+  const qa = yield* o.agent("qa")
+  yield* spaces.update(o.ada, o.factory.id, {
+    factory: {
+      maxHandoffs: 20,
+      agents: [
+        { agentId: plan },
+        { agentId: build, to: [{ agentId: review }] },
+        { agentId: review, to: [{ agentId: qa }, { agentId: build, max: 1 }] },
+        { agentId: qa, finish: true, to: [{ agentId: build, max: 1, else: review }] },
+      ],
+    },
+  })
+  return {
+    o,
+    plan,
+    build,
+    review,
+    qa,
+    builder: yield* session(build),
+    reviewer: yield* session(review),
+    tester: yield* session(qa),
+  }
+})

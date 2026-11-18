@@ -59,6 +59,8 @@ const seen: Array<{
   readonly body: string
 }> = []
 
+const holding = Promise.withResolvers<void>()
+
 const upstream = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
@@ -86,7 +88,10 @@ const upstream = Bun.serve({
         }),
         { headers: { "content-type": "text/event-stream" } },
       )
-    if (url.pathname === "/hold") return new Response(new ReadableStream({ start: () => {} }))
+    if (url.pathname === "/hold") {
+      holding.resolve()
+      return new Response(new ReadableStream({ start: () => {} }))
+    }
     return Response.json({ authorization: request.headers.get("authorization"), query: url.search })
   },
 })
@@ -582,10 +587,7 @@ describe("egress (iron-proxy fork) with Ren", () => {
       const callers = yield* CredentialCallers.Service
       const control = yield* EgressControl.Service
       const held = EgressHarness.curl([socks(found.login, found.password), "-N", at("/hold")])
-      yield* Effect.promise(async () => {
-        // ast-grep-ignore: no-test-sleep -- the request comes from a curl process through the egress; the test sees it only when the upstream records it
-        while (!seen.some((request) => request.path === "/hold")) await Bun.sleep(20)
-      })
+      yield* Effect.promise(() => holding.promise)
       const revoked = yield* callers.revoke({ kind: "brain", id: found.brainId })
       yield* Effect.forEach(revoked.logins, (login) => control.invalidate({ login }), { discard: true })
       const closed = yield* Effect.promise(() => held)

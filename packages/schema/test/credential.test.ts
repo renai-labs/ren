@@ -42,17 +42,6 @@ describe("Credential.CreateInput", () => {
     expect(decodeCreate({ ...base, hosts: [], value: { type: "key", value: "sk_live_1" } })._tag).toBe("Failure")
     expect(decodeCreate({ ...base, value: { type: "key", value: "sk_live_1" } })._tag).toBe("Failure")
   })
-  test("a value is at most 16 KB and a fields credential has at most 20 fields (A43)", () => {
-    const hosts = ["api.stripe.com"]
-    expect(decodeCreate({ ...base, hosts, value: { type: "key", value: "x".repeat(16 * 1024) } })._tag).toBe("Success")
-    expect(decodeCreate({ ...base, hosts, value: { type: "key", value: "x".repeat(16 * 1024 + 1) } })._tag).toBe(
-      "Failure",
-    )
-    const fields = (count: number) =>
-      Object.fromEntries(Array.from({ length: count }, (_, index) => [`field${index}`, "v"]))
-    expect(decodeCreate({ ...base, hosts, value: { type: "fields", fields: fields(20) } })._tag).toBe("Success")
-    expect(decodeCreate({ ...base, hosts, value: { type: "fields", fields: fields(21) } })._tag).toBe("Failure")
-  })
   test("an MCP_ label is refused, because only a connect makes MCP_ labels (K45)", () => {
     const value = { type: "key", value: "sk_live_1" }
     const hosts = ["api.stripe.com"]

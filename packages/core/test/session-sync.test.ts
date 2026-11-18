@@ -416,40 +416,31 @@ describe("SessionSync", () => {
     }),
   )
 
-  it.live("checkpoints returns only the sessions of the scope, with sync_seq and the Ren time_suspended", () =>
-    Effect.gen(function* () {
-      const sync = yield* SessionSync.Service
-      const { owner, host, rootId } = yield* tree()
-      const childId = Session.ID.create()
-      const otherRoot = yield* Seed.session(owner)
-      yield* SyncFixture.pass(host, SyncFixture.session(rootId, { time_suspended: SyncFixture.now + 1 }), 7, [])
-      yield* sync.startUpload(host, childId, { harness: "opencode", parentId: rootId })
-      yield* SyncFixture.pass(SyncFixture.host(owner.organizationId, otherRoot), SyncFixture.session(otherRoot), 3, [])
-      expect(yield* sync.checkpoints(host)).toEqual([
-        { id: rootId, syncSeq: 7, timeSuspended: SyncFixture.now + 1 },
-        { id: childId, syncSeq: null, timeSuspended: null },
-      ])
-    }),
-  )
-
-  it.live("checkpoints of a space brain list every chat of that brain and none of another brain", () =>
-    Effect.gen(function* () {
-      const sync = yield* SessionSync.Service
-      const owner = yield* Seed.owner()
-      const brainId = Brain.ID.create()
-      const first = yield* Seed.session({ ...owner, brainId })
-      const second = yield* Seed.session({ ...owner, brainId })
-      const elsewhere = yield* Seed.session(owner)
-      const host = { brainId, organizationId: owner.organizationId, spaceId: owner.spaceId, generation: 1 }
-      yield* SyncFixture.pass(host, SyncFixture.session(first), 4, [])
-      yield* SyncFixture.pass(host, SyncFixture.session(second), 5, [])
-      expect(
-        yield* Effect.flip(sync.startUpload(host, elsewhere, { harness: "opencode", parentId: null })),
-      ).toBeInstanceOf(ForbiddenError)
-      expect(
-        Object.fromEntries((yield* sync.checkpoints(host)).map((checkpoint) => [checkpoint.id, checkpoint.syncSeq])),
-      ).toEqual({ [first]: 4, [second]: 5 })
-    }),
+  it.live(
+    "checkpoints of a space brain list every chat of that brain with sync_seq and the Ren time_suspended, and none of another brain",
+    () =>
+      Effect.gen(function* () {
+        const sync = yield* SessionSync.Service
+        const owner = yield* Seed.owner()
+        const brainId = Brain.ID.create()
+        const first = yield* Seed.session({ ...owner, brainId })
+        const second = yield* Seed.session({ ...owner, brainId })
+        const elsewhere = yield* Seed.session(owner)
+        const host = { brainId, organizationId: owner.organizationId, spaceId: owner.spaceId, generation: 1 }
+        yield* SyncFixture.pass(host, SyncFixture.session(first, { time_suspended: SyncFixture.now + 1 }), 4, [])
+        yield* SyncFixture.pass(host, SyncFixture.session(second), 5, [])
+        expect(
+          yield* Effect.flip(sync.startUpload(host, elsewhere, { harness: "opencode", parentId: null })),
+        ).toBeInstanceOf(ForbiddenError)
+        expect(
+          Object.fromEntries(
+            (yield* sync.checkpoints(host)).map((checkpoint) => [
+              checkpoint.id,
+              [checkpoint.syncSeq, checkpoint.timeSuspended],
+            ]),
+          ),
+        ).toEqual({ [first]: [4, SyncFixture.now + 1], [second]: [5, null] })
+      }),
   )
 
   it.live(

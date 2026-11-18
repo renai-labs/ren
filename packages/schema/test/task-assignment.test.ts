@@ -12,9 +12,6 @@ const info: TaskAssignment.Info = {
 describe("TaskAssignment", () => {
   test("parse reads back the text an assignment is sent as", () => {
     expect(TaskAssignment.parse(TaskAssignment.text(info, "Read the task."))).toEqual(Option.some(info))
-  })
-
-  test("parse reads an assignment with only a heading", () => {
     const bare = { taskId: info.taskId, identifier: info.identifier, title: info.title, brief: "" }
     expect(TaskAssignment.parse(TaskAssignment.text(bare, "Read the task."))).toEqual(Option.some(bare))
   })

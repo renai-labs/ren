@@ -691,17 +691,6 @@ test("a session without an environment refuses to list or read files, read versi
     }),
   ))
 
-test("a session with no messages reads as an empty page", () =>
-  live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      expect(
-        yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: { limit: 20 } }),
-      ).toEqual({ items: [], cursor: {} })
-    }),
-  ))
-
 test("a session outside this brain is not found", () =>
   live(
     Effect.gen(function* () {

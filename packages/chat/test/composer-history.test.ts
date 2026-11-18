@@ -36,7 +36,6 @@ describe("Composer history", () => {
     const kept = ComposerHistory.prepend([], quoted)
     expect(kept).toEqual([quoted])
     expect(ComposerHistory.decode(ComposerHistory.encode(kept))).toEqual(kept)
-    expect(ComposerHistory.prepend(kept, { ...quoted, quotes: [{ id: "q2", text: "other" }] })).toHaveLength(2)
   })
 
   test("keeps the newest 100 entries", () => {

@@ -44,8 +44,14 @@ export const served = TestHand.layer({ environmentId, workspace })
 
 export const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
-export const accessTo = (url: string, sessionId: Session.ID) =>
-  TestHand.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+export const accessTo = (url: string, sessionId: Session.ID, options: { readonly lifetimeMs?: number } = {}) =>
+  TestHand.access({
+    url,
+    environmentId,
+    brain: Brain.ofSession(sessionId),
+    directory: folder(sessionId),
+    ...(options.lifetimeMs !== undefined && { lifetimeMs: options.lifetimeMs }),
+  })
 
 export const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
   createEmbeddedRoutes(
@@ -145,6 +151,11 @@ export const shell = (command: string) => ({ tool: { name: "shell", input: { com
 export const shellWith = (command: string, more: Record<string, unknown>) => ({
   tool: { name: "shell", input: { command, ...more } },
 })
+
+export const idle = (opened: Opened, sessionId: Session.ID) =>
+  opened.harness.sessions.pipe(
+    Effect.map((states) => states.find((state) => String(state.id) === sessionId)?.active === false),
+  )
 
 export const scratch = () => Effect.promise(() => mkdtemp(join(workspace, "scratch-")))
 

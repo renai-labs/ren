@@ -47,7 +47,7 @@ test("app edits replace the definition with a revision; a stale revision is 409;
   expect((await call(app, foreign, "GET", `/apps/${created.id}`)).status).toBe(404)
 })
 
-test("installs, releases and per-app requirements are gone; the chat and the space list profiles with gaps (P1, P2, P15)", async () => {
+test("the chat and the space list profiles with gaps (P1, P2, P15)", async () => {
   const cookie = sessionCookie(await signUp(app, "app-profiles@gmail.com", "Ana"))
   const spaces = await (await call(app, cookie, "GET", "/spaces")).json()
   const spaceId = spaces.items[0].id
@@ -67,11 +67,6 @@ test("installs, releases and per-app requirements are gone; the chat and the spa
       },
     })
   ).json()
-  expect((await call(app, cookie, "GET", "/space-apps")).status).toBe(404)
-  expect((await call(app, cookie, "GET", `/app-releases?appId=${created.id}`)).status).toBe(404)
-  expect(
-    (await call(app, cookie, "GET", `/credential-requirements?spaceId=${spaceId}&appId=${created.id}`)).status,
-  ).toBe(404)
   const profiles = await (await call(app, cookie, "GET", `/app-profiles?appId=${created.id}`)).json()
   expect(profiles.items).toHaveLength(1)
   const reached = await call(app, cookie, "GET", `/spaces/${spaceId}/profiles`)

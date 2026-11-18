@@ -4,9 +4,10 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
 import { Brain } from "@ren/schema/brain"
+import { Label } from "@ren/schema/label"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Settings as SettingsSchema } from "@ren/schema/settings"
-import { eq } from "drizzle-orm"
+import { asc, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { ReferenceCheck } from "../src/reference-check.js"
 import { Access } from "../src/access.js"
@@ -14,6 +15,7 @@ import { EgressControl } from "../src/egress-control.js"
 import { Agent } from "../src/agent.js"
 import { AgentMembership } from "../src/agent/membership.js"
 import { Settings } from "../src/settings.js"
+import { RenSettings } from "../src/settings/ren.js"
 import { SettingsRows } from "../src/settings/rows.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
@@ -242,11 +244,121 @@ describe("Settings.pull", () => {
         expect(yield* settings.pull(s.brainId)).toEqual(first)
       }),
   )
+})
 
-  it.live("an unknown brain fails with NotFound", () =>
+const empty = { permissions: [], references: [] }
+
+describe("SettingsRows", () => {
+  it.live("an org, a space, an agent and Ren each have one settings row, and a write replaces it", () =>
     Effect.gen(function* () {
-      const settings = yield* Settings.Service
-      expect((yield* Effect.flip(settings.pull(Brain.ID.create())))._tag).toBe("Settings.NotFound")
+      const database = yield* Database.Service
+      const owner = yield* Seed.owner()
+      const agentId = yield* Seed.agent(owner, "build", { isSubagent: false })
+      const owners: ReadonlyArray<SettingsRows.Owner> = [
+        { organization_id: owner.organizationId },
+        { space_id: owner.spaceId },
+        { agent_id: agentId },
+        SettingsRows.ren,
+      ]
+      for (const each of owners) {
+        yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            yield* SettingsRows.write(transaction, each, { ...empty, instructions: "First." })
+            yield* SettingsRows.write(transaction, each, { ...empty, instructions: "Second." })
+          }),
+        )
+        expect(
+          (yield* Effect.flip(database.db.insert(Database.Schema.settings).values({ ...each, settings: empty })))._tag,
+        ).toBe("EffectDrizzleQueryError")
+      }
+      const instructions = Effect.map(database.db.select().from(Database.Schema.settings), (rows) =>
+        Object.fromEntries(rows.map((row) => [row.owner_id, row.settings.instructions])),
+      )
+      expect(yield* instructions).toEqual({
+        [owner.organizationId]: "Second.",
+        [owner.spaceId]: "Second.",
+        [agentId]: "Second.",
+        ren: "Second.",
+      })
+      yield* database.db.delete(Database.Schema.space).where(eq(Database.Schema.space.id, owner.spaceId))
+      expect(yield* instructions).toEqual({ [owner.organizationId]: "Second.", ren: "Second." })
+    }),
+  )
+
+  it.live("two references with the same alias are refused", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const docs = { alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }
+      const refused = yield* Effect.flip(
+        database.transaction((transaction) =>
+          SettingsRows.write(transaction, SettingsRows.ren, {
+            permissions: [],
+            references: [docs, { ...docs, branch: "main" }],
+          }),
+        ),
+      )
+      expect(refused).toMatchObject({ _tag: "Primitive.Conflict", message: "Two references use the alias docs." })
+    }),
+  )
+})
+
+const renSettings = (instructions: string) => ({ instructions, permissions: [], references: [] })
+
+const apply = (defaults: RenSettings.Defaults) =>
+  Effect.flatMap(Database.Service, (database) =>
+    database.transaction((transaction) => RenSettings.apply(transaction, defaults)),
+  )
+
+const globalAgents = Effect.flatMap(Database.Service, (database) =>
+  database.db
+    .select({
+      id: Database.Schema.agent.id,
+      name: Database.Schema.agent.name,
+      description: Database.Schema.agent.description,
+      archived: Database.Schema.agent.archived_at,
+    })
+    .from(Database.Schema.agent)
+    .where(isNull(Database.Schema.agent.organization_id))
+    .orderBy(asc(Database.Schema.agent.name)),
+)
+
+describe("RenSettings.apply", () => {
+  it.live("a rerun updates Ren's agents in place and archives the ones it no longer lists", () =>
+    Effect.gen(function* () {
+      yield* apply({
+        settings: renSettings("House rules."),
+        agents: [
+          { name: "ren", description: "Ren", isSubagent: false, settings: renSettings("You are Ren.") },
+          { name: "explore", description: "Explores", isSubagent: true, settings: renSettings("You search.") },
+        ],
+      })
+      const first = yield* globalAgents
+      yield* apply({
+        settings: renSettings("House rules, revised."),
+        agents: [
+          { name: "ren", description: "Ren, revised", isSubagent: false, settings: renSettings("You are Ren.") },
+        ],
+      })
+      const second = yield* globalAgents
+      expect(second.map((agent) => [agent.name, agent.description, Boolean(agent.archived)])).toEqual([
+        ["explore", "Explores", true],
+        ["ren", "Ren, revised", false],
+      ])
+      expect(second.map((agent) => agent.id)).toEqual(first.map((agent) => agent.id))
+    }),
+  )
+
+  it.live("writes the system labels with their fixed IDs, once however often it runs", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      yield* apply({ settings: renSettings("House rules."), agents: [] })
+      yield* apply({ settings: renSettings("House rules."), agents: [] })
+      const labels = yield* database.db
+        .select({ id: Database.Schema.label.id, name: Database.Schema.label.name })
+        .from(Database.Schema.label)
+        .where(isNull(Database.Schema.label.organization_id))
+        .orderBy(asc(Database.Schema.label.id))
+      expect(labels).toEqual(Label.system.map((label) => ({ id: label.id, name: label.name })))
     }),
   )
 })

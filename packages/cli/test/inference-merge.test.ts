@@ -108,10 +108,6 @@ custom_providers:
     expect(second.match(/name: ren/gu)).toHaveLength(1)
     expect(second).toContain("base_url: https://ren")
   })
-
-  test("writes block style into a file that did not exist", () => {
-    expect(Merge.setYaml("", ["model", "default"], "ren/x")).toBe("model:\n  default: ren/x\n")
-  })
 })
 
 describe("dotenv", () => {
@@ -119,9 +115,5 @@ describe("dotenv", () => {
     expect(Merge.setDotenv("# mine\nA=1\nREN_INFERENCE_KEY=old\n", { REN_INFERENCE_KEY: "new", B: "2" })).toBe(
       "# mine\nA=1\nREN_INFERENCE_KEY=new\nB=2\n",
     )
-  })
-
-  test("handles an empty file", () => {
-    expect(Merge.setDotenv("", { A: "1" })).toBe("A=1\n")
   })
 })

@@ -43,41 +43,53 @@ describe.skipIf(Platform.docker !== undefined)("an executor in a container", () 
     return { protocol: hello.protocol, ms: performance.now() - started }
   }
 
-  test("filling the workspace fails the write visibly and the executor keeps serving", async () => {
-    const output = await run("head -c 100000000 /dev/zero > big.bin; echo status=$?; rm -f big.bin")
-    expect(output.stdout).not.toContain("status=0")
-    const driver = current().driver
-    await driver.ok(driver.client["files.write"]({ path: "after.txt", bytes: new TextEncoder().encode("ok") }))
-    expect((await serves()).protocol).toBe(HandApi.protocol)
-  })
+  test.skipIf(Platform.slow !== undefined)(
+    "filling the workspace fails the write visibly and the executor keeps serving",
+    async () => {
+      const output = await run("head -c 100000000 /dev/zero > big.bin; echo status=$?; rm -f big.bin")
+      expect(output.stdout).not.toContain("status=0")
+      const driver = current().driver
+      await driver.ok(driver.client["files.write"]({ path: "after.txt", bytes: new TextEncoder().encode("ok") }))
+      expect((await serves()).protocol).toBe(HandApi.protocol)
+    },
+  )
 
-  test("a process that exhausts memory is stopped and the executor keeps serving", async () => {
-    const output = await run("bun -e 'const kept=[];for(;;)kept.push(new Uint8Array(1<<24).fill(1))'")
-    expect(output.exit).not.toEqual({ type: "exit", exitCode: 0, signal: null })
-    expect((await serves()).protocol).toBe(HandApi.protocol)
-  })
+  test.skipIf(Platform.slow !== undefined)(
+    "a process that exhausts memory is stopped and the executor keeps serving",
+    async () => {
+      const output = await run("bun -e 'const kept=[];for(;;)kept.push(new Uint8Array(1<<24).fill(1))'")
+      expect(output.exit).not.toEqual({ type: "exit", exitCode: 0, signal: null })
+      expect((await serves()).protocol).toBe(HandApi.protocol)
+    },
+  )
 
-  test("hitting the process limit fails new forks visibly and the executor keeps serving", async () => {
-    const output = await run(
-      `trap "echo stopped" TERM; (i=0; while [ $i -lt 400 ]; do sleep 30 >/dev/null 2>&1 & i=$((i+1)); done) 2>/dev/null; echo status=$?; kill -TERM 0; wait`,
-    )
-    expect(output.stdout).toMatch(/status=[1-9]/)
-    expect((await serves()).protocol).toBe(HandApi.protocol)
-    expect((await current().container.observe(["pgrep", "-c", "-f", "sleep 30"])).stdout.trim()).toBe("0")
-  })
+  test.skipIf(Platform.slow !== undefined)(
+    "hitting the process limit fails new forks visibly and the executor keeps serving",
+    async () => {
+      const output = await run(
+        `trap "echo stopped" TERM; (i=0; while [ $i -lt 400 ]; do sleep 30 >/dev/null 2>&1 & i=$((i+1)); done) 2>/dev/null; echo status=$?; kill -TERM 0; wait`,
+      )
+      expect(output.stdout).toMatch(/status=[1-9]/)
+      expect((await serves()).protocol).toBe(HandApi.protocol)
+      expect((await current().container.observe(["pgrep", "-c", "-f", "sleep 30"])).stdout.trim()).toBe("0")
+    },
+  )
 
-  test("CPU saturation inside the container leaves the executor answering within a bound", async () => {
-    const driver = current().driver
-    const busy = await driver.ok(
-      driver.client["process.spawn"]({
-        command: "sh",
-        arguments: ["-c", "for i in 1 2 3 4; do (while :; do :; done) & done; wait"],
-      }),
-    )
-    await run("sleep 1")
-    expect((await serves()).ms).toBeLessThan(5_000)
-    await driver.ok(driver.client["process.kill"]({ id: busy.id, signal: "SIGKILL" }))
-  })
+  test.skipIf(Platform.slow !== undefined)(
+    "CPU saturation inside the container leaves the executor answering within a bound",
+    async () => {
+      const driver = current().driver
+      const busy = await driver.ok(
+        driver.client["process.spawn"]({
+          command: "sh",
+          arguments: ["-c", "for i in 1 2 3 4; do (while :; do :; done) & done; wait"],
+        }),
+      )
+      await run("sleep 1")
+      expect((await serves()).ms).toBeLessThan(5_000)
+      await driver.ok(driver.client["process.kill"]({ id: busy.id, signal: "SIGKILL" }))
+    },
+  )
 
   test("the executor has no path confinement, so the container is the boundary: host paths are absent and system paths read-only", async () => {
     const driver = current().driver

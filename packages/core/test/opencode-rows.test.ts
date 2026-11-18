@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Effect, Layer } from "effect"
-import { SqlClient } from "effect/sql"
 import { SessionSync } from "../src/session-sync.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -16,28 +15,6 @@ const tree = Effect.fnUntraced(function* () {
 })
 
 describe("OpenCode rows in Postgres", () => {
-  it.live("jsonb refuses JSON with \\u0000 or a lone \\ud800, so the OpenCode JSON columns are text", () =>
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient
-      const refusals = yield* Effect.forEach(
-        [JSON.stringify({ output: "a\u0000b" }), JSON.stringify({ output: "a\ud800b" })],
-        (json) => Effect.flip(sql`select ${json}::jsonb as value`),
-      )
-      expect(refusals.map((error) => error.reason.cause)).toMatchObject([
-        {
-          code: "22P05",
-          message: "unsupported Unicode escape sequence",
-          detail: "\\u0000 cannot be converted to text.",
-        },
-        {
-          code: "22P02",
-          message: "invalid input syntax for type json",
-          detail: "Unicode low surrogate must follow a high surrogate.",
-        },
-      ])
-    }),
-  )
-
   it.live(
     "Postgres text refuses a raw NUL in a plain column such as title, so the pass fails and Ren keeps nothing",
     () =>

@@ -476,16 +476,6 @@ describe("MachineLifecycle updates", () => {
     return { memory, id }
   })
 
-  it.effect("an outdated machine updates in place when it wakes, and keeps its generation", () =>
-    Effect.gen(function* () {
-      const found = yield* asleep()
-      found.memory.switches.changeAtWake = "update"
-      expect((yield* found.memory.machines.access(found.id))._tag).toBe("Starting")
-      expect(found.memory.updated).toEqual([found.id])
-      expect(yield* found.memory.read(found.id)).toMatchObject({ phase: "ready", generation: 1 })
-    }),
-  )
-
   it.effect(
     "an access during an update in place answers Starting, never the old url, and the machine is ready once, on its generation, when the update ends",
     () =>

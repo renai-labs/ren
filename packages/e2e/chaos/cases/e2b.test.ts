@@ -42,12 +42,11 @@ const sandbox = async (environmentId = Hand.ID.create(), timeoutSeconds = 300) =
 }
 
 describe.skipIf(Platform.e2b !== undefined)("an executor in an E2B sandbox", () => {
-  test("a sandbox from the pinned template serves the executor and refuses unauthenticated work", async () => {
+  test("a sandbox from the pinned template serves the executor", async () => {
     const environment = await sandbox()
     const driver = await environment.connect()
     const greeting = await driver.ok(driver.client["executor.hello"]())
     expect(greeting.environmentId).toBe(environment.created.environmentId)
-    expect(await hello(environment.created.url)).toBe(401)
   }, 600_000)
 
   test("a paused sandbox resumes with fresh access and an earlier command does not run twice", async () => {

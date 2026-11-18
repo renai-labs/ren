@@ -1,4 +1,4 @@
-import { afterAll, expect } from "bun:test"
+import { afterAll, expect, test } from "bun:test"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { HandAccess } from "@ren/brain/hand/access"
 import { HandConnections } from "@ren/brain/hand/connections"
@@ -114,13 +114,28 @@ it.live("uses the host token that a later model configuration stored", () =>
   }),
 )
 
-it.live("without a host token it fails at once as Ren does not answer, and asks nothing", () =>
+test.each<[string, number | undefined, boolean]>([
+  ["without a host token", undefined, false],
+  ["after the models are removed", 7200, true],
+  ["with an expired host token", -60, false],
+])("%s the access fails at once without asking Ren, and a new configuration repairs it", (_name, lifetime, removed) =>
   Effect.gen(function* () {
     const subject = yield* build()
+    const access = yield* accessFor(subject.sessionId)
+    ren.answer(subject.sessionId, () => ({ type: "access", access }))
+    if (lifetime !== undefined)
+      yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, lifetime)))
+    if (removed) yield* subject.store.remove
+    expect(yield* subject.hostToken.isValid).toBe(false)
     const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
     expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "the cell has no valid host token"])
-    expect(ren.accessCalls(subject.sessionId)).toBe(0)
-  }),
+    expect(ren.calls.filter((call) => call.brainId === subject.brainId)).toEqual([])
+    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
+    expect([
+      yield* subject.hostToken.isValid,
+      (yield* subject.access.open(subject.sessionId, { unreachable: false })).url.href,
+    ]).toEqual([true, access.url.href])
+  }).pipe(Effect.scoped, Effect.runPromise),
 )
 
 it.live("a host token that Ren refuses is not a revoke: it is Ren does not answer, and the token is dropped", () =>
@@ -159,20 +174,6 @@ it.live("a refused connection to Ren fails at once and is not NotFound", () =>
     expect((yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip))._tag).toBe(
       "HandAccess.Unavailable",
     )
-  }),
-)
-
-it.effect("a Ren that accepts the request and never answers fails the access in 10 seconds", () =>
-  Effect.gen(function* () {
-    const subject = yield* build()
-    ren.answer(subject.sessionId, () => ({ type: "hold" }))
-    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    const opening = yield* subject.access
-      .open(subject.sessionId, { unreachable: false })
-      .pipe(Effect.flip, Effect.forkScoped)
-    yield* Effect.promise(() => ren.reached(subject.brainId))
-    yield* TestClock.adjust(HostToken.renAnswersWithin)
-    expect((yield* Fiber.join(opening))._tag).toBe("HandAccess.Unavailable")
   }),
 )
 
@@ -252,54 +253,33 @@ it.effect("a hand that is still starting after 3 minutes fails the access as una
   }),
 )
 
-it.live("a host token in its last five minutes is renewed through host.refresh, without the model flow", () =>
-  Effect.gen(function* () {
-    const subject = yield* build()
-    const access = yield* accessFor(subject.sessionId)
-    ren.answer(subject.sessionId, () => ({ type: "access", access }))
-    const expiring = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120))
-    yield* subject.configure(expiring)
-    yield* subject.access.open(subject.sessionId, { unreachable: false })
-    const calls = ren.calls.filter((call) => call.brainId === subject.brainId)
-    expect(calls.map((call) => [call.endpoint, call.hostToken === expiring])).toEqual([
-      ["host.refresh", true],
-      ["environments.access", false],
-    ])
-    expect(Option.getOrUndefined(yield* subject.store.readHostToken)).toBe(calls.at(1)?.hostToken)
-  }),
-)
-
-it.live("removing the models removes the host token, so the access fails at once and asks Ren nothing", () =>
-  Effect.gen(function* () {
-    const subject = yield* build()
-    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    yield* subject.store.remove
-    const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
-    expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "the cell has no valid host token"])
-    expect(ren.calls.filter((call) => call.brainId === subject.brainId)).toEqual([])
-  }),
-)
-
-it.live("50 calls in the renewal window of the host token make one host.refresh and all use the new token", () =>
-  Effect.gen(function* () {
-    const subject = yield* build()
-    const access = yield* accessFor(subject.sessionId)
-    ren.answer(subject.sessionId, () => ({ type: "access", access }))
-    const expiring = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120))
-    yield* subject.configure(expiring)
-    const opened = yield* Effect.forEach(
-      Array.from({ length: 50 }),
-      () => subject.access.open(subject.sessionId, { unreachable: false }),
-      {
-        concurrency: "unbounded",
-      },
-    )
-    const calls = ren.calls.filter((call) => call.brainId === subject.brainId)
-    expect(opened).toHaveLength(50)
-    expect(calls.filter((call) => call.endpoint === "host.refresh")).toHaveLength(1)
-    const used = new Set(calls.filter((call) => call.endpoint === "environments.access").map((call) => call.hostToken))
-    expect([used.size, used.has(expiring)]).toEqual([1, false])
-  }),
+it.live(
+  "50 calls in the renewal window of the host token make one host.refresh and all use the new token, which is stored",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* build()
+      const access = yield* accessFor(subject.sessionId)
+      ren.answer(subject.sessionId, () => ({ type: "access", access }))
+      const expiring = yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, 120))
+      yield* subject.configure(expiring)
+      const opened = yield* Effect.forEach(
+        Array.from({ length: 50 }),
+        () => subject.access.open(subject.sessionId, { unreachable: false }),
+        {
+          concurrency: "unbounded",
+        },
+      )
+      const calls = ren.calls.filter((call) => call.brainId === subject.brainId)
+      expect(opened).toHaveLength(50)
+      const refreshes = calls.filter((call) => call.endpoint === "host.refresh")
+      expect(refreshes.map((call) => call.hostToken)).toEqual([expiring])
+      expect(new Set(calls.map((call) => call.endpoint))).toEqual(new Set(["host.refresh", "environments.access"]))
+      const used = new Set(
+        calls.filter((call) => call.endpoint === "environments.access").map((call) => call.hostToken),
+      )
+      expect([used.size, used.has(expiring)]).toEqual([1, false])
+      expect(Option.getOrUndefined(yield* subject.store.readHostToken)).toBe([...used][0])
+    }),
 )
 
 it.live("a host token configured while the host token is being renewed wins, with no failure", () =>
@@ -318,24 +298,6 @@ it.live("a host token configured while the host token is being renewed wins, wit
     yield* Fiber.join(opening).pipe(Effect.ensuring(Effect.sync(() => ren.holdRefresh(undefined))))
     expect(ren.calls.findLast((call) => call.endpoint === "environments.access")?.hostToken).toBe(newer)
     expect(yield* subject.store.readHostToken).toEqual(Option.some(newer))
-  }),
-)
-
-it.live("an expired host token fails the access at once without asking Ren; a new configuration repairs it", () =>
-  Effect.gen(function* () {
-    const subject = yield* build()
-    const access = yield* accessFor(subject.sessionId)
-    ren.answer(subject.sessionId, () => ({ type: "access", access }))
-    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId, -60)))
-    expect(yield* subject.hostToken.isValid).toBe(false)
-    const error = yield* subject.access.open(subject.sessionId, { unreachable: false }).pipe(Effect.flip)
-    expect([error._tag, error.message]).toEqual(["HandAccess.Unavailable", "the cell has no valid host token"])
-    expect(ren.accessCalls(subject.sessionId)).toBe(0)
-    yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.brainId)))
-    expect([
-      yield* subject.hostToken.isValid,
-      (yield* subject.access.open(subject.sessionId, { unreachable: false })).url.href,
-    ]).toEqual([true, access.url.href])
   }),
 )
 
