@@ -48,7 +48,7 @@ export const cloudflare = unless({
 
 export const slow = unless({
   met: Boolean(process.env.CHAOS_SLOW),
-  reason: "slow cases wait out OpenCode's retry schedule; set CHAOS_SLOW=1",
+  reason: "slow cases wait out OpenCode's retry schedule or exhaust a container's resources; set CHAOS_SLOW=1",
 })
 
 export const soak = unless({

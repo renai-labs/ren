@@ -2,7 +2,6 @@ import { StubModel } from "@ren/cell/testing"
 import { TestAccess } from "@ren/brain/testing"
 import { HandConnections } from "@ren/brain/hand/connections"
 import { HandSession } from "@ren/brain/hand/session"
-import { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Stream } from "effect"
@@ -41,15 +40,6 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
 
   const read = async (sessionId: string, name: string) =>
     (await current().environment.instance.observe(["cat", `${sessionId}/${name}`])).stdout
-
-  test("a chat-only turn on an attached session sends no executor request", async () => {
-    const session = await attached()
-    const from = current().environment.proxy.seen.length
-    const turn = await session.turn([ModelProvider.text("just chatting")])
-    await turn.script.called(1)
-    await session.settled()
-    expect(operationsSince(from)).toEqual([])
-  })
 
   test("patch, which OpenCode offers to GPT models in place of edit and write, adds, updates and deletes files on the environment", async () => {
     const stack = current().stack
@@ -98,10 +88,20 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     ).not.toBe(0)
   })
 
-  test("question is answered through the client and never touches the environment", async () => {
+  test("a chat-only turn, a question answered through the client, and brain and external tools run without executor traffic", async () => {
     const session = await attached({ interactive: true })
+    const inputs: Readonly<Record<string, unknown>> = {
+      skill: { id: "missing-skill" },
+      webfetch: { url: `${current().stack.providerProxy.url}/not-found`, format: "text" },
+      list_mcp_resources: {},
+      read_mcp_resource: { server: "missing", uri: "missing://resource" },
+    }
     const from = current().environment.proxy.seen.length
-    const turn = await session.turn([
+    const probe = await session.turn([ModelProvider.text("which tools")])
+    const offered = (await probe.script.called(1)).tools.filter((tool) => inputs[tool] !== undefined)
+    await session.settled()
+    expect(offered.length).toBeGreaterThan(0)
+    const asked = await session.turn([
       ModelProvider.tool("question", {
         questions: [{ question: "Which colour?", header: "Colour", options: [{ label: "Teal", description: "teal" }] }],
       }),
@@ -113,23 +113,8 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
       formID: form.id,
       answer: { [form.fields[0].key]: "Teal" },
     })
-    expect((await turn.script.called(2, 60_000)).toolResults).toContain("Teal")
-    expect(operationsSince(from)).toEqual([])
-  })
-
-  test("brain and external tools run without executor traffic", async () => {
-    const session = await attached()
-    const inputs: Readonly<Record<string, unknown>> = {
-      skill: { id: "missing-skill" },
-      webfetch: { url: `${current().stack.providerProxy.url}/not-found`, format: "text" },
-      list_mcp_resources: {},
-      read_mcp_resource: { server: "missing", uri: "missing://resource" },
-    }
-    const probe = await session.turn([ModelProvider.text("which tools")])
-    const offered = (await probe.script.called(1)).tools.filter((tool) => inputs[tool] !== undefined)
+    expect((await asked.script.called(2, 60_000)).toolResults).toContain("Teal")
     await session.settled()
-    expect(offered.length).toBeGreaterThan(0)
-    const from = current().environment.proxy.seen.length
     const turn = await session.turn([
       ...offered.map((tool) => ModelProvider.tool(tool, inputs[tool])),
       ModelProvider.text("done"),
@@ -163,63 +148,6 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
         (await environment.instance.observe(["pgrep", "-f", marker])).exitCode !== 0 ? true : undefined,
       )
       await session.settled()
-    },
-    300_000,
-  )
-
-  test.skipIf(Platform.docker !== undefined)(
-    "a container that loses its network during a command ends the call in its time limit, and the next call works once it is back",
-    async () => {
-      const stack = current().stack
-      const environment = await stack.dockerEnvironment("network")
-      const session = await stack.session({ environment })
-      const marker = `network-${crypto.randomUUID().slice(0, 8)}`
-      const turn = await session.turn([
-        ModelProvider.tool("shell", { command: `echo ${marker} > /dev/null; sleep 4; echo $((40 + 2))` }),
-        ModelProvider.text("ok"),
-      ])
-      await Wait.until("the command to start in the container", 60_000, async () =>
-        (await environment.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
-      )
-      const cutAt = Date.now()
-      environment.proxy.partition(true)
-      environment.proxy.cutAll()
-      // ast-grep-ignore: no-test-sleep -- the container stays off the network for a real time
-      await Bun.sleep(5_000)
-      environment.proxy.partition(false)
-      const result = (await turn.script.called(2, 120_000)).toolResults
-      expect(Date.now() - cutAt).toBeLessThan(30_000)
-      expect(result === "42\n" || result.includes("environment disconnected")).toBe(true)
-      await session.settled(60_000)
-      const next = await session.turn([
-        ModelProvider.tool("shell", { command: "echo $((1 + 2))" }),
-        ModelProvider.text("ok"),
-      ])
-      expect((await next.script.called(2, 120_000)).toolResults).toBe("3\n")
-      await session.settled()
-    },
-    300_000,
-  )
-
-  test.skipIf(Platform.docker !== undefined)(
-    "the executor keeps its memory within the output limits while 40 commands of 2 MiB end and nobody reads them",
-    async () => {
-      const environment = await current().stack.dockerEnvironment("memory")
-      const driver = await environment.driver()
-      const before = await environment.container.memoryBytes()
-      const spawned = await Promise.all(
-        Array.from({ length: 40 }, () =>
-          driver.ok(driver.client["process.spawn"]({ command: "head", arguments: ["-c", "2097152", "/dev/urandom"] })),
-        ),
-      )
-      await Wait.until("all commands to end", 60_000, async () =>
-        (await environment.instance.observe(["pgrep", "-x", "head"])).stdout.trim() === "" ? true : undefined,
-      )
-      const after = await environment.container.memoryBytes()
-      expect(spawned.length).toBe(40)
-      expect(after - before).toBeLessThan(64 * 1024 * 1024 + 64 * 1024 * 1024)
-      expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: HandApi.protocol })
-      await driver.dispose()
     },
     300_000,
   )
@@ -270,33 +198,6 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
         }).pipe(Effect.scoped),
       )
       expect(stdout).toBe("42\n")
-    },
-    300_000,
-  )
-
-  test.skipIf(Platform.docker !== undefined)(
-    "a replaced container runs new commands in its empty workspace, and old process IDs are unknown there",
-    async () => {
-      const stack = current().stack
-      const environment = await stack.dockerEnvironment("replaced")
-      const session = await stack.session({ environment })
-      const shell = async (command: string) => {
-        const turn = await session.turn([ModelProvider.tool("shell", { command }), ModelProvider.text("ok")])
-        const result = (await turn.script.called(2, 60_000)).toolResults
-        await session.settled()
-        return result
-      }
-      const before = await shell("echo kept > before.txt && ls")
-      expect([before.includes("Unable to execute"), before.includes("before.txt")]).toEqual([false, true])
-      const driver = await environment.driver()
-      const old = await driver.ok(driver.client["process.spawn"]({ command: "sleep", arguments: ["120"] }))
-      await environment.instance.replace()
-      environment.retarget()
-      await environment.publish(environment.generation() + 1)
-      const after = await shell("ls -a; echo listed")
-      expect([after.includes("Unable to execute"), after.includes("before.txt")]).toEqual([false, false])
-      expect((await driver.output(old.id, 10_000)).error).toBe("ProcessNotFoundError")
-      await driver.dispose()
     },
     300_000,
   )

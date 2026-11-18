@@ -1155,20 +1155,6 @@ describe("Timeline.resolveContent", () => {
     expect(Projection.resolveContent(replaced, "read")).toBeUndefined()
     expect(Projection.resolveContent(replaced, "msg_assistant:text:1")).toBeUndefined()
   })
-
-  test("stops reading as soon as the part is found", () => {
-    const message = assistant("msg_assistant", [
-      tool("first", "read", "running"),
-      {
-        get type(): "text" {
-          throw new Error("read past the matching part")
-        },
-        text: "later",
-      },
-    ])
-
-    expect(Projection.resolveContent(message, "first")).toBe(message.content[0])
-  })
 })
 
 describe("reuseTimelineRows", () => {

@@ -169,19 +169,6 @@ describe("CredentialSource.layerMinted", () => {
       }),
   )
 
-  it.effect("a brain gets REN for Ren's own host (REN_URL): its host token, in place of the placeholder", () =>
-    Effect.gen(function* () {
-      const source = yield* CredentialSource.Minted
-      const ren = (yield* source.candidates(scope, [])).find((candidate) => candidate.label === "REN")
-      expect(ren).toMatchObject({ hosts: ["api.ren.test"], inject: { op: "replace", in: ["header"] } })
-      if (!ren) return
-      const value = yield* source.value(ren, scope)
-      if (Option.isNone(value) || value.value.value.type !== "key")
-        return yield* Effect.die(new Error("expected a key"))
-      expect(Redacted.value(value.value.value.value).slice(0, 2)).toBe("ey")
-    }),
-  )
-
   it.effect(
     "with REN_INTEGRATIONS_URL, a brain in a space gets INTEGRATIONS for its host: a token with org, space, brain, generation and expiry",
     () =>

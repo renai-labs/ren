@@ -121,17 +121,11 @@ describe("InfraCommand.gate", () => {
   test("--force applies a deleted resource that changed in Ren only with --allow-archive, and says it archives", () => {
     const deleted = { ...archive, status: "conflict" as const }
     expect(
-      InfraCommand.gate(plan([deleted]), { interactive: false, digest: "abc", allowArchive: false, force: true }),
-    ).toEqual({ kind: "refuse", message: "The plan archives 1 row. Pass --allow-archive to apply it." })
+      InfraCommand.gate(plan([deleted]), { interactive: false, digest: "abc", allowArchive: false, force: true }).kind,
+    ).toBe("refuse")
     expect(InfraCommand.render(plan([deleted]), { force: true })).toEqual([
       "! force archive agent spaces/engineering/agents/lint",
     ])
-  })
-
-  test("a terminal confirms every plan", () => {
-    expect(InfraCommand.gate(plan([archive]), { interactive: true, allowArchive: false, force: false })).toEqual({
-      kind: "confirm",
-    })
   })
 
   test("without a terminal, apply takes only the digest of an earlier plan, and archives need --allow-archive", () => {

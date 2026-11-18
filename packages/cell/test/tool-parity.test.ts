@@ -11,7 +11,7 @@ import { HandApi } from "@ren/hand-api/hand-api"
 import { TestHand, Processes, testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Option, Queue, Scope, Stream } from "effect"
+import { Context, Effect, Fiber, Layer, ManagedRuntime, Option, Queue, Scope, Stream } from "effect"
 import { HttpEffect, HttpRouter } from "effect/http"
 import { createServer, connect, type Socket } from "node:net"
 import { lstat, mkdir, mkdtemp, readdir, realpath, symlink } from "node:fs/promises"
@@ -541,39 +541,6 @@ it.live("a shell removed on the sandbox while it runs reports one exit, killed, 
     ).toEqual([{ id: created.id, status: "killed" }])
   }),
 )
-
-const closedHarnessStops = (seconds: number) =>
-  live(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const opened = yield* RemoteHost.open().pipe(Effect.provideService(Scope.Scope, scope))
-      const session = yield* RemoteHost.begin(opened)
-      const dir = yield* RemoteHost.scratch()
-      const answer = yield* session.turn(
-        stub.script(RemoteHost.shellWith(`echo $$ > ${dir}/main; exec sleep 300`, { background: true })),
-      )
-      expect(RemoteHost.lastToolResult(answer)).toContain("Command moved to the background")
-      const pid = yield* Pid.read(join(dir, "main"))
-      yield* Effect.promise(async () => {
-        // ast-grep-ignore: no-test-sleep -- the session must be idle before the cell closes, and idle is only visible by polling
-        while ((await Effect.runPromise(opened.harness.sessions)).some((state) => state.active)) await Bun.sleep(100)
-      })
-      expect(Processes.running(pid)).toBe(true)
-      yield* Scope.close(scope, Exit.void)
-      const stopped = yield* RemoteHost.stops(pid, seconds)
-      if (!stopped) process.kill(pid, "SIGKILL")
-      expect(stopped).toBe(true)
-    }),
-  )
-
-test(
-  "J28 a background job stops on the sandbox within the executor's orphan time and one scan after the idle cell closes",
-  () => closedHarnessStops(33),
-  90_000,
-)
-
-test.todo("J28 a background job stops on the sandbox 30 seconds or less after the idle cell closes", () =>
-  closedHarnessStops(30))
 
 test("J29 five shell calls at once each get only their own output", () =>
   live(

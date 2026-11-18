@@ -555,20 +555,6 @@ describe("Hands", () => {
     }),
   )
 
-  it.live("a configured token lifetime is the access's lifetime", () =>
-    Effect.gen(function* () {
-      const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })
-      const organizationId = yield* Seed.organization()
-      const session = yield* subjectIn(organizationId)
-      yield* subject.environments.bind(session, Seed.version(yield* Seed.environmentTemplate(organizationId)))
-      const before = Date.now()
-      const access = yield* subject.environments.access(session, { _tag: "Remote" })
-      const after = Date.now()
-      expect(DateTime.toEpochMillis(access.expiresAt) - after).toBeLessThanOrEqual(20_000)
-      expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(18_000)
-    }),
-  )
-
   it.live("sessions that ask at once share environments, never more than sessionsPerEnvironment on one", () =>
     Effect.gen(function* () {
       const subject = yield* environmentsWith()

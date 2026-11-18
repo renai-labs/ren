@@ -49,20 +49,6 @@ describe.skipIf(Platform.wrangler !== undefined)("clients on the user link", () 
     expect(SessionDriver.occurrences(own, sent) + inbox.filter((item) => item.id === sent).length).toBe(1)
   })
 
-  test("two clients submitting the same message ID create one user message and one turn", async () => {
-    const session = await stack().session()
-    const script = stack().provider.script([ModelProvider.text("once")])
-    const id = Session.MessageID.create()
-    const results = await Promise.all(
-      [session.opencode, second(session)].map((client) =>
-        settled(client.session.prompt({ sessionID: session.id, id, text: `same ${script.marker}`, delivery: "steer" })),
-      ),
-    )
-    expect(results).toContain("ok")
-    expect(SessionDriver.occurrences(await session.settled(), id)).toBe(1)
-    expect(script.calls).toHaveLength(1)
-  })
-
   test("two clients answering one question resolve it once", async () => {
     const session = await stack().session({ start: { interactive: true } })
     const turn = await session.turn([

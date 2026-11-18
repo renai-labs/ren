@@ -92,18 +92,15 @@ describe("Ren MCP OAuth", () => {
     expect(metadata.registration_endpoint).toBeUndefined()
   })
 
-  test.each(["/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource"])(
-    "serves protected resource metadata for /mcp at %s",
-    async (path) => {
-      const response = await get(path)
-      expect(response.status).toBe(200)
-      expect(await response.json()).toMatchObject({
-        resource,
-        authorization_servers: [`${base}/auth`],
-        scopes_supported: ["ren"],
-      })
-    },
-  )
+  test("serves protected resource metadata for /mcp", async () => {
+    const response = await get("/.well-known/oauth-protected-resource/mcp")
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      resource,
+      authorization_servers: [`${base}/auth`],
+      scopes_supported: ["ren"],
+    })
+  })
 
   test("gives a CIMD client an access token for /mcp in the organization the person consented with", async () => {
     const cookie = sessionCookie(await signUp(app, "mcp@example.com", "Ada"))

@@ -92,8 +92,9 @@ const delegated = Effect.gen(function* () {
 const importOf = (client: OpenCodeClient, data: Effect.Success<ReturnType<typeof exported>>) =>
   client.experimental.session.import({ info: data.info, messages: data.messages, location: data.info.location })
 
-for (const payload of ["not json", JSON.stringify({ text: 42 })])
-  it.live(`restore rejects a synthetic queue payload ${payload} before import, and a corrected retry succeeds`, () =>
+it.live(
+  "restore rejects a synthetic queue payload that is not JSON before import, and a corrected retry succeeds",
+  () =>
     Effect.gen(function* () {
       const recorded = yield* Effect.fromNullishOr(
         OpenCodeFixtures.recordings
@@ -120,7 +121,7 @@ for (const payload of ["not json", JSON.stringify({ text: 42 })])
           ...data,
           chat: {
             ...data.chat,
-            inbox: data.chat.inbox.map((row) => (row.type === "synthetic" ? { ...row, payload } : row)),
+            inbox: data.chat.inbox.map((row) => (row.type === "synthetic" ? { ...row, payload: "not json" } : row)),
           },
         })
         .pipe(Effect.exit)
@@ -138,7 +139,7 @@ for (const payload of ["not json", JSON.stringify({ text: 42 })])
         (yield* target.opencode.session.inbox.list({ sessionID: SessionID.make(session.id) })).map((row) => row.id),
       ).toEqual(recorded.inbox.map((row) => row.id))
     }),
-  )
+)
 
 it.live("an import beside another session in the same directory shares its project and leaves it unchanged", () =>
   Effect.gen(function* () {

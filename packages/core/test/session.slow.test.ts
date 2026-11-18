@@ -12,6 +12,7 @@ import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
+import { SavedHistory } from "./lib/saved-history.js"
 import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(60_000)
@@ -195,5 +196,16 @@ describe("Session", () => {
         yield* sessions.retry(ada, id, undefined)
         expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
       }),
+  )
+
+  it.live("Ren refuses a page of saved history over 16 MiB; a smaller page of the same chat reads", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const chat = yield* SavedHistory.saved(["a".repeat(9 * 1024 * 1024), "b".repeat(9 * 1024 * 1024)])
+      expect((yield* Effect.flip(sessions.messages(chat.actor, chat.id, { limit: 2 })))._tag).toBe(
+        "Session.PageTooLarge",
+      )
+      expect((yield* sessions.messages(chat.actor, chat.id, { limit: 1 })).items).toHaveLength(1)
+    }),
   )
 })

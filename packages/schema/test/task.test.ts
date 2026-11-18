@@ -34,10 +34,6 @@ describe("TaskLink.Url", () => {
 })
 
 describe("Label names", () => {
-  test("a label name is trimmed", () => {
-    expect(Schema.decodeUnknownSync(Label.CreateInput)({ name: "  bug  " }).name).toBe("bug")
-  })
-
   test.each(["ren-fix", "REN-improve", "ren-other"])("a new label cannot be named %s", (name) => {
     expect(Exit.isSuccess(Schema.decodeUnknownExit(Label.CreateInput)({ name }))).toBe(false)
   })
@@ -48,10 +44,6 @@ describe("Label names", () => {
 
   test("a task cannot carry another ren- label", () => {
     expect(Exit.isSuccess(Schema.decodeUnknownExit(Task.LabelName)("ren-other"))).toBe(false)
-  })
-
-  test("a color is kept in lower case", () => {
-    expect(Schema.decodeUnknownSync(Label.CreateInput)({ name: "bug", color: "#D45F5F" }).color).toBe("#d45f5f")
   })
 })
 

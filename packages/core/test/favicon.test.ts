@@ -47,20 +47,13 @@ const it = testEffect(Favicon.layer.pipe(Layer.provide(fixture)))
 const count = (host: string) => requests.filter((path) => path.startsWith(`/${host}/`)).length
 
 describe("Favicon", () => {
-  it.effect("serves a PNG with its sniffed type", () =>
+  it.effect("serves a PNG with its sniffed type, also behind a redirect", () =>
     Effect.gen(function* () {
       const favicon = yield* Favicon.Service
       const icon = yield* favicon.read("ok.example.com")
       expect(Option.map(icon, (found) => found.type)).toEqual(Option.some("image/png"))
       expect(Option.map(icon, (found) => found.bytes.length)).toEqual(Option.some(png.length))
-    }),
-  )
-
-  it.effect("follows a redirect", () =>
-    Effect.gen(function* () {
-      const favicon = yield* Favicon.Service
-      const icon = yield* favicon.read("moved.example.com")
-      expect(Option.isSome(icon)).toBe(true)
+      expect(Option.isSome(yield* favicon.read("moved.example.com"))).toBe(true)
     }),
   )
 

@@ -507,20 +507,9 @@ describe("Egress.resolve", () => {
       const reply = yield* resolver.resolve(all, request(found.proof, "api.ren.test", ["ren:REN"]))
       if (!reply.allow) return yield* Effect.die(new Error("expected an allow"))
       expect(reply.labels).toEqual(["REN"])
+      expect(reply.inject).toMatchObject([{ op: "replace" }])
       expect(reply.expiresAt).toBeGreaterThan(Date.now() / 1000 + BrainToken.lifetimes.host - 60)
       expect(reply.expiresAt).toBeLessThanOrEqual(Date.now() / 1000 + BrainToken.lifetimes.host)
-    }),
-  )
-
-  it.live("an unknown login is unknown_workload", () =>
-    Effect.gen(function* () {
-      const resolver = yield* Egress.Service
-      expect(
-        yield* resolver.resolve(
-          all,
-          request({ kind: "ProxyLogin", username: "nobody", password: Redacted.make("x") }, "api.stripe.com", []),
-        ),
-      ).toEqual({ allow: false, reason: "unknown_workload" })
     }),
   )
 

@@ -57,7 +57,7 @@ const refused = Effect.fnUntraced(function* () {
   ]
 })
 
-it.live("answers a bad token before it decodes the payload", () =>
+it.live("answers a bad token before it decodes the payload, and gives a client the typed UnauthorizedError", () =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
     const invalidSpawn = HttpClientRequest.post(`${yield* TestHand.url}${HandClient.path}`).pipe(
@@ -84,11 +84,6 @@ it.live("answers a bad token before it decodes the payload", () =>
     const decoded = yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* TestServer.token())))
     expect(decoded.status).toBe(200)
     expect(decoded.body).toContain("Die")
-  }),
-)
-
-it.live("gives a client with a bad token the typed UnauthorizedError", () =>
-  Effect.gen(function* () {
     const foreign = yield* TestServer.connect(yield* TestServer.token({ environmentId: Hand.ID.create() }))
     const empty = yield* TestServer.connect("")
     const errors = yield* Effect.forEach([foreign, empty], (api) =>
@@ -132,6 +127,12 @@ it.live("returns the declared errors", () =>
       (yield* api["process.kill"]({ id: HandApi.ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag,
     ).toBe("ProcessNotFoundError")
     yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
+    const large = yield* api["files.write"]({ path: "too-large.bin", bytes: new Uint8Array(9 * 1024 * 1024) }).pipe(
+      Effect.flip,
+    )
+    expect(large._tag).toBe("FileTooLargeError")
+    expect((yield* api["files.stat"]({ path: "." })).type).toBe("directory")
+    expect(yield* Effect.promise(() => Bun.file(join(TestServer.workspace, "too-large.bin")).exists())).toBe(false)
   }),
 )
 
@@ -243,19 +244,6 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
   }),
 )
 
-it.live("refuses a negative cursor in the schema, and keeps serving", () =>
-  Effect.gen(function* () {
-    const bearer = `Bearer ${yield* TestServer.token()}`
-    const answer = yield* TestServer.post(
-      TestServer.rpc("process.output", { id: HandApi.ProcessID.create(), cursor: -1 }),
-      bearer,
-    )
-    expect(answer.body).toContain("Die")
-    expect(answer.body).toContain("Expected a value greater than or equal to 0")
-    expect((yield* TestServer.post(TestServer.rpc("executor.hello", null), bearer)).status).toBe(200)
-  }),
-)
-
 it.live("answers a body that is not NDJSON with a defect, drops a cut-off body, and keeps serving", () =>
   Effect.gen(function* () {
     const bearer = `Bearer ${yield* TestServer.token()}`
@@ -264,18 +252,6 @@ it.live("answers a body that is not NDJSON with a defect, drops a cut-off body, 
     expect(garbage.body).toContain("NdjsonDecodeError")
     expect(cut.body).toBe("")
     expect((yield* TestServer.post(TestServer.rpc("executor.hello", null), bearer)).status).toBe(200)
-  }),
-)
-
-it.live("answers a write above the file size limit with FileTooLargeError, writes no file, and keeps serving", () =>
-  Effect.gen(function* () {
-    const api = yield* TestServer.client()
-    const failure = yield* api["files.write"]({ path: "too-large.bin", bytes: new Uint8Array(9 * 1024 * 1024) }).pipe(
-      Effect.flip,
-    )
-    expect(failure._tag).toBe("FileTooLargeError")
-    expect((yield* api["files.stat"]({ path: "." })).type).toBe("directory")
-    expect(yield* Effect.promise(() => Bun.file(join(TestServer.workspace, "too-large.bin")).exists())).toBe(false)
   }),
 )
 

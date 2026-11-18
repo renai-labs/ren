@@ -56,6 +56,7 @@ import { TaskCard } from "../../src/task-card.js"
 import { Task } from "../../src/task.js"
 import { TestDrives } from "./drives.js"
 import { Host } from "./host.js"
+import { Seed } from "./seed.js"
 
 const secret = "channel-test-secret"
 
@@ -213,7 +214,7 @@ export const event = (install: string, overrides: Partial<Channel.Event> = {}): 
 
 export const delivery = (found: Channel.Event) => JSON.stringify({ type: "event", event: found })
 
-export const install = Effect.fnUntraced(function* (owner: {
+const install = Effect.fnUntraced(function* (owner: {
   readonly organizationId: Auth.OrganizationID
   readonly createdBy: Auth.UserID
 }) {
@@ -228,6 +229,11 @@ export const install = Effect.fnUntraced(function* (owner: {
     installed_by: owner.createdBy,
   })
   return workspace
+})
+
+export const routed = Effect.gen(function* () {
+  const owner = yield* Seed.owner()
+  return { owner, install: yield* install(owner) }
 })
 
 export const app = "https://ren.test/app"

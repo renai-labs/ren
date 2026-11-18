@@ -17,6 +17,7 @@ import { SettingsRows } from "../src/settings/rows.js"
 import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
+import { SavedHistory } from "./lib/saved-history.js"
 import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(60_000)
@@ -55,22 +56,6 @@ const picker = testEffect(
 )
 
 type ListInput = Parameters<Session.Interface["list"]>[1]
-
-const saved = Effect.fnUntraced(function* (texts: ReadonlyArray<string>) {
-  const database = yield* Database.Service
-  const owner = yield* Seed.owner()
-  const id = yield* Seed.session(owner)
-  yield* database.db.insert(Database.Schema.opencode_message).values(
-    texts.map((text, seq) => ({
-      id: SessionMessage.ID.create(),
-      session_id: id,
-      type: "user",
-      seq,
-      data: JSON.stringify({ text, time: { created: 1_760_000_000_000 } }),
-    })),
-  )
-  return { id, actor: { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] } }
-})
 
 const chat = Effect.fnUntraced(function* (
   owner: Parameters<typeof Seed.session>[0],
@@ -416,24 +401,13 @@ describe("Session", () => {
     }),
   )
 
-  it.live("Ren refuses a page of saved history over 16 MiB; a smaller page of the same chat reads", () =>
-    Effect.gen(function* () {
-      const sessions = yield* Session.Service
-      const chat = yield* saved(["a".repeat(9 * 1024 * 1024), "b".repeat(9 * 1024 * 1024)])
-      expect((yield* Effect.flip(sessions.messages(chat.actor, chat.id, { limit: 2 })))._tag).toBe(
-        "Session.PageTooLarge",
-      )
-      expect((yield* sessions.messages(chat.actor, chat.id, { limit: 1 })).items).toHaveLength(1)
-    }),
-  )
-
   it.live(
     "Ren reads saved history 4 at a time with 16 more waiting; one more read at that moment is told to ask again",
     () =>
       Effect.gen(function* () {
         const sessions = yield* Session.Service
         const sql = yield* SqlClient.SqlClient
-        const chat = yield* saved(["hello"])
+        const chat = yield* SavedHistory.saved(["hello"])
         const locked = yield* Deferred.make<void>()
         const unlock = yield* Deferred.make<void>()
         yield* sql

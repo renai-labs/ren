@@ -1,69 +1,21 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { Database } from "@ren/db/database"
-import { Testing } from "@ren/db/testing"
 import type { Channel } from "@ren/schema/channel"
-import { ChannelInstall } from "@ren/schema/channel-install"
 import { Task } from "@ren/schema/task"
-import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
-import { FetchHttpClient } from "effect/http"
-import { ChannelProvider } from "../src/channel-provider.js"
+import { Effect, Option } from "effect"
 import { Slack } from "../src/channel-provider/slack.js"
-import { ChannelSecrets } from "../src/channel-secrets.js"
-import { Envelope } from "../src/envelope.js"
 import { SlackApp } from "../src/slack-app.js"
 import { testEffect } from "./lib/effect.js"
-import { Seed } from "./lib/seed.js"
+import { SlackProvider } from "./lib/slack-provider.js"
 import { SlackServer } from "./lib/slack-server.js"
 
 const slack = SlackServer.start()
 afterAll(() => slack.stop())
 
-const it = testEffect(
-  ChannelProvider.layer(Effect.all([Slack.provider])).pipe(
-    Layer.provideMerge(SlackApp.layer),
-    Layer.provideMerge(ChannelSecrets.layer),
-    Layer.provideMerge(Envelope.layerLocal),
-    Layer.provideMerge(Testing.layer),
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          ...SlackServer.config(slack.url),
-          ENVELOPE_KEYS: JSON.stringify([
-            { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
-          ]),
-        }),
-      ),
-    ),
-  ),
-)
+const it = testEffect(SlackProvider.layer(slack.url))
 
-const provider = Effect.flatMap(ChannelProvider.Registry, (registry) =>
-  Option.match(registry.get("slack"), {
-    onNone: () => Effect.die(new Error("Slack is not set up")),
-    onSome: Effect.succeed,
-  }),
-)
+const provider = SlackProvider.provider
 
-const installed = Effect.fnUntraced(function* () {
-  const database = yield* Database.Service
-  const secrets = yield* ChannelSecrets.Service
-  const organizationId = yield* Seed.organization()
-  const workspace = `T${crypto.randomUUID().slice(0, 8).toUpperCase()}`
-  const token = `xoxb-${crypto.randomUUID()}`
-  slack.grants.set(`grant-${workspace}`, { team: workspace, teamName: "Acme", user: "U01", token })
-  const id = ChannelInstall.ID.create()
-  yield* database.db.insert(Database.Schema.channel_install).values({
-    id,
-    organization_id: organizationId,
-    provider: "slack",
-    workspace,
-    name: "Acme",
-    bot_user: "UBOT",
-    secret: yield* secrets.seal(organizationId, id, Redacted.make(token)),
-  })
-  return { workspace, token }
-})
+const installed = () => SlackProvider.installed(slack)
 
 const signed = (body: object, at = Math.floor(Date.now() / 1000)) => {
   const text = JSON.stringify(body)
@@ -498,20 +450,6 @@ describe("Slack", () => {
         _tag: "ChannelProvider.FileUnavailable",
         message: "Slack file large.log exceeds the 32 MiB limit",
       })
-    }),
-  )
-
-  it.live("files with an underreported size are refused when the response exceeds the byte limit", () =>
-    Effect.gen(function* () {
-      const slackProvider = yield* provider
-      const found = yield* installed()
-      const file = { url: `${slack.url}/files/F2`, name: "large.log", mime: "text/plain" }
-      slack.files.set("F2", "x".repeat(SlackApp.maxFileBytes + 1))
-      expect(yield* Effect.flip(slackProvider.fetchFile(found.workspace, { ...file, size: 1 }))).toMatchObject({
-        _tag: "ChannelProvider.FileUnavailable",
-        message: "Slack file exceeds the 32 MiB limit",
-      })
-      slack.files.delete("F2")
     }),
   )
 

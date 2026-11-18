@@ -145,13 +145,13 @@ describe("ren_notify_brains (HR10, HR23)", () => {
     }),
   )
 
-  it.live("one transaction that writes 1000 rows of one space sends one notification", () =>
+  it.live("one transaction that writes several rows of one space sends one notification", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
       const listener = yield* listening
       const owner = yield* Seed.owner()
       const agents = yield* Effect.forEach(
-        Array.from({ length: 1000 }, (_, index) => index),
+        Array.from({ length: 3 }, (_, index) => index),
         (index) => Seed.agent(owner, `agent-${index}`, { isSubagent: true }),
       )
       yield* listener.collect

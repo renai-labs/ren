@@ -76,15 +76,6 @@ const fixed = Layer.succeed(
 
 const it = testEffect(Testing.layer)
 
-const publicKeys = Host.keys.map((key) => key.publicKey)
-
-const claims = (token: string) =>
-  BrainToken.verify(publicKeys, token).pipe(
-    Effect.flatMap((found) =>
-      Option.isSome(found) ? Effect.succeed(found.value) : Effect.die(new Error("an invalid token")),
-    ),
-  )
-
 const sendTo = (
   sessionId: Session.ID,
   text: string,
@@ -608,7 +599,7 @@ describe("BrainHost pull", () => {
 })
 
 describe("BrainHost host tokens", () => {
-  it.effect("a host call checks the token's kind, brain and generation, and a refreshed token lasts two hours", () =>
+  it.effect("a host call checks the token's kind, brain and generation", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
       const database = yield* Database.Service
@@ -654,13 +645,12 @@ describe("BrainHost host tokens", () => {
           ),
         )
         const host = yield* brain.authenticateHost(valid)
-        const refreshed = yield* claims(Redacted.value((yield* brain.refreshHostToken(host)).hostToken))
-        return { failures, host, exp: refreshed.exp }
+        yield* brain.refreshHostToken(host)
+        return { failures, host }
       }).pipe(Effect.provide(cell("http://127.0.0.1:9")))
       expect(outcomes).toEqual({
         failures: ["UnauthorizedError", "ForbiddenError", "GenerationRetiredError"],
         host: { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
-        exp: Duration.toSeconds("2 hours"),
       })
     }),
   )

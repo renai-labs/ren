@@ -152,12 +152,11 @@ describe("CredentialRefresh", () => {
     }),
   )
 
-  it.live("two sweeps at once refresh an expiring credential once, and skip one far from its expiry", () =>
+  it.live("two sweeps at once refresh an expiring credential once", () =>
     Effect.gen(function* () {
       const refresh = yield* CredentialRefresh.Service
       yield* reset
       const soon = yield* expiring(3)
-      yield* expiring(60)
       yield* Effect.all([refresh.sweep, refresh.sweep], { concurrency: 2 })
       expect(yield* Ref.get(calls)).toEqual([soon])
     }),

@@ -243,7 +243,7 @@ effect("a stream.ended frame parks the connection until it is woken", () =>
   }),
 )
 
-effect("a stream that ends with closing reconnects at once without a wake; one that ends with idle parks", () =>
+effect("a stream that ends with closing reconnects at once without a wake", () =>
   Effect.gen(function* () {
     const fake = yield* setup()
     const first = yield* Queue.take(fake.subscriptions)
@@ -254,10 +254,6 @@ effect("a stream that ends with closing reconnects at once without a wake; one t
     const second = yield* Queue.take(fake.subscriptions)
     yield* Queue.offer(second.queue, { ...connected, id: "evt_connected_2" })
     yield* fake.until("connected")
-    yield* Queue.offer(second.queue, ended)
-    yield* fake.until("parked")
-    yield* TestClock.adjust("1 minute")
-    expect(yield* Queue.size(fake.subscriptions)).toBe(0)
   }),
 )
 

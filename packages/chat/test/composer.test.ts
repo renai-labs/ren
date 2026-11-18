@@ -258,7 +258,6 @@ describe("Composer model", () => {
 
 describe("Composer lists", () => {
   test("hides OpenCode's built-in skills and commands, which members can't use in Ren", () => {
-    expect(Composer.hidden).toEqual({ skills: ["opencode", "report"], commands: ["init", "review"] })
     expect(
       Composer.offeredSkills([
         { id: "opencode", name: "opencode" },

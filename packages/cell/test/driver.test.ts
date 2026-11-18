@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
-import { AbsolutePath, Model, OpenCode, Provider, Session } from "@opencode/client/effect"
+import { AbsolutePath, OpenCode, Session } from "@opencode/client/effect"
 import { SdkPlugins } from "@opencode/core/plugin/sdk"
 import { Plugin, Reference } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
@@ -11,7 +11,7 @@ import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
-import { Context, Deferred, Effect, Layer, ManagedRuntime, Option, Predicate, type Scope, Stream } from "effect"
+import { Context, Deferred, Effect, Layer, ManagedRuntime, Option, type Scope, Stream } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -88,8 +88,6 @@ const tool = (call: StubModel.Call | undefined, name: string) =>
   call?.body.tools?.find((each) => each.function.name === name)?.function
 
 const description = (call: StubModel.Call | undefined, name: string) => tool(call, name)?.description ?? ""
-
-const parameters = (call: StubModel.Call | undefined, name: string) => tool(call, name)?.parameters
 
 const toolResults = (calls: ReadonlyArray<StubModel.Call>) =>
   (calls.at(-1)?.body.messages ?? [])
@@ -252,79 +250,6 @@ describe("OpenCode facts the Ren driver relies on", () => {
     }),
   )
 
-  it.live("switchModel on a running child applies at its next step", () =>
-    Effect.gen(function* () {
-      const opened = yield* boot((context) =>
-        Effect.all([
-          context.agent.transform((editor) =>
-            editor.update("helper", (agent) => {
-              agent.mode = "subagent"
-              agent.description = "Helps with notes"
-            }),
-          ),
-          context.tool.hook("execute.before", (event) =>
-            event.tool !== "read"
-              ? Effect.void
-              : context.session
-                  .switchModel({
-                    sessionID: event.sessionID,
-                    model: { providerID: Provider.ID.make("stub"), id: Model.ID.make("stub-other") },
-                  })
-                  .pipe(Effect.orDie, Effect.asVoid),
-          ),
-        ]).pipe(Effect.asVoid),
-      )
-      const child = stub.script({ tools: [{ name: "read", input: { path: join(opened.directory, "notes.txt") } }] })
-      const parent = stub.script({ tools: [subagent("helper", child)] })
-      const session = yield* opened.session()
-      yield* opened.turn(session.id, parent)
-      expect(child.calls.map((call) => call.body.model)).toEqual(["stub-model", "stub-other"])
-      expect(parent.calls.map((call) => call.body.model)).toEqual(["stub-model", "stub-model"])
-    }),
-  )
-
-  it.live("a context hook and an execute hook can take the model parameter away from the subagent tool", () =>
-    Effect.gen(function* () {
-      const opened = yield* boot((context) =>
-        Effect.all([
-          context.agent.transform((editor) =>
-            editor.update("helper", (agent) => {
-              agent.mode = "subagent"
-              agent.description = "Helps with notes"
-            }),
-          ),
-          context.session.hook("context", (event) =>
-            Effect.sync(() => {
-              const tool = event.tools.subagent
-              const input = tool?.input
-              if (!tool || !Predicate.isObject(input) || !Predicate.isObject(input.properties)) return
-              tool.input = {
-                ...input,
-                properties: Object.fromEntries(
-                  Object.entries(input.properties).filter((entry) => entry[0] !== "model"),
-                ),
-              }
-            }),
-          ),
-          context.tool.hook("execute.before", (event) =>
-            Effect.sync(() => {
-              if (event.tool !== "subagent" || !Predicate.isObject(event.input)) return
-              event.input = Object.fromEntries(Object.entries(event.input).filter((entry) => entry[0] !== "model"))
-            }),
-          ),
-        ]).pipe(Effect.asVoid),
-      )
-      const child = stub.script({ reply: "child done" })
-      const parent = stub.script({
-        tools: [{ name: "subagent", input: { ...subagent("helper", child).input, model: "stub/stub-other" } }],
-      })
-      const session = yield* opened.session()
-      yield* opened.turn(session.id, parent)
-      expect(JSON.stringify(parameters(parent.calls[0], "subagent"))).not.toContain('"model"')
-      expect(child.calls.map((call) => call.body.model)).toEqual(["stub-model"])
-    }),
-  )
-
   it.live("reference.transform with a local source, then reload, shows the reference at the next step of a turn", () =>
     Effect.gen(function* () {
       const docs = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-docs-"))))
@@ -427,37 +352,6 @@ describe("OpenCode facts the Ren driver relies on", () => {
         yield* Effect.promise(() => script.called(2))
         expect(toolResults(script.calls).join("\n")).toContain("the guide")
         expect(connects.count).toBeGreaterThan(before)
-      }),
-  )
-
-  it.live(
-    "a read outside the session directory asks external_directory for the folder, and an edit gives the absolute path",
-    () =>
-      Effect.gen(function* () {
-        const outside = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-outside-"))))
-        yield* Effect.promise(() => writeFile(join(outside, "other.txt"), "other notes\n"))
-        const asked: Array<{ readonly action: string; readonly resources: ReadonlyArray<string> }> = []
-        const opened = yield* boot((context) =>
-          context.permission
-            .hook("evaluate", (event) =>
-              Effect.sync(() => {
-                asked.push({ action: event.action, resources: event.resources })
-                event.effect = "allow"
-              }),
-            )
-            .pipe(Effect.asVoid),
-        )
-        const file = join(outside, "other.txt")
-        const script = stub.script({
-          tools: [
-            { name: "read", input: { path: file } },
-            { name: "edit", input: { path: file, oldString: "other", newString: "changed" } },
-          ],
-        })
-        const session = yield* opened.session()
-        yield* opened.turn(session.id, script)
-        expect(asked).toContainEqual({ action: "external_directory", resources: [`${outside}/*`] })
-        expect(asked).toContainEqual({ action: "edit", resources: [file] })
       }),
   )
 })

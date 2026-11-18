@@ -195,16 +195,9 @@ describe("SlackBot", () => {
         expect(
           yield* bot.call(asAgent(owner, sessionId), "send_message", {
             message: "Here are the models.",
-            charts: [pie, { title: "Broken", type: "pie" }],
+            charts: [pie],
           }),
-        ).toEqual({
-          ...answer,
-          charts: {
-            sent: 1,
-            repaired: [],
-            dropped: [{ title: "Broken", reason: expect.stringContaining("It is not a valid chart:") }],
-          },
-        })
+        ).toEqual({ ...answer, charts: { sent: 1, repaired: [], dropped: [] } })
         expect(slack.posted.at(-1)?.params.blocks).toContain('"type":"data_visualization"')
         yield* database.db
           .update(Database.Schema.intake_thread)

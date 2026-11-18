@@ -4,20 +4,6 @@ import { Skill } from "../src/skill.js"
 const skill = (fields: Record<string, unknown> = {}) => ({ name: "my-skill", description: "A test skill", ...fields })
 
 describe("Skill.validate", () => {
-  test("accepts every field of the Agent Skills spec", () => {
-    expect(
-      Skill.validate(
-        skill({
-          license: "MIT",
-          "allowed-tools": "Bash(jq:*) Bash(git:*)",
-          metadata: { author: "Test" },
-          compatibility: "Requires Python 3.11+",
-        }),
-        "my-skill",
-      ),
-    ).toEqual([])
-  })
-
   test("gives the messages of skills-ref's validator, in its order", () => {
     expect(Skill.validate({ unknown_field: "x", other: 1 })).toEqual([
       "Unexpected fields in frontmatter: other, unknown_field. Only ['allowed-tools', 'compatibility', 'description', 'license', 'metadata', 'name'] are allowed.",

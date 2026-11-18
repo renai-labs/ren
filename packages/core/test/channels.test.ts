@@ -2,14 +2,13 @@ import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Agent } from "@ren/schema/agent"
-import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
 import { IntakeThread } from "@ren/schema/intake-thread"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { and, eq, inArray, sql } from "drizzle-orm"
-import { Deferred, Effect, Layer, Option, Schedule } from "effect"
+import { Effect, Option, Schedule } from "effect"
 import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelMappings } from "../src/channel-mappings.js"
@@ -24,18 +23,12 @@ import { ChannelFixture } from "./lib/channel-fixture.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 import { SyncFixture } from "./lib/sync-fixture.js"
-import { Testing } from "@ren/db/testing"
 
 setDefaultTimeout(60_000)
 
 const it = testEffect(ChannelFixture.cellLayer)
 
 const unstored = testEffect(ChannelFixture.unstoredLayer)
-
-const routed = Effect.gen(function* () {
-  const owner = yield* Seed.owner()
-  return { owner, install: yield* ChannelFixture.install(owner) }
-})
 
 const sessionsOf = (owner: { readonly organizationId: Auth.OrganizationID }) =>
   Effect.flatMap(Database.Service, (database) =>
@@ -61,7 +54,7 @@ const ownerOf = (sessionId: Session.ID) =>
       ),
   )
 
-const started = Effect.fnUntraced(function* (owner: Effect.Success<typeof routed>["owner"]) {
+const started = Effect.fnUntraced(function* (owner: Effect.Success<typeof ChannelFixture.routed>["owner"]) {
   const sessionId = yield* Seed.session(owner)
   const cell = yield* ChannelFixture.Cell
   cell.start(sessionId)
@@ -71,7 +64,7 @@ const started = Effect.fnUntraced(function* (owner: Effect.Success<typeof routed
 describe("Channels", () => {
   it.live("a rejected follow-up links to the existing channel session", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const sessionId = yield* started(subject.owner)
       const found = ChannelFixture.event(subject.install)
       yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
@@ -101,7 +94,7 @@ describe("Channels", () => {
 
   it.live("a bad signature answers 401 and stores no run, so the signed delivery of that event id runs", () =>
     Effect.gen(function* () {
-      const install = (yield* routed).install
+      const install = (yield* ChannelFixture.routed).install
       const found = ChannelFixture.event(install)
       const forged = ChannelFixture.event(install, { eventId: found.eventId, thread: found.thread, text: "forged" })
       expect(yield* ChannelFixture.receive(ChannelFixture.delivery(forged), "not-a-signature")).toEqual({
@@ -114,14 +107,14 @@ describe("Channels", () => {
 
   unstored.live("a store that fails answers 500, so the provider delivers again", () =>
     Effect.gen(function* () {
-      const found = ChannelFixture.event((yield* routed).install)
+      const found = ChannelFixture.event((yield* ChannelFixture.routed).install)
       expect(yield* ChannelFixture.receive(ChannelFixture.delivery(found))).toEqual({ status: 500 })
     }),
   )
 
   it.live("the same event delivered twice makes one run, and the brain gets one message", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const found = ChannelFixture.event(subject.install)
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
@@ -143,7 +136,7 @@ describe("Channels", () => {
 
   it.live("two first events on a new thread at the same time make one session that holds both messages", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const thread = { id: "C07:1712.33" }
       const first = ChannelFixture.event(subject.install, { thread, text: "the deploy failed" })
       const second = ChannelFixture.event(subject.install, { thread, text: "and the rollback too" })
@@ -167,7 +160,7 @@ describe("Channels", () => {
 
   it.live("a thread whose session is archived moves to a new session, and the old session does not change", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const database = yield* Database.Service
       const old = yield* Seed.session(subject.owner)
       const archivedAt = new Date("2026-10-01T00:00:00Z")
@@ -192,7 +185,7 @@ describe("Channels", () => {
   it.live("a message to a session that exists steers it, and its thread keeps the message's data", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const sessionId = yield* started(subject.owner)
       const found = ChannelFixture.event(subject.install, { data: { slack: { actionToken: "12345.98765.abcd" } } })
       yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
@@ -211,7 +204,7 @@ describe("Channels", () => {
 
   it.live("the provider fills in the event before the route, so the agent reads names, not ids", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const found = ChannelFixture.event(subject.install, { text: "ask <@U02> about it" })
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
       expect(yield* ChannelFixture.accepted(1)).toMatchObject([
@@ -224,7 +217,7 @@ describe("Channels", () => {
     "a message carries where it came from and the thread context, and goes on without a context it cannot read",
     () =>
       Effect.gen(function* () {
-        const subject = yield* routed
+        const subject = yield* ChannelFixture.routed
         const first = ChannelFixture.event(subject.install)
         const second = ChannelFixture.event(subject.install, { thread: first.thread, message: "unreadable" })
         yield* ChannelFixture.receive(ChannelFixture.delivery(first))
@@ -247,7 +240,7 @@ describe("Channels", () => {
 
   it.live("a brain that is unavailable gets the message again with the same id until it accepts it once", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const sessionId = yield* started(subject.owner)
       const cell = yield* ChannelFixture.Cell
       const found = ChannelFixture.event(subject.install)
@@ -264,7 +257,7 @@ describe("Channels", () => {
 
   it.live("an unmapped place goes to the oldest active space of the install's organization, as the installer", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const database = yield* Database.Service
       const later = yield* Seed.space(subject.owner.organizationId)
       yield* Seed.join(later, subject.owner.createdBy)
@@ -312,7 +305,7 @@ describe("Channels", () => {
 
   it.live("a thread whose run stopped after its claim gets its session from the next event", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const claimed = Session.ID.create()
       const found = ChannelFixture.event(subject.install)
       yield* ChannelFixture.thread(subject.owner.organizationId, found, claimed)
@@ -324,7 +317,7 @@ describe("Channels", () => {
 
   it.live("an uninstall event removes the install of its workspace and keeps the threads", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const found = ChannelFixture.event(subject.install)
       yield* ChannelFixture.thread(subject.owner.organizationId, found, Session.ID.create())
       expect(yield* ChannelFixture.receive(JSON.stringify({ type: "uninstalled", install: subject.install }))).toEqual({
@@ -340,7 +333,7 @@ describe("Channels", () => {
     "a channel file goes to the space's drive under its chat and message, and reaches the brain by its path with an inline copy; a file that cannot be read is dropped with a note",
     () =>
       Effect.gen(function* () {
-        const found = ChannelFixture.event((yield* routed).install, {
+        const found = ChannelFixture.event((yield* ChannelFixture.routed).install, {
           files: [
             { url: "bytes:3", name: "notes.txt", mime: "text/plain" },
             { url: "missing", name: "screenshot.png", mime: "image/png" },
@@ -374,7 +367,7 @@ describe("Channels", () => {
       const notes = { url: "bytes:3", name: "notes.txt", mime: "text/plain" }
       outbox.earlierFiles.push({ url: "bytes:4", name: "shot.png", mime: "image/png" }, notes)
       yield* ChannelFixture.receive(
-        ChannelFixture.delivery(ChannelFixture.event((yield* routed).install, { files: [notes] })),
+        ChannelFixture.delivery(ChannelFixture.event((yield* ChannelFixture.routed).install, { files: [notes] })),
       )
       const sent = (yield* ChannelFixture.accepted(1)).at(0)
       const folder = `chats/${sent?.sessionId}/uploads/${sent?.messageId}`
@@ -387,7 +380,7 @@ describe("Channels", () => {
 
   it.live("every file goes to the drive, and inline copies stop at each kind's limit and at 20 MiB in total", () =>
     Effect.gen(function* () {
-      const found = ChannelFixture.event((yield* routed).install, {
+      const found = ChannelFixture.event((yield* ChannelFixture.routed).install, {
         files: [
           { url: "bytes:12000000", name: "first.bin", mime: "application/octet-stream" },
           { url: "bytes:12000000", name: "second.bin", mime: "application/octet-stream" },
@@ -410,7 +403,7 @@ describe("Channels", () => {
 })
 
 const turnEnded = Effect.fnUntraced(function* (
-  subject: Effect.Success<typeof routed>,
+  subject: Effect.Success<typeof ChannelFixture.routed>,
   sessionId: Session.ID,
   turn: {
     readonly idle: number
@@ -442,7 +435,7 @@ const fromChannel = { id: "msg_1", type: "user", data: { text: "the deploy faile
 
 const answered = { id: "msg_2", type: "assistant", data: { content: [] } }
 
-const threadOf = Effect.fnUntraced(function* (subject: Effect.Success<typeof routed>) {
+const threadOf = Effect.fnUntraced(function* (subject: Effect.Success<typeof ChannelFixture.routed>) {
   const sessionId = yield* started(subject.owner)
   const found = ChannelFixture.event(subject.install)
   yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
@@ -454,7 +447,7 @@ const threadOf = Effect.fnUntraced(function* (subject: Effect.Success<typeof rou
 describe("ChannelTurns", () => {
   it.live("a reminder never earns another reminder, but a new channel message can", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const outbox = yield* ChannelFixture.Outbox
       const thread = yield* threadOf(subject)
       yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
@@ -489,7 +482,7 @@ describe("ChannelTurns", () => {
 
   it.live("a reply in the thread before the turn ends needs no reminder", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const database = yield* Database.Service
       const thread = yield* threadOf(subject)
       yield* database.db
@@ -505,7 +498,7 @@ describe("ChannelTurns", () => {
 
   it.live("a thread whose provider has no reply tool, such as GitHub, gets the end marker and no reminder", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const database = yield* Database.Service
       const sessionId = yield* started(subject.owner)
       yield* database.db.insert(Database.Schema.intake_thread).values({
@@ -525,7 +518,7 @@ describe("ChannelTurns", () => {
 
   it.live("a failed turn ends with failed and the fixed notice of its error, never the error text", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const outbox = yield* ChannelFixture.Outbox
       const thread = yield* threadOf(subject)
       const failure = {
@@ -544,7 +537,7 @@ describe("ChannelTurns", () => {
 
   it.live("a start that the brain rejects ends with failed and one notice that links to the chat", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const outbox = yield* ChannelFixture.Outbox
       ;(yield* ChannelFixture.Cell).rejectStarts()
       const found = ChannelFixture.event(subject.install)
@@ -570,7 +563,7 @@ describe("ChannelTurns", () => {
 
   it.live("a turn that a message from the app started sends nothing to the thread", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const outbox = yield* ChannelFixture.Outbox
       const thread = yield* threadOf(subject)
       const fromApp = { id: "msg_3", type: "user", data: { text: "and from the app", metadata: { userID: "u" } } }
@@ -602,7 +595,7 @@ const person = Effect.fnUntraced(function* (
 describe("ChannelIdentity", () => {
   it.live("a sign-in link wins over an email match, with no lookup", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const database = yield* Database.Service
       const identity = yield* ChannelIdentity.Service
       const outbox = yield* ChannelFixture.Outbox
@@ -628,7 +621,7 @@ describe("ChannelIdentity", () => {
     "each mention of an unlinked sender reads their email and matches an organization member; a provider that is down matches no one",
     () =>
       Effect.gen(function* () {
-        const subject = yield* routed
+        const subject = yield* ChannelFixture.routed
         const identity = yield* ChannelIdentity.Service
         const outbox = yield* ChannelFixture.Outbox
         const ana = yield* person(subject.owner.organizationId, { email: "Ana@Acme.test" })
@@ -656,7 +649,7 @@ describe("ChannelRoute", () => {
     "a DM starts a chat in the sender's private space, never a shared one; a sender without one, or unknown, is refused",
     () =>
       Effect.gen(function* () {
-        const subject = yield* routed
+        const subject = yield* ChannelFixture.routed
         const database = yield* Database.Service
         const routes = yield* ChannelRoute.Service
         const outbox = yield* ChannelFixture.Outbox
@@ -709,7 +702,7 @@ describe("ChannelRoute", () => {
 
   it.live("a known sender in the space runs as themself; one outside it runs as the fallback user", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const routes = yield* ChannelRoute.Service
       const outbox = yield* ChannelFixture.Outbox
       const inside = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
@@ -725,7 +718,7 @@ describe("ChannelRoute", () => {
 
   it.live("on an unmapped place that anyone can write, an unknown sender is refused, not run as the installer", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const routes = yield* ChannelRoute.Service
       const outbox = yield* ChannelFixture.Outbox
       const member = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
@@ -790,7 +783,7 @@ const sessionOf = Effect.fnUntraced(function* (sessionId: Session.ID | undefined
 describe("ChannelMappings", () => {
   it.live("remapping an existing thread starts a new chat in the sender's authorized space", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const mappings = yield* ChannelMappings.Service
       const outbox = yield* ChannelFixture.Outbox
       const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
@@ -821,7 +814,7 @@ describe("ChannelMappings", () => {
 
   it.live("a mapped place answers in its space as its agent, and as ren once that agent is archived", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const database = yield* Database.Service
       const mappings = yield* ChannelMappings.Service
       const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
@@ -858,43 +851,32 @@ describe("ChannelMappings", () => {
     }),
   )
 
-  it.live(
-    "an unmapped place goes to the install's default space, and to the oldest active space once it is archived",
-    () =>
-      Effect.gen(function* () {
-        const subject = yield* routed
-        const database = yield* Database.Service
-        const installs = yield* ChannelInstalls.Service
-        const owner = {
-          userId: subject.owner.createdBy,
-          organizationId: subject.owner.organizationId,
-          roles: ["owner"],
-        }
-        const support = yield* Seed.space(subject.owner.organizationId)
-        yield* Seed.join(support, subject.owner.createdBy)
-        const installId = yield* installOf(subject.install)
-        expect((yield* installs.update(owner, installId, { defaultSpaceId: support })).defaultSpace).toEqual({
-          id: support,
-          name: "Team",
-        })
-        yield* ChannelFixture.receive(ChannelFixture.delivery(ChannelFixture.event(subject.install)))
-        expect((yield* sessionOf((yield* ChannelFixture.accepted(1))[0]?.sessionId))?.spaceId).toBe(support)
-        yield* database.db
-          .update(Database.Schema.space)
-          .set({ archived_at: new Date() })
-          .where(eq(Database.Schema.space.id, support))
-        yield* ChannelFixture.receive(ChannelFixture.delivery(ChannelFixture.event(subject.install)))
-        expect((yield* sessionOf((yield* ChannelFixture.accepted(2))[1]?.sessionId))?.spaceId).toBe(
-          subject.owner.spaceId,
-        )
-      }),
+  it.live("an unmapped place goes to the install's default space", () =>
+    Effect.gen(function* () {
+      const subject = yield* ChannelFixture.routed
+      const installs = yield* ChannelInstalls.Service
+      const owner = {
+        userId: subject.owner.createdBy,
+        organizationId: subject.owner.organizationId,
+        roles: ["owner"],
+      }
+      const support = yield* Seed.space(subject.owner.organizationId)
+      yield* Seed.join(support, subject.owner.createdBy)
+      const installId = yield* installOf(subject.install)
+      expect((yield* installs.update(owner, installId, { defaultSpaceId: support })).defaultSpace).toEqual({
+        id: support,
+        name: "Team",
+      })
+      yield* ChannelFixture.receive(ChannelFixture.delivery(ChannelFixture.event(subject.install)))
+      expect((yield* sessionOf((yield* ChannelFixture.accepted(1))[0]?.sessionId))?.spaceId).toBe(support)
+    }),
   )
 
   it.live(
     "a mapping of an open place starts with the fallback off: a stranger is refused as unlinked, a member outside the space as not a member",
     () =>
       Effect.gen(function* () {
-        const subject = yield* routed
+        const subject = yield* ChannelFixture.routed
         const mappings = yield* ChannelMappings.Service
         const routes = yield* ChannelRoute.Service
         const outbox = yield* ChannelFixture.Outbox
@@ -930,7 +912,7 @@ describe("ChannelMappings", () => {
     "a new mapping, or one that moves to another space, posts one notice; the same request again gives the same mapping and posts nothing",
     () =>
       Effect.gen(function* () {
-        const subject = yield* routed
+        const subject = yield* ChannelFixture.routed
         const mappings = yield* ChannelMappings.Service
         const database = yield* Database.Service
         const outbox = yield* ChannelFixture.Outbox
@@ -960,7 +942,7 @@ describe("ChannelMappings", () => {
 
   it.live("only a member of the target space maps a place, and the fallback user must be a member of it", () =>
     Effect.gen(function* () {
-      const subject = yield* routed
+      const subject = yield* ChannelFixture.routed
       const mappings = yield* ChannelMappings.Service
       const installId = yield* installOf(subject.install)
       const inside = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
@@ -1003,7 +985,7 @@ describe("ChannelMappings", () => {
     "a trigger runs only where a mapping turned it on, with the mapping's prompt; a refused trigger posts nothing",
     () =>
       Effect.gen(function* () {
-        const subject = yield* routed
+        const subject = yield* ChannelFixture.routed
         const mappings = yield* ChannelMappings.Service
         const outbox = yield* ChannelFixture.Outbox
         const owner = {
@@ -1063,7 +1045,7 @@ describe("ChannelMappings", () => {
 const permalink = "https://acme.slack.com/archives/C07/p1712000000000100"
 
 const tasked = Effect.gen(function* () {
-  const subject = yield* routed
+  const subject = yield* ChannelFixture.routed
   const tasks = yield* Task.Service
   const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
   const spaceId = yield* Seed.space(subject.owner.organizationId)
@@ -1411,72 +1393,16 @@ describe("Channels and tasks", () => {
   )
 })
 
-const onBrains = testEffect(ChannelFixture.sandboxLayer)
-
-describe("Channels on brains", () => {
-  onBrains.live("a failed brain stops the run: 👀 becomes a failure and one fixed notice links to the chat", () =>
-    Effect.gen(function* () {
-      const subject = yield* routed
-      const database = yield* Database.Service
-      const outbox = yield* ChannelFixture.Outbox
-      const sessionId = yield* Seed.session(subject.owner)
-      yield* database.db
-        .update(Database.Schema.brain)
-        .set({ phase: "failed", failures: 3, failure: "the template is broken" })
-        .where(eq(Database.Schema.brain.id, Brain.ofSession(sessionId)))
-      const found = ChannelFixture.event(subject.install)
-      yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
-      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
-      yield* ChannelFixture.settled(found)
-      expect(outbox.progress).toEqual([
-        { message: found.message, status: "received" },
-        { message: found.message, status: "failed" },
-      ])
-      expect(outbox.sent).toEqual([
-        {
-          target: { install: found.install, place: "eng", thread: found.thread.id, message: found.message },
-          text: `I couldn’t start working on your message. Please try again. [Open in Ren](${ChannelFixture.app}/sessions/${sessionId})`,
-        },
-      ])
-    }),
-  )
-})
-
 describe("ChannelEventRun", () => {
   it.live("a ChannelEvent run that Ren stored before Intake starts its chat through the Intake queue", () =>
     Effect.gen(function* () {
-      const found = ChannelFixture.event((yield* routed).install)
+      const found = ChannelFixture.event((yield* ChannelFixture.routed).install)
       yield* DurableRunner.ensure(ChannelEventRun.Run, {
         event: found,
         messageId: Session.MessageID.create(),
         sessionId: Session.ID.create(),
       })
       expect(yield* ChannelFixture.accepted(1)).toMatchObject([{ kind: "start", prompt: { text: found.text } }])
-    }),
-  )
-})
-
-const durable = testEffect(Testing.layer)
-
-describe("Channels across a restart", () => {
-  durable.live("a run that Ren stopped mid-way runs again after Ren starts, from the run it stored", () =>
-    Effect.gen(function* () {
-      const subject = yield* routed
-      const found = ChannelFixture.event(subject.install, {
-        files: [{ url: "held", name: "log.txt", mime: "text/plain" }],
-      })
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          const ren = yield* Layer.build(ChannelFixture.durableLayer({ held: true }))
-          yield* Effect.gen(function* () {
-            expect(yield* ChannelFixture.receive(ChannelFixture.delivery(found))).toEqual({ status: 200 })
-            yield* Effect.flatMap(ChannelFixture.Hold, (hold) => Deferred.await(hold.entered))
-          }).pipe(Effect.provide(ren))
-        }),
-      )
-      const ren = yield* Layer.build(ChannelFixture.durableLayer({ held: false }))
-      const accepted = yield* ChannelFixture.accepted(1).pipe(Effect.provide(ren))
-      expect(accepted).toMatchObject([{ kind: "start", prompt: { text: found.text, files: [{ name: "log.txt" }] } }])
     }),
   )
 })

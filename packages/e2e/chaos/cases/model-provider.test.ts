@@ -63,14 +63,21 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     expect(turn.script.calls.length).toBeLessThanOrEqual(retries + 1)
   })
 
-  test("a stream cut after a tool ran never repeats the tool's effect", async () => {
+  test.each([
+    ["a stream cut", "cut-after-tool", [ModelProvider.cut("text"), ModelProvider.text("retried")]],
+    ["a lost model reply", "provider-drop", [ModelProvider.text("after"), ModelProvider.text("retried")]],
+  ] as const)("%s after a tool ran never repeats the tool's effect", async (name, label, rest) => {
     const session = await attached()
-    const marker = Ledger.marker("cut-after-tool")
-    const turn = await session.turn([
-      ModelProvider.tool("shell", { command: Ledger.append(marker) }),
-      ModelProvider.cut("text"),
-      ModelProvider.text("retried"),
-    ])
+    const marker = Ledger.marker(label)
+    if (name === "a lost model reply")
+      current().stack.providerProxy.inject(
+        {
+          operation: "POST /v1/chat/completions",
+          when: (request) => request.body.includes(marker) && request.body.includes('"role":"tool"'),
+        },
+        { type: "drop-response" },
+      )
+    const turn = await session.turn([ModelProvider.tool("shell", { command: Ledger.append(marker) }), ...rest], marker)
     await turn.script.called(2, 60_000)
     await session.settled(90_000)
     expect(await Ledger.count(current().environment.instance, marker)).toBe(1)

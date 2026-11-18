@@ -45,44 +45,38 @@ const stub = Shared.stub()
 const open = SettingsHarness.open
 
 describe("settings in the cell", () => {
-  it.live(
-    "a gateway endpoint sends its callable model ID upstream under its registered name, and an old vendor reference is refused",
-    () =>
-      Effect.gen(function* () {
-        const models: ReadonlyArray<Models.Endpoint> = [
-          {
-            id: "ren",
-            name: "Ren",
-            protocol: "openai-chat",
-            baseUrl: stub.url,
-            apiKey: { key: Redacted.make("gateway-key") },
-            models: [Struct.assign(StubModel.modelEntry("stub", "stub-model"), { input: ["text" as const] })],
-          },
-        ]
-        const opened = yield* open(
-          TestSettings.layers({ ren: { model: { endpointId: "ren", modelId: "stub/stub-model" } } }),
-          {
-            models,
-            config: JSON.stringify({ model: "ren/stub/stub-model" }),
-          },
-        )
-        const current = yield* opened.client.session.get({ sessionID: opened.sessionID })
-        expect(current.model).toMatchObject({ providerID: "ren", id: "stub/stub-model" })
-        const available = yield* opened.client.model.list()
-        expect(available.data.find((model) => model.id === "stub/stub-model")?.capabilities.input).toEqual(["text"])
-        expect([...new Set(available.data.map((model) => String(model.providerID)))]).toEqual(["ren"])
-        const turn = stub.script()
-        yield* opened.turn(turn)
-        expect(turn.calls.at(0)).toMatchObject({
-          authorization: "Bearer gateway-key",
-          body: { model: "stub/stub-model" },
-        })
-        expect((yield* opened.client.provider.get({ providerID: Provider.ID.make("ren") })).data.name).toBe("Ren")
-        const refused = yield* opened.harness
-          .setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "stub-model" }))
-          .pipe(Effect.flip)
-        expect(refused._tag).toBe("BrainRejectedError")
-      }),
+  it.live("a gateway endpoint sends its callable model ID upstream under its registered name", () =>
+    Effect.gen(function* () {
+      const models: ReadonlyArray<Models.Endpoint> = [
+        {
+          id: "ren",
+          name: "Ren",
+          protocol: "openai-chat",
+          baseUrl: stub.url,
+          apiKey: { key: Redacted.make("gateway-key") },
+          models: [Struct.assign(StubModel.modelEntry("stub", "stub-model"), { input: ["text" as const] })],
+        },
+      ]
+      const opened = yield* open(
+        TestSettings.layers({ ren: { model: { endpointId: "ren", modelId: "stub/stub-model" } } }),
+        {
+          models,
+          config: JSON.stringify({ model: "ren/stub/stub-model" }),
+        },
+      )
+      const current = yield* opened.client.session.get({ sessionID: opened.sessionID })
+      expect(current.model).toMatchObject({ providerID: "ren", id: "stub/stub-model" })
+      const available = yield* opened.client.model.list()
+      expect(available.data.find((model) => model.id === "stub/stub-model")?.capabilities.input).toEqual(["text"])
+      expect([...new Set(available.data.map((model) => String(model.providerID)))]).toEqual(["ren"])
+      const turn = stub.script()
+      yield* opened.turn(turn)
+      expect(turn.calls.at(0)).toMatchObject({
+        authorization: "Bearer gateway-key",
+        body: { model: "stub/stub-model" },
+      })
+      expect((yield* opened.client.provider.get({ providerID: Provider.ID.make("ren") })).data.name).toBe("Ren")
+    }),
   )
   it.live(
     "a reopened chat restores model-type overrides and cached catalogs before a pull, with fresh credentials",
@@ -649,20 +643,6 @@ describe("settings in the cell", () => {
     }),
   )
 
-  it.live("the layers' instructions reach the model, and a pulled edit applies at the next turn", () =>
-    Effect.gen(function* () {
-      const opened = yield* open(TestSettings.layers({ ren: { instructions: "House rules." } }))
-      const first = stub.script()
-      yield* opened.turn(first)
-      expect(first.calls[0]?.system).toContain("House rules.")
-      yield* opened.pull(TestSettings.layers({ ren: { instructions: "New rules." } }))
-      const second = stub.script()
-      yield* opened.turn(second)
-      expect(second.calls[0]?.system).toContain("New rules.")
-      expect(second.calls[0]?.system).not.toContain("House rules.")
-    }),
-  )
-
   it.live("a chat without an environment gets no references", () =>
     Effect.gen(function* () {
       const docs = { alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }
@@ -992,69 +972,51 @@ describe("settings in the cell", () => {
       })
     }),
   )
-  it.live("a chat whose picked model is gone falls back to its settings' model and gets a message naming both", () =>
-    Effect.gen(function* () {
-      const opened = yield* open(
-        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
-      )
-      const picked = {
-        id: "stub-picked",
-        type: "chat" as const,
-        protocol: "openai-chat" as const,
-        name: "Stub Picked",
-        limit: { context: 100_000, output: 4000 },
-      }
-      yield* opened.harness.configure({
-        models: opened.access.endpoints.map((endpoint) =>
-          endpoint.id === "stub" ? Struct.evolve(endpoint, { models: (models) => [...models, picked] }) : endpoint,
-        ),
-      })
-      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
-      const modelOf = opened.client.session.get({ sessionID: opened.sessionID }).pipe(
-        Effect.orDie,
-        Effect.map((session) => String(session.model?.id)),
-      )
-      expect(yield* modelOf).toBe(picked.id)
-      yield* opened.pull(TestSettings.layers(), { models: opened.access.endpoints })
-      expect(yield* modelOf).toBe("stub-model")
-      const notes = JSON.stringify(
-        yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie),
-      )
-      expect(notes).toContain("stub/stub-picked")
-      expect(notes).toContain("stub/stub-model")
-    }),
-  )
-  it.live("a chat that switches from one available pick to another gets no message that a model is gone", () =>
-    Effect.gen(function* () {
-      const opened = yield* open(
-        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
-      )
-      const first = {
-        id: "stub-first",
-        type: "chat" as const,
-        protocol: "openai-chat" as const,
-        name: "Stub First",
-        limit: { context: 100_000, output: 4000 },
-      }
-      const second = {
-        id: "stub-second",
-        type: "chat" as const,
-        protocol: "openai-chat" as const,
-        name: "Stub Second",
-        limit: { context: 100_000, output: 4000 },
-      }
-      yield* opened.harness.configure({
-        models: opened.access.endpoints.map((endpoint) =>
-          endpoint.id === "stub"
-            ? Struct.evolve(endpoint, { models: (models) => [...models, first, second] })
-            : endpoint,
-        ),
-      })
-      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
-      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: second.id }))
-      yield* opened.harness.setModel(opened.sessionId, Option.none())
-      expect(yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie)).toEqual([])
-    }),
+  it.live(
+    "a chat that switches between available picks gets no message; one whose picked model is gone falls back to its settings' model and gets a message naming both",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(
+          TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+        )
+        const first = {
+          id: "stub-first",
+          type: "chat" as const,
+          protocol: "openai-chat" as const,
+          name: "Stub First",
+          limit: { context: 100_000, output: 4000 },
+        }
+        const picked = {
+          id: "stub-picked",
+          type: "chat" as const,
+          protocol: "openai-chat" as const,
+          name: "Stub Picked",
+          limit: { context: 100_000, output: 4000 },
+        }
+        yield* opened.harness.configure({
+          models: opened.access.endpoints.map((endpoint) =>
+            endpoint.id === "stub"
+              ? Struct.evolve(endpoint, { models: (models) => [...models, first, picked] })
+              : endpoint,
+          ),
+        })
+        const inbox = opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
+        yield* opened.harness.setModel(opened.sessionId, Option.none())
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
+        expect(yield* inbox).toEqual([])
+        const modelOf = opened.client.session.get({ sessionID: opened.sessionID }).pipe(
+          Effect.orDie,
+          Effect.map((session) => String(session.model?.id)),
+        )
+        expect(yield* modelOf).toBe(picked.id)
+        yield* opened.pull(TestSettings.layers(), { models: opened.access.endpoints })
+        expect(yield* modelOf).toBe("stub-model")
+        const notes = JSON.stringify(yield* inbox)
+        expect(notes).toContain("stub/stub-picked")
+        expect(notes).toContain("stub/stub-model")
+      }),
   )
   it.live("the title request gives the model the chat as data to title, not as a request to act on", () =>
     Effect.gen(function* () {

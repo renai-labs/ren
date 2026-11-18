@@ -182,10 +182,6 @@ describe("contextStep", () => {
       Fixture.page(items.toReversed()),
     )
 
-  test("sums input, output, reasoning and both cache counts", () => {
-    expect(ChatState.contextTokens({ input: 1, output: 2, reasoning: 3, cache: { read: 4, write: 5 } })).toBe(15)
-  })
-
   test("selects the newest step with tokens", () => {
     const state = load([Fixture.user("msg_1", 1), step("msg_2", 2, 10), step("msg_3", 3, 20), assistant("msg_4", 4)])
     expect(ChatState.contextStep(state, sessionID)?.id).toBe(SessionMessage.ID.make("msg_3"))

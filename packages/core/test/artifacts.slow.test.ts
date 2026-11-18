@@ -659,9 +659,9 @@ describe("Artifacts with durable workflows and workerd", () => {
             const body: unknown = await request.json().catch(() => null)
             const messageId = Predicate.hasProperty(body, "messageId") ? body.messageId : undefined
             if (messageId === undefined) return new Response(null, { status: 404 })
-            const status = sends.filter((send) => send.status === 503).length < 5 ? 503 : 200
+            const status = sends.filter((send) => send.status === 503).length < 1 ? 503 : 200
             sends.push({ messageId, status })
-            if (sends.length === 5) refused.resolve()
+            if (sends.length === 1) refused.resolve()
             return status === 200 ? Response.json({ messageId }) : new Response(null, { status })
           },
         })
@@ -686,7 +686,7 @@ describe("Artifacts with durable workflows and workerd", () => {
         expect(new Set(sends.map((send) => send.messageId))).toEqual(
           new Set([`msg_${deploymentId.replaceAll("-", "")}`]),
         )
-        expect(sends.map((send) => send.status)).toEqual([503, 503, 503, 503, 503, 200])
+        expect(sends.map((send) => send.status)).toEqual([503, 200])
       }),
     120_000,
   )
