@@ -142,7 +142,7 @@ export const joinOrganization = async (app: App, ownerCookie: string, email: str
   return cookie
 }
 
-export const mcp = (app: App, body: unknown, headers: Record<string, string> = {}) =>
+export const mcp = (app: Pick<App, "handler">, body: unknown, headers: Record<string, string> = {}) =>
   app.handler(
     new Request(resource, {
       method: "POST",
