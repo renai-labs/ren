@@ -40,6 +40,7 @@ import { Platform } from "../../platform/platform.js"
 import { formatInZone, formatTimeInZone } from "@ren/ui/time"
 import { DateTime } from "effect"
 import { ChannelOrigin } from "./channel-origin.js"
+import { revealOnHover } from "./message-actions.js"
 import { useMentionedApps } from "../../lib/use-app.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 
@@ -435,7 +436,7 @@ function UserFooter(props: {
           Remove
         </Button>
       ) : null}
-      <span className="-mr-1.25 flex items-center gap-1 transition-opacity duration-150 ease-out motion-reduce:transition-none pointer-fine:opacity-0 pointer-fine:group-focus-within/message:opacity-100 pointer-fine:group-hover/message:opacity-100">
+      <span className={cn("-mr-1.25 flex items-center gap-1", revealOnHover)}>
         <time
           dateTime={props.sentAt}
           title={formatInZone(props.sentAt, timeZone)}

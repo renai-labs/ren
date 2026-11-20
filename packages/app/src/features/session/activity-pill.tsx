@@ -140,7 +140,10 @@ function ending(shell: Shell.Info | undefined, options: { readonly missing: bool
   return { text: "Exited", failed: false }
 }
 
-function useShellRun(root: Session.ID, item: Family.Activity) {
+export function useShellRun(
+  root: Session.ID,
+  item: { readonly sessionID: string | undefined; readonly id: string | undefined },
+) {
   const view = {
     root,
     sessionID: Session.ID.make(item.sessionID ?? root),
@@ -153,6 +156,8 @@ function useShellRun(root: Session.ID, item: Family.Activity) {
   const running = !missing && (live || !shell || shell.status === "running")
   const output = AsyncResult.getOrElse(ChatReact.useShellOutput({ ...view, running }), () => "")
   return {
+    output,
+    running,
     tail: ShellOutput.tail(output, tailLines),
     end: running ? undefined : ending(shell, { missing }),
     completed: shell?.time.completed,

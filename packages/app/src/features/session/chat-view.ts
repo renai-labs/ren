@@ -1,9 +1,10 @@
 import { useAtomValue } from "@effect/atom-react"
-import { ChatState, Family, Working, type ChatAtoms, type TimelineDetail, type TimelineRow } from "@ren/chat"
+import { ChatState, Family, ToolState, Working, type ChatAtoms, type TimelineDetail, type TimelineRow } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
+import { DateTime, Predicate } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { sessionTitle } from "../../lib/sessions.js"
 
@@ -96,6 +97,152 @@ export function useView(root: Session.ID, child: Session.ID | undefined, detail:
 export function useSubagentCard(view: ChatAtoms.View, tool: SessionMessage.Tool) {
   const state = AsyncResult.getOrElse(useAtomValue(ChatReact.useAtoms().state(view.root)), () => ChatState.empty)
   return Family.subagent(state, view.sessionID, tool)
+}
+
+export interface SubagentRun {
+  readonly key: string
+  readonly tool: string
+  readonly child: Session.ID | undefined
+  readonly description: string
+  readonly agent: string
+  readonly status: Family.SubagentStatus
+  readonly running: boolean
+  readonly needsInput: boolean
+  readonly activity: string | undefined
+  readonly started: number
+  readonly ended: number | undefined
+}
+
+export interface ShellRun {
+  readonly key: string
+  readonly tool: string | undefined
+  readonly id: string
+  readonly sessionID: string
+  readonly command: string
+  readonly running: boolean
+  readonly started: number
+  readonly ended: number | undefined
+  readonly exit: number | undefined
+  readonly state: string | undefined
+  readonly timeout: boolean
+}
+
+const text = (value: unknown) => (Predicate.isString(value) ? value : undefined)
+
+const millis = (time: DateTime.Utc) => DateTime.toEpochMillis(time)
+
+const ran = (tool: SessionMessage.Tool) => tool.time.ran ?? tool.time.created
+
+const runningFirst = <A extends { readonly running: boolean; readonly started: number }>(runs: ReadonlyArray<A>) => [
+  ...runs.filter((run) => run.running),
+  ...runs.filter((run) => !run.running).toSorted((a, b) => b.started - a.started),
+]
+
+// oxlint-disable-next-line ren/no-comments -- Every subagent the chat started, and the shells it left running in the background: the ones still running first, then the finished ones, latest first. A shell that holds up the current turn is a step of that turn, not background work.
+export function useWork(root: Session.ID) {
+  const state = AsyncResult.getOrElse(useAtomValue(ChatReact.useAtoms().state(root)), () => ChatState.empty)
+  const messages = ChatState.messages(state, root)
+  const tools = messages.flatMap((message) =>
+    message.type === "assistant"
+      ? message.content.filter((content): content is SessionMessage.Tool => content.type === "tool")
+      : [],
+  )
+  const failed = new Set<string | undefined>(
+    messages.flatMap((message) =>
+      message.type === "synthetic" &&
+      message.metadata?.source === "subagent" &&
+      message.metadata.state === "error" &&
+      message.metadata.childID
+        ? [message.metadata.childID]
+        : [],
+    ),
+  )
+  const subagents = tools
+    .filter((tool) => tool.name === "subagent" || tool.name === "task")
+    .map((tool): SubagentRun => {
+      const card = Family.subagent(state, root, tool)
+      const child = card.child ? Session.ID.make(card.child) : undefined
+      const info = child ? state.info[child] : undefined
+      const running = card.status === "running" || card.status === "delegating"
+      const ended = info ? (info.time.idle ?? info.time.updated) : tool.time.completed
+      return {
+        key: tool.id,
+        tool: tool.id,
+        child,
+        description: card.description ?? card.title,
+        agent: card.title,
+        status: failed.has(card.child) ? "failed" : card.status,
+        running,
+        needsInput: card.needsInput,
+        activity: card.activity,
+        started: millis(info?.time.created ?? ran(tool)),
+        ended: running || !ended ? undefined : millis(ended),
+      }
+    })
+  const backgrounded = tools.filter(
+    (tool) =>
+      tool.name === "shell" && tool.state.status === "completed" && ToolState.metadata(tool).status === "running",
+  )
+  const shellOf = (tool: SessionMessage.Tool) => text(ToolState.metadata(tool).shellID) ?? tool.id
+  const shellTools = new Map(backgrounded.map((tool) => [shellOf(tool), tool.id]))
+  const live = Family.activity(state, root).flatMap((item): ReadonlyArray<ShellRun> =>
+    item.type === "shell" && !item.blocking && item.id
+      ? [
+          {
+            key: item.key,
+            tool: shellTools.get(item.id),
+            id: item.id,
+            sessionID: item.sessionID ?? root,
+            command: item.label,
+            running: true,
+            started: item.started,
+            ended: undefined,
+            exit: undefined,
+            state: undefined,
+            timeout: false,
+          },
+        ]
+      : [],
+  )
+  const exits = new Map(
+    messages.flatMap((message) =>
+      message.type === "synthetic" && message.metadata?.source === "shell"
+        ? [message.metadata.shellID, message.metadata.jobID].filter(Predicate.isString).map(
+            (id) =>
+              [
+                id,
+                {
+                  at: millis(message.time.created),
+                  exit: message.metadata?.exit,
+                  state: message.metadata?.state,
+                  timeout: message.metadata?.timeout === true,
+                },
+              ] as const,
+          )
+        : [],
+    ),
+  )
+  const finished = backgrounded.flatMap((tool): ReadonlyArray<ShellRun> => {
+    const id = shellOf(tool)
+    const end = exits.get(id) ?? exits.get(tool.id)
+    if (!end || live.some((run) => run.id === id)) return []
+    return [
+      {
+        key: tool.id,
+        tool: tool.id,
+        id,
+        sessionID: root,
+        command: text(ToolState.input(tool).command) ?? id,
+        running: false,
+        started: millis(ran(tool)),
+        ended: end.at,
+        exit: end.exit,
+        state: end.state,
+        timeout: end.timeout,
+      },
+    ]
+  })
+  return { subagents: runningFirst(subagents), shells: runningFirst([...live, ...finished]) }
 }
 
 export function useRunningAgent(root: Session.ID) {

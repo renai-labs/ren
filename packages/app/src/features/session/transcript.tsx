@@ -65,6 +65,7 @@ import { ChannelMark } from "../../components/channel-mark.js"
 import { useMentionedApps } from "../../lib/use-app.js"
 import { SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
 import { TranscriptBlocks } from "./transcript-blocks.js"
+import { revealOnHover } from "./message-actions.js"
 import { CopyButton, UserMessage, type Person } from "./user-message.js"
 
 export interface TranscriptHandle {
@@ -326,7 +327,7 @@ function AnswerBlock(props: {
           <MessageFooter
             aria-hidden={props.copy === "" || undefined}
             inert={props.copy === ""}
-            className={cn(props.copy === "" && "invisible")}
+            className={cn(revealOnHover, props.copy === "" && "invisible")}
           >
             <CopyButton text={props.copy} />
           </MessageFooter>

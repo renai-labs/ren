@@ -23,6 +23,8 @@ import { Markdown } from "../../components/markdown.js"
 import { LinkIcon } from "../../components/markdown-link.js"
 import { useApp } from "../../lib/use-app.js"
 import { usePinToEnd } from "../../lib/use-pin-to-end.js"
+import { ShellDetail, WorkSections } from "./activity-work.js"
+import type { ShellRun } from "./chat-view.js"
 import { SubagentThread } from "./subagent-thread.js"
 import { DiffFile } from "./diff-file.js"
 import { toolIcons } from "./tool-icons.js"
@@ -422,6 +424,7 @@ type View = {
   readonly turn?: string | undefined
   readonly step?: string | undefined
   readonly agent?: Agent | undefined
+  readonly shell?: ShellRun | undefined
 }
 
 const located = (turns: ReadonlyArray<Turn>, view: View) => {
@@ -464,6 +467,9 @@ function Timeline(props: {
     </section>
   ))
 }
+
+const toolsOf = (turn: Turn): ReadonlySet<string> =>
+  new Set(turn.items.flatMap((item) => (item.kind === "tool" ? [item.tool.id] : [])))
 
 const turnLabel = (turn: Turn) => preview(turn.prompt) || "Ren’s own work"
 
@@ -511,7 +517,19 @@ export function ActivityTab(props: {
   }
   const go = (next: View) => setView(next)
   const agent = view.agent
+  const shell = view.shell
   const turns = turnsOf(props.messages)
+  if (shell)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex h-10 shrink-0 items-center border-b px-4">
+          <Crumbs trail={[all(go), { label: preview(shell.command) }]} />
+        </div>
+        <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain px-4 py-3">
+          <ShellDetail root={props.root} run={shell} />
+        </div>
+      </div>
+    )
   if (agent)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -525,10 +543,16 @@ export function ActivityTab(props: {
         />
       </div>
     )
-  return <ActivityList turns={turns} view={view} go={go} running={props.running} />
+  return <ActivityList root={props.root} turns={turns} view={view} go={go} running={props.running} />
 }
 
-function ActivityList(props: { turns: ReadonlyArray<Turn>; view: View; go: (view: View) => void; running: boolean }) {
+function ActivityList(props: {
+  root: Session.ID
+  turns: ReadonlyArray<Turn>
+  view: View
+  go: (view: View) => void
+  running: boolean
+}) {
   const [pinned, setPinned] = useState(true)
   const list = useRef<HTMLDivElement>(null)
   const view = props.view
@@ -558,16 +582,28 @@ function ActivityList(props: { turns: ReadonlyArray<Turn>; view: View; go: (view
               <StepDetail item={place.step} />
             </div>
           ) : (
-            <div role="log" aria-label="Activity" className="flex flex-col">
-              <Timeline
-                turns={props.turns}
-                turn={place.turn}
-                live={props.running}
-                onTurn={(id) => go({ turn: id })}
-                onStep={(key) => go({ ...view, step: key })}
-                onOpenAgent={(id, title, turn) => go({ agent: { id, title, turn } })}
+            <>
+              <div role="log" aria-label="Activity" className="flex flex-col">
+                <Timeline
+                  turns={props.turns}
+                  turn={place.turn}
+                  live={props.running}
+                  onTurn={(id) => go({ turn: id })}
+                  onStep={(key) => go({ ...view, step: key })}
+                  onOpenAgent={(id, title, turn) => go({ agent: { id, title, turn } })}
+                />
+              </div>
+              <WorkSections
+                root={props.root}
+                tools={place.turn ? toolsOf(place.turn) : undefined}
+                onOpenAgent={(run) => {
+                  if (!run.child) return
+                  const turn = props.turns.find((each) => toolsOf(each).has(run.tool))
+                  go({ agent: { id: run.child, title: run.description, turn: turn?.id } })
+                }}
+                onOpenShell={(run) => go({ shell: run })}
               />
-            </div>
+            </>
           )}
         </div>
       )}

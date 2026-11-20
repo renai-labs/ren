@@ -9,6 +9,9 @@ export interface TextSelection {
 
 const quotableOf = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest("[data-quotable]")
 
+// oxlint-disable-next-line ren/no-comments -- A selection's text breaks lines between paragraphs and a range's text does not, so the two compare by their letters alone.
+const letters = (text: string) => text.replaceAll(/\s+/gu, "")
+
 const readTextSelection = (root: HTMLElement | null): TextSelection | undefined => {
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
@@ -19,7 +22,7 @@ const readTextSelection = (root: HTMLElement | null): TextSelection | undefined 
   if (!text) return
   const clipped = range.cloneRange()
   if (block !== quotableOf(range.endContainer)) clipped.setEnd(block, block.childNodes.length)
-  if (clipped.toString().trim() !== text) return
+  if (letters(clipped.toString()) !== letters(text)) return
   return { range: clipped, text, source: block.getAttribute("data-quotable") ?? undefined }
 }
 
