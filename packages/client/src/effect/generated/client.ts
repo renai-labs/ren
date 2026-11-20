@@ -1084,6 +1084,7 @@ type TaskListInput = {
   readonly priority?: TaskListRequest["query"]["priority"]
   readonly agentId?: TaskListRequest["query"]["agentId"]
   readonly ownerId?: TaskListRequest["query"]["ownerId"]
+  readonly search?: TaskListRequest["query"]["search"]
   readonly label?: TaskListRequest["query"]["label"]
   readonly humanReview?: TaskListRequest["query"]["humanReview"]
   readonly linkedTo?: TaskListRequest["query"]["linkedTo"]
@@ -1100,6 +1101,7 @@ const EndpointTaskList = (raw: RawClient["task"]) => (input: TaskListInput) =>
       priority: input["priority"],
       agentId: input["agentId"],
       ownerId: input["ownerId"],
+      search: input["search"],
       label: input["label"],
       humanReview: input["humanReview"],
       linkedTo: input["linkedTo"],

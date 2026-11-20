@@ -337,6 +337,7 @@ export const TaskList = {
   priority: Flag.Literals("priority", ["low", "medium", "high"]).pipe(Flag.optional),
   agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
   ownerId: Flag.String("owner-id").pipe(Flag.optional),
+  search: Flag.String("search").pipe(Flag.optional, Flag.withDescription("Part of the title.")),
   label: Flag.String("label").pipe(Flag.optional, Flag.withDescription("A label name, in any case.")),
   humanReview: Flag.Boolean("human-review").pipe(Flag.optional),
   linkedTo: Flag.String("linked-to").pipe(Flag.optional, Flag.withDescription("Only tasks that link this URL.")),

@@ -3,22 +3,23 @@ export * as Mentions from "./mentions.js"
 import type { FileSystem } from "@ren/schema/file-system"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { Schema } from "effect"
 
-export type Kind = "agent" | "skill" | "file" | "app" | "repository"
+export type Kind = typeof Kind.Type
+export const Kind = Schema.Literals(["agent", "skill", "file", "app", "repository", "task", "chat", "ren-agent"])
 
-export interface Item {
-  readonly kind: Kind
-  readonly id: string
-  readonly label: string
-  readonly handle: string
-  readonly description?: string | undefined
-}
+export interface Item extends Schema.Schema.Type<typeof Item> {}
+export const Item = Schema.Struct({
+  kind: Kind,
+  id: Schema.String,
+  label: Schema.String,
+  handle: Schema.String,
+  description: Schema.optional(Schema.String),
+  sent: Schema.optional(Schema.String),
+})
 
-export interface Token {
-  readonly start: number
-  readonly end: number
-  readonly item: Item
-}
+export interface Token extends Schema.Schema.Type<typeof Token> {}
+export const Token = Schema.Struct({ start: Schema.Number, end: Schema.Number, item: Item })
 
 export const key = (item: Item) => `${item.kind}:${item.id}`
 
@@ -90,20 +91,45 @@ const positions = (input: string, needle: string, from: number): ReadonlyArray<n
   return at === -1 ? [] : [at, ...positions(input, needle, at + 1)]
 }
 
-export const tokens = (input: string, items: ReadonlyArray<Item>): ReadonlyArray<Token> => {
-  if (items.length === 0 || !input.includes("@")) return []
+const common = (left: string, right: string) => {
+  const limit = Math.min(left.length, right.length)
+  return Array.from({ length: limit }, (_, index) => index).find((index) => left[index] !== right[index]) ?? limit
+}
+
+const reversed = (input: string) => input.split("").toReversed().join("")
+
+// oxlint-disable-next-line ren/no-comments -- Moves picked mentions to their places in the edited text. A mention that the edit changed is dropped.
+export const shift = (picked: ReadonlyArray<Token>, before: string, after: string): ReadonlyArray<Token> => {
+  const prefix = common(before, after)
+  const suffix = Math.min(common(reversed(before), reversed(after)), Math.min(before.length, after.length) - prefix)
+  const moved = after.length - before.length
+  return picked.flatMap((token) => {
+    if (token.end <= prefix) return [token]
+    if (token.start < before.length - suffix) return []
+    return [{ ...token, start: token.start + moved, end: token.end + moved }]
+  })
+}
+
+// oxlint-disable-next-line ren/no-comments -- A picked mention wins over a mention found by its label.
+export const tokens = (
+  input: string,
+  items: ReadonlyArray<Item>,
+  picked: ReadonlyArray<Token> = [],
+): ReadonlyArray<Token> => {
+  if (!input.includes("@")) return []
   const ordered = [...new Map(items.map((item) => [key(item), item])).values()].toSorted(
     (left, right) => right.label.length - left.label.length,
   )
-  const candidates = ordered.flatMap((item) =>
-    positions(input, text(item), 0)
-      .map((start) => ({ start, end: start + text(item).length, item }))
-      .filter(
-        (token) =>
-          text(item).length >= 4 &&
-          (token.start === 0 || space.test(input.charAt(token.start - 1))) &&
-          (token.end >= input.length || !word.test(input.charAt(token.end))),
-      ),
+  const candidates = [
+    ...picked.filter((token) => input.slice(token.start, token.end) === text(token.item)),
+    ...ordered.flatMap((item) =>
+      positions(input, text(item), 0).map((start) => ({ start, end: start + text(item).length, item })),
+    ),
+  ].filter(
+    (token) =>
+      text(token.item).length >= 4 &&
+      (token.start === 0 || space.test(input.charAt(token.start - 1))) &&
+      (token.end >= input.length || !word.test(input.charAt(token.end))),
   )
   return candidates
     .filter(
@@ -158,7 +184,7 @@ export const resolve = (input: string, found: ReadonlyArray<Token>): Resolved =>
   }>(
     (result, token) => {
       const before = result.text + input.slice(result.from, token.start)
-      const value = `@${token.item.handle}`
+      const value = token.item.sent ?? `@${token.item.handle}`
       return {
         from: token.end,
         text: before + value,

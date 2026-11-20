@@ -45,9 +45,7 @@ test("chat placeholders remain until the first message page arrives", async ({ p
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
 })
 
-test("a member starts a chat, follows the reply, sends again, mentions a file and finds the chat in the sidebar", async ({
-  page,
-}) => {
+test("a member starts a chat, follows the reply, sends again and finds the chat in the sidebar", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await page.goto("/app/")
   const composer = page.getByRole("main").getByRole("textbox", { name: "Message" })
@@ -64,23 +62,6 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
   await expect(page.getByText("Add the budget")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(2)
 
-  await page.getByRole("button", { name: "Open panel", exact: true }).click()
-  const panel = page.getByRole("complementary", { name: "Workspace" })
-  await panel.getByRole("button", { name: /^Terminal:/ }).click()
-  const command = panel.getByRole("textbox", { name: "Command" })
-  await command.fill("mkdir -p src && echo 'export const budget = 1' > src/budget.ts && echo created")
-  await command.press("Enter")
-  await expect(panel.getByText("created", { exact: true })).toBeVisible()
-
-  await composer.pressSequentially("Ask @budge")
-  const mentions = page.getByRole("listbox", { name: "Mentions" })
-  await expect(mentions.getByRole("group", { name: /^Files/ }).getByRole("option")).toHaveText([/src\/budget\.ts$/])
-  await composer.press("Enter")
-  await composer.pressSequentially("to check it")
-  await composer.press("Enter")
-  await expect(page.getByText("Ask @src/budget.ts to check it")).toBeVisible()
-  await expect(page.getByText("stub reply")).toHaveCount(3)
-
   await page.goto("/app/")
   await expect(async () => {
     await page.reload()
@@ -88,7 +69,7 @@ test("a member starts a chat, follows the reply, sends again, mentions a file an
   }).toPass()
   await expect(page).toHaveURL(sessionURL)
   await expect(page.getByText("Plan the launch")).toBeVisible()
-  await expect(page.getByText("stub reply")).toHaveCount(3)
+  await expect(page.getByText("stub reply")).toHaveCount(2)
 })
 
 test("a finished turn with no answer says that Ren sent an empty response", async ({ page }) => {

@@ -9,6 +9,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Option, Schema, Struct } from "effect"
 import { ClientCommand } from "./client-command.js"
+import { Mentions } from "./mentions.js"
 
 export interface Pasted extends Schema.Schema.Type<typeof Pasted> {}
 export const Pasted = Schema.Struct({ id: Schema.String, text: Schema.String })
@@ -43,6 +44,7 @@ export const Draft = Schema.Struct({
   files: Schema.optionalKey(Schema.Array(SessionMessage.DriveFile)),
   chat: Schema.optionalKey(Schema.Struct({ sessionId: Session.ID, spaceId: Schema.String })),
   mentions: Schema.optionalKey(Schema.Array(MentionedApp)),
+  picked: Schema.optionalKey(Schema.Array(Mentions.Token)),
   mode: Schema.optionalKey(Schema.Literals(["prompt", "shell"])),
   quotes: Schema.optionalKey(Schema.Array(Quote)),
 })
@@ -142,6 +144,13 @@ export const mentions = (draft: Draft) => draft.mentions ?? []
 export const withMention = (draft: Draft, app: MentionedApp): Draft => ({
   ...draft,
   mentions: [...mentions(draft).filter((item) => item.id !== app.id), app],
+})
+
+export const picked = (draft: Draft) => draft.picked ?? []
+
+export const withPicked = (draft: Draft, token: Mentions.Token): Draft => ({
+  ...draft,
+  picked: [...picked(draft), token],
 })
 
 export const decode = (raw: string | undefined): Draft => Option.getOrElse(decodeStored(raw), () => empty)
@@ -281,7 +290,10 @@ export const model = (
 export const switching = (draft: Draft, current: SessionModel.Ref | undefined) =>
   draft.model && !sameModel(draft.model, current) ? draft.model : undefined
 
-export const withText = (draft: Draft, text: string): Draft => ({ ...draft, text })
+export const withText = (draft: Draft, text: string): Draft => {
+  const kept = Mentions.shift(picked(draft), draft.text, text)
+  return kept.length > 0 ? { ...draft, text, picked: kept } : { ...Struct.omit(draft, ["picked"]), text }
+}
 
 export const withModel = (draft: Draft, model: SessionModel.Ref): Draft => ({ ...draft, model })
 

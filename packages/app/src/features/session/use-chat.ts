@@ -8,6 +8,7 @@ import {
   TimelineDetail,
   type ChatSession,
   type Family,
+  type Mentions,
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
@@ -64,6 +65,7 @@ function useChatSuggestions(input: {
   model: SessionModel.Ref | undefined
   spaceId: string | undefined
   mentions: ReadonlyArray<Composer.MentionedApp>
+  picked: ReadonlyArray<Mentions.Token>
   canChooseModel: boolean
   onChooseModel: () => void
   workspace: WorkspaceCommands | undefined
@@ -97,6 +99,7 @@ function useChatSuggestions(input: {
     root: input.root,
     spaceId: input.spaceId,
     mentions: input.mentions,
+    picked: input.picked,
     commands: input.capabilities?.commands !== false,
     client: {
       "model.choose": input.canChooseModel,
@@ -341,6 +344,7 @@ export function useChat(
     model: switchTo,
     spaceId,
     mentions: Composer.mentions(draft),
+    picked: Composer.picked(draft),
     canChooseModel: abilities.canChooseModel,
     onChooseModel: () => setPicking(true),
     workspace: options.workspace,

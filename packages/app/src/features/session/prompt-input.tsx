@@ -19,7 +19,12 @@ import {
   IconLayoutGridAdd,
   IconArrowUp,
   IconChevronRight,
+  IconFolder,
+  IconGitBranch,
+  IconMessage,
+  IconMessageChatbot,
   IconQuote,
+  IconSubtask,
   IconLoader2,
   IconPaperclip,
   IconPlayerPlay,
@@ -28,13 +33,19 @@ import {
   IconTerminal2,
   IconX,
 } from "@tabler/icons-react"
-import { GitHubMark } from "../../icons/brands.js"
 import { AttachmentGroup } from "@ren/ui/attachment"
 import { Avatar } from "@ren/ui/avatar"
 import { FileIcon } from "@ren/ui/file-icon"
-import { Kbd } from "@ren/ui/kbd"
 import { Separator } from "@ren/ui/separator"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from "@ren/ui/command"
 import { Spinner } from "@ren/ui/spinner"
 import { maxFileBytes, useUploads, type Target } from "../../lib/use-uploads.js"
 import { formatBytes, plural } from "../../lib/format.js"
@@ -73,8 +84,8 @@ import { Keyboard } from "../../platform/keyboard.js"
 import { ChatKeys } from "./chat-keys.js"
 
 function AddMenu(props: {
-  onInsert: (text: string) => void
   onAttach: () => void
+  onApps?: (() => void) | undefined
   onRepositories?: (() => void) | undefined
 }) {
   return (
@@ -100,14 +111,15 @@ function AddMenu(props: {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => props.onInsert("@")}>
-            <IconApps />
-            Apps
-            <Kbd className="ml-auto">@</Kbd>
-          </DropdownMenuItem>
+          {props.onApps ? (
+            <DropdownMenuItem onClick={props.onApps}>
+              <IconApps />
+              Apps
+            </DropdownMenuItem>
+          ) : null}
           {props.onRepositories ? (
             <DropdownMenuItem onClick={props.onRepositories}>
-              <GitHubMark />
+              <IconGitBranch />
               Repositories
             </DropdownMenuItem>
           ) : null}
@@ -131,12 +143,19 @@ function useControlled(control: { value?: boolean | undefined; onChange?: ((valu
 const addingApps = (state: { adding: boolean; empty: boolean; requested: boolean }) =>
   state.adding || (state.empty && state.requested)
 
-function AppsStrip(props: { spaceId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+function AppsStrip(props: {
+  spaceId: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  adding: boolean
+  onAddingChange: (adding: boolean) => void
+}) {
   const space = useSpaceApps(props.spaceId)
   const [connecting, setConnecting] = useState<ProfileTarget & { fromAdding?: boolean }>()
   const open = props.open
   const setOpen = props.onOpenChange
-  const [adding, setAdding] = useState(false)
+  const adding = props.adding
+  const setAdding = props.onAddingChange
   const from = space.from
   if (space.pending || !from) return null
   const apps = [...new Set(space.profiles.map((profile) => profile.appId))].flatMap((appId) => {
@@ -491,14 +510,36 @@ function QuoteChips(props: {
   )
 }
 
+const categoryIcons = {
+  tasks: <IconSubtask />,
+  chats: <IconMessage />,
+  apps: <IconApps />,
+  agents: <IconMessageChatbot />,
+  files: <IconFolder />,
+  repos: <IconGitBranch />,
+}
+
+function SuggestionIcon(props: { item: Suggest["items"][number] }) {
+  const item = props.item
+  if (item.kind === "app") return <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
+  if (item.kind === "category" && item.category) return categoryIcons[item.category]
+  if (item.kind === "command") return <IconTerminal2 />
+  if (item.kind === "repository") return <IconGitBranch />
+  if (item.kind === "folder") return <IconFolder />
+  if (item.kind === "file") return <FileIcon name={item.label} />
+  if (item.kind === "task") return <IconSubtask />
+  if (item.kind === "chat") return <IconMessage />
+  return <IconMessageChatbot />
+}
+
 function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (value: string) => void }) {
   const suggest = props.suggest
   const choose = props.onChoose
   if (!suggest.open) return null
-  const groups = (["Apps", "Repositories", "Files"] as const)
-    .map((heading) => ({ heading, items: suggest.items.filter((item) => item.group === heading) }))
-    .filter((group) => group.items.length > 0)
-  const listed = groups.length > 0 ? groups : [{ heading: suggest.label, items: suggest.items }]
+  const listed = [...new Set(suggest.items.map((item) => item.group))].map((heading) => ({
+    heading,
+    items: suggest.items.filter((item) => item.group === heading),
+  }))
   return (
     <Command
       value={suggest.active ?? ""}
@@ -509,19 +550,27 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
       )}
     >
       <CommandList className="max-h-72" label={suggest.label}>
-        {listed.map((group) => (
+        {suggest.searching && listed.length === 0 ? (
+          <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+            <Spinner aria-hidden className="size-3" />
+            Searching
+          </div>
+        ) : null}
+        {listed.map((group, index) => (
           <CommandGroup
-            key={group.heading}
+            key={group.heading ?? ""}
             heading={
-              <span className="flex items-center justify-between gap-2">
-                {group.heading}
-                {suggest.searching && group.heading === listed.at(-1)?.heading ? (
-                  <span className="flex items-center gap-1">
-                    <Spinner aria-hidden className="size-3" />
-                    Searching
-                  </span>
-                ) : null}
-              </span>
+              group.heading ? (
+                <span className="flex items-center justify-between gap-2">
+                  {group.heading}
+                  {suggest.searching && index === 0 ? (
+                    <span className="flex items-center gap-1">
+                      <Spinner aria-hidden className="size-3" />
+                      Searching
+                    </span>
+                  ) : null}
+                </span>
+              ) : undefined
             }
           >
             {group.items.map((item) => (
@@ -531,12 +580,7 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
                 onMouseDown={(event) => event.preventDefault()}
                 onSelect={() => choose(item.value)}
               >
-                {item.kind === "command" ? <IconTerminal2 /> : null}
-                {item.kind === "repository" ? <GitHubMark /> : null}
-                {item.kind === "file" ? <FileIcon name={item.label} /> : null}
-                {item.kind === "app" ? (
-                  <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
-                ) : null}
+                <SuggestionIcon item={item} />
                 <span className="min-w-0 flex-1 truncate">
                   <span className="font-medium text-foreground">{item.label}</span>
                   {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
@@ -546,6 +590,11 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
                     <StatusDot status={item.status} />
                     {statusLabel[item.status]}
                   </span>
+                ) : null}
+                {item.kind === "category" || item.kind === "folder" ? (
+                  <CommandShortcut className="-mr-1 flex">
+                    <IconChevronRight stroke={2.75} />
+                  </CommandShortcut>
                 ) : null}
               </CommandItem>
             ))}
@@ -624,7 +673,10 @@ function composerState(
 
 function suggestionKey(suggest: Suggest, event: KeyboardEvent<HTMLTextAreaElement>, choose: (value: string) => void) {
   if (!suggest.open || event.nativeEvent.isComposing) return false
-  if ((event.key === "Enter" || event.key === "Tab") && suggest.active && !event.shiftKey) {
+  const opens =
+    event.key === "ArrowRight" &&
+    suggest.items.some((item) => item.value === suggest.active && (item.kind === "category" || item.kind === "folder"))
+  if ((event.key === "Enter" || event.key === "Tab" || opens) && suggest.active && !event.shiftKey) {
     event.preventDefault()
     choose(suggest.active)
     return true
@@ -636,7 +688,6 @@ function suggestionKey(suggest: Suggest, event: KeyboardEvent<HTMLTextAreaElemen
 
 function ComposerToolbar(props: {
   spaceId: string | undefined
-  onInsert: (character: string) => void
   onAttach: () => void
   onRepositories: () => void
   shell: boolean
@@ -646,17 +697,24 @@ function ComposerToolbar(props: {
 }) {
   const shell = props.shell
   const [appsOpen, setAppsOpen] = useControlled({ value: props.apps?.open, onChange: props.apps?.onOpenChange })
+  const [adding, setAdding] = useState(false)
   return (
     <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
       {shell ? null : (
         <AddMenu
-          onInsert={props.onInsert}
           onAttach={props.onAttach}
+          onApps={props.spaceId ? () => setAdding(true) : undefined}
           onRepositories={props.spaceId ? props.onRepositories : undefined}
         />
       )}
       {props.spaceId && !shell ? (
-        <AppsStrip spaceId={props.spaceId} open={appsOpen} onOpenChange={setAppsOpen} />
+        <AppsStrip
+          spaceId={props.spaceId}
+          open={appsOpen}
+          onOpenChange={setAppsOpen}
+          adding={adding}
+          onAddingChange={setAdding}
+        />
       ) : null}
       {shell ? (
         <span className="mr-auto pl-1 text-sm text-muted-foreground">Shell</span>
@@ -856,17 +914,13 @@ export function PromptInput(props: {
     change(Composer.withText(draft, entry.text))
     place(entry.text, entry.cursor === "start" ? 0 : entry.text.length)
   }
-  const insert = (character: string) => {
-    const next = character === "/" && !text ? "/" : `${text}${text && !text.endsWith(" ") ? " " : ""}${character}`
-    change(Composer.withText(draft, next))
-    props.suggest?.onCursor(next, next.length)
-    place(next, next.length)
-  }
   const choose = (value: string) => {
     const result = props.suggest?.onChoose(value, text, textarea.current?.selectionStart ?? text.length)
     if (!result) return
     const next = Composer.withText(draft, result.text)
-    change(result.mention ? Composer.withMention(next, result.mention) : next)
+    const picked = result.picked ? Composer.withPicked(next, result.picked) : next
+    const mentioned = result.mention ? Composer.withMention(picked, result.mention) : picked
+    change(result.file ? Composer.withFile(mentioned, result.file) : mentioned)
     if (result.focus !== false) place(result.text, result.cursor)
   }
   const suggest = shellMode.suggest
@@ -1044,7 +1098,6 @@ export function PromptInput(props: {
         <ShellPrefix active={shell} />
         <ComposerToolbar
           spaceId={props.spaceId}
-          onInsert={insert}
           onAttach={() => picker.current?.click()}
           onRepositories={() => setRepositories(true)}
           shell={shell}
