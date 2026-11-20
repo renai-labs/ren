@@ -54,6 +54,7 @@ export function HomePage(props: {
   const prepare = useMutation(api.chat.prepare.mutationOptions())
   const [prepared, setPrepared] = useState<ReadonlySet<string>>(() => new Set())
   const create = useMutation(api.session.create.mutationOptions())
+  const createInBackground = useMutation(api.session.create.mutationOptions())
   const mentions = useMentionSuggestions(spaceId, draft)
   const suggest = mentions.suggest
   const starting = create.isPending
@@ -73,18 +74,25 @@ export function HomePage(props: {
       void router.loadRouteChunk(router.routesById["/_authed/_shell/sessions/$sessionId/"])
     }
   }
-  const send = () => {
+  const waiting = starting || modelsLoading
+  const open = (id: Session.ID) => void navigate({ to: "/sessions/$sessionId", params: { sessionId: id } })
+  // oxlint-disable-next-line ren/no-comments -- A chat started in the background starts the same way, but the page stays here with an empty composer for the next chat. A toast links to the chat.
+  const send = (options: { readonly alternative: boolean }) => {
     const trimmed = Composer.message(draft).trim()
-    if (!trimmed || !spaceId || create.isPending || modelsLoading) return
+    if (!trimmed || !spaceId || waiting) return
     const files = Composer.files(draft)
     const message = {
       id: Composer.messageID(draft) ?? SessionMessage.ID.create(),
       text: Artifacts.resolveMention(mentions.resolve(trimmed).text, props.artifact),
       ...(files.length > 0 && { files: files.map((file) => ({ path: file.path, name: file.name })) }),
     }
-    setSent(draft)
     history.prepend(draft)
-    const created = create.mutateAsync({ id: sessionId, spaceId, message, ...(model && { model }) })
+    const created = (options.alternative ? createInBackground : create).mutateAsync({
+      id: sessionId,
+      spaceId,
+      message,
+      ...(model && { model }),
+    })
     startChat(platform, me.user.id, sessionId, {
       spaceId,
       created,
@@ -92,8 +100,24 @@ export function HomePage(props: {
     })
     setDraft(Composer.empty)
     if (draft.model && model) writeDraft(Drafts.session(sessionId), Composer.withModel(Composer.empty, model))
+    if (options.alternative) {
+      setSessionId(Session.ID.create())
+      void created.then(
+        () =>
+          toast.success("Chat started in the background", {
+            action: { label: "Open chat", onClick: () => open(sessionId) },
+          }),
+        (error: unknown) => {
+          history.remove(draft)
+          kept.update((current) => (Composer.isBlank(current) ? draft : current))
+          toast.error("Could not start the chat", { description: errorMessage(error) })
+        },
+      )
+      return
+    }
+    setSent(draft)
     ComposerMotion.leave()
-    void navigate({ to: "/sessions/$sessionId", params: { sessionId } })
+    open(sessionId)
     created.catch((error: unknown) => {
       history.remove(draft)
       setSent(undefined)
@@ -131,6 +155,7 @@ export function HomePage(props: {
             value={sent ?? draft}
             onChange={type}
             onSubmit={send}
+            alternative="Start the chat in the background"
             onChooseModel={() => setPicking(true)}
             sending={starting}
             files={{

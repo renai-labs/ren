@@ -18,6 +18,7 @@ import {
   IconApps,
   IconLayoutGridAdd,
   IconArrowUp,
+  IconChevronDown,
   IconChevronRight,
   IconFolder,
   IconGitBranch,
@@ -62,6 +63,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Input } from "@ren/ui/input"
@@ -617,30 +619,83 @@ const sendLabel = (props: { stop: boolean; shell: boolean }) => {
   return props.shell ? "Run command" : "Send"
 }
 
-function SendButton(props: {
-  blank: boolean
-  stop: boolean
-  shell: boolean
-  sending: boolean
-  booting: boolean
-  uploading: boolean
-  onClick: () => void
-}) {
+// oxlint-disable-next-line ren/no-comments -- Both halves of the split send button are transparent over the button's color, so they read as one button. Hover and an open menu tint a half with the text color.
+const half =
+  "text-inherit hover:bg-current/10 hover:text-inherit aria-expanded:bg-current/10 aria-expanded:text-inherit active:not-aria-[haspopup]:scale-100"
+
+interface Send {
+  readonly blank: boolean
+  readonly stop: boolean
+  readonly shell: boolean
+  readonly sending: boolean
+  readonly booting: boolean
+  readonly uploading: boolean
+  readonly onClick: () => void
+}
+
+const sendState = (props: Send) => ({
+  filled: !props.booting && (!props.blank || props.stop),
+  // oxlint-disable-next-line ren/no-comments -- With nothing to send and nothing to stop, the send button is disabled and dimmed like its chevron. While a chat starts, it shows its spinner instead.
+  idle: props.blank && !props.stop && !props.booting && !props.sending,
+})
+
+function SendButton(props: Send & { split?: boolean }) {
+  const state = sendState(props)
+  const variant = state.filled ? "default" : "secondary"
   return (
     <InputGroupButton
-      variant={!props.booting && (!props.blank || props.stop) ? "default" : "secondary"}
+      variant={props.split ? "ghost" : variant}
       size="icon-sm"
       className={cn(
-        "rounded-full",
+        props.split ? ["w-8.5 rounded-none pl-0.5", half] : "rounded-full",
         props.booting && "pointer-events-none",
         props.uploading && "pointer-events-none opacity-50",
       )}
+      disabled={state.idle}
       aria-disabled={props.booting || props.uploading || undefined}
       aria-label={sendLabel(props)}
       onClick={props.onClick}
     >
       <SendIcon sending={props.sending || props.booting} stop={props.stop} shell={props.shell} />
     </InputGroupButton>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- The send button and the chevron share one pill, split by a hairline. The arrow sends. The chevron opens a menu with the other way to send and its shortcut.
+function SendPill(props: Send & { other: { readonly label: string; readonly onSelect: () => void } }) {
+  return (
+    <span
+      className={cn(
+        "flex h-8 items-center overflow-hidden rounded-full transition-colors duration-150 ease-out",
+        sendState(props).filled ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground",
+      )}
+    >
+      <SendButton {...props} split />
+      <span aria-hidden className="h-4 w-px shrink-0 bg-current opacity-20" />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <InputGroupButton
+              variant="ghost"
+              size="icon-sm"
+              className={cn("w-7 rounded-none pr-0.5 [&_svg:not([class*='size-'])]:size-3.5", half)}
+              aria-label="Send options"
+              disabled={props.blank || props.booting || props.uploading || props.sending}
+            />
+          }
+        >
+          <IconChevronDown />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="bottom" className="w-64">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={props.other.onSelect}>
+              {props.other.label}
+              <DropdownMenuShortcut>{ChatKeys.apple ? "⌘↵" : "Ctrl ↵"}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
   )
 }
 
@@ -823,6 +878,7 @@ export function PromptInput(props: {
   header?: ReactNode
   queue?: ReactNode
   apps?: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void } | undefined
+  alternative?: string | undefined
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
   useImperativeHandle<HTMLTextAreaElement | null, HTMLTextAreaElement | null>(props.textareaRef, () => textarea.current)
@@ -870,17 +926,21 @@ export function PromptInput(props: {
   }
   const home = props.placement === "home"
   const status = state.status
-  const send = (
-    <SendButton
-      blank={blank}
-      stop={state.stop}
-      shell={shell}
-      sending={state.sending}
-      booting={booting}
-      uploading={uploading}
-      onClick={() => submit({ alternative: false })}
-    />
-  )
+  const sendProps = {
+    blank,
+    stop: state.stop,
+    shell,
+    sending: state.sending,
+    booting,
+    uploading,
+    onClick: () => submit({ alternative: false }),
+  }
+  const send =
+    props.alternative && !shell ? (
+      <SendPill {...sendProps} other={{ label: props.alternative, onSelect: () => submit({ alternative: true }) }} />
+    ) : (
+      <SendButton {...sendProps} />
+    )
   const place = (next: string, cursor: number) =>
     requestAnimationFrame(() => {
       const node = textarea.current
