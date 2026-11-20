@@ -25,7 +25,7 @@ const noApp = { dependsOn: [], mcps: null, skills: null }
 
 const groupSize = 5
 const filePill = /(?<=^|\s)@ {2}([^\s@]*[./][^\s@]*)/g
-const recentShown = 5
+const recentShown = 3
 
 interface SuggestionItem {
   readonly value: string
