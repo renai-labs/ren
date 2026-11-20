@@ -38,14 +38,14 @@ import {
 } from "@ren/ui/trace"
 import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
-import { useSubagentCard } from "./chat-view.js"
+import { isShellNotice, useSubagentCard } from "./chat-view.js"
 import { ImageThumbnail } from "../../components/image-set.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { WorkspaceImage } from "./workspace-image.js"
 import { InlineFile } from "./file-chip.js"
 import { DiffFile } from "./diff-file.js"
-import { OpenPanel } from "./open-panel.js"
+import { OpenPanel, useOpenActivity } from "./open-panel.js"
 import { workspacePath } from "./workspace-edits.js"
 import { TranscriptBlocks } from "./transcript-blocks.js"
 
@@ -422,7 +422,65 @@ function ShellStep(props: { message: SessionMessage.Shell }) {
   )
 }
 
+const shellNotice = /^<shell\b[^>]*>\n?([\s\S]*?)\n?<\/shell>\s*$/u
+
+function ShellNoticeLink(props: { verb: string; command: string | undefined; failed: boolean; onOpen: () => void }) {
+  return (
+    <Trace>
+      {/* oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the command in Activity, and Trace styles its button */}
+      <button type="button" aria-label={`Open ${props.command ?? "the command"} in Activity`} onClick={props.onOpen}>
+        <TraceLine status={traceStatus({ failed: props.failed })}>
+          <TraceIcon>
+            <toolIcons.command />
+          </TraceIcon>
+          <TraceTitle className="shrink-0">{props.verb}</TraceTitle>
+          {props.command ? (
+            <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{props.command}</TraceDescription>
+          ) : null}
+        </TraceLine>
+      </button>
+    </Trace>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- A background command reports back as a notice. The notice shows the command and how it ended, and opens the command in Activity. Where there is no panel, it shows the output in place.
+export function ShellNoticeStep(props: { message: SessionMessage.Synthetic }) {
+  const message = props.message
+  const metadata = message.metadata ?? {}
+  const command = message.description?.trim() || undefined
+  const end = TimelineText.shellEnd(metadata)
+  const verb = `Background command ${end.text.toLowerCase()}`
+  const output = TimelineText.shellOutput(message.text.match(shellNotice)?.[1] ?? message.text).trim()
+  const openPanel = useOpenActivity()
+  const shell = metadata.shellID
+  if (openPanel && shell)
+    return (
+      <ShellNoticeLink
+        verb={verb}
+        command={command}
+        failed={end.failed}
+        onOpen={() =>
+          openPanel({
+            kind: "activity",
+            shell: { id: shell, command: command ?? "", ended: end.text, failed: end.failed, output },
+          })
+        }
+      />
+    )
+  return (
+    <StepRow
+      icon={<toolIcons.command />}
+      verb={verb}
+      subject={command}
+      command={command}
+      failed={end.failed}
+      output={output || "No output"}
+    />
+  )
+}
+
 function NoticeStep(props: { message: SessionMessage.Info }) {
+  if (isShellNotice(props.message)) return <ShellNoticeStep message={props.message} />
   const notice = TimelineText.notice(props.message)
   if (!notice) return null
   return (
@@ -556,8 +614,7 @@ export function Steps(props: {
   workedFor: string | undefined
   onOpen?: (() => void) | undefined
 }) {
-  const backgrounded = props.steps.filter((step) => step.kind === "tool" && ToolState.backgrounded(step.tool))
-  const steps = props.steps.filter((step) => step.kind !== "tool" || !ToolState.backgrounded(step.tool))
+  const steps = props.steps
   const count = leaves(steps).filter((step) => step.kind !== "text").length
   return (
     <Trace>
@@ -589,9 +646,6 @@ export function Steps(props: {
           </TraceCollapsibleContent>
         </TraceCollapsible>
       ) : null}
-      {backgrounded.map((step) => (
-        <StepItem key={step.key} step={step} />
-      ))}
     </Trace>
   )
 }

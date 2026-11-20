@@ -137,12 +137,12 @@ function Row(props: {
   )
 }
 
-function ending(shell: Shell.Info | undefined, options: { readonly missing: boolean }) {
-  if (options.missing || shell?.status === "killed") return { text: "Stopped", failed: false }
-  if (shell?.status === "timeout") return { text: "Timed out", failed: true }
-  if (shell?.exit) return { text: `Exited with code ${shell.exit}`, failed: true }
-  return { text: "Exited", failed: false }
-}
+const endOf = (shell: Shell.Info | undefined, options: { readonly missing: boolean }) =>
+  TimelineText.shellEnd({
+    state: options.missing || shell?.status === "killed" ? "cancelled" : undefined,
+    timeout: shell?.status === "timeout",
+    exit: shell?.exit,
+  })
 
 export function useShellRun(
   root: Session.ID,
@@ -163,7 +163,7 @@ export function useShellRun(
     output,
     running,
     tail: ShellOutput.tail(output, tailLines),
-    end: running ? undefined : ending(shell, { missing }),
+    end: running ? undefined : endOf(shell, { missing }),
     completed: shell?.time.completed,
   }
 }

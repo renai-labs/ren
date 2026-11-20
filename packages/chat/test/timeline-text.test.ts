@@ -172,6 +172,14 @@ describe("timeline text", () => {
     expect(TimelineText.shellError(shell({ status: "running" }))).toBeUndefined()
   })
 
+  test("names how a background command ended, with a stop before its exit code", () => {
+    expect(TimelineText.shellEnd({ state: "cancelled", exit: 130 })).toEqual({ text: "Stopped", failed: false })
+    expect(TimelineText.shellEnd({ timeout: true })).toEqual({ text: "Timed out", failed: true })
+    expect(TimelineText.shellEnd({ state: "error", exit: 2 })).toEqual({ text: "Exited with code 2", failed: true })
+    expect(TimelineText.shellEnd({ state: "error" })).toEqual({ text: "Failed", failed: true })
+    expect(TimelineText.shellEnd({ exit: 0 })).toEqual({ text: "Exited", failed: false })
+  })
+
   test("highlights mention ranges in order and skips overlaps", () => {
     const user: SessionMessage.User = {
       id: SessionMessage.ID.make("msg_user"),

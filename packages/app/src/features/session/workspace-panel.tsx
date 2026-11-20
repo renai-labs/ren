@@ -23,6 +23,7 @@ import { FileName } from "@ren/util/file-name"
 import { cn } from "cn"
 import { revealIn } from "../../lib/use-workspace-files.js"
 import { ChangesTab } from "./workspace-changes.js"
+import type { ShellReport } from "./activity-work.js"
 import { ActivityTab } from "./workspace-activity.js"
 import { FilesTab } from "./workspace-files.js"
 import { WorkspaceProject } from "./workspace-project.js"
@@ -60,7 +61,7 @@ export type PanelTarget =
       readonly drive?: DriveTarget | undefined
     }
   | { readonly kind: "changes"; readonly path: string }
-  | { readonly kind: "activity"; readonly turn?: string }
+  | { readonly kind: "activity"; readonly turn?: string; readonly shell?: ShellReport }
 
 export type PanelRequest = PanelTarget & { readonly id: string }
 

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { createContext, use, useState, type ReactNode } from "react"
 import { TimelineText } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
@@ -11,7 +11,9 @@ import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { errorMessage } from "../../lib/errors.js"
+import { Preference } from "../../lib/preference.js"
 import { useNow } from "../../lib/use-now.js"
 import { useShellRun } from "./activity-pill.js"
 import { customAgent, useWork, type ShellRun, type SubagentRun } from "./chat-view.js"
@@ -33,22 +35,27 @@ const confirmations = {
   },
 } as const
 
-// oxlint-disable-next-line ren/no-comments -- A command the person stopped here can come back as an error from the harness, which lost it; it still reads as stopped.
-const ending = (run: ShellRun, options: { readonly stopped: boolean }) => {
-  if (run.running) return { text: "Running", failed: false }
-  if (options.stopped || run.state === "cancelled") return { text: "Stopped", failed: false }
-  if (run.timeout) return { text: "Timed out", failed: true }
-  if (run.state === "error") return { text: "Failed", failed: true }
-  if (run.exit !== undefined && run.exit !== 0) return { text: `Exited with code ${run.exit}`, failed: true }
-  return { text: "Exited", failed: false }
+interface Work {
+  readonly subagents: ReadonlyArray<SubagentRun>
+  readonly shells: ReadonlyArray<ShellRun>
+  readonly now: number
+  readonly stopping: ReadonlySet<string>
+  readonly stopAgent: (run: SubagentRun) => Promise<unknown>
+  readonly stopCommand: (run: ShellRun) => Promise<unknown>
+  readonly confirm: (bulk: Bulk) => void
+  readonly onOpenAgent: (run: SubagentRun) => void
+  readonly onOpenShell: (run: ShellRun) => void
 }
 
-// oxlint-disable-next-line ren/no-comments -- Under a turn, lists only the subagents and background commands that the turn's tool calls started.
-export function WorkSections(props: {
+const WorkContext = createContext<Work | undefined>(undefined)
+
+// oxlint-disable-next-line ren/no-comments -- The chat's subagents and background commands, with a way to open and stop each. Under a turn, it filters them by the turn's tool IDs. The lists read it. Its children get the tool IDs of every listed subagent and command, so the step timeline can leave them out and each shows once. A kind that the timeline detail hides stays out of the lists too.
+export function WorkProvider(props: {
   root: Session.ID
   tools: ReadonlySet<string> | undefined
   onOpenAgent: (run: SubagentRun) => void
   onOpenShell: (run: ShellRun) => void
+  children: (listed: ReadonlySet<string>) => ReactNode
 }) {
   const work = useWork(props.root)
   const now = useNow(1000)
@@ -59,11 +66,15 @@ export function WorkSections(props: {
     opened.stopShell(sessionID, shellID),
   )
   const terminal = useTerminalShells(props.root)
+  const detail = Preference.usePreference(ChatPreferences.timelineDetail)
   const tools = props.tools
-  const subagents = tools ? work.subagents.filter((run) => tools.has(run.tool)) : work.subagents
-  const background = work.shells.filter((run) => !terminal.has({ id: run.id, command: run.command }))
+  const agents = detail.subagents.placement === "hidden" ? [] : work.subagents
+  const subagents = tools ? agents.filter((run) => tools.has(run.tool)) : agents
+  const background =
+    detail.shell.placement === "hidden"
+      ? []
+      : work.shells.filter((run) => !terminal.has({ id: run.id, command: run.command }))
   const shells = tools ? background.filter((run) => run.tool !== undefined && tools.has(run.tool)) : background
-  if (subagents.length === 0 && shells.length === 0) return null
   const stop = (key: string, run: () => Promise<unknown>, failure: string) => {
     if (stopping.has(key)) return Promise.resolve()
     setStopping((current) => new Set([...current, key]))
@@ -83,49 +94,24 @@ export function WorkSections(props: {
       () => stopShell(Session.ID.make(run.sessionID), Shell.ID.make(run.id)),
       "Could not stop the background command",
     )
+  const listed = new Set([...work.subagents.map((run) => run.tool), ...work.shells.flatMap((run) => run.tool ?? [])])
   const runningAgents = subagents.filter((run) => run.running && run.child)
   const runningShells = shells.filter((run) => run.running)
   return (
-    <div className="flex flex-col gap-3 pt-5">
-      {subagents.length > 0 ? (
-        <Section
-          title="Subagents"
-          count={subagents.length}
-          running={runningAgents.length}
-          onStopAll={runningAgents.length > 0 ? () => setConfirming("subagents") : undefined}
-        >
-          {subagents.map((run) => (
-            <AgentRow
-              key={run.key}
-              run={run}
-              now={now}
-              stopping={run.running && stopping.has(run.key)}
-              onOpen={() => props.onOpenAgent(run)}
-              onStop={() => void stopAgent(run)}
-            />
-          ))}
-        </Section>
-      ) : null}
-      {shells.length > 0 ? (
-        <Section
-          title="Background commands"
-          count={shells.length}
-          running={runningShells.length}
-          onStopAll={runningShells.length > 0 ? () => setConfirming("shells") : undefined}
-        >
-          {shells.map((run) => (
-            <ShellRow
-              key={run.key}
-              run={run}
-              now={now}
-              stopping={run.running && stopping.has(run.key)}
-              stopped={stopping.has(run.key)}
-              onOpen={() => props.onOpenShell(run)}
-              onStop={() => void stopCommand(run)}
-            />
-          ))}
-        </Section>
-      ) : null}
+    <WorkContext
+      value={{
+        subagents,
+        shells,
+        now,
+        stopping,
+        stopAgent,
+        stopCommand,
+        confirm: setConfirming,
+        onOpenAgent: props.onOpenAgent,
+        onOpenShell: props.onOpenShell,
+      }}
+    >
+      {props.children(listed)}
       <ConfirmDialog
         open={confirming !== undefined}
         onOpenChange={(open) => (open ? undefined : setConfirming(undefined))}
@@ -136,6 +122,49 @@ export function WorkSections(props: {
             : Promise.all(runningAgents.map(stopAgent))
         }
       />
+    </WorkContext>
+  )
+}
+
+const useWorkContext = () => {
+  const work = use(WorkContext)
+  if (!work) throw new Error("WorkProvider is missing")
+  return work
+}
+
+export function WorkSections(props: { className?: string | undefined }) {
+  const work = useWorkContext()
+  const subagents = work.subagents
+  const shells = work.shells
+  if (subagents.length === 0 && shells.length === 0) return null
+  const runningAgents = subagents.filter((run) => run.running && run.child)
+  const runningShells = shells.filter((run) => run.running)
+  return (
+    <div className={cn("flex flex-col gap-3", props.className)}>
+      {subagents.length > 0 ? (
+        <Section
+          title="Subagents"
+          count={subagents.length}
+          running={runningAgents.length}
+          onStopAll={runningAgents.length > 0 ? () => work.confirm("subagents") : undefined}
+        >
+          {subagents.map((run) => (
+            <AgentRow key={run.key} run={run} />
+          ))}
+        </Section>
+      ) : null}
+      {shells.length > 0 ? (
+        <Section
+          title="Background commands"
+          count={shells.length}
+          running={runningShells.length}
+          onStopAll={runningShells.length > 0 ? () => work.confirm("shells") : undefined}
+        >
+          {shells.map((run) => (
+            <ShellRow key={run.key} run={run} />
+          ))}
+        </Section>
+      ) : null}
     </div>
   )
 }
@@ -156,7 +185,7 @@ function Section(props: {
               <Button
                 variant="ghost"
                 size="sm"
-                className="group/trigger -ml-2 text-sm font-normal text-muted-foreground aria-expanded:bg-transparent"
+                className="group/trigger -ml-2 text-sm font-normal text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground"
               />
             }
           >
@@ -261,7 +290,8 @@ function agentDetail(run: SubagentRun) {
   return agent ? `${agent} · ${state}` : state
 }
 
-function AgentRow(props: { run: SubagentRun; now: number; stopping: boolean; onOpen: () => void; onStop: () => void }) {
+function AgentRow(props: { run: SubagentRun }) {
+  const work = useWorkContext()
   const run = props.run
   const ended = run.ended
   return (
@@ -270,31 +300,25 @@ function AgentRow(props: { run: SubagentRun; now: number; stopping: boolean; onO
       title={run.description}
       detail={agentDetail(run)}
       end={
-        run.running
-          ? TimelineText.elapsed(props.now - run.started)
-          : ended && TimelineText.duration(ended - run.started)
+        run.running ? TimelineText.elapsed(work.now - run.started) : ended && TimelineText.duration(ended - run.started)
       }
       running={run.running && run.child !== undefined}
-      stopping={props.stopping}
+      stopping={run.running && work.stopping.has(run.key)}
       stopLabel={`Stop ${run.description}`}
       openLabel={`Open ${run.description}`}
-      onOpen={run.child ? props.onOpen : undefined}
-      onStop={props.onStop}
+      onOpen={run.child ? () => work.onOpenAgent(run) : undefined}
+      onStop={() => void work.stopAgent(run)}
     />
   )
 }
 
-function ShellRow(props: {
-  run: ShellRun
-  now: number
-  stopping: boolean
-  stopped: boolean
-  onOpen: () => void
-  onStop: () => void
-}) {
+function ShellRow(props: { run: ShellRun }) {
+  const work = useWorkContext()
   const run = props.run
   const ended = run.ended
-  const end = ending(run, { stopped: props.stopped })
+  const end = run.running
+    ? { text: "Running", failed: false }
+    : TimelineText.shellEnd(work.stopping.has(run.key) ? { state: "cancelled" } : run)
   return (
     <Row
       icon={
@@ -311,28 +335,47 @@ function ShellRow(props: {
       }
       detail={<span className={cn(end.failed && "text-destructive")}>{end.text}</span>}
       end={
-        run.running
-          ? TimelineText.elapsed(props.now - run.started)
-          : ended && TimelineText.duration(ended - run.started)
+        run.running ? TimelineText.elapsed(work.now - run.started) : ended && TimelineText.duration(ended - run.started)
       }
       running={run.running}
-      stopping={props.stopping}
+      stopping={run.running && work.stopping.has(run.key)}
       stopLabel={`Stop ${run.command}`}
       openLabel={`Open ${run.command}`}
-      onOpen={props.onOpen}
-      onStop={props.onStop}
+      onOpen={() => work.onOpenShell(run)}
+      onStop={() => void work.stopCommand(run)}
     />
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- A background command opened from its row: the command, and its output as it streams.
-export function ShellDetail(props: { root: Session.ID; run: ShellRun }) {
-  const shell = useShellRun(props.root, { sessionID: props.run.sessionID, id: props.run.id })
+// oxlint-disable-next-line ren/no-comments -- What a background command's notice told the chat when it ended. It still shows when the brain no longer has the shell.
+export interface ShellReport {
+  readonly id: string
+  readonly command: string
+  readonly ended: string
+  readonly failed: boolean
+  readonly output: string
+}
+
+// oxlint-disable-next-line ren/no-comments -- A background command opened from its row or its notice. It shows the command and its output as it streams, or the notice's report once it ended.
+export function ShellDetail(props: {
+  root: Session.ID
+  shell: { readonly id: string; readonly sessionID?: string | undefined; readonly command: string }
+  report?: ShellReport | undefined
+}) {
+  const live = useShellRun(props.root, { sessionID: props.shell.sessionID, id: props.shell.id })
+  const report = props.report
+  const shell = report
+    ? {
+        running: false,
+        end: { text: report.ended, failed: report.failed },
+        output: live.output || report.output,
+      }
+    : live
   const end = shell.end
   return (
     <div className="flex flex-col gap-3">
       <CodeBlock size="sm" className="border-0 bg-muted dark:bg-muted">
-        <CodeBlockContent wrap>{props.run.command}</CodeBlockContent>
+        <CodeBlockContent wrap>{props.shell.command}</CodeBlockContent>
       </CodeBlock>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {shell.running ? <Spinner className="size-3.5" /> : null}

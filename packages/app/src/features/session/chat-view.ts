@@ -139,6 +139,29 @@ export const customAgent = (agent: string | undefined) =>
     ? `${agent.slice(0, 1).toUpperCase()}${agent.slice(1)}`
     : undefined
 
+export const isShellNotice = (message: SessionMessage.Info): message is SessionMessage.Synthetic =>
+  message.type === "synthetic" && message.metadata?.source === "shell"
+
+interface Report {
+  readonly time: DateTime.Utc
+  readonly failed: boolean
+}
+
+// oxlint-disable-next-line ren/no-comments -- A subagent in the background ends its tool call at once. It runs until it reports back, even while its own session is not loaded.
+const progressOf = (input: {
+  readonly card: Family.Subagent
+  readonly info: ChatState.State["info"][string] | undefined
+  readonly report: Report | undefined
+  readonly completed: DateTime.Utc | undefined
+}) => {
+  const card = input.card
+  const info = input.info
+  const running =
+    card.status === "running" || card.status === "delegating" || (card.background && input.report === undefined)
+  const ended = input.report?.time ?? (info ? (info.time.idle ?? info.time.updated) : input.completed)
+  return { running, ended: running || !ended ? undefined : millis(ended) }
+}
+
 const runningFirst = <A extends { readonly running: boolean; readonly started: number }>(runs: ReadonlyArray<A>) => [
   ...runs.filter((run) => run.running),
   ...runs.filter((run) => !run.running).toSorted((a, b) => b.started - a.started),
@@ -153,13 +176,15 @@ export function useWork(root: Session.ID) {
       ? message.content.filter((content): content is SessionMessage.Tool => content.type === "tool")
       : [],
   )
-  const failed = new Set<string | undefined>(
+  const reports = new Map<string | undefined, Report>(
     messages.flatMap((message) =>
-      message.type === "synthetic" &&
-      message.metadata?.source === "subagent" &&
-      message.metadata.state === "error" &&
-      message.metadata.childID
-        ? [message.metadata.childID]
+      message.type === "synthetic" && message.metadata?.source === "subagent" && message.metadata.childID
+        ? [
+            [
+              message.metadata.childID,
+              { time: message.time.created, failed: message.metadata.state === "error" },
+            ] as const,
+          ]
         : [],
     ),
   )
@@ -169,20 +194,20 @@ export function useWork(root: Session.ID) {
       const card = Family.subagent(state, root, tool)
       const child = card.child ? Session.ID.make(card.child) : undefined
       const info = child ? state.info[child] : undefined
-      const running = card.status === "running" || card.status === "delegating"
-      const ended = info ? (info.time.idle ?? info.time.updated) : tool.time.completed
+      const report = reports.get(card.child)
+      const progress = progressOf({ card, info, report, completed: tool.time.completed })
       return {
         key: tool.id,
         tool: tool.id,
         child,
         description: card.description ?? card.title,
         agent: card.title,
-        status: failed.has(card.child) ? "failed" : card.status,
-        running,
+        status: report?.failed ? "failed" : card.status,
+        running: progress.running,
         needsInput: card.needsInput,
         activity: card.activity,
         started: millis(info?.time.created ?? ran(tool)),
-        ended: running || !ended ? undefined : millis(ended),
+        ended: progress.ended,
       }
     })
   const backgrounded = tools.filter(

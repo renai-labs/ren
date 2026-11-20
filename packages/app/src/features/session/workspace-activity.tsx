@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Activity, PatchFiles, TimelineText, ToolDisplay, ToolState } from "@ren/chat"
+import { Activity, PatchFiles, TimelineDetail, TimelineText, ToolDisplay, ToolState } from "@ren/chat"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { IconBrain, IconChevronRight, IconMessage, IconTimeline } from "@tabler/icons-react"
@@ -21,10 +21,11 @@ import { cn } from "cn"
 import { AppIcon } from "../../components/app-icon.js"
 import { Markdown } from "../../components/markdown.js"
 import { LinkIcon } from "../../components/markdown-link.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { Preference } from "../../lib/preference.js"
 import { useApp } from "../../lib/use-app.js"
 import { usePinToEnd } from "../../lib/use-pin-to-end.js"
-import { ShellDetail, WorkSections } from "./activity-work.js"
-import type { ShellRun } from "./chat-view.js"
+import { ShellDetail, WorkProvider, WorkSections, type ShellReport } from "./activity-work.js"
 import { useTerminalShells } from "./terminal-shells.js"
 import { SubagentThread } from "./subagent-thread.js"
 import { DiffFile } from "./diff-file.js"
@@ -46,6 +47,7 @@ interface Turn {
   readonly prompt: string
   readonly at: number
   readonly items: ReadonlyArray<Item>
+  readonly listed?: number
 }
 
 const millis = (time: DateTime.Utc) => DateTime.toEpochMillis(time)
@@ -63,25 +65,28 @@ const thinkingOf = (message: SessionMessage.Assistant, content: SessionMessage.R
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- Activity is the work Ren did, not what it said: its replies and the text between steps stay in the chat.
-const itemsOf = (message: SessionMessage.Info): ReadonlyArray<Item> => {
-  if (message.type === "shell") return [{ kind: "shell", key: message.id, message }]
+// oxlint-disable-next-line ren/no-comments -- Activity is the work Ren did, not what it said. Its replies and the text between steps stay in the chat. A kind of step that the timeline detail hides stays out of Activity too.
+const itemsOf = (message: SessionMessage.Info, detail: TimelineDetail.Detail): ReadonlyArray<Item> => {
+  if (message.type === "shell")
+    return detail.shell.placement === "hidden" ? [] : [{ kind: "shell", key: message.id, message }]
   if (message.type !== "assistant") return []
   return message.content.flatMap((content, index): ReadonlyArray<Item> => {
     const key = `${message.id}:${index}`
+    const category = TimelineDetail.category(content)
+    if (category && detail[category].placement === "hidden") return []
     if (content.type === "reasoning") return [thinkingOf(message, content, key)]
     return Activity.listed(content) ? [{ kind: "tool", key, tool: content }] : []
   })
 }
 
 // oxlint-disable-next-line ren/no-comments -- A turn is a message from a person and everything Ren did for it, in order; work before the first message stands as its own turn.
-const turnsOf = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArray<Turn> =>
+const turnsOf = (messages: ReadonlyArray<SessionMessage.Info>, detail: TimelineDetail.Detail): ReadonlyArray<Turn> =>
   messages.reduce<Array<{ id: string; prompt: string; at: number; items: Array<Item> }>>((turns, message) => {
     if (message.type === "user") {
       turns.push({ id: message.id, prompt: message.text, at: millis(message.time.created), items: [] })
       return turns
     }
-    const items = itemsOf(message)
+    const items = itemsOf(message, detail)
     if (items.length === 0) return turns
     const last = turns.at(-1)
     if (last) last.items.push(...items)
@@ -425,7 +430,8 @@ type View = {
   readonly turn?: string | undefined
   readonly step?: string | undefined
   readonly agent?: Agent | undefined
-  readonly shell?: ShellRun | undefined
+  readonly shell?: { readonly id: string; readonly sessionID?: string | undefined; readonly command: string }
+  readonly report?: ShellReport | undefined
 }
 
 const located = (turns: ReadonlyArray<Turn>, view: View) => {
@@ -446,6 +452,12 @@ function Timeline(props: {
   onOpenAgent: (id: Session.ID, title: string, turn: string) => void
 }) {
   const shown = props.turn
+  if (shown && shown.items.length === 0 && !shown.listed)
+    return (
+      <p className="py-2 text-sm text-muted-foreground">
+        {props.live && props.turns.at(-1)?.id === shown.id ? "No steps yet." : "No steps to show in this turn."}
+      </p>
+    )
   if (shown)
     return (
       <Steps
@@ -455,13 +467,12 @@ function Timeline(props: {
         onOpenAgent={(id, title) => props.onOpenAgent(id, title, shown.id)}
       />
     )
-  const worked = props.turns.filter((turn) => turn.items.length > 0)
-  return worked.map((turn, index) => (
+  return props.turns.map((turn, index) => (
     <section key={turn.id} aria-label={turn.prompt || "Ren’s own work"}>
       <TurnHeader turn={turn} onOpen={() => props.onTurn(turn.id)} />
       <Steps
         items={turn.items}
-        closed={!props.live || index < worked.length - 1}
+        closed={!props.live || index < props.turns.length - 1}
         onOpen={props.onStep}
         onOpenAgent={(id, title) => props.onOpenAgent(id, title, turn.id)}
       />
@@ -503,24 +514,36 @@ const agentTrail = (
   ]
 }
 
-// oxlint-disable-next-line ren/no-comments -- Every step Ren took, as one timeline. Opened from the panel it shows the whole chat; opened from a turn it shows that turn, and the trail leads back to the whole chat. A step opens its input and output in place, and a subagent opens its own steps in place.
+type Request = { readonly id: string; readonly turn?: string | undefined; readonly shell?: ShellReport | undefined }
+
+// oxlint-disable-next-line ren/no-comments -- A background command's notice opens Activity on that command, with how it ended.
+const viewOf = (request: Request | undefined): View => {
+  const report = request?.shell
+  return report ? { shell: report, report } : { turn: request?.turn }
+}
+
+// oxlint-disable-next-line ren/no-comments -- Every step Ren took, as one timeline. Opened from the panel, it shows the whole chat. Opened from a turn, it shows that turn, and the trail leads back to the whole chat. A step opens its input and output in place, and a subagent opens its own steps in place.
 export function ActivityTab(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
-  request?: { readonly id: string; readonly turn?: string | undefined } | undefined
+  request?: Request | undefined
   running: boolean
 }) {
-  const [view, setView] = useState<View>({ turn: props.request?.turn })
+  const [view, setView] = useState<View>(() => viewOf(props.request))
   const [handled, setHandled] = useState(props.request?.id)
   if (props.request && props.request.id !== handled) {
     setHandled(props.request.id)
-    setView({ turn: props.request.turn })
+    setView(viewOf(props.request))
   }
   const go = (next: View) => setView(next)
   const agent = view.agent
   const shell = view.shell
   const terminal = useTerminalShells(props.root)
-  const turns = turnsOf(props.messages.filter((message) => !terminal.message(message)))
+  const detail = Preference.usePreference(ChatPreferences.timelineDetail)
+  const turns = turnsOf(
+    props.messages.filter((message) => !terminal.message(message)),
+    detail,
+  )
   if (shell)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -528,7 +551,7 @@ export function ActivityTab(props: {
           <Crumbs trail={[all(go), { label: preview(shell.command) }]} />
         </div>
         <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain px-4 py-3">
-          <ShellDetail root={props.root} run={shell} />
+          <ShellDetail root={props.root} shell={shell} report={view.report} />
         </div>
       </div>
     )
@@ -555,6 +578,31 @@ function ActivityList(props: {
   go: (view: View) => void
   running: boolean
 }) {
+  const place = located(props.turns, props.view)
+  const go = props.go
+  return (
+    <WorkProvider
+      root={props.root}
+      tools={place.turn ? toolsOf(place.turn) : undefined}
+      onOpenAgent={(run) => {
+        if (!run.child) return
+        const turn = props.turns.find((each) => toolsOf(each).has(run.tool))
+        go({ agent: { id: run.child, title: run.description, turn: turn?.id } })
+      }}
+      onOpenShell={(run) => go({ shell: run })}
+    >
+      {(listed) => <ActivityBody {...props} listed={listed} />}
+    </WorkProvider>
+  )
+}
+
+function ActivityBody(props: {
+  turns: ReadonlyArray<Turn>
+  view: View
+  go: (view: View) => void
+  running: boolean
+  listed: ReadonlySet<string>
+}) {
   const [pinned, setPinned] = useState(true)
   const list = useRef<HTMLDivElement>(null)
   const view = props.view
@@ -562,12 +610,18 @@ function ActivityList(props: {
   const place = located(props.turns, view)
   const count = props.turns.reduce((total, turn) => total + turn.items.length, 0)
   usePinToEnd(list, { pinned: pinned && !place.step, count })
+  // oxlint-disable-next-line ren/no-comments -- Subagents and background commands show once, in their own lists under the steps. A turn that only started them keeps its header, which leads to its lists.
+  const turns = props.turns.map((turn) => {
+    const items = turn.items.filter((item) => item.kind !== "tool" || !props.listed.has(item.tool.id))
+    return { ...turn, items, listed: turn.items.length - items.length }
+  })
+  const turn = place.turn ? turns.find((each) => each.id === place.turn?.id) : undefined
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-10 shrink-0 items-center border-b px-4">
         <Crumbs trail={trailOf(place, go)} />
       </div>
-      {count === 0 && !place.step ? (
+      {props.turns.length === 0 && !place.step ? (
         <ActivityEmpty />
       ) : (
         <div
@@ -587,24 +641,15 @@ function ActivityList(props: {
             <>
               <div role="log" aria-label="Activity" className="flex flex-col">
                 <Timeline
-                  turns={props.turns}
-                  turn={place.turn}
+                  turns={turns}
+                  turn={turn}
                   live={props.running}
                   onTurn={(id) => go({ turn: id })}
                   onStep={(key) => go({ ...view, step: key })}
-                  onOpenAgent={(id, title, turn) => go({ agent: { id, title, turn } })}
+                  onOpenAgent={(id, title, at) => go({ agent: { id, title, turn: at } })}
                 />
               </div>
-              <WorkSections
-                root={props.root}
-                tools={place.turn ? toolsOf(place.turn) : undefined}
-                onOpenAgent={(run) => {
-                  if (!run.child) return
-                  const turn = props.turns.find((each) => toolsOf(each).has(run.tool))
-                  go({ agent: { id: run.child, title: run.description, turn: turn?.id } })
-                }}
-                onOpenShell={(run) => go({ shell: run })}
-              />
+              <WorkSections className="pt-5" />
             </>
           )}
         </div>

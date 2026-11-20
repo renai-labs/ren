@@ -62,7 +62,8 @@ import { useOpenActivity } from "./open-panel.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { useMentionedApps } from "../../lib/use-app.js"
-import { SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
+import { isShellNotice } from "./chat-view.js"
+import { ShellNoticeStep, SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
 import { TranscriptBlocks } from "./transcript-blocks.js"
 import { revealOnHover } from "./message-actions.js"
 import { useTerminalShells } from "./terminal-shells.js"
@@ -198,6 +199,14 @@ function NoticeRow(props: { messageID: string; context: Context }) {
   if (!message) return null
   if (message.type === "compaction") return <Separator>{TimelineText.compaction(message)}</Separator>
   if (message.type === "model-switched") return <ModelSwitched message={message} context={props.context} />
+  if (isShellNotice(message))
+    return (
+      <Message>
+        <MessageContent>
+          <ShellNoticeStep message={message} />
+        </MessageContent>
+      </Message>
+    )
   const notice = TimelineText.notice(message)
   if (!notice) return null
   return (
