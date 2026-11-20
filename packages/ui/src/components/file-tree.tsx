@@ -14,7 +14,7 @@ const treeClass =
   "h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:var(--card)] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)]"
 
 const focusCSS = `
-[data-item-focused='true']:not(:focus-visible)::before {
+[data-item-focused='true']::before {
   outline: none !important;
 }
 `
