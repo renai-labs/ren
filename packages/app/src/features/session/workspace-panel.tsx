@@ -4,7 +4,6 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconArrowsDiagonal,
   IconArrowsDiagonalMinimize2,
-  IconDeviceDesktop,
   IconFileDiff,
   IconFiles,
   IconLayoutSidebarRight,
@@ -29,13 +28,12 @@ import { FilesTab } from "./workspace-files.js"
 import { WorkspaceProject } from "./workspace-project.js"
 import { ChatWorkspace } from "../../lib/chat-workspace.js"
 import type { Expansion } from "../../lib/use-workspace-files.js"
-import { BrowserTab, ComputerTab } from "./workspace-streams.js"
+import { BrowserTab } from "./workspace-streams.js"
 import { TerminalTab } from "./workspace-terminal.js"
 
-type Kind = "computer" | "browser" | "files" | "changes" | "activity" | "terminal"
+type Kind = "browser" | "files" | "changes" | "activity" | "terminal"
 
 const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; icon: Icon; many?: boolean }> = [
-  { kind: "computer", label: "Computer", description: "Watch and control Ren’s computer", icon: IconDeviceDesktop },
   { kind: "browser", label: "Browser", description: "See the pages Ren opens", icon: IconWorld },
   { kind: "files", label: "Files", description: "Browse files in this workspace", icon: IconFiles },
   { kind: "changes", label: "Changes", description: "See what changed in this workspace", icon: IconFileDiff },
@@ -212,8 +210,6 @@ function TabBody(props: {
           running={props.running}
         />
       )
-    case "computer":
-      return <ComputerTab />
     case "browser":
       return <BrowserTab />
     case "files":
@@ -317,7 +313,7 @@ export function WorkspacePanel(props: {
     if (current?.id === id) setActive(next[Math.min(index, next.length - 1)]?.id)
   }
   return (
-    <aside aria-label="Workspace" className="flex size-full min-w-0 flex-col border-l">
+    <aside aria-label="Workspace" className="flex size-full min-w-0 flex-col">
       <Tabs
         value={current?.id ?? ""}
         onValueChange={(value: string) => setActive(value)}

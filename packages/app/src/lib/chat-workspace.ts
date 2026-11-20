@@ -5,7 +5,7 @@ import { Schema } from "effect"
 import { Platform } from "../platform/platform.js"
 import { Preference } from "./preference.js"
 
-export const Kind = Schema.Literals(["computer", "browser", "files", "changes", "activity", "terminal"])
+export const Kind = Schema.Literals(["browser", "files", "changes", "activity", "terminal"])
 
 const Tab = Schema.Struct({
   id: Schema.String,
