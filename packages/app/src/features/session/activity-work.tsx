@@ -3,14 +3,7 @@ import { TimelineText } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { Shell } from "@ren/schema/shell"
-import {
-  IconAlertCircle,
-  IconCheck,
-  IconChevronDown,
-  IconPlayerStopFilled,
-  IconTerminal2,
-  IconX,
-} from "@tabler/icons-react"
+import { IconAlertCircle, IconChevronDown, IconPlayerStopFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
@@ -21,7 +14,8 @@ import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useNow } from "../../lib/use-now.js"
 import { useShellRun } from "./activity-pill.js"
-import { useWork, type ShellRun, type SubagentRun } from "./chat-view.js"
+import { customAgent, useWork, type ShellRun, type SubagentRun } from "./chat-view.js"
+import { toolIcons } from "./tool-icons.js"
 
 type Bulk = "subagents" | "shells"
 
@@ -241,19 +235,27 @@ function Row(props: {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- A running subagent or command shows a spinner. Otherwise the row shows the kind's icon, red when it failed.
 function agentIcon(run: SubagentRun) {
   if (run.needsInput) return <IconAlertCircle className="size-3.5 text-chart-3" />
   if (run.running) return <Spinner className="size-3.5" />
-  if (run.status === "failed" || run.status === "denied") return <IconX className="size-3.5 text-destructive" />
-  return <IconCheck className="size-3.5" />
+  return (
+    <toolIcons.agent
+      className={cn("size-3.5", (run.status === "failed" || run.status === "denied") && "text-destructive")}
+    />
+  )
 }
 
 function agentDetail(run: SubagentRun) {
-  if (run.needsInput) return `${run.agent} · Needs your input`
-  if (run.running) return run.activity ? `${run.agent} · ${run.activity}` : `${run.agent} · Working`
-  if (run.status === "failed") return `${run.agent} · Failed`
-  if (run.status === "denied") return `${run.agent} · Not allowed`
-  return run.agent
+  const state = (() => {
+    if (run.needsInput) return "Needs your input"
+    if (run.running) return run.activity ?? "Running"
+    if (run.status === "failed") return "Failed"
+    if (run.status === "denied") return "Not allowed"
+    return "Done"
+  })()
+  const agent = customAgent(run.agent)
+  return agent ? `${agent} · ${state}` : state
 }
 
 function AgentRow(props: { run: SubagentRun; now: number; stopping: boolean; onOpen: () => void; onStop: () => void }) {
@@ -292,7 +294,13 @@ function ShellRow(props: {
   const end = ending(run, { stopped: props.stopped })
   return (
     <Row
-      icon={run.running ? <Spinner className="size-3.5" /> : <IconTerminal2 className="size-3.5" />}
+      icon={
+        run.running ? (
+          <Spinner className="size-3.5" />
+        ) : (
+          <toolIcons.command className={cn("size-3.5", end.failed && "text-destructive")} />
+        )
+      }
       title={
         <span dir="ltr" className="font-mono text-xs">
           {run.command}

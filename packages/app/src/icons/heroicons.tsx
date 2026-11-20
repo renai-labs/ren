@@ -204,6 +204,55 @@ function BrainIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- Ren's mark for a command. It draws a shell prompt, >_, with no box around it.
+function PromptIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M3.5 5.5 8 10l-4.5 4.5M10.5 15h6" />
+    </svg>
+  )
+}
+
+export const IconPrompt = wrap(PromptIcon)
+
+const hexNet = [
+  [10, 3],
+  [16.06, 6.5],
+  [16.06, 13.5],
+  [10, 17],
+  [3.94, 13.5],
+  [3.94, 6.5],
+] as const
+
+// oxlint-disable-next-line ren/no-comments -- Ren's mark for an agent or a subagent. It draws a core linked to six helpers. A label makes screen readers announce it.
+function HexNetIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden={props["aria-label"] ? undefined : true} {...props}>
+      <path
+        d={hexNet.map((point) => `M10 10L${point[0]} ${point[1]}`).join("")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        strokeLinecap="round"
+      />
+      <circle cx={10} cy={10} r={2.6} />
+      {hexNet.map((point) => (
+        <circle key={point.join()} cx={point[0]} cy={point[1]} r={1.8} />
+      ))}
+    </svg>
+  )
+}
+
+export const IconAgent = wrap(HexNetIcon)
 export const IconActivity = wrap(ChartBarSquareIcon)
 export const IconAdjustmentsHorizontal = wrap(AdjustmentsHorizontalIcon)
 export const IconAlertCircle = wrap(ExclamationCircleIcon)

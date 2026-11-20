@@ -20,11 +20,11 @@ import {
   IconSelector,
   IconSettings,
   IconShield,
-  IconSparkles,
   IconCpu,
   IconUsers,
   IconWebhook,
 } from "@tabler/icons-react"
+import { IconAgent } from "../icons/heroicons.js"
 import { GitMark } from "../icons/brands.js"
 import {
   DropdownMenu,
@@ -68,7 +68,7 @@ const spaceGroups = [
     id: "agents",
     label: "Agents",
     items: [
-      { value: "agents", label: "Agents", icon: IconSparkles, to: "/spaces/$spaceId/agents" },
+      { value: "agents", label: "Agents", icon: IconAgent, to: "/spaces/$spaceId/agents" },
       { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
       { value: "instructions", label: "Instructions", icon: IconFileText, to: "/spaces/$spaceId/instructions" },
       { value: "memory", label: "Memory", icon: IconBrain, to: "/spaces/$spaceId/memory" },

@@ -7,13 +7,13 @@ import {
   IconCalendarDue,
   IconChevronDown,
   IconCube,
-  IconGhostFilled,
   IconMaximize,
   IconMinimize,
   IconTag,
   IconUserCircle,
   IconX,
 } from "@tabler/icons-react"
+import { IconAgent } from "../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
@@ -244,7 +244,7 @@ function TaskChips(props: {
             label: agent.name,
           })),
         ]}
-        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconGhostFilled />}
+        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconAgent />}
         text={agents.find((agent) => agent.id === props.draft.agentId)?.name ?? "Assignee"}
         muted={props.draft.agentId === "none"}
         onChange={(agentId) => props.onChange({ agentId })}

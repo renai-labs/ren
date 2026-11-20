@@ -1,5 +1,6 @@
 import type { AgentInfo, LabelInfo, SpaceInfo, TaskInfo } from "@ren/client"
-import { IconAntennaBars5, IconCube, IconGhostFilled, IconProgress, IconTag, IconUsers } from "@tabler/icons-react"
+import { IconAntennaBars5, IconCube, IconProgress, IconTag, IconUsers } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { passes, type FilterProperty, type Filters } from "../../components/filter-menu.js"
 import { PriorityIcon, StatusGlyph, priorities, statuses } from "../../components/task-meta.js"
 import type { Member } from "../../lib/use-members.js"
@@ -61,7 +62,7 @@ const propertiesFor = (lookups: TaskLookups): TaskProperty[] => [
     key: "agent",
     label: "Agent",
     any: "Any",
-    icon: IconGhostFilled,
+    icon: IconAgent,
     options: lookups.agents.map((agent) => ({
       value: agent.id,
       label: agent.name,

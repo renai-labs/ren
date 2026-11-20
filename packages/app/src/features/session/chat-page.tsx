@@ -129,7 +129,7 @@ function ChatComposer(props: {
         <ActivityPill
           key={chat.root}
           root={chat.root}
-          items={chat.simple ? chat.activity.filter((item) => !item.blocking) : chat.activity}
+          items={chat.activity.filter((item) => item.type === "subagent" || !(chat.simple && item.blocking))}
           align={chat.backgroundActivity}
           composer={column}
           onOpenChild={chat.openChild}

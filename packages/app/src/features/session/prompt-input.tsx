@@ -22,7 +22,6 @@ import {
   IconFolder,
   IconGitBranch,
   IconMessage,
-  IconMessageChatbot,
   IconQuote,
   IconSubtask,
   IconLoader2,
@@ -78,6 +77,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Drafts } from "../../lib/drafts.js"
 import type { ShellHistory } from "../../lib/use-shell-history.js"
 import { Keyboard } from "../../platform/keyboard.js"
@@ -514,7 +514,7 @@ const categoryIcons = {
   tasks: <IconSubtask />,
   chats: <IconMessage />,
   apps: <IconApps />,
-  agents: <IconMessageChatbot />,
+  agents: <IconAgent />,
   files: <IconFolder />,
   repos: <IconGitBranch />,
 }
@@ -529,7 +529,7 @@ function SuggestionIcon(props: { item: Suggest["items"][number] }) {
   if (item.kind === "file") return <FileIcon name={item.label} />
   if (item.kind === "task") return <IconSubtask />
   if (item.kind === "chat") return <IconMessage />
-  return <IconMessageChatbot />
+  return <IconAgent />
 }
 
 function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (value: string) => void }) {

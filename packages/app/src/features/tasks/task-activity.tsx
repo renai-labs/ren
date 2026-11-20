@@ -11,7 +11,6 @@ import {
   IconCirclePlus,
   IconFlagCheck,
   IconHandStop,
-  IconGhostFilled,
   IconLink,
   IconMessage,
   IconPencil,
@@ -20,6 +19,7 @@ import {
   IconTag,
   IconArrowBackUp,
 } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
@@ -144,7 +144,7 @@ const when = (at: string) => (
 )
 
 function ActorMark(props: { actor: TaskActor; names: Names }) {
-  if (props.actor.agentId) return <IconGhostFilled />
+  if (props.actor.agentId) return <IconAgent />
   const image = props.names.image(props.actor)
   return (
     <Avatar size="sm" className="data-[size=sm]:size-4">
@@ -394,7 +394,7 @@ export function TaskActivity(props: { taskId: string; onOpenSession: (sessionId:
           <Trace>
             <TraceLine>
               <TraceIcon>
-                <IconGhostFilled />
+                <IconAgent />
               </TraceIcon>
               <TraceTitle>Task activity</TraceTitle>
             </TraceLine>

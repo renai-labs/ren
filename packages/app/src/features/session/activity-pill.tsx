@@ -3,7 +3,7 @@ import { Family, ShellOutput, TimelineText } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { Shell } from "@ren/schema/shell"
-import { IconArrowLeft, IconPlayerStopFilled, IconTerminal2 } from "@tabler/icons-react"
+import { IconArrowLeft, IconPlayerStopFilled } from "@tabler/icons-react"
 import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
@@ -12,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import {
@@ -27,6 +28,8 @@ import { cn } from "cn"
 import { errorMessage } from "../../lib/errors.js"
 import { useNow } from "../../lib/use-now.js"
 import { useWhen } from "../../lib/use-when.js"
+import { customAgent } from "./chat-view.js"
+import { toolIcons } from "./tool-icons.js"
 
 export type ActivityAlign = "left" | "center" | "right"
 
@@ -92,6 +95,7 @@ function RowEnd(props: { item: Family.Activity; label: string; now: number; stop
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- Subagents and commands use one row layout. It shows the kind's icon, the label and the timer. The trigger's spinner already shows that they run.
 function Row(props: {
   item: Family.Activity
   now: number
@@ -101,35 +105,35 @@ function Row(props: {
 }) {
   const item = props.item
   const subagent = item.type === "subagent"
+  const Icon = subagent ? toolIcons.agent : toolIcons.command
+  const agent = subagent ? customAgent(item.agent) : undefined
   return (
-    <DropdownMenuGroup>
-      <DropdownMenuItem
-        closeOnClick={subagent && item.id !== undefined}
-        onClick={props.onSelect}
-        onKeyDown={(event) => {
-          if ((event.key !== "Delete" && event.key !== "Backspace") || !stoppable(item)) return
-          event.preventDefault()
-          props.onStop()
-        }}
+    // ast-grep-ignore: require-item-group -- Panel puts each row inside its group
+    <DropdownMenuItem
+      closeOnClick={subagent && item.id !== undefined}
+      onClick={props.onSelect}
+      onKeyDown={(event) => {
+        if ((event.key !== "Delete" && event.key !== "Backspace") || !stoppable(item)) return
+        event.preventDefault()
+        props.onStop()
+      }}
+    >
+      <Icon className="text-muted-foreground" />
+      <span
+        dir={subagent ? undefined : "ltr"}
+        className={cn("min-w-0 flex-1 truncate", !subagent && "font-mono text-xs/5")}
       >
-        {subagent ? <Spinner className="size-3.5" /> : <IconTerminal2 />}
-        {subagent ? (
-          <span className="shrink-0 font-medium">
-            {item.agent ? `${item.agent.slice(0, 1).toUpperCase()}${item.agent.slice(1)}` : "Agent"}
-          </span>
-        ) : null}
-        <span className={cn("min-w-0 flex-1 truncate", subagent ? "text-muted-foreground" : "font-mono text-xs/5")}>
-          {item.label}
-        </span>
-        <RowEnd
-          item={item}
-          label={subagent ? "Interrupt subagent" : "Kill shell command"}
-          now={props.now}
-          stopping={props.stopping}
-          onStop={props.onStop}
-        />
-      </DropdownMenuItem>
-    </DropdownMenuGroup>
+        {item.label || (subagent ? "Subagent" : "Command")}
+      </span>
+      {agent ? <span className="shrink-0 text-xs text-muted-foreground">{agent}</span> : null}
+      <RowEnd
+        item={item}
+        label={subagent ? "Interrupt subagent" : "Stop command"}
+        now={props.now}
+        stopping={props.stopping}
+        onStop={props.onStop}
+      />
+    </DropdownMenuItem>
   )
 }
 
@@ -252,9 +256,17 @@ function Panel(props: {
         onStop={() => props.onStop(shell)}
       />
     )
-  return (
-    <>
-      {props.items.map((item) => (
+  const groups = [
+    { label: "Subagents", items: props.items.filter((item) => item.type === "subagent") },
+    { label: "Commands", items: props.items.filter((item) => item.type === "shell") },
+  ].filter((group) => group.items.length > 0)
+  return groups.map((group) => (
+    <DropdownMenuGroup key={group.label}>
+      <DropdownMenuLabel className="flex gap-1.5">
+        {group.label}
+        <span className="tabular-nums">{group.items.length}</span>
+      </DropdownMenuLabel>
+      {group.items.map((item) => (
         <Row
           key={item.key}
           item={item}
@@ -268,8 +280,8 @@ function Panel(props: {
           onStop={() => props.onStop(item)}
         />
       ))}
-    </>
-  )
+    </DropdownMenuGroup>
+  ))
 }
 
 export function ActivityPill(props: {

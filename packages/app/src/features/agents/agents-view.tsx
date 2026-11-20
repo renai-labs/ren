@@ -3,7 +3,8 @@ import type { AgentInfo } from "@ren/client"
 import { Session } from "@ren/schema/session"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { IconArchive, IconEye, IconGhostFilled, IconPencil, IconPlus } from "@tabler/icons-react"
+import { IconArchive, IconEye, IconPencil, IconPlus } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { toast } from "@ren/ui/sonner"
@@ -35,7 +36,7 @@ function AgentRow(props: { agent: AgentInfo; spaceId: string; model: string; sou
     <TableRow className="relative cursor-pointer">
       <TableCell>
         <span className="flex min-w-0 items-center gap-2.5">
-          <IconGhostFilled className="size-4 shrink-0 text-muted-foreground" />
+          <IconAgent className="size-4 shrink-0 text-muted-foreground" />
           <span className="flex min-w-0 flex-col">
             <Link
               to="/spaces/$spaceId/agents/$agentId"

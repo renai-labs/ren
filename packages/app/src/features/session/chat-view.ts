@@ -133,6 +133,12 @@ const millis = (time: DateTime.Utc) => DateTime.toEpochMillis(time)
 
 const ran = (tool: SessionMessage.Tool) => tool.time.ran ?? tool.time.created
 
+// oxlint-disable-next-line ren/no-comments -- The name of a subagent's agent, shown only for a custom agent. The default agent, general, goes unnamed, and so does a subagent without an agent, which Family.subagent titles "Subagent".
+export const customAgent = (agent: string | undefined) =>
+  agent && !["general", "subagent"].includes(agent.toLowerCase())
+    ? `${agent.slice(0, 1).toUpperCase()}${agent.slice(1)}`
+    : undefined
+
 const runningFirst = <A extends { readonly running: boolean; readonly started: number }>(runs: ReadonlyArray<A>) => [
   ...runs.filter((run) => run.running),
   ...runs.filter((run) => !run.running).toSorted((a, b) => b.started - a.started),
