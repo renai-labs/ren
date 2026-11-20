@@ -11,7 +11,7 @@ import { openBrowserAsync } from "expo-web-browser"
 
 export const serverUrl = process.env.EXPO_PUBLIC_REN_URL ?? "https://api.useren.ai"
 
-export const webUrl = process.env.EXPO_PUBLIC_REN_APP_URL ?? "https://useren.ai/app"
+export const webUrl = process.env.EXPO_PUBLIC_REN_APP_URL ?? "https://useren.ai"
 
 export const openWeb = (path: string) => void openBrowserAsync(new URL(path, `${webUrl}/`).href)
 

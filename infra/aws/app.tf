@@ -48,7 +48,7 @@ resource "aws_cloudfront_function" "app" {
   runtime = "cloudfront-js-2.0"
   publish = true
   code    = <<-EOF
-    var site = ["/demo", "/docs", "/pricing", "/privacy", "/raw", "/terms", "/why"]
+    var site = ["/delete-account", "/demo", "/docs", "/pricing", "/privacy", "/raw", "/terms", "/why"]
     var hint = "ren_signed_in"
 
     function query(querystring) {
