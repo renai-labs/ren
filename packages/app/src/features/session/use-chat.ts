@@ -269,7 +269,7 @@ export function useChat(
     enabled: start?.done !== false,
   })
   const detail = Preference.usePreference(ChatPreferences.timelineDetail)
-  const fold = Preference.usePreference(ChatPreferences.foldTurns)
+  const fold = Preference.usePreference(ChatPreferences.steps) !== "all"
   const backgroundActivity = Preference.usePreference(ChatPreferences.backgroundActivity)
   const view = useView(root, child, detail)
   const state = view.state
@@ -576,7 +576,7 @@ export function useChat(
 export function useSubagentChat(root: Session.ID, child: Session.ID) {
   const me = useMe()
   const detail = Preference.usePreference(ChatPreferences.timelineDetail)
-  const fold = Preference.usePreference(ChatPreferences.foldTurns)
+  const fold = Preference.usePreference(ChatPreferences.steps) !== "all"
   const foldMessages = Preference.usePreference(ChatPreferences.foldMessages)
   const view = useView(root, child, detail)
   const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(child))

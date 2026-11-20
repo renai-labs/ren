@@ -12,7 +12,7 @@ export const timelineWidth = Preference.make(
   "comfortable",
 )
 
-export const foldTurns = Preference.make("chat.fold-turns.v1", Schema.Boolean, true)
+export const steps = Preference.make("chat.steps.v1", Schema.Literals(["panel", "chat", "all"]), "panel")
 
 export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(["steer", "queue"]), "queue")
 

@@ -2,7 +2,6 @@ import { DateTime } from "effect"
 import { flushSync } from "react-dom"
 import {
   startTransition,
-  use,
   useEffect,
   useEffectEvent,
   useImperativeHandle,
@@ -59,7 +58,7 @@ import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
 import { MessagesSpinner } from "../../components/chat-skeleton.js"
 import { LiveActivity, type LiveLine } from "./live-activity.js"
-import { OpenPanel } from "./open-panel.js"
+import { useOpenActivity } from "./open-panel.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
 import { useMentionedApps } from "../../lib/use-app.js"
@@ -337,14 +336,14 @@ function AnswerBlock(props: {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- In the one-line timeline a finished turn's "Worked for" opens that turn in Activity; with more detail it expands in place.
+// oxlint-disable-next-line ren/no-comments -- In the one-line timeline a turn's "Worked for" opens that turn in Activity when the person chose the side panel. Otherwise it expands in place.
 function TurnSteps(props: {
   block: Extract<TranscriptBlocks.Block, { kind: "steps" }>
   folded: boolean
   simple: boolean
   workedFor: string | undefined
 }) {
-  const openPanel = use(OpenPanel)
+  const openPanel = useOpenActivity()
   const turn = props.block.turn
   return (
     <Message>
@@ -371,7 +370,6 @@ function BlockView(props: {
   context: Context
   editing: string | undefined
   onEditing: (id: string | undefined) => void
-  activeTurn: string | undefined
   copyOf: (turn: string, key: string) => string | undefined
   workedFor: (turn: string) => string | undefined
 }) {
@@ -390,7 +388,7 @@ function BlockView(props: {
     return (
       <TurnSteps
         block={block}
-        folded={props.transcript.fold && props.activeTurn !== block.turn}
+        folded={props.transcript.fold}
         simple={props.transcript.simple === true}
         workedFor={props.workedFor(block.turn)}
       />
@@ -523,7 +521,7 @@ function TurnLine(props: {
   transcript: TranscriptProps
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
 }) {
-  const openPanel = use(OpenPanel)
+  const openPanel = useOpenActivity()
   const transcript = props.transcript
   const turn = transcript.activeMessageID
   const line = liveLine(transcript, props.turns)
@@ -1018,7 +1016,6 @@ function TranscriptScroller(input: {
                     context={context}
                     editing={editing}
                     onEditing={setEditing}
-                    activeTurn={activeTurn}
                     copyOf={copyOf}
                     workedFor={workedFor}
                   />

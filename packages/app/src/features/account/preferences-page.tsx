@@ -18,6 +18,7 @@ import {
   PasswordDialog,
   ThemePicker,
   timelineWidths,
+  stepPlaces,
 } from "../../components/settings-shared.js"
 import { ChoiceRow, SwitchRow } from "../../components/preference-rows.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -37,7 +38,7 @@ const resettable = [
   AppearancePreferences.codeFont,
   AppearancePreferences.codeSize,
   ChatPreferences.timelineDetail,
-  ChatPreferences.foldTurns,
+  ChatPreferences.steps,
   ChatPreferences.foldMessages,
   ChatPreferences.timelineWidth,
   ChatPreferences.backgroundActivity,
@@ -156,11 +157,12 @@ export function PreferencesPage() {
         <Rows>
           {[
             <TimelineDetailSetting key="detail" />,
-            <SwitchRow
-              key="fold-turns"
-              title="Fold finished turns"
-              description="Collapse the steps into “Worked for…”. With Compact, Quiet or Messages only, a running turn shows one line of what Ren does now."
-              preference={ChatPreferences.foldTurns}
+            <ChoiceRow
+              key="steps"
+              title="Ren’s steps"
+              description="How the chat shows the steps Ren took."
+              preference={ChatPreferences.steps}
+              options={stepPlaces}
             />,
             <SwitchRow key="fold-messages" title="Fold long messages" preference={ChatPreferences.foldMessages} />,
             <ChoiceRow

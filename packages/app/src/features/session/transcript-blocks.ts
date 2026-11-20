@@ -127,7 +127,7 @@ export function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap
   }, [])
 }
 
-// oxlint-disable-next-line ren/no-comments -- A turn folds into one "Worked for", where its work starts: what Ren shows between steps, such as a file or an app to connect, follows it, and the answer comes last. An answer folds in only when Ren worked after it. A notice is not work: an answer cut off and continued after "The previous response was interrupted" stays in the chat.
+// oxlint-disable-next-line ren/no-comments -- A turn folds into one "Worked for" line where its work starts. A running turn folds too, and only its text streams in place. A turn that resumes, as when a background command reports back, folds its new steps into the same line. What Ren shows between steps, such as a file or an app to connect, follows the line, and the answer comes last. An answer folds in only when Ren worked after it. A notice is not work, so an answer that was cut off and continued after "The previous response was interrupted" stays in the chat.
 export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn: string) => boolean; fold: boolean }) {
   if (!options.fold) return blocks
   const groups = new Map<string, Extract<Block, { kind: "steps" }>>()
@@ -141,8 +141,7 @@ export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn:
   return blocks.reduce<Block[]>((grouped, block, index) => {
     if (
       (block.kind !== "steps" && block.kind !== "answer") ||
-      options.live(block.turn) ||
-      (block.kind === "answer" && (lastSteps.get(block.turn) ?? -1) < index)
+      (block.kind === "answer" && (options.live(block.turn) || (lastSteps.get(block.turn) ?? -1) < index))
     ) {
       grouped.push(block)
       return grouped
