@@ -4,7 +4,7 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import type { Session } from "@ren/schema/session"
 import { FileBrowser, OpenFile } from "../../components/file-browser.js"
 import { DriveFileView } from "../../components/file-preview/drive-file-view.js"
-import { useRefreshOn } from "../../lib/use-refresh-on.js"
+import { useRefreshOn, useRevalidate } from "../../lib/use-refresh-on.js"
 import { useWorkspaceFiles, type Expansion } from "../../lib/use-workspace-files.js"
 import { editedPaths } from "./workspace-edits.js"
 import type { FileTarget } from "./workspace-panel.js"
@@ -21,6 +21,7 @@ function ChatFile(props: {
 }) {
   const read = ChatReact.useFile({ root: props.root, path: props.tab.path })
   useRefreshOn(props.edits, read.refresh)
+  useRevalidate(read)
   return (
     <OpenFile
       read={read}

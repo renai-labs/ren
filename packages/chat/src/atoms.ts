@@ -260,7 +260,9 @@ export const make = <R, ER>(options: Options<R, ER>) => {
       return Effect.flatMap(get.result(session(root)), read)
     })
 
-  const folder = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.listFiles(view.path)))
+  const folder = Atom.family((view: PathView) =>
+    workspace(view.root, (opened) => opened.listFiles(view.path)).pipe(Atom.setIdleTTL("5 minutes")),
+  )
 
   const folders = Atom.family((view: FoldersView) =>
     Atom.make(
@@ -289,7 +291,9 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     }),
   )
 
-  const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
+  const file = Atom.family((view: PathView) =>
+    workspace(view.root, (opened) => opened.readFile(view.path)).pipe(Atom.setIdleTTL("5 minutes")),
+  )
 
   const vcs = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.vcs(view.path)))
 

@@ -156,7 +156,7 @@ export function FileView(props: {
         {props.actions}
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{props.meta}</span>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col border-t">
+      <div className="flex min-h-0 flex-1 flex-col">
         {find ? (
           <div className="flex shrink-0 justify-end border-b px-3 py-1.5">
             <FindBar
@@ -179,9 +179,11 @@ export function FileView(props: {
         <div ref={host} tabIndex={-1} className="flex min-h-0 flex-1 flex-col">
           <WorkerPoolContext.Provider value={workerPool()}>
             {lineCount > virtualizeAbove ? (
-              <Virtualizer className="min-h-0 flex-1 overflow-auto overscroll-contain">{file}</Virtualizer>
+              <Virtualizer className="min-h-0 flex-1 scroll-fade-y overflow-auto overscroll-contain">
+                {file}
+              </Virtualizer>
             ) : (
-              <div className="min-h-0 flex-1 overflow-auto overscroll-contain">{file}</div>
+              <div className="min-h-0 flex-1 scroll-fade-y overflow-auto overscroll-contain">{file}</div>
             )}
           </WorkerPoolContext.Provider>
         </div>

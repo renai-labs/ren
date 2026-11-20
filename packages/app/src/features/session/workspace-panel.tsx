@@ -376,8 +376,9 @@ export function WorkspacePanel(props: {
           </Button>
         </div>
         {tabs.length === 0 ? <Launcher onPick={pick} /> : null}
-        {tabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 flex-col">
+        {/* oxlint-disable-next-line ren/no-comments -- Every file tab shares one Files view, so switching files keeps the tree, its scroll and its open folders. */}
+        {[...tabs.filter((tab) => tab.kind !== "files"), ...(current?.kind === "files" ? [current] : [])].map((tab) => (
+          <TabsContent key={tab.kind === "files" ? "files" : tab.id} value={tab.id} className="flex min-h-0 flex-col">
             <TabBody
               tab={tab}
               root={props.root}

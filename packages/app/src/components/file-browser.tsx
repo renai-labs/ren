@@ -4,6 +4,7 @@ import {
   lazy,
   Suspense,
   use,
+  useEffect,
   useRef,
   useState,
   type ComponentProps,
@@ -67,9 +68,10 @@ export interface FileTree {
   readonly base: string
   readonly root: AsyncResult.AsyncResult<{ readonly entries: ReadonlyArray<unknown> }, unknown> | undefined
   readonly paths: ReadonlyArray<string>
-  readonly loaded: ReadonlyArray<string>
+  readonly opened: ReadonlyArray<string>
   readonly gitStatus: ComponentProps<typeof FileExplorer>["gitStatus"]
   readonly setQuery: (query: string) => void
+  readonly prefetch: (path: string) => void
   readonly expand: (path: string) => void
   readonly reveal: (path: string) => void
   readonly refreshFolder: (path: string) => void
@@ -81,7 +83,9 @@ export interface FileRead {
   readonly refresh: () => void
 }
 
-const FileView = lazy(() => import("@ren/ui/file-view").then((module) => ({ default: module.FileView })))
+const loadFileView = () => import("@ren/ui/file-view")
+
+const FileView = lazy(() => loadFileView().then((module) => ({ default: module.FileView })))
 
 export interface Browse {
   readonly root: Session.ID
@@ -146,7 +150,7 @@ function Crumb(props: {
   onFolder: (folder: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const look = "h-6 px-1.5 text-xs font-normal"
+  const look = "h-6 min-w-0 shrink px-1.5 text-xs font-normal"
   if (props.browse)
     return (
       <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -156,11 +160,12 @@ function Crumb(props: {
               variant="ghost"
               size="sm"
               aria-current={props.current ? "page" : undefined}
+              title={props.label}
               className={cn(look, props.current ? "text-foreground" : "text-muted-foreground")}
             />
           }
         >
-          {props.label}
+          <span className="truncate">{props.label}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-80 w-64">
           <Siblings browse={props.browse} path={props.path} onFolder={props.onFolder} close={() => setOpen(false)} />
@@ -170,9 +175,17 @@ function Crumb(props: {
   if (props.current) return <BreadcrumbPage className="truncate">{props.label}</BreadcrumbPage>
   return (
     <BreadcrumbLink
-      render={<Button variant="ghost" size="sm" className={look} onClick={() => props.onFolder(props.path)} />}
+      render={
+        <Button
+          variant="ghost"
+          size="sm"
+          title={props.label}
+          className={look}
+          onClick={() => props.onFolder(props.path)}
+        />
+      }
     >
-      {props.label}
+      <span className="truncate">{props.label}</span>
     </BreadcrumbLink>
   )
 }
@@ -185,7 +198,9 @@ function Crumbs(props: { path: string; browse: Browse | undefined; onFolder: (fo
         {parts.map((part, index) => (
           // oxlint-disable-next-line react/no-array-index-key -- a segment's position in the path is its identity
           <Fragment key={index}>
-            <BreadcrumbItem className="min-w-0 gap-1">
+            <BreadcrumbItem
+              className={cn("min-w-0 gap-1", index < parts.length - 1 && "min-w-8 shrink-10 @max-sm/file-pane:hidden")}
+            >
               <Crumb
                 label={part}
                 path={index === parts.length - 1 ? props.path : `${parts.slice(0, index + 1).join("/")}/`}
@@ -194,7 +209,7 @@ function Crumbs(props: { path: string; browse: Browse | undefined; onFolder: (fo
                 onFolder={props.onFolder}
               />
             </BreadcrumbItem>
-            {index === parts.length - 1 ? null : <BreadcrumbSeparator />}
+            {index === parts.length - 1 ? null : <BreadcrumbSeparator className="@max-sm/file-pane:hidden" />}
           </Fragment>
         ))}
       </BreadcrumbList>
@@ -307,6 +322,22 @@ function ShowTree() {
   )
 }
 
+function FileLoading(props: { path: string; browse: Browse | undefined; onFolder: (folder: string) => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-9 shrink-0 items-center gap-1 px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <ShowTree />
+          <Crumbs path={props.path} browse={props.browse} onFolder={props.onFolder} />
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 animate-in items-center justify-center text-muted-foreground delay-300 duration-200 fade-in-0 fill-mode-backwards motion-reduce:animate-none">
+        <Spinner />
+      </div>
+    </div>
+  )
+}
+
 const truncation = (file: FileSystem.Content) =>
   file.truncated ? `Showing the start of ${formatBytes(file.size)}` : null
 
@@ -332,6 +363,7 @@ export function OpenFile(props: {
           </EmptyHeader>
         </Empty>
       )
+    if (!failure) return <FileLoading path={props.tab.path} browse={props.browse} onFolder={props.onFolder} />
     return (
       <WorkspacePending
         result={read.result}
@@ -408,19 +440,13 @@ function TextFile(props: {
           <OpenIn file={file} onMention={props.onMention} />
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{truncation(file)}</span>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t px-6 py-5">
+        <div className="min-h-0 flex-1 scroll-fade-y overflow-y-auto overscroll-contain px-6 py-5">
           <Markdown className="mx-auto max-w-3xl text-sm/6">{file.content}</Markdown>
         </div>
       </section>
     )
   return (
-    <Suspense
-      fallback={
-        <div className="flex flex-1 items-center justify-center p-6 text-muted-foreground">
-          <Spinner />
-        </div>
-      }
-    >
+    <Suspense fallback={<FileLoading path={file.path} browse={props.browse} onFolder={props.onFolder} />}>
       <FileView
         path={file.path}
         contents={file.content}
@@ -477,8 +503,9 @@ function Tree(props: {
     )
   return (
     <FileExplorer
+      key={tree.base}
       paths={tree.paths}
-      loaded={tree.loaded}
+      opened={tree.opened}
       gitStatus={tree.gitStatus}
       selected={props.selected}
       dragType={Mentions.fileDragType}
@@ -486,6 +513,7 @@ function Tree(props: {
       onSelect={props.onOpen}
       onPin={props.onPin}
       onExpand={tree.expand}
+      onHover={tree.prefetch}
       onQuery={tree.setQuery}
       onRefresh={tree.refresh}
       header={props.header}
@@ -569,8 +597,11 @@ export function FileBrowser(props: {
   const sizeTree = (node: HTMLDivElement | null, next: number) =>
     node?.style.setProperty("--file-tree-width", `clamp(${treeMin}px, ${next}px, calc(100% - ${contentMin}px))`)
   const toggle = { shown, onShownChange: (next: boolean) => setPreference(ChatPreferences.fileTree, next) }
+  useEffect(() => {
+    void loadFileView()
+  }, [])
   return (
-    <div className="flex min-h-0 flex-1 px-2 pb-2">
+    <div className="flex min-h-0 flex-1 px-2 pb-4">
       <div ref={row} className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border bg-card">
         {shown || !props.open ? (
           <div

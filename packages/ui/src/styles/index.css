@@ -212,6 +212,9 @@
   * {
     @apply border-border outline-ring/50;
   }
+  [tabindex="-1"]:focus {
+    outline: none;
+  }
   html {
     @apply font-sans;
     font-feature-settings: "kern", "liga", "calt";

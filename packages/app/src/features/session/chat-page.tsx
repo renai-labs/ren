@@ -286,7 +286,9 @@ const panelMin = 320
 
 const chatMin = 512
 
-const panelSize = (width: number) => `clamp(${panelMin}px, ${width}px, calc(100vw - ${chatMin}px))`
+// oxlint-disable-next-line ren/no-comments -- `cqw` is the chat layout's width, so the sidebar's width doesn't count. `clamp` keeps `panelMin` first, so a layout narrower than `panelMin` plus `chatMin` gives the chat less than `chatMin`.
+const panelSize = (width: number | null) =>
+  `clamp(${panelMin}px, ${width === null ? "min(40vw, 640px)" : `${width}px`}, calc(100cqw - ${chatMin}px))`
 
 function panelWidth(panel: { readonly open: boolean; readonly maximized: boolean }) {
   if (!panel.open) return "w-0"
@@ -327,17 +329,15 @@ export function ChatPage() {
   const width = Preference.usePreference(ChatPreferences.panelWidth)
   const setPreference = Preference.useSetPreference()
   const layout = useRef<HTMLDivElement>(null)
-  const sizePanel = (node: HTMLDivElement | null, next: number | null) => {
-    if (next === null) node?.style.removeProperty("--panel-width")
-    else node?.style.setProperty("--panel-width", panelSize(next))
-  }
+  const sizePanel = (node: HTMLDivElement | null, next: number | null) =>
+    node?.style.setProperty("--panel-width", panelSize(next))
   return (
     <div
       ref={(node) => {
         layout.current = node
         sizePanel(node, width)
       }}
-      className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]"
+      className="@container flex min-h-0 flex-1"
     >
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
         <ChatHeader
@@ -375,7 +375,7 @@ export function ChatPage() {
               side="left"
               width={width ?? undefined}
               min={panelMin}
-              max={() => window.innerWidth - chatMin}
+              max={() => (layout.current?.getBoundingClientRect().width ?? window.innerWidth) - chatMin}
               onResize={(next) => {
                 layout.current?.setAttribute("data-resizing", "")
                 sizePanel(layout.current, next)

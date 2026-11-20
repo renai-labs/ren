@@ -73,6 +73,12 @@ export const useFolders = (root: Session.ID, opened: ReadonlyArray<string>) => {
   }
 }
 
+export const usePrefetchFile = (root: Session.ID) => {
+  const atoms = useAtoms()
+  const registry = useContext(RegistryContext)
+  return useCallback((path: string) => void registry.get(atoms.file({ root, path })), [atoms, registry, root])
+}
+
 export const useFileExists = (view: ChatAtoms.PathView) => useAtomValue(useAtoms().fileExists(view))
 
 export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))

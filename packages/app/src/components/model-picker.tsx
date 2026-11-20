@@ -204,7 +204,7 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
       disabled={props.disabled}
       aria-label={`Choose model, ${props.picker.current.name}`}
       aria-haspopup="dialog"
-      className={cn(chipClass, "max-w-72")}
+      className={cn(chipClass, "max-w-72 shrink")}
       onMouseDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
     >

@@ -12,6 +12,10 @@ const searchDelay = 200
 
 const gitFolder = /(?:^|\/)\.git(?:\/|$)/u
 
+const dependencyFolder = /(?:^|\/)node_modules\/$/u
+
+const aheadLimit = 50
+
 export const ancestorsOf = (path: string) =>
   path
     .split("/")
@@ -64,20 +68,30 @@ export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string
   const expanded = expansion.expanded
   const setExpanded = expansion.setExpanded
   const [query, setQuery] = useState("")
-  const folders = ChatReact.useFolders(root, base ? [base, ...expanded] : expanded)
+  const opened = base ? [base, ...expanded] : expanded
+  const folders = ChatReact.useFolders(root, opened)
+  const ahead = ChatReact.useFolders(
+    root,
+    [base, ...expanded.filter((path) => path.startsWith(base))].flatMap((path) => {
+      const result = folders.results.get(path)
+      return (result ? listedOf(result) : [])
+        .flatMap((entry) => (entry.type === "directory" ? [withSlash(entry.path)] : []))
+        .filter((folder) => !gitFolder.test(folder) && !dependencyFolder.test(folder) && !opened.includes(folder))
+        .slice(0, aheadLimit)
+    }),
+  )
   const found = ChatReact.useFiles({ root, query: useDebouncedValue(query, searchDelay), type: "file" })
   const diff = ChatReact.useVcsDiff({ root, mode: "working", path: base })
+  const prefetchFile = ChatReact.usePrefetchFile(root)
   const results = [...folders.results]
+  const listed = [...results, ...ahead.results]
   const hits = query && AsyncResult.isSuccess(found) ? found.value.filter((entry) => entry.type === "file") : []
   const inside = (path: string) => path.startsWith(base) && path !== base && !gitFolder.test(path)
   const paths = [
-    ...new Set([...pathsOf(results.map(([, result]) => result)), ...hits.flatMap((entry) => lineageOf(entry.path))]),
+    ...new Set([...pathsOf(listed.map(([, result]) => result)), ...hits.flatMap((entry) => lineageOf(entry.path))]),
   ]
     .filter(inside)
     .map((path) => path.slice(base.length))
-  const loaded = results.flatMap(([path, result]) =>
-    inside(path) && Option.isSome(AsyncResult.value(result)) ? [path.slice(base.length)] : [],
-  )
   const gitStatus = AsyncResult.isSuccess(diff.result)
     ? diff.result.value.map((file) => ({ path: file.file, status: file.status }))
     : []
@@ -91,9 +105,10 @@ export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string
     topFolders: top ? listedOf(top).filter((entry) => entry.type === "directory").length : 0,
     root: folders.results.get(base),
     paths,
-    loaded,
+    opened: expanded.filter(inside).map((path) => path.slice(base.length)),
     gitStatus,
     setQuery,
+    prefetch: (path: string) => prefetchFile(base + path),
     expand: (path: string) =>
       setExpanded((previous) => (previous.includes(base + path) ? previous : [...previous, base + path])),
     reveal: (path: string) => setExpanded((previous) => revealIn(previous, path)),
