@@ -4,7 +4,7 @@ import { IconSearch, IconTextWrap } from "@tabler/icons-react"
 import { Button } from "#components/button"
 import { FindBar } from "#components/find-bar"
 import { Toggle } from "#components/toggle"
-import { theme, workerPool } from "../lib/worker-pool.js"
+import { preferredHighlighter, theme, workerPool } from "../lib/worker-pool.js"
 
 const virtualizeAbove = 200
 const flashMs = 1500
@@ -88,7 +88,6 @@ const useFind = (host: RefObject<HTMLDivElement | null>, contents: string) => {
 export function FileView(props: {
   path: string
   contents: string
-  highlight: boolean
   theme: "system" | "light" | "dark"
   wrap: boolean
   onWrapChange: (wrap: boolean) => void
@@ -118,10 +117,11 @@ export function FileView(props: {
 
   const file = (
     <File
-      file={{ name: props.path, contents: props.contents, ...(props.highlight ? {} : { lang: "text" as const }) }}
+      file={{ name: props.path, contents: props.contents }}
       selectedLines={flash === undefined ? null : { start: flash, end: flash }}
       options={{
         theme,
+        preferredHighlighter,
         themeType: props.theme,
         overflow: props.wrap ? "wrap" : "scroll",
         disableFileHeader: true,

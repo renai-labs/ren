@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react"
-import type { ReactNode } from "react"
-import type { GrammarState } from "shiki/core"
-import { type Highlighter, loadHighlighter, readyHighlighter } from "../lib/highlighter.js"
-
-type Highlighted = {
-  readonly highlighter: Highlighter | null
-  readonly text: string
-  readonly lines: ReadonlyArray<ReactNode>
-  readonly state?: GrammarState | undefined
-}
+import { type Highlighter, loadHighlighter, readyHighlighter, type Stream } from "../lib/highlighter.js"
 
 export function useHighlightedCode(value: string, language: string) {
   const code = value.endsWith("\n") ? value.slice(0, -1) : value
+  const [stream, setStream] = useState<{ initial: string; highlighter?: Highlighter; lines?: Stream }>({
+    initial: code,
+  })
   const [loaded, setLoaded] = useState<{ language: string; highlighter: Highlighter | null }>()
   const highlighter = loaded?.language === language ? loaded.highlighter : readyHighlighter(language)
 
@@ -28,20 +22,12 @@ export function useHighlightedCode(value: string, language: string) {
     }
   }, [language])
 
-  const [done, setDone] = useState<Highlighted>({ highlighter: null, text: "", lines: [] })
-  const kept: Highlighted =
-    done.highlighter === highlighter && code.startsWith(done.text) ? done : { highlighter, text: "", lines: [] }
-  const end = code.lastIndexOf("\n") + 1
-  const result =
-    highlighter && end > kept.text.length
-      ? highlighter.highlight(code.slice(kept.text.length, end - 1), kept.state)
-      : undefined
-  const next: Highlighted =
-    result && highlighter
-      ? { highlighter, text: code.slice(0, end), lines: [...kept.lines, ...result.lines], state: result.state }
-      : kept
-  if (next !== done) setDone(next)
-
   if (!highlighter) return code.split("\n")
-  return [...next.lines, highlighter.highlight(code.slice(end), next.state).lines[0]]
+  // oxlint-disable-next-line ren/no-comments -- each stream holds its own WebAssembly instance, so only code that changes after the first render gets one.
+  if (code === stream.initial) return highlighter.highlight(code)
+  const lines = stream.highlighter === highlighter ? stream.lines?.(code) : null
+  if (lines) return lines
+  const next = { initial: stream.initial, highlighter, lines: highlighter.stream() }
+  setStream(next)
+  return next.lines(code) ?? code.split("\n")
 }

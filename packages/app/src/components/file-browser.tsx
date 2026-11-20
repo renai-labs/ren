@@ -13,7 +13,15 @@ import { FileTabs, Mentions } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { FileSystem } from "@ren/schema/file-system"
 import type { Session } from "@ren/schema/session"
-import { IconDots, IconFile, IconFileDiff, IconFiles, IconFolder, IconLayoutSidebar } from "@tabler/icons-react"
+import {
+  IconDots,
+  IconFile,
+  IconFileDiff,
+  IconFiles,
+  IconFolder,
+  IconLayoutSidebar,
+  IconMarkdown,
+} from "@tabler/icons-react"
 import { Cause } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
@@ -40,6 +48,7 @@ import { FileExplorer } from "@ren/ui/file-tree"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { ResizeHandle } from "@ren/ui/resize-handle"
 import { Spinner } from "@ren/ui/spinner"
+import { Toggle } from "@ren/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { FileName } from "@ren/util/file-name"
 import { cn } from "cn"
@@ -50,6 +59,7 @@ import { formatBytes } from "../lib/format.js"
 import { useCopy } from "../lib/use-copy.js"
 import { ancestorsOf } from "../lib/use-workspace-files.js"
 import { Platform } from "../platform/platform.js"
+import { Markdown } from "./markdown.js"
 import { Theme } from "./theme.js"
 import { WorkspacePending } from "./workspace-pending.js"
 
@@ -70,8 +80,6 @@ export interface FileRead {
   readonly result: AsyncResult.AsyncResult<FileSystem.Content, unknown>
   readonly refresh: () => void
 }
-
-const highlightLimit = 256 * 1024
 
 const FileView = lazy(() => import("@ren/ui/file-view").then((module) => ({ default: module.FileView })))
 
@@ -309,9 +317,6 @@ export function OpenFile(props: {
   onFolder: (folder: string) => void
   onMention: ((path: string) => void) | undefined
 }) {
-  const platform = Platform.usePlatform()
-  const theme = Theme.useTheme().preference
-  const [wrap, setWrap] = useState(() => ChatPreferences.fileWrap.read(platform.storage))
   const read = props.read
   if (!AsyncResult.isSuccess(read.result)) {
     const failure = AsyncResult.isFailure(read.result) ? Cause.squash(read.result.cause) : undefined
@@ -351,6 +356,64 @@ export function OpenFile(props: {
       </div>
     )
   return (
+    <TextFile
+      key={file.path}
+      file={file}
+      line={props.tab.line}
+      browse={props.browse}
+      onFolder={props.onFolder}
+      onMention={props.onMention}
+    />
+  )
+}
+
+const markdownFile = /\.(?:md|mdx|markdown|mdown|mkd)$/iu
+
+function TextFile(props: {
+  file: FileSystem.Content
+  line: number | undefined
+  browse: Browse | undefined
+  onFolder: (folder: string) => void
+  onMention: ((path: string) => void) | undefined
+}) {
+  const platform = Platform.usePlatform()
+  const theme = Theme.useTheme().preference
+  const [wrap, setWrap] = useState(() => ChatPreferences.fileWrap.read(platform.storage))
+  const [rendered, setRendered] = useState(false)
+  const file = props.file
+  const breadcrumb = (
+    <div className="flex min-w-0 items-center gap-1">
+      <ShowTree />
+      <Crumbs path={file.path} browse={props.browse} onFolder={props.onFolder} />
+    </div>
+  )
+  const markdown = markdownFile.test(file.path)
+  const toggle = markdown ? (
+    <Toggle
+      size="sm"
+      aria-label="Show rendered Markdown"
+      pressed={rendered}
+      onPressedChange={setRendered}
+      className="text-muted-foreground"
+    >
+      <IconMarkdown />
+    </Toggle>
+  ) : null
+  if (markdown && rendered)
+    return (
+      <section aria-label="File viewer" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex h-9 shrink-0 items-center gap-1 px-3">
+          <div className="min-w-0 flex-1">{breadcrumb}</div>
+          {toggle}
+          <OpenIn file={file} onMention={props.onMention} />
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{truncation(file)}</span>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t px-6 py-5">
+          <Markdown className="mx-auto max-w-3xl text-sm/6">{file.content}</Markdown>
+        </div>
+      </section>
+    )
+  return (
     <Suspense
       fallback={
         <div className="flex flex-1 items-center justify-center p-6 text-muted-foreground">
@@ -361,22 +424,21 @@ export function OpenFile(props: {
       <FileView
         path={file.path}
         contents={file.content}
-        highlight={file.size <= highlightLimit}
         theme={theme}
         wrap={wrap}
         onWrapChange={(next) => {
           setWrap(next)
           ChatPreferences.fileWrap.write(platform.storage, next)
         }}
-        line={props.tab.line}
-        breadcrumb={
-          <div className="flex min-w-0 items-center gap-1">
-            <ShowTree />
-            <Crumbs path={file.path} browse={props.browse} onFolder={props.onFolder} />
-          </div>
-        }
+        line={props.line}
+        breadcrumb={breadcrumb}
         meta={truncation(file)}
-        actions={<OpenIn file={file} onMention={props.onMention} />}
+        actions={
+          <>
+            {toggle}
+            <OpenIn file={file} onMention={props.onMention} />
+          </>
+        }
       />
     </Suspense>
   )
