@@ -30,7 +30,7 @@ export const actions = {
 }
 
 export const isReady = (task: typeof Database.Schema.task) => sql<boolean>`(
-  ${task.status} in ('todo', 'in_progress')
+  ${task.status} in ('backlog', 'todo', 'in_progress')
   and ${task.agent_id} is null
   and ${task.human_review} = false
   and (

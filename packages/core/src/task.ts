@@ -78,6 +78,8 @@ const actions = {
 
 const closed: ReadonlySet<Task.Status> = new Set(["done", "dismissed"])
 
+const notStarted = (status: Task.Status) => status === "backlog" || status === "todo"
+
 const reminder = {
   description: "Reminder: hand off the task",
   source: "task",
@@ -273,7 +275,7 @@ export const layer = Layer.effect(
           const row = options.once
             ? yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
             : yield* TaskQueries.find(transaction, access, actor, where, actions.start)
-          if (options.once && row.task.status !== "todo")
+          if (options.once && !notStarted(row.task.status))
             return yield* new Primitive.Conflict({ message: "This task already started." })
           const factory = yield* TaskFactory.read(transaction, row.task.space_id)
           const history = yield* TaskFactory.history(transaction, row.task.id)
@@ -294,7 +296,7 @@ export const layer = Layer.effect(
       const release = options.once
         ? database.db
             .update(Database.Schema.task)
-            .set({ status: "todo", updated_at: sql`now()` })
+            .set({ status: planned.task.status, updated_at: sql`now()` })
             .where(and(where, eq(Database.Schema.task.status, "in_progress")))
             .pipe(Effect.orDie)
         : Effect.void
@@ -331,18 +333,19 @@ export const layer = Layer.effect(
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const locked = yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
-          const row = options.once ? { ...locked, task: { ...locked.task, status: "todo" as const } } : locked
+          const row = options.once ? { ...locked, task: { ...locked.task, status: planned.task.status } } : locked
+          const from = row.task.status
           if (!planned.plan.sessionId)
             yield* transaction
               .insert(Database.Schema.task_session)
               .values({ task_id: id, session_id: sessionId, agent_id: planned.plan.agentId })
           yield* transaction
             .update(Database.Schema.task)
-            .set({ updated_at: sql`now()`, ...(row.task.status === "todo" && { status: "in_progress" as const }) })
+            .set({ updated_at: sql`now()`, ...(notStarted(from) && { status: "in_progress" as const }) })
             .where(eq(Database.Schema.task.id, id))
           yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
             { _tag: "started", agentId: planned.plan.agentId, sessionId, mode },
-            ...(row.task.status === "todo" ? [{ _tag: "status", from: "todo", to: "in_progress" } as const] : []),
+            ...(notStarted(from) ? [{ _tag: "status", from, to: "in_progress" } as const] : []),
           ])
           return yield* reread(transaction, actor, id)
         }),

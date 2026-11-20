@@ -1,0 +1,1 @@
+ALTER TABLE "task" DROP CONSTRAINT "task_status_check", ADD CONSTRAINT "task_status_check" CHECK ("status" in ('backlog', 'todo', 'in_progress', 'done', 'dismissed'));

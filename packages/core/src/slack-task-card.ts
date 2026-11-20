@@ -47,6 +47,7 @@ export const layerNone = Layer.succeed(Service, Service.of(none))
 export const eventType = "ren_task_card"
 
 const statusText: Readonly<Record<Task.Status, string>> = {
+  backlog: "Backlog",
   todo: "To do",
   in_progress: "In progress",
   done: "Done",
@@ -54,6 +55,7 @@ const statusText: Readonly<Record<Task.Status, string>> = {
 }
 
 const statusColor: Readonly<Record<Task.Status, string>> = {
+  backlog: "gray",
   todo: "gray",
   in_progress: "blue",
   done: "green",

@@ -7041,7 +7041,7 @@
                   "enum": ["true", "false"]
                 }
               ],
-              "description": "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks."
+              "description": "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks: `backlog`, `todo` and `in_progress`."
             },
             "required": false
           },
@@ -27975,8 +27975,8 @@
       },
       "Task.Status": {
         "type": "string",
-        "enum": ["todo", "in_progress", "done", "dismissed"],
-        "description": "The state of the whole task, never of one agent. `todo`: no one started it. `in_progress`: the work started and is not finished; a handoff keeps it. `done`: finished. `dismissed`: no one will do it; it stays readable so that it is not suggested again. Only a person sets `done` or `dismissed`."
+        "enum": ["backlog", "todo", "in_progress", "done", "dismissed"],
+        "description": "The state of the whole task, never of one agent. `backlog`: no one started it, and it is not a priority yet. `todo`: no one started it. `in_progress`: the work started and is not finished; a handoff keeps it. `done`: finished. `dismissed`: no one will do it; it stays readable so that it is not suggested again. Only a person sets `done` or `dismissed`."
       },
       "Task.Subtasks": {
         "type": "object",

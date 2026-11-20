@@ -37,7 +37,7 @@ Open **Tasks** in the sidebar. The **Display** button changes the layout:
   caption="The Board layout shows one column for each project."
 />
 
-**Filter tasks** narrows the list by status, priority, project, assignee, or label. By default, the list shows tasks that are **Todo** or **In progress**. Search finds tasks by text.
+**Filter tasks** narrows the list by status, priority, project, assignee, or label. By default, the list shows tasks that are **Backlog**, **Todo**, or **In progress**. Search finds tasks by text.
 
 ## Create a task
 
@@ -46,7 +46,7 @@ A task needs a title and a space. All other properties are optional:
 | Property                | What it does                                                                       |
 | ----------------------- | ---------------------------------------------------------------------------------- |
 | **Description**         | The details that Ren and your teammates need.                                      |
-| **Status**              | **Todo**, **In progress**, **Done**, or **Dismissed**.                             |
+| **Status**              | **Backlog**, **Todo**, **In progress**, **Done**, or **Dismissed**.                |
 | **Priority**            | **Low**, **Medium**, or **High**.                                                  |
 | **Assignee**            | A person in the space who owns the task.                                           |
 | **Project**             | The project that Ren uses to work on the task. You must set it before work starts. |
@@ -124,7 +124,7 @@ Ren does not start on a task when you create it. Ren also does not start when yo
 - Someone hands the task to a project with the CLI or the API, or asks Ren to do it. See [Hand a task to another project](#hand-a-task-to-another-project).
 - Someone sends a message to Ren in a thread linked to the task. An example is the Slack thread or GitHub pull request that the task came from. Ren continues the task in its project and does not start a separate chat.
 
-Before Ren can work on a task, the task needs a project. It also needs the status **Todo**, **In progress**, or **In review**.
+Before Ren can work on a task, the task needs a project. It also needs the status **Backlog**, **Todo**, or **In progress**.
 
 ## Task details
 

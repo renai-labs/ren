@@ -103,7 +103,7 @@ export const plan = Effect.fnUntraced(function* (
   },
 ) {
   if (!Task.actionable.includes(row.task.status))
-    return yield* new Primitive.Conflict({ message: "Only a task that is todo or in progress can start." })
+    return yield* new Primitive.Conflict({ message: "Only a task that is in backlog, todo or in progress can start." })
   if (!row.task.agent_id)
     return yield* new Primitive.Conflict({ message: "Give the task an agent before you start it." })
   const agent = (yield* transaction
