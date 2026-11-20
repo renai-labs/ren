@@ -21,3 +21,13 @@ export function Logomark(props: { className?: string | undefined; outline?: bool
     </svg>
   )
 }
+
+export function IconRen(props: { className?: string | undefined }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 876 1003" fill="currentColor" aria-hidden className={props.className}>
+      {logomarkPaths.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  )
+}

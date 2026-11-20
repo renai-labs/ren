@@ -68,6 +68,13 @@ describe("activity", () => {
     expect(Activity.of(running("execute", { code: "return 1 + 1" }))).toEqual({ text: "Running code", kind: "command" })
   })
 
+  test("code that calls Ren's own tools reads as Ren", () => {
+    expect(Activity.of(running("execute", { code: "return await tools.ren.task_list({})" }))).toEqual({
+      text: "Listing tasks",
+      kind: "ren",
+    })
+  })
+
   test("a tool name that does not start with a known verb still reads as plain words", () => {
     expect(Activity.of(running("execute", { code: "await tools.notion.page_lookup({})" })).text).toBe(
       "Using page lookup",

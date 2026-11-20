@@ -97,9 +97,6 @@ const humanize = (name: string) => {
   return rest.length ? `${verb} ${rest.join(" ")}` : verb
 }
 
-const call =
-  /\btools\s*(?:\.\s*([A-Za-z0-9_-]+)|\[\s*["'`]([^"'`]+)["'`]\s*\])\s*(?:\.\s*([A-Za-z0-9_]+)|\[\s*["'`]([^"'`]+)["'`]\s*\])\s*\(/u
-
 // oxlint-disable-next-line ren/no-comments -- An app's tools sit under `<app>__<profile>` or `<app>` in Code Mode; `opencode` holds OpenCode's own tools.
 const appOf = (namespace: string) => {
   const app = namespace.split("__").at(0)
@@ -107,12 +104,11 @@ const appOf = (namespace: string) => {
 }
 
 const code = (input: Readonly<Record<string, unknown>>): Line => {
-  const found = call.exec(text(input.code) ?? "")
-  const namespace = found?.at(1) ?? found?.at(2)
-  const name = found?.at(3) ?? found?.at(4)
-  if (!namespace || !name) return { text: "Running code", kind: "command" }
-  const app = appOf(namespace)
-  return { text: humanize(name), kind: "tool", ...(app && { app }) }
+  const found = ToolDisplay.codeCall(input.code)
+  if (!found) return { text: "Running code", kind: "command" }
+  if (found.namespace === "ren") return { text: ToolDisplay.renAction(found.name) ?? humanize(found.name), kind: "ren" }
+  const app = appOf(found.namespace)
+  return { text: humanize(found.name), kind: "tool", ...(app && { app }) }
 }
 
 const waiting = (step: string) => {

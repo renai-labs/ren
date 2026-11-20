@@ -119,6 +119,17 @@ describe("tool display", () => {
     expect(ToolDisplay.output(tool("read", "completed", {}, { output: "a\r\nb" }))).toBe("a\r\nb")
   })
 
+  test("a Code Mode call to Ren's own tools shows as Ren, named by the tool it calls", () => {
+    const search = tool("execute", "running", { code: 'return await tools.ren.search({ query: "linear" })' })
+    expect(ToolDisplay.kind(search)).toBe("ren")
+    expect(ToolDisplay.name(search)).toBe("Ren")
+    expect(ToolDisplay.label(search)).toBe("Searching catalog")
+    expect(ToolDisplay.label(tool("execute", "completed", { code: 'await tools["ren"].task_list({})' }))).toBe(
+      "Listing tasks",
+    )
+    expect(ToolDisplay.kind(tool("execute", "running", { code: "await tools.github.list_issues({})" }))).toBe("command")
+  })
+
   test("uses the output as the error when execute fails with an ok status", () => {
     expect(
       ToolDisplay.error(tool("execute", "completed", {}, { metadata: { error: true }, output: "TypeError: boom" })),
