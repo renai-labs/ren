@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type RefObject } from "react"
+import { useEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react"
 import { MentionLogo } from "#components/app-mention"
 import { FileIcon } from "#components/file-icon"
 
@@ -23,6 +23,7 @@ export interface MentionMark {
   readonly color: string
   readonly file: boolean
   readonly link?: boolean
+  readonly glyph?: ReactNode
 }
 
 interface Box {
@@ -32,6 +33,18 @@ interface Box {
   readonly height: number
   readonly scroll: number
   readonly style: CSSProperties
+}
+
+function MarkIcon(props: { mark: MentionMark }) {
+  const mark = props.mark
+  if (mark.glyph)
+    return (
+      <span className="absolute top-1/2 left-0 flex size-[1em] -translate-y-1/2 items-center justify-center [&_svg]:size-[0.95em]">
+        {mark.glyph}
+      </span>
+    )
+  if (mark.file) return <FileIcon name={mark.label} className="absolute top-1/2 left-0 size-[1em] -translate-y-1/2" />
+  return <MentionLogo name={mark.label} icon={mark.icon} className="absolute top-1/2 left-0 -translate-y-1/2" />
 }
 
 export function MentionOverlay(props: {
@@ -99,15 +112,7 @@ export function MentionOverlay(props: {
           return node.mark ? (
             <span key={node.key} className="relative" style={{ color: node.mark.color }}>
               <span className="invisible">{node.text.slice(0, node.text.length - node.mark.label.length)}</span>
-              {node.mark.file ? (
-                <FileIcon name={node.mark.label} className="absolute top-1/2 left-0 size-[1em] -translate-y-1/2" />
-              ) : (
-                <MentionLogo
-                  name={node.mark.label}
-                  icon={node.mark.icon}
-                  className="absolute top-1/2 left-0 -translate-y-1/2"
-                />
-              )}
+              <MarkIcon mark={node.mark} />
               {node.mark.label}
             </span>
           ) : (

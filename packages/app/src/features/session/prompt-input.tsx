@@ -25,6 +25,7 @@ import {
   IconMessage,
   IconQuote,
   IconSubtask,
+  IconSparkles,
   IconLoader2,
   IconPaperclip,
   IconPlayerPlay,
@@ -79,6 +80,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
+import { useRoom } from "../../lib/use-room.js"
 import { IconAgent } from "../../icons/heroicons.js"
 import { Drafts } from "../../lib/drafts.js"
 import type { ShellHistory } from "../../lib/use-shell-history.js"
@@ -521,6 +523,16 @@ const categoryIcons = {
   repos: <IconGitBranch />,
 }
 
+// oxlint-disable-next-line ren/no-comments -- A mention shows the same icon in the composer as in the menu it was picked from. Apps and files show their own logo or file type.
+const mentionIcons: Partial<Record<Mentions.Kind, ReactNode>> = {
+  task: <IconSubtask />,
+  chat: <IconMessage />,
+  repository: <IconGitBranch />,
+  agent: <IconAgent />,
+  "ren-agent": <IconAgent />,
+  skill: <IconSparkles />,
+}
+
 function SuggestionIcon(props: { item: Suggest["items"][number] }) {
   const item = props.item
   if (item.kind === "app") return <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
@@ -529,14 +541,18 @@ function SuggestionIcon(props: { item: Suggest["items"][number] }) {
   if (item.kind === "repository") return <IconGitBranch />
   if (item.kind === "folder") return <IconFolder />
   if (item.kind === "file") return <FileIcon name={item.label} />
-  if (item.kind === "task") return <IconSubtask />
-  if (item.kind === "chat") return <IconMessage />
-  return <IconAgent />
+  return mentionIcons[item.kind] ?? <IconAgent />
 }
 
-function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (value: string) => void }) {
+function SuggestionMenu(props: {
+  suggest: Suggest
+  anchor: RefObject<HTMLElement | null>
+  below: boolean
+  onChoose: (value: string) => void
+}) {
   const suggest = props.suggest
   const choose = props.onChoose
+  const room = useRoom(props.anchor, { open: suggest.open, prefer: props.below ? "below" : "above", want: 304 })
   if (!suggest.open) return null
   const listed = [...new Set(suggest.items.map((item) => item.group))].map((heading) => ({
     heading,
@@ -547,11 +563,13 @@ function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (va
       value={suggest.active ?? ""}
       shouldFilter={false}
       className={cn(
-        "absolute inset-x-0 z-20 h-auto w-full rounded-xl bg-popover shadow-overlay",
-        props.below ? "top-full mt-2" : "bottom-full mb-2",
+        "absolute inset-x-0 z-20 flex h-auto w-full flex-col rounded-xl bg-popover shadow-overlay",
+        (room?.below ?? props.below) ? "top-full mt-2" : "bottom-full mb-2",
       )}
+      // oxlint-disable-next-line react/forbid-component-props -- the menu is only as tall as the room its pane leaves it
+      style={room ? { maxHeight: room.height } : undefined}
     >
-      <CommandList className="max-h-72" label={suggest.label}>
+      <CommandList className="max-h-72 min-h-0 flex-1" label={suggest.label}>
         {suggest.searching && listed.length === 0 ? (
           <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
             <Spinner aria-hidden className="size-3" />
@@ -703,7 +721,7 @@ const textareaClass = (layout: { home: boolean; marked: boolean; shell: boolean 
   cn(
     "px-4 pt-4 leading-relaxed",
     layout.home ? "max-h-80 min-h-24" : "max-h-60 min-h-16",
-    layout.marked && "text-transparent caret-foreground",
+    layout.marked && "text-transparent caret-foreground selection:text-transparent",
     layout.shell && "pl-9 font-mono",
   )
 
@@ -989,9 +1007,10 @@ export function PromptInput(props: {
   const artifact = props.artifact
   const ranges = Artifacts.mentionRanges(text, artifact)
   const mentioned = [
-    ...(suggest?.marks(text) ?? []).filter(
-      (mark) => !ranges.some((range) => mark.start < range.end && mark.end > range.start),
-    ),
+    ...(suggest?.marks(text) ?? [])
+      .filter((mark) => !ranges.some((range) => mark.start < range.end && mark.end > range.start))
+      // oxlint-disable-next-line oxc/no-map-spread -- a draft has a few marks, and each one gets its kind's icon
+      .map((mark) => ({ ...mark, glyph: mentionIcons[mark.kind] })),
     ...ranges.map((range) => ({
       start: range.start,
       end: range.end,
@@ -1009,7 +1028,7 @@ export function PromptInput(props: {
     Composer.files(draft).length + uploads.uploads.length + Composer.quotes(draft).length + draft.pasted.length > 0
   return (
     <div ref={root} className="relative flex flex-col gap-2">
-      {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
+      {suggest ? <SuggestionMenu suggest={suggest} anchor={root} below={home} onChoose={choose} /> : null}
       <DropOverlay
         title="Drop files to attach"
         detail={`Up to ${Session.maxDriveFiles} files, ${formatBytes(maxFileBytes)} each`}

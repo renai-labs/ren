@@ -61,7 +61,7 @@ export interface Suggest {
       }
     | undefined
   readonly onClose: () => void
-  readonly marks: (text: string) => ReadonlyArray<MentionMark>
+  readonly marks: (text: string) => ReadonlyArray<MentionMark & { readonly kind: Mentions.Kind }>
   readonly mentioned: (text: string) => ReadonlyArray<Composer.MentionedApp>
   readonly unmention: (
     text: string,
@@ -352,6 +352,7 @@ function useSuggestions(input: {
           icon: app?.icon ?? null,
           color: mentionColor,
           file: token.item.kind === "file",
+          kind: token.item.kind,
         }
       }),
     mentioned: (text) => [
