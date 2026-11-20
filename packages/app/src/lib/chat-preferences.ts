@@ -45,8 +45,6 @@ export const homeSpace = Preference.make("chat.home-space.v1", Schema.NullOr(Sch
 
 export const shellHistory = Preference.make("chat.shell-history.v1", Schema.Array(ComposerHistory.Entry), [])
 
-export const modelFavorites = Preference.make("chat.model-favorites.v1", Schema.Array(Schema.String), [])
-
 export const modelRecent = Preference.make("chat.model-recent.v1", Schema.Array(Schema.String), [])
 
 export const panelWidth = Preference.make("chat.panel-width.v1", Schema.NullOr(Schema.Number), null)

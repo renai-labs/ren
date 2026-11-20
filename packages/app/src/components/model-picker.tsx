@@ -1,8 +1,7 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { IconCheck, IconChevronDown, IconChevronRight, IconSearch } from "@tabler/icons-react"
+import { IconCheck, IconChevronDown, IconChevronRight } from "@tabler/icons-react"
 import type { SessionModel as ModelSetting } from "@ren/client"
 import type { SessionModel } from "@ren/schema/session/model"
-import { Dialog, DialogContent, DialogTitle } from "@ren/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,15 +9,15 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
+import { InputGroupButton } from "@ren/ui/input-group"
 import { Popover, PopoverContent } from "@ren/ui/popover"
 import { Separator } from "@ren/ui/separator"
-import { Kbd, KbdGroup } from "@ren/ui/kbd"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
 import { ChatPreferences } from "../lib/chat-preferences.js"
 import { modelKey } from "../lib/format.js"
 import { Preference } from "../lib/preference.js"
+import { PaletteDialog, PaletteEmpty, PaletteHeading } from "./palette.js"
 
 type Choice = SessionModel.Choice
 
@@ -120,24 +119,20 @@ interface Group {
   readonly models: ReadonlyArray<Choice>
 }
 
-// oxlint-disable-next-line ren/no-comments -- Favorites and recent models lead until a search narrows the list, and then leave their vendor's group, so no model is listed twice.
+// oxlint-disable-next-line ren/no-comments -- Recent models lead until a search narrows the list, and then leave their vendor's group, so no model is listed twice.
 const groupsOf = (
   models: ReadonlyArray<Choice>,
-  input: { readonly query: string; readonly favorites: ReadonlyArray<string>; readonly recent: ReadonlyArray<string> },
+  input: { readonly query: string; readonly recent: ReadonlyArray<string> },
 ): ReadonlyArray<Group> => {
   const shown = models.filter((model) => matches(input.query, model)).toSorted((a, b) => a.name.localeCompare(b.name))
   const byKey = new Map(shown.map((model) => [modelKey(model), model]))
   const searching = input.query.trim() !== ""
-  const favorites = searching ? [] : input.favorites.flatMap((key) => byKey.get(key) ?? [])
-  const recent = searching
-    ? []
-    : input.recent.filter((key) => !input.favorites.includes(key)).flatMap((key) => byKey.get(key) ?? [])
-  const listed = new Set([...favorites, ...recent].map(modelKey))
+  const recent = searching ? [] : input.recent.flatMap((key) => byKey.get(key) ?? [])
+  const listed = new Set(recent.map(modelKey))
   const vendors = [...new Set(shown.map(vendorOf))].toSorted(
     (a, b) => vendorRank(a) - vendorRank(b) || vendorName(a).localeCompare(vendorName(b)),
   )
   return [
-    ...(favorites.length ? [{ key: "favorites", title: "Favorites", section: true, models: favorites }] : []),
     ...(recent.length ? [{ key: "recent", title: "Recent", section: true, models: recent }] : []),
     ...vendors.flatMap((vendor) => {
       const own = shown.filter((model) => vendorOf(model) === vendor && !listed.has(modelKey(model)))
@@ -290,14 +285,10 @@ function Details(props: { model: Choice | SessionModel.Info }) {
   )
 }
 
-const apple = /Mac|iPhone|iPad/u.test(navigator.userAgent)
-
 function Flyout(props: {
   row: Row
   anchor: HTMLElement
   staged: string | undefined
-  favorite: boolean
-  onFavorite: () => void
   onPick: (variant: string | undefined) => void
   onEnter: () => void
   onLeave: () => void
@@ -325,14 +316,6 @@ function Flyout(props: {
           </FlyoutItem>
         ))}
         {efforts.length ? <Separator className="my-0.5" /> : null}
-        <FlyoutItem onClick={props.onFavorite}>
-          {props.favorite ? "Unfavorite" : "Favorite"}
-          <KbdGroup>
-            <Kbd>{apple ? "⌘" : "Ctrl"}</Kbd>
-            <Kbd>F</Kbd>
-          </KbdGroup>
-        </FlyoutItem>
-        <Separator className="my-0.5" />
         <Details model={props.row.model} />
       </PopoverContent>
     </Popover>
@@ -385,32 +368,26 @@ function ModelRow(props: {
   )
 }
 
-const mod = (event: KeyboardEvent) => event.metaKey || event.ctrlKey
-
-// oxlint-disable-next-line ren/no-comments -- OpenCode's model palette: the search keeps focus; the arrows move the highlight and left and right step its effort; Enter picks it; Mod+F favorites it; a pause on a row opens its options beside the dialog.
+// oxlint-disable-next-line ren/no-comments -- OpenCode's model palette. The search keeps focus. The up and down arrows move the highlight, and the left and right arrows step its effort. Enter picks it, and a pause on a row opens its options beside the dialog.
 function ModelDialog(props: {
   models: ReadonlyArray<Choice>
   picker: Picker
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const favorites = Preference.usePreference(ChatPreferences.modelFavorites)
   const recent = Preference.usePreference(ChatPreferences.modelRecent)
-  const setPreference = Preference.useSetPreference()
   const [query, setQuery] = useState("")
   const [navigated, setNavigated] = useState(false)
   const [active, setActive] = useState<string>()
   const [staged, setStaged] = useState<Readonly<Record<string, string>>>({})
   const [flyout, setFlyout] = useState<{ readonly row: Row; readonly anchor: HTMLElement }>()
   const list = useRef<HTMLDivElement>(null)
-  const search = useRef<HTMLInputElement>(null)
   const timer = useRef<number>(undefined)
   const keyboard = useRef(false)
   const pending = useRef<HTMLElement>(undefined)
   const pointer = useRef<{ readonly x: number; readonly y: number }>(undefined)
   const groups = groupsOf(props.models, {
     query,
-    favorites,
     recent: [modelKey(props.picker.current), ...recent.filter((key) => key !== modelKey(props.picker.current))],
   })
   const rows = groups.flatMap((group) => group.models.map((model): Row => ({ key: modelKey(model), model, group })))
@@ -426,11 +403,6 @@ function ModelDialog(props: {
     props.picker.pick(row.model, variant ?? effortOf(row.model))
     props.onOpenChange(false)
   }
-  const toggleFavorite = (row: Row) =>
-    setPreference(
-      ChatPreferences.modelFavorites,
-      favorites.includes(row.key) ? favorites.filter((each) => each !== row.key) : [...favorites, row.key],
-    )
   const reveal = (row: Row) =>
     requestAnimationFrame(() => {
       const element = list.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(row.key)}"]`)
@@ -464,11 +436,6 @@ function ModelDialog(props: {
     ArrowLeft: () => (!query || navigated) && step(-1),
   }
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (mod(event) && event.key.toLowerCase() === "f" && current) {
-      event.preventDefault()
-      toggleFavorite(current)
-      return
-    }
     if (keys[event.key]?.(event)) event.preventDefault()
   }
   // oxlint-disable-next-line ren/no-comments -- The options open at once. Only a pointer heading right, toward them, waits a moment before another row takes them, so crossing a row on the way does not.
@@ -503,9 +470,9 @@ function ModelDialog(props: {
     timer.current = window.setTimeout(() => setFlyout(undefined), 150)
   }
   return (
-    <Dialog
+    <PaletteDialog
       open={props.open}
-      onOpenChange={(open: boolean) => {
+      onOpenChange={(open) => {
         if (!open) close()
         if (open) {
           setQuery("")
@@ -514,92 +481,65 @@ function ModelDialog(props: {
         }
         props.onOpenChange(open)
       }}
+      title="Choose model"
+      search={{
+        value: query,
+        label: "Search models",
+        onChange: (value) => {
+          setQuery(value)
+          setNavigated(false)
+          setActive(undefined)
+          close()
+        },
+        onKeyDown,
+      }}
+      className="h-[min(--spacing(120),calc(100dvh-(--spacing(24))))]"
     >
-      <DialogContent
-        showCloseButton={false}
-        initialFocus={search}
-        className="flex h-[min(--spacing(120),calc(100dvh-(--spacing(24))))] flex-col gap-0 overflow-hidden p-0 duration-0 sm:max-w-120"
+      <div
+        ref={list}
+        className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-1 overflow-y-auto overscroll-contain px-1.5 pb-1.5"
+        onScroll={follow}
+        onMouseMove={(event) => {
+          pointer.current = { x: event.clientX, y: event.clientY }
+        }}
+        onMouseLeave={() => {
+          pointer.current = undefined
+          leave()
+        }}
       >
-        <DialogTitle className="sr-only">Choose model</DialogTitle>
-        <div className="flex shrink-0 flex-col gap-1.5 px-1.5 pt-1.5">
-          <InputGroup className="h-7 border-0 bg-transparent shadow-none dark:bg-transparent">
-            <InputGroupAddon className="pl-1.5">
-              <IconSearch />
-            </InputGroupAddon>
-            <InputGroupInput
-              ref={search}
-              value={query}
-              aria-label="Search models"
-              placeholder="Search models"
-              spellCheck={false}
-              autoComplete="off"
-              className="h-7"
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setNavigated(false)
-                setActive(undefined)
-                close()
-              }}
-              onKeyDown={onKeyDown}
-            />
-          </InputGroup>
-          <div aria-hidden className="-mx-1.5 h-px bg-border" />
-        </div>
-        <div
-          ref={list}
-          className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-1 overflow-y-auto overscroll-contain px-1.5 pb-1.5"
-          onScroll={follow}
-          onMouseMove={(event) => {
-            pointer.current = { x: event.clientX, y: event.clientY }
-          }}
-          onMouseLeave={() => {
-            pointer.current = undefined
-            leave()
-          }}
-        >
-          {rows.length === 0 ? (
-            <div className="grid min-h-30 place-items-center text-sm text-muted-foreground">No models found</div>
-          ) : null}
-          {groups.map((group) => (
-            <div key={group.key} className="flex flex-col gap-1">
-              <h3 className="sticky top-0 z-10 -mx-1.5 bg-background pt-4 pr-1.5 pb-0.5 pl-8.5 text-xs/4.5 font-normal text-muted-foreground select-none">
-                {group.title}
-              </h3>
-              {group.models.map((model) => {
-                const row: Row = { key: modelKey(model), model, group }
-                return (
-                  <ModelRow
-                    key={`${group.key}:${row.key}`}
-                    row={row}
-                    query={query}
-                    active={current?.key === row.key && current.group.key === group.key}
-                    selected={props.picker.isCurrent(model)}
-                    effort={effortOf(model)}
-                    onHover={hover}
-                    onPick={() => choose(row)}
-                  />
-                )
-              })}
-            </div>
-          ))}
-        </div>
-        {flyout ? (
-          <Flyout
-            row={flyout.row}
-            anchor={flyout.anchor}
-            staged={effortOf(flyout.row.model)}
-            favorite={favorites.includes(flyout.row.key)}
-            onFavorite={() => {
-              toggleFavorite(flyout.row)
-              close()
-            }}
-            onPick={(variant) => choose(flyout.row, variant)}
-            onEnter={() => window.clearTimeout(timer.current)}
-            onLeave={leave}
-          />
-        ) : null}
-      </DialogContent>
-    </Dialog>
+        {rows.length === 0 ? <PaletteEmpty>No models found</PaletteEmpty> : null}
+        {groups.map((group) => (
+          <div key={group.key} className="flex flex-col gap-1">
+            <PaletteHeading>{group.title}</PaletteHeading>
+            {group.models.map((model) => {
+              const row: Row = { key: modelKey(model), model, group }
+              return (
+                <ModelRow
+                  key={`${group.key}:${row.key}`}
+                  row={row}
+                  query={query}
+                  active={current?.key === row.key && current.group.key === group.key}
+                  selected={props.picker.isCurrent(model)}
+                  effort={effortOf(model)}
+                  onHover={hover}
+                  onPick={() => choose(row)}
+                />
+              )
+            })}
+          </div>
+        ))}
+      </div>
+      {flyout ? (
+        <Flyout
+          row={flyout.row}
+          anchor={flyout.anchor}
+          staged={effortOf(flyout.row.model)}
+          onPick={(variant) => choose(flyout.row, variant)}
+          onEnter={() => window.clearTimeout(timer.current)}
+          onLeave={leave}
+        />
+      ) : null}
+    </PaletteDialog>
   )
 }
 
