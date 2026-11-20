@@ -233,7 +233,7 @@ export const start = async (options: {
         ...TestDrives.config,
         BETTER_AUTH_URL: `http://127.0.0.1:${serverPort}`,
         TRUSTED_ORIGINS: `http://127.0.0.1:${serverPort}`,
-        APP_URL: `http://127.0.0.1:${serverPort}/app`,
+        APP_URL: `http://127.0.0.1:${serverPort}`,
         GOOGLE_CLIENT_ID: "e2e-google-client-id",
         GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
         SIGNUP_MX_CHECK: "false",

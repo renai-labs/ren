@@ -40,7 +40,7 @@
       "env": {
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_REN_URL": "https://api.useren.ai",
-        "EXPO_PUBLIC_REN_APP_URL": "https://useren.ai/app"
+        "EXPO_PUBLIC_REN_APP_URL": "https://useren.ai"
       },
       "android": {
         "buildType": "apk"
@@ -54,7 +54,7 @@
       "env": {
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_REN_URL": "https://api.useren.ai",
-        "EXPO_PUBLIC_REN_APP_URL": "https://useren.ai/app"
+        "EXPO_PUBLIC_REN_APP_URL": "https://useren.ai"
       },
       "android": {
         "buildType": "app-bundle"

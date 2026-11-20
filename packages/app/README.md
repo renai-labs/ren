@@ -23,7 +23,7 @@ The web app is served under `/app/` (Vite `base`, router `basepath`) and calls t
 ## Commands
 
 ```sh
-bun run dev   # serves http://localhost:5173/app/, calls the API at VITE_REN_API_URL (default http://localhost:4000)
+bun run dev   # serves http://localhost:5173/, calls the API at VITE_REN_API_URL (default http://localhost:4000)
 bun run build
 bun run test
 bun typecheck
