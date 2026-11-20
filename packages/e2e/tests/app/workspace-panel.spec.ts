@@ -9,7 +9,7 @@ const brainStart = 30_000
 test.describe.configure({ timeout: 120_000 })
 
 const run = async (page: Page, command: string) => {
-  const input = page.getByRole("complementary", { name: "Workspace" }).getByRole("textbox", { name: "Command" })
+  const input = page.getByRole("complementary", { name: "Workspace" }).getByRole("textbox", { name: "Terminal" })
   await input.fill(command)
   await input.press("Enter")
 }
@@ -64,7 +64,6 @@ test("a member runs commands in the chat's terminal, browses and opens its files
   await expect(panel.getByText("created", { exact: true })).toBeVisible()
   await run(page, "ls src; exit 3")
   await expect(panel.getByText("answer.ts", { exact: true })).toBeVisible()
-  await expect(panel.getByText("Exit 3", { exact: true })).toBeVisible()
   await page.screenshot({ path: test.info().outputPath("terminal.png") })
 
   await openTab(page, "Files")

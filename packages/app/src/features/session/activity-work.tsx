@@ -15,6 +15,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { useNow } from "../../lib/use-now.js"
 import { useShellRun } from "./activity-pill.js"
 import { customAgent, useWork, type ShellRun, type SubagentRun } from "./chat-view.js"
+import { useTerminalShells } from "./terminal-shells.js"
 import { toolIcons } from "./tool-icons.js"
 
 type Bulk = "subagents" | "shells"
@@ -57,9 +58,11 @@ export function WorkSections(props: {
   const stopShell = ChatReact.useAction(props.root, (opened, sessionID: Session.ID, shellID: Shell.ID) =>
     opened.stopShell(sessionID, shellID),
   )
+  const terminal = useTerminalShells(props.root)
   const tools = props.tools
   const subagents = tools ? work.subagents.filter((run) => tools.has(run.tool)) : work.subagents
-  const shells = tools ? work.shells.filter((run) => run.tool !== undefined && tools.has(run.tool)) : work.shells
+  const background = work.shells.filter((run) => !terminal.has({ id: run.id, command: run.command }))
+  const shells = tools ? background.filter((run) => run.tool !== undefined && tools.has(run.tool)) : background
   if (subagents.length === 0 && shells.length === 0) return null
   const stop = (key: string, run: () => Promise<unknown>, failure: string) => {
     if (stopping.has(key)) return Promise.resolve()

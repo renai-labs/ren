@@ -65,6 +65,7 @@ import { useMentionedApps } from "../../lib/use-app.js"
 import { SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
 import { TranscriptBlocks } from "./transcript-blocks.js"
 import { revealOnHover } from "./message-actions.js"
+import { useTerminalShells } from "./terminal-shells.js"
 import { CopyButton, UserMessage, type Person } from "./user-message.js"
 
 export interface TranscriptHandle {
@@ -868,6 +869,7 @@ function TranscriptScroller(input: {
   const follow = input.follow
   const place = input.place
   const scroller = useMessageScroller()
+  const terminal = useTerminalShells(props.view.root)
   const touchY = useRef(0)
   const lastTop = useRef(0)
   const lastHeight = useRef(0)
@@ -889,13 +891,21 @@ function TranscriptScroller(input: {
     },
     toEnd,
   }))
-  const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
+  // oxlint-disable-next-line ren/no-comments -- Commands run in the Terminal tab belong to the terminal. The chat shows no row for them or for their notices, so they never move it.
+  const hidden = new Set(props.messages.filter(terminal.message).map((message) => message.id))
+  const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(
+    props.messages.filter((message) => !hidden.has(message.id)).map((message) => [message.id, message]),
+  )
+  const rows = props.rows.filter(
+    (row) =>
+      !hidden.has(row.userMessageID) && !((row._tag === "Notice" || row._tag === "Shell") && hidden.has(row.messageID)),
+  )
   const context = contextOf(props, byId)
   const turns = context.turns
   const activeTurn = props.busy ? props.activeMessageID : undefined
   const watched = useWatchedTurns(activeTurn)
   const blocks = TranscriptBlocks.withEmptyReplies(
-    TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(props.rows, byId), {
+    TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(rows, byId), {
       live: (turn) => turn === activeTurn,
       fold: props.fold,
     }),

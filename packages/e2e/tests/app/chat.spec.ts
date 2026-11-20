@@ -210,7 +210,7 @@ test("a member opens the terminal and a file and renames the chat with slash com
   await expect(message).toHaveValue("")
   const panel = page.getByRole("complementary", { name: "Workspace" })
   await expect(panel.getByRole("tab", { name: "Terminal", selected: true })).toBeVisible()
-  await expect(panel.getByRole("textbox", { name: "Command" })).toBeFocused()
+  await expect(panel.getByRole("textbox", { name: "Terminal" })).toBeFocused()
 
   await message.fill("/open nope.ts")
   await message.press("Enter")

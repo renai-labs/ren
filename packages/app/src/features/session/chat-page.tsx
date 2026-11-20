@@ -11,6 +11,7 @@ import { ActivityPill } from "./activity-pill.js"
 import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
 import { OpenPanel } from "./open-panel.js"
+import { useTerminalShells } from "./terminal-shells.js"
 import { WorkspacePanel, type PanelRequest, type PanelTarget } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ContextUsage } from "./context-usage.js"
@@ -37,6 +38,11 @@ type Chat = ReturnType<typeof useChat>
 
 function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
+  const terminal = useTerminalShells(chat.root)
+  // oxlint-disable-next-line ren/no-comments -- A command run in the Terminal tab keeps the session busy, but it is not Ren's work, so the chat shows no running turn for it.
+  const terminalOnly =
+    chat.activity.length > 0 &&
+    chat.activity.every((item) => item.type === "shell" && terminal.has({ id: item.id, command: item.label }))
   const keys = useChatKeys()
   const admin = useCanAdminister()
   const find = useFind({
@@ -57,8 +63,8 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         messages={chat.messages}
         rows={chat.rows}
         activeMessageID={chat.activeMessageID}
-        busy={chat.busy}
-        working={chat.working}
+        busy={chat.busy && !terminalOnly}
+        working={chat.working && !terminalOnly}
         starting={chat.starting}
         asking={chat.blocked}
         simple={chat.simple}
@@ -120,6 +126,7 @@ function ChatComposer(props: {
 }) {
   const chat = props.chat
   const column = useRef<HTMLDivElement>(null)
+  const terminal = useTerminalShells(chat.root)
   return (
     <div
       ref={column}
@@ -129,7 +136,11 @@ function ChatComposer(props: {
         <ActivityPill
           key={chat.root}
           root={chat.root}
-          items={chat.activity.filter((item) => item.type === "subagent" || !(chat.simple && item.blocking))}
+          items={chat.activity.filter(
+            (item) =>
+              (item.type === "subagent" || !(chat.simple && item.blocking)) &&
+              !(item.type === "shell" && terminal.has({ id: item.id, command: item.label })),
+          )}
           align={chat.backgroundActivity}
           composer={column}
           onOpenChild={chat.openChild}

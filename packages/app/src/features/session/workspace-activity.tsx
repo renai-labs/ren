@@ -25,6 +25,7 @@ import { useApp } from "../../lib/use-app.js"
 import { usePinToEnd } from "../../lib/use-pin-to-end.js"
 import { ShellDetail, WorkSections } from "./activity-work.js"
 import type { ShellRun } from "./chat-view.js"
+import { useTerminalShells } from "./terminal-shells.js"
 import { SubagentThread } from "./subagent-thread.js"
 import { DiffFile } from "./diff-file.js"
 import { toolIcons } from "./tool-icons.js"
@@ -518,7 +519,8 @@ export function ActivityTab(props: {
   const go = (next: View) => setView(next)
   const agent = view.agent
   const shell = view.shell
-  const turns = turnsOf(props.messages)
+  const terminal = useTerminalShells(props.root)
+  const turns = turnsOf(props.messages.filter((message) => !terminal.message(message)))
   if (shell)
     return (
       <div className="flex min-h-0 flex-1 flex-col">

@@ -18,7 +18,7 @@ test("Ren's reply shows an inline-code path as a chip when the file exists, and 
   await page.getByRole("button", { name: "Open panel", exact: true }).click()
   const panel = page.getByRole("complementary", { name: "Workspace" })
   await panel.getByRole("button", { name: /^Terminal:/ }).click()
-  const command = panel.getByRole("textbox", { name: "Command" })
+  const command = panel.getByRole("textbox", { name: "Terminal" })
   await command.fill("printf '# Notes\\n' > README.md && echo created")
   await command.press("Enter")
   await expect(panel.getByText("created", { exact: true })).toBeVisible()
