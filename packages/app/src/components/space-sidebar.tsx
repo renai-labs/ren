@@ -16,16 +16,16 @@ import {
   IconFolder,
   IconInbox,
   IconKey,
-  IconLayoutGridFilled,
+  IconApps,
   IconLock,
   IconSelector,
   IconSettings,
   IconShield,
-  IconSparkles,
   IconCpu,
   IconUsers,
   IconWebhook,
 } from "@tabler/icons-react"
+import { IconAgent } from "../icons/heroicons.js"
 import { GitMark } from "../icons/brands.js"
 import {
   DropdownMenu,
@@ -68,7 +68,7 @@ const spaceGroups = [
     id: "agents",
     label: "Agents",
     items: [
-      { value: "agents", label: "Agents", icon: IconSparkles, to: "/spaces/$spaceId/agents" },
+      { value: "agents", label: "Agents", icon: IconAgent, to: "/spaces/$spaceId/agents" },
       { value: "factory", label: "Factory", icon: IconBuildingFactory2, to: "/spaces/$spaceId/factory" },
       { value: "instructions", label: "Instructions", icon: IconFileText, to: "/spaces/$spaceId/instructions" },
       { value: "memory", label: "Memory", icon: IconBrain, to: "/spaces/$spaceId/memory" },
@@ -79,7 +79,7 @@ const spaceGroups = [
     id: "connections",
     label: "Connections",
     items: [
-      { value: "apps", label: "Apps", icon: IconLayoutGridFilled, to: "/spaces/$spaceId/apps" },
+      { value: "apps", label: "Apps", icon: IconApps, to: "/spaces/$spaceId/apps" },
       { value: "channels", label: "Channels", icon: IconMessagesFilled, to: "/spaces/$spaceId/channels" },
       { value: "credentials", label: "Secrets", icon: IconKey, to: "/spaces/$spaceId/credentials" },
       { value: "repositories", label: "Repositories", icon: GitMark, to: "/spaces/$spaceId/repositories" },

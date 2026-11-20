@@ -1,17 +1,16 @@
 import { useState, type RefObject } from "react"
-import { Family, ShellOutput, TimelineText } from "@ren/chat"
+import { Family, TimelineText } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { Shell } from "@ren/schema/shell"
-import { IconArrowLeft, IconPlayerStopFilled, IconTerminal2 } from "@tabler/icons-react"
-import { Option } from "effect"
-import { AsyncResult } from "effect/reactivity"
+import { IconArrowLeft, IconPlayerStopFilled } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import {
@@ -27,10 +26,11 @@ import { cn } from "cn"
 import { errorMessage } from "../../lib/errors.js"
 import { useNow } from "../../lib/use-now.js"
 import { useWhen } from "../../lib/use-when.js"
+import { customAgent } from "./chat-view.js"
+import { toolIcons } from "./tool-icons.js"
+import { useShellRun } from "./use-shell-run.js"
 
 export type ActivityAlign = "left" | "center" | "right"
-
-const tailLines = 14
 
 const aligns = { left: "start", center: "center", right: "end" } as const
 
@@ -90,60 +90,36 @@ function Row(props: {
 }) {
   const item = props.item
   const subagent = item.type === "subagent"
+  const Icon = subagent ? toolIcons.agent : toolIcons.command
+  const agent = subagent ? customAgent(item.agent) : undefined
   return (
-    <DropdownMenuGroup>
-      <DropdownMenuItem
-        closeOnClick={subagent && item.id !== undefined}
-        onClick={props.onSelect}
-        onKeyDown={(event) => {
-          if ((event.key !== "Delete" && event.key !== "Backspace") || !Family.stoppable(item)) return
-          event.preventDefault()
-          props.onStop()
-        }}
+    // ast-grep-ignore: require-item-group -- Panel puts each row inside its group
+    <DropdownMenuItem
+      closeOnClick={subagent && item.id !== undefined}
+      onClick={props.onSelect}
+      onKeyDown={(event) => {
+        if ((event.key !== "Delete" && event.key !== "Backspace") || !Family.stoppable(item)) return
+        event.preventDefault()
+        props.onStop()
+      }}
+    >
+      <Icon className="text-muted-foreground" />
+      <span
+        dir={subagent ? undefined : "ltr"}
+        className={cn("min-w-0 flex-1 truncate", !subagent && "font-mono text-xs/5")}
       >
-        {subagent ? <Spinner className="size-3.5" /> : <IconTerminal2 />}
-        {subagent ? (
-          <span className="shrink-0 font-medium">{item.agent ? Family.agentName(item.agent) : "Agent"}</span>
-        ) : null}
-        <span className={cn("min-w-0 flex-1 truncate", subagent ? "text-muted-foreground" : "font-mono text-xs/5")}>
-          {item.label}
-        </span>
-        <RowEnd
-          item={item}
-          label={subagent ? "Interrupt subagent" : "Kill shell command"}
-          now={props.now}
-          stopping={props.stopping}
-          onStop={props.onStop}
-        />
-      </DropdownMenuItem>
-    </DropdownMenuGroup>
+        {item.label || (subagent ? "Subagent" : "Command")}
+      </span>
+      {agent ? <span className="shrink-0 text-xs text-muted-foreground">{agent}</span> : null}
+      <RowEnd
+        item={item}
+        label={subagent ? "Interrupt subagent" : "Stop command"}
+        now={props.now}
+        stopping={props.stopping}
+        onStop={props.onStop}
+      />
+    </DropdownMenuItem>
   )
-}
-
-function ending(shell: Shell.Info | undefined, options: { readonly missing: boolean }) {
-  if (options.missing || shell?.status === "killed") return { text: "Stopped", failed: false }
-  if (shell?.status === "timeout") return { text: "Timed out", failed: true }
-  if (shell?.exit) return { text: `Exited with code ${shell.exit}`, failed: true }
-  return { text: "Exited", failed: false }
-}
-
-function useShellRun(root: Session.ID, item: Family.Activity) {
-  const view = {
-    root,
-    sessionID: Session.ID.make(item.sessionID ?? root),
-    shellID: Shell.ID.make(item.id ?? ""),
-  }
-  const info = ChatReact.useShell(view)
-  const live = ChatReact.useShellRunning(root, view.shellID)
-  const shell = Option.getOrUndefined(AsyncResult.value(info))
-  const missing = AsyncResult.isFailure(info)
-  const running = !missing && (live || !shell || shell.status === "running")
-  const output = AsyncResult.getOrElse(ChatReact.useShellOutput({ ...view, running }), () => "")
-  return {
-    tail: ShellOutput.tail(output, tailLines),
-    end: running ? undefined : ending(shell, { missing }),
-    completed: shell?.time.completed,
-  }
 }
 
 function ShellView(props: {
@@ -234,9 +210,17 @@ function Panel(props: {
         onStop={() => props.onStop(shell)}
       />
     )
-  return (
-    <>
-      {props.items.map((item) => (
+  const groups = [
+    { label: "Subagents", items: props.items.filter((item) => item.type === "subagent") },
+    { label: "Commands", items: props.items.filter((item) => item.type === "shell") },
+  ].filter((group) => group.items.length > 0)
+  return groups.map((group) => (
+    <DropdownMenuGroup key={group.label}>
+      <DropdownMenuLabel className="flex gap-1.5">
+        {group.label}
+        <span className="tabular-nums">{group.items.length}</span>
+      </DropdownMenuLabel>
+      {group.items.map((item) => (
         <Row
           key={item.key}
           item={item}
@@ -250,8 +234,8 @@ function Panel(props: {
           onStop={() => props.onStop(item)}
         />
       ))}
-    </>
-  )
+    </DropdownMenuGroup>
+  ))
 }
 
 export function ActivityPill(props: {

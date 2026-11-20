@@ -24,20 +24,23 @@ function MessageScroller({ className, ...props }: React.ComponentProps<typeof Me
   )
 }
 
+const endSlack = 8
+
 function usePinnedEnd(viewport: React.RefObject<HTMLDivElement | null>, options: { readonly enabled: boolean }) {
   const pinning = React.useEffectEvent(() => options.enabled)
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const element = viewport.current
     const content = element?.querySelector("[data-slot=message-scroller-content]")
     if (!element || !content || typeof ResizeObserver === "undefined") return
     const gap = () => element.scrollHeight - element.scrollTop - element.clientHeight
-    const state = { atEnd: gap() <= 1 }
+    const state = { atEnd: true }
     const onScroll = () => {
-      state.atEnd = gap() <= 1
+      if (element.hasAttribute("data-autoscrolling")) return
+      state.atEnd = gap() <= endSlack
     }
     const observer = new ResizeObserver(() => {
       const spacer = element.querySelector<HTMLElement>("[data-message-scroller-spacer]")
-      if (pinning() && state.atEnd && (spacer?.offsetHeight ?? 0) === 0 && gap() > 1)
+      if (pinning() && state.atEnd && (spacer?.offsetHeight ?? 0) === 0 && gap() > 0.5)
         element.scrollTop = element.scrollHeight
     })
     element.addEventListener("scroll", onScroll, { passive: true })
@@ -67,7 +70,7 @@ function MessageScrollerViewport({
       }}
       data-slot="message-scroller-viewport"
       className={cn(
-        "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain contain-content data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent data-pending-scroll:invisible",
+        "size-full min-h-0 min-w-0 scroll-fade-y scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain contain-content data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent data-pending-scroll:invisible",
         className,
       )}
       {...props}
@@ -108,8 +111,8 @@ function MessageScrollerButton({
   className,
   children,
   render,
-  variant = "secondary",
-  size = "icon-sm",
+  variant = "outline",
+  size = "icon",
   ...props
 }: React.ComponentProps<typeof MessageScrollerPrimitive.Button> &
   Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
@@ -121,7 +124,7 @@ function MessageScrollerButton({
       data-size={size}
       direction={direction}
       className={cn(
-        "absolute inset-s-1/2 -translate-x-1/2 border-border bg-background text-foreground transition-[translate,scale,opacity] duration-200 hover:bg-muted hover:text-foreground data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0 data-[active=false]:duration-400 data-[active=false]:ease-[cubic-bezier(0.7,0,0.84,0)] data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:ease-[cubic-bezier(0.23,1,0.32,1)] data-[direction=end]:bottom-4 data-[direction=end]:data-[active=false]:translate-y-full data-[direction=start]:top-4 data-[direction=start]:data-[active=false]:-translate-y-full rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180",
+        "absolute inset-s-1/2 -translate-x-1/2 rounded-full border-border bg-popover text-muted-foreground shadow-overlay transition-[translate,scale,opacity,color,background-color] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted hover:text-foreground data-[active=false]:pointer-events-none data-[active=false]:scale-90 data-[active=false]:opacity-0 data-[active=false]:duration-150 data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100 data-[active=true]:active:scale-95 data-[direction=end]:bottom-4 data-[direction=end]:data-[active=false]:translate-y-2 data-[direction=start]:top-4 data-[direction=start]:data-[active=false]:-translate-y-2 motion-reduce:transition-[opacity,color,background-color] rtl:translate-x-1/2 data-[direction=start]:[&_svg]:rotate-180",
         className,
       )}
       render={render ?? <Button variant={variant} size={size} />}

@@ -7070,6 +7070,19 @@
             "required": false
           },
           {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Part of the title."
+            },
+            "required": false
+          },
+          {
             "name": "label",
             "in": "query",
             "schema": {

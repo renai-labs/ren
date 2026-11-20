@@ -7,9 +7,26 @@ const themeVariables = [
   "--foreground",
   "--muted",
   "--muted-foreground",
+  "--card",
+  "--card-foreground",
+  "--popover",
+  "--popover-foreground",
+  "--secondary",
+  "--secondary-foreground",
+  "--accent",
+  "--accent-foreground",
+  "--destructive",
   "--border",
+  "--input",
+  "--ring",
   "--primary",
   "--primary-foreground",
+  "--chart-1",
+  "--chart-2",
+  "--chart-3",
+  "--chart-4",
+  "--chart-5",
+  "--chart-6",
   "--radius",
   "--font-sans",
   "--font-mono",
@@ -26,12 +43,14 @@ const decodeFrameMessage = Schema.decodeUnknownOption(FrameMessage)
 export function usePageFrame(options: {
   readonly zoom: number
   readonly onImage: (image: { readonly src: string; readonly alt: string }) => void
+  readonly onHeight?: ((height: number) => void) | undefined
 }) {
   const platform = Platform.usePlatform()
   const [frame, setFrame] = useState<HTMLIFrameElement | null>(null)
   const [ready, setReady] = useState(false)
   const zoom = options.zoom
   const onImage = options.onImage
+  const onHeight = options.onHeight
   useEffect(() => {
     if (!frame) return
     const post = (message: unknown) => frame.contentWindow?.postMessage(message, "*")
@@ -54,6 +73,7 @@ export function usePageFrame(options: {
       }
       if (message.type === "size") {
         frame.style.height = `${message.height}px`
+        onHeight?.(message.height)
         setReady(true)
       }
       if (
@@ -74,6 +94,6 @@ export function usePageFrame(options: {
       theme.disconnect()
       window.removeEventListener("message", received)
     }
-  }, [frame, zoom, onImage, platform])
+  }, [frame, zoom, onImage, onHeight, platform])
   return [setFrame, ready] as const
 }

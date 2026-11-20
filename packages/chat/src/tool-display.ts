@@ -6,7 +6,7 @@ import { PatchFiles } from "./patch-files.js"
 import { TimelineText } from "./timeline-text.js"
 import { ToolState } from "./tool-state.js"
 
-export type Kind = "command" | "file" | "edit" | "search" | "web" | "agent" | "tool"
+export type Kind = "command" | "file" | "edit" | "search" | "web" | "agent" | "ren" | "tool"
 
 export type Status = "running" | "completed" | "failed"
 
@@ -54,6 +54,7 @@ const actions: Readonly<Record<string, string>> = {
   ren_session_list: "Listing sessions",
   ren_session_get: "Reading session",
   ren_session_messages: "Reading messages",
+  ren_task_list: "Listing tasks",
   kernel_manage_browsers: "Managing browser",
   kernel_computer_action: "Using browser",
   kernel_execute_playwright_code: "Running Playwright",
@@ -131,7 +132,7 @@ const kinds: Readonly<Record<string, Kind>> = {
   apply_patch: "edit",
   grep: "search",
   glob: "search",
-  websearch: "search",
+  websearch: "web",
   tool_search: "search",
   webfetch: "web",
   kernel_browser_curl: "web",
@@ -183,7 +184,24 @@ const basename = (value: unknown) => {
 const count = (value: unknown, noun: string) =>
   Array.isArray(value) ? `${value.length} ${value.length === 1 ? noun : `${noun}s`}` : undefined
 
-export const kind = (tool: SessionMessage.Tool): Kind => lookup(kinds, tool.name) ?? "tool"
+const call =
+  /\btools\s*(?:\.\s*([A-Za-z0-9_-]+)|\[\s*["'`]([^"'`]+)["'`]\s*\])\s*(?:\.\s*([A-Za-z0-9_]+)|\[\s*["'`]([^"'`]+)["'`]\s*\])\s*\(/u
+
+export const codeCall = (code: unknown) => {
+  const found = call.exec(text(code) ?? "")
+  const namespace = found?.at(1) ?? found?.at(2)
+  const name = found?.at(3) ?? found?.at(4)
+  return namespace && name ? { namespace, name } : undefined
+}
+
+export const renAction = (name: string) => lookup(actions, `ren_${name}`)
+
+const renCall = (tool: SessionMessage.Tool) => {
+  const found = tool.name === "execute" ? codeCall(ToolState.input(tool).code) : undefined
+  return found?.namespace === "ren" ? found.name : undefined
+}
+
+export const kind = (tool: SessionMessage.Tool): Kind => (renCall(tool) ? "ren" : (lookup(kinds, tool.name) ?? "tool"))
 
 export const status = (tool: SessionMessage.Tool): Status => {
   if (tool.state.status === "streaming" || tool.state.status === "running") return "running"
@@ -196,6 +214,8 @@ export const hidden = (tool: SessionMessage.Tool) =>
   (tool.name === "question" && (tool.state.status === "streaming" || tool.state.status === "running"))
 
 export const label = (tool: SessionMessage.Tool) => {
+  const ren = renCall(tool)
+  if (ren) return renAction(ren) ?? "Using Ren"
   const action = lookup(actions, tool.name) ?? capitalize(tool.name.replaceAll(/[_-]+/g, " "))
   const state = status(tool)
   if (state === "failed") return lookup(failures, tool.name) ?? action
@@ -213,10 +233,10 @@ export const webSearchProvider = (provider: unknown) => {
   return `${lookup(providers, value) ?? capitalize(value)} web search`
 }
 
-export const name = (tool: SessionMessage.Tool) =>
-  tool.name === "websearch"
-    ? webSearchProvider(ToolState.metadata(tool).provider)
-    : (lookup(names, tool.name) ?? tool.name)
+export const name = (tool: SessionMessage.Tool) => {
+  if (tool.name === "websearch") return webSearchProvider(ToolState.metadata(tool).provider)
+  return renCall(tool) ? "Ren" : (lookup(names, tool.name) ?? tool.name)
+}
 
 type Subject = (
   input: Readonly<Record<string, unknown>>,

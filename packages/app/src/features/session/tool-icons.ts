@@ -1,21 +1,24 @@
+import type { ComponentType } from "react"
 import type { ToolDisplay } from "@ren/chat"
 import {
   IconFile,
   IconFilePencil,
   IconFileSearch,
   IconPlug,
-  IconSubtask,
-  IconTerminal2,
-  IconWorldWww,
+  IconPrompt,
+  IconWorld,
   type Icon,
 } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
+import { IconRen } from "../../icons/logomark.js"
 
-export const toolIcons: Record<ToolDisplay.Kind, Icon> = {
-  command: IconTerminal2,
+export const toolIcons: Record<ToolDisplay.Kind, Icon | ComponentType<{ className?: string | undefined }>> = {
+  command: IconPrompt,
   file: IconFile,
   edit: IconFilePencil,
   search: IconFileSearch,
-  web: IconWorldWww,
-  agent: IconSubtask,
+  web: IconWorld,
+  agent: IconAgent,
+  ren: IconRen,
   tool: IconPlug,
 }

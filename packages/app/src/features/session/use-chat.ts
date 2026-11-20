@@ -5,12 +5,13 @@ import {
   ChatState,
   ClientCommand,
   Composer,
-  ModelChoice,
   SessionLive,
   SessionTasks,
   SessionTitle,
+  TimelineDetail,
   type ChatSession,
   type Family,
+  type Mentions,
 } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
@@ -24,6 +25,7 @@ import { toast } from "@ren/ui/sonner"
 import { Preference } from "../../lib/preference.js"
 import type { PromptInputBoot } from "./prompt-input.js"
 import { quoteOf } from "./use-chat-quote.js"
+import { pickModel } from "../../components/model-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useModels } from "../../lib/use-models.js"
@@ -31,6 +33,7 @@ import { useSpaces } from "../../lib/use-spaces.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useComposerSuggestions } from "./use-composer-suggestions.js"
 import { notificationsOf } from "./chat-view.js"
+import { useStartingChat } from "../../lib/chat.js"
 import { Notify } from "../../lib/notify.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Drafts } from "../../lib/drafts.js"
@@ -51,6 +54,7 @@ function useChatSuggestions(input: {
   model: SessionModel.Ref | undefined
   spaceId: string | undefined
   mentions: ReadonlyArray<Composer.MentionedApp>
+  picked: ReadonlyArray<Mentions.Token>
   canChooseModel: boolean
   onChooseModel: () => void
   workspace: WorkspaceCommands | undefined
@@ -84,6 +88,7 @@ function useChatSuggestions(input: {
     root: input.root,
     spaceId: input.spaceId,
     mentions: input.mentions,
+    picked: input.picked,
     commands: input.capabilities?.commands !== false,
     client: {
       "model.choose": input.canChooseModel,
@@ -136,6 +141,35 @@ function bootStatusOf(
     ? { _tag: "Waiting", retryAt: connection.retryAt }
     : { _tag: "Reconnecting" }
 }
+
+const openingOf = (
+  state: ChatState.State,
+  view: { readonly viewed: Session.ID; readonly rows: ReadonlyArray<unknown>; readonly loading: boolean },
+) =>
+  view.loading ||
+  (view.rows.length === 0 && (ChatState.more(state, view.viewed) || ChatState.loadingHistory(state, view.viewed)))
+
+const startupOf = (
+  state: ChatState.State,
+  view: { readonly viewed: Session.ID; readonly rows: ReadonlyArray<unknown>; readonly loading: boolean },
+  input: {
+    readonly boot: PromptInputBoot | { readonly _tag: "Ready" } | undefined
+    readonly statuses: ReadonlyMap<string, ChatState.PendingStatus>
+  },
+) => {
+  const opening = openingOf(state, view)
+  const boot = input.boot?._tag
+  const last = ChatState.messages(state, view.viewed).at(-1)
+  const waiting =
+    boot !== "Failed" &&
+    boot !== "Stopped" &&
+    ((last?.type === "user" && !state.stalled.has(last.id)) || [...input.statuses.values()].includes("starting"))
+  const starting = waiting && (boot === undefined || boot === "Checking" || boot === "Starting")
+  return { opening, waiting, starting, preparing: starting || opening }
+}
+
+const liveTimeline = (options: { readonly fold: boolean; readonly detail: TimelineDetail.Detail }) =>
+  options.fold && TimelineDetail.live(options.detail)
 
 const childOf = (
   options: { readonly child?: string | undefined; readonly onChild?: unknown },
@@ -205,6 +239,7 @@ export function useChat(
   const root = Session.ID.make(params.sessionId)
   const [localChild, setLocalChild] = useState<Session.ID>()
   const child = childOf(options, localChild)
+  const start = useStartingChat(root)
   const stored = useQuery({
     ...api.session.get.queryOptions({ idOrSlug: params.sessionId }),
     ...Seed.fromList<SessionInfo>(
@@ -212,23 +247,22 @@ export function useChat(
       [api.session.list.queryKey(), SessionPages.keys.all()],
       params.sessionId,
     ),
+    enabled: !start.creating,
   })
   const detail = Preference.usePreference(ChatPreferences.timelineDetail)
-  const fold = Preference.usePreference(ChatPreferences.foldTurns)
+  const fold = Preference.usePreference(ChatPreferences.steps) !== "all"
   const backgroundActivity = Preference.usePreference(ChatPreferences.backgroundActivity)
   const view = ChatReact.useView(root, child, detail)
   const state = view.state
   const info = state.info[root]
   const running = ChatState.activity(state, root) === "running"
   const title = SessionTitle.display(info?.title ?? stored.data?.title)
-  const spaceId = stored.data?.spaceId
+  const spaceId = stored.data?.spaceId ?? start.spaceId
   const spaceName = useSpaces().spaceName(spaceId)
   const members = useMembers().members
   const models = ChatReact.useModels(root)
-  const catalog = useModels(root)
+  const catalog = useModels(root, spaceId)
   const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
-  const saved = Preference.usePreference(ChatPreferences.model)
-  const setPreference = Preference.useSetPreference()
   const kept = Drafts.useDraft(Drafts.session(root))
   const draft = kept.draft
   const history = Drafts.useHistory()
@@ -271,15 +305,18 @@ export function useChat(
   Notify.useChatNotifications({ root, title, running, ...notificationsOf(state, root) })
   SessionPages.useLive(api, root, SessionLive.of(state, root))
 
-  const model = ModelChoice.pick(modelList, [saved, info?.model])
+  const chatModel = ChatState.model(state, root)
+  const model = pickModel(modelList, [draft.model, chatModel, catalog.fallback])
+  const switchTo = Composer.switching(draft, chatModel)
   const suggestions = useChatSuggestions({
     root,
     capabilities: info?.capabilities,
     messages: view.messages,
     reverted,
-    model,
+    model: switchTo,
     spaceId,
     mentions: Composer.mentions(draft),
+    picked: Composer.picked(draft),
     canChooseModel: abilities.canChooseModel,
     onChooseModel: () => setPicking(true),
     workspace: options.workspace,
@@ -288,6 +325,7 @@ export function useChat(
     rename,
     apps: () => setAppsOpen(true),
   })
+  const statuses = ChatState.pendingStatuses(state, view.viewed)
   const bootStatus = bootStatusOf(
     { status: connection, retryAt: AsyncResult.getOrElse(view.session.retryAt, () => 0) },
     boot,
@@ -301,6 +339,7 @@ export function useChat(
     viewer: viewerOf(me.user),
     fold,
     detail,
+    simple: liveTimeline({ fold, detail }),
     foldMessages,
     bootStatus,
     blocked,
@@ -314,7 +353,8 @@ export function useChat(
     background: backgroundWork,
     backgroundActivity,
     working: view.working,
-    statuses: ChatState.pendingStatuses(state, view.viewed),
+    ...startupOf(state, view, { boot, statuses }),
+    statuses,
     people: new Map(members.map((member) => [member.id, { name: member.name, image: member.image }])),
     modelNames: new Map(modelList.map((each) => [each.id, each.name])),
     more: ChatState.more(state, view.viewed),
@@ -354,7 +394,7 @@ export function useChat(
     picking,
     setPicking,
     chooseModel: (next: SessionModel.Ref) => {
-      setPreference(ChatPreferences.model, next)
+      kept.update((current) => Composer.withModel(current, next))
     },
     quote: quoteOf({
       child,
@@ -363,7 +403,7 @@ export function useChat(
       canQueue: abilities.canQueue,
       running,
       followUp: ChatPreferences.followUp.read(platform.storage),
-      model,
+      model: switchTo,
       update: kept.update,
       send: (request) => suggestions.run(request, prompt),
     }),
@@ -390,13 +430,13 @@ export function useChat(
         behavior: ChatPreferences.followUp.read(platform.storage),
         alternative: options.alternative,
         queue: abilities.canQueue,
-        current: model,
+        current: chatModel,
       })
       if (!submission) return
       void platform.requestNotifications?.()
       history.prepend(submission.sent)
       setDraft(submission.next)
-      const selection = { delivery: submission.delivery, ...(model && { model }) }
+      const selection = { delivery: submission.delivery, ...(submission.model && { model: submission.model }) }
       void suggestions
         .run({ ...request, id, text, ...selection, files: Composer.files(draft) }, prompt)
         .catch((error: unknown) => {
@@ -412,12 +452,15 @@ export function useChat(
         id: SessionMessage.ID.create(),
         text: `I connected ${app}.`,
         delivery: running ? ChatPreferences.followUp.read(platform.storage) : "steer",
-        ...(model && { model }),
+        ...(switchTo && { model: switchTo }),
       }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
     resend: (text: string) =>
-      void prompt({ id: SessionMessage.ID.create(), text, delivery: "steer", ...(model && { model }) }).catch(
-        (error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }),
-      ),
+      void prompt({
+        id: SessionMessage.ID.create(),
+        text,
+        delivery: "steer",
+        ...(switchTo && { model: switchTo }),
+      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
     retryUnsent: (id: SessionMessage.ID) =>
       void retryMessage(id).catch((error: unknown) =>
         toast.error("Could not send your message", { description: errorMessage(error) }),
@@ -451,7 +494,14 @@ export function useChat(
       setReverting(true)
       const request = Composer.request({ ...Composer.fromMessage(message), text })
       void revert(message.id)
-        .then(() => prompt({ id: SessionMessage.ID.create(), ...request, delivery: "steer", ...(model && { model }) }))
+        .then(() =>
+          prompt({
+            id: SessionMessage.ID.create(),
+            ...request,
+            delivery: "steer",
+            ...(switchTo && { model: switchTo }),
+          }),
+        )
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
         .finally(() => setReverting(false))
     },
@@ -467,7 +517,7 @@ export function useChat(
         (error: unknown) => toast.error("Could not undo the last message", { description: errorMessage(error) }),
       ),
     compact: () =>
-      void compact(model).catch((error: unknown) =>
+      void compact(switchTo).catch((error: unknown) =>
         toast.error("Could not compact the chat", { description: errorMessage(error) }),
       ),
     restore: () =>
@@ -491,5 +541,35 @@ export function useChat(
           },
         },
       ),
+  }
+}
+
+export function useSubagentChat(root: Session.ID, child: Session.ID) {
+  const me = useMe()
+  const detail = Preference.usePreference(ChatPreferences.timelineDetail)
+  const fold = Preference.usePreference(ChatPreferences.steps) !== "all"
+  const foldMessages = Preference.usePreference(ChatPreferences.foldMessages)
+  const view = ChatReact.useView(root, child, detail)
+  const loadMore = ChatReact.useAction(root, (opened) => opened.loadMore(child))
+  return {
+    view: { root, sessionID: child },
+    messages: view.messages,
+    rows: view.rows,
+    activeMessageID: view.projection?.activeMessageID,
+    busy: view.running,
+    working: view.working,
+    statuses: ChatState.pendingStatuses(view.state, child),
+    viewer: viewerOf(me.user),
+    more: ChatState.more(view.state, child),
+    loading: view.loading,
+    loadingHistory: ChatState.loadingHistory(view.state, child),
+    loadMore: () =>
+      void loadMore().catch((error: unknown) =>
+        toast.error("Could not load earlier messages", { description: errorMessage(error) }),
+      ),
+    fold,
+    detail,
+    foldMessages,
+    simple: liveTimeline({ fold, detail }),
   }
 }

@@ -225,6 +225,7 @@ test("an unreadable supported event requests a reread and the stream continues",
         commands: unused,
         findFiles: unused,
         environment: unused,
+        git: unused,
         activate: unused,
         chats: Option.none(),
       })

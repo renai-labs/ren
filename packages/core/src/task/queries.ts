@@ -6,7 +6,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import type { TaskLink } from "@ren/schema/task-link"
-import { and, asc, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { DateTime, Effect, Option } from "effect"
 import { Access } from "../access.js"
@@ -188,6 +188,9 @@ export const byParent = (parentId: Task.ListInput["parentId"]) => {
   if (parentId) return { where: eq(Database.Schema.task.parent_id, parentId), order: asc }
   return { where: undefined, order: desc }
 }
+
+export const search = (text: string | undefined) =>
+  text ? ilike(Database.Schema.task.title, Database.contains(text)) : undefined
 
 export const latestSessions = (transaction: Database.Transaction, taskIds: ReadonlyArray<Task.ID>) =>
   transaction

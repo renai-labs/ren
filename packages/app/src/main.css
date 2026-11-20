@@ -2,6 +2,7 @@
 @import "streamdown/styles.css";
 @import "./components/markdown.css";
 @import "katex/dist/katex.min.css";
+@import "@wterm/react/css" layer(components);
 @source "./**/*.{ts,tsx}";
 @source "../node_modules/streamdown/dist/*.js";
 

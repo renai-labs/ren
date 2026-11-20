@@ -80,4 +80,4 @@ export const usedIn = (profiles: ReadonlyArray<AppProfile>) => {
   return names.size ? [...names].join(", ") : "Not in any space"
 }
 
-export const mentionColor = (app: Pick<CatalogApp, "brandColor"> | undefined) => app?.brandColor ?? "var(--ring)"
+export const mentionColor = "var(--link)"

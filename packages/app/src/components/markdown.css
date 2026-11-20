@@ -1,11 +1,13 @@
 [data-slot="markdown"] {
   overflow-wrap: break-word;
 
-  > div > :first-child {
+  > div > :first-child,
+  > div > div[dir]:first-child > :first-child {
     margin-block-start: 0;
   }
 
-  > div > :last-child {
+  > div > :last-child,
+  > div > div[dir]:last-child > :last-child {
     margin-block-end: 0;
   }
 

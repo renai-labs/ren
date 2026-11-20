@@ -161,7 +161,7 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
             <SheetTitle className="flex items-center gap-1.5 text-lg/7">
               {app.name}
               {app.source === "registry" ? (
-                <IconRosetteDiscountCheckFilled aria-label="From Ren’s registry" className="size-4 text-chart-1" />
+                <IconRosetteDiscountCheckFilled aria-label="From Ren’s registry" className="size-4 text-link" />
               ) : null}
             </SheetTitle>
             <SheetDescription className="leading-5">{app.listing?.body ?? app.description}</SheetDescription>

@@ -65,12 +65,22 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
       setReloaded(true)
       void shown.refetch()
     },
-    bytes: async (signal: AbortSignal) => {
+    bytes: async (signal: AbortSignal, limit?: number) => {
       const found = await queryClient.query(link("inline"))
       // oxlint-disable-next-line no-restricted-globals -- the signed drive link is not a Ren API call and carries no Ren token
       const response = await fetch(found.url, { credentials: "omit", signal })
       if (!response.ok) throw new Error(`UnexpectedStatus: ${response.status}`)
-      return response.arrayBuffer()
+      if (limit === undefined || !response.body) return response.arrayBuffer()
+      const reader = response.body.getReader()
+      type Chunks = ReadonlyArray<Uint8Array<ArrayBuffer>>
+      const read = async (chunks: Chunks, size: number): Promise<Chunks> => {
+        const next = size < limit ? await reader.read() : undefined
+        if (!next || next.done) return chunks
+        return read([...chunks, next.value], size + next.value.byteLength)
+      }
+      const chunks = await read([], 0)
+      void reader.cancel()
+      return (await new Blob([...chunks]).arrayBuffer()).slice(0, limit)
     },
     open: () => {
       if (!inline(file.mime)) {

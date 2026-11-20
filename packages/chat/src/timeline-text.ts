@@ -142,6 +142,18 @@ export const shellError = (message: Pick<SessionMessage.Shell, "status" | "exit"
   return message.status === "exited" && message.exit ? `Exit ${message.exit}` : undefined
 }
 
+export const shellEnd = (shell: {
+  readonly state?: string | undefined
+  readonly exit?: number | undefined
+  readonly timeout?: boolean | undefined
+}) => {
+  if (shell.state === "cancelled") return { text: "Stopped", failed: false }
+  if (shell.timeout) return { text: "Timed out", failed: true }
+  if (shell.exit) return { text: `Exited with code ${shell.exit}`, failed: true }
+  if (shell.state === "error") return { text: "Failed", failed: true }
+  return { text: "Exited", failed: false }
+}
+
 export const mentions = (message: SessionMessage.User) =>
   [...(message.files ?? []), ...(message.agents ?? []), ...(message.skills ?? [])]
     .flatMap((item) => (item.mention ? [{ start: item.mention.start, end: item.mention.end }] : []))

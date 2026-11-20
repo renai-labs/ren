@@ -74,7 +74,7 @@ export const presets = [
   {
     id: "compact",
     label: "Compact",
-    description: "Show subagents separately. Group other activity with details collapsed.",
+    description: "While Ren works, show one line of what it does now. Group finished activity with details collapsed.",
     value: compact,
   },
   {
@@ -125,6 +125,8 @@ export const preset = (value: Detail) =>
       )
     }),
   )
+
+export const live = (value: Detail) => ["compact", "quiet", "text-only"].includes(preset(value)?.id ?? "")
 
 export const category = (content: SessionMessage.Content): Category | undefined => {
   if (content.type === "text") return undefined

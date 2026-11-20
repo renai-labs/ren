@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router"
-import { IconCube, IconEdit, IconFolder, IconLayoutGridFilled, IconSubtask, IconWebhook } from "@tabler/icons-react"
+import { IconCube, IconEdit, IconFolder, IconApps, IconSubtask, IconWebhook } from "@tabler/icons-react"
 import { buttonVariants } from "@ren/ui/button"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -12,7 +12,7 @@ import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 const newChat = { to: "/", label: "New Chat", icon: IconEdit } as const
 const tasks = { to: "/tasks", label: "Tasks", icon: IconSubtask } as const
 const automations = { to: "/automations", label: "Automations", icon: IconWebhook } as const
-const apps = { to: "/apps", label: "Apps", icon: IconLayoutGridFilled } as const
+const apps = { to: "/apps", label: "Apps", icon: IconApps } as const
 const drive = { to: "/drive", label: "Drive", icon: IconFolder } as const
 type Page = typeof newChat | typeof tasks | typeof automations | typeof drive | typeof apps
 

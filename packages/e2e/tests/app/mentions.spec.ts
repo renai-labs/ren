@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Ren } from "@ren/client"
-import { createOrganization, serverURL } from "../lib/servers.js"
+import { Session } from "@ren/schema/session"
+import { appURL, createOrganization, serverURL } from "../lib/servers.js"
 
 test("mentions settings shows live connection states and removes the prototype navigation", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
@@ -44,4 +45,57 @@ test("closing punctuation stays on the line of the app pill it follows", async (
     expect(lines.mark, `width ${width}`).toBeGreaterThan(lines.top)
     expect(lines.mark, `width ${width}`).toBeLessThan(lines.bottom)
   }
+})
+
+test("a member mentions a task and another chat through the @ categories, and the message names both", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
+  const cookie = (await page.request.storageState()).cookies.map((entry) => `${entry.name}=${entry.value}`).join("; ")
+  const ren = Ren.make({ baseUrl: serverURL, headers: { cookie } })
+  const spaceId = (await ren.space.list({ page: 1, pageSize: 25 })).items[0]?.id ?? ""
+  const task = await ren.task.create({ spaceId, title: "Fix the login page" })
+  const other = Session.ID.create()
+  await ren.session.create({ id: other, spaceId })
+
+  await page.goto(`/app/?spaceId=${spaceId}`)
+  const start = page.getByRole("main")
+  const message = start.getByRole("textbox", { name: "Message" })
+  const mentions = page.getByRole("listbox", { name: "Mentions" })
+  await message.pressSequentially("Read @")
+  await expect(mentions.getByRole("option")).toHaveText([
+    /^Tasks/,
+    /^Chats/,
+    /^Apps/,
+    /^Agents/,
+    /^Files/,
+    /^Repositories/,
+  ])
+  await mentions.getByRole("option", { name: /^Tasks/ }).click()
+  await expect(message).toHaveValue("Read @tasks:")
+  await message.press("Backspace")
+  await expect(message).toHaveValue("Read @")
+  await message.press("ArrowRight")
+  await expect(message).toHaveValue("Read @tasks:")
+  await message.pressSequentially("login")
+  await expect(mentions.getByRole("option")).toHaveText([`${task.identifier} Fix the login page`])
+  await message.press("Enter")
+  await expect(message).toHaveValue(`Read @  ${task.identifier} Fix the login page `)
+
+  await message.pressSequentially("and @chats:")
+  await mentions.getByRole("option", { name: "New chat" }).click()
+  await expect(message).toHaveValue(`Read @  ${task.identifier} Fix the login page and @  New chat `)
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: 30_000 })
+  const sessionId = new URL(page.url()).pathname.split("/").at(-1) ?? ""
+  await expect
+    .poll(async () => JSON.stringify(await ren.chat.messages({ id: sessionId })), { timeout: 30_000 })
+    .toContain(`Read [${task.identifier} Fix the login page](${appURL}/tasks/${task.id}) and ${other}`)
+
+  await page.goto(`/app/?spaceId=${spaceId}`)
+  await message.pressSequentially("@")
+  await expect(mentions.getByRole("group", { name: "Recent" }).getByRole("option")).toHaveText([
+    "New chat",
+    `${task.identifier} Fix the login page`,
+  ])
 })

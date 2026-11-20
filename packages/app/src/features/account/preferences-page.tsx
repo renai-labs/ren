@@ -19,6 +19,7 @@ import {
   PasswordDialog,
   ThemePicker,
   timelineWidths,
+  stepPlaces,
 } from "../../components/settings-shared.js"
 import { ChoiceRow, SwitchRow } from "../../components/preference-rows.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -28,15 +29,17 @@ import { TimeZonePicker } from "../../components/time-zone-picker.js"
 import { AppearancePreferences } from "../../lib/appearance-preferences.js"
 import { TimelineDetailSetting } from "./timeline-detail-setting.js"
 import { TypographySection } from "./typography-section.js"
+import { LayoutSetting } from "./layout-setting.js"
 
 const resettable = [
   AppearancePreferences.theme,
+  AppearancePreferences.layout,
   AppearancePreferences.uiFont,
   AppearancePreferences.uiSize,
   AppearancePreferences.codeFont,
   AppearancePreferences.codeSize,
   ChatPreferences.timelineDetail,
-  ChatPreferences.foldTurns,
+  ChatPreferences.steps,
   ChatPreferences.foldMessages,
   ChatPreferences.timelineWidth,
   ChatPreferences.backgroundActivity,
@@ -162,18 +165,19 @@ export function PreferencesPage() {
         ]}
       </Rows>
       <Section title="Appearance">
-        <Rows>{[<ThemePicker key="theme" />]}</Rows>
+        <Rows>{[<ThemePicker key="theme" />, <LayoutSetting key="layout" />]}</Rows>
       </Section>
       <TypographySection />
       <Section title="Timeline">
         <Rows>
           {[
             <TimelineDetailSetting key="detail" />,
-            <SwitchRow
-              key="fold-turns"
-              title="Fold finished turns"
-              description="Collapse the steps into “Worked for…”."
-              preference={ChatPreferences.foldTurns}
+            <ChoiceRow
+              key="steps"
+              title="Ren’s steps"
+              description="How the chat shows the steps Ren took."
+              preference={ChatPreferences.steps}
+              options={stepPlaces}
             />,
             <SwitchRow key="fold-messages" title="Fold long messages" preference={ChatPreferences.foldMessages} />,
             <ChoiceRow

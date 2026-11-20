@@ -1650,6 +1650,7 @@ export function make(options: ClientOptions) {
               priority: input["priority"],
               agentId: input["agentId"],
               ownerId: input["ownerId"],
+              search: input["search"],
               label: input["label"],
               humanReview: input["humanReview"],
               linkedTo: input["linkedTo"],

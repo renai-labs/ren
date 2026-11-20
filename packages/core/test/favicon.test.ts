@@ -11,14 +11,40 @@ large.set(png)
 
 const requests: Array<string> = []
 
-const routes: Readonly<Record<string, (url: URL) => Response>> = {
+const routes: Readonly<Record<string, (url: URL, request: Request) => Response>> = {
   "ok.example.com": () => new Response(png, { headers: { "content-type": "image/png" } }),
   "vector.example.com": () => new Response(svg, { headers: { "content-type": "image/svg+xml" } }),
   "gone.example.com": () => new Response("no", { status: 404 }),
   "large.example.com": () => new Response(large),
   "moved.example.com": () =>
     new Response(null, { status: 301, headers: { location: "https://ok.example.com/icon.png" } }),
-  "loop.example.com": () => new Response(null, { status: 302, headers: { location: "/favicon.ico" } }),
+  "loop.example.com": (url) =>
+    url.pathname.endsWith("/favicon.ico")
+      ? new Response(null, { status: 302, headers: { location: "/favicon.ico" } })
+      : new Response("no", { status: 404 }),
+  "declared.example.com": (url) => {
+    if (url.pathname === "/declared.example.com/images/favicon.ico")
+      return new Response(png, { headers: { "content-type": "image/x-icon" } })
+    if (url.pathname === "/declared.example.com/")
+      return page(
+        `<link rel="mask-icon" href="/mask.svg"><link rel="shortcut icon" type="image/x-icon" href="/images/favicon.ico"/>`,
+      )
+    return new Response("{}", { status: 404, headers: { "content-type": "application/json" } })
+  },
+  "agents.example.com": (_url, request) =>
+    request.headers.get("user-agent")?.includes("Ren")
+      ? new Response(png, { headers: { "content-type": "image/png" } })
+      : new Response("forbidden", { status: 403 }),
+  "private.example.com": (url) =>
+    url.pathname === "/private.example.com/"
+      ? page(`<link rel="icon" href="https://127.0.0.1/favicon.png">`)
+      : new Response("no", { status: 404 }),
+}
+
+function page(head: string) {
+  return new Response(`<!doctype html><html><head>${head}</head><body></body></html>`, {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  })
 }
 
 const server = Bun.serve({
@@ -27,7 +53,7 @@ const server = Bun.serve({
     const url = new URL(request.url)
     requests.push(url.pathname)
     const host = url.pathname.split("/")[1] ?? ""
-    return routes[host]?.(url) ?? new Response("missing", { status: 404 })
+    return routes[host]?.(url, request) ?? new Response("missing", { status: 404 })
   },
 })
 afterAll(() => server.stop(true))
@@ -85,7 +111,7 @@ describe("Favicon", () => {
     Effect.gen(function* () {
       const favicon = yield* Favicon.Service
       expect(Option.isNone(yield* favicon.read("loop.example.com"))).toBe(true)
-      expect(count("loop.example.com")).toBe(Favicon.maximumRedirects + 1)
+      expect(count("loop.example.com")).toBe(Favicon.maximumRedirects + 2)
     }),
   )
 
@@ -93,8 +119,32 @@ describe("Favicon", () => {
     Effect.gen(function* () {
       const favicon = yield* Favicon.Service
       yield* favicon.read("gone.example.com")
+      const first = count("gone.example.com")
       yield* favicon.read("gone.example.com")
-      expect(count("gone.example.com")).toBe(1)
+      expect(count("gone.example.com")).toBe(first)
+    }),
+  )
+
+  it.effect("names itself, as sites such as Wikipedia refuse a request without a User-Agent", () =>
+    Effect.gen(function* () {
+      const favicon = yield* Favicon.Service
+      expect(Option.isSome(yield* favicon.read("agents.example.com"))).toBe(true)
+    }),
+  )
+
+  it.effect("uses the icon a site's page declares when it has no /favicon.ico", () =>
+    Effect.gen(function* () {
+      const favicon = yield* Favicon.Service
+      const icon = yield* favicon.read("declared.example.com")
+      expect(Option.map(icon, (found) => found.bytes.length)).toEqual(Option.some(png.length))
+    }),
+  )
+
+  it.effect("refuses an icon a page declares on a private host and never requests it", () =>
+    Effect.gen(function* () {
+      const favicon = yield* Favicon.Service
+      expect(Option.isNone(yield* favicon.read("private.example.com"))).toBe(true)
+      expect(count("127.0.0.1")).toBe(0)
     }),
   )
 })

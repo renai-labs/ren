@@ -608,6 +608,7 @@ export const layer = Layer.effect(
           input.priority ? eq(Database.Schema.task.priority, input.priority) : undefined,
           input.agentId ? eq(Database.Schema.task.agent_id, input.agentId) : undefined,
           input.ownerId ? eq(Database.Schema.task.owner_id, input.ownerId) : undefined,
+          TaskQueries.search(input.search),
           Predicate.isBoolean(input.humanReview) ? eq(Database.Schema.task.human_review, input.humanReview) : undefined,
           input.label
             ? sql`exists (

@@ -119,10 +119,11 @@ export interface Chat {
     path: string | undefined,
   ) => Effect.Effect<FileSystem.Page, NotFound | Rejected>
   readonly readFile: (sessionId: Session.ID, path: string) => Effect.Effect<FileSystem.Content, NotFound | Rejected>
-  readonly vcs: (sessionId: Session.ID) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
+  readonly vcs: (sessionId: Session.ID, path: string | undefined) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
+  readonly vcsProjects: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionVcs.Project>, NotFound | Rejected>
   readonly vcsDiff: (
     sessionId: Session.ID,
-    options: { readonly mode: SessionVcs.Mode; readonly context?: number },
+    options: { readonly mode: SessionVcs.Mode; readonly context?: number; readonly path?: string },
   ) => Effect.Effect<ReadonlyArray<SessionInfo.FileDiff>, NotFound | Rejected>
   readonly replyPermission: (
     sessionId: Session.ID,

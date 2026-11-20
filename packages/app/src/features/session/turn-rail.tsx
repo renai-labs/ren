@@ -30,11 +30,17 @@ const turnsOf = (messages: ReadonlyArray<SessionMessage.Info>): Turn[] => {
 
 const widths = ["w-6", "w-5", "w-4"] as const
 
-const tickWidth = (index: number, active: number | undefined) =>
-  active === undefined ? "w-2.5" : (widths[Math.abs(index - active)] ?? "w-3")
+const tickWidth = (index: number, marks: { readonly active: number | undefined; readonly current: number }) => {
+  if (marks.active !== undefined) return widths[Math.abs(index - marks.active)] ?? "w-3"
+  return index === marks.current ? "w-4" : "w-2.5"
+}
 
-const tickColor = (index: number, active: number | undefined, options: { seen: boolean }) => {
-  if (index === active) return "bg-foreground"
+const tickColor = (
+  index: number,
+  marks: { readonly active: number | undefined; readonly current: number },
+  options: { seen: boolean },
+) => {
+  if (index === marks.active || index === marks.current) return "bg-foreground"
   return options.seen ? "bg-foreground/55" : "bg-muted-foreground/35"
 }
 
@@ -44,9 +50,16 @@ export function TurnRail(props: { messages: ReadonlyArray<SessionMessage.Info> }
   const [active, setActive] = useState<number>()
   if (turns.length < 2) return null
   const last = turns.length - 1
-  const focusable = active ?? last
-  const jump = (id: string) =>
-    rail.scope()?.querySelector(turnSelector(id))?.scrollIntoView({ behavior: "smooth", block: "start" })
+  const reading = turns.findIndex((turn) => turn.id === rail.current)
+  const marks = { active, current: reading }
+  const focusable = active ?? (reading === -1 ? last : reading)
+  const jump = (id: string) => {
+    const target = rail.scope()?.querySelector<HTMLElement>(turnSelector(id))
+    const viewport = target?.closest<HTMLElement>("[data-slot=message-scroller-viewport]")
+    if (!target || !viewport) return
+    const distance = Math.abs(target.getBoundingClientRect().top - viewport.getBoundingClientRect().top)
+    target.scrollIntoView({ behavior: distance < viewport.clientHeight * 1.5 ? "smooth" : "instant", block: "start" })
+  }
   const keys = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
     if (step !== undefined) {
@@ -62,6 +75,12 @@ export function TurnRail(props: { messages: ReadonlyArray<SessionMessage.Info> }
       ref={railRef}
       aria-label="Jump to a message (Alt+J)"
       className="pointer-events-none absolute inset-y-0 left-3 z-10 flex flex-col justify-center max-md:hidden"
+      onWheel={(event) =>
+        rail
+          .scope()
+          ?.querySelector("[data-slot=message-scroller-viewport]")
+          ?.scrollBy({ top: event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY })
+      }
     >
       <div className="pointer-events-auto flex flex-col py-2 pr-3 pl-1">
         {turns.map((turn, index) => (
@@ -71,6 +90,7 @@ export function TurnRail(props: { messages: ReadonlyArray<SessionMessage.Info> }
             data-turn-tick
             tabIndex={index === focusable ? 0 : -1}
             aria-label={turn.prompt || "Message"}
+            aria-current={index === reading ? "location" : undefined}
             className="relative flex h-2.5 w-auto justify-start rounded-sm border-0 p-0 hover:bg-transparent focus-visible:ring-2 focus-visible:ring-ring/50 active:not-aria-[haspopup]:scale-100"
             onMouseEnter={() => setActive(index)}
             onMouseLeave={() => setActive(undefined)}
@@ -82,8 +102,8 @@ export function TurnRail(props: { messages: ReadonlyArray<SessionMessage.Info> }
             <span
               className={cn(
                 "h-0.5 rounded-full transition-[width,background-color] duration-150 ease-out motion-reduce:transition-none",
-                tickWidth(index, active),
-                tickColor(index, active, { seen: rail.inView.has(turn.id) }),
+                tickWidth(index, marks),
+                tickColor(index, marks, { seen: rail.inView.has(turn.id) }),
               )}
             />
             {index === active ? (

@@ -1,4 +1,14 @@
-import { IconCornerUpRight, IconCrown, IconEyeOff, IconStack2, IconUser, IconUserShield } from "@tabler/icons-react"
+import {
+  IconCornerUpRight,
+  IconCrown,
+  IconEyeOff,
+  IconLayoutSidebarRight,
+  IconList,
+  IconListDetails,
+  IconStack2,
+  IconUser,
+  IconUserShield,
+} from "@tabler/icons-react"
 import { useState, type ComponentType } from "react"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
@@ -98,6 +108,11 @@ export const timelineWidths = [
 export const deliveries = [
   { value: "steer", label: "Steer the current turn", icon: IconCornerUpRight },
   { value: "queue", label: "Queue for the next turn", icon: IconStack2 },
+] as const
+export const stepPlaces = [
+  { value: "panel", label: "One line that opens in the side panel", icon: IconLayoutSidebarRight },
+  { value: "chat", label: "One line that opens in the chat", icon: IconListDetails },
+  { value: "all", label: "Every step", icon: IconList },
 ] as const
 export const backgroundActivities = [
   { value: "off", label: "Hidden", icon: IconEyeOff },

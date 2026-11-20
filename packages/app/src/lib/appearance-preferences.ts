@@ -5,10 +5,13 @@ import { Preference } from "./preference.js"
 
 export const themes = ["system", "light", "dark"] as const
 
+export const layout = Preference.make("appearance.layout.v1", Schema.Literals(["sidebar", "tabs"]), "sidebar")
+
 export const uiFonts = [
   { value: "sf-pro", label: "SF Pro", family: "SF Pro Variable" },
   { value: "inter", label: "Inter", family: "Inter Variable" },
   { value: "geist", label: "Geist", family: "Geist Variable" },
+  { value: "allo", label: "Allo", family: "Allo Variable" },
 ] as const
 
 export const codeFonts = [

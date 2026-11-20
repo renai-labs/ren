@@ -59,6 +59,11 @@ export function createWebPlatform(stores: {
       const response = await globalThis.fetch(form.uploadUrl, { method: "POST", body, signal })
       if (!response.ok) throw new Error(`The upload failed (${response.status}).`)
     },
+    windowStorage: {
+      get: (key) => sessionStorage.getItem(prefix + key) ?? undefined,
+      set: (key, value) => sessionStorage.setItem(prefix + key, value),
+      remove: (key) => sessionStorage.removeItem(prefix + key),
+    },
     storage: {
       get: (key) => localStorage.getItem(prefix + key) ?? undefined,
       set: (key, value) => {

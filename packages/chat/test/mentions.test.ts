@@ -90,6 +90,26 @@ describe("Mentions tokens", () => {
     })
     expect(Mentions.resolve("Plain text", [])).toEqual({ text: "Plain text" })
   })
+
+  test("sends a mention that has its own text as that text", () => {
+    const chat = { kind: "chat" as const, id: "ses_1", label: "Fix login", handle: "ses_1", sent: "ses_1" }
+    const text = "Read @  Fix login first"
+    expect(Mentions.resolve(text, Mentions.tokens(text, [chat]))).toEqual({ text: "Read ses_1 first" })
+  })
+
+  test("keeps each picked mention's item through edits, so two chats with one title stay apart", () => {
+    const chat = (id: string) => ({ kind: "chat" as const, id, label: "New chat", handle: id, sent: id })
+    const text = "Compare @  New chat with @  New chat"
+    const picked = [
+      { start: 8, end: 19, item: chat("ses_1") },
+      { start: 25, end: 36, item: chat("ses_2") },
+    ]
+    const edited = `Now ${text}`
+    expect(Mentions.resolve(edited, Mentions.tokens(edited, [], Mentions.shift(picked, text, edited)))).toEqual({
+      text: "Now Compare ses_1 with ses_2",
+    })
+    expect(Mentions.shift(picked, text, text.replace("with @  New", "with @  Old"))).toEqual(picked.slice(0, 1))
+  })
 })
 
 describe("Mentions on a keyboard without key events", () => {

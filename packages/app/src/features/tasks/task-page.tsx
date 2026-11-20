@@ -12,7 +12,6 @@ import {
   IconChecklist,
   IconCube,
   IconDots,
-  IconGhostFilled,
   IconHandStop,
   IconHistory,
   IconMessage,
@@ -21,6 +20,7 @@ import {
   IconTag,
   IconUserCircle,
 } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Calendar } from "@ren/ui/calendar"
@@ -483,7 +483,7 @@ function PriorityProperty(props: { task: TaskInfo; onChange: (patch: Patch) => v
 
 function AssigneeIcon(props: { task: TaskInfo; owner: Member | undefined }) {
   const owner = props.owner
-  if (props.task.agentId) return <IconGhostFilled />
+  if (props.task.agentId) return <IconAgent />
   if (owner?.name) return <PersonAvatar name={owner.name} image={owner.image} />
   return <IconUserCircle />
 }
@@ -541,7 +541,7 @@ function AssigneeList(props: { task: TaskInfo; assigned: boolean; onAssign: (tar
             data-checked={task.agentId === agent.id}
             onSelect={() => props.onAssign({ agentId: agent.id })}
           >
-            <IconGhostFilled />
+            <IconAgent />
             {agent.name}
           </CommandItem>
         ))}

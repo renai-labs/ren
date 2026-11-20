@@ -83,7 +83,7 @@ export function make(platform: Platform.Info) {
     defaultPendingMinMs: 500,
     defaultPendingComponent: RouteSkeleton,
     defaultErrorComponent: RouteError,
-    scrollRestoration: true,
+    scrollRestoration: (options) => !options.location.pathname.includes("/sessions/"),
     parseSearch: OAuthSearch.parse,
     stringifySearch: OAuthSearch.stringify,
   })

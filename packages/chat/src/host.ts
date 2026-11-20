@@ -35,6 +35,7 @@ export interface Options {
   readonly chatFetch?: typeof globalThis.fetch | undefined
   readonly lifecycle?: ((listener: (event: ChatAtoms.Lifecycle) => void) => () => void) | undefined
   readonly flushInterval?: Duration.Input | undefined
+  readonly created?: ((sessionID: Session.ID) => Promise<void> | undefined) | undefined
 }
 
 const Kept = Schema.fromJsonString(Schema.Array(Outbox.Kept))
@@ -79,7 +80,8 @@ export const make = (options: Options) => {
     // ast-grep-ignore: no-nullish-comparison -- a flushInterval of 0 is a real value
     ...(options.flushInterval !== undefined && { connection: { flushInterval: options.flushInterval } }),
     access: (sessionID: Session.ID, input: { readonly unreachable: boolean }) =>
-      ren.pipe(
+      Effect.promise(() => options.created?.(sessionID) ?? Promise.resolve()).pipe(
+        Effect.andThen(ren),
         Effect.flatMap((client) =>
           client.chat.access({ id: sessionID, ...(input.unreachable && { unreachable: "true" as const }) }),
         ),

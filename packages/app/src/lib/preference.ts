@@ -20,6 +20,7 @@ export function make<A>(key: `${string}.v${number}`, schema: Schema.Codec<A>, fa
   }
   return {
     key,
+    fallback,
     isDefault: (storage: Platform.Storage) => cached(storage.get(key)).isDefault,
     decode: (raw: string | undefined) => cached(raw).value,
     read: (storage: Platform.Storage) => Option.getOrElse(decode(storage.get(key)), () => fallback),
