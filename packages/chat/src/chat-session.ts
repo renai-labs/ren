@@ -1166,8 +1166,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     listFiles: (path: string) =>
       Effect.flatMap(client, (api) => api.file.list({ sessionID: root, ...(path && { path }) })),
     readFile: (path: string) => Effect.flatMap(client, (api) => api.file.read({ sessionID: root, path })),
-    vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
-    vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
+    vcs: (path: string) => Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root, ...(path && { path }) })),
+    vcsProjects: Effect.flatMap(client, (api) => api.vcs.projects({ sessionID: root })),
+    vcsDiff: (mode: SessionVcs.Mode, path: string) =>
+      Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode, ...(path && { path }) })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
     stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),

@@ -12,7 +12,7 @@ const seekFrames = 30
 const lineHeight = 20
 
 const viewCSS = `
-  * { --diffs-bg: var(--background) !important; }
+  * { --diffs-bg: transparent !important; }
   ::highlight(ren-find-hit) { background-color: var(--find-hit); }
   ::highlight(ren-find-active) { background-color: var(--find-active); color: var(--background); }
 `

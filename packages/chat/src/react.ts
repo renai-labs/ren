@@ -77,10 +77,12 @@ export const useFileExists = (view: ChatAtoms.PathView) => useAtomValue(useAtoms
 
 export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))
 
-export const useVcs = (root: Session.ID) => useRefreshable(useAtoms().vcs(root))
+export const useVcs = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().vcs(view))
 
-export const useVcsDiff = (root: Session.ID, mode: SessionVcs.Mode) =>
-  useRefreshable(useAtoms().vcsDiff({ root, mode }))
+export const useVcsProjects = (root: Session.ID) => useRefreshable(useAtoms().vcsProjects(root))
+
+export const useVcsDiff = (view: ChatAtoms.PathView & { readonly mode: SessionVcs.Mode }) =>
+  useRefreshable(useAtoms().vcsDiff(view))
 
 export const useRunningShells = (root: Session.ID) => useAtomValue(useAtoms().runningShells(root))
 

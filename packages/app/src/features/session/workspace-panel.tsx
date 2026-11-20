@@ -7,7 +7,7 @@ import {
   IconDeviceDesktop,
   IconFileDiff,
   IconFiles,
-  IconLayoutSidebarRightCollapse,
+  IconLayoutSidebarRight,
   IconPlus,
   IconTerminal2,
   IconTimeline,
@@ -18,10 +18,16 @@ import {
 import { Button } from "@ren/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
+import { FileIcon } from "@ren/ui/file-icon"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@ren/ui/tabs"
+import { FileName } from "@ren/util/file-name"
+import { cn } from "cn"
+import { revealIn } from "../../lib/use-workspace-files.js"
 import { ChangesTab } from "./workspace-changes.js"
 import { ActivityTab } from "./workspace-activity.js"
 import { FilesTab } from "./workspace-files.js"
+import { WorkspaceProject } from "./workspace-project.js"
+import type { Expansion } from "../../lib/use-workspace-files.js"
 import { BrowserTab, ComputerTab } from "./workspace-streams.js"
 import { TerminalTab } from "./workspace-terminal.js"
 
@@ -44,25 +50,43 @@ const kinds: ReadonlyArray<{ kind: Kind; label: string; description: string; ico
 
 const byKind = new Map(kinds.map((each) => [each.kind, each]))
 
+type DriveTarget = { readonly spaceId: string | undefined; readonly file: SessionMessage.DriveFile }
+
 export type PanelTarget =
   | { readonly kind: "terminal"; readonly folder?: string }
   | {
       readonly kind: "files"
       readonly path: string
       readonly line?: number | undefined
-      readonly drive?: { readonly spaceId: string | undefined; readonly file: SessionMessage.DriveFile } | undefined
+      readonly drive?: DriveTarget | undefined
     }
   | { readonly kind: "changes"; readonly path: string }
   | { readonly kind: "activity"; readonly turn?: string }
 
 export type PanelRequest = PanelTarget & { readonly id: string }
 
+export interface FileTarget {
+  readonly path: string
+  readonly preview: boolean
+  readonly line?: number | undefined
+  readonly drive?: DriveTarget | undefined
+}
+
 interface OpenTab {
   readonly id: string
   readonly kind: Kind
   readonly label: string
   readonly request?: PanelRequest
+  readonly file?: FileTarget
 }
+
+const labelOf = (tab: OpenTab) => {
+  if (!tab.file) return tab.label
+  return tab.file.drive ? tab.file.drive.file.name : FileName.base(tab.file.path)
+}
+
+// oxlint-disable-next-line ren/no-comments -- A file a chat showed from the space's drive opens as its own tab, read from the drive, so it opens while the computer is off too.
+const driveKey = (file: SessionMessage.DriveFile) => `drive:${file.path}`
 
 const reusable = (
   tabs: ReadonlyArray<OpenTab>,
@@ -103,7 +127,7 @@ function AddMenu(props: { onPick: (kind: Kind) => void }) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
-          <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground" aria-label="Open a tab" />
+          <Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label="Open a tab" />
         }
       >
         <IconPlus />
@@ -165,6 +189,11 @@ function TabBody(props: {
   tab: OpenTab
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
+  projects: WorkspaceProject.Projects
+  expansion: Expansion
+  onOpenFile: (path: string, options: { readonly pin: boolean }) => void
+  onChanges: () => void
+  onClose: () => void
   onMention: ((path: string) => void) | undefined
   onTerminal: (folder: string) => void
   running: boolean
@@ -172,7 +201,7 @@ function TabBody(props: {
   const request = props.tab.request
   switch (props.tab.kind) {
     case "changes":
-      return <ChangesTab root={props.root} messages={props.messages} request={request} />
+      return <ChangesTab root={props.root} messages={props.messages} request={request} projects={props.projects} />
     case "activity":
       return (
         <ActivityTab
@@ -191,7 +220,12 @@ function TabBody(props: {
         <FilesTab
           root={props.root}
           messages={props.messages}
-          request={request}
+          file={props.tab.file}
+          projects={props.projects}
+          expansion={props.expansion}
+          onOpen={props.onOpenFile}
+          onChanges={props.onChanges}
+          onClose={props.onClose}
           onMention={props.onMention}
           onTerminal={props.onTerminal}
         />
@@ -221,6 +255,8 @@ export function WorkspacePanel(props: {
   const [active, setActive] = useState<string>()
   const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
   const [handled, setHandled] = useState<string>()
+  const [expanded, setExpanded] = useState<ReadonlyArray<string>>([])
+  const projects = WorkspaceProject.useProjects(props.root, props.messages)
   const pick = (kind: Kind, request?: PanelRequest) => {
     const next = openTab(
       tabs,
@@ -231,9 +267,44 @@ export function WorkspacePanel(props: {
     setTabs(next.tabs)
     setActive(next.active)
   }
+  const openFile = (
+    path: string,
+    options: { readonly pin: boolean; readonly line?: number; readonly drive?: DriveTarget },
+  ) => {
+    const file: FileTarget = {
+      path,
+      preview: !options.pin,
+      ...(options.line && { line: options.line }),
+      ...(options.drive && { drive: options.drive }),
+    }
+    const same = tabs.find((tab) => tab.file?.path === path)
+    const reuse =
+      same ??
+      (current?.kind === "files" && (!current.file || current.file.preview)
+        ? current
+        : tabs.find((tab) => tab.kind === "files" && tab.file?.preview))
+    if (reuse) {
+      const kept = same ? { ...file, preview: same.file?.preview === true && !options.pin } : file
+      setTabs(tabs.map((tab) => (tab.id === reuse.id ? { ...tab, file: kept } : tab)))
+      setActive(reuse.id)
+      return
+    }
+    const tab: OpenTab = { id: crypto.randomUUID(), kind: "files", label: "Files", file }
+    setTabs([...tabs, tab])
+    setActive(tab.id)
+  }
+  const openRequest = (request: PanelRequest) => {
+    if (request.kind !== "files") return pick(request.kind, request)
+    if (request.drive) return openFile(driveKey(request.drive.file), { pin: true, drive: request.drive })
+    const path = request.path.trim().replace(/^\/+/u, "")
+    if (path) setExpanded((previous) => revealIn(previous, path))
+    if (path) projects.reveal(path)
+    if (!path || path.endsWith("/")) return pick("files")
+    return openFile(path, { pin: false, ...(request.line && { line: request.line }) })
+  }
   if (props.request && props.request.id !== handled) {
     setHandled(props.request.id)
-    pick(props.request.kind, props.request)
+    openRequest(props.request)
   }
   const close = (id: string) => {
     const index = tabs.findIndex((tab) => tab.id === id)
@@ -248,25 +319,35 @@ export function WorkspacePanel(props: {
         onValueChange={(value: string) => setActive(value)}
         className="min-h-0 flex-1 gap-0"
       >
-        <div className="flex h-12 shrink-0 items-center gap-1 px-3 pt-2">
-          <TabsList className="h-8 min-w-0 shrink scrollbar-none justify-start gap-0.5 overflow-x-auto overscroll-contain bg-transparent p-0">
+        <div className="flex h-10 shrink-0 items-center gap-1 px-2">
+          <TabsList className="h-7 min-w-0 shrink scrollbar-none justify-start gap-0.5 overflow-x-auto overscroll-contain bg-transparent p-0">
             {tabs.map((tab) => {
               const TabIcon = byKind.get(tab.kind)?.icon ?? IconFiles
+              const label = labelOf(tab)
               return (
                 <span key={tab.id} className="group/tab relative flex shrink-0">
                   <TabsTrigger
                     value={tab.id}
-                    className="h-8 flex-none gap-1.5 pr-7 pl-2.5 font-normal text-muted-foreground data-active:bg-secondary data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-secondary [&_svg]:text-muted-foreground"
+                    title={tab.file?.path}
+                    onDoubleClick={() => {
+                      if (tab.file?.preview)
+                        openFile(tab.file.path, { pin: true, ...(tab.file.drive && { drive: tab.file.drive }) })
+                    }}
+                    onAuxClick={(event) => event.button === 1 && close(tab.id)}
+                    className={cn(
+                      "h-7 max-w-48 flex-none gap-1.5 rounded-md pr-7 pl-2 text-xs font-normal text-muted-foreground data-active:bg-secondary data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-secondary [&_svg]:text-muted-foreground",
+                      tab.file?.preview && "italic",
+                    )}
                   >
-                    <TabIcon />
-                    {tab.label}
+                    {tab.file ? <FileIcon name={label} /> : <TabIcon />}
+                    <span className="truncate">{label}</span>
                   </TabsTrigger>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Close ${tab.label}`}
+                    aria-label={`Close ${label}`}
                     onClick={() => close(tab.id)}
-                    className="absolute top-1/2 right-1.5 size-5 -translate-y-1/2 rounded-sm text-muted-foreground opacity-0 transition-[color,background-color,opacity] group-hover/tab:opacity-100 group-has-data-active/tab:opacity-100 focus-visible:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
+                    className="absolute top-1/2 right-1 size-5 -translate-y-1/2 rounded-sm text-muted-foreground opacity-0 transition-[color,background-color,opacity] group-hover/tab:opacity-100 group-has-data-active/tab:opacity-100 focus-visible:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
                   >
                     <IconX />
                   </Button>
@@ -277,7 +358,7 @@ export function WorkspacePanel(props: {
           <AddMenu onPick={pick} />
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             className="ml-auto shrink-0 text-muted-foreground"
             aria-label={props.maximized ? "Restore panel" : "Maximize panel"}
             onClick={() => props.onMaximize(!props.maximized)}
@@ -286,12 +367,12 @@ export function WorkspacePanel(props: {
           </Button>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             className="shrink-0 text-muted-foreground"
             aria-label="Close panel"
             onClick={props.onClose}
           >
-            <IconLayoutSidebarRightCollapse />
+            <IconLayoutSidebarRight stroke={2.25} />
           </Button>
         </div>
         {tabs.length === 0 ? <Launcher onPick={pick} /> : null}
@@ -301,6 +382,11 @@ export function WorkspacePanel(props: {
               tab={tab}
               root={props.root}
               messages={props.messages}
+              projects={projects}
+              expansion={{ expanded, setExpanded }}
+              onOpenFile={openFile}
+              onChanges={() => pick("changes")}
+              onClose={() => close(tab.id)}
               onMention={props.onMention}
               running={props.running}
               onTerminal={(folder) => pick("terminal", { kind: "terminal", folder, id: crypto.randomUUID() })}

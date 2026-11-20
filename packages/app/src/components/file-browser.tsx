@@ -1,7 +1,19 @@
-import { Fragment, lazy, Suspense, useState, type ComponentProps, type ReactNode } from "react"
+import {
+  createContext,
+  Fragment,
+  lazy,
+  Suspense,
+  use,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react"
 import { FileTabs, Mentions } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
 import type { FileSystem } from "@ren/schema/file-system"
-import { IconDots, IconFile, IconFiles, IconX } from "@tabler/icons-react"
+import type { Session } from "@ren/schema/session"
+import { IconDots, IconFile, IconFileDiff, IconFiles, IconFolder, IconLayoutSidebar } from "@tabler/icons-react"
 import { Cause } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { Button } from "@ren/ui/button"
@@ -18,15 +30,21 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { FileIcon } from "@ren/ui/file-icon"
 import { FileExplorer } from "@ren/ui/file-tree"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
+import { ResizeHandle } from "@ren/ui/resize-handle"
 import { Spinner } from "@ren/ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { FileName } from "@ren/util/file-name"
 import { cn } from "cn"
 import { ChatPreferences } from "../lib/chat-preferences.js"
+import { Preference } from "../lib/preference.js"
 import { errorStatus } from "../lib/errors.js"
 import { formatBytes } from "../lib/format.js"
 import { useCopy } from "../lib/use-copy.js"
@@ -36,6 +54,7 @@ import { Theme } from "./theme.js"
 import { WorkspacePending } from "./workspace-pending.js"
 
 export interface FileTree {
+  readonly base: string
   readonly root: AsyncResult.AsyncResult<{ readonly entries: ReadonlyArray<unknown> }, unknown> | undefined
   readonly paths: ReadonlyArray<string>
   readonly loaded: ReadonlyArray<string>
@@ -56,31 +75,116 @@ const highlightLimit = 256 * 1024
 
 const FileView = lazy(() => import("@ren/ui/file-view").then((module) => ({ default: module.FileView })))
 
-function Crumbs(props: { path: string; onFolder: (folder: string) => void }) {
+export interface Browse {
+  readonly root: Session.ID
+  readonly onOpen: (path: string) => void
+}
+
+const siblingLimit = 200
+
+const folderOf = (path: string) => path.slice(0, path.slice(0, -1).lastIndexOf("/") + 1)
+
+function Siblings(props: { browse: Browse; path: string; onFolder: (folder: string) => void; close: () => void }) {
+  const folder = folderOf(props.path)
+  const listed = ChatReact.useFolder({ root: props.browse.root, path: folder })
+  if (!AsyncResult.isSuccess(listed.result))
+    return (
+      <div className="flex justify-center p-2 text-muted-foreground">
+        {AsyncResult.isFailure(listed.result) ? (
+          <span className="text-xs">Could not list {folder || "the folder"}</span>
+        ) : (
+          <Spinner />
+        )}
+      </div>
+    )
+  const entries = listed.result.value.entries
+    .filter((entry) => FileName.base(entry.path.replace(/\/$/u, "")) !== ".git")
+    .map((entry) => ({
+      path: entry.type === "directory" && !entry.path.endsWith("/") ? `${entry.path}/` : entry.path,
+      folder: entry.type === "directory",
+    }))
+  return (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel className="truncate">{folder || "Chat folder"}</DropdownMenuLabel>
+      <DropdownMenuRadioGroup
+        value={props.path}
+        onValueChange={(value: string) => {
+          props.close()
+          if (value.endsWith("/")) props.onFolder(value)
+          else props.browse.onOpen(value)
+        }}
+      >
+        {entries.slice(0, siblingLimit).map((entry) => (
+          <DropdownMenuRadioItem key={entry.path} value={entry.path}>
+            {entry.folder ? <IconFolder /> : <FileIcon name={FileName.base(entry.path)} />}
+            <span className="truncate">{FileName.base(entry.path.replace(/\/$/u, ""))}</span>
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+      {entries.length > siblingLimit ? (
+        <DropdownMenuLabel className="font-normal">
+          {entries.length - siblingLimit} more in the file tree
+        </DropdownMenuLabel>
+      ) : null}
+    </DropdownMenuGroup>
+  )
+}
+
+function Crumb(props: {
+  label: string
+  path: string
+  current: boolean
+  browse: Browse | undefined
+  onFolder: (folder: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const look = "h-6 px-1.5 text-xs font-normal"
+  if (props.browse)
+    return (
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-current={props.current ? "page" : undefined}
+              className={cn(look, props.current ? "text-foreground" : "text-muted-foreground")}
+            />
+          }
+        >
+          {props.label}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-80 w-64">
+          <Siblings browse={props.browse} path={props.path} onFolder={props.onFolder} close={() => setOpen(false)} />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  if (props.current) return <BreadcrumbPage className="truncate">{props.label}</BreadcrumbPage>
+  return (
+    <BreadcrumbLink
+      render={<Button variant="ghost" size="sm" className={look} onClick={() => props.onFolder(props.path)} />}
+    >
+      {props.label}
+    </BreadcrumbLink>
+  )
+}
+
+function Crumbs(props: { path: string; browse: Browse | undefined; onFolder: (folder: string) => void }) {
   const parts = props.path.split("/")
   return (
     <Breadcrumb>
-      <BreadcrumbList className="flex-nowrap gap-1 font-mono text-xs sm:gap-1">
+      <BreadcrumbList className="flex-nowrap gap-0.5 text-xs sm:gap-0.5">
         {parts.map((part, index) => (
           // oxlint-disable-next-line react/no-array-index-key -- a segment's position in the path is its identity
           <Fragment key={index}>
             <BreadcrumbItem className="min-w-0 gap-1">
-              {index === parts.length - 1 ? (
-                <BreadcrumbPage className="truncate">{part}</BreadcrumbPage>
-              ) : (
-                <BreadcrumbLink
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto px-1 py-0.5 font-mono text-xs font-normal"
-                      onClick={() => props.onFolder(`${parts.slice(0, index + 1).join("/")}/`)}
-                    />
-                  }
-                >
-                  {part}
-                </BreadcrumbLink>
-              )}
+              <Crumb
+                label={part}
+                path={index === parts.length - 1 ? props.path : `${parts.slice(0, index + 1).join("/")}/`}
+                current={index === parts.length - 1}
+                browse={props.browse}
+                onFolder={props.onFolder}
+              />
             </BreadcrumbItem>
             {index === parts.length - 1 ? null : <BreadcrumbSeparator />}
           </Fragment>
@@ -136,6 +240,7 @@ function OpenIn(props: { file: FileSystem.Content; onMention: ((path: string) =>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal tabular-nums">{formatBytes(props.file.size)}</DropdownMenuLabel>
           <DropdownMenuItem disabled={!copy} onClick={() => copy?.(props.file.path, "Path copied")}>
             Copy path
           </DropdownMenuItem>
@@ -157,9 +262,50 @@ function OpenIn(props: { file: FileSystem.Content; onMention: ((path: string) =>
   )
 }
 
+const TreeToggle = createContext<{ readonly shown: boolean; readonly onShownChange: (shown: boolean) => void } | null>(
+  null,
+)
+
+function TreeButton(props: { label: string; icon: ReactNode; onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={props.label}
+            className="text-muted-foreground"
+            onClick={props.onClick}
+          />
+        }
+      >
+        {props.icon}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{props.label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function ShowTree() {
+  const toggle = use(TreeToggle)
+  if (!toggle || toggle.shown) return null
+  return (
+    <TreeButton
+      label="Show file tree"
+      icon={<IconLayoutSidebar stroke={2.25} />}
+      onClick={() => toggle.onShownChange(true)}
+    />
+  )
+}
+
+const truncation = (file: FileSystem.Content) =>
+  file.truncated ? `Showing the start of ${formatBytes(file.size)}` : null
+
 export function OpenFile(props: {
   read: FileRead
   tab: FileTabs.Tab
+  browse?: Browse | undefined
   onFolder: (folder: string) => void
   onMention: ((path: string) => void) | undefined
 }) {
@@ -195,11 +341,11 @@ export function OpenFile(props: {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-9 shrink-0 items-center gap-1 px-3">
+          <ShowTree />
           <div className="min-w-0 flex-1">
-            <Crumbs path={file.path} onFolder={props.onFolder} />
+            <Crumbs path={file.path} browse={props.browse} onFolder={props.onFolder} />
           </div>
           <OpenIn file={file} onMention={props.onMention} />
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatBytes(file.size)}</span>
         </div>
         <Unsupported file={file} />
       </div>
@@ -223,58 +369,16 @@ export function OpenFile(props: {
           ChatPreferences.fileWrap.write(platform.storage, next)
         }}
         line={props.tab.line}
-        breadcrumb={<Crumbs path={file.path} onFolder={props.onFolder} />}
-        meta={file.truncated ? `${formatBytes(file.size)}, showing the start` : formatBytes(file.size)}
+        breadcrumb={
+          <div className="flex min-w-0 items-center gap-1">
+            <ShowTree />
+            <Crumbs path={file.path} browse={props.browse} onFolder={props.onFolder} />
+          </div>
+        }
+        meta={truncation(file)}
         actions={<OpenIn file={file} onMention={props.onMention} />}
       />
     </Suspense>
-  )
-}
-
-function TabStrip(props: {
-  state: FileTabs.State
-  onSelect: (path: string) => void
-  onPin: (path: string) => void
-  onClose: (path: string) => void
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Open files"
-      className="flex h-9 shrink-0 scrollbar-none overflow-x-auto overscroll-contain border-b px-1"
-    >
-      {props.state.tabs.map((tab) => (
-        <span key={tab.path} className="group/file relative flex shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            role="tab"
-            aria-selected={tab.path === props.state.active}
-            title={tab.path}
-            onClick={() => props.onSelect(tab.path)}
-            onDoubleClick={() => props.onPin(tab.path)}
-            onMouseDown={(event) => event.button === 1 && event.preventDefault()}
-            onAuxClick={(event) => event.button === 1 && props.onClose(tab.path)}
-            className={cn(
-              "h-9 max-w-48 justify-start gap-1.5 rounded-none pr-7 pl-2.5 text-xs font-normal text-muted-foreground aria-selected:bg-secondary aria-selected:text-foreground",
-              tab.preview && "italic",
-            )}
-          >
-            <FileIcon name={tab.path} data-icon="inline-start" />
-            <span className="truncate">{FileName.base(tab.path)}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Close ${FileName.base(tab.path)}`}
-            onClick={() => props.onClose(tab.path)}
-            className="absolute top-1/2 right-1 size-5 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within/file:opacity-100 group-hover/file:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
-          >
-            <IconX />
-          </Button>
-        </span>
-      ))}
-    </div>
   )
 }
 
@@ -288,6 +392,9 @@ function MenuItem(props: { label: string; onClick: () => void }) {
 
 function Tree(props: {
   tree: FileTree
+  header: ReactNode
+  tools: ReactNode
+  actions: ReactNode
   selected: string | undefined
   onOpen: (path: string) => void
   onPin: (path: string) => void
@@ -313,11 +420,15 @@ function Tree(props: {
       gitStatus={tree.gitStatus}
       selected={props.selected}
       dragType={Mentions.fileDragType}
+      base={tree.base}
       onSelect={props.onOpen}
       onPin={props.onPin}
       onExpand={tree.expand}
       onQuery={tree.setQuery}
       onRefresh={tree.refresh}
+      header={props.header}
+      tools={props.tools}
+      actions={props.actions}
       notice={
         root.value.entries.length === 0 ? (
           <p className="px-3 py-1.5 text-xs text-muted-foreground">This folder is empty</p>
@@ -340,7 +451,7 @@ function Tree(props: {
               label="Copy path"
               onClick={() => {
                 close()
-                copy(item.path, "Path copied")
+                copy(tree.base + item.path, "Path copied")
               }}
             />
           ) : null}
@@ -349,7 +460,7 @@ function Tree(props: {
               label="Mention in prompt"
               onClick={() => {
                 close()
-                props.onMention?.(item.path)
+                props.onMention?.(tree.base + item.path)
               }}
             />
           ) : null}
@@ -358,7 +469,9 @@ function Tree(props: {
               label="Reveal in terminal"
               onClick={() => {
                 close()
-                props.onTerminal?.(item.kind === "directory" ? item.path : (ancestorsOf(item.path).at(-1) ?? ""))
+                props.onTerminal?.(
+                  tree.base + (item.kind === "directory" ? item.path : (ancestorsOf(item.path).at(-1) ?? "")),
+                )
               }}
             />
           ) : null}
@@ -368,51 +481,89 @@ function Tree(props: {
   )
 }
 
+const treeMin = 160
+
+const contentMin = 256
+
 export function FileBrowser(props: {
   tree: FileTree
-  files: FileTabs.State
-  onFiles: (files: FileTabs.State) => void
+  header: ReactNode
+  current: string | undefined
+  open: boolean
+  onOpen: (path: string, options: { readonly pin: boolean }) => void
+  onChanges: () => void
   onMention: ((path: string) => void) | undefined
   onTerminal: ((folder: string) => void) | undefined
   empty: string
   children: ReactNode
 }) {
-  const files = props.files
-  const current = files.tabs.find((tab) => tab.path === files.active)
+  const base = props.tree.base
+  const current = props.current
+  const shown = Preference.usePreference(ChatPreferences.fileTree)
+  const width = Preference.usePreference(ChatPreferences.fileTreeWidth)
+  const setPreference = Preference.useSetPreference()
+  const row = useRef<HTMLDivElement>(null)
+  const pane = useRef<HTMLDivElement>(null)
+  const sizeTree = (node: HTMLDivElement | null, next: number) =>
+    node?.style.setProperty("--file-tree-width", `clamp(${treeMin}px, ${next}px, calc(100% - ${contentMin}px))`)
+  const toggle = { shown, onShownChange: (next: boolean) => setPreference(ChatPreferences.fileTree, next) }
   return (
-    <div className="flex min-h-0 flex-1">
-      <div className="flex w-76 shrink-0 flex-col overflow-hidden border-r">
-        <Tree
-          tree={props.tree}
-          selected={files.active}
-          onOpen={(path) => props.onFiles(FileTabs.open(files, path))}
-          onPin={(path) => props.onFiles(FileTabs.open(files, path, { pin: true }))}
-          onMention={props.onMention}
-          onTerminal={props.onTerminal}
-        />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        {current ? (
-          <>
-            <TabStrip
-              state={files}
-              onSelect={(path) => props.onFiles({ ...files, active: path })}
-              onPin={(path) => props.onFiles(FileTabs.pin(files, path))}
-              onClose={(path) => props.onFiles(FileTabs.close(files, path))}
+    <div className="flex min-h-0 flex-1 px-2 pb-2">
+      <div ref={row} className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border bg-card">
+        {shown || !props.open ? (
+          <div
+            ref={(node) => {
+              pane.current = node
+              sizeTree(node, width)
+            }}
+            className="relative flex w-(--file-tree-width) shrink-0 flex-col overflow-hidden border-r"
+          >
+            <Tree
+              tree={props.tree}
+              header={props.header}
+              tools={<TreeButton label="Changes" icon={<IconFileDiff />} onClick={props.onChanges} />}
+              actions={
+                props.open ? (
+                  <TreeButton
+                    label="Hide file tree"
+                    icon={<IconLayoutSidebar stroke={2.25} />}
+                    onClick={() => toggle.onShownChange(false)}
+                  />
+                ) : null
+              }
+              selected={current?.startsWith(base) ? current.slice(base.length) : undefined}
+              onOpen={(path) => props.onOpen(base + path, { pin: false })}
+              onPin={(path) => props.onOpen(base + path, { pin: true })}
+              onMention={props.onMention}
+              onTerminal={props.onTerminal}
             />
-            {props.children}
-          </>
-        ) : (
-          <Empty className="flex-1">
-            <EmptyHeader>
-              <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
-                <IconFiles />
-              </EmptyMedia>
-              <EmptyTitle>Files</EmptyTitle>
-              <EmptyDescription>{props.empty}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
+            <ResizeHandle
+              label="Resize file tree"
+              side="right"
+              width={width}
+              min={treeMin}
+              max={() => (row.current?.getBoundingClientRect().width ?? treeMin + contentMin) - contentMin}
+              onResize={(next) => sizeTree(pane.current, next)}
+              onCommit={(next) => setPreference(ChatPreferences.fileTreeWidth, next)}
+              onReset={() => setPreference(ChatPreferences.fileTreeWidth, ChatPreferences.fileTreeWidth.fallback)}
+            />
+          </div>
+        ) : null}
+        <div className="@container/file-pane flex min-w-0 flex-1 flex-col">
+          {props.open ? (
+            <TreeToggle value={toggle}>{props.children}</TreeToggle>
+          ) : (
+            <Empty className="flex-1">
+              <EmptyHeader>
+                <EmptyMedia className="text-muted-foreground [&_svg]:size-6">
+                  <IconFiles />
+                </EmptyMedia>
+                <EmptyTitle>Files</EmptyTitle>
+                <EmptyDescription>{props.empty}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Badge } from "@ren/ui/badge"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { Button } from "@ren/ui/button"
+import { ResizeHandle } from "@ren/ui/resize-handle"
 import { ActivityPill } from "./activity-pill.js"
 import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
@@ -20,6 +21,8 @@ import { PromptInput } from "./prompt-input.js"
 import { useChatKeys } from "./use-chat-keys.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { Preference } from "../../lib/preference.js"
 import { cn } from "cn"
 import { useChat } from "./use-chat.js"
 import { useFind } from "./use-find.js"
@@ -273,11 +276,17 @@ function ChatHeader(props: {
         className="text-muted-foreground aria-pressed:bg-secondary aria-pressed:text-foreground"
         onClick={props.onTogglePanel}
       >
-        <IconLayoutSidebarRight />
+        <IconLayoutSidebarRight stroke={2.25} />
       </Button>
     </Breadcrumb.Header>
   )
 }
+
+const panelMin = 320
+
+const chatMin = 512
+
+const panelSize = (width: number) => `clamp(${panelMin}px, ${width}px, calc(100vw - ${chatMin}px))`
 
 function panelWidth(panel: { readonly open: boolean; readonly maximized: boolean }) {
   if (!panel.open) return "w-0"
@@ -315,8 +324,21 @@ export function ChatPage() {
   const updateDraft = chat.files.update
   const mentionFile = (path: string) =>
     updateDraft((draft) => Composer.withText(draft, Mentions.insertFile(draft.text, path, draft.text.length).text))
+  const width = Preference.usePreference(ChatPreferences.panelWidth)
+  const setPreference = Preference.useSetPreference()
+  const layout = useRef<HTMLDivElement>(null)
+  const sizePanel = (node: HTMLDivElement | null, next: number | null) => {
+    if (next === null) node?.style.removeProperty("--panel-width")
+    else node?.style.setProperty("--panel-width", panelSize(next))
+  }
   return (
-    <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
+    <div
+      ref={(node) => {
+        layout.current = node
+        sizePanel(node, width)
+      }}
+      className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]"
+    >
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
         <ChatHeader
           chat={chat}
@@ -342,11 +364,29 @@ export function ChatPage() {
       <div
         inert={!panel}
         className={cn(
-          "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear motion-reduce:transition-none",
+          "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear in-data-resizing:transition-none motion-reduce:transition-none",
           panelWidth({ open: panel, maximized }),
         )}
       >
-        <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
+        <div className={cn("relative h-full", maximized ? "w-full" : "w-(--panel-width)")}>
+          {panel && !maximized ? (
+            <ResizeHandle
+              label="Resize panel"
+              side="left"
+              width={width ?? undefined}
+              min={panelMin}
+              max={() => window.innerWidth - chatMin}
+              onResize={(next) => {
+                layout.current?.setAttribute("data-resizing", "")
+                sizePanel(layout.current, next)
+              }}
+              onCommit={(next) => {
+                layout.current?.removeAttribute("data-resizing")
+                setPreference(ChatPreferences.panelWidth, next)
+              }}
+              onReset={() => setPreference(ChatPreferences.panelWidth, null)}
+            />
+          ) : null}
           <WorkspacePanel
             root={chat.root}
             messages={chat.messages}

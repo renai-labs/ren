@@ -291,10 +291,12 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
 
-  const vcs = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcs))
+  const vcs = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.vcs(view.path)))
 
-  const vcsDiff = Atom.family((view: { readonly root: Session.ID; readonly mode: SessionVcs.Mode }) =>
-    workspace(view.root, (opened) => opened.vcsDiff(view.mode)),
+  const vcsProjects = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcsProjects))
+
+  const vcsDiff = Atom.family((view: PathView & { readonly mode: SessionVcs.Mode }) =>
+    workspace(view.root, (opened) => opened.vcsDiff(view.mode, view.path)),
   )
 
   const runningShells = Atom.family((root: Session.ID) =>
@@ -363,6 +365,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     fileExists,
     file,
     vcs,
+    vcsProjects,
     vcsDiff,
     shellRunning,
     runningShells,

@@ -14,6 +14,8 @@ import { ToggleGroup, ToggleGroupItem } from "@ren/ui/toggle-group"
 import { DiffFile } from "./diff-file.js"
 import { editsOf, type Change } from "./workspace-edits.js"
 import type { PanelRequest } from "./workspace-panel.js"
+import { ProjectPicker } from "./project-picker.js"
+import type { WorkspaceProject } from "./workspace-project.js"
 import { WorkspacePending } from "../../components/workspace-pending.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Platform } from "../../platform/platform.js"
@@ -64,7 +66,7 @@ function Changes(props: {
   const additions = props.changes.reduce((total, change) => total + change.additions, 0)
   const deletions = props.changes.reduce((total, change) => total + change.deletions, 0)
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="mx-2 mb-2 flex min-h-0 flex-1 overflow-hidden rounded-xl border bg-card">
       <div className="flex w-52 shrink-0 flex-col border-r">
         <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs text-muted-foreground tabular-nums">
           {props.changes.length === 1 ? "1 file" : `${props.changes.length} files`}
@@ -86,7 +88,7 @@ function Changes(props: {
 
 function Bar(props: { children?: ReactNode; actions: ReactNode }) {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
+    <div className="flex h-10 shrink-0 items-center gap-2 px-3">
       {props.children}
       <div className="ml-auto flex items-center gap-1">{props.actions}</div>
     </div>
@@ -95,12 +97,13 @@ function Bar(props: { children?: ReactNode; actions: ReactNode }) {
 
 function RepositoryChanges(props: {
   root: Session.ID
+  project: string
   picker: ReactNode
   diffToggle: ReactNode
   diffStyle: DiffStyle
   onRefresh: () => void
 }) {
-  const diff = ChatReact.useVcsDiff(props.root, "working")
+  const diff = ChatReact.useVcsDiff({ root: props.root, mode: "working", path: props.project })
   return (
     <>
       <Bar
@@ -187,10 +190,13 @@ export function ChangesTab(props: {
   root: Session.ID
   messages: ReadonlyArray<SessionMessage.Info>
   request: PanelRequest | undefined
+  projects: WorkspaceProject.Projects
 }) {
   const focus = props.request?.kind === "changes" ? props.request : undefined
   const platform = Platform.usePlatform()
-  const vcs = ChatReact.useVcs(props.root)
+  const project = props.projects.current
+  const vcs = ChatReact.useVcs({ root: props.root, path: project })
+  const projectPicker = <ProjectPicker projects={props.projects} />
   const repository = AsyncResult.isSuccess(vcs.result) && vcs.result.value.provider ? vcs.result.value : undefined
   const [chosen, setChosen] = useState<Source | undefined>(focus ? "edits" : undefined)
   const [seen, setSeen] = useState(focus)
@@ -228,17 +234,23 @@ export function ChangesTab(props: {
   if (!repository)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <Bar actions={diffToggle} />
+        <Bar actions={diffToggle}>{projectPicker}</Bar>
         {edits}
       </div>
     )
   const source = chosen ?? "repository"
-  const picker = <SourcePicker source={source} branch={repository.branch.current} onChange={setChosen} />
+  const picker = (
+    <>
+      {projectPicker}
+      <SourcePicker source={source} branch={repository.branch.current} onChange={setChosen} />
+    </>
+  )
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {source === "repository" ? (
         <RepositoryChanges
           root={props.root}
+          project={project}
           picker={picker}
           diffToggle={diffToggle}
           diffStyle={diffStyle}

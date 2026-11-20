@@ -1,15 +1,59 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
 import { FileTree as FileTreePrimitive, useFileTree } from "@pierre/trees/react"
-import { IconChevronDown, IconChevronUp, IconRefresh, IconSearch } from "@tabler/icons-react"
+import { IconFoldUp, IconRefresh, IconSearch } from "@tabler/icons-react"
 import { cn } from "cn"
 import { Button } from "#components/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "#components/input-group"
+import { Toggle } from "#components/toggle"
+import { Tooltip, TooltipContent, TooltipTrigger } from "#components/tooltip"
 import { icons } from "../lib/file-icons.js"
 
 type FileStatus = "added" | "deleted" | "modified"
 
 const treeClass =
   "h-full [--trees-accent:var(--muted-foreground)] [--trees-bg:transparent] [--trees-fg-muted:var(--muted-foreground)] [--trees-fg:var(--foreground)]"
+
+const explorerCSS = `
+:host {
+  --trees-font-family-override: var(--font-sans);
+  --trees-font-size-override: 13px;
+  --trees-padding-inline-override: 8px;
+  --trees-item-padding-x-override: 3px;
+  --trees-item-margin-x-override: 0px;
+  --trees-item-row-gap-override: 4px;
+  --trees-level-gap-override: 5px;
+  --trees-icon-width-override: 14px;
+  --trees-icon-nudge-override: 0px;
+  --trees-border-radius-override: 6px;
+  --trees-git-lane-width-override: 10px;
+  --trees-action-lane-width-override: 14px;
+  --trees-scrollbar-gutter-override: 6px;
+  --trees-theme-sidebar-bg: transparent;
+  --trees-theme-sidebar-fg: var(--foreground);
+  --trees-theme-list-hover-bg: var(--muted);
+  --trees-theme-list-active-selection-bg: var(--secondary);
+  --trees-theme-list-active-selection-fg: var(--foreground);
+  --trees-theme-focus-ring: var(--ring);
+  --trees-status-added-override: var(--chart-2);
+  --trees-status-untracked-override: var(--chart-2);
+  --trees-status-modified-override: var(--chart-3);
+  --trees-status-renamed-override: var(--chart-3);
+  --trees-status-deleted-override: var(--chart-4);
+  --trees-git-added-color-override: color-mix(in srgb, var(--chart-2) 60%, transparent);
+  --trees-git-modified-color-override: color-mix(in srgb, var(--chart-3) 60%, transparent);
+  --trees-git-deleted-color-override: color-mix(in srgb, var(--chart-4) 60%, transparent);
+}
+[data-item-git-status] > [data-item-section='content'] {
+  color: var(--trees-theme-sidebar-fg) !important;
+}
+[data-item-section='git'] {
+  width: 14px;
+  margin-inline-end: 2px;
+}
+[data-item-section='git'] [data-icon-name='file-tree-icon-dot'] {
+  transform: none;
+}
+`
 
 function FileTree({
   files,
@@ -41,7 +85,26 @@ function FileTree({
   return <FileTreePrimitive data-slot="file-tree" model={tree.model} className={cn(treeClass, className)} />
 }
 
-const headerButton = "px-1.5 text-muted-foreground has-data-[icon=inline-start]:pl-1"
+function TreeAction(props: { label: string; icon: ReactNode; onClick: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={props.label}
+            className="text-muted-foreground"
+            onClick={props.onClick}
+          />
+        }
+      >
+        {props.icon}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{props.label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 type Model = ReturnType<typeof useFileTree>["model"]
 
@@ -68,17 +131,23 @@ function FileExplorer(props: {
   gitStatus: ReadonlyArray<{ readonly path: string; readonly status: FileStatus }>
   selected: string | undefined
   dragType: string
+  base: string
   onSelect: (path: string) => void
   onPin: (path: string) => void
   onExpand: (folder: string) => void
   onQuery: (query: string) => void
   onRefresh: () => void
+  header?: ReactNode
+  tools?: ReactNode
+  actions?: ReactNode
   notice?: ReactNode
   // ast-grep-ignore: no-render-props -- the tree hands back the row that was right-clicked
   renderMenu: (item: { readonly path: string; readonly kind: "file" | "directory" }, close: () => void) => ReactNode
   className?: string
 }) {
   const [query, setQuery] = useState("")
+  const [searching, setSearching] = useState(false)
+  const focusSearch = useRef(false)
   const latest = useRef(props)
   const dragging = useRef(false)
   const revealing = useRef(false)
@@ -89,7 +158,9 @@ function FileExplorer(props: {
   const tree = useFileTree({
     paths: props.paths,
     icons,
-    density: "compact",
+    density: 0.8,
+    itemHeight: 24,
+    unsafeCSS: explorerCSS,
     initialExpansion: "closed",
     fileTreeSearchMode: "hide-non-matches",
     search: false,
@@ -165,7 +236,7 @@ function FileExplorer(props: {
         const path = rowPath(event.nativeEvent)
         if (!path || path.endsWith("/")) return
         dragging.current = true
-        event.dataTransfer.setData(props.dragType, path)
+        event.dataTransfer.setData(props.dragType, props.base + path)
       }}
       onDoubleClick={(event) => {
         const path = rowPath(event.nativeEvent)
@@ -177,43 +248,65 @@ function FileExplorer(props: {
         for (const path of model.getSelectedPaths()) model.getItem(path)?.deselect()
       }}
     >
-      <div className="flex shrink-0 flex-col gap-1.5 px-1.5 pt-2 pb-1">
-        <InputGroup className="h-7">
-          <InputGroupAddon>
+      <div className="flex h-9 shrink-0 items-center gap-0.5 px-1.5">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Toggle
+                size="sm"
+                aria-label="Search files"
+                pressed={searching}
+                onPressedChange={(next: boolean) => {
+                  focusSearch.current = next
+                  setSearching(next)
+                  if (!next) change("")
+                }}
+                className="text-muted-foreground"
+              />
+            }
+          >
             <IconSearch />
-          </InputGroupAddon>
-          <InputGroupInput
-            type="search"
-            value={query}
-            placeholder="Search files"
-            aria-label="Search files"
-            onChange={(event) => change(event.target.value)}
-          />
-        </InputGroup>
-        <div className="flex min-w-0 items-center">
-          <Button variant="ghost" size="sm" className={headerButton} onClick={() => each(folders, "collapse")}>
-            <IconChevronUp data-icon="inline-start" />
-            Collapse all
-          </Button>
-          <Button variant="ghost" size="sm" className={headerButton} onClick={() => each(props.loaded, "expand")}>
-            <IconChevronDown data-icon="inline-start" />
-            Expand loaded
-          </Button>
-          <Button variant="ghost" size="sm" className={cn(headerButton, "ml-auto")} onClick={props.onRefresh}>
-            <IconRefresh data-icon="inline-start" />
-            Refresh
-          </Button>
-        </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Search files</TooltipContent>
+        </Tooltip>
+        {props.tools}
+        <TreeAction label="Collapse all" icon={<IconFoldUp />} onClick={() => each(folders, "collapse")} />
+        <TreeAction label="Refresh" icon={<IconRefresh />} onClick={props.onRefresh} />
+        <div className="ml-auto flex items-center">{props.actions}</div>
       </div>
+      {searching ? (
+        <div className="shrink-0 px-2 pb-1.5">
+          <InputGroup className="h-7">
+            <InputGroupAddon>
+              <IconSearch />
+            </InputGroupAddon>
+            <InputGroupInput
+              type="search"
+              ref={(node) => {
+                if (!node || !focusSearch.current) return
+                focusSearch.current = false
+                node.focus()
+              }}
+              value={query}
+              placeholder="Search files"
+              aria-label="Search files"
+              onChange={(event) => change(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return
+                setSearching(false)
+                change("")
+              }}
+            />
+          </InputGroup>
+        </div>
+      ) : null}
+      {props.header ? <div className="flex shrink-0 items-center px-2 pb-1">{props.header}</div> : null}
       {props.notice}
       <FileTreePrimitive
         data-slot="file-tree"
         model={model}
         aria-label="Files"
-        className={cn(
-          treeClass,
-          "min-h-0 flex-1 [--trees-border-radius-override:var(--radius-md)] [--trees-selected-bg-override:var(--secondary)]",
-        )}
+        className={cn(treeClass, "min-h-0 flex-1")}
         // ast-grep-ignore: no-render-props -- @pierre/trees takes its context menu as a function
         renderContextMenu={(item, context) => (
           <div

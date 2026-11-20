@@ -398,23 +398,38 @@ const adaptGroupFile = (raw: RawClient["file"]) => ({
 })
 
 type VcsGetRequest = Parameters<RawClient["vcs"]["vcs.get"]>[0]
-type VcsGetInput = { readonly sessionID: VcsGetRequest["params"]["sessionID"] }
+type VcsGetInput = {
+  readonly sessionID: VcsGetRequest["params"]["sessionID"]
+  readonly path?: VcsGetRequest["query"]["path"]
+}
 const EndpointVcsGet = (raw: RawClient["vcs"]) => (input: VcsGetInput) =>
-  raw["vcs.get"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+  raw["vcs.get"]({ params: { sessionID: input["sessionID"] }, query: { path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type VcsProjectsRequest = Parameters<RawClient["vcs"]["vcs.projects"]>[0]
+type VcsProjectsInput = { readonly sessionID: VcsProjectsRequest["params"]["sessionID"] }
+const EndpointVcsProjects = (raw: RawClient["vcs"]) => (input: VcsProjectsInput) =>
+  raw["vcs.projects"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
 
 type VcsDiffRequest = Parameters<RawClient["vcs"]["vcs.diff"]>[0]
 type VcsDiffInput = {
   readonly sessionID: VcsDiffRequest["params"]["sessionID"]
+  readonly path?: VcsDiffRequest["query"]["path"]
   readonly mode?: VcsDiffRequest["query"]["mode"]
   readonly context?: VcsDiffRequest["query"]["context"]
 }
 const EndpointVcsDiff = (raw: RawClient["vcs"]) => (input: VcsDiffInput) =>
   raw["vcs.diff"]({
     params: { sessionID: input["sessionID"] },
-    query: { mode: input["mode"], context: input["context"] },
+    query: { path: input["path"], mode: input["mode"], context: input["context"] },
   }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupVcs = (raw: RawClient["vcs"]) => ({ get: EndpointVcsGet(raw), diff: EndpointVcsDiff(raw) })
+const adaptGroupVcs = (raw: RawClient["vcs"]) => ({
+  get: EndpointVcsGet(raw),
+  projects: EndpointVcsProjects(raw),
+  diff: EndpointVcsDiff(raw),
+})
 
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),

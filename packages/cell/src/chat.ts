@@ -560,7 +560,18 @@ const handlers = Layer.mergeAll(
         .handle("vcs.get", (request) =>
           touch(request.params.sessionID).pipe(
             Effect.andThen(
-              run((harness) => harness.chat.vcs(request.params.sessionID).pipe(notFound, rejected, unreachable)),
+              run((harness) =>
+                harness.chat.vcs(request.params.sessionID, request.query.path).pipe(notFound, rejected, unreachable),
+              ),
+            ),
+          ),
+        )
+        .handle("vcs.projects", (request) =>
+          touch(request.params.sessionID).pipe(
+            Effect.andThen(
+              run((harness) =>
+                harness.chat.vcsProjects(request.params.sessionID).pipe(notFound, rejected, unreachable),
+              ),
             ),
           ),
         )
@@ -572,6 +583,7 @@ const handlers = Layer.mergeAll(
                   .vcsDiff(request.params.sessionID, {
                     mode: request.query.mode ?? "working",
                     ...(Predicate.isNumber(request.query.context) && { context: request.query.context }),
+                    ...(request.query.path && { path: request.query.path }),
                   })
                   .pipe(notFound, rejected, unreachable),
               ),

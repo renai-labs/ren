@@ -10,6 +10,8 @@ import { useRefreshOn } from "./use-refresh-on.js"
 
 const searchDelay = 200
 
+const gitFolder = /(?:^|\/)\.git(?:\/|$)/u
+
 export const ancestorsOf = (path: string) =>
   path
     .split("/")
@@ -47,41 +49,57 @@ function useFolderFailures(
   }, [failures, refreshFolder])
 }
 
-export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string>) {
-  const [expanded, setExpanded] = useState<ReadonlyArray<string>>([])
+export interface Expansion {
+  readonly expanded: ReadonlyArray<string>
+  readonly setExpanded: (change: (previous: ReadonlyArray<string>) => ReadonlyArray<string>) => void
+}
+
+export const revealIn = (expanded: ReadonlyArray<string>, path: string) => {
+  const missing = ancestorsOf(path).filter((parent) => !expanded.includes(parent))
+  return missing.length > 0 ? [...expanded, ...missing] : expanded
+}
+
+// oxlint-disable-next-line ren/no-comments -- Lists one project, a folder in the chat's folder. Tree paths and git status are relative to `base`. Prefix a path with `base` before you open or mention its file.
+export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string>, base: string, expansion: Expansion) {
+  const expanded = expansion.expanded
+  const setExpanded = expansion.setExpanded
   const [query, setQuery] = useState("")
-  const folders = ChatReact.useFolders(root, expanded)
+  const folders = ChatReact.useFolders(root, base ? [base, ...expanded] : expanded)
   const found = ChatReact.useFiles({ root, query: useDebouncedValue(query, searchDelay), type: "file" })
-  const diff = ChatReact.useVcsDiff(root, "working")
-  const refreshFolder = folders.refresh
+  const diff = ChatReact.useVcsDiff({ root, mode: "working", path: base })
   const results = [...folders.results]
   const hits = query && AsyncResult.isSuccess(found) ? found.value.filter((entry) => entry.type === "file") : []
+  const inside = (path: string) => path.startsWith(base) && path !== base && !gitFolder.test(path)
   const paths = [
     ...new Set([...pathsOf(results.map(([, result]) => result)), ...hits.flatMap((entry) => lineageOf(entry.path))]),
   ]
-  const loaded = results.flatMap(([path, result]) => (path && Option.isSome(AsyncResult.value(result)) ? [path] : []))
+    .filter(inside)
+    .map((path) => path.slice(base.length))
+  const loaded = results.flatMap(([path, result]) =>
+    inside(path) && Option.isSome(AsyncResult.value(result)) ? [path.slice(base.length)] : [],
+  )
   const gitStatus = AsyncResult.isSuccess(diff.result)
     ? diff.result.value.map((file) => ({ path: file.file, status: file.status }))
     : []
-  useFolderFailures(results, refreshFolder)
+  useFolderFailures(results, folders.refresh)
   useRefreshOn(edited.length, () => {
-    for (const path of new Set(edited.flatMap(foldersOf))) refreshFolder(path)
+    for (const path of new Set(edited.flatMap(foldersOf))) folders.refresh(path)
   })
+  const top = folders.results.get("")
   return {
-    root: folders.results.get(""),
+    base,
+    topFolders: top ? listedOf(top).filter((entry) => entry.type === "directory").length : 0,
+    root: folders.results.get(base),
     paths,
     loaded,
     gitStatus,
     setQuery,
-    expand: (path: string) => setExpanded((previous) => (previous.includes(path) ? previous : [...previous, path])),
-    reveal: (path: string) =>
-      setExpanded((previous) => {
-        const missing = ancestorsOf(path).filter((parent) => !previous.includes(parent))
-        return missing.length > 0 ? [...previous, ...missing] : previous
-      }),
-    refreshFolder: folders.refresh,
+    expand: (path: string) =>
+      setExpanded((previous) => (previous.includes(base + path) ? previous : [...previous, base + path])),
+    reveal: (path: string) => setExpanded((previous) => revealIn(previous, path)),
+    refreshFolder: (path: string) => folders.refresh(base + path),
     refresh: () => {
-      for (const path of ["", ...expanded]) folders.refresh(path)
+      for (const path of ["", base, ...expanded]) folders.refresh(path)
       diff.refresh()
     },
   }

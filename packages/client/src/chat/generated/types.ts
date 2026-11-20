@@ -175,6 +175,8 @@ export type FileSystemContent = {
 
 export type SessionVcsInfo = { provider?: string; branch: { current?: string; default?: string } }
 
+export type SessionVcsProject = { path: string; branch?: string }
+
 export type SessionEventSessionAgentSelected = {
   id: string
   created: number
@@ -1605,17 +1607,31 @@ export type FileReadInput = {
 
 export type FileReadOutput = FileSystemContent
 
-export type VcsGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+export type VcsGetInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly path?: { readonly path?: string | undefined }["path"]
+}
 
 export type VcsGetOutput = SessionVcsInfo
 
+export type VcsProjectsInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type VcsProjectsOutput = Array<SessionVcsProject>
+
 export type VcsDiffInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly path?: {
+    readonly path?: string | undefined
+    readonly mode?: ("working" | "branch" | "committed") | undefined
+    readonly context?: number | undefined
+  }["path"]
   readonly mode?: {
+    readonly path?: string | undefined
     readonly mode?: ("working" | "branch" | "committed") | undefined
     readonly context?: number | undefined
   }["mode"]
   readonly context?: {
+    readonly path?: string | undefined
     readonly mode?: ("working" | "branch" | "committed") | undefined
     readonly context?: number | undefined
   }["context"]

@@ -683,7 +683,8 @@ test("a session without an environment refuses to list or read files, read versi
       const refused = yield* Effect.all([
         brain.chat.file["file.list"]({ params, query: {} }).pipe(Effect.flip),
         brain.chat.file["file.read"]({ params, query: { path: "notes.md" } }).pipe(Effect.flip),
-        brain.chat.vcs["vcs.get"]({ params }).pipe(Effect.flip),
+        brain.chat.vcs["vcs.get"]({ params, query: {} }).pipe(Effect.flip),
+        brain.chat.vcs["vcs.projects"]({ params }).pipe(Effect.flip),
         brain.chat.vcs["vcs.diff"]({ params, query: {} }).pipe(Effect.flip),
         brain.chat.shell["shell.create"]({ params, payload: { command: "true" } }).pipe(Effect.flip),
       ])
