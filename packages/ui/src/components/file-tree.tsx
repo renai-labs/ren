@@ -145,6 +145,7 @@ function FileExplorer(props: {
   onSelect: (path: string) => void
   onPin: (path: string) => void
   onExpand: (folder: string) => void
+  onCollapse: (folder: string) => void
   onHover: (path: string) => void
   onQuery: (query: string) => void
   onRefresh: () => void
@@ -213,9 +214,15 @@ function FileExplorer(props: {
   useEffect(() => {
     const report = () => {
       for (const path of folders) {
-        if (reported.current.has(path) || !isOpen(model, path)) continue
-        reported.current.add(path)
-        latest.current.onExpand(path)
+        const open = isOpen(model, path)
+        if (open === reported.current.has(path)) continue
+        if (open) {
+          reported.current.add(path)
+          latest.current.onExpand(path)
+        } else {
+          reported.current.delete(path)
+          latest.current.onCollapse(path)
+        }
       }
     }
     report()

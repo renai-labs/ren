@@ -73,6 +73,7 @@ export interface FileTree {
   readonly setQuery: (query: string) => void
   readonly prefetch: (path: string) => void
   readonly expand: (path: string) => void
+  readonly collapse: (path: string) => void
   readonly reveal: (path: string) => void
   readonly refreshFolder: (path: string) => void
   readonly refresh: () => void
@@ -513,6 +514,7 @@ function Tree(props: {
       onSelect={props.onOpen}
       onPin={props.onPin}
       onExpand={tree.expand}
+      onCollapse={tree.collapse}
       onHover={tree.prefetch}
       onQuery={tree.setQuery}
       onRefresh={tree.refresh}

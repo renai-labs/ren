@@ -22,6 +22,7 @@ import { useChatKeys } from "./use-chat-keys.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { ChatWorkspace } from "../../lib/chat-workspace.js"
 import { Preference } from "../../lib/preference.js"
 import { cn } from "cn"
 import { useChat } from "./use-chat.js"
@@ -299,13 +300,15 @@ export function ChatPage() {
   const params = route.useParams()
   const search = route.useSearch()
   const navigate = useNavigate()
-  const [panel, setPanel] = useState(false)
-  const [maximized, setMaximized] = useState(false)
+  const workspace = ChatWorkspace.useWorkspace(params.sessionId)
+  const panel = workspace.open
+  const maximized = workspace.maximized
   const [renaming, setRenaming] = useState(false)
-  const [request, setRequest] = useState<PanelRequest>()
+  const [pending, setPending] = useState<{ readonly chat: string; readonly request: PanelRequest }>()
+  const request = pending?.chat === params.sessionId ? pending.request : undefined
   const requestPanel = (next: PanelTarget) => {
-    setPanel(true)
-    setRequest({ ...next, id: crypto.randomUUID() })
+    workspace.setOpen(true)
+    setPending({ chat: params.sessionId, request: { ...next, id: crypto.randomUUID() } })
   }
   const chat = useChat(params.sessionId, {
     child: search.child,
@@ -345,7 +348,7 @@ export function ChatPage() {
           panel={panel}
           renaming={renaming}
           onRenamingChange={setRenaming}
-          onTogglePanel={() => setPanel((current) => !current)}
+          onTogglePanel={() => workspace.setOpen(!panel)}
         />
         {chat.failed ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
@@ -388,16 +391,18 @@ export function ChatPage() {
             />
           ) : null}
           <WorkspacePanel
+            key={chat.root}
             root={chat.root}
+            saved={workspace.panel}
             messages={chat.messages}
             request={request}
             maximized={maximized}
-            onMaximize={setMaximized}
+            onMaximize={workspace.setMaximized}
             onMention={mentionFile}
             running={chat.busy}
             onClose={() => {
-              setPanel(false)
-              setMaximized(false)
+              workspace.setOpen(false)
+              workspace.setMaximized(false)
             }}
           />
         </div>

@@ -27,6 +27,7 @@ import { ChangesTab } from "./workspace-changes.js"
 import { ActivityTab } from "./workspace-activity.js"
 import { FilesTab } from "./workspace-files.js"
 import { WorkspaceProject } from "./workspace-project.js"
+import { ChatWorkspace } from "../../lib/chat-workspace.js"
 import type { Expansion } from "../../lib/use-workspace-files.js"
 import { BrowserTab, ComputerTab } from "./workspace-streams.js"
 import { TerminalTab } from "./workspace-terminal.js"
@@ -243,6 +244,7 @@ function TabBody(props: {
 
 export function WorkspacePanel(props: {
   root: Session.ID
+  saved: ChatWorkspace.Panel
   request: PanelRequest | undefined
   messages: ReadonlyArray<SessionMessage.Info>
   maximized: boolean
@@ -251,12 +253,14 @@ export function WorkspacePanel(props: {
   onMention: ((path: string) => void) | undefined
   running: boolean
 }) {
-  const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>([])
-  const [active, setActive] = useState<string>()
+  const [tabs, setTabs] = useState<ReadonlyArray<OpenTab>>(props.saved.tabs)
+  const [active, setActive] = useState(props.saved.active)
   const current = tabs.find((tab) => tab.id === active) ?? tabs.at(-1)
-  const [handled, setHandled] = useState<string>()
-  const [expanded, setExpanded] = useState<ReadonlyArray<string>>([])
-  const projects = WorkspaceProject.useProjects(props.root, props.messages)
+  const [handled, setHandled] = useState(() => props.request?.id)
+  const [expanded, setExpanded] = useState(props.saved.expanded)
+  const [chosen, setChosen] = useState(props.saved.chosen)
+  const projects = WorkspaceProject.useProjects(props.root, props.messages, { chosen, onChosen: setChosen })
+  ChatWorkspace.useSavePanel(props.root, { tabs, active: current, expanded, chosen })
   const pick = (kind: Kind, request?: PanelRequest) => {
     const next = openTab(
       tabs,

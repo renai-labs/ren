@@ -111,6 +111,7 @@ export function useWorkspaceFiles(root: Session.ID, edited: ReadonlyArray<string
     prefetch: (path: string) => prefetchFile(base + path),
     expand: (path: string) =>
       setExpanded((previous) => (previous.includes(base + path) ? previous : [...previous, base + path])),
+    collapse: (path: string) => setExpanded((previous) => previous.filter((each) => each !== base + path)),
     reveal: (path: string) => setExpanded((previous) => revealIn(previous, path)),
     refreshFolder: (path: string) => folders.refresh(base + path),
     refresh: () => {

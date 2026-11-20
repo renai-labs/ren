@@ -1,12 +1,13 @@
 export * as WorkspaceProject from "./workspace-project.js"
 
-import { useState } from "react"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionVcs } from "@ren/schema/session/vcs"
 import { AsyncResult } from "effect/reactivity"
 import { editedPaths } from "./workspace-edits.js"
+
+export type Chosen = { readonly project: string } | { readonly file: string }
 
 export interface Projects {
   readonly list: ReadonlyArray<SessionVcs.Project>
@@ -27,10 +28,14 @@ const containing = (list: ReadonlyArray<SessionVcs.Project>, path: string) =>
   )
 
 // oxlint-disable-next-line ren/no-comments -- Files and Changes start in the repository Ren edited last, or in the only one the chat's folder holds, so a clone shows as the project and not as a folder of the chat's folder.
-export function useProjects(root: Session.ID, messages: ReadonlyArray<SessionMessage.Info>): Projects {
+export function useProjects(
+  root: Session.ID,
+  messages: ReadonlyArray<SessionMessage.Info>,
+  choice: { readonly chosen: Chosen | undefined; readonly onChosen: (next: Chosen) => void },
+): Projects {
   const projects = ChatReact.useVcsProjects(root)
   const list = AsyncResult.isSuccess(projects.result) ? projects.result.value : []
-  const [chosen, setChosen] = useState<{ readonly project: string } | { readonly file: string }>()
+  const chosen = choice.chosen
   const last = editedPaths(messages).at(-1)
   const repositories = list.filter((project) => project.path)
   const only =
@@ -44,8 +49,8 @@ export function useProjects(root: Session.ID, messages: ReadonlyArray<SessionMes
   return {
     list,
     current,
-    choose: (path) => setChosen({ project: path }),
-    reveal: (path) => setChosen({ file: path }),
+    choose: (path) => choice.onChosen({ project: path }),
+    reveal: (path) => choice.onChosen({ file: path }),
     refresh: projects.refresh,
   }
 }
