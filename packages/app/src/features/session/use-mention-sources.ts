@@ -1,8 +1,10 @@
 import { Composer, Mentions } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
+import { AsyncResult } from "effect/reactivity"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { Preference } from "../../lib/preference.js"
 import { sessionTitle } from "../../lib/sessions.js"
@@ -16,7 +18,7 @@ export const categories = [
   { prefix: "chats", label: "Chats" },
   { prefix: "apps", label: "Apps", description: "Apps the agent can use" },
   { prefix: "agents", label: "Agents", description: "Agents in this space" },
-  { prefix: "files", label: "Files", description: "Files in the space’s drive" },
+  { prefix: "files", label: "Files", description: "Files on this chat’s computer and in the space’s drive" },
   { prefix: "repos", label: "Repositories", description: "Repositories the agent can read" },
 ] as const
 
@@ -33,7 +35,7 @@ const searchDelay = 250
 const searchSize = 20
 const recentSize = 20
 
-// oxlint-disable-next-line ren/no-comments -- A mention the person picked, with what choosing it again needs: the app it marks, or the drive file it attaches.
+// oxlint-disable-next-line ren/no-comments -- A mention the person picked, with what choosing it again needs. That is the app it marks, the drive file it attaches, or the chat whose computer has the file.
 export interface Entry extends Schema.Schema.Type<typeof Entry> {}
 export const Entry = Schema.Struct({
   item: Schema.Struct({
@@ -46,18 +48,20 @@ export const Entry = Schema.Struct({
   }),
   app: Schema.optional(Composer.MentionedApp),
   file: Schema.optional(SessionMessage.DriveFile),
+  root: Schema.optional(Session.ID),
 })
 
 const Recent = Schema.Array(Entry)
 
-export const key = (entry: Entry) => Mentions.key(entry.item)
+export const key = (entry: Entry) =>
+  entry.root ? `${entry.root}:${Mentions.key(entry.item)}` : Mentions.key(entry.item)
 
-export function useRecent(spaceId: string | undefined) {
+export function useRecent(spaceId: string | undefined, root: Session.ID | undefined) {
   const storage = Platform.usePlatform().storage
   const recent = Preference.make(`mentions.recent.${useMe().user.id}.${spaceId ?? "none"}.v1`, Recent, [])
   const entries = Preference.usePreference(recent)
   return {
-    entries,
+    entries: entries.filter((entry) => entry.root === undefined || entry.root === root),
     add: (entry: Entry) =>
       recent.write(storage, [entry, ...entries.filter((each) => key(each) !== key(entry))].slice(0, recentSize)),
   }
@@ -177,7 +181,13 @@ function useDrive(input: { readonly enabled: boolean; readonly spaceId: string |
       entry.type === "file"
         ? [
             {
-              item: { kind: "file", id: entry.path, label: nameOf(entry.path), handle: entry.path },
+              item: {
+                kind: "file",
+                id: entry.path,
+                label: nameOf(entry.path),
+                handle: entry.path,
+                description: "Drive",
+              },
               file: {
                 path: entry.path,
                 name: nameOf(entry.path),
@@ -188,6 +198,32 @@ function useDrive(input: { readonly enabled: boolean; readonly spaceId: string |
           ]
         : [],
     ),
+  }
+}
+
+const noChat = Session.ID.create()
+
+// oxlint-disable-next-line ren/no-comments -- Search the current chat's computer by filename. Insert selected paths as mentions. New chats have no computer to search.
+function useComputerFiles(input: {
+  readonly enabled: boolean
+  readonly root: Session.ID | undefined
+  readonly search: string
+}) {
+  const found = ChatReact.useFiles({
+    root: input.root ?? noChat,
+    query: input.enabled && input.root ? input.search : "",
+    type: "file",
+  })
+  const root = input.root
+  return {
+    searching: AsyncResult.isWaiting(found),
+    files:
+      root && AsyncResult.isSuccess(found)
+        ? found.value.slice(0, searchSize).map((entry): Entry => ({
+            item: { ...Mentions.fromFile(entry), description: "Chat’s computer" },
+            root,
+          }))
+        : [],
   }
 }
 
@@ -207,16 +243,17 @@ export function useMentionSources(input: {
   const chats = useChats({ enabled: wants(input.scope, "chats"), search, root: input.root })
   const agents = useAgents(input.spaceId)
   const drive = useDrive({ enabled: wants(input.scope, "files"), spaceId: input.spaceId, folder })
+  const computer = useComputerFiles({ enabled: wants(input.scope, "files"), root: input.root, search })
   const lists: Record<Prefix, ReadonlyArray<Entry>> = {
     tasks: tasks.entries,
     chats: chats.entries,
     apps: named(input.apps, filter),
     agents: named(agents, filter),
-    files: named(drive.files, filter),
+    files: [...computer.files, ...named(drive.files, filter)],
     repos: named(input.repositories, filter),
   }
   return {
-    searching: tasks.searching || chats.searching || drive.searching,
+    searching: tasks.searching || chats.searching || drive.searching || computer.searching,
     lists,
     agents,
     folders: named(drive.folders, filter),

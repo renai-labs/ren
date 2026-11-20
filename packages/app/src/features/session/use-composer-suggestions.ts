@@ -250,9 +250,11 @@ function useSuggestions(input: {
   const appById = apps.byId
   const appEntries = apps.items.map((item): Entry => ({ item, app: apps.mentionOf(item.id) }))
   const repositories = useRepositoryMentions(input.spaceId).map((item): Entry => ({ item }))
-  const recent = useRecent(input.spaceId)
+  const recent = useRecent(input.spaceId, input.root)
   const sources = useMentionSources({ root: input.root, spaceId: input.spaceId, scope, apps: appEntries, repositories })
-  const offered = categories.filter((each) => each.prefix !== "files" || input.spaceId !== undefined)
+  const offered = categories.filter(
+    (each) => each.prefix !== "files" || input.spaceId !== undefined || input.root !== undefined,
+  )
   const pickable = pick(scope, sources.lists, recent.entries, offered)
   const opened = opening(scope, offered, sources.folders)
   const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
