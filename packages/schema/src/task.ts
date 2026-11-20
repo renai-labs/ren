@@ -159,6 +159,7 @@ export const ListInput = Schema.Struct({
   priority: Schema.optional(Priority),
   agentId: Schema.optional(Agent.ID),
   ownerId: Schema.optional(Auth.UserID),
+  search: Schema.optional(Schema.String).annotate({ description: "Part of the title." }),
   label: Schema.optional(Label.Name).annotate({ description: "A label name, in any case." }),
   humanReview: Schema.optional(Schema.Boolean),
   linkedTo: Schema.optional(TaskLink.Url).annotate({

@@ -2,7 +2,16 @@ import { useLayoutEffect } from "react"
 import { cn } from "cn"
 import { resolveFileIcon, spriteSheets } from "../lib/file-icons.js"
 
-const sprites = { injected: false }
+const sprites: { host: HTMLElement | undefined } = { host: undefined }
+
+const injectSprites = () => {
+  if (sprites.host) return
+  const host = document.createElement("div")
+  host.hidden = true
+  host.innerHTML = spriteSheets.join("")
+  document.body.prepend(host)
+  sprites.host = host
+}
 
 function FileIcon({
   name,
@@ -10,14 +19,7 @@ function FileIcon({
   className,
   ...props
 }: Omit<React.ComponentProps<"svg">, "children"> & { name: string; mime?: string | undefined }) {
-  useLayoutEffect(() => {
-    if (sprites.injected) return
-    sprites.injected = true
-    const host = document.createElement("div")
-    host.hidden = true
-    host.innerHTML = spriteSheets.join("")
-    document.body.append(host)
-  }, [])
+  useLayoutEffect(injectSprites, [])
   const icon = resolveFileIcon(name, mime)
   return (
     <svg

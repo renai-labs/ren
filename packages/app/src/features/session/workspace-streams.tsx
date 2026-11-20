@@ -1,12 +1,5 @@
 import type { ReactNode } from "react"
-import {
-  IconArrowLeft,
-  IconArrowRight,
-  IconDeviceDesktop,
-  IconHandFinger,
-  IconRefresh,
-  IconWorld,
-} from "@tabler/icons-react"
+import { IconArrowLeft, IconArrowRight, IconHandFinger, IconRefresh, IconWorld } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
@@ -49,21 +42,6 @@ function Playback(props: { label: string }) {
           <IconHandFinger />
         </Button>
       </div>
-    </div>
-  )
-}
-
-export function ComputerTab() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1">
-        <Waiting
-          icon={<IconDeviceDesktop />}
-          title="Computer"
-          description="The environment’s desktop streams here once it’s connected."
-        />
-      </div>
-      <Playback label="Computer" />
     </div>
   )
 }

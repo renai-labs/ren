@@ -7540,6 +7540,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7554,6 +7555,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7568,6 +7570,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7582,6 +7585,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7596,6 +7600,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7610,6 +7615,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7617,6 +7623,21 @@ export type TaskListInput = {
     readonly page: number
     readonly pageSize: number
   }["ownerId"]
+  readonly search?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly includeDone?: boolean | undefined
+    readonly priority?: ("low" | "medium" | "high") | undefined
+    readonly agentId?: string | undefined
+    readonly ownerId?: string | undefined
+    readonly search?: string | undefined
+    readonly label?: string | undefined
+    readonly humanReview?: boolean | undefined
+    readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
   readonly label?: {
     readonly spaceId?: string | undefined
     readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
@@ -7624,6 +7645,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7638,6 +7660,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7652,6 +7675,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7666,6 +7690,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7680,6 +7705,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7694,6 +7720,7 @@ export type TaskListInput = {
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined

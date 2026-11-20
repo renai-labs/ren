@@ -49,7 +49,7 @@ export const inboxIsFilesReset = sql<boolean>`coalesce(${Database.Schema.opencod
 
 export const search = (text: string | undefined) => {
   if (!text) return
-  const pattern = `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
+  const pattern = Database.contains(text)
   return or(
     ilike(Database.Schema.opencode_session.title, pattern),
     sql`exists (

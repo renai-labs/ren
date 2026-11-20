@@ -357,7 +357,7 @@ export const layer = Layer.effect(
         if (!isAllowed(actor, "list")) return Pagination.page([], input)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const pattern = input.query && `%${input.query.replaceAll(/[\\%_]/gu, "\\$&")}%`
+            const pattern = input.query && Database.contains(input.query)
             const page = Pagination.page(
               yield* browse(
                 transaction,

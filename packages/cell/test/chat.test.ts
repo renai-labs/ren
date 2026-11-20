@@ -8,7 +8,7 @@ import { Session } from "@ren/schema/session"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Exit, Layer, Logger, Queue, Ref, type Scope, Stream } from "effect"
+import { Effect, Exit, Layer, Logger, Predicate, Queue, Ref, type Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { HttpApi } from "effect/http-api"
 import { Chat } from "../src/chat.js"
@@ -683,11 +683,93 @@ test("a session without an environment refuses to list or read files, read versi
       const refused = yield* Effect.all([
         brain.chat.file["file.list"]({ params, query: {} }).pipe(Effect.flip),
         brain.chat.file["file.read"]({ params, query: { path: "notes.md" } }).pipe(Effect.flip),
-        brain.chat.vcs["vcs.get"]({ params }).pipe(Effect.flip),
+        brain.chat.vcs["vcs.get"]({ params, query: {} }).pipe(Effect.flip),
+        brain.chat.vcs["vcs.projects"]({ params }).pipe(Effect.flip),
         brain.chat.vcs["vcs.diff"]({ params, query: {} }).pipe(Effect.flip),
         brain.chat.shell["shell.create"]({ params, payload: { command: "true" } }).pipe(Effect.flip),
       ])
       expect(refused.map((error) => error._tag)).toEqual(refused.map(() => "InvalidRequestError"))
+    }),
+  ))
+
+test("every tool the model calls directly takes an activity line, and the transcript keeps the line of a call", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const script = stub.script({
+        tool: { name: "skill", input: { name: "missing", activity: "Loading a skill" } },
+      })
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+      })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
+      const tools = (script.calls[0]?.body.tools ?? []).map((tool) => ({
+        name: tool.function.name,
+        activity: Boolean(
+          Predicate.isObject(tool.function.parameters) &&
+          Predicate.isObject(tool.function.parameters.properties) &&
+          tool.function.parameters.properties.activity,
+        ),
+      }))
+      expect(tools.length).toBeGreaterThan(1)
+      expect(tools.filter((tool) => !tool.activity).map((tool) => tool.name)).toEqual([])
+      expect(script.calls[0]?.system).toContain("Always fill the `activity` field")
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      const call = page.items
+        .flatMap((message) => (message.type === "assistant" ? message.content : []))
+        .find((content) => content.type === "tool" && content.name === "skill")
+      expect(call).toMatchObject({ state: { input: { name: "missing", activity: "Loading a skill" } } })
+    }),
+  ))
+
+test("code run through execute keeps its activity line and still runs", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const script = stub.script({
+        tool: { name: "execute", input: { code: "return 21 * 2", activity: "Doubling twenty-one" } },
+      })
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+      })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      const call = page.items
+        .flatMap((message) => (message.type === "assistant" ? message.content : []))
+        .find((content) => content.type === "tool" && content.name === "execute")
+      expect(call).toMatchObject({
+        state: {
+          status: "completed",
+          input: { code: "return 21 * 2", activity: "Doubling twenty-one" },
+          content: [{ type: "text", text: expect.stringContaining("42") }],
+        },
+      })
+    }),
+  ))
+
+test("a page shorter than its limit is the last one and has no next cursor; a full page has one", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: stub.script().marker, delivery: "steer" },
+      })
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
+      const short = yield* brain.chat.session["session.messages"]({ params, query: { limit: 20 } })
+      expect(short.items.length).toBeLessThan(20)
+      expect(short.cursor.next).toBeUndefined()
+      const full = yield* brain.chat.session["session.messages"]({ params, query: { limit: 1 } })
+      expect(full.items).toHaveLength(1)
+      expect(full.cursor.next).toBeDefined()
     }),
   ))
 

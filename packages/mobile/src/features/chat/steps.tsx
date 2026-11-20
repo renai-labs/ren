@@ -46,6 +46,7 @@ const toolIcons = {
   search: DocumentMagnifyingGlassIcon,
   web: GlobeAltIcon,
   agent: QueueListIcon,
+  ren: PowerIcon,
   tool: PowerIcon,
 } satisfies Record<ToolDisplay.Kind, unknown>
 

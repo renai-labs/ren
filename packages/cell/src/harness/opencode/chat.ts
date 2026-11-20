@@ -12,12 +12,14 @@ import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
+import { posix } from "node:path"
 import { Clock, Effect, Exit, Fiber, Option, Predicate, Schedule, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
 import { Translate } from "@ren/opencode-transcript/translate"
 import { OpenCodeAttachments } from "./attachments.js"
+import { RenVcs } from "./vcs.js"
 
 const capabilities = SessionCapabilities.of("opencode")
 
@@ -69,6 +71,7 @@ export const make = (
     | "commands"
     | "findFiles"
     | "environment"
+    | "git"
     | "activate"
     | "chats"
   >,
@@ -166,7 +169,7 @@ export const make = (
           items: yield* readAll(found.data, Translate.message),
           cursor: {
             ...(found.cursor.previous && { previous: found.cursor.previous }),
-            ...(found.cursor.next && { next: found.cursor.next }),
+            ...(found.cursor.next && !(page.limit && found.data.length < page.limit) && { next: found.cursor.next }),
           },
         }
       }),
@@ -350,18 +353,22 @@ export const make = (
           ),
         ),
       ),
-    vcs: (sessionId) =>
-      host
-        .environment(sessionId, (environment) => environment.vcs.info())
-        .pipe(Effect.flatMap((info) => readOne(info, Translate.vcs))),
-    vcsDiff: (sessionId, options) =>
-      host.environment(sessionId, (environment) =>
-        environment.vcs
-          .diff(options.mode, { ...(Predicate.isNumber(options.context) && { context: options.context }) })
-          .pipe(
-            Effect.catchTag("Vcs.DiffError", (error) => Effect.fail(new Harness.Rejected({ message: error.message }))),
-          ),
-      ),
+    vcs: (sessionId, path) =>
+      (path
+        ? host.git(sessionId, (hand) => RenVcs.make(hand.spawner, posix.join(hand.directory, path)).info())
+        : host.environment(sessionId, (environment) => environment.vcs.info())
+      ).pipe(Effect.flatMap((info) => readOne(info, Translate.vcs))),
+    vcsProjects: (sessionId) => host.git(sessionId, (hand) => RenVcs.projects(hand.spawner, hand.directory)),
+    vcsDiff: (sessionId, options) => {
+      const context = { ...(Predicate.isNumber(options.context) && { context: options.context }) }
+      return (
+        options.path
+          ? host.git(sessionId, (hand) =>
+              RenVcs.make(hand.spawner, posix.join(hand.directory, options.path ?? "")).diff(options.mode, context),
+            )
+          : host.environment(sessionId, (environment) => environment.vcs.diff(options.mode, context))
+      ).pipe(Effect.catchTag("Vcs.DiffError", (error) => Effect.fail(new Harness.Rejected({ message: error.message }))))
+    },
     replyPermission: (sessionId, requestId, reply, message) =>
       api.permission
         .reply({

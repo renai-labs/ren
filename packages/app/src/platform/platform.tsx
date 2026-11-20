@@ -37,6 +37,7 @@ interface Base {
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
+  readonly windowStorage?: Omit<Storage, "subscribe">
   readonly drafts?: Drafts
   readonly chatCache?: ChatCache
   readonly openExternal: (url: string) => void

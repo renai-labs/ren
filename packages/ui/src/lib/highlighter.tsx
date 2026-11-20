@@ -1,65 +1,30 @@
 import type { ReactNode } from "react"
-import { createHighlighterCore, type GrammarState, type HighlighterCore } from "shiki/core"
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript"
+import type { ThemedToken } from "@pierre/highlights"
 
-const languages = {
-  bash: () => import("shiki/langs/shellscript.mjs"),
-  css: () => import("shiki/langs/css.mjs"),
-  diff: () => import("shiki/langs/diff.mjs"),
-  go: () => import("shiki/langs/go.mjs"),
-  html: () => import("shiki/langs/html.mjs"),
-  javascript: () => import("shiki/langs/javascript.mjs"),
-  json: () => import("shiki/langs/json.mjs"),
-  jsx: () => import("shiki/langs/jsx.mjs"),
-  markdown: () => import("shiki/langs/markdown.mjs"),
-  python: () => import("shiki/langs/python.mjs"),
-  rust: () => import("shiki/langs/rust.mjs"),
-  sql: () => import("shiki/langs/sql.mjs"),
-  tsx: () => import("shiki/langs/tsx.mjs"),
-  typescript: () => import("shiki/langs/typescript.mjs"),
-  yaml: () => import("shiki/langs/yaml.mjs"),
+export const longLine = 1000
+
+const loaded: { library: ReturnType<typeof load> | undefined } = { library: undefined }
+
+function load() {
+  return Promise.all([
+    import("@pierre/highlights"),
+    import("@pierre/highlights/themes/pierre-light"),
+    import("@pierre/highlights/themes/pierre-dark"),
+  ]).then(([core, light, dark]) => ({ core, themes: { light: light.default, dark: dark.default } }))
 }
 
-type Language = keyof typeof languages
+const render = (line: ReadonlyArray<ThemedToken>) =>
+  line.map((token) => (
+    <span key={token.offset} style={token.htmlStyle} className="text-(--hls-light) dark:text-(--hls-dark)">
+      {token.content}
+    </span>
+  ))
 
-const aliases: Readonly<Record<string, Language>> = {
-  js: "javascript",
-  md: "markdown",
-  py: "python",
-  rs: "rust",
-  sh: "bash",
-  shell: "bash",
-  shellscript: "bash",
-  ts: "typescript",
-  yml: "yaml",
-  zsh: "bash",
-}
-
-const isLanguage = (name: string): name is Language => Object.hasOwn(languages, name)
-
-const loaded: { highlighter: Promise<HighlighterCore> | undefined } = { highlighter: undefined }
-
-function shiki() {
-  loaded.highlighter ??= createHighlighterCore({
-    themes: [import("shiki/themes/github-light.mjs"), import("shiki/themes/github-dark.mjs")],
-    langs: [],
-    engine: createJavaScriptRegexEngine({ forgiving: true }),
-  })
-  return loaded.highlighter
-}
-
-function languageOf(language: string) {
-  const name = language.toLowerCase()
-  if (name === "ansi") return name
-  if (isLanguage(name)) return name
-  return aliases[name] ?? null
-}
+export type Stream = (code: string) => ReadonlyArray<ReactNode> | null
 
 export interface Highlighter {
-  readonly highlight: (
-    code: string,
-    state?: GrammarState,
-  ) => { readonly lines: ReadonlyArray<ReactNode>; readonly state: GrammarState | undefined }
+  readonly highlight: (code: string) => ReadonlyArray<ReactNode>
+  readonly stream: () => Stream
 }
 
 const ready = new Map<string, Highlighter>()
@@ -67,29 +32,25 @@ const ready = new Map<string, Highlighter>()
 export const readyHighlighter = (language: string) => ready.get(language) ?? null
 
 export async function loadHighlighter(language: string) {
-  const lang = languageOf(language)
+  const lang = language.toLowerCase()
   if (!lang) return null
-  const core = await shiki()
-  if (lang !== "ansi" && !core.getLoadedLanguages().includes(lang)) await core.loadLanguage(languages[lang])
+  loaded.library ??= load()
+  const library = await loaded.library
+  if (!library.core.isSupportedLanguage(lang)) return null
+  const options = { lang, themes: library.themes, defaultColor: false, tokenizeMaxLineLength: longLine } as const
   const highlighter: Highlighter = {
-    highlight(code, state) {
-      const tokenize = (text: string) =>
-        core.codeToTokens(text, {
-          lang,
-          themes: { light: "github-light", dark: "github-dark" },
-          defaultColor: false,
-          ...(state && { grammarState: state }),
-        }).tokens
-      const tokens = lang === "ansi" ? code.split("\n").flatMap((line) => tokenize(line)) : tokenize(code)
-      return {
-        lines: tokens.map((line) =>
-          line.map((token) => (
-            <span key={token.offset} style={token.htmlStyle} className="text-(--shiki-light) dark:text-(--shiki-dark)">
-              {token.content}
-            </span>
-          )),
-        ),
-        state: core.getLastGrammarState(tokens),
+    highlight: (code) => library.core.codeToTokens(code, options).tokens.map(render),
+    stream() {
+      const tokenizer = new library.core.StreamTokenizer(options)
+      const done = { text: "", lines: new Array<ReactNode>() }
+      return (code) => {
+        if (!code.startsWith(done.text)) return null
+        const end = code.lastIndexOf("\n") + 1
+        if (end > done.text.length) {
+          done.lines = [...done.lines, ...tokenizer.pushCode(code.slice(done.text.length, end)).map(render)]
+          done.text = code.slice(0, end)
+        }
+        return [...done.lines, ...highlighter.highlight(code.slice(end))]
       }
     },
   }

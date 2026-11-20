@@ -6,10 +6,12 @@ import { Alert, AlertAction, AlertDescription } from "@ren/ui/alert"
 import { Badge } from "@ren/ui/badge"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { Button } from "@ren/ui/button"
+import { ResizeHandle } from "@ren/ui/resize-handle"
 import { ActivityPill } from "./activity-pill.js"
 import { Queue } from "./queue.js"
 import { QueuedMessages } from "./queued-messages.js"
 import { OpenPanel } from "./open-panel.js"
+import { useTerminalShells } from "./terminal-shells.js"
 import { WorkspacePanel, type PanelRequest, type PanelTarget } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ContextUsage } from "./context-usage.js"
@@ -20,6 +22,9 @@ import { PromptInput } from "./prompt-input.js"
 import { useChatKeys } from "./use-chat-keys.js"
 import { ModelPicker } from "../../components/model-picker.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
+import { ChatWorkspace } from "../../lib/chat-workspace.js"
+import { Preference } from "../../lib/preference.js"
 import { cn } from "cn"
 import { useChat } from "./use-chat.js"
 import { useFind } from "./use-find.js"
@@ -33,6 +38,10 @@ type Chat = ReturnType<typeof useChat>
 
 function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
   const chat = props.chat
+  const terminal = useTerminalShells(chat.root)
+  const terminalOnly =
+    chat.activity.length > 0 &&
+    chat.activity.every((item) => item.type === "shell" && terminal.has({ id: item.id, command: item.label }))
   const keys = useChatKeys()
   const admin = useCanAdminister()
   const find = useFind({
@@ -53,13 +62,17 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         messages={chat.messages}
         rows={chat.rows}
         activeMessageID={chat.activeMessageID}
-        busy={chat.busy}
-        working={chat.working}
+        busy={chat.busy && !terminalOnly}
+        working={chat.working && !terminalOnly}
+        starting={chat.starting}
+        asking={chat.blocked}
+        simple={chat.simple}
+        waiting={chat.waiting}
         statuses={chat.statuses}
         viewer={chat.viewer}
         people={chat.people}
         more={chat.more}
-        loading={chat.rows.length === 0 && (chat.loading || chat.more || chat.loadingHistory)}
+        loading={chat.opening}
         loadingHistory={chat.loadingHistory}
         onLoadMore={chat.loadMore}
         find={find}
@@ -112,6 +125,7 @@ function ChatComposer(props: {
 }) {
   const chat = props.chat
   const column = useRef<HTMLDivElement>(null)
+  const terminal = useTerminalShells(chat.root)
   return (
     <div
       ref={column}
@@ -121,7 +135,11 @@ function ChatComposer(props: {
         <ActivityPill
           key={chat.root}
           root={chat.root}
-          items={chat.activity}
+          items={chat.activity.filter(
+            (item) =>
+              (item.type === "subagent" || !(chat.simple && item.blocking)) &&
+              !(item.type === "shell" && terminal.has({ id: item.id, command: item.label })),
+          )}
           align={chat.backgroundActivity}
           composer={column}
           onOpenChild={chat.openChild}
@@ -153,6 +171,7 @@ function ChatComposer(props: {
           onSubmit={chat.send}
           onChooseModel={chat.canChooseModel ? () => chat.setPicking(true) : undefined}
           boot={chat.bootStatus}
+          preparing={chat.preparing}
           onRetry={chat.retry}
           onRetryNow={chat.retryNow}
           running={chat.running}
@@ -268,11 +287,18 @@ function ChatHeader(props: {
         className="text-muted-foreground aria-pressed:bg-secondary aria-pressed:text-foreground"
         onClick={props.onTogglePanel}
       >
-        <IconLayoutSidebarRight />
+        <IconLayoutSidebarRight stroke={2.25} />
       </Button>
     </Breadcrumb.Header>
   )
 }
+
+const panelMin = 320
+
+const chatMin = 512
+
+const panelSize = (width: number | null) =>
+  `clamp(${panelMin}px, ${width === null ? "min(40vw, 640px)" : `${width}px`}, calc(100cqw - ${chatMin}px))`
 
 function panelWidth(panel: { readonly open: boolean; readonly maximized: boolean }) {
   if (!panel.open) return "w-0"
@@ -283,13 +309,15 @@ export function ChatPage() {
   const params = route.useParams()
   const search = route.useSearch()
   const navigate = useNavigate()
-  const [panel, setPanel] = useState(false)
-  const [maximized, setMaximized] = useState(false)
+  const workspace = ChatWorkspace.useWorkspace(params.sessionId)
+  const panel = workspace.open
+  const maximized = workspace.maximized
   const [renaming, setRenaming] = useState(false)
-  const [request, setRequest] = useState<PanelRequest>()
+  const [pending, setPending] = useState<{ readonly chat: string; readonly request: PanelRequest }>()
+  const request = pending?.chat === params.sessionId ? pending.request : undefined
   const requestPanel = (next: PanelTarget) => {
-    setPanel(true)
-    setRequest({ ...next, id: crypto.randomUUID() })
+    workspace.setOpen(true)
+    setPending({ chat: params.sessionId, request: { ...next, id: crypto.randomUUID() } })
   }
   const chat = useChat(params.sessionId, {
     child: search.child,
@@ -310,15 +338,26 @@ export function ChatPage() {
   const updateDraft = chat.files.update
   const mentionFile = (path: string) =>
     updateDraft((draft) => Composer.withText(draft, Mentions.insertFile(draft.text, path, draft.text.length).text))
+  const width = Preference.usePreference(ChatPreferences.panelWidth)
+  const setPreference = Preference.useSetPreference()
+  const layout = useRef<HTMLDivElement>(null)
+  const sizePanel = (node: HTMLDivElement | null, next: number | null) =>
+    node?.style.setProperty("--panel-width", panelSize(next))
   return (
-    <div className="flex min-h-0 flex-1 [--panel-width:clamp(--spacing(96),40vw,--spacing(160))]">
+    <div
+      ref={(node) => {
+        layout.current = node
+        sizePanel(node, width)
+      }}
+      className="@container flex min-h-0 flex-1"
+    >
       <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
         <ChatHeader
           chat={chat}
           panel={panel}
           renaming={renaming}
           onRenamingChange={setRenaming}
-          onTogglePanel={() => setPanel((current) => !current)}
+          onTogglePanel={() => workspace.setOpen(!panel)}
         />
         {chat.failed ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
@@ -337,21 +376,42 @@ export function ChatPage() {
       <div
         inert={!panel}
         className={cn(
-          "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear motion-reduce:transition-none",
+          "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear in-data-resizing:transition-none motion-reduce:transition-none",
           panelWidth({ open: panel, maximized }),
         )}
       >
-        <div className={cn("h-full", maximized ? "w-full" : "w-(--panel-width)")}>
+        <div className={cn("relative h-full", maximized ? "w-full" : "w-(--panel-width)")}>
+          {panel && !maximized ? (
+            <ResizeHandle
+              label="Resize panel"
+              side="left"
+              width={width ?? undefined}
+              min={panelMin}
+              max={() => (layout.current?.getBoundingClientRect().width ?? window.innerWidth) - chatMin}
+              onResize={(next) => {
+                layout.current?.setAttribute("data-resizing", "")
+                sizePanel(layout.current, next)
+              }}
+              onCommit={(next) => {
+                layout.current?.removeAttribute("data-resizing")
+                setPreference(ChatPreferences.panelWidth, next)
+              }}
+              onReset={() => setPreference(ChatPreferences.panelWidth, null)}
+            />
+          ) : null}
           <WorkspacePanel
+            key={chat.root}
             root={chat.root}
+            saved={workspace.panel}
             messages={chat.messages}
             request={request}
             maximized={maximized}
-            onMaximize={setMaximized}
+            onMaximize={workspace.setMaximized}
             onMention={mentionFile}
+            running={chat.busy}
             onClose={() => {
-              setPanel(false)
-              setMaximized(false)
+              workspace.setOpen(false)
+              workspace.setMaximized(false)
             }}
           />
         </div>

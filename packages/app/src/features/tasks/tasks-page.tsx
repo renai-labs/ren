@@ -1,6 +1,7 @@
 import { Preference } from "../../lib/preference.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { IconHandStop, IconCube, IconArchive, IconLink, IconX, IconPlus, IconGhostFilled } from "@tabler/icons-react"
+import { IconHandStop, IconCube, IconArchive, IconLink, IconX, IconPlus } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
 import {
@@ -94,7 +95,7 @@ function TaskAssignee(props: { task: Task; agentName: string | null; owner: Memb
   if (props.task.agentId)
     return (
       <span className="flex size-6 shrink-0 items-center justify-center">
-        <IconGhostFilled className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
+        <IconAgent className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
       </span>
     )
   return (
@@ -196,14 +197,14 @@ const groupingsFor = (lookups: TaskLookups) => ({
     ...lookups.agents.map((agent) => ({
       id: agent.id,
       label: agent.name,
-      icon: IconGhostFilled,
+      icon: IconAgent,
       spaceId: undefined,
       has: (task: Task) => task.agentId === agent.id,
     })),
     {
       id: "none",
       label: "No agent",
-      icon: IconGhostFilled,
+      icon: IconAgent,
       spaceId: undefined,
       has: (task: Task) => task.agentId === null,
     },
@@ -553,7 +554,7 @@ function SelectionBar(props: {
           <DropdownMenuGroup>
             {props.agents.map((agent) => (
               <DropdownMenuItem key={agent.id} onClick={() => props.onMove(agent.id)}>
-                <IconGhostFilled />
+                <IconAgent />
                 {agent.name}
               </DropdownMenuItem>
             ))}

@@ -3,7 +3,7 @@ export * as FileTabs from "./file-tabs.js"
 export interface Tab {
   readonly path: string
   readonly preview: boolean
-  readonly line?: number
+  readonly line?: number | undefined
 }
 
 export interface State {
