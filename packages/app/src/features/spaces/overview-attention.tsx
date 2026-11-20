@@ -21,7 +21,9 @@ const byRecent = (left: { updatedAt: string }, right: { updatedAt: string }) =>
   Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
 
 function attentionTasks(tasks: ReadonlyArray<TaskInfo>) {
-  const open = tasks.filter((task) => task.status === "todo" || task.status === "in_progress")
+  const open = tasks.filter(
+    (task) => task.status === "backlog" || task.status === "todo" || task.status === "in_progress",
+  )
   return [
     ...open.filter((task) => task.humanReview).toSorted(byRecent),
     ...open.filter((task) => !task.humanReview && task.session?.state === "failed").toSorted(byRecent),

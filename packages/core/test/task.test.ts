@@ -141,18 +141,20 @@ describe("Task", () => {
     }),
   )
 
-  it.live("the default list has the actionable tasks, newest first; includeDone and a status widen or narrow it", () =>
+  it.live("the default list has the open tasks, newest first; includeDone and a status widen or narrow it", () =>
     Effect.gen(function* () {
       const tasks = yield* Task.Service
       const o = yield* org
       const first = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "First" })
       const second = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Second", status: "in_progress" })
       const done = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Done", status: "done" })
+      const later = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Later", status: "backlog" })
       const ids = (input: Partial<TaskSchema.ListInput>) =>
         tasks.list(o.ada, { ...page, ...input }).pipe(Effect.map((result) => result.items.map((task) => task.id)))
-      expect(yield* ids({})).toEqual([second.id, first.id])
-      expect(yield* ids({ includeDone: true })).toEqual([done.id, second.id, first.id])
+      expect(yield* ids({})).toEqual([later.id, second.id, first.id])
+      expect(yield* ids({ includeDone: true })).toEqual([later.id, done.id, second.id, first.id])
       expect(yield* ids({ status: "done" })).toEqual([done.id])
+      expect(yield* ids({ status: "backlog" })).toEqual([later.id])
     }),
   )
 

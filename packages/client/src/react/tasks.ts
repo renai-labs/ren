@@ -20,9 +20,15 @@ const pageSize = 100
 
 export const refreshEvery = 5000
 
-const statuses = ["todo", "in_progress", "done", "dismissed"] as const satisfies ReadonlyArray<TaskInfo["status"]>
+const statuses = ["backlog", "todo", "in_progress", "done", "dismissed"] as const satisfies ReadonlyArray<
+  TaskInfo["status"]
+>
 
 const isStatus = (value: string | undefined): value is TaskInfo["status"] => statuses.some((status) => status === value)
+
+const openStatuses: ReadonlyArray<TaskInfo["status"]> = ["backlog", "todo", "in_progress"]
+
+const isOpen = (value: string | undefined) => openStatuses.some((status) => status === value)
 
 const isPriority = (value: string | undefined): value is NonNullable<TaskInfo["priority"]> =>
   value === "high" || value === "medium" || value === "low"
@@ -37,7 +43,7 @@ export function listInput(given: Filters | undefined, space?: string): Filter {
   const agentId = one(filters.agent)
   const ownerId = one(filters.owner)
   const label = one(filters.label)
-  const open = isStatus(status) && (status === "todo" || status === "in_progress")
+  const open = isOpen(status)
   return {
     parentId: "none",
     ...(open ? {} : { includeDone: true }),

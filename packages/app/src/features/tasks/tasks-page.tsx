@@ -55,6 +55,8 @@ import { TaskLink } from "./task-scope.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
+const isStatus = (value: string): value is TaskInfo["status"] => Object.hasOwn(statuses, value)
+
 type Task = TaskInfo
 
 function TaskMeta(props: { task: Task; spaceName: string; show: (property: string) => boolean }) {
@@ -372,7 +374,7 @@ export function TasksPage(props: {
   const setStatus = (status: string) => {
     const ids = selected
     setSelected([])
-    if (status !== "todo" && status !== "in_progress" && status !== "done" && status !== "dismissed") return
+    if (!isStatus(status)) return
     void bulk(ids, (id) => update.mutateAsync({ id, status }), "Status changed")
   }
   const move = (agentId: string | null) => {
@@ -395,9 +397,7 @@ export function TasksPage(props: {
     }
     if (groupBy === "status") {
       const status = input.groupId
-      return status === "todo" || status === "in_progress" || status === "done" || status === "dismissed"
-        ? update.mutateAsync({ id: input.taskId, status }).catch(failed)
-        : Promise.resolve()
+      return isStatus(status) ? update.mutateAsync({ id: input.taskId, status }).catch(failed) : Promise.resolve()
     }
     if (groupBy === "agent")
       return assign

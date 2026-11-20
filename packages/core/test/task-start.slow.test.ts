@@ -137,6 +137,28 @@ describe("Task start", () => {
       }),
   )
 
+  it.live("an assign to a backlog task starts its agent and moves it to in progress", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const activity = yield* TaskActivity.Service
+      const o = yield* org
+      const plan = yield* o.agent("plan")
+      const script = harness.stub.script()
+      const created = yield* tasks.create(o.ada, {
+        spaceId: o.factory.id,
+        title: `Plan ${script.marker}`,
+        status: "backlog",
+      })
+      yield* sessionOf(yield* tasks.assign(o.ada, created.id, { agentId: plan }))
+      yield* Effect.promise(() => script.called())
+      expect((yield* tasks.get(o.ada, created.id)).status).toBe("in_progress")
+      const trail = yield* activity.list(o.ada, { taskId: created.id, ...page })
+      expect(trail.items.at(-1)).toMatchObject({
+        event: { data: { _tag: "status", from: "backlog", to: "in_progress" } },
+      })
+    }),
+  )
+
   it.live("a task's first message carries the assignment it sends the agent", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

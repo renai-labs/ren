@@ -8,7 +8,7 @@ import { ColorDot } from "@ren/ui/color-dot"
 
 type GlyphProps = { className?: string | undefined; "aria-label"?: string | undefined }
 
-type RingState = "empty" | "half" | "complete" | "dismissed"
+type RingState = "dashed" | "empty" | "half" | "complete" | "dismissed"
 
 function ProgressRing(props: GlyphProps & { state: RingState }) {
   const mask = useId()
@@ -39,7 +39,15 @@ function ProgressRing(props: GlyphProps & { state: RingState }) {
   const circumference = 2 * Math.PI * 2
   return (
     <svg {...svg}>
-      <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle
+        cx="7"
+        cy="7"
+        r="6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray={props.state === "dashed" ? "1.4 1.74" : undefined}
+      />
       {props.state === "half" ? (
         <circle
           cx="7"
@@ -123,6 +131,7 @@ export function UnassignedIcon(props: GlyphProps) {
 }
 
 export const statuses = {
+  backlog: { label: Task.statusLabels.backlog, ring: "dashed", color: "text-muted-foreground" },
   todo: { label: Task.statusLabels.todo, ring: "empty", color: "text-muted-foreground" },
   in_progress: { label: Task.statusLabels.in_progress, ring: "half", color: "text-chart-3" },
   done: { label: Task.statusLabels.done, ring: "complete", color: "text-[#5e6ad2]" },

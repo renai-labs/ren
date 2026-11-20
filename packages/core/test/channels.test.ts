@@ -1347,6 +1347,12 @@ describe("Channels and tasks", () => {
         status: "dismissed",
         links: [pull],
       })
+      const later = yield* tasks.create(setup.owner, {
+        spaceId: setup.spaceId,
+        title: "Later attempt",
+        status: "backlog",
+        links: [pull],
+      })
       const signal = JSON.stringify({
         type: "signal",
         signal: {
@@ -1358,10 +1364,11 @@ describe("Channels and tasks", () => {
       })
       expect(yield* ChannelFixture.receive(signal)).toEqual({ status: 200 })
       expect(yield* ChannelFixture.receive(signal)).toEqual({ status: 200 })
-      const after = yield* Effect.forEach([open.id, closed.id], (id) => tasks.get(setup.owner, id))
+      const after = yield* Effect.forEach([open.id, closed.id, later.id], (id) => tasks.get(setup.owner, id))
       expect(after.map((task) => [task.status, task.humanReview])).toEqual([
         ["done", false],
         ["dismissed", false],
+        ["done", false],
       ])
       expect(
         yield* database.db
@@ -1374,7 +1381,7 @@ describe("Channels and tasks", () => {
           .where(
             and(
               eq(Database.Schema.task_event.kind, "status"),
-              inArray(Database.Schema.task_event.task_id, [open.id, closed.id]),
+              inArray(Database.Schema.task_event.task_id, [open.id, closed.id, later.id]),
             ),
           ),
       ).toEqual([
@@ -1383,6 +1390,16 @@ describe("Channels and tasks", () => {
           data: {
             _tag: "status",
             from: "todo",
+            to: "done",
+            automation: { provider: "github", cause: "pull_request_merged", url: pull },
+          },
+          userId: null,
+        },
+        {
+          taskId: later.id,
+          data: {
+            _tag: "status",
+            from: "backlog",
             to: "done",
             automation: { provider: "github", cause: "pull_request_merged", url: pull },
           },

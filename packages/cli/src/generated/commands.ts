@@ -326,7 +326,7 @@ export const SessionArchive = { id: Argument.String("session").pipe(Argument.wit
 
 export const TaskList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
-  status: Flag.Literals("status", ["todo", "in_progress", "done", "dismissed"]).pipe(
+  status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("Only this status."),
   ),
@@ -351,7 +351,7 @@ export const TaskCreate = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   title: Flag.String("title").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
-  status: Flag.Literals("status", ["todo", "in_progress", "done", "dismissed"]).pipe(
+  status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("The state of the whole task, never of one agent."),
   ),
@@ -377,7 +377,7 @@ export const TaskUpdate = {
   id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
   title: Flag.String("title").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
-  status: Flag.Literals("status", ["todo", "in_progress", "done", "dismissed"]).pipe(
+  status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("The state of the whole task, never of one agent."),
   ),
