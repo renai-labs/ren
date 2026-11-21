@@ -30,7 +30,7 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByLabel("Password", { exact: true }).fill(password)
-  await page.getByRole("button", { name: "Continue", exact: true }).click()
+  await page.getByRole("button", { name: "Create account" }).click()
   const code = await emailedCode(request, email)
   await page.getByRole("textbox").first().click()
   await page.keyboard.type(code)

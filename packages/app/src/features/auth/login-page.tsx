@@ -2,19 +2,22 @@ import { AuthError, AuthForm } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { IconMail } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { Field, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { FieldGroup } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
 import {
+  AuthField,
   AuthLayout,
   BackButton,
   CodeVerification,
+  EmailSummary,
   FormError,
   GoogleButton,
   PasswordInput,
   SocialButton,
 } from "../../components/auth-layout.js"
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { flushSync } from "react-dom"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -28,40 +31,55 @@ export function LoginPage() {
   const navigate = useNavigate()
   const destination = { invitationId: search.invitationId, redirect: search.redirect }
   const completeAuth = useCompleteAuth(destination)
+  const emailInput = useRef<HTMLInputElement>(null)
+  const passwordInput = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState<LoginStep>("email")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [emailError, setEmailError] = useState("")
+  const [passwordError, setPasswordError] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState<"password" | "code" | null>(null)
   const back = () => {
     setError("")
+    setPasswordError("")
     setStep("email")
   }
   const checkEmail = () => {
     const failure = AuthForm.emailError(email)
-    setError(failure)
+    setEmailError(failure)
+    if (failure) emailInput.current?.focus()
     return failure === ""
   }
   const continueWithEmail = () => {
+    setError("")
     if (checkEmail()) setStep("password")
   }
   const signIn = async () => {
     setError("")
+    setPasswordError("")
     setPending("password")
     const result = await auth.signIn.email({ email, password })
     if (result.error === null) {
       await completeAuth()
       return
     }
-    setPending(null)
     const failure = AuthError.describe(result.error)
     if (failure.code === "EMAIL_NOT_VERIFIED") {
+      setPending(null)
       await navigate({ to: "/verify-email", search: { ...destination, email } })
       return
     }
-    setError(failure.message)
+    const wrongPassword = failure.code === "INVALID_EMAIL_OR_PASSWORD"
+    flushSync(() => {
+      setPending(null)
+      if (wrongPassword) setPasswordError(failure.message)
+      else setError(failure.message)
+    })
+    if (wrongPassword) passwordInput.current?.select()
   }
   const sendCode = async () => {
+    setError("")
     if (!checkEmail()) return
     setPending("code")
     const result = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
@@ -84,15 +102,14 @@ export function LoginPage() {
   }
   if (step === "code")
     return (
-      <AuthLayout>
+      <AuthLayout title="Check your email" description="">
         <CodeVerification email={email} verify={verifyCode} resend={resendCode} />
         <BackButton onClick={back} />
       </AuthLayout>
     )
   if (step === "password")
     return (
-      <AuthLayout>
-        <FormError>{error}</FormError>
+      <AuthLayout title="Enter your password" description="">
         <form
           onSubmit={(event) => {
             event.preventDefault()
@@ -100,46 +117,46 @@ export function LoginPage() {
           }}
         >
           <FieldGroup className="gap-4">
-            <Field>
-              <FieldLabel htmlFor="login-email">Email</FieldLabel>
-              <Input
-                id="login-email"
-                type="email"
-                value={email}
-                readOnly
-                className="h-10 border-transparent bg-muted dark:bg-muted"
-              />
-            </Field>
-            <Field>
-              <div className="flex items-center">
-                <FieldLabel htmlFor="login-password">Password</FieldLabel>
+            <FormError>{error}</FormError>
+            <EmailSummary email={email} onChange={back} />
+            <AuthField
+              id="login-password"
+              label="Password"
+              error={passwordError}
+              labelAction={
                 <Link
                   to="/forgot-password"
                   search={{ email }}
-                  className="ml-auto text-sm text-muted-foreground hover:text-foreground"
+                  className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Forgot your password?
                 </Link>
-              </div>
-              <PasswordInput
-                id="login-password"
-                autoComplete="current-password"
-                placeholder="Your password"
-                // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
-                autoFocus
-                required
-                value={password}
-                onChange={(event) => ((value: string) => setPassword(value))(event.currentTarget.value)}
-                disabled={pending !== null}
-              />
-            </Field>
+              }
+            >
+              {(control) => (
+                <PasswordInput
+                  {...control}
+                  ref={passwordInput}
+                  autoComplete="current-password"
+                  placeholder="Your password"
+                  // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
+                  autoFocus
+                  required
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.currentTarget.value)
+                    setPasswordError("")
+                  }}
+                  disabled={pending !== null}
+                />
+              )}
+            </AuthField>
             <Button type="submit" className="h-10 w-full" disabled={pending !== null}>
               {pending === "password" ? <Spinner data-icon="inline-start" /> : null}
               {pending === "password" ? "Signing in…" : "Sign in"}
             </Button>
           </FieldGroup>
         </form>
-        <BackButton onClick={back} />
       </AuthLayout>
     )
   return (
@@ -153,10 +170,13 @@ export function LoginPage() {
         </>
       }
     >
-      <GoogleButton destination={destination} />
-      <SocialButton provider="github" destination={destination} />
-      <SocialButton provider="slack" destination={destination} />
+      <div className="flex flex-col gap-2">
+        <GoogleButton destination={destination} />
+        <SocialButton provider="github" destination={destination} />
+        <SocialButton provider="slack" destination={destination} />
+      </div>
       <form
+        noValidate
         onSubmit={(event) => {
           event.preventDefault()
           continueWithEmail()
@@ -164,34 +184,41 @@ export function LoginPage() {
       >
         <FieldGroup className="gap-4">
           <FormError>{error}</FormError>
-          <Field>
-            <FieldLabel htmlFor="login-email">Email</FieldLabel>
-            <Input
-              className="h-10 bg-card dark:bg-card"
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@company.com"
-              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
-              autoFocus
-              required
-              value={email}
-              onChange={(event) => ((value: string) => setEmail(value))(event.currentTarget.value)}
-            />
-          </Field>
-          <Button type="submit" className="h-10 w-full" disabled={pending !== null}>
-            Continue
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-10 w-full"
-            disabled={pending !== null}
-            onClick={() => void sendCode()}
-          >
-            {pending === "code" ? <Spinner data-icon="inline-start" /> : <IconMail data-icon="inline-start" />}
-            Email me a sign-in code
-          </Button>
+          <AuthField id="login-email" label="Email" error={emailError}>
+            {(control) => (
+              <Input
+                {...control}
+                ref={emailInput}
+                className="h-10 bg-card dark:bg-card"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.com"
+                // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
+                autoFocus
+                required
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.currentTarget.value)
+                  setEmailError("")
+                }}
+              />
+            )}
+          </AuthField>
+          <div className="flex flex-col gap-2">
+            <Button type="submit" className="h-10 w-full" disabled={pending !== null}>
+              Continue
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-10 w-full"
+              disabled={pending !== null}
+              onClick={() => void sendCode()}
+            >
+              {pending === "code" ? <Spinner data-icon="inline-start" /> : <IconMail data-icon="inline-start" />}
+              Email me a sign-in code
+            </Button>
+          </div>
         </FieldGroup>
       </form>
     </AuthLayout>
