@@ -19,12 +19,21 @@ import { RelativeTime } from "@ren/util/relative-time"
 import { localTimeZone } from "@ren/ui/time"
 import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
-import { PageTabsList, PageTabsTrigger, TableCard, TableSample, useShapeId } from "../../components/page.js"
+import {
+  PageActions,
+  PageTabs,
+  PageTabsList,
+  PageTabsTrigger,
+  TableCard,
+  TableSample,
+  useShapeId,
+} from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Automations, type Automation } from "../../lib/automations.js"
 import { useAutomationActions, useAutomations, useRuns } from "../../lib/use-automations.js"
 import { useNow } from "../../lib/use-now.js"
 import { useSpaces } from "../../lib/use-spaces.js"
+import { Webhooks } from "../../lib/webhooks.js"
 import { RunStatus } from "./run-status.js"
 
 export type Tab = "automations" | "runs"
@@ -54,7 +63,7 @@ export function NewAutomationButton(props: { spaceId: string | undefined }) {
 }
 
 function EditorLink(props: { automation: Automation; scoped: boolean; className?: string; children: React.ReactNode }) {
-  const params = { spaceId: props.automation.spaceId, slug: props.automation.slug }
+  const params = { spaceId: props.automation.spaceId, slug: props.automation.handle }
   return props.scoped ? (
     <Link to="/spaces/$spaceId/automations/$slug" params={params} className={props.className}>
       {props.children}
@@ -68,24 +77,36 @@ function EditorLink(props: { automation: Automation; scoped: boolean; className?
 
 const dots = { attention: "bg-chart-3", active: "bg-chart-2", off: "bg-muted-foreground/40" } as const
 
-function Status(props: { automation: Automation }) {
+function Status(props: { automation: Automation; activity: string }) {
   const status = Automations.statusOf(props.automation)
   return (
-    <span className="flex items-center gap-2">
-      <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dots[status.tone])} />
-      {status.label}
+    <span className="flex min-w-0 flex-col">
+      <span className="flex items-center gap-2">
+        <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dots[status.tone])} />
+        {status.label}
+      </span>
+      {props.activity ? (
+        <span className="truncate pl-4 text-xs text-muted-foreground max-md:hidden">{props.activity}</span>
+      ) : null}
     </span>
   )
+}
+
+const activityOf = (automation: Automation, now: number) => {
+  const next = Automations.nextRunOf(automation)
+  if (next) return `Runs ${RelativeTime.format(next, now)}`
+  const last = automation.webhook?.lastRequest
+  if (last) return `${Webhooks.outcomes[last.outcome].label} ${RelativeTime.format(last.receivedAt, now)}`
+  return automation.webhook ? "No requests yet" : ""
 }
 
 function AutomationRow(props: { automation: Automation; scoped: boolean; spaceName: string | undefined; now: number }) {
   const actions = useAutomationActions()
   const automation = props.automation
   const active = Automations.isActive(automation)
-  const next = Automations.nextRunOf(automation)
   return (
     <TableRow className="relative cursor-pointer">
-      <TableCell className="max-w-80">
+      <TableCell className="max-w-80 max-md:max-w-40">
         <span className="flex min-w-0 items-center gap-3">
           {automation.schedule ? (
             <IconClock className="size-4 shrink-0 text-muted-foreground" />
@@ -104,14 +125,11 @@ function AutomationRow(props: { automation: Automation; scoped: boolean; spaceNa
           </span>
         </span>
       </TableCell>
-      <TableCell className="max-w-64 truncate text-muted-foreground max-md:hidden">
+      <TableCell className="max-w-56 truncate text-muted-foreground max-md:hidden">
         {Automations.triggerSummary(automation, localTimeZone())}
       </TableCell>
-      <TableCell className="text-muted-foreground max-md:hidden">
-        {next ? RelativeTime.format(next, props.now) : "—"}
-      </TableCell>
-      <TableCell>
-        <Status automation={automation} />
+      <TableCell className="max-w-48">
+        <Status automation={automation} activity={activityOf(automation, props.now)} />
       </TableCell>
       <TableCell>
         <span className="relative flex justify-end">
@@ -130,9 +148,7 @@ function AutomationRow(props: { automation: Automation; scoped: boolean; spaceNa
                     icon: IconPlayerPlay,
                     onSelect: () => actions.setActive(automation, { active: true }),
                   },
-              ...(automation.schedule
-                ? [{ label: "Test now", icon: IconPlayerPlay, onSelect: () => actions.test(automation) }]
-                : []),
+              { label: "Test now", icon: IconPlayerPlay, onSelect: () => actions.test(automation) },
               { label: "Duplicate", icon: IconCopy, onSelect: () => actions.duplicate(automation) },
               { label: "Copy as JSON", icon: IconCode, onSelect: () => actions.copyJson(automation) },
               {
@@ -153,9 +169,9 @@ function AutomationRow(props: { automation: Automation; scoped: boolean; spaceNa
   )
 }
 
-const columns = ["Automation", "Trigger", "Next run", "Status", ""]
+const columns = ["Automation", "Trigger", "Status", ""]
 
-const phoneHidden = new Set(["Trigger", "Next run", "Space"])
+const phoneHidden = new Set(["Trigger", "Space"])
 
 function AutomationTable(props: { spaceId: string | undefined }) {
   const list = useAutomations(props.spaceId)
@@ -164,7 +180,7 @@ function AutomationTable(props: { spaceId: string | undefined }) {
   const shapeId = useShapeId("automations")
   const items = list.automations
   return (
-    <Loading id={shapeId} loading={!items} label="Loading automations">
+    <Loading id={shapeId} loading={!items} label="Loading automations" className="flex min-h-0 flex-col">
       {items ? null : <TableSample columns={columns} />}
       {items?.length === 0 ? (
         <EmptyState title="No automations yet" action={<NewAutomationButton spaceId={props.spaceId} />}>
@@ -172,7 +188,7 @@ function AutomationTable(props: { spaceId: string | undefined }) {
         </EmptyState>
       ) : null}
       {items && items.length > 0 ? (
-        <TableCard>
+        <TableCard scroll>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -241,14 +257,14 @@ function RunsTable(props: { spaceId: string | undefined }) {
   const items = runs.data?.pages.flatMap((page) => page.items)
   const scoped = props.spaceId !== undefined
   return (
-    <div className="flex flex-col gap-4">
-      <Loading id={shapeId} loading={!items} label="Loading runs">
+    <div className="flex min-h-0 flex-col gap-4">
+      <Loading id={shapeId} loading={!items} label="Loading runs" className="flex min-h-0 flex-col">
         {items ? null : <TableSample columns={runColumns(scoped)} />}
         {items?.length === 0 ? (
           <EmptyState title="No runs yet">Runs show here when a schedule fires or a webhook gets a request.</EmptyState>
         ) : null}
         {items && items.length > 0 ? (
-          <TableCard>
+          <TableCard scroll>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -281,18 +297,22 @@ export function AutomationsList(props: {
   actions?: React.ReactNode
 }) {
   return (
-    <Tabs value={props.tab} onValueChange={(tab) => props.onTab(tab === "runs" ? "runs" : "automations")}>
-      <div className="flex items-center justify-between gap-4">
+    <Tabs
+      value={props.tab}
+      onValueChange={(tab) => props.onTab(tab === "runs" ? "runs" : "automations")}
+      className="min-h-0"
+    >
+      <PageTabs>
         <PageTabsList>
           <PageTabsTrigger value="automations">Automations</PageTabsTrigger>
           <PageTabsTrigger value="runs">Runs</PageTabsTrigger>
         </PageTabsList>
-        {props.actions}
-      </div>
-      <TabsContent value="automations" className="flex flex-col gap-6 pt-6">
+      </PageTabs>
+      {props.actions ? <PageActions>{props.actions}</PageActions> : null}
+      <TabsContent value="automations" className="flex min-h-0 flex-col gap-6">
         <AutomationTable spaceId={props.spaceId} />
       </TabsContent>
-      <TabsContent value="runs" className="pt-6">
+      <TabsContent value="runs" className="flex min-h-0 flex-col">
         <RunsTable spaceId={props.spaceId} />
       </TabsContent>
     </Tabs>
