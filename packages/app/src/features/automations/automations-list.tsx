@@ -104,10 +104,12 @@ function AutomationRow(props: { automation: Automation; scoped: boolean; spaceNa
           </span>
         </span>
       </TableCell>
-      <TableCell className="max-w-64 truncate text-muted-foreground">
+      <TableCell className="max-w-64 truncate text-muted-foreground max-md:hidden">
         {Automations.triggerSummary(automation, localTimeZone())}
       </TableCell>
-      <TableCell className="text-muted-foreground">{next ? RelativeTime.format(next, props.now) : "—"}</TableCell>
+      <TableCell className="text-muted-foreground max-md:hidden">
+        {next ? RelativeTime.format(next, props.now) : "—"}
+      </TableCell>
       <TableCell>
         <Status automation={automation} />
       </TableCell>
@@ -153,6 +155,8 @@ function AutomationRow(props: { automation: Automation; scoped: boolean; spaceNa
 
 const columns = ["Automation", "Trigger", "Next run", "Status", ""]
 
+const phoneHidden = new Set(["Trigger", "Next run", "Space"])
+
 function AutomationTable(props: { spaceId: string | undefined }) {
   const list = useAutomations(props.spaceId)
   const spaces = useSpaces()
@@ -173,7 +177,10 @@ function AutomationTable(props: { spaceId: string | undefined }) {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {columns.map((column) => (
-                  <TableHead key={column} className={column === "" ? "w-10" : undefined}>
+                  <TableHead
+                    key={column}
+                    className={cn(column === "" && "w-10", phoneHidden.has(column) && "max-md:hidden")}
+                  >
                     {column}
                   </TableHead>
                 ))}
@@ -210,8 +217,10 @@ function RunRow(props: { run: SessionInfo; scoped: boolean; spaceName: string; n
           {run.title || "Untitled run"}
         </Link>
       </TableCell>
-      <TableCell className="text-muted-foreground">{run.origin === "webhook" ? "Webhook" : "Schedule"}</TableCell>
-      {props.scoped ? null : <TableCell className="text-muted-foreground">{props.spaceName}</TableCell>}
+      <TableCell className="text-muted-foreground max-md:hidden">
+        {run.origin === "webhook" ? "Webhook" : "Schedule"}
+      </TableCell>
+      {props.scoped ? null : <TableCell className="text-muted-foreground max-md:hidden">{props.spaceName}</TableCell>}
       <TableCell className="text-muted-foreground">{RelativeTime.format(run.createdAt, props.now)}</TableCell>
       <TableCell>
         <RunStatus tone={run.status === "busy" ? "working" : "done"}>
@@ -244,7 +253,9 @@ function RunsTable(props: { spaceId: string | undefined }) {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   {runColumns(scoped).map((column) => (
-                    <TableHead key={column}>{column}</TableHead>
+                    <TableHead key={column} className={cn(phoneHidden.has(column) && "max-md:hidden")}>
+                      {column}
+                    </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
