@@ -362,3 +362,24 @@ it.live("an app's removal takes its skills away in the same session", () =>
     )
   }),
 )
+
+it.live("the context names each app's skills and the ones that load only by name, and such a skill loads by name", () =>
+  Effect.gen(function* () {
+    const github = yield* TestGitHub.make()
+    yield* github.commit({
+      "skills/pdf/SKILL.md":
+        "---\nname: AFK\ndescription: Work while away\ndisable-model-invocation: true\n---\nWork alone.\n",
+    })
+    const opened = yield* open(github)
+    const session = yield* opened.begin()
+    yield* opened.harness.configure({
+      apps: Option.some(catalog({ afk: upstream(github.url), notes: content("notes") })),
+    })
+    yield* Shared.appsSettled(opened.harness)
+    const told = yield* session.turn(stub.script(), 1)
+    const line = told.system.split("\n").find((text) => text.includes("They load only when named")) ?? ""
+    expect([line.includes("afk (Work while away)"), line.includes("notes")]).toEqual([true, false])
+    expect(told.system).toContain("@docs (docs) gives this chat the skills afk, notes.")
+    expect(result(yield* session.load("afk"))).toContain("Work alone.")
+  }),
+)

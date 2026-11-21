@@ -1,5 +1,7 @@
 import { expect } from "bun:test"
+import { Agent } from "@ren/schema/agent"
 import type { App as AppSchema } from "@ren/schema/app"
+import { Session } from "@ren/schema/session"
 import { Effect, Schema } from "effect"
 import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
@@ -98,6 +100,13 @@ it.live("connected lists every app with a profile the actor sees, registry apps 
     yield* members.create(admin, { spaceId: shared, userId: member.userId })
     expect(yield* slugs(member, { connected: true })).toEqual(["notion"])
     expect(yield* slugs(admin, { connected: true })).toEqual(["hidden", "notion"])
+    const agent = {
+      ...member,
+      agent: { agentId: Agent.ID.create(), sessionId: Session.ID.create(), spaceId: shared, fence: null },
+    }
+    expect(yield* slugs(member, {})).toEqual([])
+    expect(yield* slugs(agent, {})).toEqual(["notion"])
+    expect(yield* slugs(agent, { connected: false })).toEqual([])
   }),
 )
 
