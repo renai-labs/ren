@@ -378,7 +378,7 @@ it.live("the context names each app's skills and the ones that load only by name
     yield* Shared.appsSettled(opened.harness)
     const told = yield* session.turn(stub.script(), 1)
     const line = told.system.split("\n").find((text) => text.includes("They load only when named")) ?? ""
-    expect([line.includes("afk"), line.includes("notes")]).toEqual([true, false])
+    expect([line.includes("afk (Work while away)"), line.includes("notes")]).toEqual([true, false])
     expect(told.system).toContain("@docs (docs) gives this chat the skills afk, notes.")
     expect(result(yield* session.load("afk"))).toContain("Work alone.")
   }),

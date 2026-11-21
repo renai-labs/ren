@@ -187,7 +187,11 @@ export const make = Effect.fnUntraced(function* (input: {
       })
     const named = allowed
       .filter((registration) => registration.info.autoinvoke === false || registration.info.description === undefined)
-      .map((registration) => registration.info.id)
+      .map((registration) =>
+        registration.info.description
+          ? `${registration.info.id} (${registration.info.description.replaceAll(/\s+/gu, " ").trim()})`
+          : registration.info.id,
+      )
     return [
       ...(apps.length > 0
         ? [
@@ -196,7 +200,7 @@ export const make = Effect.fnUntraced(function* (input: {
         : []),
       ...(named.length > 0
         ? [
-            `These skills are not in the list of available skills but this chat has them: ${named.join(", ")}. They load only when named: when the person asks for one, load it with the skill tool.`,
+            `These skills are not in the list of available skills but this chat has them: ${named.join("; ")}. They load only when named: when the person asks for one, load it with the skill tool.`,
           ]
         : []),
     ]
