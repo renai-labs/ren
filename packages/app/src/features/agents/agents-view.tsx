@@ -4,7 +4,6 @@ import { Session } from "@ren/schema/session"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { IconArchive, IconEye, IconPencil, IconPlus } from "@tabler/icons-react"
-import { IconAgent } from "../../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { toast } from "@ren/ui/sonner"
@@ -12,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EmptyState } from "../../components/empty-state.js"
 import { modelRef } from "../../components/model-picker.js"
 import { PageActions, TableCard, TableEmpty, TableSample, useShapeId } from "../../components/page.js"
+import { AgentAvatar } from "../../components/resource-avatar.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { Agents } from "../../lib/agents.js"
@@ -36,7 +36,7 @@ function AgentRow(props: { agent: AgentInfo; spaceId: string; model: string; sou
     <TableRow className="relative cursor-pointer">
       <TableCell>
         <span className="flex min-w-0 items-center gap-2.5">
-          <IconAgent className="size-4 shrink-0 text-muted-foreground" />
+          <AgentAvatar icon={agent.icon} className="size-6 rounded-md" />
           <span className="flex min-w-0 flex-col">
             <Link
               to="/spaces/$spaceId/agents/$agentId"

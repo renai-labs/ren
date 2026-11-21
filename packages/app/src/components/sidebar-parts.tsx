@@ -19,7 +19,6 @@ import {
   IconCircle,
   IconCube,
   IconHelpCircle,
-  IconLock,
   IconLogout,
   IconPencil,
   IconPin,
@@ -33,7 +32,6 @@ import {
   IconWorld,
   type Icon,
 } from "@tabler/icons-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Button, buttonVariants } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -70,6 +68,7 @@ import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
 import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
+import { SpaceAvatar } from "./resource-avatar.js"
 import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
@@ -272,7 +271,7 @@ export function SpaceEntry(props: {
           render={<Link to="/spaces/$spaceId" params={{ spaceId: props.space.id }} />}
         >
           <span className="flex size-6 shrink-0 items-center justify-center text-current">
-            {props.space.kind === "private" ? <IconLock /> : <IconCube />}
+            <SpaceAvatar space={props.space} inline className="size-5 rounded-md" />
           </span>
           <span className="min-w-0 flex-1 truncate">{props.space.name}</span>
         </SidebarMenuButton>
@@ -518,10 +517,7 @@ function UserRow() {
             />
           }
         >
-          <Avatar className="size-7">
-            {me.user.image ? <AvatarImage src={me.user.image} alt="" /> : null}
-            <AvatarFallback className="text-xs">{initials(userName)}</AvatarFallback>
-          </Avatar>
+          <PersonAvatar name={userName} image={me.user.image} initials={initials(userName)} size={7} />
           <span className="flex min-w-0 flex-1 flex-col text-start leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-medium tracking-tight text-sidebar-foreground">{userName}</span>
             <span className="truncate text-xs text-sidebar-foreground/80">{me.organization.name}</span>

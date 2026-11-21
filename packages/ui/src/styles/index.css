@@ -50,6 +50,11 @@
   --avatar-from: #b5b5b5;
   --avatar-to: #555555;
   --avatar-foreground: #ffffff;
+  --avatar-azure: #0065cc;
+  --avatar-violet: #8250df;
+  --avatar-green: #197735;
+  --avatar-amber: #8a5700;
+  --avatar-coral: #bd2634;
 
   --chart-1: #0065cc;
   --chart-2: #197735;
@@ -110,6 +115,12 @@
   --chart-4: #f47780;
   --chart-5: #a3a3a3;
   --chart-6: #a371f7;
+
+  --avatar-azure: #268bff;
+  --avatar-violet: #a371f7;
+  --avatar-green: #53c878;
+  --avatar-amber: #e0a33a;
+  --avatar-coral: #f47780;
 
   --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
   --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
@@ -181,6 +192,11 @@
   --color-avatar-from: var(--avatar-from);
   --color-avatar-to: var(--avatar-to);
   --color-avatar-foreground: var(--avatar-foreground);
+  --color-avatar-azure: var(--avatar-azure);
+  --color-avatar-violet: var(--avatar-violet);
+  --color-avatar-green: var(--avatar-green);
+  --color-avatar-amber: var(--avatar-amber);
+  --color-avatar-coral: var(--avatar-coral);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

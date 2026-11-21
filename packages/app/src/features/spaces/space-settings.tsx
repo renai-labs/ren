@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import { EditableText } from "../../components/editable-text.js"
 import { ModelPicker, modelRef, modelSetting } from "../../components/model-picker.js"
+import { SpaceAvatar } from "../../components/resource-avatar.js"
+import { ResourceIconPicker } from "../../components/resource-icon-picker.js"
 import { Row, Rows } from "../../components/page.js"
 import { errorMessage } from "../../lib/errors.js"
 import { useMe } from "../../lib/use-me.js"
@@ -50,6 +52,25 @@ function Details(props: { space: Space; model: ReactNode }) {
   return (
     <Rows>
       {[
+        <Row key="icon" title="Icon" description="Shown in the sidebar and the spaces list.">
+          <ResourceIconPicker
+            label="Space icon"
+            className="rounded-lg"
+            value={space.icon}
+            disabled={!space.canUpdate}
+            onChange={(icon) =>
+              update.mutateAsync(
+                { id: space.id, icon },
+                {
+                  onSuccess: (updated) =>
+                    queryClient.setQueryData(api.space.get.queryOptions({ idOrSlug: space.id }).queryKey, updated),
+                },
+              )
+            }
+          >
+            <SpaceAvatar space={space} className="size-9 rounded-lg" />
+          </ResourceIconPicker>
+        </Row>,
         <Row key="name" title="Name">
           <EditableText
             value={space.name}

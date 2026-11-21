@@ -208,6 +208,7 @@ export const layer = Layer.effect(
           slug: row.space.slug,
           name: row.space.name,
           description: canRead || row.space.kind === "shared" ? row.space.description : null,
+          icon: row.space.icon,
           brainScope: row.space.brain_scope,
           brain: SpaceQueries.brainMachine(row.space, deploymentProvider),
           hand: SpaceQueries.hand(row.space),
@@ -352,6 +353,7 @@ export const layer = Layer.effect(
               .set({
                 name: input.name,
                 description: input.description,
+                icon: input.icon,
                 brain_scope: input.brainScope,
                 ...(input.brain && SpaceQueries.brainColumns(input.brain)),
                 ...(input.hand && SpaceQueries.handColumns(input.hand)),

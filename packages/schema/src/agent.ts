@@ -5,6 +5,7 @@ import { AgentIdentity } from "./agent/identity.js"
 import { Auth } from "./auth.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { ResourceIcon } from "./resource-icon.js"
 import { Settings } from "./settings.js"
 import { Space } from "./space.js"
 
@@ -24,6 +25,7 @@ export const Info = Schema.Struct({
   ownerSpaceId: Schema.NullOr(Space.ID).annotate({ description: "Null for a global agent." }),
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
+  icon: ResourceIcon.Stored,
   isSubagent: Schema.Boolean,
   settings: Settings.Info,
   canUpdate: Schema.Boolean.annotate({
@@ -66,6 +68,7 @@ export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
   name: Schema.optional(Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
+  icon: Schema.optional(Schema.NullOr(ResourceIcon.Descriptor)),
   isSubagent: Schema.optional(Schema.Boolean),
   settings: Schema.optional(Settings.Info),
 }).annotate({ identifier: "Agent.UpdateInput" })

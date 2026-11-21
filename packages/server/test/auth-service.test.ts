@@ -260,6 +260,26 @@ describe("Auth", () => {
       }),
   )
 
+  it.live("takes a profile photo or an organization logo only as a resource icon, and clears either", () =>
+    Effect.gen(function* () {
+      const session = sessionCookie(yield* register("joan@example.com"))
+      const organization = yield* json(yield* post("/organization/create", { name: "Joan Co", slug: "joan" }, session))
+      const user = (image: string | null) => post("/update-user", { image }, session).pipe(Effect.map((r) => r.status))
+      const logo = (value: string | null) =>
+        post("/organization/update", { organizationId: organization.id, data: { logo: value } }, session).pipe(
+          Effect.map((r) => r.status),
+        )
+      expect(yield* user("tabler:IconRocket:violet")).toBe(200)
+      expect(yield* user(":🚀")).toBe(200)
+      expect(yield* user("data:image/jpeg;base64,/9j/4AAQ")).toBe(400)
+      expect(yield* user(null)).toBe(200)
+      expect(yield* logo("https://ren.example/icons/a.webp")).toBe(200)
+      expect(yield* logo("javascript:alert(1)")).toBe(400)
+      expect(yield* logo("")).toBe(400)
+      expect(yield* logo(null)).toBe(200)
+    }),
+  )
+
   it.live("normalizes explicit organization slugs before the duplicate check", () =>
     Effect.gen(function* () {
       const session = sessionCookie(yield* register("linus@example.com"))

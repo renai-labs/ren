@@ -27,6 +27,10 @@ export const SpaceUpdate = {
   id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
+  icon: Flag.String("icon").pipe(
+    Flag.optional,
+    Flag.withDescription("A picture: `tabler:<Name>:<color>`, `:<emoji>`, or the https URL of an uploaded image."),
+  ),
   brainScope: Flag.Literals("brain-scope", ["session", "space"]).pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
@@ -142,6 +146,10 @@ export const AgentUpdate = {
   id: Argument.String("agent").pipe(Argument.withDescription("Agent slug or ID")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
+  icon: Flag.String("icon").pipe(
+    Flag.optional,
+    Flag.withDescription("A picture: `tabler:<Name>:<color>`, `:<emoji>`, or the https URL of an uploaded image."),
+  ),
   isSubagent: Flag.Boolean("is-subagent").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }

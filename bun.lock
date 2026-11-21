@@ -55,6 +55,7 @@
         "cn": "catalog:",
         "docx-preview": "0.4.1",
         "effect": "catalog:",
+        "emojibase-data": "17.0.0",
         "github-slugger": "catalog:",
         "hast-util-from-dom": "catalog:",
         "hast-util-to-mdast": "catalog:",
@@ -232,6 +233,7 @@
         "disposable-email-domains-js": "catalog:",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
+        "sharp": "catalog:",
         "slackify-markdown": "5.0.0",
         "standardwebhooks": "catalog:",
         "stripe": "catalog:",
@@ -2890,6 +2892,10 @@
     "emmet": ["emmet@2.4.11", "", { "dependencies": { "@emmetio/abbreviation": "^2.3.3", "@emmetio/css-abbreviation": "^2.1.8" } }, "sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ=="],
 
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
+
+    "emojibase": ["emojibase@18.0.0", "", {}, "sha512-5PG+EEt5zQ9qvqdHZw61+T9iz96g+r621QS/w8jEzPg+3mjzAdjl8LPLc+e9ABv/yboNfMwEair7aK9qKnwAbQ=="],
+
+    "emojibase-data": ["emojibase-data@17.0.0", "", { "peerDependencies": { "emojibase": "*" } }, "sha512-Yvgb5AWoHViHV/gq1qr5ZAarcBip+B27/ZLRsUJkbgAEaLlZ/fof9g882LTpmEpyhBNEC0m2SEmItljHsTygjA=="],
 
     "encodeurl": ["encodeurl@2.0.0", "", {}, "sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg=="],
 

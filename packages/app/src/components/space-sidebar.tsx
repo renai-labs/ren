@@ -11,13 +11,11 @@ import {
   IconChartPie,
   IconMessagesFilled,
   IconSubtask,
-  IconCube,
   IconFileText,
   IconFolder,
   IconInbox,
   IconKey,
   IconApps,
-  IconLock,
   IconSelector,
   IconSettings,
   IconShield,
@@ -51,6 +49,7 @@ import { Preference } from "../lib/preference.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
+import { SpaceAvatar } from "./resource-avatar.js"
 
 const spaceGroups = [
   {
@@ -101,10 +100,6 @@ type SpaceItem = (typeof spaceGroups)[number]["items"][number]
 
 const shows = (item: SpaceItem, space: SpaceInfo | undefined) => item.value !== "members" || space?.kind !== "private"
 
-function SpaceIcon(props: { kind: string; className?: string | undefined }) {
-  return props.kind === "private" ? <IconLock className={props.className} /> : <IconCube className={props.className} />
-}
-
 function SpaceSwitcher(props: {
   spaceId: string
   space: SpaceInfo | undefined
@@ -127,7 +122,11 @@ function SpaceSwitcher(props: {
           />
         }
       >
-        <SpaceIcon kind={props.space?.kind ?? "shared"} className="size-4.5" />
+        <SpaceAvatar
+          space={props.space ?? { kind: "shared", icon: null }}
+          inline
+          className="mx-1.25 my-0.75 size-4.5 rounded-sm group-data-[collapsible=icon]:m-0 group-data-[collapsible=icon]:size-5"
+        />
         <span className="flex-1 truncate">{props.space?.name ?? "Space"}</span>
         <IconSelector className="text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
       </DropdownMenuTrigger>
@@ -146,7 +145,7 @@ function SpaceSwitcher(props: {
           >
             {spaces.map((each) => (
               <DropdownMenuRadioItem key={each.id} value={each.id}>
-                <SpaceIcon kind={each.kind} />
+                <SpaceAvatar space={each} inline className="size-4 rounded-sm" />
                 {each.name}
               </DropdownMenuRadioItem>
             ))}

@@ -47,6 +47,7 @@
     "cn": "catalog:",
     "docx-preview": "0.4.1",
     "effect": "catalog:",
+    "emojibase-data": "17.0.0",
     "github-slugger": "catalog:",
     "hast-util-from-dom": "catalog:",
     "hast-util-to-mdast": "catalog:",

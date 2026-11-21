@@ -42,6 +42,7 @@ import type {
   MemoryDeleteInput,
   DriveStartUploadInput,
   DriveDownloadInput,
+  IconUploadInput,
   FilesListInput,
   FilesReadInput,
   FilesDeleteInput,
@@ -610,6 +611,16 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["drive", "download", input] as const,
             queryFn: (context) => client["drive"]["download"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    icon: {
+      upload: {
+        mutationKey: () => ["icon", "upload"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["icon", "upload"] as const,
+            mutationFn: (input: IconUploadInput) => client["icon"]["upload"](input),
           }),
       },
     },

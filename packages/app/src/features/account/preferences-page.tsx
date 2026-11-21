@@ -23,7 +23,8 @@ import {
 } from "../../components/settings-shared.js"
 import { ChoiceRow, SwitchRow } from "../../components/preference-rows.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { AvatarPicker } from "../../components/avatar-picker.js"
+import { PersonAvatar } from "../../components/person-avatar.js"
+import { ResourceIconPicker } from "../../components/resource-icon-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
 import { AppearancePreferences } from "../../lib/appearance-preferences.js"
@@ -80,7 +81,6 @@ export function PreferencesPage() {
     },
     // ast-grep-ignore: no-manual-invalidation -- Better Auth changes the user
     onSuccess: () => queryClient.invalidateQueries({ queryKey: api.me.get.queryKey() }),
-    onError: (error) => toast.error("Couldn’t change your photo", { description: errorMessage(error) }),
   })
   const navigate = useNavigate()
   const signOut = useSignOut()
@@ -143,13 +143,14 @@ export function PreferencesPage() {
       <Rows>
         {[
           <Row key="photo" title="Photo">
-            <AvatarPicker
-              kind="person"
+            <ResourceIconPicker
               label="Your photo"
-              name={user.name || user.email}
+              className="rounded-full"
               value={user.image}
               onChange={(image) => photo.mutateAsync(image)}
-            />
+            >
+              <PersonAvatar name={user.name || user.email} image={user.image} size={9} />
+            </ResourceIconPicker>
           </Row>,
           <Row key="name" title="Name">
             <EditableText

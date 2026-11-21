@@ -7,7 +7,8 @@ import { InstructionsField } from "../../components/instructions-field.js"
 import { EditableText } from "../../components/editable-text.js"
 import { ModelPicker, modelRef, modelSetting } from "../../components/model-picker.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
-import { AvatarPicker } from "../../components/avatar-picker.js"
+import { ResourceAvatar } from "../../components/resource-avatar.js"
+import { ResourceIconPicker } from "../../components/resource-icon-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { organizationOptions } from "../../lib/auth.js"
@@ -44,11 +45,8 @@ export function GeneralSettingsPage() {
     ])
   }
   const changeLogo = async (logo: string | null) => {
-    const result = await auth.organization.update({ organizationId: me.organization.id, data: { logo: logo ?? "" } })
-    if (result.error !== null) {
-      toast.error(result.error.message ?? "Failed to update the logo")
-      return
-    }
+    const result = await auth.organization.update({ organizationId: me.organization.id, data: { logo } })
+    if (result.error !== null) throw new Error(result.error.message ?? "Couldn’t change the logo")
     await Promise.all([
       // ast-grep-ignore: no-manual-invalidation -- the organization logo changes through Better Auth
       queryClient.invalidateQueries({ queryKey: api.me.get.queryKey() }),
@@ -61,14 +59,19 @@ export function GeneralSettingsPage() {
       <Rows>
         {[
           <Row key="logo" title="Logo" description="Shown in the sidebar and wherever your organization appears.">
-            <AvatarPicker
-              kind="organization"
+            <ResourceIconPicker
               label="Organization logo"
-              name={organization.name}
+              className="rounded-lg"
               value={organization.logo}
               disabled={!canUpdate}
               onChange={changeLogo}
-            />
+            >
+              <ResourceAvatar
+                icon={organization.logo}
+                fallback={organization.name.charAt(0).toUpperCase()}
+                className="size-9 rounded-lg"
+              />
+            </ResourceIconPicker>
           </Row>,
           <Row key="name" title="Name">
             <EditableText value={organization.name} label="name" required readOnly={!canUpdate} onCommit={rename} />
