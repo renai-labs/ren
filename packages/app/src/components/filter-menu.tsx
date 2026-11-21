@@ -61,7 +61,7 @@ export const sidebarAction =
   "size-5 rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg:not([class*='size-'])]:size-4"
 
 const row = "h-9 gap-3 px-3 data-highlighted:[&_svg]:text-foreground! data-popup-open:[&_svg]:text-foreground!"
-const marked = "h-9 gap-2 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"
+const marked = "min-h-9 gap-2 py-1.5 pr-3 pl-8 *:data-[slot$=indicator]:right-auto *:data-[slot$=indicator]:left-2"
 
 export function FilterMenu(props: {
   label: string
@@ -112,7 +112,7 @@ export function FilterMenu(props: {
                   <span className="flex-1">{property.label}</span>
                   <span className="text-muted-foreground">{summary(property, selected)}</span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent sideOffset={2} className={props.noun ? "w-60" : "w-48"}>
+                <DropdownMenuSubContent sideOffset={2} className={props.noun ? "w-60" : "w-56"}>
                   {property.single ? (
                     <RadioOptions property={property} selected={selected} onChange={set} />
                   ) : (
@@ -162,7 +162,7 @@ function RadioOptions(props: { property: FilterProperty; selected: string[]; onC
       ].map((option) => (
         <DropdownMenuRadioItem key={option.value} value={option.value} className={marked}>
           {option.icon ? <option.icon /> : null}
-          <span className="flex-1 truncate">{option.label}</span>
+          <span className="min-w-0 flex-1 break-words">{option.label}</span>
         </DropdownMenuRadioItem>
       ))}
     </DropdownMenuRadioGroup>
@@ -203,7 +203,7 @@ function CheckboxOptions(props: {
           }
         >
           {option.icon ? <option.icon /> : null}
-          <span className="flex-1 truncate">{option.label}</span>
+          <span className="min-w-0 flex-1 break-words">{option.label}</span>
           {props.noun && option.count !== undefined ? (
             <span className="text-xs text-muted-foreground">
               {option.count} {option.count === 1 ? props.noun : `${props.noun}s`}
