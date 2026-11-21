@@ -29,7 +29,7 @@ import { TaskEvent } from "@ren/schema/task-event"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { toast } from "@ren/ui/sonner"
 import { formatDateTime } from "@ren/ui/time"
-import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
+import { PersonAvatar } from "../../components/person-avatar.js"
 import { Item, ItemHeader } from "@ren/ui/item"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
@@ -72,13 +72,7 @@ const when = (at: string) => (
 
 function ActorMark(props: { actor: TaskActor; names: Names }) {
   if (props.actor.agentId) return <IconAgent />
-  const image = props.names.image(props.actor)
-  return (
-    <Avatar size="sm" className="data-[size=sm]:size-4">
-      {image ? <AvatarImage src={image} alt="" /> : null}
-      <AvatarFallback className="text-2xs">{props.names.actor(props.actor).charAt(0).toUpperCase()}</AvatarFallback>
-    </Avatar>
-  )
+  return <PersonAvatar name={props.names.actor(props.actor)} image={props.names.image(props.actor)} size={4} />
 }
 
 const eventIcons = {

@@ -26,6 +26,7 @@ import { Feedback } from "@ren/core/feedback"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
 import { Favicon } from "@ren/core/favicon"
+import { Icons } from "@ren/core/icons"
 import { Insights } from "@ren/core/insights"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
@@ -74,6 +75,7 @@ import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { ArtifactLinkRoutes } from "./artifact-link-routes.js"
 import { FaviconRoutes } from "./favicon-routes.js"
+import { IconRoutes } from "./icon-routes.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
 import { WebhookRoutes } from "./webhook-routes.js"
@@ -88,6 +90,7 @@ import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
 import { DriveHandler } from "./handlers/api/drive.js"
+import { IconHandler } from "./handlers/api/icon.js"
 import { FilesHandler } from "./handlers/api/files.js"
 import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OnboardingHandler } from "./handlers/api/onboarding.js"
@@ -200,6 +203,7 @@ export const layer = Layer.mergeAll(
         OrganizationSettingsHandler,
         MemoryHandler,
         DriveHandler,
+        IconHandler,
         FilesHandler,
         AgentHandler,
         AppHandler,
@@ -249,6 +253,7 @@ export const layer = Layer.mergeAll(
         MachineTemplates.layer,
         Memory.layer,
         FileSystem.layer.pipe(Layer.provide(Memory.layer)),
+        Icons.layer,
         Insights.layer,
         Feedback.layer,
         settingsAndAgents,
@@ -302,6 +307,7 @@ export const layer = Layer.mergeAll(
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
     FaviconRoutes.layer.pipe(Layer.provide(Favicon.layer)),
+    IconRoutes.layer.pipe(Layer.provide(Icons.layer)),
     ArtifactLinkRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(intake),

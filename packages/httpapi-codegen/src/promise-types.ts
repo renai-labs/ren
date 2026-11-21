@@ -139,6 +139,8 @@ function renderEndpointTypes(
       const schema = schemas[field.source]
       if (schema === undefined)
         throw new Errors.GenerationError({ reason: `Missing input schema: ${prefix}.${field.name}` })
+      if (SchemaShape.isBinaryPayload(endpoint) && field.source === "payload")
+        return `readonly ${JSON.stringify(field.name)}${field.optional ? "?" : ""}: Blob | Uint8Array`
       const type =
         SchemaShape.isOpaquePayload(endpoint) && field.source === "payload"
           ? typeOf(schema)

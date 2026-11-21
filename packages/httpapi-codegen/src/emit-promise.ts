@@ -104,8 +104,8 @@ function normalizeClientContent(content: string, groups: ReadonlyArray<Types.Gro
                 'if (descriptor.body !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json")',
                 'if (descriptor.body !== undefined && !headers.has("content-type"))\n      headers.set("content-type", descriptor.binaryBody ? "application/octet-stream" : "application/json")',
               ),
-              "body: descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body),",
-              'body:\n          descriptor.body === undefined\n            ? undefined\n            : descriptor.binaryBody\n              ? (descriptor.body as RequestInit["body"])\n              : JSON.stringify(descriptor.body),',
+              "...(descriptor.body !== undefined && { body: JSON.stringify(descriptor.body) }),",
+              "...(descriptor.body !== undefined && {\n          body: descriptor.binaryBody ? (descriptor.body as BodyInit) : JSON.stringify(descriptor.body),\n        }),",
             ),
         ]
       : []),

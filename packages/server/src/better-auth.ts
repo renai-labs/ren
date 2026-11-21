@@ -12,6 +12,7 @@ import type { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
+import { ResourceIcon } from "@ren/schema/resource-icon"
 import { BASE_ERROR_CODES, betterAuth } from "better-auth"
 import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth"
 import { APIError, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
@@ -102,6 +103,14 @@ const signUpPath = "/sign-up/email"
 const SignUp = Schema.Struct({ email: Schema.String })
 
 const CreateOrganization = Schema.Struct({ slug: Schema.String })
+
+const Picture = Schema.optional(Schema.NullOr(ResourceIcon.Descriptor))
+
+const UpdateUser = Schema.Struct({ image: Picture })
+
+const UpdateOrganization = Schema.Struct({ data: Schema.Struct({ logo: Picture }) })
+
+const invalidPicture = { message: "Choose an icon, an emoji or an uploaded image." }
 
 const AcceptedConsent = Schema.Struct({ accept: Schema.Literal(true) })
 
@@ -209,6 +218,12 @@ const guardRequests = (input: Input) =>
         if (Option.isSome(rejection)) throw new APIError("BAD_REQUEST", rejection.value)
         return
       }
+      case "/update-user":
+        if (!Schema.is(UpdateUser)(body)) throw new APIError("BAD_REQUEST", invalidPicture)
+        return
+      case "/organization/update":
+        if (!Schema.is(UpdateOrganization)(body)) throw new APIError("BAD_REQUEST", invalidPicture)
+        return
       case "/organization/create":
         if (!Schema.is(CreateOrganization)(body)) return
         return { context: { body: { ...body, slug: Auth.organizationSlug(body.slug) } } }

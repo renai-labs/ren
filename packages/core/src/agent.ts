@@ -80,6 +80,7 @@ export const layer = Layer.effect(
         ownerSpaceId: agent.owner_space_id,
         name: agent.name,
         description: agent.description,
+        icon: agent.icon,
         isSubagent: agent.is_subagent,
         settings,
         canUpdate: access.isAllowed({ actor, action: actions.update, resource: AgentPolicy.resource(holds) }),
@@ -215,6 +216,7 @@ export const layer = Layer.effect(
               description: Predicate.isUndefined(input.description) ? row.agent.description : input.description,
               isSubagent: input.isSubagent ?? row.agent.is_subagent,
               settings: input.settings ?? (yield* settingsOf(row)),
+              icon: Predicate.isUndefined(input.icon) ? row.agent.icon : input.icon,
             }
             const reason = refused(next)
             if (reason) return yield* new Primitive.Conflict({ message: reason })
@@ -225,6 +227,7 @@ export const layer = Layer.effect(
               .set({
                 name: next.name,
                 description: next.description,
+                icon: next.icon,
                 is_subagent: next.isSubagent,
                 updated_at: sql`now()`,
               })

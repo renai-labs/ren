@@ -30,6 +30,10 @@ const exceptions = new Map([
     "files",
     "Lists, reads and deletes the files of a drive or a memory by path, through one contract for every source: files are not records, and no primitive operation addresses a part of one.",
   ],
+  [
+    "icon",
+    "Uploads an image and returns the URL of its cropped copy, keyed by the hash of its bytes: a stored file, not a record, which no primitive operation is.",
+  ],
   ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],
   [

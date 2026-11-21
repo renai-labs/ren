@@ -1,9 +1,11 @@
 import type { SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { IconArchive, IconCheck, IconCube, IconLock, IconPin, IconPinnedOff } from "@tabler/icons-react"
+import { IconArchive, IconCheck, IconPin, IconPinnedOff } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
-import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@ren/ui/avatar"
+import { AvatarGroup } from "@ren/ui/avatar"
+import { PersonAvatar } from "../../components/person-avatar.js"
+import { SpaceAvatar } from "../../components/resource-avatar.js"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
 import { Loading } from "@ren/ui/loading"
@@ -45,10 +47,14 @@ function Members(props: { space: SpaceInfo }) {
         >
           <AvatarGroup className="-space-x-1 *:data-[slot=avatar]:bg-card *:data-[slot=avatar]:ring-card">
             {shown.map((member) => (
-              <Avatar key={member.id} size="sm" title={member.name} className="data-[size=sm]:size-6">
-                {member.image ? <AvatarImage src={member.image} alt="" /> : null}
-                <AvatarFallback className="text-2xs">{initials(member.name)}</AvatarFallback>
-              </Avatar>
+              <PersonAvatar
+                key={member.id}
+                name={member.name}
+                image={member.image}
+                initials={initials(member.name)}
+                title={member.name}
+                size={6}
+              />
             ))}
           </AvatarGroup>
           {space.memberCount > shown.length ? <span>+{space.memberCount - shown.length}</span> : null}
@@ -105,7 +111,6 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean; pinned: boolean;
   const navigate = useNavigate()
   const archive = useMutation(api.space.archive.mutationOptions())
   const space = props.space
-  const Icon = space.kind === "private" ? IconLock : IconCube
   return (
     <TableRow
       className="cursor-pointer"
@@ -113,12 +118,7 @@ function SpaceRow(props: { space: SpaceInfo; browsing: boolean; pinned: boolean;
     >
       <TableCell>
         <span className="flex min-w-0 items-center gap-3">
-          <span
-            aria-hidden
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
-          >
-            <Icon className="size-4" />
-          </span>
+          <SpaceAvatar space={space} className="size-8 rounded-lg" />
           <Link
             to="/spaces/$spaceId"
             params={{ spaceId: space.id }}

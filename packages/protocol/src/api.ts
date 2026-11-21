@@ -21,6 +21,7 @@ import { MachineTemplateGroup } from "./groups/machine-template.js"
 import { MachineProviderGroup } from "./groups/machine-provider.js"
 import { McpInspectGroup } from "./groups/mcp-inspect.js"
 import { HealthGroup } from "./groups/health.js"
+import { IconGroup } from "./groups/icon.js"
 import { InfraGroup } from "./groups/infra.js"
 import { InsightsGroup } from "./groups/insights.js"
 import { InvitationGroup } from "./groups/invitation.js"
@@ -61,6 +62,7 @@ export const Api = HttpApi.make("server")
   .add(OrganizationSettingsGroup)
   .add(MemoryGroup)
   .add(DriveGroup)
+  .add(IconGroup)
   .add(FilesGroup)
   .add(AgentGroup)
   .add(AppGroup)
