@@ -38,7 +38,7 @@ export const OAuthClientAssertionID = Identifier.make("oca", "Auth.OAuthClientAs
 export const consentOrganizationHeader = "x-ren-consent-organization"
 
 export const cliClient = {
-  client_id: "https://v2.useren.ai/ren/oauth-client.json",
+  client_id: "https://useren.ai/ren/oauth-client.json",
   client_name: "Ren CLI",
   redirect_uris: ["http://127.0.0.1/callback"],
   token_endpoint_auth_method: "none",
