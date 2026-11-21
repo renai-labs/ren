@@ -2,7 +2,7 @@ import { useState } from "react"
 import type { ChannelInstallInfo, ChannelMappingInfo, ChannelTrigger, SpaceInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Button } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { Switch } from "@ren/ui/switch"
@@ -36,10 +36,7 @@ export function MappingDialog(props: {
     >
       <DialogContent className="gap-6 p-6">
         <DialogHeader>
-          <DialogTitle>{props.place.name}</DialogTitle>
-          <DialogDescription>
-            {props.mapping ? "Edit where mentions start work." : "Choose where mentions start work."}
-          </DialogDescription>
+          <DialogTitle>{Channels.label(props.install.provider, props.place.name)}</DialogTitle>
         </DialogHeader>
         <form
           className="flex flex-col gap-6"
@@ -63,9 +60,9 @@ export function MappingDialog(props: {
         >
           <FieldGroup className="gap-5">
             <Field>
-              <FieldLabel>Work in space</FieldLabel>
+              <FieldLabel>Space</FieldLabel>
               <Choice
-                label="Work in space"
+                label="Space"
                 value={spaceId}
                 options={[
                   { value: "", label: "Choose a space" },
@@ -79,7 +76,7 @@ export function MappingDialog(props: {
                 }}
               />
               {props.spaces.length === 0 ? (
-                <FieldDescription>Join or create a space before adding a mapping.</FieldDescription>
+                <FieldDescription>Join or create a space first.</FieldDescription>
               ) : null}
             </Field>
             <FallbackSender
@@ -107,14 +104,15 @@ export function MappingDialog(props: {
                 />
               </Field>
             ))}
-            {save.isError ? <FieldError>{errorMessage(save.error, "Couldn’t save the mapping.")}</FieldError> : null}
+            {save.isError ? <FieldError>{errorMessage(save.error, "Couldn’t save. Try again.")}</FieldError> : null}
           </FieldGroup>
-          <div className="flex justify-end gap-2 border-t pt-4">
+          <div className="flex justify-end gap-2">
             <Button variant="outline" type="button" disabled={save.isPending} onClick={props.onClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={!spaceId || save.isPending}>
-              {save.isPending ? <Spinner data-icon="inline-start" /> : null}Save mapping
+              {save.isPending ? <Spinner data-icon="inline-start" /> : null}
+              {props.mapping ? "Save" : `Link ${Channels.byId[props.install.provider].noun}`}
             </Button>
           </div>
         </form>
@@ -133,9 +131,9 @@ function FallbackSender(props: {
   const members = useQuery(Channels.membersOptions(client, props.spaceId))
   return (
     <Field>
-      <FieldLabel>Fallback sender</FieldLabel>
+      <FieldLabel>Run unknown senders as</FieldLabel>
       <Choice
-        label="Fallback sender"
+        label="Run unknown senders as"
         value={props.value}
         options={[
           { value: "", label: "Nobody" },
@@ -147,7 +145,6 @@ function FallbackSender(props: {
         className="w-full"
         disabled={!props.spaceId || members.isPending || members.isError || props.disabled}
       />
-      <FieldDescription>Run as this person when Ren can’t match the sender to a member.</FieldDescription>
       {members.isError ? (
         <FieldError>
           {errorMessage(members.error, "Couldn’t load space members.")}

@@ -1,12 +1,15 @@
 import type { ChannelMappingInfo } from "@ren/client"
-import { IconCube, IconHash, IconPencil, IconPlugOff } from "@tabler/icons-react"
+import { IconCube, IconHash, IconLinkOff, IconPencil } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { ChannelMark } from "../../components/channel-mark.js"
+import { PlaceName } from "../../components/place-name.js"
 import { TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 
 export function MappingsTable(props: {
+  noun: string
+  plural: string
   mappings: ReadonlyArray<ChannelMappingInfo>
   filtered: boolean
   editableSpaceIds: ReadonlyArray<string>
@@ -30,8 +33,8 @@ export function MappingsTable(props: {
           {props.mappings.length === 0 ? (
             <TableEmpty columns={3}>
               {props.filtered
-                ? "No matching mappings. Change the search or space filter."
-                : "No mappings yet. Add one to choose where mentions start work."}
+                ? `No matching ${props.plural}. Change the search or space filter.`
+                : `No linked ${props.plural} yet. Add one so people can mention @Ren there.`}
             </TableEmpty>
           ) : null}
           {props.mappings.map((mapping) => (
@@ -47,11 +50,15 @@ export function MappingsTable(props: {
                     variant="ghost"
                     disabled={props.busy || !props.editableSpaceIds.includes(mapping.space.id)}
                     title={mapping.placeName}
-                    aria-label={`Edit ${mapping.placeName} mapping`}
+                    aria-label={`Edit ${mapping.placeName}`}
                     onClick={() => props.onEdit(mapping.id)}
                     className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
                   >
-                    {mapping.placeName}
+                    {mapping.provider === "github" ? (
+                      <PlaceName provider={mapping.provider} name={mapping.placeName} />
+                    ) : (
+                      mapping.placeName
+                    )}
                   </Button>
                 </span>
               </TableCell>
@@ -69,8 +76,8 @@ export function MappingsTable(props: {
                     <RowMenu
                       label={`${mapping.placeName} actions`}
                       items={[
-                        { label: "Edit mapping", icon: IconPencil, onSelect: () => props.onEdit(mapping.id) },
-                        { label: "Disconnect", icon: IconPlugOff, onSelect: () => props.onRemove(mapping) },
+                        { label: "Edit", icon: IconPencil, onSelect: () => props.onEdit(mapping.id) },
+                        { label: "Unlink", icon: IconLinkOff, onSelect: () => props.onRemove(mapping) },
                       ]}
                     />
                   )}

@@ -2,11 +2,22 @@ import { useState } from "react"
 import type { ChannelInstallInfo, ChannelMappingInfo, ChannelTrigger, SpaceInfo } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
-import { IconAlertCircle, IconArrowLeft, IconCube, IconPlus, IconPlugOff } from "@tabler/icons-react"
+import { IconAlertCircle, IconArrowLeft, IconCube, IconLock, IconPlus, IconPlugOff } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Alert, AlertDescription, AlertTitle } from "@ren/ui/alert"
 import { Button, buttonVariants } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@ren/ui/dialog"
+import { Checkbox } from "@ren/ui/checkbox"
+import { Field, FieldError, FieldLabel } from "@ren/ui/field"
+import { Choice } from "../../components/settings-shared.js"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { Spinner } from "@ren/ui/spinner"
 import { ChannelMark } from "../../components/channel-mark.js"
@@ -22,6 +33,7 @@ import { FilterMenu, spaceOptions } from "../../components/filter-menu.js"
 import { Search } from "@ren/schema/search"
 import { useShown } from "../../lib/use-shown.js"
 import { LoadMore } from "../../components/load-more.js"
+import { PlaceName } from "../../components/place-name.js"
 import { MappingsTable } from "./mappings-table.js"
 import { MappingDialog } from "./mapping-dialog.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -111,7 +123,7 @@ export function ChannelProviderPage() {
           onOpenChange={setDisconnecting}
           confirmation={{
             title: `Disconnect ${provider.title}?`,
-            description: `This removes every ${provider.title} mapping for this organization. Ren will stop responding there. You’ll need to connect ${provider.title} again to use it.`,
+            description: `This unlinks every ${provider.title} ${provider.noun} from its space, and Ren stops responding there. To use ${provider.title} again, connect it again.`,
             action: `Disconnect ${provider.title}`,
           }}
           onConfirm={() => disconnect(install.id)}
@@ -177,7 +189,7 @@ function MappingList(props: {
         {mappings.isError ? (
           <Alert variant="destructive">
             <IconAlertCircle />
-            <AlertTitle>Couldn’t load mappings</AlertTitle>
+            <AlertTitle>Couldn’t load linked {props.provider.plural}</AlertTitle>
             <AlertDescription>
               {errorMessage(mappings.error)}
               <Button variant="outline" size="sm" onClick={() => void mappings.refetch()}>
@@ -186,10 +198,12 @@ function MappingList(props: {
             </AlertDescription>
           </Alert>
         ) : null}
-        <Loading id={shapeId} loading={mappings.isPending} label="Loading mappings">
+        <Loading id={shapeId} loading={mappings.isPending} label={`Loading linked ${props.provider.plural}`}>
           {mappings.isPending ? <TableSample columns={["Channel", "Space", "Status", ""]} /> : null}
           {mappings.isSuccess ? (
             <MappingsTable
+              noun={props.provider.noun}
+              plural={props.provider.plural}
               mappings={shown.items}
               filtered={Boolean(search.q || search.spaces)}
               editableSpaceIds={editableSpaces.map((space) => space.id)}
@@ -202,13 +216,13 @@ function MappingList(props: {
                   { id: mapping.id },
                   {
                     onSuccess: () =>
-                      toast.success(`${mapping.placeName} disconnected`, {
+                      toast.success(`${Channels.label(mapping.provider, mapping.placeName)} unlinked`, {
                         action: {
                           label: "Undo",
                           onClick: () =>
                             restore.mutate(Channels.settingsOf(mapping), {
                               onError: (error) =>
-                                toast.error("Couldn’t restore the mapping", {
+                                toast.error(`Couldn’t link ${mapping.placeName} again`, {
                                   description: errorMessage(error),
                                   duration: Infinity,
                                 }),
@@ -216,7 +230,7 @@ function MappingList(props: {
                         },
                       }),
                     onError: (error) =>
-                      toast.error("Couldn’t disconnect the mapping", {
+                      toast.error(`Couldn’t unlink ${mapping.placeName}`, {
                         description: errorMessage(error),
                         duration: Infinity,
                       }),
@@ -233,7 +247,6 @@ function MappingList(props: {
           install={props.install}
           provider={props.provider}
           spaces={editableSpaces}
-          triggers={props.triggers}
           mappings={items}
           onClose={close}
         />
@@ -259,7 +272,7 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
   return (
     <div className="flex min-h-8 items-center justify-end gap-1">
       <ToolbarSearch
-        label="Search mappings"
+        label={`Search ${props.provider.plural}`}
         value={search.q ?? ""}
         onChange={(q) =>
           void navigate({
@@ -269,7 +282,7 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
         }
       />
       <FilterMenu
-        label="Filter mappings"
+        label={`Filter ${props.provider.plural}`}
         properties={[
           {
             key: "space",
@@ -303,84 +316,117 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
   )
 }
 
+const flatCommand =
+  "rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0"
+
 function AddMappingDialog(props: {
   install: ChannelInstallInfo
   provider: Channels.Info
   spaces: ReadonlyArray<SpaceInfo>
-  triggers: ReadonlyArray<ChannelTrigger>
   mappings: ReadonlyArray<ChannelMappingInfo>
   onClose: () => void
 }) {
-  const { client } = RouterContext.useRouterContext()
-  const search = route.useSearch()
-  const navigate = route.useNavigate()
+  const { api, client } = RouterContext.useRouterContext()
   const places = useQuery(Channels.availablePlacesOptions(client, props.install.id))
-  const selected = places.data?.find((place) => place.id === search.place)
-  if (selected)
-    return (
-      <MappingDialog
-        key={selected.id}
-        install={props.install}
-        place={selected}
-        mapping={undefined}
-        spaces={props.spaces}
-        triggers={props.triggers}
-        onClose={props.onClose}
-      />
+  const create = useMutation(api["channel-mapping"].create.mutationOptions())
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set())
+  const [spaceId, setSpaceId] = useState("")
+  const free = (places.data ?? []).filter((place) => !props.mappings.some((mapping) => mapping.place === place.id))
+  const count = picked.size
+  const noun = count > 1 ? `${count} ${props.provider.plural}` : props.provider.noun
+  const toggle = (id: string) =>
+    setPicked((current) =>
+      current.has(id) ? new Set([...current].filter((each) => each !== id)) : new Set([...current, id]),
     )
+  const link = () =>
+    Promise.all(
+      [...picked].map((place) =>
+        create.mutateAsync({ installId: props.install.id, place, spaceId, fallback: false, triggers: [] }),
+      ),
+    ).then(() => {
+      toast.success(`${count > 1 ? `${count} ${props.provider.plural}` : props.provider.title + " " + props.provider.noun} linked`)
+      props.onClose()
+    })
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onClose()
+        if (!open && !create.isPending) props.onClose()
       }}
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add {props.provider.noun}</DialogTitle>
-          <DialogDescription>Choose a {props.provider.noun}, then its Ren space.</DialogDescription>
+          <DialogTitle>Add {props.provider.plural}</DialogTitle>
+          {props.provider.id === "slack" ? (
+            <DialogDescription>
+              Missing a channel? Run <code>/invite @Ren</code> in it.
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
-        {props.provider.id === "slack" ? (
-          <p className="text-xs text-muted-foreground">
-            To add a missing channel, run <code>/invite @Ren</code> in that Slack channel first.
-          </p>
-        ) : null}
         {places.isError ? (
-          <p className="text-sm text-destructive">
+          <p className="flex items-center gap-3 text-sm text-destructive">
             {errorMessage(places.error)}
             <Button variant="outline" size="sm" onClick={() => void places.refetch()}>
               Retry
             </Button>
           </p>
         ) : null}
-        {places.isPending ? <SkeletonRows count={4} label="Loading channels" /> : null}
+        {places.isPending ? <SkeletonRows count={4} label={`Loading ${props.provider.plural}`} /> : null}
         {places.isSuccess ? (
-          <Command>
+          <Command className={flatCommand}>
             <CommandInput
               aria-label={`Search ${props.provider.plural}`}
               placeholder={`Search ${props.provider.plural}…`}
             />
-            <CommandList>
-              <CommandEmpty>No available {props.provider.plural}.</CommandEmpty>
-              <CommandGroup>
-                {places.data
-                  .filter((place) => !props.mappings.some((mapping) => mapping.place === place.id))
-                  .map((place) => (
-                    <CommandItem
-                      key={place.id}
-                      value={place.id}
-                      keywords={[place.name]}
-                      onSelect={() =>
-                        void navigate({ search: (previous) => ({ ...previous, place: place.id }), replace: true })
-                      }
-                    >
-                      {place.name}
-                    </CommandItem>
-                  ))}
+            <CommandList className="pt-1">
+              <CommandEmpty>
+                {free.length === 0
+                  ? `Every ${props.provider.noun} is already linked.`
+                  : `No matching ${props.provider.plural}.`}
+              </CommandEmpty>
+              <CommandGroup className="p-0">
+                {free.map((place) => (
+                  <CommandItem key={place.id} value={place.id} keywords={[place.name]} onSelect={() => toggle(place.id)}>
+                    <Checkbox checked={picked.has(place.id)} tabIndex={-1} aria-hidden className="pointer-events-none" />
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span className="min-w-0 break-words">
+                        <PlaceName provider={props.provider.id} name={place.name} />
+                        <span className="sr-only">{picked.has(place.id) ? ", selected" : ""}</span>
+                      </span>
+                      {place.private ? (
+                        <IconLock aria-label="Private" className="size-3.5 shrink-0 text-muted-foreground" />
+                      ) : null}
+                    </span>
+                  </CommandItem>
+                ))}
               </CommandGroup>
             </CommandList>
           </Command>
         ) : null}
+        <Field>
+          <FieldLabel>Space</FieldLabel>
+          <Choice
+            label="Space"
+            value={spaceId}
+            options={[
+              { value: "", label: "Choose a space" },
+              ...props.spaces.map((space) => ({ value: space.id, label: space.name })),
+            ]}
+            className="w-full"
+            disabled={create.isPending}
+            onChange={setSpaceId}
+          />
+        </Field>
+        {create.isError ? <FieldError>{errorMessage(create.error, "Couldn’t link. Try again.")}</FieldError> : null}
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />} disabled={create.isPending}>
+            Cancel
+          </DialogClose>
+          <Button disabled={count === 0 || !spaceId || create.isPending} onClick={() => void link().catch(() => undefined)}>
+            {create.isPending ? <Spinner data-icon="inline-start" /> : null}
+            Link {noun}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
