@@ -46,11 +46,19 @@ function ClosedRing(props: GlyphProps & { readonly path: string }) {
 
 const halfDash = Math.PI * 2
 
-function OpenRing(props: GlyphProps & { readonly half: boolean }) {
+function OpenRing(props: GlyphProps & { readonly half: boolean; readonly dashed?: boolean }) {
   const shown = glyph(props)
   return (
     <Svg viewBox="-1 -1 16 16" width={shown.size} height={shown.size}>
-      <Circle cx="7" cy="7" r="6" fill="none" stroke={shown.color} strokeWidth="1.5" />
+      <Circle
+        cx="7"
+        cy="7"
+        r="6"
+        fill="none"
+        stroke={shown.color}
+        strokeWidth="1.5"
+        {...(props.dashed ? { strokeDasharray: "1.4 1.74" } : {})}
+      />
       {props.half ? (
         <Circle
           cx="7"
@@ -65,6 +73,10 @@ function OpenRing(props: GlyphProps & { readonly half: boolean }) {
       ) : null}
     </Svg>
   )
+}
+
+function BacklogRing(props: GlyphProps) {
+  return <OpenRing {...props} half={false} dashed />
 }
 
 function TodoRing(props: GlyphProps) {
@@ -84,6 +96,7 @@ function DismissedRing(props: GlyphProps) {
 }
 
 const statusLooks = {
+  backlog: { glyph: BacklogRing, color: "text-muted-foreground" },
   todo: { glyph: TodoRing, color: "text-muted-foreground" },
   in_progress: { glyph: ProgressRing, color: "text-chart-3" },
   done: { glyph: DoneRing, color: "text-chart-6" },

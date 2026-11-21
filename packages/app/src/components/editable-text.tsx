@@ -32,7 +32,7 @@ function TextView(props: {
               className={cn(
                 "h-auto min-w-0 cursor-text justify-start p-0 text-left font-normal hover:bg-transparent",
                 text,
-                props.multiline && "py-1",
+                props.multiline ? "py-1" : "block shrink",
                 !props.value && "text-muted-foreground",
               )}
             />

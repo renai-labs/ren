@@ -477,9 +477,8 @@ function SpaceRow(props: {
       <WorkingIn
         spaces={spaces.joined}
         spaceId={props.draft.spaceId}
-        side="bottom"
         label={null}
-        className="ml-0 px-0 hover:bg-transparent dark:hover:bg-transparent"
+        className="-ml-1"
         onChange={(spaceId) => props.onChange({ spaceId, agent: Webhooks.defaultAgent })}
       />
       {automation && props.draft.spaceId !== automation.spaceId ? (

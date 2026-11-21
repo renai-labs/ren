@@ -20,7 +20,7 @@ test("a member creates a daily automation, tests it, and finds the run under Run
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/automations")
+  await page.goto("/automations")
   await expect(page.getByText("No automations yet")).toBeVisible()
 
   await page.getByRole("link", { name: "New automation" }).first().click()
@@ -41,11 +41,11 @@ test("a member creates a daily automation, tests it, and finds the run under Run
   await expect(page.getByRole("link", { name: "Daily report", exact: true })).toBeVisible()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  await page.goto("/app/automations?tab=runs")
+  await page.goto("/automations?tab=runs")
   await expect(page.getByRole("cell", { name: "Schedule" })).toBeVisible()
   await expect(page.getByRole("navigation").getByText("Summarize the day")).toHaveCount(0)
 
-  await page.goto("/app/automations")
+  await page.goto("/automations")
   await expect(page.getByRole("cell", { name: /every day/u })).toBeVisible()
   await expect(page.getByRole("cell", { name: /Active/u })).toBeVisible()
 })
@@ -60,7 +60,7 @@ test("a member creates a webhook automation that is off, sees its first request 
     await (await page.request.get(`${serverURL}/spaces?page=1&pageSize=50`)).json(),
   )
   const spaceId = spaces.items.at(0)?.id ?? ""
-  await page.goto(`/app/spaces/${spaceId}/automations`)
+  await page.goto(`/spaces/${spaceId}/automations`)
   await expect(page.getByText("No automations yet")).toBeVisible()
 
   await page.getByRole("link", { name: "New automation" }).first().click()

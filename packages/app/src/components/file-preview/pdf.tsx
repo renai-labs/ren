@@ -4,6 +4,7 @@ import type { PDFDocumentProxy, RenderTask, TextLayer } from "pdfjs-dist"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
+import { plural } from "../../lib/format.js"
 import { maxFitWidth, type PreviewProps } from "./preview.js"
 import { PageField, useNear, usePageKeys } from "./page-field.js"
 import { workerTimeoutMs } from "./worker-call.js"
@@ -20,6 +21,14 @@ const hitClass = "bg-yellow-300/40"
 const activeClass = "bg-orange-400/50"
 
 const pageOf = async (doc: PDFDocumentProxy, number: number) => doc.getPage(number)
+
+const openDocument = (pdfjs: Pdfjs, bytes: ArrayBuffer) =>
+  pdfjs.getDocument({
+    data: new Uint8Array(structuredClone(bytes)),
+    cMapUrl: `${assets}cmaps/`,
+    standardFontDataUrl: `${assets}standard_fonts/`,
+    wasmUrl: `${assets}wasm/`,
+  })
 
 const loadPdfjs = async () => {
   // oxlint-disable-next-line no-restricted-imports -- this module is itself a lazy chunk, and the import runs when a PDF opens
@@ -209,12 +218,7 @@ export function PdfView(props: PreviewProps) {
     const destroy: { current: (() => void) | undefined } = { current: undefined }
     loadPdfjs()
       .then(async (pdfjs) => {
-        const task = pdfjs.getDocument({
-          data: new Uint8Array(structuredClone(props.bytes)),
-          cMapUrl: `${assets}cmaps/`,
-          standardFontDataUrl: `${assets}standard_fonts/`,
-          wasmUrl: `${assets}wasm/`,
-        })
+        const task = openDocument(pdfjs, props.bytes)
         const timer = setTimeout(() => void task.destroy(), workerTimeoutMs)
         destroy.current = () => {
           clearTimeout(timer)
@@ -319,6 +323,49 @@ export function PdfView(props: PreviewProps) {
         </div>
       </div>
       <PageField current={current} total={opened.doc.numPages} onGoto={goto} />
+    </div>
+  )
+}
+
+export function PdfFirstPage(props: { bytes: ArrayBuffer; className: string }) {
+  const canvas = useRef<HTMLCanvasElement>(null)
+  const [pages, setPages] = useState<number>()
+  useEffect(() => {
+    const target = canvas.current
+    if (!target) return
+    const cancelled = { value: false }
+    const stopped = () => cancelled.value
+    const destroy: { current: (() => void) | undefined } = { current: undefined }
+    loadPdfjs()
+      .then(async (pdfjs) => {
+        if (stopped()) return
+        const task = openDocument(pdfjs, props.bytes)
+        destroy.current = () => void task.destroy()
+        const doc = await task.promise
+        if (stopped()) return
+        setPages(doc.numPages)
+        const page = await doc.getPage(1)
+        const base = page.getViewport({ scale: 1 })
+        const viewport = page.getViewport({ scale: (target.clientWidth / base.width) * window.devicePixelRatio })
+        target.width = viewport.width
+        target.height = viewport.height
+        target.style.aspectRatio = `${base.width} / ${base.height}`
+        await page.render({ canvas: target, viewport }).promise
+      })
+      .catch((error: unknown) => {
+        if (!stopped()) throw error
+      })
+    return () => {
+      cancelled.value = true
+      destroy.current?.()
+    }
+  }, [props.bytes])
+  return (
+    <div className="flex flex-col gap-1.5">
+      <canvas ref={canvas} className={props.className} />
+      {pages ? (
+        <span className="text-xs text-muted-foreground tabular-nums">{plural(pages, "page", "pages")}</span>
+      ) : null}
     </div>
   )
 }

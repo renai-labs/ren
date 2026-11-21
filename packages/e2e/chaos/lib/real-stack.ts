@@ -30,6 +30,7 @@ import { SpaceSettings } from "@ren/core/space/settings"
 import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestHand } from "@ren/executor/testing"
+import type { Machine } from "@ren/schema/machine"
 import { MachineTemplate } from "@ren/schema/machine-template"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
@@ -66,6 +67,14 @@ const freePort = async () => {
 const encodedKey = (key: Signature.PrivateKey) => ({
   id: key.id,
   key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.key),
+})
+
+// oxlint-disable-next-line ren/no-comments -- The version a chat of the space targets (SpaceCompute): a container is that chat's machine only with the same version and space.
+const targetOf = (environmentTemplateId: MachineTemplate.ID): Machine.Version => ({
+  environmentTemplateId,
+  image: null,
+  config: { environmentTemplateId },
+  system: null,
 })
 
 export interface EnvironmentOptions {
@@ -191,7 +200,8 @@ export const start = async (options: {
               sandboxes.map((sandbox) => ({
                 id: sandbox.container.environmentId,
                 environment_template_id: sandbox.environmentTemplateId,
-                target: Seed.version(sandbox.environmentTemplateId),
+                space_id: owner.spaceId,
+                target: targetOf(sandbox.environmentTemplateId),
               })),
             ),
           ),
@@ -233,7 +243,7 @@ export const start = async (options: {
         ...TestDrives.config,
         BETTER_AUTH_URL: `http://127.0.0.1:${serverPort}`,
         TRUSTED_ORIGINS: `http://127.0.0.1:${serverPort}`,
-        APP_URL: `http://127.0.0.1:${serverPort}/app`,
+        APP_URL: `http://127.0.0.1:${serverPort}`,
         GOOGLE_CLIENT_ID: "e2e-google-client-id",
         GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
         SIGNUP_MX_CHECK: "false",
@@ -312,7 +322,7 @@ export const start = async (options: {
     const environmentId = Hand.ID.create()
     await entry.container.replace(environmentId)
     await direct`DELETE FROM environment WHERE environment_template_id = ${entry.environmentTemplateId} AND binding IS NULL`
-    await direct`INSERT INTO environment (id, environment_template_id) VALUES (${environmentId}, ${entry.environmentTemplateId})`
+    await direct`INSERT INTO environment (id, environment_template_id, space_id, target) VALUES (${environmentId}, ${entry.environmentTemplateId}, ${owner.spaceId}, ${JSON.stringify(targetOf(entry.environmentTemplateId))})`
   }
   const remote = (sessionId: Session.ID) =>
     databaseRuntime.runPromise(

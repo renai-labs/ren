@@ -17,14 +17,14 @@ test("images the agent shows form one gallery with a file chip each, and a missi
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   await send(page, "Draw three logos")
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   await page.getByRole("button", { name: "Open panel", exact: true }).click()
   const panel = page.getByRole("complementary", { name: "Workspace" })
   await panel.getByRole("button", { name: /^Terminal:/ }).click()
-  const input = panel.getByRole("textbox", { name: "Command" })
+  const input = panel.getByRole("textbox", { name: "Terminal" })
   await input.fill(
     `mkdir -p .ren/images && for name in a b c; do echo ${pixel} | base64 -d > .ren/images/logo-$name.png; done && echo drawn`,
   )

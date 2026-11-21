@@ -67,22 +67,29 @@ function LinkGroup(props: { label: string; rows: ReadonlyArray<LinkRow> }) {
   )
 }
 
-function ChatLinks(props: { sessionId: Session.ID; open: boolean }) {
+function useChatLinks(sessionId: Session.ID) {
   const { api } = RouterContext.useRouterContext()
+  const linked = useQuery(api.link.session.links.queryOptions({ id: sessionId }))
+  const links = linked.data ?? noLinks
+  const pulled = useQuery({
+    ...api.link.session.pullRequests.queryOptions({ id: sessionId }),
+    enabled: links.pullRequests.length > 0,
+  })
+  return {
+    links,
+    pulls: new Map(pulled.data?.map((pull) => [pull.url, pull])),
+    refresh: () => {
+      void linked.refetch()
+      if (links.pullRequests.length > 0) void pulled.refetch()
+    },
+  }
+}
+
+function ChatLinks(props: Pick<ReturnType<typeof useChatLinks>, "links" | "pulls">) {
   const navigate = useNavigate()
   const platform = Platform.usePlatform()
-  const links =
-    useQuery({
-      ...api.link.session.links.queryOptions({ id: props.sessionId }),
-      enabled: props.open,
-      staleTime: 0,
-    }).data ?? noLinks
-  const pullRequests = useQuery({
-    ...api.link.session.pullRequests.queryOptions({ id: props.sessionId }),
-    enabled: props.open && links.pullRequests.length > 0,
-    staleTime: 0,
-  }).data
-  const pulls = new Map(pullRequests?.map((pull) => [pull.url, pull]))
+  const links = props.links
+  const pulls = props.pulls
   return (
     <>
       <LinkGroup
@@ -129,6 +136,7 @@ export function ChatActions(props: {
 }) {
   const [open, setOpen] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  const chatLinks = useChatLinks(props.sessionId)
   const write = Platform.usePlatform().writeClipboardText
   const copyLink = () =>
     void write?.(window.location.href).then(
@@ -137,14 +145,20 @@ export function ChatActions(props: {
     )
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu
+        open={open}
+        onOpenChange={(next: boolean) => {
+          setOpen(next)
+          if (next) chatLinks.refresh()
+        }}
+      >
         <DropdownMenuTrigger
           render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Chat actions" />}
         >
           <IconDots />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72" finalFocus={false}>
-          <ChatLinks sessionId={props.sessionId} open={open} />
+          <ChatLinks links={chatLinks.links} pulls={chatLinks.pulls} />
           {write || props.onRename ? (
             <DropdownMenuGroup>
               {props.onRename ? (

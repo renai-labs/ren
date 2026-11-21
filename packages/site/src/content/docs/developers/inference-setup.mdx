@@ -4,7 +4,7 @@ icon: Developer
 description: Connect Claude Code, Codex, OpenCode, Pi, or Hermes to Ren inference with one CLI command.
 ---
 
-Ren inference connects local coding tools to the Claude and ChatGPT subscriptions of your organization. Before you set up a tool, you need a connected provider, an inference key, and the Ren CLI.
+Ren inference connects local coding tools to the Claude and ChatGPT subscriptions of your organization. Before you set up a tool, you need a connected provider and the Ren CLI.
 
 ```bash
 ren inference setup claude-code
@@ -29,20 +29,9 @@ An organization admin connects the subscriptions that Ren sends requests through
 
 When the connection is complete, the subscription shows on the Providers page.
 
-## Create an inference key
-
-<Steps>
-
-1. Open **Settings → Access keys** and select the **Inference keys** tab.
-2. Select **Create key**.
-3. Give the key the name of the machine or tool that uses it.
-4. Copy the key before you close the dialog. Ren shows it only one time.
-
-</Steps>
-
 ## Install the CLI
 
-The installer needs Node.js 18 or later.
+The installer installs the CLI and signs you in.
 
 ```bash
 curl -fsSL https://useren.ai/install | bash
@@ -52,7 +41,7 @@ For other options, see [CLI installation](/docs/surfaces/cli/).
 
 ## Set up your coding tool
 
-Install your coding tool, then run its setup command. The setup command asks for your inference key, shows a preview of the changes, and makes a backup of each file that it changes.
+Install your coding tool, then run its setup command. The setup command uses your newest inference key, or creates one named after your computer. It shows a preview of the changes and makes a backup of each file that it changes.
 
 ### Claude Code
 
@@ -96,8 +85,8 @@ Setup writes `~/.hermes/config.yaml` and `~/.hermes/.env`. To send a test reques
 
 ## Good to know
 
-- Keep the inference key out of repositories.
-- If someone sees your key, revoke it on the **Inference keys** tab and create a new key.
+- Setup writes the inference key into the files of your coding tool. Keep those files out of repositories.
+- If someone sees your key, revoke it under **Settings → Providers → Inference keys**, then run the setup again to create a new key.
 - To preview the changes without writing files, add `--dry-run` to the setup command.
 - To restore the files from the latest setup, run `ren inference setup --undo`.
-- After you connect another provider, run the setup again to refresh the model list.
+- After you connect another provider, run `ren inference sync` to refresh the model list of each tool that you set up.

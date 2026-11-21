@@ -162,6 +162,16 @@ const contextUsageOf = (
   }
 }
 
+const showable = (state: ChatState.State, sessionID: string) => {
+  const messages = state.messages[sessionID]
+  if (!messages) return false
+  return (
+    state.loaded.has(sessionID) ||
+    state.partial.has(sessionID) ||
+    messages.some((message) => state.outbox.has(message.id))
+  )
+}
+
 export function useView(root: Session.ID, child: Session.ID | undefined, detail?: TimelineDetail.Detail) {
   const session = useSession(root, { child, detail })
   const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
@@ -175,7 +185,7 @@ export function useView(root: Session.ID, child: Session.ID | undefined, detail?
     state,
     viewed,
     projection,
-    loading: !state.messages[viewed] && !AsyncResult.isFailure(session.state),
+    loading: !AsyncResult.isFailure(session.state) && !showable(state, viewed),
     messages: ChatState.messages(state, viewed),
     contextUsage: contextUsageOf(state, viewed, models),
     rows: projection?.rows ?? noRows,
@@ -219,7 +229,7 @@ export function useFileMentions(root: Session.ID | undefined, query: string | un
   const result = useFiles({ root: root ?? unrooted, query: root ? text : "", type: "file" })
   const [kept, setKept] = useState<ReadonlyArray<Mentions.Item>>([])
   if (AsyncResult.isSuccess(result)) {
-    const next = result.value.map(Mentions.fromFile)
+    const next = result.value.map((file) => Mentions.fromFile(file))
     if (next.length !== kept.length || next.some((item, index) => item.id !== kept[index]?.id)) setKept(next)
   }
   const active = Boolean(root && query)
@@ -245,14 +255,22 @@ export const useFolders = (root: Session.ID, opened: ReadonlyArray<string>) => {
   }
 }
 
+export const usePrefetchFile = (root: Session.ID) => {
+  const atoms = useAtoms()
+  const registry = useContext(RegistryContext)
+  return useCallback((path: string) => void registry.get(atoms.file({ root, path })), [atoms, registry, root])
+}
+
 export const useFileExists = (view: ChatAtoms.PathView) => useAtomValue(useAtoms().fileExists(view))
 
 export const useFile = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().file(view))
 
-export const useVcs = (root: Session.ID) => useRefreshable(useAtoms().vcs(root))
+export const useVcs = (view: ChatAtoms.PathView) => useRefreshable(useAtoms().vcs(view))
 
-export const useVcsDiff = (root: Session.ID, mode: SessionVcs.Mode) =>
-  useRefreshable(useAtoms().vcsDiff({ root, mode }))
+export const useVcsProjects = (root: Session.ID) => useRefreshable(useAtoms().vcsProjects(root))
+
+export const useVcsDiff = (view: ChatAtoms.PathView & { readonly mode: SessionVcs.Mode }) =>
+  useRefreshable(useAtoms().vcsDiff(view))
 
 export const useRunningShells = (root: Session.ID) => useAtomValue(useAtoms().runningShells(root))
 

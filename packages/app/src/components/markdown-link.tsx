@@ -41,7 +41,7 @@ const wrapClass = (label: string) => {
   return label.length <= 24 && !/^(?:https?:\/\/|www\.)/iu.test(label) ? "whitespace-nowrap" : "break-all"
 }
 
-const iconClass = "mr-1 inline-block size-3.5 shrink-0 align-[-2px]"
+const inlineIcon = "mr-1 inline-block size-3.5 shrink-0 align-[-2px]"
 
 const brands = [
   { name: "github", hosts: ["github.com"], Mark: GitHubMark },
@@ -51,11 +51,11 @@ const brands = [
   { name: "google", hosts: ["docs.google.com", "drive.google.com"], Mark: GoogleMark },
 ]
 
-function Favicon(props: { host: string }) {
+function Favicon(props: { host: string; className: string }) {
   const platform = Platform.usePlatform()
   const [loaded, setLoaded] = useState(false)
   return (
-    <span className={cn(iconClass, "relative")} data-link-icon="favicon" aria-hidden>
+    <span className={cn(props.className, "relative")} data-link-icon="favicon" aria-hidden>
       <IconWorld className={cn("size-3.5", loaded && "invisible")} data-link-icon="globe" />
       <img
         ref={(image) => {
@@ -73,8 +73,9 @@ function Favicon(props: { host: string }) {
   )
 }
 
-function LinkIcon(props: { href: string; streaming: boolean }) {
+export function LinkIcon(props: { href: string; streaming: boolean; className?: string | undefined }) {
   const platform = Platform.usePlatform()
+  const iconClass = props.className ?? inlineIcon
   if (!URL.canParse(props.href)) return null
   const url = new URL(props.href)
   const host = url.hostname.toLowerCase()
@@ -90,7 +91,7 @@ function LinkIcon(props: { href: string; streaming: boolean }) {
   if (brand) return <brand.Mark className={iconClass} data-link-icon={brand.name} />
   if (props.streaming || !PublicHost.isPublic(host))
     return <IconWorld className={iconClass} data-link-icon="globe" aria-hidden />
-  return <Favicon key={host} host={host} />
+  return <Favicon key={host} host={host} className={iconClass} />
 }
 
 export function MarkdownLink({ node, href, className, children, onClick, ...rest }: ComponentProps<"a"> & ExtraProps) {

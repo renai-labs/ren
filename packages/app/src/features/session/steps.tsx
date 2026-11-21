@@ -40,13 +40,14 @@ import {
 } from "@ren/ui/trace"
 import { Markdown } from "../../components/markdown.js"
 import { toolIcons } from "./tool-icons.js"
+import { isShellNotice } from "./chat-view.js"
 import { ImageThumbnail } from "../../components/image-set.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { WorkspaceImage } from "./workspace-image.js"
 import { InlineFile } from "./file-chip.js"
 import { DiffFile } from "./diff-file.js"
-import { OpenPanel } from "./open-panel.js"
+import { OpenPanel, useOpenActivity } from "./open-panel.js"
 import { workspacePath } from "./workspace-edits.js"
 
 function Output(props: { text: string; failed?: boolean | undefined; quotable?: string | undefined }) {
@@ -410,7 +411,64 @@ function ShellStep(props: { message: SessionMessage.Shell }) {
   )
 }
 
+const shellNotice = /^<shell\b[^>]*>\n?([\s\S]*?)\n?<\/shell>\s*$/u
+
+function ShellNoticeLink(props: { verb: string; command: string | undefined; failed: boolean; onOpen: () => void }) {
+  return (
+    <Trace>
+      {/* oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the command in Activity, and Trace styles its button */}
+      <button type="button" aria-label={`Open ${props.command ?? "the command"} in Activity`} onClick={props.onOpen}>
+        <TraceLine status={traceStatus({ failed: props.failed })}>
+          <TraceIcon>
+            <toolIcons.command />
+          </TraceIcon>
+          <TraceTitle className="shrink-0">{props.verb}</TraceTitle>
+          {props.command ? (
+            <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{props.command}</TraceDescription>
+          ) : null}
+        </TraceLine>
+      </button>
+    </Trace>
+  )
+}
+
+export function ShellNoticeStep(props: { message: SessionMessage.Synthetic }) {
+  const message = props.message
+  const metadata = message.metadata ?? {}
+  const command = message.description?.trim() || undefined
+  const end = TimelineText.shellEnd(metadata)
+  const verb = `Background command ${end.text.toLowerCase()}`
+  const output = TimelineText.shellOutput(message.text.match(shellNotice)?.[1] ?? message.text).trim()
+  const openPanel = useOpenActivity()
+  const shell = metadata.shellID
+  if (openPanel && shell)
+    return (
+      <ShellNoticeLink
+        verb={verb}
+        command={command}
+        failed={end.failed}
+        onOpen={() =>
+          openPanel({
+            kind: "activity",
+            shell: { id: shell, command: command ?? "", ended: end.text, failed: end.failed, output },
+          })
+        }
+      />
+    )
+  return (
+    <StepRow
+      icon={<toolIcons.command />}
+      verb={verb}
+      subject={command}
+      command={command}
+      failed={end.failed}
+      output={output || "No output"}
+    />
+  )
+}
+
 function NoticeStep(props: { message: SessionMessage.Info }) {
+  if (isShellNotice(props.message)) return <ShellNoticeStep message={props.message} />
   const notice = TimelineText.notice(props.message)
   if (!notice) return null
   return (
@@ -512,21 +570,40 @@ function GroupStep(props: { step: Extract<Step, { kind: "group" }> }) {
   )
 }
 
-export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | undefined }) {
-  const backgrounded = props.steps.filter((step) => step.kind === "tool" && ToolState.backgrounded(step.tool))
-  const steps = props.steps.filter((step) => step.kind !== "tool" || !ToolState.backgrounded(step.tool))
+const workedTitle = (workedFor: string | undefined) => (workedFor ? `Worked for ${workedFor}` : "Worked")
+
+const stepCount = (count: number) => (count === 1 ? "1 step" : `${count} steps`)
+
+export function Steps(props: {
+  steps: ReadonlyArray<Step>
+  workedFor: string | undefined
+  onOpen?: (() => void) | undefined
+}) {
+  const steps = props.steps
   const count = TranscriptBlocks.count(steps)
   return (
     <Trace>
-      {steps.length > 0 ? (
+      {steps.length > 0 && props.onOpen ? (
+        // oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the turn in Activity, and Trace styles its button
+        <button type="button" aria-label="Open this turn in Activity" onClick={props.onOpen}>
+          <TraceLine>
+            <TraceIcon>
+              <IconClock />
+            </TraceIcon>
+            <TraceTitle>{workedTitle(props.workedFor)}</TraceTitle>
+            <TraceDescription>{stepCount(count)}</TraceDescription>
+          </TraceLine>
+        </button>
+      ) : null}
+      {steps.length > 0 && !props.onOpen ? (
         <TraceCollapsible>
           <TraceCollapsibleTrigger>
             <TraceLine>
               <TraceIcon>
                 <IconClock />
               </TraceIcon>
-              <TraceTitle>{props.workedFor ? `Worked for ${props.workedFor}` : "Worked"}</TraceTitle>
-              <TraceDescription>{count === 1 ? "1 step" : `${count} steps`}</TraceDescription>
+              <TraceTitle>{workedTitle(props.workedFor)}</TraceTitle>
+              <TraceDescription>{stepCount(count)}</TraceDescription>
             </TraceLine>
           </TraceCollapsibleTrigger>
           <TraceCollapsibleContent className="flex flex-col gap-3">
@@ -534,9 +611,6 @@ export function Steps(props: { steps: ReadonlyArray<Step>; workedFor: string | u
           </TraceCollapsibleContent>
         </TraceCollapsible>
       ) : null}
-      {backgrounded.map((step) => (
-        <StepItem key={step.key} step={step} />
-      ))}
     </Trace>
   )
 }

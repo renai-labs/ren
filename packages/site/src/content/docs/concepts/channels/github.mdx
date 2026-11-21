@@ -113,7 +113,7 @@ Name a [task](/docs/concepts/tasks/) in a pull request or an issue, and Ren link
 | You write                | Example                                |
 | ------------------------ | -------------------------------------- |
 | The task ID, in any case | `ACME-42`, or the branch `acme-42-fix` |
-| The task URL             | `https://useren.ai/app/tasks/ACME-42`  |
+| The task URL             | `https://useren.ai/tasks/ACME-42`      |
 
 Ren reads only the task IDs of the organization that installed the app. Words such as `Fixes` or `Closes` change nothing. When the pull request merges, Ren sets each task that links it to done.
 
@@ -126,7 +126,7 @@ A GitHub autolink turns each task ID in GitHub into a link to the task. A reposi
 1. On GitHub, open the repository's **Settings → Autolink references**.
 2. Select **Add autolink reference**.
 3. In **Reference prefix**, enter your organization's task prefix and a hyphen, such as `ACME-`.
-4. In **Target URL**, enter `https://useren.ai/app/tasks/ACME-<num>`.
+4. In **Target URL**, enter `https://useren.ai/tasks/ACME-<num>`.
 5. Choose **Numeric**, so that only numbers after the prefix match. Then select **Add autolink reference**.
 
 ## Who Ren commits as

@@ -44,7 +44,7 @@ export const token = Effect.fn("OAuth.token")(function* (endpoints: Endpoints, p
     ),
   )
   if (response.status === 400 || response.status === 401)
-    return yield* Effect.fail(new Error("Your session expired. Run ren2 login."))
+    return yield* Effect.fail(new Error("Your session expired. Run ren login."))
   const issued = yield* HttpClientResponse.filterStatusOk(response).pipe(
     Effect.flatMap(HttpClientResponse.schemaBodyJson(Token)),
   )

@@ -19,6 +19,7 @@ export const layerNone = Layer.succeed(Service, Service.of({ refresh: () => Effe
 const marker = (taskId: Task.ID) => `<!-- ren:task ${taskId} -->`
 
 const statusText: Readonly<Record<Task.Status, string>> = {
+  backlog: "Backlog",
   todo: "To do",
   in_progress: "In progress",
   done: "Done",

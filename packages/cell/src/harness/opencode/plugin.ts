@@ -44,6 +44,7 @@ import { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
+import { OpenCodeActivity } from "./activity.js"
 import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -482,8 +483,24 @@ export const make = (
           apps: (yield* Ref.get(applied)).apps,
           onPrompt: Effect.flatten(Ref.get(refreshSkills)),
         })
-        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's references and skills.
-        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [skills.items]
+        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's apps' setup, references and skills.
+        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [
+          () =>
+            Option.match(
+              Option.flatMap(Ref.getUnsafe(applied).apps, (info) => HandCopies.setupOf(info.catalog.apps)),
+              {
+                onNone: () => [],
+                onSome: (item) => [
+                  {
+                    path: item.path,
+                    copy: item.copy,
+                    note: (message: string) => `${message}. The next turn sets it up again.`,
+                  },
+                ],
+              },
+            ),
+          skills.items,
+        ]
         yield* OpenCodeCopies.make({
           context,
           copies,
@@ -567,7 +584,7 @@ export const make = (
             editor.add({
               name: SessionMessage.showFileTool,
               description:
-                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced. An .html file of at most 5 MB is shown as a page in a sandboxed frame, for a visual answer such as a chart, a table or a layout. Write it as one self-contained file: CSS and scripts inline, images as data URIs. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. Style it with the CSS variables of the app (`--background`, `--foreground`, `--muted`, `--muted-foreground`, `--border`, `--primary`, `--radius`, `--font-sans`, `--font-mono`) so that it fits light and dark themes.",
+                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced. An .html file of at most 5 MB is shown as a page in a sandboxed frame, for a visual answer such as a chart, a table or a layout. Write it as one self-contained file: CSS and scripts inline, images as data URIs. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. The page shows inline in the reply, as wide as the reply (about 720px on a computer, 360px on a phone) and as tall as its content, on the chat’s background. Leave html, body and the outer element without a background, an outer card or border, a banner title or side padding; Ren adds an 8px gutter. A box that needs its own background gets 16px padding and `var(--radius)` corners. Give charts fixed pixel heights, use fluid widths, and let the content set the height: no `vh` units and no `height: 100%` on html or body. Use the app’s CSS variables, never fixed colors, so the page fits light and dark themes: `--background`, `--foreground`, `--muted`, `--muted-foreground`, `--card`, `--card-foreground`, `--secondary`, `--secondary-foreground`, `--accent`, `--accent-foreground`, `--primary`, `--primary-foreground`, `--destructive`, `--border`, `--ring`, `--chart-1` to `--chart-6`, `--radius`, `--font-sans` and `--font-mono`. The base styles set the background, the text color, the font and 14px text.",
               input: Schema.Struct({
                 path: Schema.NonEmptyString.annotate({ description: "The path of the file on the environment." }),
               }),
@@ -713,6 +730,14 @@ export const make = (
           }
           OpenCodeModelTools.register(editor, modelTools)
         })
+        yield* tool.transform(OpenCodeActivity.register)
+        yield* context.session.hook("context", (event) =>
+          Effect.sync(() => {
+            OpenCodeActivity.request(event.tools)
+            if (Object.keys(event.tools).length > 0)
+              event.system.push({ type: "text", text: OpenCodeActivity.instruction })
+          }),
+        )
         yield* context.websearch.transform((editor) => editor.default.set(editor.default.get() ?? "random"))
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {

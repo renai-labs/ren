@@ -40,6 +40,7 @@ import {
   Struct,
 } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
+import type { ChildProcessSpawner } from "effect/process"
 import manifest from "../../../package.json"
 import { SessionID } from "@opencode/schema/session-id"
 import { Harness } from "../harness.js"
@@ -312,6 +313,24 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         ),
         Effect.flatMap(use),
       ),
+    git: (sessionId, use) =>
+      located(sessionId, Location.Service).pipe(
+        Effect.flatMap((location) =>
+          Option.match(
+            Option.flatMap(connections, (found) =>
+              Option.map(Option.fromNullishOr(location.workspaceID), (workspaceID) => ({
+                spawner: RenWorkspaceDriver.session(found, RenWorkspaceDriver.sessionIdOf(workspaceID)).spawner,
+                directory: location.directory,
+              })),
+            ),
+            {
+              onNone: () => Effect.fail(new Harness.Rejected({ message: `Session ${sessionId} has no environment` })),
+              onSome: Effect.succeed,
+            },
+          ),
+        ),
+        Effect.flatMap(use),
+      ),
     agents: (sessionId) => located(sessionId, Agent.Service).pipe(Effect.flatMap((agents) => agents.list())),
     skills: (sessionId) => located(sessionId, Skill.Service).pipe(Effect.flatMap((skills) => skills.list())),
     commands: (sessionId) => located(sessionId, Command.Service).pipe(Effect.flatMap((commands) => commands.list())),
@@ -365,6 +384,13 @@ export interface Instance {
   readonly environment: <A, E>(
     sessionId: string,
     use: (services: Hand) => Effect.Effect<A, E>,
+  ) => Effect.Effect<A, E | Harness.NotFound | Harness.Rejected>
+  readonly git: <A, E>(
+    sessionId: string,
+    use: (hand: {
+      readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]
+      readonly directory: string
+    }) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E | Harness.NotFound | Harness.Rejected>
   readonly agents: (sessionId: string) => Effect.Effect<ReadonlyArray<Agent.Info>, Harness.NotFound>
   readonly skills: (sessionId: string) => Effect.Effect<ReadonlyArray<Skill.Info>, Harness.NotFound>

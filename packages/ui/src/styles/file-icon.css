@@ -11,6 +11,7 @@
   --file-icon-purple: light-dark(#a631be, #d568ea);
   --file-icon-pink: light-dark(#d32a61, #ff678d);
   --file-icon-mauve: light-dark(#594c5b, #79697b);
+  --file-icon-gray: light-dark(#84848a, #adadb1);
 }
 
 [data-slot="file-icon"][data-file-icon="astro"],
@@ -95,4 +96,39 @@
 
 [data-slot="file-icon"][data-file-icon="git"] {
   color: var(--file-icon-vermilion);
+}
+
+[data-slot="file-icon"][data-file-icon="default"],
+[data-slot="file-icon"][data-file-icon="nextjs"],
+[data-slot="file-icon"][data-file-icon="stylelint"],
+[data-slot="file-icon"][data-file-icon="text"] {
+  color: var(--file-icon-gray);
+}
+
+[data-slot="file-icon"][data-file-icon="pdf"] {
+  color: var(--file-icon-red);
+}
+
+[data-slot="file-icon"][data-file-icon="word"] {
+  color: var(--file-icon-blue);
+}
+
+[data-slot="file-icon"][data-file-icon="slides"] {
+  color: var(--file-icon-orange);
+}
+
+[data-slot="file-icon"][data-file-icon="video"] {
+  color: var(--file-icon-purple);
+}
+
+[data-slot="file-icon"][data-file-icon="audio"] {
+  color: var(--file-icon-pink);
+}
+
+[data-slot="file-icon"][data-file-icon="epub"] {
+  color: var(--file-icon-indigo);
+}
+
+[data-slot="file-icon"][data-file-icon="diff"] {
+  color: var(--file-icon-green);
 }

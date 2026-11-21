@@ -1,7 +1,7 @@
 export * as E2BSandbox from "./e2b.js"
 
 import { HandApi } from "@ren/hand-api/hand-api"
-import { App } from "@ren/schema/app"
+import { Packages } from "@ren/schema/packages"
 import { Auth } from "@ren/schema/auth"
 import { Identifier } from "@ren/schema/identifier"
 import { Space } from "@ren/schema/space"
@@ -115,7 +115,7 @@ const TemplateConfig = Schema.Struct({
   memoryMiB: Schema.Literals([1024, 2048, 4096, 6144, 8192])
     .annotate({ title: "Memory (MiB)" })
     .pipe(Schema.withDecodingDefaultKey(Effect.succeed(2048 as const))),
-  ...App.Environment.fields,
+  ...Packages.Setup.fields,
 }).annotate({ title: "E2B" })
 
 const Tags = Schema.Array(Schema.Struct({ tag: Schema.String }))
@@ -137,32 +137,6 @@ const logLinesShown = 8
 
 const startCommand = "/opt/ren/start.sh"
 
-const quoteAll = (names: ReadonlyArray<string> | undefined) => (names ?? []).map(quote).join(" ")
-
-// oxlint-disable-next-line ren/no-comments -- One RUN per package manager, as root, which installs the manager when the system image lacks it; then one RUN per build command, as the sandbox user.
-const stepsOf = (config: Pick<typeof TemplateConfig.Type, "packages" | "buildCommands">) => {
-  const root = (command: string): MachineProvider.Step => ({ command, user: "root" })
-  const apt = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y"
-  const packages = config.packages
-  return [
-    ...(packages.apt?.length ? [root(`${apt} ${quoteAll(packages.apt)}`)] : []),
-    ...(packages.npm?.length
-      ? [root(`(command -v npm || (${apt} nodejs npm)) && npm install -g ${quoteAll(packages.npm)}`)]
-      : []),
-    ...(packages.pip?.length
-      ? [
-          root(
-            `(command -v pip3 || (${apt} python3-pip)) && pip3 install --break-system-packages ${quoteAll(packages.pip)}`,
-          ),
-        ]
-      : []),
-    ...(packages.go?.length
-      ? [root(`(command -v go || (${apt} golang-go)) && GOBIN=/usr/local/bin go install ${quoteAll(packages.go)}`)]
-      : []),
-    ...config.buildCommands.map((command): MachineProvider.Step => ({ command, user: "user" })),
-  ]
-}
-
 const managers = ["apt", "npm", "pip", "go"] as const
 
 // oxlint-disable-next-line ren/no-comments -- A config that keeps the size, keeps every package and only appends build commands changes a machine in place, with the steps of what it adds.
@@ -176,7 +150,7 @@ const stepsBetween = (from: typeof TemplateConfig.Type, to: typeof TemplateConfi
     from.buildCommands.every((command, index) => to.buildCommands[index] === command)
   return keeps
     ? Option.some(
-        stepsOf({
+        Packages.steps({
           packages: Object.fromEntries(managers.map((manager) => [manager, added(manager)])),
           buildCommands: to.buildCommands.slice(from.buildCommands.length),
         }),
@@ -428,7 +402,7 @@ export const provider = Effect.gen(function* () {
           HttpClientRequest.post(`/v2/templates/${requested.templateID}/builds/${requested.buildID}`).pipe(
             HttpClientRequest.bodyJsonUnsafe({
               fromTemplate: config.template,
-              steps: stepsOf(input.config).map((step) => ({
+              steps: Packages.steps(input.config).map((step) => ({
                 type: "RUN",
                 args: [step.command, step.user],
                 force: false,

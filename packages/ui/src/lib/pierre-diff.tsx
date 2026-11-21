@@ -3,7 +3,8 @@ import { type ReactNode, useCallback, useMemo } from "react"
 import { Virtualizer as WindowVirtualizer } from "@pierre/diffs"
 import { MultiFileDiff, PatchDiff, Virtualizer, VirtualizerContext, WorkerPoolContext } from "@pierre/diffs/react"
 import type { FileDiffStyle } from "../components/file-diff.js"
-import { longLine, theme, workerPool } from "./worker-pool.js"
+import { longLine } from "./highlighter.js"
+import { preferredHighlighter, theme, workerPool } from "./worker-pool.js"
 
 export type Source =
   | { readonly kind: "contents"; readonly before: string; readonly after: string; readonly cacheKey: string }
@@ -20,6 +21,7 @@ const css = `
 
 const shared = {
   theme,
+  preferredHighlighter,
   diffStyle: "unified",
   diffIndicators: "bars",
   lineDiffType: "word-line",

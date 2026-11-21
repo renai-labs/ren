@@ -15,7 +15,7 @@ function Toaster(props: ToasterProps) {
       closeButton
       icons={{
         success: <IconCircleCheckFilled className="text-chart-2" />,
-        info: <IconInfoCircleFilled className="text-chart-1" />,
+        info: <IconInfoCircleFilled className="text-link" />,
         warning: <IconAlertTriangleFilled className="text-chart-3" />,
         error: <IconAlertCircleFilled className="text-chart-4" />,
         loading: <IconLoader2 className="animate-spin text-muted-foreground" />,

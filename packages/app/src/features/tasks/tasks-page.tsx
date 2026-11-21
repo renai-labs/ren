@@ -1,6 +1,7 @@
 import { Preference } from "../../lib/preference.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { IconHandStop, IconCube, IconArchive, IconLink, IconX, IconPlus, IconGhostFilled } from "@tabler/icons-react"
+import { IconHandStop, IconCube, IconArchive, IconLink, IconX, IconPlus } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
 import {
@@ -54,6 +55,8 @@ import { TaskLink } from "./task-scope.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
 
+const isStatus = (value: string): value is TaskInfo["status"] => Object.hasOwn(statuses, value)
+
 type Task = TaskInfo
 
 function TaskMeta(props: { task: Task; spaceName: string; show: (property: string) => boolean }) {
@@ -94,7 +97,7 @@ function TaskAssignee(props: { task: Task; agentName: string | null; owner: Memb
   if (props.task.agentId)
     return (
       <span className="flex size-6 shrink-0 items-center justify-center">
-        <IconGhostFilled className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
+        <IconAgent className="size-4 text-muted-foreground" aria-label={props.agentName ?? "Agent"} />
       </span>
     )
   return (
@@ -196,14 +199,14 @@ const groupingsFor = (lookups: TaskLookups) => ({
     ...lookups.agents.map((agent) => ({
       id: agent.id,
       label: agent.name,
-      icon: IconGhostFilled,
+      icon: IconAgent,
       spaceId: undefined,
       has: (task: Task) => task.agentId === agent.id,
     })),
     {
       id: "none",
       label: "No agent",
-      icon: IconGhostFilled,
+      icon: IconAgent,
       spaceId: undefined,
       has: (task: Task) => task.agentId === null,
     },
@@ -371,7 +374,7 @@ export function TasksPage(props: {
   const setStatus = (status: string) => {
     const ids = selected
     setSelected([])
-    if (status !== "todo" && status !== "in_progress" && status !== "done" && status !== "dismissed") return
+    if (!isStatus(status)) return
     void bulk(ids, (id) => update.mutateAsync({ id, status }), "Status changed")
   }
   const move = (agentId: string | null) => {
@@ -394,9 +397,7 @@ export function TasksPage(props: {
     }
     if (groupBy === "status") {
       const status = input.groupId
-      return status === "todo" || status === "in_progress" || status === "done" || status === "dismissed"
-        ? update.mutateAsync({ id: input.taskId, status }).catch(failed)
-        : Promise.resolve()
+      return isStatus(status) ? update.mutateAsync({ id: input.taskId, status }).catch(failed) : Promise.resolve()
     }
     if (groupBy === "agent")
       return assign
@@ -553,7 +554,7 @@ function SelectionBar(props: {
           <DropdownMenuGroup>
             {props.agents.map((agent) => (
               <DropdownMenuItem key={agent.id} onClick={() => props.onMove(agent.id)}>
-                <IconGhostFilled />
+                <IconAgent />
                 {agent.name}
               </DropdownMenuItem>
             ))}

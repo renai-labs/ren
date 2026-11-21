@@ -326,7 +326,7 @@ export const SessionArchive = { id: Argument.String("session").pipe(Argument.wit
 
 export const TaskList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
-  status: Flag.Literals("status", ["todo", "in_progress", "done", "dismissed"]).pipe(
+  status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("Only this status."),
   ),
@@ -337,6 +337,7 @@ export const TaskList = {
   priority: Flag.Literals("priority", ["low", "medium", "high"]).pipe(Flag.optional),
   agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
   ownerId: Flag.String("owner-id").pipe(Flag.optional),
+  search: Flag.String("search").pipe(Flag.optional, Flag.withDescription("Part of the title.")),
   label: Flag.String("label").pipe(Flag.optional, Flag.withDescription("A label name, in any case.")),
   humanReview: Flag.Boolean("human-review").pipe(Flag.optional),
   linkedTo: Flag.String("linked-to").pipe(Flag.optional, Flag.withDescription("Only tasks that link this URL.")),
@@ -350,7 +351,7 @@ export const TaskCreate = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   title: Flag.String("title").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
-  status: Flag.Literals("status", ["todo", "in_progress", "done", "dismissed"]).pipe(
+  status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("The state of the whole task, never of one agent."),
   ),
@@ -376,7 +377,7 @@ export const TaskUpdate = {
   id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
   title: Flag.String("title").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
-  status: Flag.Literals("status", ["todo", "in_progress", "done", "dismissed"]).pipe(
+  status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("The state of the whole task, never of one agent."),
   ),

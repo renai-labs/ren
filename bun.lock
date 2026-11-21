@@ -14,7 +14,6 @@
         "eslint-plugin-better-tailwindcss": "4.9.0",
         "husky": "9.1.7",
         "knip": "6.40.0",
-        "oxfmt": "catalog:",
         "oxlint": "1.93.0",
         "tsrs": "catalog:",
         "turbo": "2.11.7",
@@ -50,6 +49,8 @@
         "@tiptap/pm": "3.32.0",
         "@tiptap/react": "3.32.0",
         "@tiptap/starter-kit": "3.32.0",
+        "@wterm/dom": "0.5.10",
+        "@wterm/react": "0.5.10",
         "better-auth": "catalog:",
         "cn": "catalog:",
         "docx-preview": "0.4.1",
@@ -164,7 +165,7 @@
       "name": "@renai-labs/cli",
       "version": "0.0.0",
       "bin": {
-        "ren2": "./src/index.ts",
+        "ren": "./src/index.ts",
       },
       "dependencies": {
         "@effect/platform-bun": "catalog:",
@@ -565,6 +566,7 @@
         "@fontsource-variable/jetbrains-mono": "catalog:",
         "@fontsource/ibm-plex-mono": "catalog:",
         "@pierre/diffs": "catalog:",
+        "@pierre/highlights": "catalog:",
         "@pierre/trees": "catalog:",
         "@shadcn/react": "catalog:",
         "@tabler/icons-react": "catalog:",
@@ -574,7 +576,6 @@
         "input-otp": "catalog:",
         "react-day-picker": "catalog:",
         "shadcn": "catalog:",
-        "shiki": "catalog:",
         "skullet": "catalog:",
         "sonner": "catalog:",
         "tailwindcss": "catalog:",
@@ -666,6 +667,7 @@
     "@opencode/server": "2.2.6",
     "@opencode/util": "2.2.6",
     "@pierre/diffs": "1.6.4",
+    "@pierre/highlights": "0.4.0",
     "@pierre/trees": "1.0.0-beta.6",
     "@playwright/test": "1.63.0",
     "@rn-primitives/slot": "1.5.2",
@@ -753,7 +755,6 @@
     "remark-breaks": "4.0.0",
     "shadcn": "4.22.1",
     "sharp": "0.34.5",
-    "shiki": "4.5.0",
     "skullet": "0.0.3",
     "sonner": "2.0.8",
     "standardwebhooks": "1.1.1",
@@ -2435,6 +2436,12 @@
     "@vscode/emmet-helper": ["@vscode/emmet-helper@2.11.0", "", { "dependencies": { "emmet": "^2.4.3", "jsonc-parser": "^2.3.0", "vscode-languageserver-textdocument": "^1.0.1", "vscode-languageserver-types": "^3.15.1", "vscode-uri": "^3.0.8" } }, "sha512-QLxjQR3imPZPQltfbWRnHU6JecWTF1QSWhx3GAKQpslx7y3Dp6sIIXhKjiUJ/BR9FX8PVthjr9PD6pNwOJfAzw=="],
 
     "@vscode/l10n": ["@vscode/l10n@0.0.18", "", {}, "sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ=="],
+
+    "@wterm/core": ["@wterm/core@0.5.10", "", {}, "sha512-kVzgs094y/9z/w2IVaYUd75F+bUFa14cn7uhec0g9QDI1kalh8W7Ft6ckOER478gncsPrf7a9oRf1bAOe3ERgQ=="],
+
+    "@wterm/dom": ["@wterm/dom@0.5.10", "", { "dependencies": { "@wterm/core": "0.5.10" } }, "sha512-Tcdig0gqVgqpoWB/i9pp4z3+ZI2Rf5MOeCy3geOuRvGSSXMGgeF6xcA/PD667tCe8Te47ldVeKYsM92uUgijCg=="],
+
+    "@wterm/react": ["@wterm/react@0.5.10", "", { "peerDependencies": { "@wterm/dom": "0.5.10", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-Jfim53j/9mXER+aVzzY0lCzpmpImaSrFYvHqGg6lSOAvibNE/Thd2OWf0iPlS16ei+Zqgd1+xhBVrlkzWeCEXg=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.8.15", "", {}, "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA=="],
 

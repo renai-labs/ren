@@ -743,7 +743,7 @@ for (const place of places) {
           ]),
         )
         const chat = opened.harness.chat
-        expect(yield* chat.vcs(session.sessionId)).toEqual({
+        expect(yield* chat.vcs(session.sessionId, undefined)).toEqual({
           provider: "git",
           branch: { current: "main", default: "main" },
         })

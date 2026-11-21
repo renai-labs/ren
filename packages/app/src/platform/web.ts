@@ -43,7 +43,7 @@ export function createWebPlatform(stores: {
     }),
     platform: "web",
     serverUrl,
-    appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/u, ""),
+    appUrl: window.location.origin,
     authorizationQuery: new URLSearchParams(window.location.search).has("sig")
       ? window.location.search.slice(1)
       : undefined,
@@ -58,6 +58,11 @@ export function createWebPlatform(stores: {
       body.append("file", file)
       const response = await globalThis.fetch(form.uploadUrl, { method: "POST", body, signal })
       if (!response.ok) throw new Error(`The upload failed (${response.status}).`)
+    },
+    windowStorage: {
+      get: (key) => sessionStorage.getItem(prefix + key) ?? undefined,
+      set: (key, value) => sessionStorage.setItem(prefix + key, value),
+      remove: (key) => sessionStorage.removeItem(prefix + key),
     },
     storage: {
       get: (key) => localStorage.getItem(prefix + key) ?? undefined,
@@ -161,6 +166,10 @@ export function createWebPlatform(stores: {
         document.removeEventListener("visibilitychange", visibility)
         window.removeEventListener("online", online)
       }
+    },
+    markSignedIn: (signedIn) => {
+      const secure = window.location.protocol === "https:" ? "; Secure" : ""
+      document.cookie = `ren_signed_in=1; Path=/; Max-Age=${signedIn ? 7_776_000 : 0}; SameSite=Lax${secure}`
     },
   }
 }

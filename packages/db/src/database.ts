@@ -44,6 +44,8 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/db/Database") {}
 
+export const contains = (text: string) => `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {

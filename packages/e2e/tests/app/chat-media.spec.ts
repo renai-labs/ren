@@ -12,7 +12,7 @@ test("a member sends a video and a broken one; the video plays inline without au
   const holdSendBecauseStackCannotMountDrive = () => undefined
   await page.route("**/chat/session/*/prompt", holdSendBecauseStackCannotMountDrive)
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const main = page.getByRole("main")
   const message = main.getByRole("textbox", { name: "Message" })
   await message.fill("Plan the launch")

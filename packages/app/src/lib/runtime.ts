@@ -60,6 +60,14 @@ export function make(platform: Platform.Info) {
       if (data !== undefined) analytics.identify(data.user)
     })
   }
+  const markSignedIn = platform.markSignedIn
+  if (markSignedIn !== undefined) {
+    const sessionHash = hashKey(Auth.authKeys.session())
+    queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success" || event.query.queryHash !== sessionHash) return
+      markSignedIn(event.action.data !== null)
+    })
+  }
   const context: Context = {
     platform,
     queryClient,
@@ -76,14 +84,13 @@ export function make(platform: Platform.Info) {
       if (error instanceof Error && "_tag" in error && error.name === error._tag) return
       analytics?.captureException(error)
     },
-    basepath: "/app",
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
     defaultPendingMs: 1000,
     defaultPendingMinMs: 500,
     defaultPendingComponent: RouteSkeleton,
     defaultErrorComponent: RouteError,
-    scrollRestoration: true,
+    scrollRestoration: (options) => !options.location.pathname.includes("/sessions/"),
     parseSearch: OAuthSearch.parse,
     stringifySearch: OAuthSearch.stringify,
   })

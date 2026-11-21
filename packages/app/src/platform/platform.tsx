@@ -37,6 +37,7 @@ interface Base {
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
+  readonly windowStorage?: Omit<Storage, "subscribe">
   readonly drafts?: Drafts
   readonly chatCache?: ChatCache
   readonly openExternal: (url: string) => void
@@ -57,6 +58,7 @@ interface Base {
   readonly saveFile?: (url: string, name: string) => void
   readonly authorizationQuery?: string | undefined
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
+  readonly markSignedIn?: (signedIn: boolean) => void
   readonly analytics?: Analytics.Interface
 }
 

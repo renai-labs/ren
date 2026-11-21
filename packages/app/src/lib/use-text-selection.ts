@@ -9,6 +9,8 @@ export interface TextSelection {
 
 const quotableOf = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest("[data-quotable]")
 
+const letters = (text: string) => text.replaceAll(/\s+/gu, "")
+
 const readTextSelection = (root: HTMLElement | null): TextSelection | undefined => {
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
@@ -19,7 +21,7 @@ const readTextSelection = (root: HTMLElement | null): TextSelection | undefined 
   if (!text) return
   const clipped = range.cloneRange()
   if (block !== quotableOf(range.endContainer)) clipped.setEnd(block, block.childNodes.length)
-  if (clipped.toString().trim() !== text) return
+  if (letters(clipped.toString()) !== letters(text)) return
   return { range: clipped, text, source: block.getAttribute("data-quotable") ?? undefined }
 }
 
@@ -39,22 +41,38 @@ export function useTextSelection(options: {
   const onAlt = useEffectEvent(options.onAlt)
   useEffect(() => {
     if (paused) return
-    const update = () => setSelected(read())
-    const release = (event: MouseEvent) => {
-      if (!event.altKey) return
+    const pointer = { down: false }
+    const update = () => setSelected(pointer.down ? undefined : read())
+    const press = (event: PointerEvent) => {
+      if (
+        event.button !== 0 ||
+        (event.target instanceof Element && event.target.closest("[data-slot=popover-content]"))
+      )
+        return
+      pointer.down = true
+      setSelected(undefined)
+    }
+    const release = (event: PointerEvent) => {
+      if (!pointer.down) return
+      pointer.down = false
       const next = read()
-      if (!next || next.text.length > Composer.quoteLimit) return
+      if (!event.altKey || !next || next.text.length > Composer.quoteLimit) {
+        setSelected(next)
+        return
+      }
       onAlt(next)
       window.getSelection()?.removeAllRanges()
       setSelected(undefined)
     }
     const scrolled = () => setSelected((current) => (current && visible(current.range) ? current : undefined))
     document.addEventListener("selectionchange", update)
-    document.addEventListener("mouseup", release)
+    document.addEventListener("pointerdown", press)
+    document.addEventListener("pointerup", release)
     window.addEventListener("scroll", scrolled, { capture: true, passive: true })
     return () => {
       document.removeEventListener("selectionchange", update)
-      document.removeEventListener("mouseup", release)
+      document.removeEventListener("pointerdown", press)
+      document.removeEventListener("pointerup", release)
       window.removeEventListener("scroll", scrolled, { capture: true })
     }
   }, [paused])

@@ -1,9 +1,10 @@
 import { useState, type RefObject } from "react"
-import { IconQuote } from "@tabler/icons-react"
+import { IconMessage, IconQuote } from "@tabler/icons-react"
 import { Composer } from "@ren/chat"
 import type { SessionInbox } from "@ren/schema/session/inbox"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { Popover, PopoverContent } from "@ren/ui/popover"
 import { Textarea } from "@ren/ui/textarea"
@@ -28,10 +29,13 @@ const draftOf = (selection: TextSelection): QuoteDraft => ({
   ...(selection.source && { source: selection.source }),
 })
 
+const lastLine = (range: Range) =>
+  [...range.getClientRects()].findLast((rect) => rect.width > 0) ?? range.getBoundingClientRect()
+
 const anchorOf = (selection: TextSelection) => {
   const container = selection.range.commonAncestorContainer
   return {
-    getBoundingClientRect: () => selection.range.getBoundingClientRect(),
+    getBoundingClientRect: () => lastLine(selection.range),
     contextElement: container instanceof Element ? container : (container.parentElement ?? undefined),
   }
 }
@@ -41,24 +45,30 @@ function Toolbar(props: { selection: TextSelection; onQuote: () => void; onComme
     <Popover open>
       <PopoverContent
         anchor={anchorOf(props.selection)}
-        side="top"
-        sideOffset={8}
+        side="bottom"
+        sideOffset={6}
         initialFocus={false}
         aria-label="Quote selection"
-        className="w-auto flex-row items-center gap-0.5 p-1"
+        className="w-auto flex-row items-center gap-0.5 rounded-xl p-1"
         onPointerDown={(event) => event.preventDefault()}
       >
         {props.selection.text.length > Composer.quoteLimit ? (
           <span className="px-2 py-1 text-sm text-muted-foreground">Selection too long</span>
         ) : (
           <>
-            <Button variant="ghost" size="sm" title="Alt + select quotes at once" onClick={props.onQuote}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-lg active:scale-[0.97]"
+              title="Alt + select quotes at once"
+              onClick={props.onQuote}
+            >
               <IconQuote />
               Quote
             </Button>
-            <Button variant="ghost" size="sm" onClick={props.onComment}>
-              <IconQuote />
-              Quote and comment
+            <Button variant="ghost" size="sm" className="rounded-lg active:scale-[0.97]" onClick={props.onComment}>
+              <IconMessage />
+              Comment
             </Button>
           </>
         )}
@@ -106,19 +116,19 @@ function CommentBox(props: { selection: TextSelection; quote: QuoteProps; onClos
       <PopoverContent
         anchor={anchorOf(props.selection)}
         side="bottom"
-        align="start"
+        sideOffset={6}
         aria-label="Quote and comment"
-        className="w-80"
+        className="w-80 rounded-xl"
       >
-        <div className="border-l-2 border-primary/60 pl-2 text-sm text-muted-foreground">
-          <p className="line-clamp-2 whitespace-pre-wrap">{props.selection.text}</p>
-          {props.selection.source ? <p className="text-xs">{props.selection.source}</p> : null}
+        <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-2.5 py-2 text-sm text-muted-foreground">
+          <IconQuote className="mt-0.75 size-3.5 shrink-0" />
+          <p className="line-clamp-2 min-w-0 whitespace-pre-wrap">{props.selection.text}</p>
         </div>
         <Textarea
           value={comment}
           disabled={sending}
           aria-label="Comment on the quote"
-          placeholder="Add a comment about this quote"
+          placeholder="e.g. Is this still true?"
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the box opens because the person asked to comment
           autoFocus
           className="max-h-40 min-h-16 text-sm"
@@ -175,21 +185,30 @@ function SelectedQuote(props: QuoteProps & { root: RefObject<HTMLElement | null>
 
 function QuoteCard(props: { quote: SessionMessage.Quote }) {
   const [open, setOpen] = useState(false)
+  const quote = props.quote
   return (
-    <div className="flex max-w-full flex-col gap-1 self-end rounded-lg border-l-2 border-primary/60 bg-muted/50 px-3 py-2 text-sm">
+    <div className="flex max-w-[80%] min-w-0 flex-col items-end gap-1 self-end">
       <Button
         variant="ghost"
         aria-expanded={open}
-        className={cn(
-          "h-auto justify-start p-0 text-left font-normal whitespace-pre-wrap text-muted-foreground hover:bg-transparent",
-          !open && "line-clamp-3 block overflow-hidden",
-        )}
+        aria-label={open ? "Show less of the quote" : "Show all of the quote"}
+        className="h-auto max-w-full items-start justify-start gap-2 rounded-xl bg-muted/50 px-3 py-2 text-left text-sm font-normal whitespace-normal text-muted-foreground hover:bg-muted aria-expanded:bg-muted/50 aria-expanded:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5"
         onClick={() => setOpen((current) => !current)}
       >
-        {props.quote.text}
+        <IconQuote className="mt-0.75 shrink-0" />
+        <span className={cn("min-w-0 leading-5 whitespace-pre-wrap", !open && "line-clamp-2")}>{quote.text}</span>
       </Button>
-      {props.quote.source ? <span className="text-xs text-muted-foreground">{props.quote.source}</span> : null}
-      {props.quote.comment ? <p className="whitespace-pre-wrap">{props.quote.comment}</p> : null}
+      {open && quote.source ? <span className="px-3 text-xs text-muted-foreground">From {quote.source}</span> : null}
+      {quote.comment ? (
+        <Bubble variant="muted" align="end" className="max-w-full">
+          <BubbleContent
+            dir="auto"
+            className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap"
+          >
+            {quote.comment}
+          </BubbleContent>
+        </Bubble>
+      ) : null}
     </div>
   )
 }

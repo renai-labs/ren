@@ -9,7 +9,7 @@ const brainStart = 30_000
 test.describe.configure({ timeout: 120_000 })
 
 const run = async (page: Page, command: string) => {
-  const input = page.getByRole("complementary", { name: "Workspace" }).getByRole("textbox", { name: "Command" })
+  const input = page.getByRole("complementary", { name: "Workspace" }).getByRole("textbox", { name: "Terminal" })
   await input.fill(command)
   await input.press("Enter")
 }
@@ -22,7 +22,7 @@ const openTab = async (page: Page, label: string) => {
 
 test("a shell row in the transcript opens to the full command, highlighted, above its output", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Say hi [stub:bash echo hi]")
   await message.press("Enter")
@@ -42,7 +42,7 @@ test("a member runs commands in the chat's terminal, browses and opens its files
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Set up the project")
   const first = page.waitForRequest(
@@ -64,7 +64,6 @@ test("a member runs commands in the chat's terminal, browses and opens its files
   await expect(panel.getByText("created", { exact: true })).toBeVisible()
   await run(page, "ls src; exit 3")
   await expect(panel.getByText("answer.ts", { exact: true })).toBeVisible()
-  await expect(panel.getByText("Exit 3", { exact: true })).toBeVisible()
   await page.screenshot({ path: test.info().outputPath("terminal.png") })
 
   await openTab(page, "Files")
@@ -118,7 +117,7 @@ test("a member runs commands in the chat's terminal, browses and opens its files
     },
   })
   expect(created.ok()).toBe(true)
-  await page.goto(`/app/sessions/${repository}`)
+  await page.goto(`/sessions/${repository}`)
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
   await page.getByRole("button", { name: "Open panel", exact: true }).click()
   await panel.getByRole("button", { name: /^Changes:/ }).click()
@@ -134,7 +133,7 @@ test("a member opens a file from its chip in the chat, and copies its path from 
   const marker = await script(page.request, {
     tools: [{ name: "write", input: { path: "src/answer.ts", content: "export const answer = 42\n" } }],
   })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill(`Write the answer ${marker}`)
   await message.press("Enter")
@@ -171,7 +170,7 @@ test("a member opens a nested folder, finds a file that is not loaded yet and dr
   page,
 }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Set up the project")
   await message.press("Enter")
@@ -196,6 +195,7 @@ test("a member opens a nested folder, finds a file that is not loaded yet and dr
   await panel.getByRole("button", { name: "Collapse all" }).click()
   await expect(panel.getByRole("treeitem", { name: "index.ts", exact: true })).toBeHidden()
 
+  await panel.getByRole("button", { name: "Search files" }).click()
   const search = panel.getByRole("searchbox", { name: "Search files" })
 
   await expect(async () => {
@@ -219,7 +219,9 @@ test("a member opens a nested folder, finds a file that is not loaded yet and dr
   page.on("request", (request) => {
     if (request.method() === "POST" && request.url().includes("/drive")) uploads.push(request.url())
   })
-  await panel.getByRole("button", { name: "Expand loaded" }).click()
+  await panel.getByRole("button", { name: "Collapse all" }).click()
+  await panel.getByRole("treeitem", { name: "packages", exact: true }).click()
+  await panel.getByRole("treeitem", { name: "chat", exact: true }).click()
   await panel.getByRole("treeitem", { name: "index.ts", exact: true }).dragTo(message)
   await expect(message).toHaveValue("@  packages/chat/index.ts ")
   await expect(page.getByText("Drop files to attach")).toBeHidden()

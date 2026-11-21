@@ -38,7 +38,7 @@ const failure = (stderr: string) =>
     ),
   )(stderr).error
 
-describe("ren2", () => {
+describe("ren", () => {
   test("a usage error exits 2 with one JSON error when piped, and with help and the problem in a terminal format", async () => {
     const piped = await ren(["nope"])
     const pretty = await ren(["nope", "--output", "pretty"])
@@ -51,7 +51,7 @@ describe("ren2", () => {
     expect(pretty.stderr).toContain("nope")
   })
 
-  test("help works without a connection and uses the ren2 name; without a subcommand, a terminal shows only the help, led by the description", async () => {
+  test("help works without a connection and uses the ren name; without a subcommand, a terminal shows only the help, led by the description", async () => {
     const [root, nested, bare] = await Promise.all([
       ren(["--help"]),
       ren(["infra", "apply", "--help"]),
@@ -59,7 +59,7 @@ describe("ren2", () => {
     ])
 
     expect(root.code).toBe(0)
-    expect(root.stdout).toContain("ren2")
+    expect(root.stdout).toContain("ren <subcommand>")
     expect(root.stdout).toContain("health")
     expect(root.stderr).toBe("")
     expect(nested.code).toBe(0)
@@ -106,7 +106,7 @@ describe("ren2", () => {
 
   test("uses stored credentials only for the server that issued them", async () => {
     const config = await folder({
-      "ren2/credentials.json": JSON.stringify({
+      "ren/credentials.json": JSON.stringify({
         "https://ren.example": { accessToken: "access", refreshToken: "refresh", expiresAt: Date.now() + 3_600_000 },
       }),
     })
@@ -116,7 +116,7 @@ describe("ren2", () => {
     expect(result.code).toBe(1)
     expect(failure(result.stderr)).toEqual({
       type: "CliError",
-      message: "Not logged in to http://127.0.0.1:9. Run ren2 login.",
+      message: "Not logged in to http://127.0.0.1:9. Run ren login.",
     })
   })
 

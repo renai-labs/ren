@@ -8,7 +8,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Upgrade } from "../src/upgrade.js"
 
-const root = await mkdtemp(join(tmpdir(), "ren2-update-"))
+const root = await mkdtemp(join(tmpdir(), "ren-update-"))
 let checks = 0
 const server = Bun.serve({
   port: 0,
@@ -25,7 +25,7 @@ afterAll(async () => {
 })
 
 test("checks for a newer release at most once a day", async () => {
-  const options = { host: server.url.origin, cache: join(root, "ren2/update.json"), current: "0.0.1" }
+  const options = { host: server.url.origin, cache: join(root, "ren/update.json"), current: "0.0.1" }
   const seen = await Effect.gen(function* () {
     const first = yield* Upgrade.available(options)
     const again = yield* Upgrade.available(options)
@@ -47,7 +47,7 @@ test("checks for a newer release at most once a day", async () => {
   })
 })
 
-test("an older ren2 must upgrade once Ren names a minimum release, checked at most once an hour", async () => {
+test("an older ren must upgrade once Ren names a minimum release, checked at most once an hour", async () => {
   const published: { minimum?: string } = {}
   const releases = Bun.serve({
     port: 0,
@@ -57,7 +57,7 @@ test("an older ren2 must upgrade once Ren names a minimum release, checked at mo
   })
   const options = (current: string) => ({
     host: releases.url.origin,
-    cache: join(root, `ren2/minimum-${current}.json`),
+    cache: join(root, `ren/minimum-${current}.json`),
     current,
   })
   const seen = await Effect.gen(function* () {

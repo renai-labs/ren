@@ -1,7 +1,8 @@
 import { useState, type ComponentType } from "react"
 import { useScrollEdges } from "../../lib/use-scroll-edges.js"
 import type { TaskInfo } from "@ren/client"
-import { IconCalendarDue, IconGhostFilled, IconHandStop, IconPlus } from "@tabler/icons-react"
+import { IconCalendarDue, IconHandStop, IconPlus } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 import { NewTaskDialog } from "../../components/new-task-dialog.js"
@@ -28,7 +29,7 @@ const dragType = "application/x-ren-task"
 function BoardAssignee(props: { task: TaskInfo }) {
   const agent = useAgents().agent(props.task.agentId)
   const owner = useMembers().member(props.task.ownerId)
-  if (props.task.agentId) return <IconGhostFilled className="size-4" aria-label={agent?.name ?? "Agent"} />
+  if (props.task.agentId) return <IconAgent className="size-4" aria-label={agent?.name ?? "Agent"} />
   if (owner) return <PersonAvatar name={owner.name} image={owner.image} />
   return <UnassignedIcon />
 }

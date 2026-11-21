@@ -1,10 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
 import { Schema } from "effect"
 import { Button } from "@ren/ui/button"
 import { Loading } from "@ren/ui/loading"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { cn } from "cn"
-import { Sheet, SheetTabs, type PreviewProps } from "./preview.js"
+import { maxSheetRows, Sheet, SheetTabs, type PreviewProps } from "./preview.js"
 import { workerCalls } from "./worker-call.js"
 
 const decodeTabs = Schema.decodeUnknownSync(SheetTabs)
@@ -92,41 +92,11 @@ function Grid(props: {
   )
 }
 
-export function XlsxView(props: PreviewProps) {
-  const [tabs, setTabs] = useState<typeof SheetTabs.Type>([])
-  const [tab, setTab] = useState(0)
-  const [loaded, setLoaded] = useState<Loaded>()
+function SheetGrid(props: PreviewProps & { sheet: typeof Sheet.Type | undefined; footer?: ReactNode }) {
   const [view, setView] = useState({ top: 0, height: 600 })
-  const client = useRef<ReturnType<typeof workerCalls>>(undefined)
   const grid = useRef<HTMLDivElement>(null)
-  const fail = useEffectEvent(props.onError)
   const count = useEffectEvent(props.onCount)
-  useEffect(() => {
-    const calls = workerCalls(() => new Worker(new URL("./xlsx.worker.ts", import.meta.url), { type: "module" }))
-    client.current = calls
-    calls.call({ type: "open", bytes: structuredClone(props.bytes) }).then((opened) => {
-      const found = decodeTabs(opened)
-      setTabs(found)
-      setTab(found[0]?.index ?? 0)
-    }, fail)
-    return () => calls.close()
-  }, [props.bytes])
-  useEffect(() => {
-    if (tabs.length === 0) return
-    const cancelled = { value: false }
-    client.current?.call({ type: "sheet", index: tab }).then(
-      (read) => {
-        if (!cancelled.value) setLoaded({ tab, sheet: decodeSheet(read) })
-      },
-      () => {
-        if (!cancelled.value) fail()
-      },
-    )
-    return () => {
-      cancelled.value = true
-    }
-  }, [tabs, tab])
-  const sheet = loaded?.tab === tab ? loaded.sheet : undefined
+  const sheet = props.sheet
   const rows = sheet?.rows ?? []
   const hits = findCells(rows, props.query.trim().toLowerCase())
   const hitKey = hits.join(",")
@@ -187,21 +157,91 @@ export function XlsxView(props: PreviewProps) {
           </p>
         ) : null}
       </div>
-      <div role="tablist" className="flex gap-1 overflow-x-auto overscroll-contain border-t px-2 py-1.5">
-        {tabs.map((item) => (
-          <Button
-            key={item.index}
-            variant="ghost"
-            size="sm"
-            role="tab"
-            aria-selected={tab === item.index}
-            onClick={() => setTab(item.index)}
-            className={cn("text-muted-foreground", tab === item.index && "bg-muted font-medium text-foreground")}
-          >
-            {item.name}
-          </Button>
-        ))}
-      </div>
+      {props.footer}
     </div>
   )
+}
+
+export function XlsxView(props: PreviewProps) {
+  const [tabs, setTabs] = useState<typeof SheetTabs.Type>([])
+  const [tab, setTab] = useState(0)
+  const [loaded, setLoaded] = useState<Loaded>()
+  const client = useRef<ReturnType<typeof workerCalls>>(undefined)
+  const fail = useEffectEvent(props.onError)
+  useEffect(() => {
+    const calls = workerCalls(() => new Worker(new URL("./xlsx.worker.ts", import.meta.url), { type: "module" }))
+    client.current = calls
+    calls.call({ type: "open", bytes: structuredClone(props.bytes) }).then((opened) => {
+      const found = decodeTabs(opened)
+      setTabs(found)
+      setTab(found[0]?.index ?? 0)
+    }, fail)
+    return () => calls.close()
+  }, [props.bytes])
+  useEffect(() => {
+    if (tabs.length === 0) return
+    const cancelled = { value: false }
+    client.current?.call({ type: "sheet", index: tab }).then(
+      (read) => {
+        if (!cancelled.value) setLoaded({ tab, sheet: decodeSheet(read) })
+      },
+      () => {
+        if (!cancelled.value) fail()
+      },
+    )
+    return () => {
+      cancelled.value = true
+    }
+  }, [tabs, tab])
+  return (
+    <SheetGrid
+      {...props}
+      sheet={loaded?.tab === tab ? loaded.sheet : undefined}
+      footer={
+        <div role="tablist" className="flex gap-1 overflow-x-auto overscroll-contain border-t px-2 py-1.5">
+          {tabs.map((item) => (
+            <Button
+              key={item.index}
+              variant="ghost"
+              size="sm"
+              role="tab"
+              aria-selected={tab === item.index}
+              onClick={() => setTab(item.index)}
+              className={cn("text-muted-foreground", tab === item.index && "bg-muted font-medium text-foreground")}
+            >
+              {item.name}
+            </Button>
+          ))}
+        </div>
+      }
+    />
+  )
+}
+
+const delimiters = [",", "\t", ";"]
+
+const occurrences = (line: string, delimiter: string) => line.split(delimiter).length - 1
+
+const unquote = (cell: string) => (cell.startsWith('"') ? cell.slice(1, -1).replaceAll('""', '"') : cell)
+
+export function parseCsv(text: string): typeof Sheet.Type {
+  const body = text.replace(/^\uFEFF/u, "")
+  const firstLine = body.split(/\r?\n/u, 1).at(0) ?? ""
+  const delimiter = delimiters.reduce((best, each) =>
+    occurrences(firstLine, each) > occurrences(firstLine, best) ? each : best,
+  )
+  const escaped = delimiter === "\t" ? "\\t" : delimiter
+  const pattern = new RegExp(`("(?:[^"]|"")*"|[^"${escaped}\\r\\n]*)(${escaped}|\\r?\\n|$)`, "gu")
+  const rows: string[][] = [[]]
+  for (const match of body.matchAll(pattern)) {
+    rows.at(-1)?.push(unquote(match[1] ?? ""))
+    if (match[2] === "" || rows.length > maxSheetRows) break
+    if (match[2] !== delimiter) rows.push([])
+  }
+  const filled = rows.filter((row, index) => index < rows.length - 1 || row.some(Boolean))
+  return { rows: filled.slice(0, maxSheetRows), truncated: filled.length > maxSheetRows }
+}
+
+export function CsvView(props: PreviewProps) {
+  return <SheetGrid {...props} sheet={parseCsv(new TextDecoder().decode(props.bytes))} />
 }

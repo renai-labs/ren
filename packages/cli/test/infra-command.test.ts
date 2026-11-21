@@ -131,13 +131,13 @@ describe("InfraCommand.gate", () => {
   test("without a terminal, apply takes only the digest of an earlier plan, and archives need --allow-archive", () => {
     expect(InfraCommand.gate(plan([create]), { interactive: false, allowArchive: false, force: false })).toEqual({
       kind: "refuse",
-      message: "Without a terminal, apply needs --plan <digest> from ren2 infra plan.",
+      message: "Without a terminal, apply needs --plan <digest> from ren infra plan.",
     })
     expect(
       InfraCommand.gate(plan([create]), { interactive: false, digest: "old", allowArchive: false, force: false }),
     ).toEqual({
       kind: "refuse",
-      message: "The plan has changed since digest old. Run ren2 infra plan again.",
+      message: "The plan has changed since digest old. Run ren infra plan again.",
     })
     expect(
       InfraCommand.gate(plan([archive]), { interactive: false, digest: "abc", allowArchive: false, force: false }),

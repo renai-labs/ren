@@ -98,7 +98,7 @@ export type CredentialOAuthApp = { kind: "oauth_app"; name: string; description?
 
 export type CredentialOption = { label: string; value: string; hint?: string }
 
-export type AppPackages = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
+export type PackagesInfo = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
 
 export type CredentialEnvName = string
 
@@ -243,7 +243,7 @@ export type TaskID = string
 
 export type TaskSubtasks = { total: number; done: number }
 
-export type TaskStatus = "todo" | "in_progress" | "done" | "dismissed"
+export type TaskStatus = "backlog" | "todo" | "in_progress" | "done" | "dismissed"
 
 export type TaskPriority = "low" | "medium" | "high"
 
@@ -616,7 +616,7 @@ export type CredentialSecret = { kind: "secret"; name: CredentialFieldName; desc
 
 export type CredentialWhen = { name: CredentialFieldName; op: "eq" | "neq"; value: string }
 
-export type AppEnvironment = { packages?: AppPackages; buildCommands?: Array<string> }
+export type PackagesSetup = { packages?: PackagesInfo; buildCommands?: Array<string> }
 
 export type CredentialName = CredentialEnvName | CredentialFieldName
 
@@ -1789,7 +1789,7 @@ export type AppInfo = {
   description: string
   icon: string | null
   requiredCredentials?: Array<CredentialRequirement>
-  environment?: AppEnvironment
+  environment?: PackagesSetup
   skills: { [x: PrimitiveSlug]: SkillInfo }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
@@ -1809,7 +1809,7 @@ export type InfraPulledApp = {
   dependsOn?: Array<PrimitiveSlug>
   webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
   icon?: string
-  environment?: AppEnvironment
+  environment?: PackagesSetup
 }
 
 export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
@@ -7535,11 +7535,12 @@ export type ChatModelsOutput = SessionModelChoices
 export type TaskListInput = {
   readonly spaceId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7549,11 +7550,12 @@ export type TaskListInput = {
   }["spaceId"]
   readonly status?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7563,11 +7565,12 @@ export type TaskListInput = {
   }["status"]
   readonly includeDone?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7577,11 +7580,12 @@ export type TaskListInput = {
   }["includeDone"]
   readonly priority?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7591,11 +7595,12 @@ export type TaskListInput = {
   }["priority"]
   readonly agentId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7605,11 +7610,12 @@ export type TaskListInput = {
   }["agentId"]
   readonly ownerId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7617,13 +7623,29 @@ export type TaskListInput = {
     readonly page: number
     readonly pageSize: number
   }["ownerId"]
-  readonly label?: {
+  readonly search?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
+    readonly label?: string | undefined
+    readonly humanReview?: boolean | undefined
+    readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
+  readonly label?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly includeDone?: boolean | undefined
+    readonly priority?: ("low" | "medium" | "high") | undefined
+    readonly agentId?: string | undefined
+    readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7633,11 +7655,12 @@ export type TaskListInput = {
   }["label"]
   readonly humanReview?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7647,11 +7670,12 @@ export type TaskListInput = {
   }["humanReview"]
   readonly linkedTo?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7661,11 +7685,12 @@ export type TaskListInput = {
   }["linkedTo"]
   readonly parentId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7675,11 +7700,12 @@ export type TaskListInput = {
   }["parentId"]
   readonly page: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7689,11 +7715,12 @@ export type TaskListInput = {
   }["page"]
   readonly pageSize: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -7714,7 +7741,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7727,7 +7754,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7740,7 +7767,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7753,7 +7780,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7766,7 +7793,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7779,7 +7806,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7792,7 +7819,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7805,7 +7832,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7818,7 +7845,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7831,7 +7858,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7844,7 +7871,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7862,7 +7889,7 @@ export type TaskUpdateInput = {
   readonly title?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7873,7 +7900,7 @@ export type TaskUpdateInput = {
   readonly description?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7884,7 +7911,7 @@ export type TaskUpdateInput = {
   readonly status?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7895,7 +7922,7 @@ export type TaskUpdateInput = {
   readonly priority?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7906,7 +7933,7 @@ export type TaskUpdateInput = {
   readonly labels?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7917,7 +7944,7 @@ export type TaskUpdateInput = {
   readonly dueAt?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7928,7 +7955,7 @@ export type TaskUpdateInput = {
   readonly addLinks?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7939,7 +7966,7 @@ export type TaskUpdateInput = {
   readonly removeLinks?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7950,7 +7977,7 @@ export type TaskUpdateInput = {
   readonly parentId?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null

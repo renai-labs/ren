@@ -16,7 +16,7 @@ test("a member opens PDF, Word, PowerPoint and Excel files from their cards and 
   page,
 }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Review the files")
   await message.press("Enter")

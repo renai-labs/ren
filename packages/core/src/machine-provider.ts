@@ -1,7 +1,7 @@
 export * as MachineProvider from "./machine-provider.js"
 
 import { HandClient } from "@ren/hand-api/hand-client"
-import type { Step as BrainApiStep } from "@ren/host-api/brain-api"
+import type { Packages } from "@ren/schema/packages"
 import type { Auth } from "@ren/schema/auth"
 import type { Hand } from "@ren/schema/hand"
 import { ID, Info, Infos } from "@ren/schema/machine-provider"
@@ -54,7 +54,7 @@ interface CreateInput<Config> {
   readonly network: Network
 }
 
-export type Step = BrainApiStep
+export type Step = Packages.Step
 
 interface BuildInput<Config> {
   readonly environmentTemplateId: MachineTemplate.ID

@@ -3,7 +3,7 @@ import { createOrganization } from "../lib/servers.js"
 
 test("a member creates an inference key, copies it once, opens its usage and revokes it", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/settings/providers")
+  await page.goto("/settings/providers")
   await page.getByRole("link", { name: "Inference keys" }).click()
   await expect(page.getByText("No inference keys yet")).toBeVisible()
 

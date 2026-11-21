@@ -1,11 +1,9 @@
-import { Apps, type AppProfileInfo } from "@ren/client"
+import type { AppProfileInfo } from "@ren/client"
 import { SpaceApps } from "@ren/client/react"
 import type { ProfileTarget } from "../../components/profile-dialog.js"
 import { gaps, type Status } from "../../lib/apps.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { RouterContext } from "../../lib/router-context.js"
-
-export const isReady = Apps.isReady
 
 export function useSpaceApps(spaceId: string | undefined, appIds: ReadonlyArray<string> = []) {
   const { api } = RouterContext.useRouterContext()

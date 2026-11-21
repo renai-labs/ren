@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-default_host='__REN2_HOST_URL__'
-host=${REN2_HOST_URL:-$default_host}
+default_host='__REN_HOST_URL__'
+host=${REN_HOST_URL:-$default_host}
 host=${host%/}
 version=
 modify_path=true
@@ -17,14 +17,14 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)
       cat <<'EOF'
-Install ren2
+Install ren
 
   --version <version>  Install a specific release
   --no-modify-path     Leave PATH and shell config alone
   --no-init            Skip onboarding
   --help              Show help
 
-REN2_HOST_URL selects the release host.
+REN_HOST_URL selects the release host.
 EOF
       exit 0
       ;;
@@ -41,7 +41,7 @@ done
 
 case "$host" in
   https://*|http://*) ;;
-  *) fail 'REN2_HOST_URL must be an HTTP or HTTPS URL' ;;
+  *) fail 'REN_HOST_URL must be an HTTP or HTTPS URL' ;;
 esac
 command -v curl >/dev/null || fail 'curl is required'
 
@@ -69,38 +69,38 @@ download() {
 }
 
 if [ -z "$version" ]; then
-  version=$(download "$host/ren2/latest.txt") || fail 'Could not find the latest release'
+  version=$(download "$host/ren/latest.txt") || fail 'Could not find the latest release'
 fi
 [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || fail "Invalid version: $version"
 
-asset="ren2-$os-$arch"
-directory="$HOME/.ren2/bin"
+asset="ren-$os-$arch"
+directory="$HOME/.ren/bin"
 mkdir -p "$directory"
 temporary=$(mktemp -d "$directory/.install.XXXXXX")
 trap 'rm -rf "$temporary"' EXIT
-url="$host/ren2/releases/$version/$asset"
-printf 'Downloading ren2 v%s (%s-%s)\n' "$version" "$os" "$arch"
+url="$host/ren/releases/$version/$asset"
+printf 'Downloading ren v%s (%s-%s)\n' "$version" "$os" "$arch"
 if [ -t 2 ]; then
-  download --no-silent --progress-bar "$url" -o "$temporary/ren2" || fail "Could not download ren2 $version"
+  download --no-silent --progress-bar "$url" -o "$temporary/ren" || fail "Could not download ren $version"
 else
-  download "$url" -o "$temporary/ren2" || fail "Could not download ren2 $version"
+  download "$url" -o "$temporary/ren" || fail "Could not download ren $version"
 fi
 download "$url.sha256" -o "$temporary/checksum" || fail 'Could not download the checksum'
 read -r expected filename extra < "$temporary/checksum" || fail 'Invalid checksum file'
 [[ "$expected" =~ ^[0-9a-f]{64}$ ]] && [ "$filename" = "$asset" ] && [ -z "$extra" ] || fail 'Invalid checksum file'
 if command -v sha256sum >/dev/null; then
-  actual=$(sha256sum "$temporary/ren2")
+  actual=$(sha256sum "$temporary/ren")
 elif command -v shasum >/dev/null; then
-  actual=$(shasum -a 256 "$temporary/ren2")
+  actual=$(shasum -a 256 "$temporary/ren")
 else
   fail 'sha256sum or shasum is required'
 fi
 [ "${actual%% *}" = "$expected" ] || fail 'Checksum mismatch'
-chmod 755 "$temporary/ren2"
-installed=$("$temporary/ren2" --version) || fail 'The downloaded executable could not start'
-[ "$installed" = "ren2 v$version" ] || fail 'The downloaded executable has the wrong version'
-mv -f "$temporary/ren2" "$directory/ren2"
-printf 'Installed %s at %s/ren2\n' "$installed" "$directory"
+chmod 755 "$temporary/ren"
+installed=$("$temporary/ren" --version) || fail 'The downloaded executable could not start'
+[ "$installed" = "ren v$version" ] || fail 'The downloaded executable has the wrong version'
+mv -f "$temporary/ren" "$directory/ren"
+printf 'Installed %s at %s/ren\n' "$installed" "$directory"
 
 on_path() {
   case ":$PATH:" in
@@ -113,9 +113,9 @@ linked=
 if [ "$modify_path" = true ] && ! on_path "$directory"; then
   for bin in "$HOME/.local/bin" "$HOME/bin"; do
     if on_path "$bin" && [ -d "$bin" ] && [ -w "$bin" ] &&
-      { [ ! -e "$bin/ren2" ] || [ "$(readlink "$bin/ren2")" = "$directory/ren2" ]; }; then
-      ln -sf "$directory/ren2" "$bin/ren2"
-      linked="$bin/ren2"
+      { [ ! -e "$bin/ren" ] || [ "$(readlink "$bin/ren")" = "$directory/ren" ]; }; then
+      ln -sf "$directory/ren" "$bin/ren"
+      linked="$bin/ren"
       printf 'Linked %s\n' "$linked"
       break
     fi
@@ -123,7 +123,7 @@ if [ "$modify_path" = true ] && ! on_path "$directory"; then
 fi
 
 profile=
-line="export PATH=\"\$HOME/.ren2/bin:\$PATH\""
+line="export PATH=\"\$HOME/.ren/bin:\$PATH\""
 if [ "$modify_path" = true ]; then
   shell=${SHELL:-}
   case "${shell##*/}" in
@@ -133,7 +133,7 @@ if [ "$modify_path" = true ]; then
       ;;
     fish)
       profile="${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish"
-      line="fish_add_path \"\$HOME/.ren2/bin\""
+      line="fish_add_path \"\$HOME/.ren/bin\""
       ;;
   esac
 fi
@@ -149,16 +149,16 @@ fi
 path_hint() {
   if on_path "$directory" || [ -n "$linked" ]; then return; fi
   if [ -n "$profile" ]; then
-    printf 'To use ren2 in this terminal, run:\n  source %q\n' "$profile"
+    printf 'To use ren in this terminal, run:\n  source %q\n' "$profile"
   else
     printf 'Add %s to PATH.\n' "$directory"
   fi
 }
 
 if [ "$init" = true ] && [ -t 1 ]; then
-  "$directory/ren2" login </dev/tty || printf 'Run ren2 login to sign in.\n'
+  "$directory/ren" login </dev/tty || printf 'Run ren login to sign in.\n'
   path_hint
 else
   path_hint
-  if [ "$init" = true ]; then printf 'Next: ren2 login\n'; fi
+  if [ "$init" = true ]; then printf 'Next: ren login\n'; fi
 fi

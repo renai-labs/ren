@@ -14,7 +14,7 @@ import {
 
 test("renames the account and picks a theme", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("rename") })
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await expect(page.getByText("Contact support to change.")).toBeVisible()
   await page.getByRole("button", { name: "Edit Name" }).click()
   await page.getByRole("textbox", { name: "Name" }).fill("Ada King")
@@ -33,7 +33,7 @@ test("renames the account and picks a theme", async ({ page }) => {
 test("changes the password", async ({ page, request }) => {
   const email = uniqueEmail("password")
   await createUser(page.request, { name: "Ada Lovelace", email })
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await page.getByRole("button", { name: "Change", exact: true }).click()
   const dialog = page.getByRole("dialog", { name: "Change password" })
   await expect(dialog).toContainText("Confirm your current password, then pick a new one.")
@@ -54,7 +54,7 @@ test("changes the password", async ({ page, request }) => {
 test("deletes the account, signs out and can't sign in again", async ({ page, request }) => {
   const email = uniqueEmail("delete")
   await createUser(page.request, { name: "Ada Lovelace", email })
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await page.getByRole("button", { name: "Delete my account" }).click()
   const dialog = page.getByRole("dialog", { name: "Delete your account?" })
   await expect(dialog).toContainText("within 7 days")
@@ -69,7 +69,7 @@ test("deletes the account, signs out and can't sign in again", async ({ page, re
 
 test("the timeline width sets the chat column and leaves the home composer alone", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const start = page.locator("[data-slot=input-group]").filter({ has: page.getByRole("textbox", { name: "Message" }) })
   const homeWidth = (await start.boundingBox())?.width
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
@@ -83,20 +83,20 @@ test("the timeline width sets the chat column and leaves the home composer alone
   await expect.poll(width).toBeGreaterThan(0)
   expect(await width()).toBeLessThanOrEqual(768)
 
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await page.getByRole("combobox", { name: "Timeline width" }).click()
   await page.getByRole("option", { name: "Wide" }).click()
   await page.goto(chatURL)
   await expect.poll(width).toBeGreaterThan(768)
   expect(await width()).toBeLessThanOrEqual(1000)
 
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   await page.getByRole("combobox", { name: "Timeline width" }).click()
   await page.getByRole("option", { name: "Comfortable" }).click()
   await page.goto(chatURL)
   await expect.poll(width).toBeLessThanOrEqual(768)
 
-  await page.goto("/app/")
+  await page.goto("/")
   expect((await start.boundingBox())?.width).toBe(homeWidth)
 })
 
@@ -114,11 +114,11 @@ test("a preference changed in one tab applies in the other open tabs without a r
   expect(created.ok()).toBe(true)
 
   const chat = await page.context().newPage()
-  await chat.goto(`/app/sessions/${sessionId}`)
+  await chat.goto(`/sessions/${sessionId}`)
   await expect(chat.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
   const other = await page.context().newPage()
-  await other.goto("/app/settings/preferences")
-  await page.goto("/app/settings/preferences")
+  await other.goto("/settings/preferences")
+  await page.goto("/settings/preferences")
   await expect(other.getByRole("combobox", { name: "Timeline width" })).toHaveText("Comfortable")
 
   await page.getByRole("combobox", { name: "Timeline width" }).click()
@@ -134,7 +134,7 @@ test("a preference changed in one tab applies in the other open tabs without a r
 
 test("picks the code font and interface size, then resets every preference", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("typography") })
-  await page.goto("/app/settings/preferences")
+  await page.goto("/settings/preferences")
   const reset = page.getByRole("button", { name: "Reset to defaults" })
   await expect(reset).toBeDisabled()
 
