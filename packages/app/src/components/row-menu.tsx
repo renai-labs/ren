@@ -16,6 +16,7 @@ export interface RowMenuItem {
   readonly icon: Icon
   readonly onSelect: () => void | Promise<unknown>
   readonly confirm?: Confirmation | undefined
+  readonly destructive?: boolean | undefined
 }
 
 export function RowMenu(props: {
@@ -49,12 +50,15 @@ export function RowMenu(props: {
         >
           <IconDots />
         </DropdownMenuTrigger>
-        <DropdownMenuContent side={props.side ?? "bottom"} align="end" className="w-44">
+        <DropdownMenuContent side={props.side ?? "bottom"} align="end" className="w-auto min-w-44">
           <DropdownMenuGroup>
             {props.items.map((item, index) => (
               <Fragment key={item.label}>
-                {item.confirm && index > 0 ? <DropdownMenuSeparator /> : null}
-                <DropdownMenuItem variant={item.confirm ? "destructive" : "default"} onClick={() => setChosen(item)}>
+                {item.confirm && index > 0 && !props.items[index - 1]?.confirm ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuItem
+                  variant={(item.destructive ?? Boolean(item.confirm)) ? "destructive" : "default"}
+                  onClick={() => setChosen(item)}
+                >
                   <item.icon />
                   {item.label}
                 </DropdownMenuItem>
