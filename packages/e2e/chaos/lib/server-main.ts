@@ -76,7 +76,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
 
-HttpRouter.serve(Routes.layer).pipe(
+const server = HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
     Layer.mergeAll(Brains.layer, BrainPush.layer, SpaceShutdown.layer).pipe(
       Layer.provideMerge(BrainHost.layerCell),
@@ -122,6 +122,6 @@ HttpRouter.serve(Routes.layer).pipe(
       idleTimeout: Config.succeed(10),
     }),
   ),
-  Layer.launch,
-  BunRuntime.runMain,
 )
+
+Layer.launch(server).pipe(BunRuntime.runMain)
