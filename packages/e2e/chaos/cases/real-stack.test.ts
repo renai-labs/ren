@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
+import type { App } from "@ren/schema/app"
 import { AppProfile } from "@ren/schema/app-profile"
 import { Brain } from "@ren/schema/brain"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -72,6 +73,31 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     const stops = (pid: string, ms: number) =>
       Wait.until(`process ${pid} to stop in the container`, ms, async () =>
         (await full().container.observe(["kill", "-0", pid])).exitCode === 0 ? undefined : true,
+      )
+
+    // oxlint-disable-next-line ren/no-comments -- Lists a shared profile of the app in the owner's space. A session brain reaches its space's apps only through its creator's space membership (Credentials.scopeOf); a chat's creator is always a member.
+    const install = (appId: App.ID) =>
+      stack().run(
+        Effect.gen(function* () {
+          const owner = stack().owner
+          const database = yield* Database.Service
+          const profileId = AppProfile.ID.create()
+          yield* database.db.insert(Database.Schema.app_profile).values({
+            id: profileId,
+            organization_id: owner.organizationId,
+            app_id: appId,
+            slug: "team",
+            name: "Team",
+            kind: "shared",
+          })
+          yield* database.db
+            .insert(Database.Schema.app_profile_space)
+            .values({ profile_id: profileId, space_id: owner.spaceId })
+          yield* database.db
+            .insert(Database.Schema.space_member)
+            .values({ id: Space.MembershipID.create(), space_id: owner.spaceId, user_id: owner.createdBy })
+            .onConflictDoNothing()
+        }),
       )
 
     beforeAll(async () => {
@@ -322,7 +348,6 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     test.skipIf(Platform.github !== undefined)(
       "a text skill, a skill with files and a GitHub skill load by tool and mention, and files reach the sandbox only on use",
       async () => {
-        const owner = stack().owner
         const marker = crypto.randomUUID()
         const published = await stack().run(
           AppRegistry.Service.use((registry) => registry.publish(batch(marker))).pipe(
@@ -331,27 +356,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
         )
         const appId = published.apps.at(0)?.appId
         if (!appId) throw new Error("the app was not published")
-        await stack().run(
-          Effect.gen(function* () {
-            const database = yield* Database.Service
-            const profileId = AppProfile.ID.create()
-            yield* database.db.insert(Database.Schema.app_profile).values({
-              id: profileId,
-              organization_id: owner.organizationId,
-              app_id: appId,
-              slug: "team",
-              name: "Team",
-              kind: "shared",
-            })
-            yield* database.db
-              .insert(Database.Schema.app_profile_space)
-              .values({ profile_id: profileId, space_id: owner.spaceId })
-            // oxlint-disable-next-line ren/no-comments -- A session brain reaches its space's apps only through its creator's space membership (Credentials.scopeOf); a chat's creator is always a member.
-            yield* database.db
-              .insert(Database.Schema.space_member)
-              .values({ id: Space.MembershipID.create(), space_id: owner.spaceId, user_id: owner.createdBy })
-          }),
-        )
+        await install(appId)
         const session = await stack().session()
         const issued = stack().issued()
 
@@ -390,6 +395,43 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       },
       600_000,
     )
+
+    test("a bundle's apps set up on the container before the first shell, each after the apps it depends on, once per container", async () => {
+      const log = `/tmp/app-setup-${crypto.randomUUID()}.log`
+      const published = await stack().run(
+        AppRegistry.Service.use((registry) =>
+          registry.publish(
+            Schema.decodeUnknownSync(AppRegistry.Batch)({
+              apps: [
+                {
+                  slug: "e2e-tools",
+                  name: "Tools",
+                  description: "Only a build command",
+                  listing: {},
+                  environment: { buildCommands: [`echo tools >> ${log}`] },
+                },
+                {
+                  slug: "e2e-suite",
+                  name: "Suite",
+                  description: "A bundle that includes the tools",
+                  listing: {},
+                  dependsOn: ["e2e-tools"],
+                  skills: { guide: { type: "content", description: "Use for the suite", instructions: "Guide." } },
+                  environment: { buildCommands: [`echo suite >> ${log}`] },
+                },
+              ],
+            }),
+          ),
+        ).pipe(Effect.provide(AppRegistry.layer)),
+      )
+      const suite = published.apps.find((app) => app.slug === "e2e-suite")?.appId
+      if (!suite) throw new Error("the bundle was not published")
+      await install(suite)
+      const first = await stack().session()
+      expect(await first.tool("shell", { command: `cat ${log}` })).toBe("tools\nsuite\n")
+      const second = await stack().session()
+      expect(await second.tool("shell", { command: `cat ${log}` })).toBe("tools\nsuite\n")
+    }, 600_000)
 
     test("the alarm syncs a turn with a tool call to Postgres, and again after the cell dies during a pass, with no request to the cell", async () => {
       const session = await stack().session()
