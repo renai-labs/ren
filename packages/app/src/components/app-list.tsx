@@ -3,7 +3,7 @@ import { useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
-import { Button } from "@ren/ui/button"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { Loading } from "@ren/ui/loading"
@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
+import { GitHubMark } from "../icons/brands.js"
 import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
@@ -331,8 +332,7 @@ function DependencyCards(props: { app: App }) {
 export function AppSections(props: { app: App }) {
   const app = props.app
   const spaceName = useSpaces().spaceName
-  const skills = Object.entries(app.skills ?? {})
-  const tile = appTile(app)
+  const skills = app.skills ?? {}
   const categories = [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel)
   const facts = [
     ...(categories.length > 0 ? [["Category", categories.join(", ")] as const] : []),
@@ -342,27 +342,7 @@ export function AppSections(props: { app: App }) {
     <>
       {app.dependsOn.length > 0 ? <DependencyCards app={app} /> : null}
       {app.mcps && Object.keys(app.mcps).length > 0 ? <McpCards app={app} mcps={app.mcps} /> : null}
-      {skills.length > 0 ? (
-        <SheetSection title="Skills">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-            {skills.map(([slug, skill]) => (
-              <Entry
-                key={slug}
-                media={
-                  <DefaultIcon
-                    kind="skill"
-                    name={slug}
-                    description={skill.type === "content" ? skill.description : undefined}
-                    tile={tile}
-                  />
-                }
-                title={slug}
-                description={skill.type === "content" ? skill.description : skill.upstream.url}
-              />
-            ))}
-          </div>
-        </SheetSection>
-      ) : null}
+      {Object.keys(skills).length > 0 ? <SkillCards app={app} skills={skills} /> : null}
       <SheetSection title="Information">
         <dl className="divide-y rounded-xl border text-sm">
           {facts.map(([term, value]) => (
@@ -420,25 +400,107 @@ const usageOf = (mcps: NonNullable<App["mcps"]>, mcp: Mcp) => {
   return "Uses your account"
 }
 
-function Entry(props: {
-  media: ReactNode
-  title: string
-  badge?: ReactNode
-  description?: string
-  children?: ReactNode
-}) {
+type Skill = NonNullable<App["skills"]>[string]
+
+function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClose: () => void }) {
+  const skill = props.skill
+  const title = (
+    <DialogTitle className="text-lg [overflow-wrap:anywhere]">
+      {props.slug} <span className="font-normal text-muted-foreground">Skill</span>
+    </DialogTitle>
+  )
   return (
-    <div className="flex min-w-0 items-center gap-3">
-      {props.media}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 items-center gap-2 text-sm">
-          <span className="truncate">{props.title}</span>
-          {props.badge}
-        </span>
-        {props.description ? <span className="truncate text-xs text-muted-foreground">{props.description}</span> : null}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+    >
+      {skill.type === "content" ? (
+        <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="gap-3 px-6 pt-6 pr-14 pb-5">
+            {props.icon}
+            {title}
+            <DialogDescription className="text-pretty">{skill.description}</DialogDescription>
+          </DialogHeader>
+          {skill.instructions.trim() ? (
+            <div className="mx-6 mb-6 min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card px-5 py-4">
+              <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0!">{skill.instructions}</Markdown>
+            </div>
+          ) : null}
+        </DialogContent>
+      ) : (
+        <DialogContent className="justify-items-center gap-4 p-6 sm:max-w-sm">
+          <DialogHeader className="items-center gap-3 px-8 text-center">
+            {props.icon}
+            {title}
+          </DialogHeader>
+          <UpstreamLink upstream={skill.upstream} />
+        </DialogContent>
+      )}
+    </Dialog>
+  )
+}
+
+function UpstreamLink(props: { upstream: Extract<Skill, { type: "upstream" }>["upstream"] }) {
+  const url = URL.parse(props.upstream.url)
+  const github = url?.hostname === "github.com"
+  const folder = props.upstream.path === "." ? "" : `/tree/${props.upstream.ref ?? "HEAD"}/${props.upstream.path}`
+  return (
+    <a
+      href={github ? `${props.upstream.url.replace(/\/$/u, "")}${folder}` : props.upstream.url}
+      target="_blank"
+      rel="noreferrer"
+      className={buttonVariants({ variant: "secondary", size: "sm", className: "w-fit" })}
+    >
+      {github ? <GitHubMark data-icon="inline-start" /> : null}
+      {github ? "View on GitHub" : (url?.hostname ?? props.upstream.url)}
+    </a>
+  )
+}
+
+function SkillCards(props: { app: App; skills: Readonly<Record<string, Skill>> }) {
+  const tile = appTile(props.app)
+  const [opened, setOpened] = useState<string>()
+  const openedSkill = opened === undefined ? undefined : props.skills[opened]
+  const icon = (slug: string, skill: Skill) => (
+    <DefaultIcon
+      kind="skill"
+      name={slug}
+      description={skill.type === "content" ? skill.description : undefined}
+      tile={tile}
+    />
+  )
+  return (
+    <SheetSection title="Skills">
+      <div className="-mx-2 grid grid-cols-2 gap-x-4 gap-y-1">
+        {Object.entries(props.skills).map(([slug, skill]) => (
+          <Button
+            key={slug}
+            variant="ghost"
+            aria-haspopup="dialog"
+            onClick={() => setOpened(slug)}
+            className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
+          >
+            {icon(slug, skill)}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm">{slug}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {skill.type === "content" ? skill.description : skill.upstream.url}
+              </span>
+            </span>
+          </Button>
+        ))}
       </div>
-      {props.children ? <div className="flex shrink-0 items-center gap-1">{props.children}</div> : null}
-    </div>
+      {opened && openedSkill ? (
+        <SkillDialog
+          slug={opened}
+          skill={openedSkill}
+          icon={icon(opened, openedSkill)}
+          onClose={() => setOpened(undefined)}
+        />
+      ) : null}
+    </SheetSection>
   )
 }
 
