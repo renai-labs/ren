@@ -37,7 +37,9 @@ import { useNow } from "../../lib/use-now.js"
 const scheduleChoices: ReadonlyArray<{ readonly frequency: Frequency; readonly label: string }> = [
   { frequency: "hourly", label: "Hourly" },
   { frequency: "daily", label: "Daily" },
+  { frequency: "weekdays", label: "Weekdays" },
   { frequency: "weekly", label: "Weekly" },
+  { frequency: "monthly", label: "Monthly" },
   { frequency: "custom", label: "Custom (cron)" },
 ]
 
@@ -211,6 +213,7 @@ export function TriggerList(props: { children: ReadonlyArray<React.ReactNode>; a
 
 export function ScheduleTrigger(props: {
   cadence: Cadence
+  active: boolean
   onChange: (patch: Partial<Cadence>) => void
   onRemove: () => void
 }) {
@@ -219,7 +222,9 @@ export function ScheduleTrigger(props: {
   return (
     <TriggerRow kind="schedule" actions={<RemoveButton label="Remove schedule" onRemove={props.onRemove} />}>
       <ScheduleSentence cadence={props.cadence} onChange={props.onChange} />
-      {next ? <span className="text-muted-foreground">Next run {formatRun(next, props.cadence.timeZone)}</span> : null}
+      {next && props.active ? (
+        <span className="text-muted-foreground">Next run {formatRun(next, props.cadence.timeZone)}</span>
+      ) : null}
     </TriggerRow>
   )
 }
