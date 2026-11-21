@@ -10,6 +10,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
+    "move-oauth-client": "bun run script/move-oauth-client.ts",
     "print-policies": "bun run script/print-policies.ts",
     "publish-apps": "bun run script/publish-apps.ts",
     "slack-manifest": "bun run script/slack-manifest.ts",
