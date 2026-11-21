@@ -65,7 +65,8 @@ export function InviteLinkDialog() {
             { id: space.id },
             {
               onSuccess: () => toast.success("Invite link reset"),
-              onError: (error) => toast.error("Could not reset the link", { description: errorMessage(error) }),
+              onError: (error) =>
+                toast.error("Couldn’t reset the link", { description: errorMessage(error), duration: Infinity }),
             },
           )
         }

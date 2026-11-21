@@ -1,18 +1,20 @@
 import { useMutation } from "@tanstack/react-query"
 import { IconBan, IconCopy } from "@tabler/icons-react"
+import type { ReactNode } from "react"
 import type { OrganizationInviteLinkInfo } from "@ren/client"
 import { toast } from "@ren/ui/sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { formatShortDate } from "@ren/ui/time"
 import { RowMenu } from "../../components/row-menu.js"
 import { TableCard, TableEmpty } from "../../components/page.js"
+import { TruncatedText } from "../../components/truncated-text.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 
 export function OrganizationInviteLinksTable(props: {
   links: ReadonlyArray<OrganizationInviteLinkInfo>
-  empty: string
+  empty: ReactNode
 }) {
   const { api } = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
@@ -20,7 +22,7 @@ export function OrganizationInviteLinksTable(props: {
   const copy = (link: OrganizationInviteLinkInfo) =>
     platform.writeClipboardText?.(`${platform.appUrl}/join/${link.token}`).then(
       () => toast.success("Link copied"),
-      () => toast.error("Couldn’t copy the link"),
+      () => toast.error("Couldn’t copy the link", { duration: Infinity }),
     )
   return (
     <TableCard>
@@ -40,8 +42,8 @@ export function OrganizationInviteLinksTable(props: {
           {props.links.map((link) => (
             <TableRow key={link.id}>
               <TableCell className="font-mono text-xs">…/join/{link.token.slice(0, 10)}…</TableCell>
-              <TableCell className="max-w-56 truncate text-muted-foreground">
-                {link.spaces.map((space) => space.name).join(", ")}
+              <TableCell className="max-w-56 text-muted-foreground">
+                <TruncatedText text={link.spaces.map((space) => space.name).join(", ")} />
               </TableCell>
               <TableCell className="text-muted-foreground">{link.createdBy.name}</TableCell>
               <TableCell className="text-muted-foreground tabular-nums">{link.uses}</TableCell>
@@ -60,13 +62,16 @@ export function OrganizationInviteLinksTable(props: {
                           {
                             onSuccess: () => toast.success("Link revoked"),
                             onError: (error) =>
-                              toast.error("Couldn’t revoke the link", { description: errorMessage(error) }),
+                              toast.error("Couldn’t revoke the link", {
+                                description: errorMessage(error),
+                                duration: Infinity,
+                              }),
                           },
                         ),
                       confirm: {
                         title: "Revoke link?",
                         description: "The link stops working. People who already joined stay.",
-                        action: "Revoke",
+                        action: "Revoke link",
                       },
                     },
                   ]}

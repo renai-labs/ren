@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { Fragment, useState, type ReactNode } from "react"
 import { IconArrowDown, IconArrowUp, IconUserMinus } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
@@ -15,8 +15,11 @@ export type MemberRow = {
   you?: boolean | undefined
 }
 
+const beforeAt = /(?=@)/u
+
 export function MembersTable<Row extends MemberRow>(props: {
   rows: Row[]
+  limit?: number | undefined
   column: { heading: string; cell: (row: Row) => ReactNode }
   spaces?: ((row: Row) => ReactNode) | undefined
   items?: ((row: Row) => ReadonlyArray<RowMenuItem>) | undefined
@@ -31,7 +34,7 @@ export function MembersTable<Row extends MemberRow>(props: {
       <Table className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead>
+            <TableHead className={props.spaces ? "w-1/4" : "w-1/3"} aria-sort={descending ? "descending" : "ascending"}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -42,16 +45,17 @@ export function MembersTable<Row extends MemberRow>(props: {
                 {descending ? <IconArrowDown /> : <IconArrowUp />}
               </Button>
             </TableHead>
-            <TableHead className={props.spaces ? "w-1/4" : "w-1/3"}>Email</TableHead>
+            <TableHead>Email</TableHead>
             <TableHead className={props.spaces ? "w-36" : "w-1/4"}>{props.column.heading}</TableHead>
             {props.spaces ? <TableHead className="w-1/5">Spaces</TableHead> : null}
             <TableHead className="w-15" />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {props.rows.length === 0 ? <TableEmpty columns={5}>{props.empty}</TableEmpty> : null}
+          {props.rows.length === 0 ? <TableEmpty columns={props.spaces ? 5 : 4}>{props.empty}</TableEmpty> : null}
           {props.rows
             .toSorted((a, b) => a.name.localeCompare(b.name) * (descending ? -1 : 1))
+            .slice(0, props.limit)
             .map((row) => {
               const confirmation = props.remove(row)
               return (
@@ -63,8 +67,13 @@ export function MembersTable<Row extends MemberRow>(props: {
                       {row.you ? <span className="text-xs text-muted-foreground">You</span> : null}
                     </span>
                   </TableCell>
-                  <TableCell className="truncate" title={row.email}>
-                    {row.email}
+                  <TableCell className="whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
+                    {row.email.split(beforeAt).map((part, index) => (
+                      <Fragment key={part}>
+                        {index > 0 ? <wbr /> : null}
+                        {part}
+                      </Fragment>
+                    ))}
                   </TableCell>
                   <TableCell>{props.column.cell(row)}</TableCell>
                   {props.spaces ? <TableCell>{props.spaces(row)}</TableCell> : null}

@@ -22,12 +22,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs } from "@ren/ui/tabs"
 import { formatDateTime } from "@ren/ui/time"
 import { LoadMore } from "../../components/load-more.js"
-import { PageActions, PageTabsList, PageTabsTrigger, TableCard, TableEmpty, useShapeId } from "../../components/page.js"
+import {
+  PageActions,
+  PageTabs,
+  PageTabsList,
+  PageTabsTrigger,
+  TableCard,
+  TableEmpty,
+  useShapeId,
+} from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { MembersTable } from "../../components/members-table.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { StatusBadge } from "../../components/status-badge.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { TruncatedText } from "../../components/truncated-text.js"
 import { InviteLinkDialog } from "./invite-link-dialog.js"
 import { useMe } from "../../lib/use-me.js"
 import { useOrganization } from "../../lib/use-organization.js"
@@ -64,6 +73,7 @@ function CandidateList(props: {
               key={member.value}
               value={`${member.name} ${member.email}`}
               data-checked={props.selected.has(member.value)}
+              aria-checked={props.selected.has(member.value)}
               onSelect={() => props.onSelect(member.value)}
             >
               <PersonAvatar name={member.name} image={member.image} />
@@ -88,14 +98,20 @@ function AddSpaceMemberDialog(props: {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const chosen = props.candidates.filter((each) => selected.has(each.value))
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <Dialog
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!open) setSelected(new Set())
+        props.onOpenChange(open)
+      }}
+    >
       <DialogTrigger render={<Button />}>
         <IconPlus />
-        Add member
+        Add members
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add member</DialogTitle>
+          <DialogTitle>Add members</DialogTitle>
           <DialogDescription>
             Pick someone from the organization, or someone invited to it. Invited people join once they accept.
           </DialogDescription>
@@ -134,20 +150,24 @@ export function SpaceMembersTab() {
   const requests = useInfiniteQuery({ ...Pages.spaceJoinRequests(client, space.id), ...Loader.required })
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <Tabs
-        value={tab}
-        onValueChange={(value: string) =>
-          void navigate({ search: value === "requests" ? { tab: "requests" } : {}, replace: true })
-        }
-      >
-        <PageTabsList>
-          <PageTabsTrigger value="members">Members</PageTabsTrigger>
-          <PageTabsTrigger value="requests" count={requests.data?.pages.at(0)?.total}>
-            Requests
-          </PageTabsTrigger>
-        </PageTabsList>
-      </Tabs>
-      {tab === "requests" ? <SpaceRequests /> : <SpaceMembers />}
+      {space.kind === "private" ? null : (
+        <PageTabs>
+          <Tabs
+            value={tab}
+            onValueChange={(value: string) =>
+              void navigate({ search: value === "requests" ? { tab: "requests" } : {}, replace: true })
+            }
+          >
+            <PageTabsList>
+              <PageTabsTrigger value="members">Members</PageTabsTrigger>
+              <PageTabsTrigger value="requests" count={requests.data?.pages.at(0)?.total}>
+                Requests
+              </PageTabsTrigger>
+            </PageTabsList>
+          </Tabs>
+        </PageTabs>
+      )}
+      {tab === "requests" && space.kind !== "private" ? <SpaceRequests /> : <SpaceMembers />}
     </div>
   )
 }
@@ -158,12 +178,14 @@ function RequestRow(props: { request: SpaceJoinRequestInfo; space: SpaceInfo }) 
   const approve = useMutation({
     ...api["space-join-request"].approve.mutationOptions(),
     onSuccess: () => toast.success(`${request.name} added to ${props.space.name}`),
-    onError: (error) => toast.error("Could not approve the request", { description: errorMessage(error) }),
+    onError: (error) =>
+      toast.error("Couldn’t approve the request", { description: errorMessage(error), duration: Infinity }),
   })
   const decline = useMutation({
     ...api["space-join-request"].decline.mutationOptions(),
     onSuccess: () => toast.success(`Declined ${request.name}`),
-    onError: (error) => toast.error("Could not decline the request", { description: errorMessage(error) }),
+    onError: (error) =>
+      toast.error("Couldn’t decline the request", { description: errorMessage(error), duration: Infinity }),
   })
   const deciding = approve.isPending || decline.isPending
   return (
@@ -179,8 +201,8 @@ function RequestRow(props: { request: SpaceJoinRequestInfo; space: SpaceInfo }) 
           </span>
         </span>
       </TableCell>
-      <TableCell className="truncate text-muted-foreground" title={request.note ?? undefined}>
-        {request.note ?? "No note"}
+      <TableCell className="text-muted-foreground">
+        {request.note ? <TruncatedText text={request.note} /> : "No note"}
       </TableCell>
       <TableCell className="text-muted-foreground tabular-nums">
         <time dateTime={request.createdAt} title={formatDateTime(request.createdAt)}>
@@ -193,7 +215,7 @@ function RequestRow(props: { request: SpaceJoinRequestInfo; space: SpaceInfo }) 
             {decline.isPending ? <Spinner data-icon="inline-start" /> : null}
             Decline
           </Button>
-          <Button size="sm" disabled={deciding} onClick={() => approve.mutate({ id: request.id })}>
+          <Button variant="secondary" size="sm" disabled={deciding} onClick={() => approve.mutate({ id: request.id })}>
             {approve.isPending ? <Spinner data-icon="inline-start" /> : null}
             Approve
           </Button>
@@ -327,7 +349,11 @@ function SpaceMembers() {
       else if ("userId" in only.target) toast.success(`${only.name} added to space`)
       else toast.success(`${only.name} will join when they accept their invite`)
     }
-    if (failed.length > 0) toast.error("Could not add the member", { description: errorMessage(failed[0]?.reason) })
+    if (failed.length > 0)
+      toast.error(failed.length === 1 ? "Couldn’t add the member" : `Couldn’t add ${failed.length} members`, {
+        description: errorMessage(failed[0]?.reason),
+        duration: Infinity,
+      })
   }
   return (
     <>
@@ -363,7 +389,7 @@ function SpaceMembers() {
               : {
                   title: `Remove ${row.name} from ${space.name}?`,
                   description: "They lose access to this space’s chats, apps and secrets.",
-                  action: "Remove",
+                  action: "Remove member",
                 }
           }
           onRemove={(row: { id: string; name: string }) =>
@@ -371,7 +397,11 @@ function SpaceMembers() {
               { id: row.id },
               {
                 onSuccess: () => toast.success(`${row.name} removed`),
-                onError: (error) => toast.error("Could not remove the member", { description: errorMessage(error) }),
+                onError: (error) =>
+                  toast.error("Couldn’t remove the member", {
+                    description: errorMessage(error),
+                    duration: Infinity,
+                  }),
               },
             )
           }
