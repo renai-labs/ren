@@ -5,10 +5,20 @@ import { Platform } from "../platform/platform.js"
 import { errorMessage } from "./errors.js"
 import { RouterContext } from "./router-context.js"
 
+const closed = (tab: Window) =>
+  new Promise<void>((resolve) => {
+    const timer = setInterval(() => {
+      if (!tab.closed) return
+      clearInterval(timer)
+      resolve()
+    }, 1000)
+  })
+
 export function useSignIn(onOpened?: (item: AppProfileItem) => void, onFailed?: () => void) {
   const platform = Platform.usePlatform()
   const { api } = RouterContext.useRouterContext()
   const connect = useMutation(api["credential-connect"].credential.connect.mutationOptions())
+  const wait = useMutation({ mutationKey: ["credential-connect", "wait"], mutationFn: closed })
   return {
     pending: connect.isPending,
     start: (
@@ -29,8 +39,10 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void, onFailed?: 
               tab?.close()
               return
             }
-            if (tab) tab.location.href = result.redirectUrl
-            else platform.openExternal(result.redirectUrl)
+            if (tab) {
+              tab.location.href = result.redirectUrl
+              wait.mutate(tab)
+            } else platform.openExternal(result.redirectUrl)
             if (onOpened) onOpened(item)
             else
               toast(`Sign in to ${item.name} in the window that opened`, {
