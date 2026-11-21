@@ -111,9 +111,8 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
       description={webhook.modeReason ? Webhooks.modeReasons[webhook.modeReason] : undefined}
       back={
         <Link
-          to="/spaces/$spaceId/automations"
-          params={{ spaceId: props.spaceId }}
-          search={{ kind: "webhooks" }}
+          to="/spaces/$spaceId/automations/$slug"
+          params={{ spaceId: webhook.spaceId, slug: webhook.slug }}
           className={buttonVariants({
             variant: "ghost",
             size: "sm",
@@ -121,7 +120,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
           })}
         >
           <IconArrowLeft />
-          Back to webhooks
+          Back to automation
         </Link>
       }
       aside={
