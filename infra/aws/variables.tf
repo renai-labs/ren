@@ -23,28 +23,24 @@ variable "public_subnet_ids" {
   }
 }
 
-variable "parent_zone_name" {
-  type        = string
-  description = "Existing public zone that delegates `domain` to the zone this stack makes, for example example.com."
-}
-
 variable "domain" {
   type        = string
-  description = "The deployment's domain, for example ren.example.com. The app serves on it; api. and egress. are under it."
+  description = "The deployment's domain, an existing public zone, for example example.com. The app serves on it; api., llm., inference. and egress. are under it."
 }
 
-variable "alias_domain" {
-  type = object({
-    name    = string
-    publish = bool
-  })
-  default     = null
-  description = "A second domain in an existing public zone, for example example.com. The app also serves on it and the API on api.<name>; machines keep using `domain`. With publish false, the stack makes only the certificate and the load balancer rule. With publish true, it also takes the CloudFront alias and points the zone's records here: another distribution must not hold the alias."
-}
-
-variable "database_security_group_id" {
+variable "database_identifier" {
   type        = string
-  description = "Security group of the Postgres instance. This stack adds one ingress rule to it, from the server only."
+  description = "The Postgres instance's identifier; its subnet group and security group are named after it."
+}
+
+variable "database_subnet_ids" {
+  type        = list(string)
+  description = "Private subnets of the Postgres instance."
+}
+
+variable "database_instance_class" {
+  type    = string
+  default = "db.t4g.medium"
 }
 
 variable "github_repository" {
@@ -136,4 +132,32 @@ variable "posthog_proxy" {
   })
   default     = null
   description = "PostHog's managed reverse proxy: the name under `domain` (a neutral word, not analytics or posthog) and the CNAME target PostHog shows for it. Unset, the browser sends to PostHog directly."
+}
+
+variable "inference_github_repository" {
+  type        = string
+  description = "The repository whose deploy workflow releases the inference service, as GitHub's OIDC subject names it."
+}
+
+variable "inference_secret_keys" {
+  type = list(string)
+}
+
+variable "litellm_secret_keys" {
+  type = list(string)
+}
+
+variable "inference_cpu" {
+  type    = number
+  default = 1024
+}
+
+variable "inference_memory" {
+  type    = number
+  default = 4096
+}
+
+variable "inference_desired_count" {
+  type    = number
+  default = 1
 }
