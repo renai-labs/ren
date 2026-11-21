@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { useRef, useState } from "react"
+import { Link, useBlocker, useNavigate } from "@tanstack/react-router"
 import { IconAlertTriangle, IconCode, IconCopy, IconHistory, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { Alert, AlertDescription } from "@ren/ui/alert"
@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { RelativeTime } from "@ren/util/relative-time"
 import { localTimeZone } from "@ren/ui/time"
+import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { RouteNotFound } from "../../components/route-error.js"
 import { Section, TableCard, TableSample, useShapeId } from "../../components/page.js"
@@ -30,6 +31,7 @@ import { useAutomationActions, useAutomationRuns, useAutomations, type Run } fro
 import { useNow } from "../../lib/use-now.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Webhooks } from "../../lib/webhooks.js"
+import { Keyboard } from "../../platform/keyboard.js"
 import { AgentSelect } from "../../components/agent-select.js"
 import { WorkingIn } from "../../components/working-in.js"
 import { RunStatus } from "./run-status.js"
@@ -120,6 +122,7 @@ function Settings(props: {
           <ScheduleTrigger
             key="schedule"
             cadence={draft.schedule}
+            active={draft.active}
             onChange={(patch) => props.onChange({ schedule: draft.schedule && { ...draft.schedule, ...patch } })}
             onRemove={() => props.onChange({ schedule: undefined })}
           />,
@@ -141,7 +144,9 @@ function Settings(props: {
   const add = (
     <AddTrigger
       taken={taken}
-      onSchedule={(frequency) => props.onChange({ schedule: Automations.startCadence(frequency, zone) })}
+      onSchedule={(frequency) =>
+        props.onChange({ schedule: Automations.startCadence(frequency, zone, draft.schedule) })
+      }
       onWebhook={() => props.onChange({ webhook: true })}
     />
   )
@@ -196,13 +201,13 @@ function EditorHeader(props: {
   const automation = props.automation
   const blocked = testBlockOf(automation, { changed: props.changed })
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 px-3 pt-2">
+    <header className="flex h-12 shrink-0 items-center gap-2 px-3 pt-2 max-md:pl-12">
       <Breadcrumb className="mr-auto flex h-8 items-center rounded-lg border bg-sidebar px-3">
         <BreadcrumbList className="gap-2">
-          <BreadcrumbItem>
+          <BreadcrumbItem className="max-md:hidden">
             <ListLink scope={props.scope}>Automations</ListLink>
           </BreadcrumbItem>
-          <BreadcrumbSeparator />
+          <BreadcrumbSeparator className="max-md:hidden" />
           <BreadcrumbItem>
             {props.runs ? (
               <BreadcrumbLink render={<Link to="." search={{}} />} className="max-w-64 truncate">
@@ -316,14 +321,22 @@ function Editor(props: {
   const automation = props.automation
   const changed = JSON.stringify(draft) !== JSON.stringify(initial)
   const change = (patch: Partial<Draft>) => setDraft((previous) => ({ ...previous, ...patch }))
+  const leaving = useRef(false)
+  const blocker = useBlocker({
+    shouldBlockFn: (move) => changed && !leaving.current && move.current.pathname !== move.next.pathname,
+    enableBeforeUnload: changed,
+    withResolver: true,
+  })
   const open = (saved: { readonly spaceId: string; readonly slug: string }) =>
     props.scope.scoped
       ? navigate({ to: "/spaces/$spaceId/automations/$slug", params: saved, replace: true })
       : navigate({ to: "/automations/$spaceId/$slug", params: saved, replace: true })
-  const toList = () =>
-    props.scope.scoped && props.scope.spaceId
+  const toList = () => {
+    leaving.current = true
+    return props.scope.scoped && props.scope.spaceId
       ? navigate({ to: "/spaces/$spaceId/automations", params: { spaceId: props.scope.spaceId } })
       : navigate({ to: "/automations" })
+  }
   const save = () => {
     const problem = Automations.problemOf(draft)
     if (problem) {
@@ -333,9 +346,16 @@ function Editor(props: {
     void actions.save(draft, automation).then((saved) => {
       toast.success(automation ? "Automation saved" : "Automation created")
       setInitial(draft)
-      if (!automation || saved.slug !== automation.slug || saved.spaceId !== automation.spaceId) void open(saved)
+      if (automation && saved.slug === automation.slug && saved.spaceId === automation.spaceId) return
+      leaving.current = true
+      void open(saved)
     })
   }
+  Keyboard.useKeyDown((event) => {
+    if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey) return
+    event.preventDefault()
+    if (changed && !actions.saving) save()
+  })
   const name = Automations.nameOrDefault(draft.name)
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -352,13 +372,13 @@ function Editor(props: {
       />
       <div className="mx-auto flex w-full max-w-200 flex-1 flex-col gap-6 px-6 pt-16 pb-12">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 max-md:flex-wrap">
             <Input
               aria-label="Name"
               placeholder="Untitled"
               value={draft.name}
               onChange={(event) => change({ name: event.target.value })}
-              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent"
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0 max-md:basis-full md:text-xl dark:bg-transparent"
             />
             {automation && props.tab !== "runs" ? (
               <Button variant="ghost" className="text-muted-foreground" onClick={() => props.onTab("runs")}>
@@ -366,6 +386,7 @@ function Editor(props: {
                 Run history
               </Button>
             ) : null}
+            {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               Active
               <Switch checked={draft.active} onCheckedChange={(active) => change({ active })} />
@@ -379,6 +400,21 @@ function Editor(props: {
           <Settings draft={draft} automation={automation} onChange={change} />
         )}
       </div>
+      {blocker.status === "blocked" ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) blocker.reset()
+          }}
+          confirmation={{
+            title: "Discard your changes?",
+            description: `${name} has changes you haven’t saved.`,
+            action: "Discard",
+            cancel: "Keep editing",
+          }}
+          onConfirm={() => blocker.proceed()}
+        />
+      ) : null}
     </div>
   )
 }

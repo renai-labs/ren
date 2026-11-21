@@ -169,10 +169,11 @@ export const draftOf = (automation: Automation | undefined, spaceId: string, zon
   }
 }
 
-export const startCadence = (frequency: Frequency, zone: string): Cadence => {
-  const base = cadenceOf(undefined, zone)
-  if (frequency === "custom") return { ...base, frequency, cron: "0 9 * * *" }
-  return { ...base, frequency }
+export const startCadence = (frequency: Frequency, zone: string, current: Cadence | undefined): Cadence => {
+  const base = current ?? cadenceOf(undefined, zone)
+  if (frequency !== "custom") return { ...base, frequency }
+  const when = current ? Option.getOrUndefined(whenOf(current)) : undefined
+  return { ...base, frequency, cron: when && "cron" in when ? when.cron : base.cron }
 }
 
 const sameWhen = (cadence: Cadence, when: ScheduleWhen) =>
