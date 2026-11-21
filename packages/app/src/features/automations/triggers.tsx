@@ -1,7 +1,10 @@
+import { useState } from "react"
 import type { WebhookInfo } from "@ren/client"
 import { Link } from "@tanstack/react-router"
 import {
   IconAlertTriangle,
+  IconArrowsExchange,
+  IconCalendar,
   IconChevronDown,
   IconClock,
   IconWebhook,
@@ -12,7 +15,9 @@ import {
   IconTrash,
 } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
+import { cn } from "cn"
 import { Button, buttonVariants } from "@ren/ui/button"
+import { Calendar } from "@ren/ui/calendar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,8 +34,18 @@ import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemSeparator } f
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
-import { formatRun, monthDays, weekdays, type Cadence, type Frequency } from "../../lib/schedules.js"
+import { formatDate } from "@ren/ui/time"
+import {
+  dateKey,
+  dateOfKey,
+  formatRun,
+  monthDays,
+  weekdays,
+  type Cadence,
+  type Frequency,
+} from "../../lib/schedules.js"
 import { Automations } from "../../lib/automations.js"
+import type { AppPreset } from "../../lib/use-automations.js"
 import { Webhooks } from "../../lib/webhooks.js"
 import { useNow } from "../../lib/use-now.js"
 
@@ -40,6 +55,7 @@ const scheduleChoices: ReadonlyArray<{ readonly frequency: Frequency; readonly l
   { frequency: "weekdays", label: "Weekdays" },
   { frequency: "weekly", label: "Weekly" },
   { frequency: "monthly", label: "Monthly" },
+  { frequency: "once", label: "Once" },
   { frequency: "custom", label: "Custom (cron)" },
 ]
 
@@ -75,6 +91,46 @@ function TimeSelect(props: { value: string; onChange: (time: string) => void }) 
       items={Automations.timesWith(props.value).map((time) => ({ value: time, label: time }))}
       onChange={props.onChange}
     />
+  )
+}
+
+export function DatePicker(props: {
+  label: string
+  placeholder: string
+  value: string
+  onChange: (date: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const now = useNow()
+  const selected = dateOfKey(props.value)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className="font-normal"
+            aria-label={`${props.label}: ${selected ? formatDate(selected) : props.placeholder}`}
+          />
+        }
+      >
+        <IconCalendar data-icon="inline-start" />
+        {selected ? formatDate(selected) : props.placeholder}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 gap-2 p-3">
+        <Calendar
+          mode="single"
+          selected={selected}
+          disabled={{ before: new Date(now) }}
+          onSelect={(day: Date | undefined) => {
+            props.onChange(day ? dateKey(day) : "")
+            setOpen(false)
+          }}
+          className="w-full p-0"
+        />
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -158,7 +214,20 @@ function ScheduleSentence(props: { cadence: Cadence; onChange: (patch: Partial<C
         {time}
       </>
     )
-  if (cadence.frequency === "once") return <span>Once</span>
+  if (cadence.frequency === "once")
+    return (
+      <>
+        <span>Once on</span>
+        <DatePicker
+          label="Date"
+          placeholder="Pick a date"
+          value={cadence.date}
+          onChange={(date) => props.onChange({ date })}
+        />
+        <span>at</span>
+        {time}
+      </>
+    )
   return (
     <>
       <span>Custom schedule</span>
@@ -200,12 +269,12 @@ function TriggerRow(props: { kind: "schedule" | "webhook"; actions: React.ReactN
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- The triggers of an automation in one card, and the button that adds one under a line.
-export function TriggerList(props: { children: ReadonlyArray<React.ReactNode>; add: React.ReactNode }) {
+// oxlint-disable-next-line ren/no-comments -- The one trigger of an automation in a card, and the button that adds or changes it under a line.
+export function TriggerList(props: { children: React.ReactNode; add: React.ReactNode }) {
   return (
     <ItemGroup className="gap-0 rounded-xl border bg-card p-1 has-data-[size=sm]:gap-0">
       {props.children}
-      {props.children.length > 0 ? <ItemSeparator className="my-1" /> : null}
+      {props.children ? <ItemSeparator className="my-1" /> : null}
       {props.add}
     </ItemGroup>
   )
@@ -256,6 +325,7 @@ function WebhookSettingsLink(props: { spaceId: string; webhook: WebhookInfo }) {
 
 export function WebhookTrigger(props: {
   webhook: WebhookInfo | undefined
+  label: string
   spaceId: string
   onCopyUrl: (webhook: WebhookInfo) => void
   onCopyAuthHeader: (webhook: WebhookInfo) => void
@@ -273,7 +343,7 @@ export function WebhookTrigger(props: {
         </>
       }
     >
-      <span>{webhook?.preset ? `${webhook.preset.appName} · ${webhook.name}` : "Webhook"}</span>
+      <span>{props.label}</span>
       {webhook ? (
         <>
           <Button
@@ -286,7 +356,15 @@ export function WebhookTrigger(props: {
             <span className="truncate">{webhook.url}</span>
             <IconCopy data-icon="inline-end" />
           </Button>
-          {webhook.preset ? null : (
+          {webhook.preset ? (
+            <Link
+              to="/spaces/$spaceId/automations/webhooks/$webhookId"
+              params={{ spaceId: props.spaceId, webhookId: webhook.id }}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Setup steps
+            </Link>
+          ) : (
             <Button variant="outline" size="sm" onClick={() => props.onCopyAuthHeader(webhook)}>
               <IconKey data-icon="inline-start" />
               {signed ? "Copy auth header" : "Generate auth header"}
@@ -300,10 +378,34 @@ export function WebhookTrigger(props: {
   )
 }
 
+function PresetItem(props: { preset: AppPreset; current: boolean; onPick: (preset: AppPreset) => void }) {
+  const preset = props.preset
+  return (
+    <DropdownMenuItem
+      disabled={props.current || preset.turnedOn}
+      onClick={() => props.onPick(preset)}
+      className="items-start gap-2.5"
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate">
+          {preset.appName} · {preset.name}
+        </span>
+        <span className="text-xs text-muted-foreground">{preset.description}</span>
+      </span>
+      {props.current || preset.turnedOn ? (
+        <span className="ml-auto text-xs">{props.current ? "Current" : "On"}</span>
+      ) : null}
+    </DropdownMenuItem>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- current is "schedule", "webhook" or the key of an app’s preset.
 export function AddTrigger(props: {
-  taken: ReadonlyArray<"schedule" | "webhook">
+  current: string | undefined
+  presets: ReadonlyArray<AppPreset>
   onSchedule: (frequency: Frequency) => void
   onWebhook: () => void
+  onPreset: (preset: AppPreset) => void
 }) {
   return (
     <DropdownMenu>
@@ -315,15 +417,13 @@ export function AddTrigger(props: {
           />
         }
       >
-        <IconPlus data-icon="inline-start" />
-        Add trigger
+        {props.current ? <IconArrowsExchange data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
+        {props.current ? "Change trigger" : "Add trigger"}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuGroup>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              {props.taken.includes("schedule") ? "Change schedule" : "Schedule"}
-            </DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger>Schedule</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {scheduleChoices.map((choice) => (
                 <DropdownMenuItem key={choice.frequency} onClick={() => props.onSchedule(choice.frequency)}>
@@ -332,10 +432,25 @@ export function AddTrigger(props: {
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem disabled={props.taken.includes("webhook")} onClick={props.onWebhook}>
+          <DropdownMenuItem disabled={props.current === "webhook"} onClick={props.onWebhook}>
             Webhook
-            {props.taken.includes("webhook") ? <span className="ml-auto text-xs">Added</span> : null}
+            {props.current === "webhook" ? <span className="ml-auto text-xs">Current</span> : null}
           </DropdownMenuItem>
+          {props.presets.length > 0 ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>From an app</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-72">
+                {props.presets.map((preset) => (
+                  <PresetItem
+                    key={Automations.presetKey(preset)}
+                    preset={preset}
+                    current={props.current === Automations.presetKey(preset)}
+                    onPick={props.onPreset}
+                  />
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

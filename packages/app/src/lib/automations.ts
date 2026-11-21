@@ -1,9 +1,11 @@
 export * as Automations from "./automations.js"
 
 import type { ScheduleInfo, ScheduleRunStatus, ScheduleWhen, WebhookInfo, WebhookRequestOutcome } from "@ren/client"
+import { Primitive } from "@ren/schema/primitive"
 import { Session } from "@ren/schema/session"
+import { Slug } from "@ren/util/slug"
 import { Cron, Option, Result, Schema } from "effect"
-import { cadenceOf, describe, whenOf, type Cadence, type Frequency } from "./schedules.js"
+import { cadenceOf, dateKey, describe, whenOf, type Cadence, type Frequency } from "./schedules.js"
 import { Webhooks } from "./webhooks.js"
 
 const SearchSchema = Schema.Struct({
@@ -35,9 +37,10 @@ export const chatOrigins: ReadonlyArray<Session.Origin> = Session.Origin.literal
   (origin) => !runOrigins.includes(origin),
 )
 
-// oxlint-disable-next-line ren/no-comments -- An automation is the schedule and the webhook of a space that share a slug: one name, one instruction and one agent, with a timed trigger, a request trigger or both.
+// oxlint-disable-next-line ren/no-comments -- An automation is one schedule or one webhook of a space: a name, the instructions for the agent and its one trigger.
 export interface Automation {
   readonly key: string
+  readonly handle: string
   readonly spaceId: string
   readonly slug: string
   readonly name: string
@@ -49,64 +52,55 @@ export interface Automation {
   readonly webhook: WebhookInfo | undefined
 }
 
-const keyOf = (spaceId: string, slug: string) => `${spaceId}/${slug}`
-
 const webhookName = (webhook: WebhookInfo) =>
   webhook.preset ? `${webhook.preset.appName} · ${webhook.name}` : webhook.name
 
-const latest = (...values: ReadonlyArray<string | undefined>) =>
-  values.reduce<string>(
-    (found, value) => (value !== undefined && Date.parse(value) > Date.parse(found || "0") ? value : found),
-    "",
-  )
+const fromSchedule = (schedule: ScheduleInfo) => ({
+  key: schedule.id,
+  spaceId: schedule.spaceId,
+  slug: schedule.slug,
+  name: schedule.name,
+  message: schedule.message,
+  agentId: schedule.agentId,
+  ownerId: schedule.ownerId,
+  updatedAt: schedule.updatedAt,
+  schedule,
+  webhook: undefined,
+})
 
-interface Parts {
-  readonly schedule?: ScheduleInfo
-  readonly webhook?: WebhookInfo
-}
+const fromWebhook = (webhook: WebhookInfo) => ({
+  key: webhook.id,
+  spaceId: webhook.spaceId,
+  slug: webhook.slug,
+  name: webhookName(webhook),
+  message: webhook.message ?? "",
+  agentId: webhook.agentId,
+  ownerId: webhook.ownerId,
+  updatedAt: webhook.updatedAt,
+  schedule: undefined,
+  webhook,
+})
 
-const fieldsOf = (part: Parts) => {
-  if (part.schedule) return { name: part.schedule.name, message: part.schedule.message, agentId: part.schedule.agentId }
-  if (part.webhook)
-    return { name: webhookName(part.webhook), message: part.webhook.message ?? "", agentId: part.webhook.agentId }
-  return null
-}
+const placeOf = (item: { readonly spaceId: string; readonly slug: string }) => `${item.spaceId}/${item.slug}`
 
-const automationOf = (key: string, part: Parts): ReadonlyArray<Automation> => {
-  const first = part.schedule ?? part.webhook
-  const fields = fieldsOf(part)
-  if (!first || !fields) return []
-  return [
-    {
-      key,
-      spaceId: first.spaceId,
-      slug: first.slug,
-      ...fields,
-      ownerId: first.ownerId,
-      updatedAt: latest(part.schedule?.updatedAt, part.webhook?.updatedAt),
-      schedule: part.schedule,
-      webhook: part.webhook,
-    },
-  ]
-}
-
-export const group = (
+// oxlint-disable-next-line ren/no-comments -- Its address is its slug. A webhook whose slug a schedule of its space also has, made before automations had one trigger, goes by its ID.
+export const list = (
   schedules: ReadonlyArray<ScheduleInfo>,
   webhooks: ReadonlyArray<WebhookInfo>,
 ): ReadonlyArray<Automation> => {
-  const parts = new Map<string, Parts>()
-  for (const schedule of schedules) {
-    const key = keyOf(schedule.spaceId, schedule.slug)
-    parts.set(key, { ...parts.get(key), schedule })
-  }
-  for (const webhook of webhooks) {
-    const key = keyOf(webhook.spaceId, webhook.slug)
-    parts.set(key, { ...parts.get(key), webhook })
-  }
-  return [...parts.entries()]
-    .flatMap(([key, part]) => automationOf(key, part))
-    .toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  const scheduled = new Set(schedules.map(placeOf))
+  return [
+    ...schedules.map((schedule) => ({ ...fromSchedule(schedule), handle: schedule.slug })),
+    ...webhooks.map((webhook) => ({
+      ...fromWebhook(webhook),
+      handle: scheduled.has(placeOf(webhook)) ? webhook.id : webhook.slug,
+    })),
+  ].toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
 }
+
+export type Kind = "schedule" | "webhook"
+
+export const kindOf = (automation: Automation): Kind => (automation.schedule ? "schedule" : "webhook")
 
 export const isActive = (automation: Automation) =>
   automation.schedule?.status === "active" || automation.webhook?.mode === "live"
@@ -136,41 +130,70 @@ export const triggerSummary = (automation: Automation, zone: string) =>
 export const nextRunOf = (automation: Automation) =>
   automation.schedule?.status === "active" ? (automation.schedule.nextRunAt ?? undefined) : undefined
 
+export interface PresetRef {
+  readonly appId: string
+  readonly preset: string
+}
+
+export type Trigger =
+  | { readonly kind: "schedule"; readonly cadence: Cadence }
+  | { readonly kind: "webhook"; readonly preset: PresetRef | null }
+
+export type Target = ScheduleInfo["target"]
+
 export interface Draft {
   readonly spaceId: string
   readonly name: string
   readonly message: string
   readonly agent: string
   readonly active: boolean
-  readonly schedule: Cadence | undefined
-  readonly webhook: boolean
+  readonly trigger: Trigger | undefined
+  readonly target: Target
+  readonly fallback: string | null
 }
 
-const blankDraft = (spaceId: string): Draft => ({
-  spaceId,
-  name: "",
-  message: "",
-  agent: Webhooks.defaultAgent,
-  active: true,
-  schedule: undefined,
-  webhook: false,
-})
+const presetOf = (webhook: WebhookInfo | undefined): PresetRef | null =>
+  webhook?.preset ? { appId: webhook.preset.appId, preset: webhook.preset.preset } : null
+
+const triggerOf = (automation: Automation, zone: string): Trigger =>
+  automation.schedule
+    ? { kind: "schedule", cadence: cadenceOf(automation.schedule.when, zone) }
+    : { kind: "webhook", preset: presetOf(automation.webhook) }
+
+export const presetKey = (preset: PresetRef) => `${preset.appId}/${preset.preset}`
+
+export const presetOfDraft = (draft: Draft) => (draft.trigger?.kind === "webhook" ? draft.trigger.preset : null)
 
 export const draftOf = (automation: Automation | undefined, spaceId: string, zone: string): Draft => {
-  if (!automation) return blankDraft(spaceId)
+  if (!automation)
+    return {
+      spaceId,
+      name: "",
+      message: "",
+      agent: Webhooks.defaultAgent,
+      active: true,
+      trigger: undefined,
+      target: "new-chat",
+      fallback: null,
+    }
   return {
     spaceId: automation.spaceId,
     name: automation.name,
     message: automation.message,
     agent: Webhooks.agentValueOf(automation.agentId),
     active: isActive(automation),
-    schedule: automation.schedule ? cadenceOf(automation.schedule.when, zone) : undefined,
-    webhook: automation.webhook !== undefined,
+    trigger: triggerOf(automation, zone),
+    target: automation.schedule?.target ?? "new-chat",
+    fallback: automation.webhook?.fallbackUserId ?? null,
   }
 }
 
+export const cadenceOfDraft = (draft: Draft) => (draft.trigger?.kind === "schedule" ? draft.trigger.cadence : undefined)
+
 export const startCadence = (frequency: Frequency, zone: string, current: Cadence | undefined): Cadence => {
   const base = current ?? cadenceOf(undefined, zone)
+  if (frequency === "once")
+    return { ...base, frequency, date: base.date || dateKey(new Date(Date.now() + 24 * 60 * 60 * 1000)) }
   if (frequency !== "custom") return { ...base, frequency }
   const when = current ? Option.getOrUndefined(whenOf(current)) : undefined
   return { ...base, frequency, cron: when && "cron" in when ? when.cron : base.cron }
@@ -182,13 +205,29 @@ const sameWhen = (cadence: Cadence, when: ScheduleWhen) =>
     onSome: (next) => JSON.stringify(next) === JSON.stringify(when),
   })
 
-export const problemOf = (draft: Draft) =>
-  [
+export const problemOf = (draft: Draft) => {
+  const cadence = cadenceOfDraft(draft)
+  return [
     { failed: draft.spaceId === "", message: "Choose a space." },
-    { failed: !draft.schedule && !draft.webhook, message: "Add a trigger." },
-    { failed: draft.schedule !== undefined && Option.isNone(whenOf(draft.schedule)), message: "Fix the schedule." },
+    { failed: draft.trigger === undefined, message: "Add a trigger." },
+    {
+      failed: cadence !== undefined && Option.isNone(whenOf(cadence)),
+      message: cadence?.frequency === "once" ? "Pick a date and a time." : "Fix the schedule.",
+    },
+    {
+      failed: cadence?.frequency === "once" && nextRuns(cadence, 1, Date.now()).length === 0,
+      message: "Pick a time in the future.",
+    },
     { failed: draft.message.trim() === "", message: "Write the instructions for the agent." },
   ].find((check) => check.failed)?.message
+}
+
+// oxlint-disable-next-line ren/no-comments -- A webhook cannot change between custom and an app’s preset, or between presets, so those changes make it again too.
+export const changesKind = (draft: Draft, automation: Automation | undefined) =>
+  automation !== undefined &&
+  draft.trigger !== undefined &&
+  (draft.trigger.kind !== kindOf(automation) ||
+    JSON.stringify(presetOfDraft(draft)) !== JSON.stringify(presetOf(automation.webhook)))
 
 const agentChange = (agentId: string | undefined, current: string | null) =>
   (agentId ?? null) === current ? {} : { agentId: agentId ?? null }
@@ -200,8 +239,9 @@ export const scheduleChanges = (draft: Draft, current: ScheduleInfo, when: Sched
   return {
     ...(name === current.name ? {} : { name }),
     ...(message === current.message ? {} : { message }),
-    ...(draft.schedule && sameWhen(draft.schedule, current.when) ? {} : { when }),
+    ...(draft.trigger?.kind === "schedule" && sameWhen(draft.trigger.cadence, current.when) ? {} : { when }),
     ...agentChange(Webhooks.agentIdOf(draft.agent), current.agentId),
+    ...(JSON.stringify(draft.target) === JSON.stringify(current.target) ? {} : { target: draft.target }),
   }
 }
 
@@ -213,10 +253,34 @@ export const webhookChanges = (draft: Draft, current: WebhookInfo) => {
     ...(custom && name !== current.name ? { name } : {}),
     ...(custom && message !== current.message ? { message } : {}),
     ...agentChange(Webhooks.agentIdOf(draft.agent), current.agentId),
+    ...(draft.fallback === current.fallbackUserId ? {} : { fallbackUserId: draft.fallback }),
   }
 }
 
+export const scheduleUndo = (changed: ReturnType<typeof scheduleChanges>, current: ScheduleInfo) => ({
+  ...("name" in changed && { name: current.name }),
+  ...("message" in changed && { message: current.message }),
+  ...("when" in changed && { when: current.when }),
+  ...("agentId" in changed && { agentId: current.agentId }),
+  ...("target" in changed && { target: current.target }),
+})
+
+export const webhookUndo = (changed: ReturnType<typeof webhookChanges>, current: WebhookInfo) => ({
+  ...("name" in changed && { name: current.name }),
+  ...("message" in changed && current.message !== null && { message: current.message }),
+  ...("agentId" in changed && { agentId: current.agentId }),
+  ...("fallbackUserId" in changed && { fallbackUserId: current.fallbackUserId }),
+})
+
 export const nameOrDefault = (name: string) => name.trim() || "Untitled"
+
+// oxlint-disable-next-line ren/no-comments -- A slug that no schedule and no webhook of the space has, so a new automation never takes the address of another.
+export const freeSlug = (name: string, taken: ReadonlySet<string>) =>
+  Slug.free(
+    Slug.of(nameOrDefault(name), Primitive.maximumSlugLength) || "automation",
+    new Set([...taken, newSlug]),
+    Primitive.maximumSlugLength,
+  )
 
 export const authHeader = "x-ren-secret"
 
@@ -241,7 +305,7 @@ export const timesWith = (time: string) => (hours.includes(time) ? hours : [...h
 export const nextRuns = (cadence: Cadence, count: number, now: number): ReadonlyArray<string> => {
   const when = Option.getOrUndefined(whenOf(cadence))
   if (!when) return []
-  if ("at" in when) return [when.at]
+  if ("at" in when) return Date.parse(when.at) > now ? [when.at] : []
   const parsed = Cron.parse(when.cron, when.timeZone)
   if (Result.isFailure(parsed)) return []
   const next = Option.liftThrowable(Cron.next)
