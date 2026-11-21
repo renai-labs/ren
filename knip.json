@@ -3,7 +3,13 @@
   "ignore": ["repos/**", "**/generated/**", "**/*.gen.ts"],
   "workspaces": {
     ".": {
-      "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts", "infra/cloudflare/dispatcher.js"],
+      "entry": [
+        "script/**/*.ts",
+        "oxlint.config.ts",
+        ".opencode/plugins/*.ts",
+        "infra/cloudflare/dispatcher.js",
+        "infra/aws/app-function.js"
+      ],
       "ignoreBinaries": ["fmt"],
       "ignoreDependencies": ["@opencode/plugin"]
     },
@@ -54,7 +60,7 @@
       "ignoreDependencies": ["@ren/server"]
     },
     "packages/site": {
-      "entry": ["src/layouts/legal.astro"],
+      "entry": ["src/layouts/legal.astro", "test/**/*.test.ts", "script/**/*.ts"],
       "ignoreDependencies": ["react-dom", "@types/react-dom"]
     },
     "packages/httpapi-codegen": {
