@@ -35,12 +35,15 @@ export const pageWidths = {
 export type PageWidth = keyof typeof pageWidths | "full"
 
 const columnHead = "mx-auto flex w-full shrink-0 flex-col gap-6 px-6 pt-22"
-const columnBody = "mx-auto flex w-full flex-1 flex-col gap-6 px-6 pt-6 pb-12"
+const columnBody = "mx-auto flex w-full flex-1 flex-col gap-6 px-6 pt-6 pb-12 has-data-[page-fill]:min-h-0"
 
 const pageFrames: Record<PageWidth, { readonly head: string; readonly body: string }> = {
   column: { head: cn(columnHead, pageWidths.column), body: cn(columnBody, pageWidths.column) },
   wide: { head: cn(columnHead, pageWidths.wide), body: cn(columnBody, pageWidths.wide) },
-  full: { head: "flex shrink-0 flex-col gap-4 px-8 pt-8", body: "flex flex-1 flex-col gap-4 px-8 pt-4 pb-3" },
+  full: {
+    head: "flex shrink-0 flex-col gap-4 px-8 pt-8",
+    body: "flex flex-1 flex-col gap-4 px-8 pt-4 pb-3 has-data-[page-fill]:min-h-0",
+  },
 }
 
 type PageProps = {
@@ -177,7 +180,7 @@ export function Page(props: PageProps) {
         loading={props.loading ?? false}
         label={`Loading ${props.title}`}
         className={cn(
-          "flex min-h-0 flex-1 scroll-fade-t scrollbar-thin [scrollbar-gutter:stable] flex-col overflow-y-auto overscroll-contain",
+          "flex min-h-0 flex-1 scroll-fade-t scrollbar-thin [scrollbar-gutter:stable] flex-col overflow-y-auto overscroll-contain has-data-[page-fill]:overflow-y-hidden",
           width === "full" ? "[--scroll-fade-t-size:--spacing(4)]" : "[--scroll-fade-t-size:--spacing(6)]",
         )}
       >
@@ -185,7 +188,7 @@ export function Page(props: PageProps) {
           <PageActionsSlot value={slot}>
             <PageTabsSlot value={tabsSlot}>
               <PageTabsCount value={setMountedTabs}>
-                <div className="flex flex-1 flex-col gap-8">{props.children}</div>
+                <div className="flex flex-1 flex-col gap-8 has-data-[page-fill]:min-h-0">{props.children}</div>
               </PageTabsCount>
             </PageTabsSlot>
           </PageActionsSlot>
@@ -200,11 +203,15 @@ function PageFooter(props: { children: ReactNode }) {
   return <div className="mt-auto flex items-center justify-between gap-4 empty:hidden">{props.children}</div>
 }
 
-export function TableCard(props: { children: ReactNode; className?: string | undefined }) {
+// oxlint-disable-next-line ren/no-comments -- With scroll, the card keeps its frame and its column names, and only its rows scroll. Its page then stops scrolling.
+export function TableCard(props: { children: ReactNode; className?: string | undefined; scroll?: boolean }) {
   return (
     <div
+      data-page-fill={props.scroll ? "" : undefined}
       className={cn(
         "rounded-xl border bg-card p-2 [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3 [&_th]:font-normal [&_th]:text-muted-foreground [&_thead_tr]:border-0 [&_tr]:border-0",
+        props.scroll &&
+          "flex min-h-0 flex-col [&_[data-slot=table-container]]:min-h-0 [&_[data-slot=table-container]]:scrollbar-thin [&_[data-slot=table-container]]:overflow-y-auto [&_[data-slot=table-container]]:overscroll-contain [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-card",
         props.className,
       )}
     >
