@@ -26,6 +26,7 @@ export const agent = pgTable(
       .references(() => space.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
+    icon: text(),
     is_subagent: boolean().notNull(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
