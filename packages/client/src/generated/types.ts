@@ -73,6 +73,8 @@ export type WriteResultUpload = {
 
 export type DriveLink = { url: string; expiresAt: string }
 
+export type ResourceIconUpload = { url: string }
+
 export type FileSystemEntryType = "file" | "directory"
 
 export type FileSystemAction = "upload" | "write" | "remove"
@@ -1669,6 +1671,7 @@ export type SpaceInfo = {
   slug: PrimitiveSlug
   name: string
   description: string | null
+  icon: string | null
   brainScope: BrainScope
   brain: SpaceBrainMachine
   hand: SpaceHand
@@ -1703,6 +1706,7 @@ export type AgentInfo = {
   ownerSpaceId: SpaceID | null
   name: string
   description: string | null
+  icon: string | null
   isSubagent: boolean
   settings: SettingsInfo
   canUpdate: boolean
@@ -1987,6 +1991,7 @@ export type SpaceUpdateInput = {
     } | null
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
     readonly hand?:
@@ -2014,6 +2019,7 @@ export type SpaceUpdateInput = {
     } | null
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
     readonly hand?:
@@ -2041,6 +2047,7 @@ export type SpaceUpdateInput = {
     } | null
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
     readonly hand?:
@@ -2051,6 +2058,34 @@ export type SpaceUpdateInput = {
         )
       | null
   }["description"]
+  readonly icon?: {
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly finish?: true
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly icon?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
+  }["icon"]
   readonly brainScope?: {
     readonly factory?: {
       readonly maxHandoffs?: number
@@ -2068,6 +2103,7 @@ export type SpaceUpdateInput = {
     } | null
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
     readonly hand?:
@@ -2095,6 +2131,7 @@ export type SpaceUpdateInput = {
     } | null
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
     readonly hand?:
@@ -2122,6 +2159,7 @@ export type SpaceUpdateInput = {
     } | null
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly brainScope?: ("session" | "space") | null
     readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
     readonly hand?:
@@ -2684,6 +2722,10 @@ export type DriveDownloadInput = {
 
 export type DriveDownloadOutput = DriveLink
 
+export type IconUploadInput = { readonly payload: Blob | Uint8Array }
+
+export type IconUploadOutput = ResourceIconUpload
+
 export type FilesListInput = {
   readonly source: {
     readonly source: "drive" | "memory"
@@ -2946,6 +2988,7 @@ export type AgentUpdateInput = {
   readonly name?: {
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly isSubagent?: boolean | null
     readonly settings?: {
       readonly instructions?: string
@@ -2975,6 +3018,7 @@ export type AgentUpdateInput = {
   readonly description?: {
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly isSubagent?: boolean | null
     readonly settings?: {
       readonly instructions?: string
@@ -3001,9 +3045,40 @@ export type AgentUpdateInput = {
       }>
     } | null
   }["description"]
+  readonly icon?: {
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly icon?: string | null | null
+    readonly isSubagent?: boolean | null
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly defaultModels?: {
+        readonly image_generation?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_transcription?: { readonly providerId: string; readonly modelId: string }
+        readonly decisions?: { readonly providerId: string; readonly modelId: string }
+        readonly audio_speech?: { readonly providerId: string; readonly modelId: string }
+        readonly realtime?: { readonly providerId: string; readonly modelId: string }
+        readonly video_generation?: { readonly providerId: string; readonly modelId: string }
+      }
+      readonly steps?: number
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description: string
+      }>
+    } | null
+  }["icon"]
   readonly isSubagent?: {
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly isSubagent?: boolean | null
     readonly settings?: {
       readonly instructions?: string
@@ -3033,6 +3108,7 @@ export type AgentUpdateInput = {
   readonly settings?: {
     readonly name?: string | null
     readonly description?: string | null | null
+    readonly icon?: string | null | null
     readonly isSubagent?: boolean | null
     readonly settings?: {
       readonly instructions?: string

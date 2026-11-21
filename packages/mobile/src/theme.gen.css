@@ -36,6 +36,11 @@
   --color-avatar-from: #b5b5b5;
   --color-avatar-to: #555555;
   --color-avatar-foreground: #ffffff;
+  --color-avatar-azure: #0065cc;
+  --color-avatar-violet: #8250df;
+  --color-avatar-green: #197735;
+  --color-avatar-amber: #8a5700;
+  --color-avatar-coral: #bd2634;
   --color-chart-1: #0065cc;
   --color-chart-2: #197735;
   --color-chart-3: #8a5700;
@@ -77,6 +82,11 @@
       --color-avatar-from: #b5b5b5;
       --color-avatar-to: #555555;
       --color-avatar-foreground: #ffffff;
+      --color-avatar-azure: #0065cc;
+      --color-avatar-violet: #8250df;
+      --color-avatar-green: #197735;
+      --color-avatar-amber: #8a5700;
+      --color-avatar-coral: #bd2634;
       --color-chart-1: #0065cc;
       --color-chart-2: #197735;
       --color-chart-3: #8a5700;
@@ -116,6 +126,11 @@
       --color-avatar-from: #b5b5b5;
       --color-avatar-to: #555555;
       --color-avatar-foreground: #ffffff;
+      --color-avatar-azure: #268bff;
+      --color-avatar-violet: #a371f7;
+      --color-avatar-green: #53c878;
+      --color-avatar-amber: #e0a33a;
+      --color-avatar-coral: #f47780;
       --color-chart-1: #268bff;
       --color-chart-2: #53c878;
       --color-chart-3: #e0a33a;
