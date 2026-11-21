@@ -362,3 +362,23 @@ it.live("an app's removal takes its skills away in the same session", () =>
     )
   }),
 )
+
+it.live("a skill whose header sets disable-model-invocation is named in the context and loads by name", () =>
+  Effect.gen(function* () {
+    const github = yield* TestGitHub.make()
+    yield* github.commit({
+      "skills/pdf/SKILL.md":
+        "---\nname: AFK\ndescription: Work while away\ndisable-model-invocation: true\n---\nWork alone.\n",
+    })
+    const opened = yield* open(github)
+    const session = yield* opened.begin()
+    yield* opened.harness.configure({
+      apps: Option.some(catalog({ afk: upstream(github.url), notes: content("notes") })),
+    })
+    yield* Shared.appsSettled(opened.harness)
+    const told = yield* session.turn(stub.script(), 1)
+    const line = told.system.split("\n").find((text) => text.includes("They load only when named")) ?? ""
+    expect([line.includes("afk"), line.includes("notes")]).toEqual([true, false])
+    expect(result(yield* session.load("afk"))).toContain("Work alone.")
+  }),
+)

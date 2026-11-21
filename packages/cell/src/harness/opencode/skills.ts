@@ -158,8 +158,28 @@ export const make = Effect.fnUntraced(function* (input: {
       for (const skill of event.prompt.skills ?? []) load(skill.id)
     }),
   )
+  // oxlint-disable-next-line ren/no-comments -- OpenCode lists a skill only when it has a description and may load itself (no disable-model-invocation); name the rest so that the agent knows that it has them.
+  const namedOnly = Effect.fnUntraced(function* (agentID: string, tools: Readonly<Record<string, unknown>>) {
+    if (!("skill" in tools)) return []
+    const hidden = Ref.getUnsafe(current).filter(
+      (registration) => registration.info.autoinvoke === false || registration.info.description === undefined,
+    )
+    if (hidden.length === 0) return []
+    const agent = yield* input.context.agent.get({ agentID: Agent.ID.make(agentID) }).pipe(Effect.option)
+    const rules = Option.match(agent, { onNone: () => [], onSome: (found) => found.data.permissions })
+    return hidden
+      .map((registration) => registration.info.id)
+      .filter((id) => Permission.evaluate("skill", id, rules).effect !== "deny")
+      .toSorted((left, right) => left.localeCompare(right))
+  })
   yield* input.context.session.hook("context", (event) =>
-    Effect.sync(() => {
+    Effect.gen(function* () {
+      const named = yield* namedOnly(event.agent, event.tools)
+      if (named.length > 0)
+        event.system.push({
+          type: "text",
+          text: `These skills are not in the list of available skills but this chat has them: ${named.join(", ")}. They load only when named: when the person asks for one, load it with the skill tool.`,
+        })
       const changed = [...loaded.values()].filter((registration) => {
         const now = Ref.getUnsafe(current).find((each) => each.info.id === registration.info.id)
         return now ? now.identity !== registration.identity : false

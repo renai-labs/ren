@@ -107,7 +107,8 @@ export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
   spaceId: Schema.optional(Space.ID),
   connected: Schema.optional(Schema.Boolean).annotate({
-    description: "Only apps with a profile you can see, registry apps too. Without it, only the organization’s apps.",
+    description:
+      "Only apps with a profile you can see, registry apps too. Without it, only the organization’s apps; an agent in a chat also gets the apps with a profile it can see, so that it lists the apps whose tools and skills it has.",
   }),
   ...Pagination.fields(50),
 }).annotate({ identifier: "App.ListInput" })
