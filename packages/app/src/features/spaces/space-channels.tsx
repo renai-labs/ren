@@ -1,9 +1,10 @@
 import { useState } from "react"
-import type { ChannelInstallInfo, ChannelMappingCreateInput, ChannelMappingInfo } from "@ren/client"
-import { useMutation, useQueries, useSuspenseQuery, type UseQueryResult } from "@tanstack/react-query"
+import type { ChannelInstallInfo, ChannelMappingCreateInput, ChannelMappingInfo, ChannelPlaceInfo } from "@ren/client"
+import { useMutation, useQueries, useSuspenseQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { IconAt, IconLinkOff, IconPlus } from "@tabler/icons-react"
+import { IconAt, IconChevronRight, IconLinkOff, IconLock, IconPlus } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
+import { cn } from "cn"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
@@ -11,18 +12,19 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@ren/ui/dialog"
 import { FieldError } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
+import { Tabs } from "@ren/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { ChannelMark } from "../../components/channel-mark.js"
+import { PlaceName } from "../../components/place-name.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { LoadMore } from "../../components/load-more.js"
-import { PageActions, TableCard, TableEmpty } from "../../components/page.js"
+import { PageActions, PageTabsList, PageTabsTrigger, TableCard, TableEmpty } from "../../components/page.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
 import { errorMessage } from "../../lib/errors.js"
@@ -39,12 +41,6 @@ function ChannelName(props: { provider: Channels.Provider; name: string }) {
       <span className="truncate">{props.name}</span>
     </span>
   )
-}
-
-function emptyText(places: ReadonlyArray<Pick<UseQueryResult, "isPending">>, failed: Error | null | undefined) {
-  if (places.some((query) => query.isPending)) return "Loading…"
-  if (failed) return errorMessage(failed, "Could not list the channels.")
-  return "No channels to add"
 }
 
 export function SpaceChannelsTab() {
@@ -98,13 +94,16 @@ export function SpaceChannelsTab() {
           <TableHeader>
             <TableRow>
               <TableHead>Channel</TableHead>
-              <TableHead className="w-2/5">Provider</TableHead>
-              {canLink ? <TableHead className="w-15" /> : null}
+              {canLink ? (
+                <TableHead className="w-15">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {shown.items.length === 0 ? (
-              <TableEmpty columns={3}>
+              <TableEmpty columns={canLink ? 2 : 1}>
                 {Search.empty(query, "No channels yet. Link one so people can mention @Ren there.")}
               </TableEmpty>
             ) : null}
@@ -115,7 +114,6 @@ export function SpaceChannelsTab() {
                   <TableCell>
                     <ChannelName provider={mapping.provider} name={name} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{Channels.byId[mapping.provider].title}</TableCell>
                   {canLink ? (
                     <TableCell>
                       <RowMenu
@@ -156,6 +154,37 @@ export function SpaceChannelsTab() {
   )
 }
 
+const flatCommand =
+  "rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0"
+
+function PlaceRow(props: {
+  provider: Channels.Provider
+  place: ChannelPlaceInfo
+  value: string
+  picked: boolean
+  onToggle: () => void
+}) {
+  return (
+    <CommandItem value={props.value} keywords={[props.place.name]} onSelect={props.onToggle}>
+      <Checkbox checked={props.picked} tabIndex={-1} aria-hidden className="pointer-events-none" />
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="min-w-0 break-words">
+          <PlaceName provider={props.provider} name={props.place.name} />
+          <span className="sr-only">{props.picked ? ", selected" : ""}</span>
+        </span>
+        {props.place.private ? (
+          <IconLock aria-label="Private" className="size-3.5 shrink-0 text-muted-foreground" />
+        ) : null}
+      </span>
+      {props.place.mapping ? (
+        <span className={cn("shrink-0 text-xs", props.picked ? "text-foreground" : "text-muted-foreground")}>
+          {props.picked ? `Moves from ${props.place.mapping.space.name}` : props.place.mapping.space.name}
+        </span>
+      ) : null}
+    </CommandItem>
+  )
+}
+
 function AddChannelsDialog(props: {
   spaceId: string
   installs: ReadonlyArray<ChannelInstallInfo>
@@ -169,101 +198,182 @@ function AddChannelsDialog(props: {
     queries: props.installs.map((install) => Channels.placesOptions(api, install.id)),
   })
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set())
-  const groups = props.installs.map((install, index) => ({
-    install,
-    places: (places[index]?.data?.items ?? []).filter((place) => place.mapping?.space.id !== props.spaceId),
-  }))
-  const chosen = groups.flatMap((group) =>
-    group.places.flatMap((place) =>
-      picked.has(`${group.install.id} ${place.id}`)
+  const [tab, setTab] = useState(props.installs[0]?.id ?? "")
+  const [query, setQuery] = useState("")
+  const [others, setOthers] = useState(false)
+  const groups = props.installs.map((install, index) => {
+    const listed = (places[index]?.data?.items ?? []).filter((place) => place.mapping?.space.id !== props.spaceId)
+    return {
+      install,
+      query: places[index],
+      free: listed.filter((place) => !place.mapping),
+      taken: listed.filter((place) => place.mapping),
+    }
+  })
+  const group = groups.find((each) => each.install.id === tab) ?? groups[0]
+  const keyOf = (installId: string, placeId: string) => `${installId} ${placeId}`
+  const toggle = (key: string) =>
+    setPicked((current) =>
+      current.has(key) ? new Set([...current].filter((each) => each !== key)) : new Set([...current, key]),
+    )
+  const chosen = groups.flatMap((each) =>
+    [...each.free, ...each.taken].flatMap((place) =>
+      picked.has(keyOf(each.install.id, place.id))
         ? [
             place.mapping
               ? Channels.settingsOf(place.mapping)
-              : { installId: group.install.id, place: place.id, spaceId: props.spaceId },
+              : { installId: each.install.id, place: place.id, spaceId: props.spaceId },
           ]
         : [],
     ),
   )
-  const failed = places.find((query) => query.error)?.error
-  const connected = props.installs.length > 0
+  const moving = groups.flatMap((each) =>
+    each.taken.flatMap((place) =>
+      place.mapping && picked.has(keyOf(each.install.id, place.id))
+        ? [`${Channels.label(each.install.provider, place.name)} will stop reaching ${place.mapping.space.name}.`]
+        : [],
+    ),
+  )
+  const provider = group ? Channels.byId[group.install.provider] : undefined
+  const pickedIn = (installId: string) => [...picked].filter((key) => key.startsWith(`${installId} `)).length
+  const kinds = [
+    ...new Set(groups.filter((each) => pickedIn(each.install.id) > 0).map((each) => each.install.provider)),
+  ]
+  const only = kinds.length === 1 && kinds[0] ? Channels.byId[kinds[0]] : undefined
+  const kind = only ?? (kinds.length === 0 && provider ? provider : Channels.byId.slack)
+  const addLabel = chosen.length > 1 ? `Add ${chosen.length} ${kind.plural}` : `Add ${kind.noun}`
+  const showOthers = others || query.trim() !== ""
+  const empty = () => {
+    if (!group || !provider) return null
+    if (group.query?.isPending) return "Loading…"
+    if (group.query?.error) return errorMessage(group.query.error, `Couldn’t list the ${provider.plural}.`)
+    if (group.free.length + group.taken.length === 0) return `Every ${provider.noun} is already in this space.`
+    if (group.free.length === 0 && !query.trim()) return `The other ${provider.plural} are in other spaces.`
+    return `No matching ${provider.plural}.`
+  }
   return (
     <Dialog open onOpenChange={(open) => (open || props.saving ? undefined : props.onClose())}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add channels</DialogTitle>
-          <DialogDescription>
-            People can mention @Ren in these channels to start a chat in this space.
-          </DialogDescription>
         </DialogHeader>
-        {connected ? (
-          <Command className="rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0">
-            <CommandInput placeholder="Search channels…" />
-            <CommandList className="pt-1">
-              <CommandEmpty>{emptyText(places, failed)}</CommandEmpty>
-              {groups.map((group) =>
-                group.places.length > 0 ? (
-                  <CommandGroup
-                    key={group.install.id}
-                    heading={`${Channels.byId[group.install.provider].title} · ${group.install.name}`}
-                    className="p-0"
-                  >
-                    {group.places.map((place) => {
-                      const key = `${group.install.id} ${place.id}`
+        {group && provider ? (
+          <div className="flex flex-col gap-3">
+            {groups.length > 1 ? (
+              <Tabs
+                value={group.install.id}
+                onValueChange={(value: string) => {
+                  setTab(value)
+                  setQuery("")
+                  setOthers(false)
+                }}
+              >
+                <PageTabsList aria-label="Provider">
+                  {groups.map((each) => (
+                    <PageTabsTrigger
+                      key={each.install.id}
+                      value={each.install.id}
+                      count={pickedIn(each.install.id) || undefined}
+                    >
+                      <ChannelMark provider={each.install.provider} className="size-4" />
+                      {Channels.byId[each.install.provider].title}
+                    </PageTabsTrigger>
+                  ))}
+                </PageTabsList>
+              </Tabs>
+            ) : null}
+            <Command key={group.install.id} className={flatCommand}>
+              <CommandInput value={query} onValueChange={setQuery} placeholder={`Search ${provider.plural}…`} />
+              <CommandList className="h-72 pt-1">
+                <CommandEmpty>{empty()}</CommandEmpty>
+                {group.free.length > 0 ? (
+                  <CommandGroup className="p-0">
+                    {group.free.map((place) => {
+                      const key = keyOf(group.install.id, place.id)
                       return (
-                        <CommandItem
+                        <PlaceRow
                           key={key}
                           value={key}
-                          keywords={[place.name]}
-                          onSelect={() =>
-                            setPicked((current) =>
-                              current.has(key)
-                                ? new Set([...current].filter((each) => each !== key))
-                                : new Set([...current, key]),
-                            )
-                          }
-                        >
-                          <Checkbox
-                            checked={picked.has(key)}
-                            tabIndex={-1}
-                            aria-hidden
-                            className="pointer-events-none"
-                          />
-                          <span className="flex-1 truncate">{Channels.label(group.install.provider, place.name)}</span>
-                          {place.mapping ? (
-                            <span className="truncate text-xs text-muted-foreground">{place.mapping.space.name}</span>
-                          ) : null}
-                        </CommandItem>
+                          provider={group.install.provider}
+                          place={place}
+                          picked={picked.has(key)}
+                          onToggle={() => toggle(key)}
+                        />
                       )
                     })}
                   </CommandGroup>
-                ) : null,
+                ) : null}
+                {group.taken.length > 0 && !query.trim() ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={showOthers}
+                    className="mt-1 text-muted-foreground"
+                    onClick={() => setOthers((was) => !was)}
+                  >
+                    In other spaces · {group.taken.length}
+                    <IconChevronRight
+                      data-icon="inline-end"
+                      className={showOthers ? "rotate-90 transition-transform" : "transition-transform"}
+                    />
+                  </Button>
+                ) : null}
+                {group.taken.length > 0 && showOthers ? (
+                  <CommandGroup className="p-0">
+                    {group.taken.map((place) => {
+                      const key = keyOf(group.install.id, place.id)
+                      return (
+                        <PlaceRow
+                          key={key}
+                          value={key}
+                          provider={group.install.provider}
+                          place={place}
+                          picked={picked.has(key)}
+                          onToggle={() => toggle(key)}
+                        />
+                      )
+                    })}
+                  </CommandGroup>
+                ) : null}
+              </CommandList>
+            </Command>
+            <p className="text-xs text-muted-foreground">
+              {group.install.provider === "slack" ? (
+                <>
+                  Missing a channel? Run <code>/invite @Ren</code> in it.
+                </>
+              ) : (
+                "Missing a repo? Give the Ren app access to it on GitHub."
               )}
-            </CommandList>
-          </Command>
+            </p>
+          </div>
         ) : (
           <EmptyState
             action={
               <Link to="/settings/channels" className={buttonVariants({ variant: "outline" })}>
                 <IconAt data-icon="inline-start" />
-                Open Mentions settings
+                Open channel settings
               </Link>
             }
           >
-            Connect Slack, GitHub or Linear first.
+            Connect Slack or GitHub first.
           </EmptyState>
         )}
+        <p role="status" className="sr-only">
+          {moving.join(" ")}
+        </p>
         {props.error ? <FieldError>{errorMessage(props.error)}</FieldError> : null}
-        <DialogFooter className={connected ? undefined : "sm:justify-end"}>
+        <DialogFooter className={group ? undefined : "sm:justify-end"}>
           <DialogClose render={<Button variant="outline" />} disabled={props.saving}>
             Cancel
           </DialogClose>
-          {connected ? (
+          {group ? (
             <Button
               disabled={chosen.length === 0 || props.saving}
               onClick={() => void props.onAdd(chosen).catch(() => undefined)}
             >
               {props.saving ? <Spinner data-icon="inline-start" /> : null}
-              {chosen.length > 1 ? `Add ${chosen.length} channels` : "Add channel"}
+              {addLabel}
             </Button>
           ) : null}
         </DialogFooter>
