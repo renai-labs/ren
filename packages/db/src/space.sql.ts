@@ -36,6 +36,7 @@ export const space = pgTable(
     slug: text().notNull(),
     name: text().notNull(),
     description: text(),
+    icon: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
     // oxlint-disable-next-line ren/no-comments -- Null: the deployment's first brain provider.
     brain_provider: text().$type<MachineProvider.ID>(),
