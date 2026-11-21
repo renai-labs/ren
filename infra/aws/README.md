@@ -28,6 +28,7 @@ egress ──mTLS server.<name>.internal:4443──▶ server        server ─�
 | `app-function.js` | The CloudFront function that sends each path to the site, the app or a file               |
 | `drives.tf`       | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
 | `deploy.tf`       | The role the deploy workflow assumes with GitHub OIDC                                     |
+| `bastion.tf`      | SSM bastion for database queries, its role and security group, one database rule          |
 
 ## Rules
 
