@@ -5,6 +5,8 @@ import { Preference } from "./preference.js"
 
 export const open = Preference.make("sidebar.open.v1", Schema.Boolean, true)
 
+export const width = Preference.make("sidebar.width.v1", Schema.NullOr(Schema.Number), null)
+
 export const sections = Preference.make(
   "sidebar.sections.v1",
   Schema.Struct({ spaces: Schema.Boolean, chats: Schema.Boolean }),
