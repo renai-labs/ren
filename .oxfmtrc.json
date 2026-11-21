@@ -1,5 +1,5 @@
 {
-  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "$schema": "./packages/httpapi-codegen/node_modules/oxfmt/configuration_schema.json",
   "semi": false,
   "printWidth": 120,
   "sortPackageJson": false,

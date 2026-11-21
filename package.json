@@ -5,7 +5,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.4.2",
+  "packageManager": "bun@1.4.5",
   "scripts": {
     "dev": "bun run --cwd packages/server dev",
     "dev:app": "bun run --cwd packages/app dev",
@@ -20,7 +20,7 @@
     "generate": "bun run script/generate.ts",
     "test:opencode": "bun turbo test:opencode --concurrency=1 --continue",
     "opencode:bump": "bun run script/opencode-bump.ts",
-    "opencode:record": "bun run --cwd packages/cell opencode:record && oxfmt packages/opencode-transcript/test/fixtures packages/cell/test/fixtures/databases",
+    "opencode:record": "bun run --cwd packages/cell opencode:record && bun fmt packages/opencode-transcript/test/fixtures packages/cell/test/fixtures/databases",
     "memory": "bun script/memory.ts",
     "keys": "bun run packages/schema/script/keys.ts",
     "format": "bun run script/format.ts",
@@ -29,7 +29,7 @@
     "lint:root": "bun script/lint.ts",
     "lint:rules": "ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script",
     "lint:unused": "knip --no-config-hints",
-    "format:check": "oxfmt --check",
+    "format:check": "bun fmt --check",
     "typecheck:root": "tsrs -b",
     "check:all": "bun script/opencode-lock.ts && bun run typecheck && bun run lint",
     "test:all": "bun turbo test:all --output-logs=errors-only"
@@ -198,7 +198,6 @@
     "eslint-plugin-better-tailwindcss": "4.9.0",
     "husky": "9.1.7",
     "knip": "6.40.0",
-    "oxfmt": "catalog:",
     "oxlint": "1.93.0",
     "tsrs": "catalog:",
     "turbo": "2.11.7"

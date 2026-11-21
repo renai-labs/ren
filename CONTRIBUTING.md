@@ -20,7 +20,7 @@ docker compose up -d
 | `bun run dev:app`                       | Start the web app (proxies the API to the server)  |
 | `bun run dev:site`                      | Start the docs site                                |
 | `bun run generate`                      | Regenerate `openapi.json` and the clients          |
-| `bun run format`                        | Format the repo with oxfmt                         |
+| `bun run format`                        | Format the repo with `bun fmt`                     |
 | `bun run check`                         | Typecheck and lint what changed since `main`       |
 | `bun run test`                          | Run the tests that cover what changed since `main` |
 | `bun run check:all`, `bun run test:all` | The same for everything                            |

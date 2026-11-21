@@ -4,6 +4,7 @@
   "workspaces": {
     ".": {
       "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts", "infra/cloudflare/dispatcher.js"],
+      "ignoreBinaries": ["fmt"],
       "ignoreDependencies": ["@opencode/plugin"]
     },
     "packages/*": {
