@@ -19,6 +19,7 @@ export interface Registration {
   readonly directory: string
   readonly files: Option.Option<HandCopies.Copy>
   readonly source?: SkillSource.Pointer
+  readonly app?: { readonly slug: string; readonly name: string }
 }
 
 const encoder = new TextEncoder()
@@ -50,10 +51,16 @@ export const make = Effect.fnUntraced(function* (input: {
   const hasWorkspace = input.hasWorkspace
   const prepare = Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
     const previous = yield* Ref.get(current)
+    const names = new Map(
+      Option.match(apps, { onNone: () => [], onSome: (info) => info.catalog.apps }).map(
+        (app) => [app.appSlug, app.name] as const,
+      ),
+    )
     const prepared = yield* Effect.forEach(
       entriesOf(apps),
       Effect.fnUntraced(function* (entry) {
         const declaration = entry.declaration
+        const app = { slug: entry.appSlug, name: names.get(entry.appSlug) ?? entry.appSlug }
         if (declaration.type === "content") {
           // oxlint-disable-next-line ren/no-comments -- An app has one definition (profiles.md P2), so a content skill is named by its content: an edit gives a new directory.
           const identity = Math.abs(Hash.string(JSON.stringify(declaration))).toString(36)
@@ -63,6 +70,7 @@ export const make = Effect.fnUntraced(function* (input: {
             {
               identity,
               directory,
+              app,
               files: hasFiles
                 ? Option.some({
                     type: "inline" as const,
@@ -91,17 +99,18 @@ export const make = Effect.fnUntraced(function* (input: {
           ),
           Effect.option,
         )
-        if (Option.isNone(found)) return fallback
+        if (Option.isNone(found)) return fallback.map((registration) => ({ ...registration, app }))
         const read = SkillFile.parse(root, `${root}/${entry.slug}/SKILL.md`, found.value.document)
         if (read._tag === "Skipped") {
           yield* Effect.logWarning(`The SKILL.md of the skill ${entry.slug} has no valid ${read.reason}`)
-          return fallback
+          return fallback.map((registration) => ({ ...registration, app }))
         }
         const identity = found.value.lookup.commit.slice(0, 12)
         const directory = `${root}/${entry.slug}/${identity}`
         const registration: Registration = {
           identity,
           directory,
+          app,
           source: declaration.upstream,
           files: Option.some({
             type: "archive",
@@ -125,11 +134,9 @@ export const make = Effect.fnUntraced(function* (input: {
     const registration = Ref.getUnsafe(current).find((each) => each.info.id === id)
     if (registration) loaded.set(id, registration)
   }
-  const isChanged = (next: ReadonlyArray<Registration>) =>
-    !Equal.equals(
-      next.map((each) => each.info),
-      Ref.getUnsafe(current).map((each) => each.info),
-    )
+  const shapeOf = (all: ReadonlyArray<Registration>) =>
+    all.map((each) => [each.info, each.app?.slug, each.app?.name] as const)
+  const isChanged = (next: ReadonlyArray<Registration>) => !Equal.equals(shapeOf(next), shapeOf(Ref.getUnsafe(current)))
   yield* input.context.skill.transform((editor) => {
     for (const registration of Ref.getUnsafe(current)) editor.add(registration.info)
   })
@@ -158,28 +165,45 @@ export const make = Effect.fnUntraced(function* (input: {
       for (const skill of event.prompt.skills ?? []) load(skill.id)
     }),
   )
-  // oxlint-disable-next-line ren/no-comments -- OpenCode lists a skill only when it has a description and may load itself (no disable-model-invocation); name the rest so that the agent knows that it has them.
-  const namedOnly = Effect.fnUntraced(function* (agentID: string, tools: Readonly<Record<string, unknown>>) {
+  // oxlint-disable-next-line ren/no-comments -- The agent sees a mention as plain `@<app>` text, and OpenCode lists a skill only when it has a description and may load itself (no disable-model-invocation). Name each app's skills, and the ones that load only by name, so that the agent knows what it has.
+  const notes = Effect.fnUntraced(function* (agentID: string, tools: Readonly<Record<string, unknown>>) {
     if (!("skill" in tools)) return []
-    const hidden = Ref.getUnsafe(current).filter(
-      (registration) => registration.info.autoinvoke === false || registration.info.description === undefined,
-    )
-    if (hidden.length === 0) return []
+    const all = Ref.getUnsafe(current)
+    if (all.length === 0) return []
     const agent = yield* input.context.agent.get({ agentID: Agent.ID.make(agentID) }).pipe(Effect.option)
     const rules = Option.match(agent, { onNone: () => [], onSome: (found) => found.data.permissions })
-    return hidden
+    const allowed = all
+      .filter((registration) => Permission.evaluate("skill", registration.info.id, rules).effect !== "deny")
+      .toSorted((left, right) => left.info.id.localeCompare(right.info.id))
+    const byApp = Map.groupBy(
+      allowed.filter((registration) => registration.app !== undefined),
+      (registration) => registration.app?.slug ?? "",
+    )
+    const apps = [...byApp.entries()]
+      .toSorted(([left], [right]) => left.localeCompare(right))
+      .map(([slug, registrations]) => {
+        const name = registrations.at(0)?.app?.name ?? slug
+        return `@${slug} (${name}) gives this chat the skills ${registrations.map((each) => each.info.id).join(", ")}.`
+      })
+    const named = allowed
+      .filter((registration) => registration.info.autoinvoke === false || registration.info.description === undefined)
       .map((registration) => registration.info.id)
-      .filter((id) => Permission.evaluate("skill", id, rules).effect !== "deny")
-      .toSorted((left, right) => left.localeCompare(right))
+    return [
+      ...(apps.length > 0
+        ? [
+            `${apps.join(" ")} When someone mentions an app or asks what it has, these are its skills: load one with the skill tool.`,
+          ]
+        : []),
+      ...(named.length > 0
+        ? [
+            `These skills are not in the list of available skills but this chat has them: ${named.join(", ")}. They load only when named: when the person asks for one, load it with the skill tool.`,
+          ]
+        : []),
+    ]
   })
   yield* input.context.session.hook("context", (event) =>
     Effect.gen(function* () {
-      const named = yield* namedOnly(event.agent, event.tools)
-      if (named.length > 0)
-        event.system.push({
-          type: "text",
-          text: `These skills are not in the list of available skills but this chat has them: ${named.join(", ")}. They load only when named: when the person asks for one, load it with the skill tool.`,
-        })
+      for (const text of yield* notes(event.agent, event.tools)) event.system.push({ type: "text", text })
       const changed = [...loaded.values()].filter((registration) => {
         const now = Ref.getUnsafe(current).find((each) => each.info.id === registration.info.id)
         return now ? now.identity !== registration.identity : false

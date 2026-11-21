@@ -363,7 +363,7 @@ it.live("an app's removal takes its skills away in the same session", () =>
   }),
 )
 
-it.live("a skill whose header sets disable-model-invocation is named in the context and loads by name", () =>
+it.live("the context names each app's skills and the ones that load only by name, and such a skill loads by name", () =>
   Effect.gen(function* () {
     const github = yield* TestGitHub.make()
     yield* github.commit({
@@ -379,6 +379,7 @@ it.live("a skill whose header sets disable-model-invocation is named in the cont
     const told = yield* session.turn(stub.script(), 1)
     const line = told.system.split("\n").find((text) => text.includes("They load only when named")) ?? ""
     expect([line.includes("afk"), line.includes("notes")]).toEqual([true, false])
+    expect(told.system).toContain("@docs (docs) gives this chat the skills afk, notes.")
     expect(result(yield* session.load("afk"))).toContain("Work alone.")
   }),
 )
