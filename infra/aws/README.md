@@ -4,7 +4,7 @@ Terraform for one Ren deployment on AWS. The deploy workflow (`.github/workflows
 
 The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren2/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
 
-The site and the app share the domain's root. The bucket holds the site's files at its root and the app's under `/app/`; the CloudFront function in `app.tf` picks one for each page. Site sections (`/docs`, `/pricing` and the rest of the list in `app.tf`) and `/home` get the site. `/` gets the app when the browser has the `ren_signed_in` cookie, which the app sets while someone is signed in, and the landing page otherwise. Any other page gets the app. An old link under `/app` redirects to the same page without `/app`. Set the server's `APP_URL` to the domain's root, with no `/app`.
+The site and the app share the domain's root. The bucket holds the site's files at its root and the app's under `/app/`; the CloudFront function in `app-function.js` picks one for each page, and `packages/site/test/app-function.test.ts` tests it. Site sections (`/docs`, `/pricing` and the rest of the list in `app-function.js`) and `/home` get the site. `/` gets the app when the browser has the `ren_signed_in` cookie, which the app sets while someone is signed in, and the landing page otherwise. Any other page gets the app. An old link under `/app` redirects to the same page without `/app`. Set the server's `APP_URL` to the domain's root, with no `/app`.
 
 A new top-level page of the site, such as `/use-cases`, needs its path in that list and a `terraform apply`, or it gets the app. `@ren/site#check:routes`, part of `bun run lint` and `bun run check`, fails when a page is missing from the list. Pages inside a listed section need no change.
 
@@ -17,16 +17,17 @@ server ──E2B API──▶ sandbox (brain + hand) ──every connection, egr
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
 ```
 
-| File         | Contents                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| `dns.tf`     | The deployment's zone and its delegation, the certificate, records, the private namespace |
-| `network.tf` | Security groups, the load balancer, one rule on the database's security group             |
-| `server.tf`  | ECS cluster, ECR repository, server secret, roles, task definition, service               |
-| `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
-| `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
-| `app.tf`     | Site and app bucket and CloudFront distribution                                           |
-| `drives.tf`  | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
-| `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
+| File              | Contents                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| `dns.tf`          | The deployment's zone and its delegation, the certificate, records, the private namespace |
+| `network.tf`      | Security groups, the load balancer, one rule on the database's security group             |
+| `server.tf`       | ECS cluster, ECR repository, server secret, roles, task definition, service               |
+| `egress.tf`       | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
+| `waf.tf`          | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
+| `app.tf`          | Site and app bucket and CloudFront distribution                                           |
+| `app-function.js` | The CloudFront function that sends each path to the site, the app or a file               |
+| `drives.tf`       | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
+| `deploy.tf`       | The role the deploy workflow assumes with GitHub OIDC                                     |
 
 ## Rules
 
