@@ -1,6 +1,6 @@
 export * as Pages from "./pages.js"
 
-import type { BillingInvoicePage, CredentialListInput, ScheduleListInput, ScheduleRunListInput } from "@ren/client"
+import type { BillingInvoicePage, CredentialListInput } from "@ren/client"
 import { infiniteQueryOptions } from "@tanstack/react-query"
 import { pageSize } from "./pagination.js"
 import type { Runtime } from "./runtime.js"
@@ -41,13 +41,7 @@ export const connectedApps = (client: Client) =>
     client.app.list({ connected: true, ...paging }, { signal }),
   )
 
-export const schedules = (client: Client, input: Omit<ScheduleListInput, keyof Paging>) =>
-  paged(["schedule", "list", input], (paging, signal) => client.schedule.list({ ...input, ...paging }, { signal }))
 
-export const scheduleRuns = (client: Client, input: Omit<ScheduleRunListInput, keyof Paging>) =>
-  paged(["schedule-run", "list", input], (paging, signal) =>
-    client["schedule-run"].list({ ...input, ...paging }, { signal }),
-  )
 
 const invoicePageSize = 10
 
