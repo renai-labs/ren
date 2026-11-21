@@ -60,7 +60,7 @@ resource "aws_vpc_security_group_egress_rule" "server" {
 
 # The only change to a resource this stack does not own: one rule on the database's group.
 resource "aws_vpc_security_group_ingress_rule" "database_from_server" {
-  security_group_id            = var.database_security_group_id
+  security_group_id            = aws_security_group.database.id
   referenced_security_group_id = aws_security_group.server.id
   ip_protocol                  = "tcp"
   from_port                    = 5432
@@ -94,13 +94,6 @@ resource "aws_lb_listener" "https" {
       status_code  = "404"
     }
   }
-}
-
-resource "aws_lb_listener_certificate" "alias" {
-  count = var.alias_domain == null ? 0 : 1
-
-  listener_arn    = aws_lb_listener.https.arn
-  certificate_arn = aws_acm_certificate_validation.alias[0].certificate_arn
 }
 
 resource "aws_lb_listener" "http" {

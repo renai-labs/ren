@@ -54,7 +54,6 @@ const it = testEffect(
             { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
           ]),
           REN_URL: "https://ren.test",
-          REN_PREVIOUS_HOSTS: "old.ren.test=ren.test",
         }),
       ),
     ),
@@ -222,28 +221,6 @@ describe("OAuth.connect: client, scope, resource and PKCE (tests 9, 10, 11, 32)"
       const document = yield* connect(yield* setup())
       expect(document.searchParams.get("client_id")).toBe("https://ren.test/oauth/client.json")
       expect(server.seen.map((seen) => seen.path)).not.toContain("/register")
-    }),
-  )
-
-  it.live("on a previous host, the client document and the code exchange keep that host's addresses", () =>
-    Effect.gen(function* () {
-      yield* reset({ metadata: { client_id_metadata_document_supported: true } })
-      const service = yield* OAuth.Service
-      expect(yield* service.clientMetadata(Option.some("old.ren.test"))).toMatchObject({
-        client_id: "https://old.ren.test/oauth/client.json",
-        redirect_uris: ["https://old.ren.test/oauth/callback"],
-      })
-      expect(yield* service.clientMetadata(Option.some("other.test"))).toMatchObject({
-        client_id: "https://ren.test/oauth/client.json",
-      })
-      const signIn = yield* connect(yield* setup())
-      yield* service.callback(
-        { state: signIn.searchParams.get("state") ?? "", code: "c", host: "old.ren.test" },
-        Option.none(),
-      )
-      expect(server.seen.find((seen) => seen.path === "/token")?.form.get("redirect_uri")).toBe(
-        "https://old.ren.test/oauth/callback",
-      )
     }),
   )
 

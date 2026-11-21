@@ -42,7 +42,7 @@ resource "aws_vpc_security_group_egress_rule" "bastion" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "database_from_bastion" {
-  security_group_id            = var.database_security_group_id
+  security_group_id            = aws_security_group.database.id
   referenced_security_group_id = aws_security_group.bastion.id
   ip_protocol                  = "tcp"
   from_port                    = 5432

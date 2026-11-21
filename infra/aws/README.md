@@ -17,18 +17,20 @@ server ──E2B API──▶ sandbox (brain + hand) ──every connection, egr
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
 ```
 
-| File              | Contents                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------- |
-| `dns.tf`          | The deployment's zone and its delegation, the certificate, records, the private namespace |
-| `network.tf`      | Security groups, the load balancer, one rule on the database's security group             |
-| `server.tf`       | ECS cluster, ECR repository, server secret, roles, task definition, service               |
-| `egress.tf`       | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
-| `waf.tf`          | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
-| `app.tf`          | Site and app bucket and CloudFront distribution                                           |
-| `app-function.js` | The CloudFront function that sends each path to the site, the app or a file               |
-| `drives.tf`       | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
-| `deploy.tf`       | The role the deploy workflow assumes with GitHub OIDC                                     |
-| `bastion.tf`      | SSM bastion for database queries, its role and security group, one database rule          |
+| File              | Contents                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `dns.tf`          | Records in the zone of `domain`, the certificate, the private namespace                 |
+| `network.tf`      | Security groups, the load balancer, the server's rule on the database's security group  |
+| `database.tf`     | The Postgres instance, its subnet group and security group                              |
+| `inference.tf`    | The inference service: task, service, target groups, rules, records, its deploy role    |
+| `server.tf`       | ECS cluster, ECR repository, server secret, roles, task definition, service             |
+| `egress.tf`       | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document   |
+| `waf.tf`          | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules       |
+| `app.tf`          | Site and app bucket and CloudFront distribution                                         |
+| `app-function.js` | The CloudFront function that sends each path to the site, the app or a file             |
+| `drives.tf`       | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role |
+| `deploy.tf`       | The role the deploy workflow assumes with GitHub OIDC                                   |
+| `bastion.tf`      | SSM bastion for database queries, its role and security group, one database rule        |
 
 ## Rules
 

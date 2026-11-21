@@ -38,15 +38,7 @@ output "load_balancer_zone_id" {
 }
 
 output "zone_id" {
-  value = aws_route53_zone.this.zone_id
-}
-
-output "alias_domain" {
-  value = var.alias_domain
-}
-
-output "alias_zone_id" {
-  value = var.alias_domain == null ? null : data.aws_route53_zone.alias[0].zone_id
+  value = data.aws_route53_zone.this.zone_id
 }
 
 output "namespace_id" {
@@ -96,4 +88,16 @@ output "egress_secret_arn" {
 
 output "deploy_secret_arn" {
   value = aws_secretsmanager_secret.deploy.arn
+}
+
+output "inference_deploy_role_arn" {
+  value = aws_iam_role.inference_deploy.arn
+}
+
+output "inference_secret_arn" {
+  value = aws_secretsmanager_secret.inference.arn
+}
+
+output "litellm_secret_arn" {
+  value = aws_secretsmanager_secret.litellm.arn
 }
