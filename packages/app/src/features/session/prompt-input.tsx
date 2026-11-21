@@ -75,7 +75,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/p
 import { ProfileDialog, useAddManaged, type ProfileTarget } from "../../components/profile-dialog.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
-import { StatusDot } from "../../components/app-list.js"
+import { StatusDot } from "../../components/status-dot.js"
 import { isBundle, statusAction, statusLabel, waitsForUser, type CatalogApp, type Status } from "../../lib/apps.js"
 import { useApps } from "../../lib/use-app.js"
 import { errorMessage } from "../../lib/errors.js"

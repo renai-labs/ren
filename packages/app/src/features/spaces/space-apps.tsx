@@ -338,6 +338,7 @@ export function SpaceAppsTab() {
             }
             profiles={here}
             empty={`No ${app.name} accounts in ${space.name} yet`}
+            from={from}
             onOpen={(each) => setProfile({ appId: each.appId, profileId: each.id, from, edit: true })}
           />
         ) : null}
