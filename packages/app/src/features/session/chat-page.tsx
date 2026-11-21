@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { IconCube, IconGhostFilled, IconLayoutSidebarRight, IconRestore } from "@tabler/icons-react"
 import { Composer, Mentions } from "@ren/chat"
@@ -343,6 +343,11 @@ export function ChatPage() {
   const layout = useRef<HTMLDivElement>(null)
   const sizePanel = (node: HTMLDivElement | null, next: number | null) =>
     node?.style.setProperty("--panel-width", panelSize(next))
+  const browser = chat.browser?.closed === false ? chat.browser.id : undefined
+  const openBrowser = useEffectEvent(() => requestPanel({ kind: "browser" }))
+  useEffect(() => {
+    if (browser) openBrowser()
+  }, [browser])
   return (
     <div
       ref={(node) => {
@@ -405,6 +410,8 @@ export function ChatPage() {
             saved={workspace.panel}
             messages={chat.messages}
             request={request}
+            browserIds={chat.browserIds}
+            open={panel}
             maximized={maximized}
             onMaximize={workspace.setMaximized}
             onMention={mentionFile}
