@@ -1,69 +1,152 @@
 import { AuthError, AuthForm } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { FieldGroup } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
 import {
+  AuthField,
   AuthLayout,
-  BackButton,
+  EmailSummary,
   FormError,
   GoogleButton,
   PasswordInput,
   SocialButton,
 } from "../../components/auth-layout.js"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const route = getRouteApi("/signup")
 
+function DetailsStep(props: {
+  name: string
+  onNameChange: (name: string) => void
+  email: string
+  onEmailChange: (email: string) => void
+  emailError: string
+  onEmailError: (error: string) => void
+  onContinue: () => void
+}) {
+  const nameInput = useRef<HTMLInputElement>(null)
+  const emailInput = useRef<HTMLInputElement>(null)
+  const [nameError, setNameError] = useState("")
+  const submit = () => {
+    const nameFailure = AuthForm.nameError(props.name)
+    const emailFailure = AuthForm.emailError(props.email)
+    setNameError(nameFailure)
+    props.onEmailError(emailFailure)
+    if (nameFailure) nameInput.current?.focus()
+    else if (emailFailure) emailInput.current?.focus()
+    else props.onContinue()
+  }
+  return (
+    <form
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault()
+        submit()
+      }}
+    >
+      <FieldGroup className="gap-4">
+        <AuthField id="signup-name" label="Name" error={nameError}>
+          {(control) => (
+            <Input
+              {...control}
+              ref={nameInput}
+              className="h-10 bg-card dark:bg-card"
+              autoComplete="name"
+              placeholder="Maya Chen"
+              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
+              autoFocus={!props.emailError}
+              required
+              value={props.name}
+              onChange={(event) => {
+                props.onNameChange(event.currentTarget.value)
+                setNameError("")
+              }}
+            />
+          )}
+        </AuthField>
+        <AuthField id="signup-email" label="Email" error={props.emailError}>
+          {(control) => (
+            <Input
+              {...control}
+              ref={emailInput}
+              className="h-10 bg-card dark:bg-card"
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
+              autoFocus={props.emailError !== ""}
+              required
+              value={props.email}
+              onChange={(event) => {
+                props.onEmailChange(event.currentTarget.value)
+                props.onEmailError("")
+              }}
+            />
+          )}
+        </AuthField>
+        <Button type="submit" className="h-10 w-full">
+          Continue
+        </Button>
+      </FieldGroup>
+    </form>
+  )
+}
+
 function PasswordStep(props: {
   email: string
   password: string
   onPasswordChange: (password: string) => void
+  onChangeEmail: () => void
   error: string
   pending: boolean
   onSubmit: () => void
 }) {
+  const passwordInput = useRef<HTMLInputElement>(null)
+  const [passwordError, setPasswordError] = useState("")
+  const submit = () => {
+    const failure = AuthForm.passwordError(props.password)
+    setPasswordError(failure)
+    if (failure) passwordInput.current?.focus()
+    else props.onSubmit()
+  }
   return (
     <form
+      noValidate
       onSubmit={(event) => {
         event.preventDefault()
-        props.onSubmit()
+        submit()
       }}
     >
       <FieldGroup className="gap-4">
         <FormError>{props.error}</FormError>
-        <Field>
-          <FieldLabel htmlFor="signup-email">Email</FieldLabel>
-          <Input
-            id="signup-email"
-            type="email"
-            value={props.email}
-            readOnly
-            className="h-10 border-transparent bg-muted dark:bg-muted"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="signup-password">Password</FieldLabel>
-          <PasswordInput
-            id="signup-password"
-            autoComplete="new-password"
-            placeholder="Create a password"
-            // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
-            autoFocus
-            required
-            value={props.password}
-            disabled={props.pending}
-            onChange={(event) => props.onPasswordChange(event.currentTarget.value)}
-          />
-          <FieldDescription>{AuthForm.passwordHint}</FieldDescription>
-        </Field>
+        <EmailSummary email={props.email} onChange={props.onChangeEmail} />
+        <AuthField id="signup-password" label="Password" error={passwordError} hint={AuthForm.passwordHint}>
+          {(control) => (
+            <PasswordInput
+              {...control}
+              ref={passwordInput}
+              autoComplete="new-password"
+              placeholder="Create a password"
+              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
+              autoFocus
+              required
+              value={props.password}
+              disabled={props.pending}
+              onChange={(event) => {
+                props.onPasswordChange(event.currentTarget.value)
+                setPasswordError("")
+              }}
+            />
+          )}
+        </AuthField>
         <Button type="submit" className="h-10 w-full" disabled={props.pending}>
           {props.pending ? <Spinner data-icon="inline-start" /> : null}
-          {props.pending ? "Creating account…" : "Continue"}
+          {props.pending ? "Creating account…" : "Create account"}
         </Button>
       </FieldGroup>
     </form>
@@ -89,32 +172,11 @@ export function SignupPage() {
   const [emailError, setEmailError] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
-  const title = organizationName ? `Join ${organizationName}` : undefined
-  const description = organizationName ? "Create your Ren account" : undefined
   const back = () => {
     setError("")
     setStep("details")
   }
-  const continueWithDetails = () => {
-    const nameFailure = AuthForm.nameError(name)
-    if (nameFailure) {
-      setError(nameFailure)
-      return
-    }
-    const emailFailure = AuthForm.emailError(email)
-    if (emailFailure) {
-      setEmailError(emailFailure)
-      return
-    }
-    setError("")
-    setStep("password")
-  }
   const createAccount = async () => {
-    const passwordFailure = AuthForm.passwordError(password)
-    if (passwordFailure) {
-      setError(passwordFailure)
-      return
-    }
     setError("")
     setPending(true)
     const result = await auth.signUp.email({ name: name.trim(), email, password })
@@ -135,22 +197,22 @@ export function SignupPage() {
   }
   if (step === "password")
     return (
-      <AuthLayout title={title} description={description} legal="signup">
+      <AuthLayout title="Create a password" description="" legal="signup">
         <PasswordStep
           email={email}
           password={password}
           onPasswordChange={setPassword}
+          onChangeEmail={back}
           error={error}
           pending={pending}
           onSubmit={() => void createAccount()}
         />
-        <BackButton onClick={back} />
       </AuthLayout>
     )
   return (
     <AuthLayout
-      title={title}
-      description={description}
+      title={organizationName ? `Join ${organizationName}` : undefined}
+      description={organizationName ? "Create your Ren account" : undefined}
       legal="signup"
       footer={
         <>
@@ -161,58 +223,20 @@ export function SignupPage() {
         </>
       }
     >
-      <GoogleButton destination={destination} />
-      <SocialButton provider="github" destination={destination} />
-      <SocialButton provider="slack" destination={destination} />
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          continueWithDetails()
-        }}
-      >
-        <FieldGroup className="gap-4">
-          <FormError>{error}</FormError>
-          <Field>
-            <FieldLabel htmlFor="signup-name">Name</FieldLabel>
-            <Input
-              className="h-10 bg-card dark:bg-card"
-              id="signup-name"
-              autoComplete="name"
-              placeholder="Maya Chen"
-              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
-              autoFocus={!emailError}
-              required
-              value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
-            />
-          </Field>
-          <Field data-invalid={emailError !== "" || undefined}>
-            <FieldLabel htmlFor="signup-email">Email</FieldLabel>
-            <Input
-              className="h-10 bg-card dark:bg-card"
-              id="signup-email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@company.com"
-              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this field
-              autoFocus={emailError !== ""}
-              required
-              aria-invalid={emailError !== "" || undefined}
-              value={email}
-              onChange={(event) =>
-                ((value: string) => {
-                  setEmail(value)
-                  setEmailError("")
-                })(event.currentTarget.value)
-              }
-            />
-            {emailError ? <FieldError>{emailError}</FieldError> : null}
-          </Field>
-          <Button type="submit" className="h-10 w-full">
-            Continue
-          </Button>
-        </FieldGroup>
-      </form>
+      <div className="flex flex-col gap-2">
+        <GoogleButton destination={destination} />
+        <SocialButton provider="github" destination={destination} />
+        <SocialButton provider="slack" destination={destination} />
+      </div>
+      <DetailsStep
+        name={name}
+        onNameChange={setName}
+        email={email}
+        onEmailChange={setEmail}
+        emailError={emailError}
+        onEmailError={setEmailError}
+        onContinue={() => setStep("password")}
+      />
     </AuthLayout>
   )
 }

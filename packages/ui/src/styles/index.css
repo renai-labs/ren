@@ -253,7 +253,6 @@
   }
 }
 
-:focus-visible:not(input, textarea, [contenteditable="true"]),
 [data-slot="attachment"]:focus-within {
   --ring: transparent;
   outline: none;

@@ -60,7 +60,7 @@ test("an admin shares an invite link, and a new person signs up through it and l
   await newcomer.getByLabel("Email").fill(email)
   await newcomer.getByRole("button", { name: "Continue", exact: true }).click()
   await newcomer.getByLabel("Password", { exact: true }).fill(password)
-  await newcomer.getByRole("button", { name: "Continue", exact: true }).click()
+  await newcomer.getByRole("button", { name: "Create account" }).click()
   await expect(newcomer).toHaveURL(/\/verify-email\?/)
   await newcomer.getByRole("textbox").first().click()
   await newcomer.keyboard.type(await emailedCode(newcomerContext.request, email))

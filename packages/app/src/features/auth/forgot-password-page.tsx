@@ -28,14 +28,17 @@ export function ForgotPasswordPage() {
   }
   const back = () => void navigate({ to: "/login" })
   return (
-    <AuthLayout>
-      {sentTo ? (
-        <div className="flex flex-col text-sm">
-          <p className="text-muted-foreground">If an account exists for</p>
-          <p className="font-medium break-all">{sentTo}</p>
-          <p className="text-muted-foreground">you’ll get an email with a link to reset your password.</p>
-        </div>
-      ) : (
+    <AuthLayout title={sentTo ? "Check your email" : "Reset your password"} description="">
+      <output className="block empty:hidden">
+        {sentTo ? (
+          <div className="flex flex-col text-sm">
+            <p className="text-muted-foreground">If an account exists for</p>
+            <p className="font-medium break-all">{sentTo}</p>
+            <p className="text-muted-foreground">you’ll get an email with a link to reset your password.</p>
+          </div>
+        ) : null}
+      </output>
+      {sentTo ? null : (
         <form
           onSubmit={(event) => {
             event.preventDefault()
@@ -44,7 +47,7 @@ export function ForgotPasswordPage() {
         >
           <FieldGroup className="gap-4">
             <FormError>{error}</FormError>
-            <FieldDescription>Enter your email and we’ll send you a link to reset your password.</FieldDescription>
+            <FieldDescription>We’ll email you a link to choose a new password.</FieldDescription>
             <Field>
               <FieldLabel htmlFor="reset-email">Email</FieldLabel>
               <Input

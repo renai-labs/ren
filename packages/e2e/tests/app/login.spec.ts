@@ -9,10 +9,12 @@ test("signs in with a password and returns to the requested page", async ({ page
   await expect(page).toHaveURL(/\/login\?redirect=%2F$/)
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await expect(page.getByLabel("Email")).toHaveValue(email)
+  await expect(page.getByText(email)).toBeVisible()
   await page.getByLabel("Password", { exact: true }).fill("wrong password")
   await page.getByRole("button", { name: "Sign in" }).click()
-  await expect(page.getByRole("alert")).toHaveText("Invalid email or password.")
+  await expect(page.getByRole("alert")).toHaveText(
+    "That email and password don’t match. Try again or reset your password.",
+  )
   await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(`${appOrigin}/`)
