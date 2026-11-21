@@ -86,7 +86,7 @@ dist/
 
 Run the `cli release` GitHub workflow with a stable version (`X.Y.Z`). It builds and tests all four targets natively, uploads immutable artifacts under `/ren/releases/`, then publishes the installer and `latest.txt`. Existing release versions cannot be overwritten. It uses the `v2-prod` environment's AWS deployment role, app bucket and CloudFront distribution. `REN_HOST_URL` is an environment variable there, defaulting to `https://useren.ai`.
 
-The npm package is private. ren-v1 published its CLI as `@renai-labs/cli` 0.x on npm; this CLI replaces it and ships only through the installer.
+The npm package is private: the CLI ships only through the installer. ren-v1's `@renai-labs/cli` 0.x on npm is deprecated.
 
 ## Architecture
 
