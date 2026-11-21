@@ -38,9 +38,20 @@ export const SpaceUpdate = (input: Command.Command.Config.Infer<typeof Commands.
     ClientApi.groups["space"].endpoints["space.update"],
     {
       params: { id: input["id"] },
-      payload: { name: input["name"], description: input["description"], brainScope: input["brainScope"] },
+      payload: {
+        name: input["name"],
+        description: input["description"],
+        icon: input["icon"],
+        brainScope: input["brainScope"],
+      },
       input: input["input"],
-      labels: { id: "<space>", name: "--name", description: "--description", brainScope: "--brain-scope" },
+      labels: {
+        id: "<space>",
+        name: "--name",
+        description: "--description",
+        icon: "--icon",
+        brainScope: "--brain-scope",
+      },
       lookups: {
         id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
@@ -304,9 +315,20 @@ export const AgentUpdate = (input: Command.Command.Config.Infer<typeof Commands.
     ClientApi.groups["agent"].endpoints["agent.update"],
     {
       params: { id: input["id"] },
-      payload: { name: input["name"], description: input["description"], isSubagent: input["isSubagent"] },
+      payload: {
+        name: input["name"],
+        description: input["description"],
+        icon: input["icon"],
+        isSubagent: input["isSubagent"],
+      },
       input: input["input"],
-      labels: { id: "<agent>", name: "--name", description: "--description", isSubagent: "--is-subagent" },
+      labels: {
+        id: "<agent>",
+        name: "--name",
+        description: "--description",
+        icon: "--icon",
+        isSubagent: "--is-subagent",
+      },
       lookups: {
         id: (client, value) => client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },

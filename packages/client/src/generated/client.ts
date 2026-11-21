@@ -87,6 +87,8 @@ import type {
   DriveStartUploadOutput,
   DriveDownloadInput,
   DriveDownloadOutput,
+  IconUploadInput,
+  IconUploadOutput,
   FilesListInput,
   FilesListOutput,
   FilesReadInput,
@@ -377,6 +379,7 @@ interface RequestDescriptor {
   readonly query?: Record<string, unknown>
   readonly headers?: Record<string, unknown>
   readonly body?: unknown
+  readonly binaryBody?: true
   readonly successStatus: number
   readonly declaredStatuses: ReadonlyArray<number>
   readonly empty: boolean
@@ -396,14 +399,17 @@ export function make(options: ClientOptions) {
       if (value !== undefined && value !== null) headers.set(key, String(value))
     }
     for (const [key, value] of new Headers(requestOptions?.headers)) headers.set(key, value)
-    if (descriptor.body !== undefined && !headers.has("content-type")) headers.set("content-type", "application/json")
+    if (descriptor.body !== undefined && !headers.has("content-type"))
+      headers.set("content-type", descriptor.binaryBody ? "application/octet-stream" : "application/json")
     return {
       url,
       init: {
         method: descriptor.method,
         headers,
         ...(requestOptions?.signal !== undefined && { signal: requestOptions.signal }),
-        ...(descriptor.body !== undefined && { body: JSON.stringify(descriptor.body) }),
+        ...(descriptor.body !== undefined && {
+          body: descriptor.binaryBody ? (descriptor.body as BodyInit) : JSON.stringify(descriptor.body),
+        }),
       } satisfies RequestInit,
     }
   }
@@ -516,6 +522,7 @@ export function make(options: ClientOptions) {
               factory: input["factory"],
               name: input["name"],
               description: input["description"],
+              icon: input["icon"],
               brainScope: input["brainScope"],
               brain: input["brain"],
               hand: input["hand"],
@@ -1027,6 +1034,21 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
     },
+    icon: {
+      upload: (input: IconUploadInput, requestOptions?: RequestOptions) =>
+        request<IconUploadOutput>(
+          {
+            method: "POST",
+            path: `/icons`,
+            body: input["payload"],
+            successStatus: 200,
+            declaredStatuses: [400, 401, 503],
+            empty: false,
+            binaryBody: true,
+          },
+          requestOptions,
+        ),
+    },
     files: {
       list: (input: FilesListInput, requestOptions?: RequestOptions) =>
         request<FilesListOutput>(
@@ -1125,6 +1147,7 @@ export function make(options: ClientOptions) {
             body: {
               name: input["name"],
               description: input["description"],
+              icon: input["icon"],
               isSubagent: input["isSubagent"],
               settings: input["settings"],
             },

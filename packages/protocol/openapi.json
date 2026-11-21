@@ -3417,6 +3417,76 @@
         "summary": "Download a drive file"
       }
     },
+    "/icons": {
+      "post": {
+        "tags": ["icon"],
+        "operationId": "icon.upload",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ResourceIcon.Upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceIcon.Upload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Crop a PNG, JPEG or WebP image of at most 512 KB to a 256×256 WebP and return its public URL. The same image gives the same URL.",
+        "summary": "Upload an icon",
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/files": {
       "get": {
         "tags": ["files"],
@@ -15498,6 +15568,17 @@
               }
             ]
           },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A `ResourceIcon.Descriptor`, or a preset image older profiles keep inline as a data URL. Null: the default icon."
+          },
           "isSubagent": {
             "type": "boolean"
           },
@@ -15531,6 +15612,7 @@
           "ownerSpaceId",
           "name",
           "description",
+          "icon",
           "isSubagent",
           "settings",
           "canUpdate",
@@ -15618,6 +15700,19 @@
             "anyOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceIcon.Descriptor"
               },
               {
                 "type": "null"
@@ -24192,6 +24287,21 @@
         "type": "string",
         "enum": ["ok", "warn", "error"]
       },
+      "ResourceIcon.Descriptor": {
+        "type": "string",
+        "maxLength": 2048
+      },
+      "ResourceIcon.Upload": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Save it as the icon of a profile, an organization, a space or an agent."
+          }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
       "Schedule.CreateInput": {
         "type": "object",
         "properties": {
@@ -26931,6 +27041,17 @@
               }
             ]
           },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A `ResourceIcon.Descriptor`, or a preset image older profiles keep inline as a data URL. Null: the default icon."
+          },
           "brainScope": {
             "$ref": "#/components/schemas/Brain.Scope"
           },
@@ -27017,6 +27138,7 @@
           "slug",
           "name",
           "description",
+          "icon",
           "brainScope",
           "brain",
           "hand",
@@ -27131,6 +27253,19 @@
             "anyOf": [
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceIcon.Descriptor"
               },
               {
                 "type": "null"
@@ -30299,6 +30434,9 @@
     },
     {
       "name": "drive"
+    },
+    {
+      "name": "icon"
     },
     {
       "name": "files"

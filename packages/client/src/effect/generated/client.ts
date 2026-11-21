@@ -68,6 +68,7 @@ type SpaceUpdateInput = {
   readonly factory?: SpaceUpdateRequest["payload"]["factory"]
   readonly name?: SpaceUpdateRequest["payload"]["name"]
   readonly description?: SpaceUpdateRequest["payload"]["description"]
+  readonly icon?: SpaceUpdateRequest["payload"]["icon"]
   readonly brainScope?: SpaceUpdateRequest["payload"]["brainScope"]
   readonly brain?: SpaceUpdateRequest["payload"]["brain"]
   readonly hand?: SpaceUpdateRequest["payload"]["hand"]
@@ -79,6 +80,7 @@ const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInpu
       factory: input["factory"],
       name: input["name"],
       description: input["description"],
+      icon: input["icon"],
       brainScope: input["brainScope"],
       brain: input["brain"],
       hand: input["hand"],
@@ -523,6 +525,13 @@ const adaptGroupDrive = (raw: RawClient["drive"]) => ({
   download: EndpointDriveDownload(raw),
 })
 
+type IconUploadRequest = Parameters<RawClient["icon"]["icon.upload"]>[0]
+type IconUploadInput = { readonly payload: IconUploadRequest["payload"] }
+const EndpointIconUpload = (raw: RawClient["icon"]) => (input: IconUploadInput) =>
+  raw["icon.upload"]({ payload: input["payload"] } as IconUploadRequest).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupIcon = (raw: RawClient["icon"]) => ({ upload: EndpointIconUpload(raw) })
+
 type FilesListRequest = Parameters<RawClient["files"]["files.list"]>[0]
 type FilesListInput = {
   readonly source: FilesListRequest["query"]["source"]
@@ -609,6 +618,7 @@ type AgentUpdateInput = {
   readonly id: AgentUpdateRequest["params"]["id"]
   readonly name?: AgentUpdateRequest["payload"]["name"]
   readonly description?: AgentUpdateRequest["payload"]["description"]
+  readonly icon?: AgentUpdateRequest["payload"]["icon"]
   readonly isSubagent?: AgentUpdateRequest["payload"]["isSubagent"]
   readonly settings?: AgentUpdateRequest["payload"]["settings"]
 }
@@ -618,6 +628,7 @@ const EndpointAgentUpdate = (raw: RawClient["agent"]) => (input: AgentUpdateInpu
     payload: {
       name: input["name"],
       description: input["description"],
+      icon: input["icon"],
       isSubagent: input["isSubagent"],
       settings: input["settings"],
     },
@@ -2253,6 +2264,7 @@ const adaptClient = (raw: RawClient) => ({
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
   memory: adaptGroupMemory(raw["memory"]),
   drive: adaptGroupDrive(raw["drive"]),
+  icon: adaptGroupIcon(raw["icon"]),
   files: adaptGroupFiles(raw["files"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
