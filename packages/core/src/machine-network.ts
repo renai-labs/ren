@@ -75,6 +75,7 @@ export const layer = Layer.effect(
     const server = [...(yield* renServer), ...Option.toArray((yield* Bundles.Service).host)]
     // oxlint-disable-next-line ren/no-comments -- A brain also reaches the addresses of its model providers, which can differ from Ren's own.
     const models = yield* Models.Service
+    const withPreviousHosts = yield* Deployment.withPreviousHosts.pipe(Effect.orDie)
     const inference = (yield* models.providers.pipe(Effect.orElseSucceed(() => []))).flatMap((provider) =>
       Option.toArray(hostOf(provider.baseUrl)),
     )
@@ -113,12 +114,14 @@ export const layer = Layer.effect(
         const scope = yield* credentials.scopeOf(workload)
         return Option.some(
           [
-            ...new Set([
-              ...ofTemplate(networking),
-              ...server,
-              ...(workload.kind === "brain" ? inference : []),
-              ...(Option.isSome(scope) ? yield* ofSpace(scope.value, networking) : []),
-            ]),
+            ...new Set(
+              withPreviousHosts([
+                ...ofTemplate(networking),
+                ...server,
+                ...(workload.kind === "brain" ? inference : []),
+                ...(Option.isSome(scope) ? yield* ofSpace(scope.value, networking) : []),
+              ]),
+            ),
           ].toSorted(),
         )
       }),

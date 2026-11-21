@@ -25,6 +25,7 @@ import {
 import { Access } from "./access.js"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
+import { Deployment } from "./deployment.js"
 import { Drives } from "./drives.js"
 import { GitHubApp } from "./github-app.js"
 import { Integrations } from "./integrations.js"
@@ -161,6 +162,7 @@ export const layerMinted = Layer.effect(
     const drives = yield* Drives.Service
     const integrations = yield* Integrations.Service
     const renHost = new URL(brains.renUrl).hostname
+    const withPreviousHosts = yield* Deployment.withPreviousHosts.pipe(Effect.orDie)
 
     const Key = Schema.fromJsonString(
       Schema.Struct({
@@ -315,60 +317,62 @@ export const layerMinted = Layer.effect(
         ]
         const integrationsHost = Option.filter(integrations.host, () => Option.isSome(scope.spaceId))
         const personHosts = [...modelHosts, ...Option.toArray(integrationsHost)]
-        return [
-          ...drive,
-          {
-            id: `minted:${ren}`,
-            source: "minted",
-            label: ren,
-            owner: "workload",
-            hosts: [renHost],
-            inject: { op: "replace", in: ["header"] },
-            revision: 0,
-          },
-          ...endpoints.flatMap((endpoint): ReadonlyArray<Credentials.Candidate> => {
-            const url = URL.parse(endpoint.baseUrl)
-            if (!url) return []
-            return [
-              {
-                id: `minted:${models}:${endpoint.id}`,
-                source: "minted",
-                label: models,
-                owner: "workload",
-                hosts: [url.hostname],
-                inject: { op: "replace", in: ["header"] },
-                revision: 0,
-              },
-            ]
-          }),
-          ...Option.match(integrationsHost, {
-            onNone: (): ReadonlyArray<Credentials.Candidate> => [],
-            onSome: (host): ReadonlyArray<Credentials.Candidate> => [
-              {
-                id: `minted:${Integrations.label}`,
-                source: "minted",
-                label: Integrations.label,
-                owner: "workload",
-                hosts: [host],
-                inject: { op: "replace", in: ["header"] },
-                revision: 0,
-              },
-            ],
-          }),
-          ...(personHosts.length === 0
-            ? []
-            : [
+        return (
+          [
+            ...drive,
+            {
+              id: `minted:${ren}`,
+              source: "minted",
+              label: ren,
+              owner: "workload",
+              hosts: [renHost],
+              inject: { op: "replace", in: ["header"] },
+              revision: 0,
+            },
+            ...endpoints.flatMap((endpoint): ReadonlyArray<Credentials.Candidate> => {
+              const url = URL.parse(endpoint.baseUrl)
+              if (!url) return []
+              return [
                 {
-                  id: `minted:${person}`,
+                  id: `minted:${models}:${endpoint.id}`,
                   source: "minted",
-                  label: person,
+                  label: models,
                   owner: "workload",
-                  hosts: personHosts,
+                  hosts: [url.hostname],
                   inject: { op: "replace", in: ["header"] },
-                } satisfies Credentials.Candidate,
-              ]),
-          ...gitHub,
-        ] satisfies ReadonlyArray<Credentials.Candidate>
+                  revision: 0,
+                },
+              ]
+            }),
+            ...Option.match(integrationsHost, {
+              onNone: (): ReadonlyArray<Credentials.Candidate> => [],
+              onSome: (host): ReadonlyArray<Credentials.Candidate> => [
+                {
+                  id: `minted:${Integrations.label}`,
+                  source: "minted",
+                  label: Integrations.label,
+                  owner: "workload",
+                  hosts: [host],
+                  inject: { op: "replace", in: ["header"] },
+                  revision: 0,
+                },
+              ],
+            }),
+            ...(personHosts.length === 0
+              ? []
+              : [
+                  {
+                    id: `minted:${person}`,
+                    source: "minted",
+                    label: person,
+                    owner: "workload",
+                    hosts: personHosts,
+                    inject: { op: "replace", in: ["header"] },
+                  } satisfies Credentials.Candidate,
+                ]),
+            ...gitHub,
+          ] satisfies ReadonlyArray<Credentials.Candidate>
+        ).map((candidate) => Object.assign(candidate, { hosts: withPreviousHosts(candidate.hosts) }))
       }),
       value: Effect.fn("CredentialSource.minted.value")(function* (
         candidate: Credentials.Candidate,
