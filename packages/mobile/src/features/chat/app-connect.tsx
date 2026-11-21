@@ -185,9 +185,10 @@ function ConnectChoices(props: {
 function ConnectCard(props: {
   readonly app: Pick<Apps.CatalogApp, "name" | "icon" | "source">
   readonly status: Apps.Status
+  readonly elsewhere?: boolean
   readonly onAction?: () => void
 }) {
-  const action = Apps.statusAction[props.status]
+  const action = props.elsewhere === true ? Apps.elsewhereAction : Apps.statusAction[props.status]
   return (
     <View className="flex-row items-center gap-3 rounded-xl border border-border bg-card p-3">
       <AppIcon name={props.app.name} icon={props.app.icon} />
@@ -203,7 +204,7 @@ function ConnectCard(props: {
         <View className="flex-row items-center gap-2">
           <StatusDot status={props.status} />
           <Text variant="muted" numberOfLines={1}>
-            {Apps.statusLabel[props.status]}
+            {props.elsewhere === true ? Apps.elsewhereLabel : Apps.statusLabel[props.status]}
           </Text>
         </View>
       </View>
@@ -255,6 +256,8 @@ function AppConnectCard(props: {
 }) {
   const space = useQuery(Api.query.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const apps = SpaceApps.useSpace(Api.query, { spaceId: props.spaceId, space: space.data, appIds: [props.appId] })
+  const me = useQuery(Api.query.me.get.queryOptions()).data
+  const accounts = useQuery(Api.query["app-profile"].list.queryOptions({ appId: props.appId, ...accountsPage })).data
   const [open, setOpen] = useState(false)
   const app = apps.app(props.appId)
   const from = apps.from
@@ -262,13 +265,22 @@ function AppConnectCard(props: {
     return <ConnectCard app={{ name: "App", icon: null, source: "custom" }} status="missing" />
   if (!app || !from || !space.data) return null
   const status = apps.status(app.id)
+  const elsewhere =
+    me && accounts
+      ? Apps.connectedElsewhere({
+          status,
+          accounts: accounts.items,
+          target: { spaceId: from.spaceId, private: from.private === true },
+          userId: me.user.id,
+        })
+      : undefined
   if (props.onlyUnready === true && Apps.isReady(status)) return null
   const watch = async () => {
     if (await watchStatus({ refresh: () => apps.refresh(app.id), before: status })) props.onConnected?.(app.name)
   }
   return (
     <>
-      <ConnectCard app={app} status={status} onAction={() => setOpen(true)} />
+      <ConnectCard app={app} status={status} elsewhere={elsewhere !== undefined} onAction={() => setOpen(true)} />
       <Sheet open={open} onClose={() => setOpen(false)}>
         <ConnectBody
           app={app}

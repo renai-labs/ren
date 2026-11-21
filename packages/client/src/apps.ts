@@ -74,6 +74,10 @@ export const statusOf = (app: Pick<CatalogApp, "mcps">, profiles: ReadonlyArray<
 
 export const isReady = (status: Status) => status === "connected" || status === "credits"
 
+export const elsewhereLabel = "Connected in another space"
+
+export const elsewhereAction = "Use here"
+
 const rank: Record<Status, number> = { expired: 0, missing: 0, credits: 1, connected: 2 }
 
 export const improved = (before: Status, after: Status) => rank[after] > rank[before]
@@ -166,6 +170,21 @@ export const connectPlan = (input: {
     managed: here.length === 0 && hasManaged(input.app),
   }
 }
+
+export const connectedElsewhere = (input: {
+  readonly status: Status
+  readonly accounts: ReadonlyArray<Profile>
+  readonly target: Target
+  readonly userId: string
+}) =>
+  input.status === "missing" || input.status === "credits"
+    ? input.accounts.find(
+        (profile) =>
+          !reaches(profile, input.target, input.userId) &&
+          gaps(profile).length === 0 &&
+          usable(profile, input.target, input.userId),
+      )
+    : undefined
 
 export interface From {
   readonly spaceId: string
