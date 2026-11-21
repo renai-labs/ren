@@ -30,6 +30,41 @@ test("renames the account and picks a theme", async ({ page }) => {
   await expect(page.getByRole("combobox", { name: /Switch organization/ })).toContainText("Ada King")
 })
 
+test("an uploaded photo saves once its upload ends, and no other pick can overtake it", async ({ page }) => {
+  await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("photo") })
+  const release = Promise.withResolvers<void>()
+  await page.route("**/icons", async (route) => {
+    await release.promise
+    await route.continue()
+  })
+  await page.goto("/app/settings/preferences")
+  await page.getByRole("button", { name: "Change your photo" }).click()
+  const picker = page.getByRole("dialog", { name: "Your photo" })
+  await picker.getByRole("tab", { name: "Upload" }).click()
+  await picker.locator("input[type=file]").setInputFiles({
+    name: "photo.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  })
+  await expect(picker.getByRole("button", { name: "Choose image" })).toBeDisabled()
+
+  await picker.getByRole("tab", { name: "Emoji" }).click()
+  await expect(picker.getByRole("button", { name: "rocket" })).toBeDisabled()
+  await picker.getByRole("tab", { name: "Icons" }).click()
+  await expect(picker.getByRole("button", { name: "Rocket" })).toBeDisabled()
+
+  release.resolve()
+  await expect(picker).toBeHidden()
+  const me = await page.request.get(`${serverURL}/me`)
+  const image = Schema.decodeUnknownSync(Schema.Struct({ user: Schema.Struct({ image: Schema.String }) }))(
+    await me.json(),
+  ).user.image
+  expect(image).toMatch(/\/icons\/[a-f0-9]{64}\.webp$/u)
+})
+
 test("changes the password", async ({ page, request }) => {
   const email = uniqueEmail("password")
   await createUser(page.request, { name: "Ada Lovelace", email })
