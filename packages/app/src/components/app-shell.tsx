@@ -53,6 +53,7 @@ export function AppShell() {
   const [searching, setSearching] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
   const sidebarOpen = Preference.usePreference(SidebarPreferences.open)
+  const sidebarWidth = Preference.usePreference(SidebarPreferences.width)
   const setPreference = Preference.useSetPreference()
   useSearchShortcut(() => setSearching((current) => !current))
   useNewTaskShortcut(() => setCreatingTask(true))
@@ -60,7 +61,12 @@ export function AppShell() {
   return (
     <RegistryContext key={chat.generation} value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
-        <SidebarProvider open={sidebarOpen} onOpenChange={(next) => setPreference(SidebarPreferences.open, next)}>
+        <SidebarProvider
+          open={sidebarOpen}
+          onOpenChange={(next) => setPreference(SidebarPreferences.open, next)}
+          width={sidebarWidth ?? undefined}
+          onWidthChange={(next) => setPreference(SidebarPreferences.width, next ?? null)}
+        >
           <ShellSidebar path={path} onSearch={() => setSearching(true)} />
           <SidebarInset className={insetClass}>
             <SidebarOpen />
