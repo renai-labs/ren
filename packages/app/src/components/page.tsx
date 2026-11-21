@@ -34,13 +34,13 @@ export const pageWidths = {
 
 export type PageWidth = keyof typeof pageWidths | "full"
 
-const columnHead = "mx-auto flex w-full shrink-0 flex-col gap-6 px-6 pt-22 pb-6"
-const columnBody = "mx-auto flex w-full flex-1 flex-col gap-6 px-6 pb-12"
+const columnHead = "mx-auto flex w-full shrink-0 flex-col gap-6 px-6 pt-22"
+const columnBody = "mx-auto flex w-full flex-1 flex-col gap-6 px-6 pt-6 pb-12"
 
 const pageFrames: Record<PageWidth, { readonly head: string; readonly body: string }> = {
   column: { head: cn(columnHead, pageWidths.column), body: cn(columnBody, pageWidths.column) },
   wide: { head: cn(columnHead, pageWidths.wide), body: cn(columnBody, pageWidths.wide) },
-  full: { head: "flex shrink-0 flex-col gap-4 px-8 pt-8 pb-4", body: "flex flex-1 flex-col gap-4 px-8 pb-3" },
+  full: { head: "flex shrink-0 flex-col gap-4 px-8 pt-8", body: "flex flex-1 flex-col gap-4 px-8 pt-4 pb-3" },
 }
 
 type PageProps = {
@@ -90,18 +90,24 @@ function PageHeading(props: Pick<PageProps, "title" | "description">) {
 
 function PageTabsRow(props: { tabs: ReactNode; onSlot: (element: HTMLElement | null) => void; actions: ReactNode }) {
   return (
-    <div className={cn("flex min-h-8 items-center justify-between gap-4", !props.actions && "hidden")}>
-      <div className="flex min-w-0 items-center">
+    <div
+      className={cn("flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2", !props.actions && "hidden")}
+    >
+      <div className="flex shrink-0 items-center">
         {props.tabs}
         <div ref={(node) => props.onSlot(node)} className="contents" />
       </div>
-      {props.actions ? <PageToolbar>{props.actions}</PageToolbar> : null}
+      {props.actions ? (
+        <PageToolbar className="min-w-min flex-1 basis-0 justify-end **:data-[slot=input-group]:w-auto **:data-[slot=input-group]:min-w-36 **:data-[slot=input-group]:flex-[0_1_14rem]">
+          {props.actions}
+        </PageToolbar>
+      ) : null}
     </div>
   )
 }
 
-function PageToolbar(props: { children: ReactNode }) {
-  return <div className="flex min-h-8 shrink-0 items-center gap-2">{props.children}</div>
+function PageToolbar(props: { children: ReactNode; className?: string }) {
+  return <div className={cn("flex min-h-8 shrink-0 items-center gap-2", props.className)}>{props.children}</div>
 }
 
 function PageHeader(props: PageProps) {
@@ -170,7 +176,10 @@ export function Page(props: PageProps) {
         id={shapeId}
         loading={props.loading ?? false}
         label={`Loading ${props.title}`}
-        className="flex min-h-0 flex-1 scrollbar-thin [scrollbar-gutter:stable] flex-col overflow-y-auto overscroll-contain"
+        className={cn(
+          "flex min-h-0 flex-1 scroll-fade-t scrollbar-thin [scrollbar-gutter:stable] flex-col overflow-y-auto overscroll-contain",
+          width === "full" ? "[--scroll-fade-t-size:--spacing(4)]" : "[--scroll-fade-t-size:--spacing(6)]",
+        )}
       >
         <div className={frame.body}>
           <PageActionsSlot value={slot}>
@@ -216,7 +225,7 @@ export function PageTabsTrigger(props: { value: string; count?: number | undefin
       className="h-8 flex-none gap-2 px-3 font-normal data-active:border-transparent data-active:bg-secondary data-active:font-medium group-data-[variant=default]/tabs-list:data-active:shadow-none"
     >
       {props.children}
-      {props.count === undefined ? null : <span className="text-muted-foreground">{props.count}</span>}
+      {props.count === undefined ? null : <span className="text-muted-foreground tabular-nums">{props.count}</span>}
     </TabsTrigger>
   )
 }
