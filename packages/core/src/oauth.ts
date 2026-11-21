@@ -36,6 +36,7 @@ import type { Actor } from "./actor.js"
 import { ProfileItems } from "./app/profile-items.js"
 import { ProfileLabel } from "./app/profile-label.js"
 import { CredentialRefresh } from "./credential-refresh.js"
+import { Deployment } from "./deployment.js"
 import { SignIn } from "./credential/sign-in.js"
 import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
@@ -52,6 +53,7 @@ export interface Callback {
   readonly iss?: string
   readonly error?: string
   readonly errorDescription?: string
+  readonly host?: string | undefined
 }
 
 type Settled =
@@ -74,7 +76,7 @@ export interface Interface {
   >
   readonly callback: (input: Callback, browser: Option.Option<Auth.UserID>) => Effect.Effect<Outcome>
   readonly session: (actor: Actor.Info, id: string) => Effect.Effect<OAuthSession.Info, Primitive.NotFound>
-  readonly clientMetadata: Effect.Effect<Readonly<Record<string, unknown>>>
+  readonly clientMetadata: (host: Option.Option<string>) => Effect.Effect<Readonly<Record<string, unknown>>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/OAuth") {}
@@ -238,6 +240,17 @@ export const layer = Layer.effect(
     const providerConnect = yield* ProviderConnect.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
     const callbackUrl = `${base}/oauth/callback`
+    const renames = yield* Deployment.previousHosts.pipe(Effect.orDie)
+    // oxlint-disable-next-line ren/no-comments -- A connection made on a previous host keeps that host's client document and callback, so its server still accepts Ren (REN_PREVIOUS_HOSTS).
+    const baseOf = (host: Option.Option<string>) => {
+      const url = new URL(base)
+      return Option.match(
+        Option.filter(host, (found) =>
+          renames.some((rename) => rename.previous === found && rename.current === url.host),
+        ),
+        { onNone: () => base, onSome: (found) => `${url.protocol}//${found}` },
+      )
+    }
     const clientDocument = `${base}/oauth/client.json`
 
     const seal = (
@@ -716,7 +729,7 @@ export const layer = Layer.effect(
       const answered = yield* OAuthToken.post(http.fetch, discovered.value.tokenEndpoint, client, {
         grant_type: "authorization_code",
         code: input.code,
-        redirect_uri: callbackUrl,
+        redirect_uri: `${baseOf(Option.fromNullishOr(input.host))}/oauth/callback`,
         code_verifier: taken.code_verifier,
         resource: taken.resource ?? undefined,
       }).pipe(Effect.option)
@@ -761,14 +774,15 @@ export const layer = Layer.effect(
       connect,
       callback,
       session,
-      clientMetadata: Effect.succeed({
-        client_id: clientDocument,
-        client_name: "Ren",
-        redirect_uris: [callbackUrl],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      }),
+      clientMetadata: (host) =>
+        Effect.succeed({
+          client_id: `${baseOf(host)}/oauth/client.json`,
+          client_name: "Ren",
+          redirect_uris: [`${baseOf(host)}/oauth/callback`],
+          grant_types: ["authorization_code", "refresh_token"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
     })
   }),
 )
