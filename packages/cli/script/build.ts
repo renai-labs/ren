@@ -24,8 +24,8 @@ const version = Schema.decodeUnknownSync(
 const target = Schema.decodeUnknownSync(Schema.Literals(["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"]))(
   args.values.target,
 )
-const name = `ren2-${target}`
-const host = new URL(process.env.REN2_HOST_URL ?? "https://v2.useren.ai")
+const name = `ren-${target}`
+const host = new URL(process.env.REN_HOST_URL ?? "https://useren.ai")
 if (
   !["http:", "https:"].includes(host.protocol) ||
   host.pathname !== "/" ||
@@ -34,9 +34,9 @@ if (
   host.username ||
   host.password
 )
-  throw new Error("REN2_HOST_URL must be an HTTP or HTTPS origin")
-const api = new URL(process.env.REN2_API_URL ?? "http://localhost:4000")
-if (!["http:", "https:"].includes(api.protocol)) throw new Error("REN2_API_URL must be an HTTP or HTTPS URL")
+  throw new Error("REN_HOST_URL must be an HTTP or HTTPS origin")
+const api = new URL(process.env.REN_API_URL ?? "http://localhost:4000")
+if (!["http:", "https:"].includes(api.protocol)) throw new Error("REN_API_URL must be an HTTP or HTTPS URL")
 const folder = resolve(args.values.outdir, "releases", version)
 const outfile = resolve(folder, name)
 await mkdir(folder, { recursive: true })
@@ -45,9 +45,9 @@ const result = await Bun.build({
   target: "bun",
   minify: true,
   define: {
-    REN2_VERSION: JSON.stringify(version),
-    REN2_API_URL: JSON.stringify(api.origin),
-    REN2_RELEASE_HOST: JSON.stringify(host.origin),
+    REN_CLI_VERSION: JSON.stringify(version),
+    REN_CLI_API_URL: JSON.stringify(api.origin),
+    REN_CLI_RELEASE_HOST: JSON.stringify(host.origin),
   },
   compile: {
     target: target === "linux-x64" ? "bun-linux-x64-baseline" : `bun-${target}`,
@@ -66,7 +66,7 @@ if (new URL(Auth.cliClient.client_id).origin === host.origin)
 await Bun.write(
   resolve(args.values.outdir, "install.sh"),
   (await Bun.file(new URL("../install.sh", import.meta.url)).text()).replace(
-    "__REN2_HOST_URL__",
+    "__REN_HOST_URL__",
     host.origin.replaceAll("'", "'\\''"),
   ),
 )

@@ -104,7 +104,7 @@ resource "aws_lb_listener_rule" "server" {
 
   condition {
     host_header {
-      values = ["api.${var.domain}"]
+      values = concat(["api.${var.domain}"], var.alias_domain == null ? [] : ["api.${var.alias_domain.name}"])
     }
   }
 
@@ -157,10 +157,19 @@ resource "aws_ecs_task_definition" "server" {
         DRIVE_BUCKET   = aws_s3_bucket.drives.id
         DRIVE_REGION   = var.region
         DRIVE_ROLE_ARN = aws_iam_role.drive_access.arn
+        BUNDLE_BUCKET  = aws_s3_bucket.artifacts.id
+        BUNDLE_REGION  = var.region
+        }, var.artifact_cloudflare == null ? {} : {
+        ARTIFACT_PROVIDER             = "cloudflare"
+        CLOUDFLARE_ACCOUNT_ID         = var.artifact_cloudflare.account_id
+        ARTIFACT_CLOUDFLARE_NAMESPACE = var.artifact_cloudflare.namespace
+        ARTIFACT_DOMAIN               = var.artifact_cloudflare.domain
+        }, try(var.artifact_cloudflare.names, null) == null ? {} : {
+        ARTIFACT_CLOUDFLARE_NAMES = var.artifact_cloudflare.names
       }) : { name = key, value = value }
     ]
     secrets = [
-      for key in var.server_secret_keys : { name = key, valueFrom = "${aws_secretsmanager_secret.server.arn}:${key}::" }
+      for key in distinct(concat(var.server_secret_keys, var.artifact_cloudflare == null ? [] : ["CLOUDFLARE_API_TOKEN"])) : { name = key, valueFrom = "${aws_secretsmanager_secret.server.arn}:${key}::" }
     ]
     logConfiguration = {
       logDriver = "awslogs"

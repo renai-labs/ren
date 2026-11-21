@@ -2,10 +2,14 @@
 
 Terraform for one Ren deployment on AWS. The deploy workflow (`.github/workflows/deploy.yml`) releases code into it.
 
-The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren2/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
+The `cli-release.yml` workflow publishes CLI binaries and the installer under `/ren/` in the app bucket. CloudFront serves those paths directly; app deploys only replace `/app/`.
+
+The site and the app share the domain's root. The bucket holds the site's files at its root and the app's under `/app/`; the CloudFront function in `app-function.js` picks one for each page, and `packages/site/test/app-function.test.ts` tests it. Site sections (`/docs`, `/pricing` and the rest of the list in `app-function.js`) and `/home` get the site. `/` gets the app when the browser has the `ren_signed_in` cookie, which the app sets while someone is signed in, and the landing page otherwise. Any other page gets the app. An old link under `/app` redirects to the same page without `/app`. Set the server's `APP_URL` to the domain's root, with no `/app`.
+
+A new top-level page of the site, such as `/use-cases`, needs its path in that list and a `terraform apply`, or it gets the app. `@ren/site#check:routes`, part of `bun run lint` and `bun run check`, fails when a page is missing from the list. Pages inside a listed section need no change.
 
 ```
-browser ──HTTPS──▶ CloudFront ──▶ S3 (site, /; app, /app/)
+browser ──HTTPS──▶ CloudFront ──▶ S3 (site files, /; app files, /app/)
 browser ──HTTPS <posthog_proxy.name>.<domain>──▶ PostHog's managed reverse proxy ──▶ PostHog
 browser ──HTTPS api.<domain>──▶ load balancer ──▶ ECS service server :4100
 browser ──HTTPS POST (form the server signed)──▶ S3 (drives)
@@ -13,16 +17,18 @@ server ──E2B API──▶ sandbox (brain + hand) ──every connection, egr
 egress ──mTLS server.<name>.internal:4443──▶ server        server ──mTLS egress.<name>.internal:9443──▶ egress
 ```
 
-| File         | Contents                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| `dns.tf`     | The deployment's zone and its delegation, the certificate, records, the private namespace |
-| `network.tf` | Security groups, the load balancer, one rule on the database's security group             |
-| `server.tf`  | ECS cluster, ECR repository, server secret, roles, task definition, service               |
-| `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
-| `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
-| `app.tf`     | Site and app bucket and CloudFront distribution                                           |
-| `drives.tf`  | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
-| `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
+| File              | Contents                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| `dns.tf`          | The deployment's zone and its delegation, the certificate, records, the private namespace |
+| `network.tf`      | Security groups, the load balancer, one rule on the database's security group             |
+| `server.tf`       | ECS cluster, ECR repository, server secret, roles, task definition, service               |
+| `egress.tf`       | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
+| `waf.tf`          | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
+| `app.tf`          | Site and app bucket and CloudFront distribution                                           |
+| `app-function.js` | The CloudFront function that sends each path to the site, the app or a file               |
+| `drives.tf`       | Drives bucket, CORS for the app's uploads, the server's access, the `drive-access` role   |
+| `deploy.tf`       | The role the deploy workflow assumes with GitHub OIDC                                     |
+| `bastion.tf`      | SSM bastion for database queries, its role and security group, one database rule          |
 
 ## Rules
 
@@ -50,6 +56,46 @@ terraform plan -out=plan && terraform apply plan
 
 The mTLS certificates: one CA signs a server certificate for `server.<name>.internal` and an egress certificate for `egress.<name>.internal`, both with `serverAuth` and `clientAuth`. The sandbox CA is separate. `repos/iron-proxy/script/certificates.ts` shows the commands.
 
+## Artifacts on Cloudflare
+
+Apply `infra/cloudflare` first: it makes the domain's zone, the dispatch
+namespace and the dispatcher. Create an account-owned token with Workers Scripts
+Write. Store it as `CLOUDFLARE_API_TOKEN` in the existing server secret,
+preserving its other keys. Terraform never reads the token value.
+
+Add this to the deployment's private `terraform.tfvars`:
+
+```hcl
+artifact_cloudflare = {
+  account_id = "<cloudflare-account-id>"
+  namespace  = "ren-artifacts"
+  domain     = "useren.site"
+  names      = "<names_namespace output of infra/cloudflare>"
+}
+```
+
+This selects `ARTIFACT_PROVIDER=cloudflare`, sets `CLOUDFLARE_ACCOUNT_ID`,
+`ARTIFACT_CLOUDFLARE_NAMESPACE` and `ARTIFACT_DOMAIN`, and appends the token's
+Secrets Manager reference to the ECS task. Other environment values and secret
+references are preserved. These settings take precedence over the same keys in
+`server_environment`. Leaving this variable
+unset preserves the existing provider configuration.
+
+The drives bucket expires temporary `artifact-uploads/` objects after seven days.
+Retained source archives are outside that prefix; the provider keeps its
+recovery state in Postgres.
+The existing server bucket policy covers their access; environments must be able
+to reach the bucket endpoint for presigned uploads and downloads.
+
+Plan and apply the stack, then use the release workflow to deploy the server
+image and updated task configuration. Applying Terraform does not move the ECS
+service to the new task revision. Verify the complete chat-to-public-artifact
+flow after deployment; see `docs/artifact-cloudflare.md`.
+
+Each artifact is served at `https://<label>.<domain>/`. Switching configuration
+does not migrate existing artifacts between providers, accounts, namespaces or
+domains.
+
 ## GitHub environment
 
 The deploy workflow runs in the environment that `github_environment` names:
@@ -62,7 +108,7 @@ The deploy workflow runs in the environment that `github_environment` names:
 | Variable | `APP_DISTRIBUTION_ID` | output `app_distribution_id`                                                                  |
 | Variable | `EGRESS_INSTANCE_ID`  | output `egress_instance_id`                                                                   |
 | Variable | `REN_API_URL`         | `https://api.<domain>`                                                                        |
-| Variable | `REN2_HOST_URL`       | CLI release origin, currently `https://v2.useren.ai`                                          |
+| Variable | `REN_HOST_URL`        | CLI release origin, currently `https://useren.ai`                                             |
 | Variable | `E2B_TEMPLATE_NAME`   | the brain template's name                                                                     |
 | Variable | `E2B_OWNER`           | the owner tag, the same as `E2B_OWNER` of the server                                          |
 | Variable | `POSTHOG_PROJECT_KEY` | the PostHog project's `phc_` token, which is public; unset, the site and the app send nothing |

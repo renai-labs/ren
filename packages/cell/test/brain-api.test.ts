@@ -207,6 +207,39 @@ it.live("each send and each chat prompt checks Ren for changes before its turn",
   }),
 )
 
+it.live("a stop during a turn refuses every later send", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start({ interactive: false })
+    const held = Shared.stub().script({ hold: true })
+    yield* brain.send(`long ${held.marker}`)
+    yield* Effect.promise(() => held.called())
+    yield* brain.client.brain["brain.stop"]()
+    held.release()
+    expect((yield* brain.send("after").pipe(Effect.flip))._tag).toBe("BrainRejectedError")
+  }),
+)
+
+it.live("a prompt that the Chat API accepted just before a stop stays in the chat", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start({ interactive: false })
+    const id = SessionMessage.ID.create()
+    yield* brain.chat.session["session.prompt"]({
+      params: { sessionID: brain.id },
+      payload: { id, text: `just before the stop ${Shared.stub().script({ hold: true }).marker}`, delivery: "steer" },
+    })
+    yield* brain.client.brain["brain.stop"]()
+    const kept = [
+      ...(yield* brain.opencode.message.list({ sessionID: SessionID.make(brain.id) })).data.map(
+        (message) => message.id,
+      ),
+      ...(yield* brain.opencode.session.inbox.list({ sessionID: SessionID.make(brain.id) })).map((item) => item.id),
+    ]
+    expect(kept.map(String)).toContain(String(id))
+  }),
+)
+
 it.live("send before start is a typed SessionNotStartedError", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
@@ -565,28 +598,6 @@ it.live("a model with its own protocol is called with it, not with its endpoint'
   }),
 )
 
-it.live("a model removed from the catalog while the harness is open is no longer listed or selectable", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    yield* brain.install(
-      catalog([
-        { id: "stub-model", type: "chat", protocol: "openai-chat", limit },
-        { id: "stub-added", type: "chat", protocol: "openai-chat", limit },
-      ]),
-    )
-    yield* brain.install(catalog([{ id: "stub-model", type: "chat", protocol: "openai-chat", limit }]))
-    expect(
-      (yield* brain.opencode.model.list()).data.filter(
-        (model) => model.providerID === "stub" && model.modelID === "stub-added",
-      ),
-    ).toEqual([])
-    expect(
-      yield* brain.start({ model: { endpointId: "stub", modelId: "stub-added" } }).pipe(Effect.flip),
-    ).toBeInstanceOf(BrainRejectedError)
-  }),
-)
-
 test.each<[string, Models.Access, Models.Access, Session.Model]>([
   [
     "a model removed from its endpoint",
@@ -603,20 +614,28 @@ test.each<[string, Models.Access, Models.Access, Session.Model]>([
     Shared.access({ stub: Shared.apiKey("stub-ren") }, Shared.stub().url),
     { endpointId: "later", modelId: "stub-model" },
   ],
-])("the selected model removed while the harness is open (%s) sends no model request", (_name, before, after, model) =>
-  live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.Service
-      yield* brain.start()
-      yield* brain.install(before)
-      yield* brain.start({ model })
-      yield* brain.install(after)
-      const script = Shared.stub().script()
-      yield* Effect.exit(brain.send(`removed ${script.marker}`))
-      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
-      expect(script.calls).toEqual([])
-    }),
-  ),
+])(
+  "the selected model removed while the harness is open (%s) sends no model request, and is no longer listed or selectable",
+  (_name, before, after, model) =>
+    live(
+      Effect.gen(function* () {
+        const brain = yield* BrainTest.Service
+        yield* brain.start()
+        yield* brain.install(before)
+        yield* brain.start({ model })
+        yield* brain.install(after)
+        const script = Shared.stub().script()
+        yield* Effect.exit(brain.send(`removed ${script.marker}`))
+        yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
+        expect(script.calls).toEqual([])
+        expect(
+          (yield* brain.opencode.model.list()).data.filter(
+            (listed) => listed.providerID === model.endpointId && listed.modelID === model.modelId,
+          ),
+        ).toEqual([])
+        expect(yield* brain.start({ model }).pipe(Effect.flip)).toBeInstanceOf(BrainRejectedError)
+      }),
+    ),
 )
 
 test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach the next model request", () =>

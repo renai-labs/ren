@@ -1,0 +1,6 @@
+id: no-number-or-default
+language: Tsx
+message: "`Number(x) || y` turns a valid 0 into the default and hides a value that did not parse. Decode it with a schema and give the default for a failure."
+severity: error
+rule:
+  pattern: Number($VALUE) || $DEFAULT

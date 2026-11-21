@@ -85,7 +85,7 @@ describe("cell contract", () => {
     const state = { chunks: 0 }
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
-        if (state.chunks++ === 17) return controller.close()
+        if (state.chunks++ > Session.maxBodyBytes / 1_000_000) return controller.close()
         controller.enqueue(new Uint8Array(1_000_000))
       },
     })

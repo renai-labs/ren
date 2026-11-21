@@ -41,6 +41,14 @@ output "zone_id" {
   value = aws_route53_zone.this.zone_id
 }
 
+output "alias_domain" {
+  value = var.alias_domain
+}
+
+output "alias_zone_id" {
+  value = var.alias_domain == null ? null : data.aws_route53_zone.alias[0].zone_id
+}
+
 output "namespace_id" {
   value = aws_service_discovery_private_dns_namespace.this.id
 }

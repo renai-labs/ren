@@ -1,10 +1,10 @@
 ---
 title: Apps
 icon: Cable
-description: Find an app such as Gmail, Linear, or Shopify, add it to a project, connect an account, and use it in chats.
+description: Find an app such as Gmail, Linear, or Shopify, or create your own from MCP servers and skills. Add it to a space, connect an account, and use it in chats.
 ---
 
-An app connects Ren to a service like Gmail, Linear, HubSpot, or Shopify. For example, Gmail lets Ren read, summarize, and draft email. In the API and CLI, an app is a blueprint with `kind: app`.
+An app connects Ren to a service like Gmail, Linear, HubSpot, or Shopify. For example, Gmail lets Ren read, summarize, and draft email.
 
 ```text
 @Gmail summarize my unread email from today.
@@ -12,29 +12,30 @@ An app connects Ren to a service like Gmail, Linear, HubSpot, or Shopify. For ex
 
 ## How apps work
 
-An app usually gives Ren tools through an MCP server. It can also include [skills](/docs/concepts/skills/) that explain how to use those tools. You connect the account or key that the app needs.
+An app gives Ren tools through one or more MCP servers. It can also include [skills](/docs/concepts/skills/) that explain how to use those tools. You connect the account or key that the app needs.
 
-Add an app to a [project](/docs/concepts/projects/) to make it available in every chat of that project. Projects in the same space reuse the connected account.
+Add an app to a [space](/docs/concepts/spaces/) to make it available in every chat of that space. An **account** holds the sign-ins and keys of an app. Several spaces can use the same account.
 
 | Part                                | What it does                           | Linear example                  |
 | ----------------------------------- | -------------------------------------- | ------------------------------- |
 | App                                 | Gives Ren tools                        | Reads and updates issues        |
 | [Channel](/docs/concepts/channels/) | Receives requests and delivers replies | Receives issues assigned to Ren |
 
-If a tool has no app but has an MCP server, add it as a [custom MCP](/docs/concepts/custom-mcps/).
+There are two kinds of app:
+
+| Kind            | Who makes it                             | Who can edit it                  |
+| --------------- | ---------------------------------------- | -------------------------------- |
+| Ren's registry  | Ren                                      | Nobody. Ren keeps it up to date. |
+| Your org's apps | Someone in your organization, in a space | The members of that space        |
+
+If no app exists for a service, [create one](#create-an-app) from its MCP server, your skills, or both.
 
 ## Find an app
 
 <SurfaceTabs>
 <Fragment slot="app">
 
-Open **Marketplace → Apps** to browse, or search by name. Select an app to see the MCPs and skills that it adds, the publisher, and links to its documentation.
-
-<Screenshot
-  shot="apps/marketplace"
-  alt="Marketplace Apps with an app drawer open, showing its MCPs, skills, and the Add button"
-  caption="The app drawer shows the MCPs and skills of the app, and the Add button."
-/>
+Open **Apps** in the sidebar to browse, or search by name. The **Organization** tab lists the apps that your organization made. Select an app to see its MCP servers, tools, skills, and accounts.
 
 </Fragment>
 <Fragment slot="ask-ren">
@@ -44,52 +45,89 @@ Open **Marketplace → Apps** to browse, or search by name. Select an app to see
 </Fragment>
 </SurfaceTabs>
 
-You can also browse apps without signing in on the public [Blueprints catalog](/blueprints).
-
-## Add an app to a project
+## Add an app to a space
 
 <SurfaceTabs>
 <Fragment slot="app">
 
 <Steps>
 
-1. Open **Marketplace → Apps** and select the app.
-2. Select **Add**, then pick a project.
-3. If the app needs an account, sign in or enter its key. Then select **Add to** and the project name.
+1. Open the space, then **Apps**, and select **Add app**.
+2. Pick the app.
+3. If the app needs an account, sign in or enter its key.
 
 </Steps>
 
-Ren attaches the MCPs and skills of the app to the project. They are ready in the next chat of the project.
-
-<Screenshot
-  shot="apps/add-to-project"
-  frame="detail"
-  alt="An app's Add menu searched down to the Storefront project in the General team"
-  caption="The Add menu of an app, with a search that shows the Storefront project."
-/>
+You can also open the app from **Apps** and select **Add to space**.
 
 </Fragment>
 <Fragment slot="ask-ren">
 
-<AskRen prompt="Add the Linear app to this project." />
+<AskRen prompt="Add the Linear app to this space." />
 
 If the app needs an account, Ren shows a connect card.
 
 </Fragment>
-<Fragment slot="cli">
+</SurfaceTabs>
 
-```sh
-ren blueprints add --source linear --target-project-id <project-id>
-```
+## Create an app
 
-`--source` takes the slug of the app. After this, connect its account with `ren credentials connect`.
+Create an app when the service you need is not in the list. An app you create can hold MCP servers, skills, or both.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+<Steps>
+
+1. Open **Apps** and select **Create app**. In a space's **Add app** dialog, select **Create app** under the list.
+2. Paste the address of an MCP server, such as `https://mcp.acme.dev/mcp`. Ren reads the server and fills in its sign-in, name, description, and icon. You can change each of them.
+3. To add skills, drop their folders on the dialog, select **Choose folder**, or select **From GitHub** and paste the link to a skill folder.
+4. Under **Add to**, pick the space that owns the app.
+5. Select **Create app**. If the server uses a sign-in, the button is **Create and sign in**: Ren creates the app and opens the sign-in window.
+
+</Steps>
+
+Ren adds the app to its space with a first account, and opens the app's page. A key or token that you typed in the dialog goes into that account, never into the app itself. For the details of MCP servers and their sign-ins, see [Custom MCPs](/docs/concepts/custom-mcps/). For skill folders, see [Skills](/docs/concepts/skills/).
+
+{/* Media placeholder (detail `apps/create`): The Create app dialog with an MCP server URL checked, OAuth 2.0 picked, a dropped skill, and **Create and sign in**. Answers: how do I make an app for a service that Ren does not list? */}
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Make an app for https://mcp.acme.dev/mcp and add it to this space." />
 
 </Fragment>
 </SurfaceTabs>
 
+### Spec mode
+
+Select **Spec** at the top of the dialog to see the app as YAML. You can paste YAML or JSON there too. Ren checks it as you type, and shows each problem with the field it belongs to, such as `mcps.acme.auth`. **Form** and **Spec** edit the same app, so you can switch back and forth.
+
+Webhooks are edited in Spec mode only.
+
+### Advanced
+
+**Advanced**, under the name, holds settings that most apps do not need:
+
+| Setting        | What it does                                                         |
+| -------------- | -------------------------------------------------------------------- |
+| Packages       | apt, npm, pip, and Go packages that Ren installs for the app         |
+| Build commands | Commands that run after the packages, one per line                   |
+| Depends on     | Other apps of your organization that this app needs                  |
+| Secrets        | Env names, such as `ACME_API_KEY`, that each account fills in        |
+| MCP timeouts   | How long Ren waits for each MCP server to start, list tools, and run |
+
+## Edit, move, or archive an app
+
+Members of the space that owns an app can change it. Open the app from **Apps**:
+
+- Select **Edit** to open the same dialog. Change what you need, then select **Save**. If someone else saved the app since you opened it, Ren shows **The app changed. Reload before saving.** Select **Reload** to start again from the saved app.
+- Select **⋯ → Move to another space** to make another space its owner.
+- Select **⋯ → Archive app** to remove it from every space that uses it.
+
 ## Connect an account
 
-When Ren needs an app that is not connected, it shows a connect card in the chat. If the app is not in the project yet, a connection from the card also adds it.
+When Ren needs an app that is not connected, it shows a connect card in the chat. If the app is not in the space yet, a connection from the card also adds it.
 
 <SurfaceTabs>
 <Fragment slot="app">
@@ -116,25 +154,9 @@ When Ren needs an app that is not connected, it shows a connect card in the chat
 Select **Connect** on the card that Ren shows, and finish the sign-in.
 
 </Fragment>
-<Fragment slot="cli">
-
-```sh
-ren credentials connect <mcp> --vault-id <vault-id>
-```
-
-Use the vault of the space of the project (`ren vaults list`).
-
-</Fragment>
 </SurfaceTabs>
 
-### Where Ren saves the connection
-
-| Project location    | Where Ren saves the connection |
-| ------------------- | ------------------------------ |
-| A shared space      | The space of the project       |
-| Your personal space | Your personal credentials      |
-
-If your organization already has a connection for the app, Ren uses it. The connection dialog then shows **Connected using organization credentials**. For the full lookup order, see [Credentials](/docs/concepts/credentials/).
+To add a second account, open the app and select **New account**. For where Ren keeps each sign-in, see [Credentials](/docs/concepts/credentials/).
 
 ## Use an app in a chat
 
@@ -144,30 +166,11 @@ Type `@` in the composer and pick the app. The mention tells Ren which app to us
 @Gmail summarize my unread email from today.
 ```
 
-Mentions are optional. Mention an app when more than one service can do the request. If the project does not have the app, Ren shows a connect card to add it.
+Mentions are optional. Mention an app when more than one service can do the request. If the space does not have the app, Ren shows a connect card to add it.
 
-## Remove an app
+## Remove an app from a space
 
-<SurfaceTabs>
-<Fragment slot="app">
-
-<Steps>
-
-1. Open **Marketplace → Apps** and select the app.
-2. Select **Add** to open the project list.
-3. Select a project with a check mark to remove the app from that project.
-
-</Steps>
-
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Remove the Linear app from this project." />
-
-</Fragment>
-</SurfaceTabs>
-
-When you remove an app, Ren detaches its MCPs and skills from the project. If no other project in that space needs the credentials of the app, Ren also deletes them from the space. Credentials at the organization level stay.
+Open the space, then **Apps**. Open the row menu of the app and select **Remove from** the space. Accounts that have a sign-in stay in **Settings → Credentials**.
 
 ## Troubleshooting
 
@@ -183,10 +186,6 @@ Some apps, such as Figma, Meta Ads, and Shopify, end the sign-in on a page that 
 
 Connect cards work only in the web app, not in channels. Connect the account from a chat in the web app.
 
-## Good to know
+### “Couldn’t reach the server” when you create an app
 
-- Each space holds one connection for each app. A new connection replaces the old one.
-- To use two accounts for one app, connect one in each space. Or connect one at the organization level and one in the space.
-- If another space that you belong to has a connection, select **Reuse** to copy it into this space. Select **Add new** to connect a different account.
-- In shared spaces, Ren uses the connection of the space before the connection of the organization. In your personal space, your personal connection comes first.
-- The marketplace lists the skills of an app with the app, not under **Marketplace → Skills**.
+Ren could not read the MCP server at that address. Check the address. You can still create the app, and connect it later.

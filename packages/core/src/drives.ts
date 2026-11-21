@@ -7,7 +7,6 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
-  S3Client,
   S3ServiceException,
   type _Object,
 } from "@aws-sdk/client-s3"
@@ -17,7 +16,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
-import type { Drive } from "@ren/schema/drive"
+import { Drive } from "@ren/schema/drive"
+import { FileSystem } from "@ren/schema/file-system"
 import type { Space } from "@ren/schema/space"
 import type { WriteResult } from "@ren/schema/write-result"
 import { and, eq, isNull, lt } from "drizzle-orm"
@@ -25,7 +25,9 @@ import { ByteSize, Config, Context, DateTime, Duration, Effect, Layer, Option, R
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { DrivePolicy } from "./drives/policy.js"
+import { FileSystemProvider } from "./file-system/provider.js"
 import { Primitive } from "./primitive.js"
+import { ObjectStorage } from "./object-storage.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Drives.Unavailable", {
@@ -45,10 +47,7 @@ export interface Owner {
 }
 
 export interface Interface {
-  readonly list: (
-    actor: Actor.Info,
-    input: Drive.ListInput,
-  ) => Effect.Effect<Drive.Listing, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Unavailable>
+  readonly fileSystem: FileSystemProvider.Interface
   readonly startUpload: (
     actor: Actor.Info,
     input: Drive.StartUploadInput,
@@ -57,10 +56,6 @@ export interface Interface {
     actor: Actor.Info,
     input: Drive.DownloadInput,
   ) => Effect.Effect<Drive.Link, Primitive.NotFound | Primitive.Forbidden | Unavailable>
-  readonly delete: (
-    actor: Actor.Info,
-    input: Drive.PathInput,
-  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Unavailable>
   readonly put: (owner: Owner, path: string, body: Uint8Array, type: string) => Effect.Effect<void, Unavailable>
   readonly files: (owner: Owner, folder: string) => Effect.Effect<ReadonlyArray<Drive.File>, Unavailable>
   readonly read: (owner: Owner, path: string) => Effect.Effect<Uint8Array, Primitive.NotFound | Unavailable>
@@ -102,6 +97,18 @@ const isStatus = (status: number) => (error: Unavailable) =>
 
 const missing = (path: string) => new Primitive.NotFound({ message: `The drive has no file ${path}.` })
 
+const decodePath = Schema.decodeUnknownEffect(Drive.Path)
+
+const valid = (path: string, field: string) =>
+  decodePath(path).pipe(Effect.mapError((error) => new Primitive.Invalid({ message: error.message, field })))
+
+const unavailable = <A, E, R>(effect: Effect.Effect<A, E | Unavailable, R>) =>
+  Effect.catchIf(
+    effect,
+    (error): error is Unavailable => error instanceof Unavailable,
+    (error) => Effect.fail(new FileSystemProvider.Unavailable({ cause: error.cause })),
+  )
+
 const filesOf = (root: string, objects: ReadonlyArray<_Object> | undefined): ReadonlyArray<Drive.File> =>
   (objects ?? []).flatMap((object) =>
     object.Key
@@ -119,36 +126,16 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
-      bucket: Config.String("DRIVE_BUCKET"),
-      region: Config.String("DRIVE_REGION").pipe(Config.withDefault("us-east-1")),
-      endpoint: Config.option(Config.String("DRIVE_ENDPOINT")),
       roleArn: Config.String("DRIVE_ROLE_ARN"),
-      accessKeyId: Config.option(Config.String("DRIVE_ACCESS_KEY_ID")),
-      secretAccessKey: Config.option(Config.Redacted("DRIVE_SECRET_ACCESS_KEY")),
-      maxFileBytes: Config.ByteSize("DRIVE_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.mebibytes(100))),
+      maxFileBytes: Config.ByteSize("DRIVE_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.bytes(Drive.maxFileBytes))),
     })
     const database = yield* Database.Service
     const access = yield* Access.Service
-    const client = {
-      region: config.region,
-      ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
-      ...(Option.isSome(config.accessKeyId) &&
-        Option.isSome(config.secretAccessKey) && {
-          credentials: {
-            accessKeyId: config.accessKeyId.value,
-            secretAccessKey: Redacted.value(config.secretAccessKey.value),
-          },
-        }),
-    }
-    const s3 = new S3Client({ ...client, forcePathStyle: Option.isSome(config.endpoint) })
-    const sts = new STSClient(client)
-    yield* Effect.addFinalizer(() =>
-      Effect.sync(() => {
-        s3.destroy()
-        sts.destroy()
-      }),
-    )
-    const bucket = config.bucket
+    const storage = yield* ObjectStorage.Service
+    const s3 = storage.s3
+    const sts = new STSClient(storage.client)
+    yield* Effect.addFinalizer(() => Effect.sync(() => sts.destroy()))
+    const bucket = storage.bucket
     const maxFileBytes = ByteSize.toNumberUnsafe(config.maxFileBytes)
     const lifetime = Duration.toSeconds(linkLifetime)
 
@@ -161,7 +148,7 @@ export const layer = Layer.effect(
         Effect.catchIf(isStatus(404), () => Effect.succeed(false)),
       )
 
-    const prefix = Effect.fnUntraced(function* (
+    const allow = Effect.fnUntraced(function* (
       actor: Actor.Info,
       spaceId: Space.ID | undefined,
       action: (typeof DrivePolicy.actions)[keyof typeof DrivePolicy.actions],
@@ -190,7 +177,22 @@ export const layer = Layer.effect(
           return yield* new Primitive.Forbidden({ message: "An agent reads a drive only on its environment." })
         return yield* new Primitive.NotFound({ message: "Space not found." })
       }
-      return prefixOf({ organizationId: actor.organizationId, spaceId })
+      return { root: prefixOf({ organizationId: actor.organizationId, spaceId }), resource }
+    })
+
+    const prefix = (
+      actor: Actor.Info,
+      spaceId: Space.ID | undefined,
+      action: (typeof DrivePolicy.actions)[keyof typeof DrivePolicy.actions],
+    ) => Effect.map(allow(actor, spaceId, action), (allowed) => allowed.root)
+
+    const fileKey = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      input: FileSystemProvider.PathInput,
+      action: (typeof DrivePolicy.actions)[keyof typeof DrivePolicy.actions],
+    ) {
+      const path = yield* valid(input.path, "path")
+      return { path, key: `${yield* prefix(actor, input.spaceId, action)}${path}` }
     })
 
     const deletePage = Effect.fnUntraced(function* (under: string) {
@@ -209,33 +211,89 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      list: Effect.fn("Drives.list")(function* (actor: Actor.Info, input: Drive.ListInput) {
-        const root = yield* prefix(actor, input.spaceId, DrivePolicy.actions.read)
-        const folder = input.folder ? `${root}${input.folder}/` : root
-        const listed = yield* send((signal) =>
-          s3.send(
-            new ListObjectsV2Command({
-              Bucket: bucket,
-              Prefix: folder,
-              Delimiter: "/",
-              ...(input.cursor && { ContinuationToken: input.cursor }),
-            }),
-            { abortSignal: signal },
-          ),
-        ).pipe(
-          Effect.catchIf(
-            (error) => Boolean(input.cursor) && isStatus(400)(error),
-            () => Effect.fail(new Primitive.Invalid({ message: "The cursor is not valid.", field: "cursor" })),
-          ),
-        )
-        return {
-          folders: (listed.CommonPrefixes ?? []).flatMap((common) =>
-            common.Prefix ? [common.Prefix.slice(root.length, -1)] : [],
-          ),
-          files: filesOf(root, listed.Contents).filter((file) => `${root}${file.path}` !== folder),
-          cursor: listed.NextContinuationToken ?? null,
-        }
-      }),
+      fileSystem: {
+        list: Effect.fn("Drives.fileSystem.list")(function* (actor: Actor.Info, input: FileSystemProvider.ListInput) {
+          const raw = FileSystemProvider.folderOf(input.folder)
+          const folder = raw ? yield* valid(raw, "folder") : ""
+          const allowed = yield* allow(actor, input.spaceId, DrivePolicy.actions.read)
+          const root = allowed.root
+          const under = folder ? `${root}${folder}/` : root
+          const listed = yield* send((signal) =>
+            s3.send(
+              new ListObjectsV2Command({
+                Bucket: bucket,
+                Prefix: under,
+                Delimiter: "/",
+                ...(input.cursor && { ContinuationToken: input.cursor }),
+              }),
+              { abortSignal: signal },
+            ),
+          ).pipe(
+            Effect.catchIf(
+              (error) => Boolean(input.cursor) && isStatus(400)(error),
+              () => Effect.fail(new Primitive.Invalid({ message: "The cursor is not valid.", field: "cursor" })),
+            ),
+          )
+          const folders = (listed.CommonPrefixes ?? [])
+            .flatMap((common) =>
+              common.Prefix ? [{ path: common.Prefix.slice(root.length), type: "directory" as const }] : [],
+            )
+            .filter((entry) => entry.path !== Drive.chatsFolder)
+          const files = filesOf(root, listed.Contents)
+            .filter((file) => `${root}${file.path}` !== under)
+            .map((file) => ({
+              path: file.path,
+              type: "file" as const,
+              size: file.size,
+              modifiedAt: file.modifiedAt,
+              mime: Drive.typeOf(file.path),
+            }))
+          return {
+            entries: FileSystemProvider.sorted([...folders, ...files]),
+            cursor: listed.NextContinuationToken ?? null,
+            actions: access.isAllowed({ actor, action: DrivePolicy.actions.write, resource: allowed.resource })
+              ? (["upload", "remove"] as const)
+              : [],
+          }
+        }, unavailable),
+        read: Effect.fn("Drives.fileSystem.read")(function* (actor: Actor.Info, input: FileSystemProvider.PathInput) {
+          const file = yield* fileKey(actor, input, DrivePolicy.actions.read)
+          const mime = Drive.typeOf(file.path)
+          const object = yield* send((signal) =>
+            s3.send(
+              new GetObjectCommand({ Bucket: bucket, Key: file.key, Range: `bytes=0-${FileSystem.readLimit - 1}` }),
+              { abortSignal: signal },
+            ),
+          ).pipe(
+            Effect.map(Option.some),
+            // oxlint-disable-next-line ren/no-comments -- S3 answers a range on an empty object with 416.
+            Effect.catchIf(isStatus(416), () => Effect.succeed(Option.none())),
+            Effect.catchIf(isStatus(404), () => Effect.fail(missing(file.path))),
+          )
+          if (Option.isNone(object))
+            return FileSystem.contentOf({ path: file.path, mime, size: 0, bytes: new Uint8Array() })
+          const body = object.value.Body
+          if (!body) return yield* missing(file.path)
+          const bytes = yield* send(() => body.transformToByteArray())
+          const total = Number(object.value.ContentRange?.split("/").at(1))
+          return FileSystem.contentOf({
+            path: file.path,
+            mime,
+            size: Number.isInteger(total) ? total : bytes.length,
+            bytes,
+          })
+        }, unavailable),
+        remove: Effect.fn("Drives.fileSystem.remove")(function* (
+          actor: Actor.Info,
+          input: FileSystemProvider.PathInput,
+        ) {
+          const file = yield* fileKey(actor, input, DrivePolicy.actions.write)
+          if (!(yield* exists(file.key))) return yield* missing(file.path)
+          yield* send((signal) =>
+            s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: file.key }), { abortSignal: signal }),
+          )
+        }, unavailable),
+      },
       startUpload: Effect.fn("Drives.startUpload")(function* (actor: Actor.Info, input: Drive.StartUploadInput) {
         const root = yield* prefix(actor, input.spaceId, DrivePolicy.actions.write)
         if (input.size > maxFileBytes)
@@ -310,11 +368,6 @@ export const layer = Layer.effect(
         if (!body) return yield* missing(path)
         return yield* send(() => body.transformToByteArray())
       }),
-      delete: Effect.fn("Drives.delete")(function* (actor: Actor.Info, input: Drive.PathInput) {
-        const key = `${yield* prefix(actor, input.spaceId, DrivePolicy.actions.write)}${input.path}`
-        if (!(yield* exists(key))) return yield* missing(input.path)
-        yield* send((signal) => s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal }))
-      }),
       availability: (owner, environment) => {
         if (!environment.canMount) return { type: "unavailable", reason: "no_mount" }
         if (!environment.egress) return { type: "unavailable", reason: "no_egress" }
@@ -331,16 +384,16 @@ export const layer = Layer.effect(
                 organizationId: owner.organizationId,
                 ...(kind === "space" && { spaceId: owner.spaceId }),
               }),
-              region: config.region,
-              ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
+              region: storage.region,
+              ...(Option.isSome(storage.endpoint) && { endpoint: storage.endpoint.value }),
               placeholder,
             },
             access: kinds[kind].access,
           })),
         }
       },
-      hosts: Option.match(config.endpoint, {
-        onNone: () => [`${bucket}.s3.${config.region}.amazonaws.com`],
+      hosts: Option.match(storage.endpoint, {
+        onNone: () => [`${bucket}.s3.${storage.region}.amazonaws.com`],
         onSome: (endpoint) => [new URL(endpoint).hostname],
       }),
       keys: Effect.fn("Drives.keys")(function* (owner) {
@@ -408,4 +461,4 @@ export const layer = Layer.effect(
       }),
     })
   }),
-)
+).pipe(Layer.provide(ObjectStorage.layer))

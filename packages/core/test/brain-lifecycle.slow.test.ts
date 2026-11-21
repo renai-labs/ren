@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
-import { inArray } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
-import type { Brain } from "@ren/schema/brain"
+import { Brain } from "@ren/schema/brain"
+import { Bundle } from "@ren/schema/bundle"
 import { Session } from "@ren/schema/session"
-import { DateTime, Duration, Effect, Option, Schedule, type Schema, Tracer } from "effect"
+import { Space } from "@ren/schema/space"
+import { DateTime, Duration, Effect, Exit, Option, Schedule, type Schema, Scope, Tracer } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -12,17 +15,20 @@ import { Brains } from "../src/brains.js"
 import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
-import { SandboxProvider } from "../src/sandbox-provider.js"
+import { E2BSandbox } from "../src/machine-provider/e2b.js"
+import { MachineProvider } from "../src/machine-provider.js"
 import { BrainRuns } from "./lib/brain-runs.js"
+import { TestBundles } from "./lib/bundles.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { Host } from "./lib/host.js"
+import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(120_000)
 
 const runs = await BrainRuns.make()
 
 const pause = (binding: Schema.Json) =>
-  SandboxProvider.Service.use((provider) =>
+  Effect.flatMap(BrainProvider.first, (provider) =>
     provider
       .keepAlive(binding, Duration.millis(1))
       .pipe(
@@ -43,6 +49,66 @@ beforeAll(() => runs.setup())
 afterAll(() => runs.dispose())
 
 describe("brain runs", () => {
+  test("cleanup destroys a provider sandbox whose brain row does not exist", async () => {
+    const current = await runs.ren()
+    const created = await current.runPromise(
+      BrainProvider.first.pipe(
+        Effect.flatMap((provider) =>
+          provider.create({
+            labels: {
+              kind: "brain",
+              id: Brain.ID.create(),
+              generation: 1,
+              organizationId: Auth.OrganizationID.create(),
+              spaceId: Space.ID.create(),
+            },
+            config: {},
+            variables: {},
+            image: Option.none(),
+            network: MachineProvider.unrestricted,
+          }),
+        ),
+      ),
+    )
+    const pid = BrainRuns.pidOf(created.binding)
+    expect(BrainRuns.isAlive(pid)).toBe(true)
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.cleanup))
+    expect(BrainRuns.isAlive(pid)).toBe(false)
+    await current.dispose()
+  })
+
+  test("a start gives up when its creator can no longer see the space, and the brain does not start", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren()
+    await runs.database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .delete(Database.Schema.member)
+          .where(eq(Database.Schema.member.organizationId, found.organizationId))
+      }),
+    )
+    const input = {
+      sessionId: found.sessionId,
+      harness: "opencode" as const,
+      interactive: false,
+      hand: Space.defaultHand,
+    }
+    const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
+    await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
+    await current.runPromise(
+      Brains.StartRun.poll(await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 0 }))).pipe(
+        Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
+        Effect.timeoutOrElse({
+          duration: "20 seconds",
+          orElse: () => Effect.die(new Error("The start did not give up")),
+        }),
+      ),
+    )
+    expect((await runs.row(found.brainId)).binding).toBeNull()
+    await current.dispose()
+  })
+
   test("a run that Ren stopped while the brain booted continues after Ren starts again, on the same sandbox", async () => {
     const brainId = await runs.newBrain()
     const first = await runs.ren({ keepBrains: true })
@@ -53,12 +119,12 @@ describe("brain runs", () => {
     await second.runPromise(Effect.void)
     const ready = await runs.reaches(brainId, "ready")
     expect(ready.binding).toEqual(booting.binding)
-    const sandboxes = await second.runPromise(SandboxProvider.Service.use((provider) => provider.list))
-    expect(sandboxes.filter((each) => each.brainId === brainId)).toHaveLength(1)
+    const sandboxes = await second.runPromise(BrainProvider.first.pipe(Effect.flatMap((provider) => provider.list)))
+    expect(sandboxes.filter((each) => each.id === brainId)).toHaveLength(1)
     await second.dispose()
   })
 
-  test("a sandbox that is gone interrupts its brain's busy chats, and the brain gets a new sandbox with no access", async () => {
+  test("a sandbox that is gone marks its brain's busy chats interrupted, and the brain is replaced with no access", async () => {
     const found = await runs.seeded()
     const current = await runs.ren({ lostEvery: "50 millis" })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
@@ -79,6 +145,18 @@ describe("brain runs", () => {
     process.kill(-BrainRuns.pidOf(ready.binding), "SIGSTOP")
     const replaced = await runs.replaced(found.brainId)
     expect([replaced.generation, await runs.outcome(found.sessionId)]).toEqual([2, "interrupted"])
+    await current.dispose()
+  })
+
+  test("a failed brain whose retry time passed starts again with no access when a chat waits to continue", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren({ lostEvery: "1 hour", config: { BRAIN_PULL_TIMEOUT: "3 seconds" } })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    const ready = await runs.reaches(found.brainId, "ready")
+    process.kill(-BrainRuns.pidOf(ready.binding), "SIGKILL")
+    await runs.marked(found.sessionId)
+    await runs.update(found.brainId, { phase: "failed", failures: 3, retry_at: new Date(Date.now() - 1000) })
+    expect(await runs.reaches(found.brainId, "ready", { generation: 2 })).toMatchObject({ retries: 0, retry_at: null })
     await current.dispose()
   })
 
@@ -153,6 +231,7 @@ describe("brain runs", () => {
       sessionId: found.sessionId,
       harness: "opencode" as const,
       interactive: false,
+      hand: Space.defaultHand,
       initialMessage: {
         messageId: Session.MessageID.create(),
         prompt: { text: `${script.marker} hello` },
@@ -202,18 +281,31 @@ describe("brain runs", () => {
     await rm(own, { recursive: true, force: true })
   })
 
+  test("a replace at a wake does not continue an idle chat whose inbox holds only Ren's notice", async () => {
+    const found = await runs.seeded()
+    await runs.notice(found.sessionId)
+    const runtime = await runs.ren({ systemImage: "t2", config: { BRAIN_PULL_TIMEOUT: "1 hour" } })
+    await runtime.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    await runs.reaches(found.brainId, "ready")
+    await runs.update(found.brainId, { image: "t1", keep_alive_until: new Date(Date.now() - 1000) })
+    await runtime.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.access(found.brainId)))
+    await runs.reaches(found.brainId, "ready", { generation: 2 })
+    expect(await runs.mark(found.sessionId)).toBeNull()
+    await runtime.dispose()
+  })
+
   test("a paused brain on an older build is replaced with the provider's build at its next access; a running one keeps its build", async () => {
     const paused = await runs.newBrain()
     const running = await runs.newBrain()
-    const runtime = await runs.ren({ template: "t2" })
+    const runtime = await runs.ren({ systemImage: "t2" })
     await runtime.runPromise(
       BrainLifecycle.Service.use((lifecycle) =>
         Effect.all([lifecycle.ensure(paused), lifecycle.ensure(running)], { discard: true }),
       ),
     )
     await Promise.all([runs.reaches(paused, "ready"), runs.reaches(running, "ready")])
-    await runs.update(paused, { template: "t1", keep_alive_until: new Date(Date.now() - 1000) })
-    await runs.update(running, { template: "t1" })
+    await runs.update(paused, { image: "t1", keep_alive_until: new Date(Date.now() - 1000) })
+    await runs.update(running, { image: "t1" })
     await runtime.runPromise(
       BrainLifecycle.Service.use((lifecycle) =>
         Effect.all([lifecycle.access(paused), lifecycle.access(running)], { discard: true }),
@@ -231,7 +323,7 @@ describe("brain runs", () => {
         }),
       ),
     )
-    expect([replaced.template, (await runs.row(running)).generation, (await runs.row(running)).template]).toEqual([
+    expect([replaced.image, (await runs.row(running)).generation, (await runs.row(running)).image]).toEqual([
       "t2",
       1,
       "t1",
@@ -424,7 +516,9 @@ describe("brain runs", () => {
     )
     expect((await runs.row(awake.brainId)).keep_alive_until).toEqual(before.keep_alive_until)
     expect(
-      await runtime.runPromise(SandboxProvider.Service.use((provider) => Effect.orDie(provider.status(pausedBinding)))),
+      await runtime.runPromise(
+        BrainProvider.first.pipe(Effect.flatMap((provider) => Effect.orDie(provider.status(pausedBinding)))),
+      ),
     ).toBe("paused")
     await runtime.dispose()
   })
@@ -500,14 +594,139 @@ describe("brain runs", () => {
     await current.dispose()
   })
 
-  test("a brain run that ended runs again when the brain needs it", async () => {
-    const brainId = await runs.newBrain()
+  test("a shutdown of an awake brain retires its generation, destroys its machine, and leaves it stopped until new work", async () => {
+    const found = await runs.seeded()
     const current = await runs.ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    await runs.reaches(found.brainId, "ready")
+    const problems = await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.stop(found.brainId)))
+    const listed = await current.runPromise(
+      BrainProvider.first.pipe(Effect.flatMap((provider) => provider.list.pipe(Effect.orDie))),
+    )
+    const access = await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.access(found.brainId)))
+    expect({
+      problems,
+      row: await runs.row(found.brainId),
+      listed: listed.filter((each) => each.id === found.brainId),
+      access: access._tag,
+    }).toMatchObject({
+      problems: [],
+      row: { generation: 2, phase: "stopped", binding: null },
+      listed: [],
+      access: "Stopped",
+    })
+    await current.dispose()
+  })
+
+  test("a brain whose space moved its hand to a remote machine is replaced at its resume, and the new one is for a remote hand", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    expect(await runs.reaches(found.brainId, "ready")).toMatchObject({ generation: 1, hand_placement: "colocated" })
+    await runs.database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.space)
+          .set({
+            hand_placement: "remote",
+            environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+          })
+          .where(eq(Database.Schema.space.id, found.spaceId))
+      }),
+    )
+    await runs.update(found.brainId, { phase: "resuming" })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    expect(await runs.reaches(found.brainId, "ready", { generation: 2 })).toMatchObject({
+      generation: 2,
+      hand_placement: "remote",
+    })
+    await current.dispose()
+  })
+
+  test("a brain for a remote hand boots on its space's brain template: its image and its config", async () => {
+    const found = await runs.seeded()
+    const brainTemplate = await runs.database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        const id = yield* Seed.environmentTemplate(found.organizationId, { provider: "local" })
+        yield* db.db
+          .update(Database.Schema.environment_template)
+          .set({ image: "brain-image", image_config: { label: "brain" }, build_status: "ready" })
+          .where(eq(Database.Schema.environment_template.id, id))
+        yield* db.db
+          .update(Database.Schema.space)
+          .set({
+            hand_placement: "remote",
+            environment_template_id: yield* Seed.environmentTemplate(found.organizationId),
+            brain_template_id: id,
+          })
+          .where(eq(Database.Schema.space.id, found.spaceId))
+        return id
+      }),
+    )
+    const current = await runs.ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    expect(await runs.reaches(found.brainId, "ready")).toMatchObject({
+      hand_placement: "remote",
+      image: "brain-image",
+      image_template: { environmentTemplateId: brainTemplate, config: { label: "brain" } },
+    })
+    await current.dispose()
+  })
+
+  test("a brain made before Ren served bundles is replaced once at its wake, with no update it cannot take, and the new one runs the current bundles", async () => {
+    const spans: Array<Tracer.NativeSpan> = []
+    const brainId = await runs.newBrain()
+    const scope = await Effect.runPromise(Scope.make())
+    const bucket = await Effect.runPromise(TestBundles.bucket.pipe(Scope.provide(scope)))
+    const current = await runs.ren({
+      config: bucket.config,
+      tracer: Tracer.make({
+        span: (options) => {
+          const span = new Tracer.NativeSpan(options)
+          spans.push(span)
+          return span
+        },
+      }),
+    })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
-    await runs.reaches(brainId, "ready")
+    expect(await runs.reaches(brainId, "ready")).toMatchObject({ generation: 1, bundles: null })
+    const versions = { dependencies: "1111111111111111", brain: "2222222222222222", executor: "3333333333333333" }
+    await Effect.runPromise(
+      bucket.publish(Bundle.kinds.map((kind) => ({ kind, version: versions[kind], sha256: "a".repeat(64) }))),
+    )
     await runs.update(brainId, { phase: "resuming" })
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
-    await runs.reaches(brainId, "ready")
+    expect(await runs.reaches(brainId, "ready", { generation: 2 })).toMatchObject({ bundles: versions })
+    await runs.update(brainId, { phase: "resuming" })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    expect(await runs.reaches(brainId, "ready")).toMatchObject({ generation: 2 })
+    expect(spans.filter((span) => span.attributes.get("url.path") === "/ren/update")).toHaveLength(0)
+    await current.dispose()
+    await Effect.runPromise(Scope.close(scope, Exit.void))
+  })
+})
+
+// oxlint-disable-next-line ren/no-comments -- Live: calls E2B with the development key (README §7). script/test.ts removes E2B_ variables, so run it with `E2B_API_KEY=… bun test test/brain-lifecycle.slow.test.ts -t E2B`.
+describe.skipIf(!process.env.E2B_API_KEY)("an E2B brain", () => {
+  test("E2B: a template tag that E2B does not have fails with the tag in the reason, and the third failure gives failed (G4, E81)", async () => {
+    const found = await runs.seeded()
+    const current = await runs.ren({
+      sandbox: BrainProvider.layer([E2BSandbox.provider]),
+      config: {
+        E2B_API_KEY: process.env.E2B_API_KEY ?? "",
+        E2B_TEMPLATE: "ren-brain-dev:0000000000000000",
+        E2B_VCPU_SECOND_MICRO_USD: "14",
+        E2B_GIB_SECOND_MICRO_USD: "4.5",
+      },
+    })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    await runs.reaches(found.brainId, "failed")
+    expect(await runs.row(found.brainId)).toMatchObject({
+      failures: 3,
+      failure: expect.stringContaining("tag '0000000000000000' does not exist"),
+    })
     await current.dispose()
   })
 })

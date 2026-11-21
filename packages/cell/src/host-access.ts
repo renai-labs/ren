@@ -1,18 +1,24 @@
 export * as HostAccess from "./host-access.js"
 
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import type { Session } from "@ren/schema/session"
-import { Effect, Layer, Option } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { Duration, Effect, Layer, Option, Schedule } from "effect"
+import { FetchHttpClient, HttpClientError } from "effect/http"
 import { Cell } from "./cell.js"
 import { CredentialEnv } from "./credential-env.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { RenAddress } from "./ren-address.js"
 
+// oxlint-disable-next-line ren/no-comments -- Ren answers EnvironmentStartingError while the chat's hand starts; a new remote hand takes about 2 minutes (E2B gives its executor 2 minutes, `handBootWithin`). The brain asks again every 2 seconds, also after a lost connection during that wait.
+export const handStartsWithin = Duration.minutes(3)
+
+// oxlint-disable-next-line ren/no-comments -- A connection lost on the way, such as a kept-alive one that the other side closed. The access asks again once at once, so one lost connection is not a Ren that does not answer.
+const isLost = (error: unknown) => HttpClientError.isHttpClientError(error) && error.reason._tag === "TransportError"
+
 export const layer = Layer.effect(
-  EnvironmentAccess.Service,
+  HandAccess.Service,
   Effect.gen(function* () {
     const info = yield* Cell.Info
     const hostToken = yield* HostToken.Service
@@ -20,19 +26,37 @@ export const layer = Layer.effect(
     if (!info.vars.REN_URL) return yield* Effect.die(new Error("HostAccess needs REN_URL"))
     const host = yield* HostToken.client(info.vars.REN_URL).pipe(Effect.provide(RenAddress.http))
     const withHostToken = Effect.fnUntraced(function* (sessionId: Session.ID) {
-      const unavailable = (message: string) => new EnvironmentAccess.Unavailable({ sessionId, message })
+      const unavailable = (message: string) => new HandAccess.Unavailable({ sessionId, message })
       const token = yield* hostToken.current
       if (Option.isNone(token)) return yield* unavailable("the cell has no valid host token")
       return { token: token.value, unavailable }
     })
-    return EnvironmentAccess.Service.of({
-      open: Effect.fn("HostAccess.open")(function* (sessionId) {
+    return HandAccess.Service.of({
+      open: Effect.fn("HostAccess.open")(function* (sessionId, options) {
         const presented = yield* withHostToken(sessionId)
-        return yield* host.environments["environments.access"]({ params: { id: sessionId } }).pipe(
+        const wait = { starting: false }
+        return yield* host.environments["environments.access"]({
+          params: { id: sessionId },
+          query: { ...(options.unreachable && { unreachable: "true" as const }) },
+        }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
+          Effect.retry({ times: 1, while: isLost }),
+          Effect.tapError((error) =>
+            Effect.sync(() => {
+              if (error._tag === "EnvironmentStartingError") wait.starting = true
+            }),
+          ),
+          Effect.retry({
+            while: (error) => error._tag === "EnvironmentStartingError" || (wait.starting && isLost(error)),
+            schedule: Schedule.spaced("2 seconds"),
+          }),
+          Effect.timeoutOrElse({
+            duration: handStartsWithin,
+            orElse: () => Effect.fail(presented.unavailable("The hand did not start within 3 minutes")),
+          }),
           Effect.catchTag("EnvironmentNotFoundError", (error) =>
-            Effect.fail(new EnvironmentAccess.NotFound({ sessionId, message: error.message })),
+            Effect.fail(new HandAccess.NotFound({ sessionId, message: error.message })),
           ),
           Effect.catchTag("ForbiddenError", (error) =>
             store
@@ -41,7 +65,7 @@ export const layer = Layer.effect(
           ),
           Effect.catchTag("EnvironmentUnavailableError", (error) => Effect.fail(presented.unavailable(error.message))),
           Effect.catchIf(
-            (error) => error._tag !== "EnvironmentAccess.NotFound" && error._tag !== "EnvironmentAccess.Unavailable",
+            (error) => error._tag !== "HandAccess.NotFound" && error._tag !== "HandAccess.Unavailable",
             (error) => Effect.fail(presented.unavailable(error.message)),
           ),
         )
@@ -63,12 +87,12 @@ export const connections = Layer.unwrap(
     const info = yield* Cell.Info
     if (!info.vars.REN_URL) return Layer.empty
     return Layer.effect(
-      EnvironmentConnections.Service,
+      HandConnections.Service,
       Effect.gen(function* () {
-        const connections = yield* EnvironmentConnections.Service
+        const connections = yield* HandConnections.Service
         const env = yield* CredentialEnv.Service
-        return EnvironmentConnections.Service.of({ ...connections, env: env.current })
+        return HandConnections.Service.of({ ...connections, env: env.current })
       }),
-    ).pipe(Layer.provide(EnvironmentConnections.layer.pipe(Layer.provide(layer), Layer.provide(FetchHttpClient.layer))))
+    ).pipe(Layer.provide(HandConnections.layer.pipe(Layer.provide(layer), Layer.provide(FetchHttpClient.layer))))
   }),
 )

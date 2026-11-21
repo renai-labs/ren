@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Testing } from "@ren/db/testing"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Auth } from "@ren/schema/auth"
@@ -6,6 +7,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { ConfigProvider, Effect, Layer, Schedule, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { Billing } from "../src/billing.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { EgressControl } from "../src/egress-control.js"
 import { GitHubApp } from "../src/github-app.js"
@@ -53,9 +55,10 @@ const models = Models.layer([RenInferenceProvider.make]).pipe(
 )
 
 const it = testEffect(
-  Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
+    Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
     Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Host.layer({}, models)),
@@ -99,7 +102,7 @@ describe.skipIf(Object.values(live).some((value) => !value))("Ren Inference Serv
       const actor = { userId: ada.id, organizationId, roles: ["member"] }
       const team = yield* spaces.create(actor, { name: "Team" })
       const [providerID = "", id = ""] = live.model.split("/")
-      expect(yield* sessions.models(actor, Session.ID.create())).toContainEqual(
+      expect((yield* sessions.models(actor, Session.ID.create())).models).toContainEqual(
         expect.objectContaining({ providerID, id }),
       )
 

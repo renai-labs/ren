@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test"
-import { appURL, createOrganization } from "../lib/servers.js"
+import { appOrigin, createOrganization } from "../lib/servers.js"
 
 test("creates an organization from the profile card and switches to it", async ({ page }) => {
   const company = (await createOrganization(page.request, { name: "Ada Lovelace" })).organization
-  await page.goto("/app/")
+  await page.goto("/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()
   await page.getByRole("button", { name: "Create organization" }).click()
 
@@ -23,6 +23,32 @@ test("creates an organization from the profile card and switches to it", async (
   await expect(dialog.getByText(name.toLowerCase().replace(" ", "-"), { exact: true })).toBeVisible()
   await dialog.getByRole("button", { name: "Create organization" }).click()
   await expect(dialog).toBeHidden()
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appOrigin}/`)
   await expect(page.getByRole("combobox", { name: `Switch organization (current: ${name})` })).toBeVisible()
+})
+
+test("after a chat, creating an organization opens home with a working chat (RENAI-209)", async ({ page }) => {
+  const errors: Array<string> = []
+  page.on("pageerror", (error) => errors.push(error.message))
+  const company = (await createOrganization(page.request, { name: "Ada Lovelace" })).organization
+  await page.goto("/")
+  const composer = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await composer.fill("Plan the launch")
+  await composer.press("Enter")
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: 30_000 })
+
+  await page.getByRole("button", { name: `Switch organization (current: ${company})` }).click()
+  await page.getByRole("menuitem", { name: "Create organization" }).click()
+  const dialog = page.getByRole("dialog", { name: "Create organization" })
+  const name = `Moonshot ${crypto.randomUUID().slice(0, 8)}`
+  await dialog.getByLabel("Name").fill(name)
+  await dialog.getByRole("button", { name: "Create organization" }).click()
+  await expect(page).toHaveURL(`${appOrigin}/`)
+  await expect(page.getByRole("button", { name: `Switch organization (current: ${name})` })).toBeVisible()
+
+  await composer.fill("Plan the next launch")
+  await composer.press("Enter")
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: 30_000 })
+  await expect(page.getByText("Plan the next launch")).toBeVisible()
+  expect(errors).toEqual([])
 })

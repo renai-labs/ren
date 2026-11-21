@@ -1,6 +1,7 @@
 import type {
   HealthGetOutput,
   MeGetOutput,
+  MeRequestDeletionOutput,
   InvitationPreviewInput,
   InvitationPreviewOutput,
   SpaceListInput,
@@ -13,12 +14,41 @@ import type {
   SpaceUpdateOutput,
   SpaceArchiveInput,
   SpaceArchiveOutput,
+  SpaceShutdownInput,
+  SpaceShutdownOutput,
   SpaceMemberListInput,
   SpaceMemberListOutput,
   SpaceMemberCreateInput,
   SpaceMemberCreateOutput,
   SpaceMemberArchiveInput,
   SpaceMemberArchiveOutput,
+  SpaceJoinRequestListInput,
+  SpaceJoinRequestListOutput,
+  SpaceJoinRequestCreateInput,
+  SpaceJoinRequestCreateOutput,
+  SpaceJoinRequestApproveInput,
+  SpaceJoinRequestApproveOutput,
+  SpaceJoinRequestDeclineInput,
+  SpaceJoinRequestDeclineOutput,
+  SpaceJoinRequestCancelInput,
+  SpaceJoinRequestCancelOutput,
+  SpaceInviteLinkGetInput,
+  SpaceInviteLinkGetOutput,
+  SpaceInviteLinkResetInput,
+  SpaceInviteLinkResetOutput,
+  JoinLinkPreviewInput,
+  JoinLinkPreviewOutput,
+  JoinLinkAcceptInput,
+  JoinLinkAcceptOutput,
+  OrganizationInviteLinkCreateInput,
+  OrganizationInviteLinkCreateOutput,
+  OrganizationInviteLinkListOutput,
+  OrganizationInviteLinkRevokeInput,
+  OrganizationInviteLinkRevokeOutput,
+  OrganizationJoinLinkPreviewInput,
+  OrganizationJoinLinkPreviewOutput,
+  OrganizationJoinLinkAcceptInput,
+  OrganizationJoinLinkAcceptOutput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateListOutput,
   EnvironmentTemplateGetInput,
@@ -29,13 +59,12 @@ import type {
   EnvironmentTemplateUpdateOutput,
   EnvironmentTemplateArchiveInput,
   EnvironmentTemplateArchiveOutput,
+  EnvironmentTemplateRetryBuildInput,
+  EnvironmentTemplateRetryBuildOutput,
+  EnvironmentTemplateAffectedSpacesInput,
+  EnvironmentTemplateAffectedSpacesOutput,
   EnvironmentProviderListOutput,
-  SpaceEnvironmentTemplateListInput,
-  SpaceEnvironmentTemplateListOutput,
-  SpaceEnvironmentTemplateCreateInput,
-  SpaceEnvironmentTemplateCreateOutput,
-  SpaceEnvironmentTemplateArchiveInput,
-  SpaceEnvironmentTemplateArchiveOutput,
+  EnvironmentProviderBrainsOutput,
   SpaceSettingsGetInput,
   SpaceSettingsGetOutput,
   SpaceSettingsUpdateInput,
@@ -54,14 +83,16 @@ import type {
   MemoryEditOutput,
   MemoryDeleteInput,
   MemoryDeleteOutput,
-  DriveListInput,
-  DriveListOutput,
   DriveStartUploadInput,
   DriveStartUploadOutput,
   DriveDownloadInput,
   DriveDownloadOutput,
-  DriveDeleteInput,
-  DriveDeleteOutput,
+  FilesListInput,
+  FilesListOutput,
+  FilesReadInput,
+  FilesReadOutput,
+  FilesDeleteInput,
+  FilesDeleteOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -112,6 +143,10 @@ import type {
   AppRegistryListOutput,
   AppRegistryGetInput,
   AppRegistryGetOutput,
+  AppToolsGetInput,
+  AppToolsGetOutput,
+  McpInspectMcpInspectInput,
+  McpInspectMcpInspectOutput,
   AgentMembershipListInput,
   AgentMembershipListOutput,
   AgentMembershipCreateInput,
@@ -164,6 +199,8 @@ import type {
   TaskActivityListOutput,
   LinkSessionLinksInput,
   LinkSessionLinksOutput,
+  LinkSessionUsageInput,
+  LinkSessionUsageOutput,
   LinkSessionPullRequestsInput,
   LinkSessionPullRequestsOutput,
   LinkTaskPullRequestsInput,
@@ -218,6 +255,14 @@ import type {
   WebhookRequestListOutput,
   WebhookRequestGetInput,
   WebhookRequestGetOutput,
+  ArtifactListInput,
+  ArtifactListOutput,
+  ArtifactGetInput,
+  ArtifactGetOutput,
+  ArtifactUpdateInput,
+  ArtifactUpdateOutput,
+  ArtifactArchiveInput,
+  ArtifactArchiveOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -255,6 +300,29 @@ import type {
   RenInferenceConnectionRenameOutput,
   RenInferenceConnectionRemoveInput,
   RenInferenceConnectionRemoveOutput,
+  RenInferenceKeyListOutput,
+  RenInferenceKeyUsageInput,
+  RenInferenceKeyUsageOutput,
+  RenInferenceKeyCreateInput,
+  RenInferenceKeyCreateOutput,
+  RenInferenceKeyRevokeInput,
+  RenInferenceKeyRevokeOutput,
+  RenInferenceKeySecretInput,
+  RenInferenceKeySecretOutput,
+  RenInferenceHarnessPlanInput,
+  RenInferenceHarnessPlanOutput,
+  BillingGetOutput,
+  BillingPlanListOutput,
+  BillingInvoiceListInput,
+  BillingInvoiceListOutput,
+  BillingInvoiceUrlInput,
+  BillingInvoiceUrlOutput,
+  BillingSubscribeInput,
+  BillingSubscribeOutput,
+  BillingChangePlanInput,
+  BillingChangePlanOutput,
+  BillingCancelOutput,
+  BillingPortalOutput,
   ChannelInstallListInput,
   ChannelInstallListOutput,
   ChannelInstallUpdateInput,
@@ -282,6 +350,8 @@ import type {
   InfraApplyOutput,
   InsightsQueryInput,
   InsightsQueryOutput,
+  FeedbackReportInput,
+  FeedbackReportOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -379,6 +449,11 @@ export function make(options: ClientOptions) {
           { method: "GET", path: `/me`, successStatus: 200, declaredStatuses: [401], empty: false },
           requestOptions,
         ),
+      requestDeletion: (requestOptions?: RequestOptions) =>
+        request<MeRequestDeletionOutput>(
+          { method: "POST", path: `/me/deletion`, successStatus: 204, declaredStatuses: [401, 409], empty: true },
+          requestOptions,
+        ),
     },
     invitation: {
       preview: (input: InvitationPreviewInput, requestOptions?: RequestOptions) =>
@@ -439,6 +514,8 @@ export function make(options: ClientOptions) {
               name: input["name"],
               description: input["description"],
               brainScope: input["brainScope"],
+              brain: input["brain"],
+              hand: input["hand"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -457,6 +534,18 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      shutdown: (input: SpaceShutdownInput, requestOptions?: RequestOptions) =>
+        request<SpaceShutdownOutput>(
+          {
+            method: "POST",
+            path: `/spaces/${encodeURIComponent(input.id)}/shutdown`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     "space-member": {
       list: (input: SpaceMemberListInput, requestOptions?: RequestOptions) =>
@@ -466,6 +555,7 @@ export function make(options: ClientOptions) {
             path: `/space-members`,
             query: {
               spaceId: input["spaceId"],
+              userId: input["userId"],
               status: input["status"],
               page: input["page"],
               pageSize: input["pageSize"],
@@ -495,6 +585,181 @@ export function make(options: ClientOptions) {
             path: `/space-members/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-join-request": {
+      list: (input: SpaceJoinRequestListInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestListOutput>(
+          {
+            method: "GET",
+            path: `/space-join-requests`,
+            query: {
+              spaceId: input["spaceId"],
+              status: input["status"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SpaceJoinRequestCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestCreateOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests`,
+            body: { spaceId: input["spaceId"], note: input["note"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      approve: (input: SpaceJoinRequestApproveInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestApproveOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests/${encodeURIComponent(input.id)}/approve`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      decline: (input: SpaceJoinRequestDeclineInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestDeclineOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests/${encodeURIComponent(input.id)}/decline`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      cancel: (input: SpaceJoinRequestCancelInput, requestOptions?: RequestOptions) =>
+        request<SpaceJoinRequestCancelOutput>(
+          {
+            method: "POST",
+            path: `/space-join-requests/${encodeURIComponent(input.id)}/cancel`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-invite-link": {
+      get: (input: SpaceInviteLinkGetInput, requestOptions?: RequestOptions) =>
+        request<SpaceInviteLinkGetOutput>(
+          {
+            method: "GET",
+            path: `/spaces/${encodeURIComponent(input.id)}/invite-link`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      reset: (input: SpaceInviteLinkResetInput, requestOptions?: RequestOptions) =>
+        request<SpaceInviteLinkResetOutput>(
+          {
+            method: "POST",
+            path: `/spaces/${encodeURIComponent(input.id)}/invite-link/reset`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "join-link": {
+      preview: (input: JoinLinkPreviewInput, requestOptions?: RequestOptions) =>
+        request<JoinLinkPreviewOutput>(
+          {
+            method: "GET",
+            path: `/join-links/${encodeURIComponent(input.token)}/preview`,
+            successStatus: 200,
+            declaredStatuses: [401],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      accept: (input: JoinLinkAcceptInput, requestOptions?: RequestOptions) =>
+        request<JoinLinkAcceptOutput>(
+          {
+            method: "POST",
+            path: `/join-links/${encodeURIComponent(input.token)}/accept`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "organization-invite-link": {
+      create: (input: OrganizationInviteLinkCreateInput, requestOptions?: RequestOptions) =>
+        request<OrganizationInviteLinkCreateOutput>(
+          {
+            method: "POST",
+            path: `/organization-invite-links`,
+            body: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      list: (requestOptions?: RequestOptions) =>
+        request<OrganizationInviteLinkListOutput>(
+          {
+            method: "GET",
+            path: `/organization-invite-links`,
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      revoke: (input: OrganizationInviteLinkRevokeInput, requestOptions?: RequestOptions) =>
+        request<OrganizationInviteLinkRevokeOutput>(
+          {
+            method: "DELETE",
+            path: `/organization-invite-links/${encodeURIComponent(input.id)}`,
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    "organization-join-link": {
+      preview: (input: OrganizationJoinLinkPreviewInput, requestOptions?: RequestOptions) =>
+        request<OrganizationJoinLinkPreviewOutput>(
+          {
+            method: "GET",
+            path: `/organization-join-links/${encodeURIComponent(input.token)}/preview`,
+            successStatus: 200,
+            declaredStatuses: [],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      accept: (input: OrganizationJoinLinkAcceptInput, requestOptions?: RequestOptions) =>
+        request<OrganizationJoinLinkAcceptOutput>(
+          {
+            method: "POST",
+            path: `/organization-join-links/${encodeURIComponent(input.token)}/accept`,
+            successStatus: 200,
+            declaredStatuses: [401, 404],
             empty: false,
           },
           requestOptions,
@@ -535,6 +800,7 @@ export function make(options: ClientOptions) {
               provider: input["provider"],
               config: input["config"],
               sessionsPerEnvironment: input["sessionsPerEnvironment"],
+              networking: input["networking"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -552,6 +818,7 @@ export function make(options: ClientOptions) {
               description: input["description"],
               config: input["config"],
               sessionsPerEnvironment: input["sessionsPerEnvironment"],
+              networking: input["networking"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -564,6 +831,30 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/environment-templates/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      retryBuild: (input: EnvironmentTemplateRetryBuildInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateRetryBuildOutput>(
+          {
+            method: "POST",
+            path: `/environment-templates/${encodeURIComponent(input.id)}/retryBuild`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      affectedSpaces: (input: EnvironmentTemplateAffectedSpacesInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateAffectedSpacesOutput>(
+          {
+            method: "POST",
+            path: `/environment-templates/${encodeURIComponent(input.id)}/affectedSpaces`,
+            body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
@@ -583,41 +874,9 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-    },
-    "space-environment-template": {
-      list: (input: SpaceEnvironmentTemplateListInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateListOutput>(
-          {
-            method: "GET",
-            path: `/space-environment-templates`,
-            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-            successStatus: 200,
-            declaredStatuses: [401, 403],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      create: (input: SpaceEnvironmentTemplateCreateInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateCreateOutput>(
-          {
-            method: "POST",
-            path: `/space-environment-templates`,
-            body: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 409],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      archive: (input: SpaceEnvironmentTemplateArchiveInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentTemplateArchiveOutput>(
-          {
-            method: "DELETE",
-            path: `/space-environment-templates/${encodeURIComponent(input.id)}`,
-            successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
-            empty: false,
-          },
+      brains: (requestOptions?: RequestOptions) =>
+        request<EnvironmentProviderBrainsOutput>(
+          { method: "GET", path: `/brain-providers`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
           requestOptions,
         ),
     },
@@ -701,9 +960,9 @@ export function make(options: ClientOptions) {
           {
             method: "PUT",
             path: `/memory/file`,
-            body: { spaceId: input["spaceId"], path: input["path"], content: input["content"] },
+            body: { spaceId: input["spaceId"], path: input["path"], content: input["content"], mode: input["mode"] },
             successStatus: 204,
-            declaredStatuses: [400, 401, 403, 404],
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: true,
           },
           requestOptions,
@@ -740,18 +999,6 @@ export function make(options: ClientOptions) {
         ),
     },
     drive: {
-      list: (input?: DriveListInput, requestOptions?: RequestOptions) =>
-        request<DriveListOutput>(
-          {
-            method: "GET",
-            path: `/drive`,
-            query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 503],
-            empty: false,
-          },
-          requestOptions,
-        ),
       startUpload: (input: DriveStartUploadInput, requestOptions?: RequestOptions) =>
         request<DriveStartUploadOutput>(
           {
@@ -776,14 +1023,45 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      delete: (input: DriveDeleteInput, requestOptions?: RequestOptions) =>
-        request<DriveDeleteOutput>(
+    },
+    files: {
+      list: (input: FilesListInput, requestOptions?: RequestOptions) =>
+        request<FilesListOutput>(
+          {
+            method: "GET",
+            path: `/files`,
+            query: {
+              source: input["source"],
+              spaceId: input["spaceId"],
+              folder: input["folder"],
+              cursor: input["cursor"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: FilesReadInput, requestOptions?: RequestOptions) =>
+        request<FilesReadOutput>(
+          {
+            method: "GET",
+            path: `/files/content`,
+            query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      delete: (input: FilesDeleteInput, requestOptions?: RequestOptions) =>
+        request<FilesDeleteOutput>(
           {
             method: "DELETE",
-            path: `/drive/file`,
-            query: { spaceId: input["spaceId"], path: input["path"] },
+            path: `/files`,
+            query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] },
             successStatus: 204,
-            declaredStatuses: [401, 403, 404, 503],
+            declaredStatuses: [400, 401, 403, 404, 503],
             empty: true,
           },
           requestOptions,
@@ -1067,7 +1345,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/app-profiles/${encodeURIComponent(input.id)}/promote`,
-            body: {},
+            body: { spaceId: input["spaceId"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
@@ -1138,6 +1416,7 @@ export function make(options: ClientOptions) {
             query: {
               query: input["query"],
               category: input["category"],
+              slugs: input["slugs"],
               page: input["page"],
               pageSize: input["pageSize"],
             },
@@ -1158,6 +1437,35 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "app-tools": {
+      get: (input: AppToolsGetInput, requestOptions?: RequestOptions) =>
+        request<AppToolsGetOutput>(
+          {
+            method: "GET",
+            path: `/app-registry/${encodeURIComponent(input.idOrSlug)}/tools`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "mcp-inspect": {
+      mcp: {
+        inspect: (input: McpInspectMcpInspectInput, requestOptions?: RequestOptions) =>
+          request<McpInspectMcpInspectOutput>(
+            {
+              method: "POST",
+              path: `/mcp/inspect`,
+              body: { url: input["url"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     "agent-membership": {
       list: (input: AgentMembershipListInput, requestOptions?: RequestOptions) =>
@@ -1321,8 +1629,9 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/sessions/${encodeURIComponent(input.id)}/models`,
+            query: { spaceId: input["spaceId"] },
             successStatus: 200,
-            declaredStatuses: [401, 403],
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,
@@ -1341,6 +1650,7 @@ export function make(options: ClientOptions) {
               priority: input["priority"],
               agentId: input["agentId"],
               ownerId: input["ownerId"],
+              search: input["search"],
               label: input["label"],
               humanReview: input["humanReview"],
               linkedTo: input["linkedTo"],
@@ -1535,6 +1845,17 @@ export function make(options: ClientOptions) {
             {
               method: "GET",
               path: `/sessions/${encodeURIComponent(input.id)}/links`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        usage: (input: LinkSessionUsageInput, requestOptions?: RequestOptions) =>
+          request<LinkSessionUsageOutput>(
+            {
+              method: "GET",
+              path: `/sessions/${encodeURIComponent(input.id)}/usage`,
               successStatus: 200,
               declaredStatuses: [401, 403, 404],
               empty: false,
@@ -1738,7 +2059,12 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/schedule-runs`,
-            query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+            query: {
+              scheduleId: input["scheduleId"],
+              status: input["status"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
@@ -1909,6 +2235,54 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
     },
+    artifact: {
+      list: (input: ArtifactListInput, requestOptions?: RequestOptions) =>
+        request<ArtifactListOutput>(
+          {
+            method: "GET",
+            path: `/artifacts`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ArtifactGetInput, requestOptions?: RequestOptions) =>
+        request<ArtifactGetOutput>(
+          {
+            method: "GET",
+            path: `/artifacts/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ArtifactUpdateInput, requestOptions?: RequestOptions) =>
+        request<ArtifactUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/artifacts/${encodeURIComponent(input.id)}`,
+            body: { title: input["title"], name: input["name"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: ArtifactArchiveInput, requestOptions?: RequestOptions) =>
+        request<ArtifactArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/artifacts/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
     credential: {
       list: (input: CredentialListInput, requestOptions?: RequestOptions) =>
         request<CredentialListOutput>(
@@ -2020,7 +2394,12 @@ export function make(options: ClientOptions) {
             {
               method: "POST",
               path: `/credentials/connect`,
-              body: { profileId: input["profileId"], item: input["item"], reconnect: input["reconnect"] },
+              body: {
+                profileId: input["profileId"],
+                item: input["item"],
+                reconnect: input["reconnect"],
+                returnTo: input["returnTo"],
+              },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404, 409],
               empty: false,
@@ -2132,7 +2511,7 @@ export function make(options: ClientOptions) {
             path: `/ren-inference/connect`,
             body: { returnUrl: input["returnUrl"], connectionId: input["connectionId"] },
             successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 503],
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
             empty: false,
           },
           requestOptions,
@@ -2144,7 +2523,7 @@ export function make(options: ClientOptions) {
               method: "GET",
               path: `/ren-inference/connections`,
               successStatus: 200,
-              declaredStatuses: [400, 401, 403, 404, 503],
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
               empty: false,
             },
             requestOptions,
@@ -2156,7 +2535,7 @@ export function make(options: ClientOptions) {
               path: `/ren-inference/connections/${encodeURIComponent(input.id)}`,
               body: { label: input["label"] },
               successStatus: 200,
-              declaredStatuses: [400, 401, 403, 404, 503],
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
               empty: false,
             },
             requestOptions,
@@ -2167,12 +2546,186 @@ export function make(options: ClientOptions) {
               method: "DELETE",
               path: `/ren-inference/connections/${encodeURIComponent(input.id)}`,
               successStatus: 204,
-              declaredStatuses: [400, 401, 403, 404, 503],
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
               empty: true,
             },
             requestOptions,
           ),
       },
+      key: {
+        list: (requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyListOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/keys`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        usage: (input: RenInferenceKeyUsageInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyUsageOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/keys/usage`,
+              query: { period: input["period"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        create: (input: RenInferenceKeyCreateInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyCreateOutput>(
+            {
+              method: "POST",
+              path: `/ren-inference/keys`,
+              body: { name: input["name"], expiresIn: input["expiresIn"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        revoke: (input: RenInferenceKeyRevokeInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeyRevokeOutput>(
+            {
+              method: "DELETE",
+              path: `/ren-inference/keys/${encodeURIComponent(input.id)}`,
+              successStatus: 204,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        secret: (input: RenInferenceKeySecretInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceKeySecretOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/keys/${encodeURIComponent(input.id)}/secret`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      "harness-plan": (input: RenInferenceHarnessPlanInput, requestOptions?: RequestOptions) =>
+        request<RenInferenceHarnessPlanOutput>(
+          {
+            method: "POST",
+            path: `/ren-inference/harness-plans`,
+            body: {
+              harnessId: input["harnessId"],
+              keyEnvVar: input["keyEnvVar"],
+              withOptional: input["withOptional"],
+              schemaVersions: input["schemaVersions"],
+              supportedMutationKinds: input["supportedMutationKinds"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    billing: {
+      get: (requestOptions?: RequestOptions) =>
+        request<BillingGetOutput>(
+          {
+            method: "GET",
+            path: `/billing`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      plan: {
+        list: (requestOptions?: RequestOptions) =>
+          request<BillingPlanListOutput>(
+            {
+              method: "GET",
+              path: `/billing/plans`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      invoice: {
+        list: (input: BillingInvoiceListInput, requestOptions?: RequestOptions) =>
+          request<BillingInvoiceListOutput>(
+            {
+              method: "GET",
+              path: `/billing/invoices`,
+              query: { page: input["page"], perPage: input["perPage"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        url: (input: BillingInvoiceUrlInput, requestOptions?: RequestOptions) =>
+          request<BillingInvoiceUrlOutput>(
+            {
+              method: "GET",
+              path: `/billing/invoices/${encodeURIComponent(input.id)}/url`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      subscribe: (input: BillingSubscribeInput, requestOptions?: RequestOptions) =>
+        request<BillingSubscribeOutput>(
+          {
+            method: "POST",
+            path: `/billing/subscribe`,
+            body: { plan: input["plan"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      "change-plan": (input: BillingChangePlanInput, requestOptions?: RequestOptions) =>
+        request<BillingChangePlanOutput>(
+          {
+            method: "POST",
+            path: `/billing/change-plan`,
+            body: { plan: input["plan"] },
+            successStatus: 204,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      cancel: (requestOptions?: RequestOptions) =>
+        request<BillingCancelOutput>(
+          {
+            method: "POST",
+            path: `/billing/cancel`,
+            successStatus: 204,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      portal: (requestOptions?: RequestOptions) =>
+        request<BillingPortalOutput>(
+          {
+            method: "POST",
+            path: `/billing/portal`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     "channel-install": {
       list: (input: ChannelInstallListInput, requestOptions?: RequestOptions) =>
@@ -2383,12 +2936,27 @@ export function make(options: ClientOptions) {
               model: input["model"],
               payer: input["payer"],
               kind: input["kind"],
+              type: input["type"],
               orderBy: input["orderBy"],
               limit: input["limit"],
             },
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    feedback: {
+      report: (input: FeedbackReportInput, requestOptions?: RequestOptions) =>
+        request<FeedbackReportOutput>(
+          {
+            method: "POST",
+            path: `/feedback`,
+            body: { message: input["message"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 503],
+            empty: true,
           },
           requestOptions,
         ),

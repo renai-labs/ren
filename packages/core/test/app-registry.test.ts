@@ -52,12 +52,15 @@ it.live("only execution changes raise the revision; every org that reaches the a
     expect(yield* publish(renamed)).toMatchObject({ revision: 1, changed: { execution: false, metadata: true } })
     const relabeled = {
       ...renamed,
-      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"] },
+      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"], tools: {} },
     }
     expect((yield* publish(relabeled)).changed).toEqual({ execution: false, metadata: false, listing: true })
+    const tools = { docs: [{ name: "search", description: "Search the docs", readOnly: true }] }
+    const cataloged = publication("docs", { ...relabeled, listing: { ...relabeled.listing, tools } })
+    expect((yield* publish(cataloged)).changed).toEqual({ execution: false, metadata: false, listing: true })
     const next = yield* publish(
       publication("docs", {
-        ...relabeled,
+        ...cataloged,
         skills: { guide: { ...skill, upstream: { ...skill.upstream, path: "b" } } },
       }),
     )
@@ -65,10 +68,10 @@ it.live("only execution changes raise the revision; every org that reaches the a
     const reader = yield* Seed.actor(yield* Seed.organization(), "member")
     expect(yield* registry.get(reader, "docs")).toMatchObject({
       name: "Docs",
-      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"] },
+      listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"], toolCounts: { docs: 1 } },
       revision: 2,
-      skills: { guide: { upstream: { path: "b" } } },
     })
+    expect(yield* registry.tools(reader, "docs")).toEqual(tools)
   }),
 )
 
@@ -113,14 +116,25 @@ it.live("an admin reads a listed app but never edits, archives or moves it", () 
   }),
 )
 
-it.live("browsing lists active listings by text and category", () =>
+it.live("browsing lists active listings by text, category and slugs", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service
     const reader = yield* Seed.actor(yield* Seed.organization(), "member")
     yield* registry.publish({
       apps: [
         publication("linear", { description: "Track issues", listing: { categories: { roles: ["engineer"] } } }),
-        publication("notion", { description: "Write pages", listing: { categories: { roles: ["writer"] } } }),
+        publication("notion", {
+          description: "Write pages",
+          mcps: {
+            notion: Schema.decodeUnknownSync(Mcp.Declaration)({
+              name: "Notion",
+              description: "Notion on Ren credits",
+              transport: { type: "managed", server: "notion" },
+              auth: { type: "none" },
+            }),
+          },
+          listing: { categories: { roles: ["writer"] } },
+        }),
         Schema.decodeUnknownSync(AppRegistry.Publication)({
           slug: "unlisted",
           name: "Unlisted",
@@ -128,21 +142,19 @@ it.live("browsing lists active listings by text and category", () =>
         }),
       ],
     })
-    const slugs = (input: { readonly query?: string; readonly category?: string }) =>
-      Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
+    const slugs = (input: {
+      readonly query?: string
+      readonly category?: string
+      readonly slugs?: ReadonlyArray<string>
+    }) => Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
     expect(yield* slugs({})).toEqual(["linear", "notion"])
-    yield* publish(
-      publication("guide", {
-        skills: {
-          write: { type: "content", description: "Write guides", instructions: "Long", files: { "a.md": "A" } },
-        },
-      }),
-    )
-    expect((yield* registry.get(reader, "guide")).skills).toEqual({
-      write: { type: "content", description: "Write guides", requiredCredentials: [] },
-    })
+    expect((yield* registry.list(reader, page)).items.map((item) => [item.slug, item.managed] as const)).toEqual([
+      ["linear", false],
+      ["notion", true],
+    ])
     expect(yield* slugs({ query: "ISSUES" })).toEqual(["linear"])
     expect(yield* slugs({ category: "writer" })).toEqual(["notion"])
+    expect(yield* slugs({ slugs: ["notion", "unlisted", "linear"] })).toEqual(["linear", "notion"])
     expect((yield* Effect.flip(registry.get(reader, "unlisted")))._tag).toBe("Primitive.NotFound")
   }),
 )
@@ -214,28 +226,36 @@ it.live("duplicate dependencies reject the batch without changing existing apps"
   }),
 )
 
-it.live("publication rejects self-dependencies and cycles within a batch or through existing apps", () =>
-  Effect.gen(function* () {
-    const registry = yield* AppRegistry.Service
-    const database = yield* Database.Service
-    yield* Effect.forEach(
-      [
-        [publication("self", { dependsOn: ["self"] })],
-        [publication("first", { dependsOn: ["second"] }), publication("second", { dependsOn: ["first"] })],
-      ],
-      (apps) =>
-        Effect.gen(function* () {
-          const failure = yield* registry.publish({ apps }).pipe(Effect.flip)
-          expect(failure._tag).toBe("Primitive.Conflict")
-          expect(failure.message).toContain("Dependency cycle")
-          expect(yield* database.db.select().from(Database.Schema.app)).toEqual([])
-        }),
-    )
-    yield* registry.publish({ apps: [publication("first"), publication("second", { dependsOn: ["first"] })] })
-    const failure = yield* publish(publication("first", { dependsOn: ["second"] })).pipe(Effect.flip)
-    expect(failure._tag).toBe("Primitive.Conflict")
-    expect(failure.message).toMatch(/first -> second -> first|second -> first -> second/u)
-  }),
+it.live(
+  "publication rejects self-dependencies, cycles and chains deeper than three apps, through existing apps too",
+  () =>
+    Effect.gen(function* () {
+      const registry = yield* AppRegistry.Service
+      const database = yield* Database.Service
+      yield* Effect.forEach(
+        [
+          [publication("self", { dependsOn: ["self"] })],
+          [publication("first", { dependsOn: ["second"] }), publication("second", { dependsOn: ["first"] })],
+        ],
+        (apps) =>
+          Effect.gen(function* () {
+            const failure = yield* registry.publish({ apps }).pipe(Effect.flip)
+            expect(failure._tag).toBe("Primitive.Conflict")
+            expect(failure.message).toContain("Dependency cycle")
+            expect(yield* database.db.select().from(Database.Schema.app)).toEqual([])
+          }),
+      )
+      yield* registry.publish({ apps: [publication("first"), publication("second", { dependsOn: ["first"] })] })
+      const failure = yield* publish(publication("first", { dependsOn: ["second"] })).pipe(Effect.flip)
+      expect(failure._tag).toBe("Primitive.Conflict")
+      expect(failure.message).toMatch(/first -> second -> first|second -> first -> second/u)
+      yield* publish(publication("third", { dependsOn: ["second"] }))
+      const deeper = yield* registry
+        .publish({ apps: [publication("zero"), publication("first", { dependsOn: ["zero"] })] })
+        .pipe(Effect.flip)
+      expect(deeper._tag).toBe("Primitive.Conflict")
+      expect(deeper.message).toContain("third -> second -> first -> zero")
+    }),
 )
 
 it.live("a withdrawn app keeps its profiles running and takes no new ones; publication does not relist", () =>

@@ -60,6 +60,14 @@ export class EnvironmentUnavailableError extends Schema.TaggedError<EnvironmentU
   { httpApiStatus: 503 },
 ) {}
 
+export class EnvironmentStartingError extends Schema.TaggedError<EnvironmentStartingError>()(
+  "EnvironmentStartingError",
+  { message: Schema.String },
+  { httpApiStatus: 503 },
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
+
 export class SyncUnavailableError extends Schema.TaggedError<SyncUnavailableError>()(
   "SyncUnavailableError",
   { message: Schema.String },
@@ -81,3 +89,33 @@ export class GenerationRetiredError extends Schema.TaggedError<GenerationRetired
 ) {
   override readonly [ErrorReporter.ignore] = true
 }
+
+export class ArtifactNotFoundError extends Schema.TaggedError<ArtifactNotFoundError>()(
+  "ArtifactNotFoundError",
+  { message: Schema.String },
+  { httpApiStatus: 404 },
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
+
+export class ArtifactConflictError extends Schema.TaggedError<ArtifactConflictError>()(
+  "ArtifactConflictError",
+  { message: Schema.String },
+  { httpApiStatus: 409 },
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
+
+export class ArtifactInvalidError extends Schema.TaggedError<ArtifactInvalidError>()(
+  "ArtifactInvalidError",
+  { message: Schema.String },
+  { httpApiStatus: 400 },
+) {
+  override readonly [ErrorReporter.ignore] = true
+}
+
+export class ArtifactFailedError extends Schema.TaggedError<ArtifactFailedError>()(
+  "ArtifactFailedError",
+  { message: Schema.String },
+  { httpApiStatus: 502 },
+) {}

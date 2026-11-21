@@ -39,7 +39,7 @@ export const AppProfileGroup = Primitive.group(AppProfile.definition, "sdk", [
     OpenApi.annotations({
       identifier: "app-profile.promote",
       summary: "Share a private profile",
-      description: "Turn your private profile into a shared one that lists your spaces. Its accounts and labels stay.",
+      description: "Turn your private profile into a shared one that lists one space. Its accounts and labels stay.",
     }),
   ),
 ])

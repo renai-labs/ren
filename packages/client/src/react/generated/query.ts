@@ -7,17 +7,30 @@ import type {
   SpaceCreateInput,
   SpaceUpdateInput,
   SpaceArchiveInput,
+  SpaceShutdownInput,
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
+  SpaceJoinRequestListInput,
+  SpaceJoinRequestCreateInput,
+  SpaceJoinRequestApproveInput,
+  SpaceJoinRequestDeclineInput,
+  SpaceJoinRequestCancelInput,
+  SpaceInviteLinkGetInput,
+  SpaceInviteLinkResetInput,
+  JoinLinkPreviewInput,
+  JoinLinkAcceptInput,
+  OrganizationInviteLinkCreateInput,
+  OrganizationInviteLinkRevokeInput,
+  OrganizationJoinLinkPreviewInput,
+  OrganizationJoinLinkAcceptInput,
   EnvironmentTemplateListInput,
   EnvironmentTemplateGetInput,
   EnvironmentTemplateCreateInput,
   EnvironmentTemplateUpdateInput,
   EnvironmentTemplateArchiveInput,
-  SpaceEnvironmentTemplateListInput,
-  SpaceEnvironmentTemplateCreateInput,
-  SpaceEnvironmentTemplateArchiveInput,
+  EnvironmentTemplateRetryBuildInput,
+  EnvironmentTemplateAffectedSpacesInput,
   SpaceSettingsGetInput,
   SpaceSettingsUpdateInput,
   OrganizationSettingsGetInput,
@@ -27,10 +40,11 @@ import type {
   MemoryWriteInput,
   MemoryEditInput,
   MemoryDeleteInput,
-  DriveListInput,
   DriveStartUploadInput,
   DriveDownloadInput,
-  DriveDeleteInput,
+  FilesListInput,
+  FilesReadInput,
+  FilesDeleteInput,
   AgentListInput,
   AgentGetInput,
   AgentCreateInput,
@@ -56,6 +70,8 @@ import type {
   AppProfileReachAppRequestConnectInput,
   AppRegistryListInput,
   AppRegistryGetInput,
+  AppToolsGetInput,
+  McpInspectMcpInspectInput,
   AgentMembershipListInput,
   AgentMembershipCreateInput,
   AgentMembershipArchiveInput,
@@ -82,6 +98,7 @@ import type {
   TaskCommentArchiveInput,
   TaskActivityListInput,
   LinkSessionLinksInput,
+  LinkSessionUsageInput,
   LinkSessionPullRequestsInput,
   LinkTaskPullRequestsInput,
   LabelListInput,
@@ -109,6 +126,10 @@ import type {
   WebhookReplayInput,
   WebhookRequestListInput,
   WebhookRequestGetInput,
+  ArtifactListInput,
+  ArtifactGetInput,
+  ArtifactUpdateInput,
+  ArtifactArchiveInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -127,6 +148,15 @@ import type {
   RenInferenceConnectInput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
+  RenInferenceKeyUsageInput,
+  RenInferenceKeyCreateInput,
+  RenInferenceKeyRevokeInput,
+  RenInferenceKeySecretInput,
+  RenInferenceHarnessPlanInput,
+  BillingInvoiceListInput,
+  BillingInvoiceUrlInput,
+  BillingSubscribeInput,
+  BillingChangePlanInput,
   ChannelInstallListInput,
   ChannelInstallUpdateInput,
   ChannelInstallRemoveInput,
@@ -139,6 +169,7 @@ import type {
   InfraPlanInput,
   InfraApplyInput,
   InsightsQueryInput,
+  FeedbackReportInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -160,6 +191,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["me", "get"] as const,
             queryFn: (context) => client["me"]["get"]({ signal: context.signal }),
+          }),
+      },
+      requestDeletion: {
+        mutationKey: () => ["me", "requestDeletion"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["me", "requestDeletion"] as const,
+            mutationFn: () => client["me"]["requestDeletion"](),
           }),
       },
     },
@@ -217,6 +256,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationFn: (input: SpaceArchiveInput) => client["space"]["archive"](input),
           }),
       },
+      shutdown: {
+        mutationKey: () => ["space", "shutdown"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space", "shutdown"] as const,
+            mutationFn: (input: SpaceShutdownInput) => client["space"]["shutdown"](input),
+          }),
+      },
     },
     "space-member": {
       list: {
@@ -242,6 +289,140 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["space-member", "archive"] as const,
             mutationFn: (input: SpaceMemberArchiveInput) => client["space-member"]["archive"](input),
+          }),
+      },
+    },
+    "space-join-request": {
+      list: {
+        queryKey: (input?: SpaceJoinRequestListInput) =>
+          input === undefined
+            ? (["space-join-request", "list"] as const)
+            : (["space-join-request", "list", input] as const),
+        queryOptions: (input: SpaceJoinRequestListInput) =>
+          queryOptions({
+            queryKey: ["space-join-request", "list", input] as const,
+            queryFn: (context) => client["space-join-request"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["space-join-request", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "create"] as const,
+            mutationFn: (input: SpaceJoinRequestCreateInput) => client["space-join-request"]["create"](input),
+          }),
+      },
+      approve: {
+        mutationKey: () => ["space-join-request", "approve"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "approve"] as const,
+            mutationFn: (input: SpaceJoinRequestApproveInput) => client["space-join-request"]["approve"](input),
+          }),
+      },
+      decline: {
+        mutationKey: () => ["space-join-request", "decline"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "decline"] as const,
+            mutationFn: (input: SpaceJoinRequestDeclineInput) => client["space-join-request"]["decline"](input),
+          }),
+      },
+      cancel: {
+        mutationKey: () => ["space-join-request", "cancel"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-join-request", "cancel"] as const,
+            mutationFn: (input: SpaceJoinRequestCancelInput) => client["space-join-request"]["cancel"](input),
+          }),
+      },
+    },
+    "space-invite-link": {
+      get: {
+        queryKey: (input?: SpaceInviteLinkGetInput) =>
+          input === undefined
+            ? (["space-invite-link", "get"] as const)
+            : (["space-invite-link", "get", input] as const),
+        queryOptions: (input: SpaceInviteLinkGetInput) =>
+          queryOptions({
+            queryKey: ["space-invite-link", "get", input] as const,
+            queryFn: (context) => client["space-invite-link"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      reset: {
+        mutationKey: () => ["space-invite-link", "reset"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-invite-link", "reset"] as const,
+            mutationFn: (input: SpaceInviteLinkResetInput) => client["space-invite-link"]["reset"](input),
+          }),
+      },
+    },
+    "join-link": {
+      preview: {
+        queryKey: (input?: JoinLinkPreviewInput) =>
+          input === undefined ? (["join-link", "preview"] as const) : (["join-link", "preview", input] as const),
+        queryOptions: (input: JoinLinkPreviewInput) =>
+          queryOptions({
+            queryKey: ["join-link", "preview", input] as const,
+            queryFn: (context) => client["join-link"]["preview"](input, { signal: context.signal }),
+          }),
+      },
+      accept: {
+        mutationKey: () => ["join-link", "accept"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["join-link", "accept"] as const,
+            mutationFn: (input: JoinLinkAcceptInput) => client["join-link"]["accept"](input),
+          }),
+      },
+    },
+    "organization-invite-link": {
+      create: {
+        mutationKey: () => ["organization-invite-link", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-invite-link", "create"] as const,
+            mutationFn: (input: OrganizationInviteLinkCreateInput) =>
+              client["organization-invite-link"]["create"](input),
+          }),
+      },
+      list: {
+        queryKey: () => ["organization-invite-link", "list"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["organization-invite-link", "list"] as const,
+            queryFn: (context) => client["organization-invite-link"]["list"]({ signal: context.signal }),
+          }),
+      },
+      revoke: {
+        mutationKey: () => ["organization-invite-link", "revoke"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-invite-link", "revoke"] as const,
+            mutationFn: (input: OrganizationInviteLinkRevokeInput) =>
+              client["organization-invite-link"]["revoke"](input),
+          }),
+      },
+    },
+    "organization-join-link": {
+      preview: {
+        queryKey: (input?: OrganizationJoinLinkPreviewInput) =>
+          input === undefined
+            ? (["organization-join-link", "preview"] as const)
+            : (["organization-join-link", "preview", input] as const),
+        queryOptions: (input: OrganizationJoinLinkPreviewInput) =>
+          queryOptions({
+            queryKey: ["organization-join-link", "preview", input] as const,
+            queryFn: (context) => client["organization-join-link"]["preview"](input, { signal: context.signal }),
+          }),
+      },
+      accept: {
+        mutationKey: () => ["organization-join-link", "accept"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-join-link", "accept"] as const,
+            mutationFn: (input: OrganizationJoinLinkAcceptInput) => client["organization-join-link"]["accept"](input),
           }),
       },
     },
@@ -292,6 +473,24 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationFn: (input: EnvironmentTemplateArchiveInput) => client["environment-template"]["archive"](input),
           }),
       },
+      retryBuild: {
+        mutationKey: () => ["environment-template", "retryBuild"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment-template", "retryBuild"] as const,
+            mutationFn: (input: EnvironmentTemplateRetryBuildInput) =>
+              client["environment-template"]["retryBuild"](input),
+          }),
+      },
+      affectedSpaces: {
+        mutationKey: () => ["environment-template", "affectedSpaces"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment-template", "affectedSpaces"] as const,
+            mutationFn: (input: EnvironmentTemplateAffectedSpacesInput) =>
+              client["environment-template"]["affectedSpaces"](input),
+          }),
+      },
     },
     environmentProvider: {
       list: {
@@ -302,35 +501,12 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["environmentProvider"]["list"]({ signal: context.signal }),
           }),
       },
-    },
-    "space-environment-template": {
-      list: {
-        queryKey: (input?: SpaceEnvironmentTemplateListInput) =>
-          input === undefined
-            ? (["space-environment-template", "list"] as const)
-            : (["space-environment-template", "list", input] as const),
-        queryOptions: (input: SpaceEnvironmentTemplateListInput) =>
+      brains: {
+        queryKey: () => ["environmentProvider", "brains"] as const,
+        queryOptions: () =>
           queryOptions({
-            queryKey: ["space-environment-template", "list", input] as const,
-            queryFn: (context) => client["space-environment-template"]["list"](input, { signal: context.signal }),
-          }),
-      },
-      create: {
-        mutationKey: () => ["space-environment-template", "create"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-environment-template", "create"] as const,
-            mutationFn: (input: SpaceEnvironmentTemplateCreateInput) =>
-              client["space-environment-template"]["create"](input),
-          }),
-      },
-      archive: {
-        mutationKey: () => ["space-environment-template", "archive"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-environment-template", "archive"] as const,
-            mutationFn: (input: SpaceEnvironmentTemplateArchiveInput) =>
-              client["space-environment-template"]["archive"](input),
+            queryKey: ["environmentProvider", "brains"] as const,
+            queryFn: (context) => client["environmentProvider"]["brains"]({ signal: context.signal }),
           }),
       },
     },
@@ -419,15 +595,6 @@ export function make(client: ReturnType<typeof Ren.make>) {
       },
     },
     drive: {
-      list: {
-        queryKey: (input?: DriveListInput) =>
-          input === undefined ? (["drive", "list"] as const) : (["drive", "list", input] as const),
-        queryOptions: (input?: DriveListInput) =>
-          queryOptions({
-            queryKey: ["drive", "list", input] as const,
-            queryFn: (context) => client["drive"]["list"](input, { signal: context.signal }),
-          }),
-      },
       startUpload: {
         mutationKey: () => ["drive", "startUpload"] as const,
         mutationOptions: () =>
@@ -445,12 +612,32 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["drive"]["download"](input, { signal: context.signal }),
           }),
       },
+    },
+    files: {
+      list: {
+        queryKey: (input?: FilesListInput) =>
+          input === undefined ? (["files", "list"] as const) : (["files", "list", input] as const),
+        queryOptions: (input: FilesListInput) =>
+          queryOptions({
+            queryKey: ["files", "list", input] as const,
+            queryFn: (context) => client["files"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      read: {
+        queryKey: (input?: FilesReadInput) =>
+          input === undefined ? (["files", "read"] as const) : (["files", "read", input] as const),
+        queryOptions: (input: FilesReadInput) =>
+          queryOptions({
+            queryKey: ["files", "read", input] as const,
+            queryFn: (context) => client["files"]["read"](input, { signal: context.signal }),
+          }),
+      },
       delete: {
-        mutationKey: () => ["drive", "delete"] as const,
+        mutationKey: () => ["files", "delete"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["drive", "delete"] as const,
-            mutationFn: (input: DriveDeleteInput) => client["drive"]["delete"](input),
+            mutationKey: ["files", "delete"] as const,
+            mutationFn: (input: FilesDeleteInput) => client["files"]["delete"](input),
           }),
       },
     },
@@ -692,6 +879,29 @@ export function make(client: ReturnType<typeof Ren.make>) {
           }),
       },
     },
+    "app-tools": {
+      get: {
+        queryKey: (input?: AppToolsGetInput) =>
+          input === undefined ? (["app-tools", "get"] as const) : (["app-tools", "get", input] as const),
+        queryOptions: (input: AppToolsGetInput) =>
+          queryOptions({
+            queryKey: ["app-tools", "get", input] as const,
+            queryFn: (context) => client["app-tools"]["get"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    "mcp-inspect": {
+      mcp: {
+        inspect: {
+          mutationKey: () => ["mcp-inspect", "mcp", "inspect"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["mcp-inspect", "mcp", "inspect"] as const,
+              mutationFn: (input: McpInspectMcpInspectInput) => client["mcp-inspect"]["mcp"]["inspect"](input),
+            }),
+        },
+      },
+    },
     "agent-membership": {
       list: {
         queryKey: (input?: AgentMembershipListInput) =>
@@ -925,6 +1135,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryOptions({
               queryKey: ["link", "session", "links", input] as const,
               queryFn: (context) => client["link"]["session"]["links"](input, { signal: context.signal }),
+            }),
+        },
+        usage: {
+          queryKey: (input?: LinkSessionUsageInput) =>
+            input === undefined
+              ? (["link", "session", "usage"] as const)
+              : (["link", "session", "usage", input] as const),
+          queryOptions: (input: LinkSessionUsageInput) =>
+            queryOptions({
+              queryKey: ["link", "session", "usage", input] as const,
+              queryFn: (context) => client["link"]["session"]["usage"](input, { signal: context.signal }),
             }),
         },
         pullRequests: {
@@ -1170,6 +1391,42 @@ export function make(client: ReturnType<typeof Ren.make>) {
           }),
       },
     },
+    artifact: {
+      list: {
+        queryKey: (input?: ArtifactListInput) =>
+          input === undefined ? (["artifact", "list"] as const) : (["artifact", "list", input] as const),
+        queryOptions: (input: ArtifactListInput) =>
+          queryOptions({
+            queryKey: ["artifact", "list", input] as const,
+            queryFn: (context) => client["artifact"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: ArtifactGetInput) =>
+          input === undefined ? (["artifact", "get"] as const) : (["artifact", "get", input] as const),
+        queryOptions: (input: ArtifactGetInput) =>
+          queryOptions({
+            queryKey: ["artifact", "get", input] as const,
+            queryFn: (context) => client["artifact"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      update: {
+        mutationKey: () => ["artifact", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["artifact", "update"] as const,
+            mutationFn: (input: ArtifactUpdateInput) => client["artifact"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["artifact", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["artifact", "archive"] as const,
+            mutationFn: (input: ArtifactArchiveInput) => client["artifact"]["archive"](input),
+          }),
+      },
+    },
     credential: {
       list: {
         queryKey: (input?: CredentialListInput) =>
@@ -1343,6 +1600,138 @@ export function make(client: ReturnType<typeof Ren.make>) {
             }),
         },
       },
+      key: {
+        list: {
+          queryKey: () => ["ren-inference", "key", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["ren-inference", "key", "list"] as const,
+              queryFn: (context) => client["ren-inference"]["key"]["list"]({ signal: context.signal }),
+            }),
+        },
+        usage: {
+          queryKey: (input?: RenInferenceKeyUsageInput) =>
+            input === undefined
+              ? (["ren-inference", "key", "usage"] as const)
+              : (["ren-inference", "key", "usage", input] as const),
+          queryOptions: (input: RenInferenceKeyUsageInput) =>
+            queryOptions({
+              queryKey: ["ren-inference", "key", "usage", input] as const,
+              queryFn: (context) => client["ren-inference"]["key"]["usage"](input, { signal: context.signal }),
+            }),
+        },
+        create: {
+          mutationKey: () => ["ren-inference", "key", "create"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "key", "create"] as const,
+              mutationFn: (input: RenInferenceKeyCreateInput) => client["ren-inference"]["key"]["create"](input),
+            }),
+        },
+        revoke: {
+          mutationKey: () => ["ren-inference", "key", "revoke"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "key", "revoke"] as const,
+              mutationFn: (input: RenInferenceKeyRevokeInput) => client["ren-inference"]["key"]["revoke"](input),
+            }),
+        },
+        secret: {
+          queryKey: (input?: RenInferenceKeySecretInput) =>
+            input === undefined
+              ? (["ren-inference", "key", "secret"] as const)
+              : (["ren-inference", "key", "secret", input] as const),
+          queryOptions: (input: RenInferenceKeySecretInput) =>
+            queryOptions({
+              queryKey: ["ren-inference", "key", "secret", input] as const,
+              queryFn: (context) => client["ren-inference"]["key"]["secret"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      "harness-plan": {
+        mutationKey: () => ["ren-inference", "harness-plan"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["ren-inference", "harness-plan"] as const,
+            mutationFn: (input: RenInferenceHarnessPlanInput) => client["ren-inference"]["harness-plan"](input),
+          }),
+      },
+    },
+    billing: {
+      get: {
+        queryKey: () => ["billing", "get"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["billing", "get"] as const,
+            queryFn: (context) => client["billing"]["get"]({ signal: context.signal }),
+          }),
+      },
+      plan: {
+        list: {
+          queryKey: () => ["billing", "plan", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["billing", "plan", "list"] as const,
+              queryFn: (context) => client["billing"]["plan"]["list"]({ signal: context.signal }),
+            }),
+        },
+      },
+      invoice: {
+        list: {
+          queryKey: (input?: BillingInvoiceListInput) =>
+            input === undefined
+              ? (["billing", "invoice", "list"] as const)
+              : (["billing", "invoice", "list", input] as const),
+          queryOptions: (input: BillingInvoiceListInput) =>
+            queryOptions({
+              queryKey: ["billing", "invoice", "list", input] as const,
+              queryFn: (context) => client["billing"]["invoice"]["list"](input, { signal: context.signal }),
+            }),
+        },
+        url: {
+          queryKey: (input?: BillingInvoiceUrlInput) =>
+            input === undefined
+              ? (["billing", "invoice", "url"] as const)
+              : (["billing", "invoice", "url", input] as const),
+          queryOptions: (input: BillingInvoiceUrlInput) =>
+            queryOptions({
+              queryKey: ["billing", "invoice", "url", input] as const,
+              queryFn: (context) => client["billing"]["invoice"]["url"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      subscribe: {
+        mutationKey: () => ["billing", "subscribe"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "subscribe"] as const,
+            mutationFn: (input: BillingSubscribeInput) => client["billing"]["subscribe"](input),
+          }),
+      },
+      "change-plan": {
+        mutationKey: () => ["billing", "change-plan"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "change-plan"] as const,
+            mutationFn: (input: BillingChangePlanInput) => client["billing"]["change-plan"](input),
+          }),
+      },
+      cancel: {
+        mutationKey: () => ["billing", "cancel"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "cancel"] as const,
+            mutationFn: () => client["billing"]["cancel"](),
+          }),
+      },
+      portal: {
+        mutationKey: () => ["billing", "portal"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["billing", "portal"] as const,
+            mutationFn: () => client["billing"]["portal"](),
+          }),
+      },
     },
     "channel-install": {
       list: {
@@ -1491,6 +1880,16 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["insights", "query", input] as const,
             queryFn: (context) => client["insights"]["query"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    feedback: {
+      report: {
+        mutationKey: () => ["feedback", "report"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["feedback", "report"] as const,
+            mutationFn: (input: FeedbackReportInput) => client["feedback"]["report"](input),
           }),
       },
     },

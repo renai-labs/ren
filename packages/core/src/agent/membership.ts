@@ -135,7 +135,7 @@ export const layer = Layer.effect(
               })
             )
               return yield* new Primitive.Forbidden({
-                message: "Adding an agent to a space needs membership in both spaces, or an organization admin.",
+                message: "Adding an agent to a space needs membership in both spaces.",
               })
             if (found.agent.owner_space_id === input.spaceId)
               return entry({

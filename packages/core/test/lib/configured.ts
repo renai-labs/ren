@@ -1,5 +1,6 @@
 export * as Configured from "./configured.js"
 
+import { BrainProviders } from "./brain-providers.js"
 import { Shared } from "@ren/cell/testing"
 import type { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -7,6 +8,7 @@ import type { Auth } from "@ren/schema/auth"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Effect, Layer } from "effect"
 import { Access } from "../../src/access.js"
+import { Billing } from "../../src/billing.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { GitHubApp } from "../../src/github-app.js"
@@ -45,9 +47,10 @@ export const runnerLayer = Layer.mergeAll(SessionRunner.layer, SessionSync.layer
 export const sessionLayerWith = (
   github: Layer.Layer<GitHubApp.Service, never, Database.Service> = GitHubApp.layerNone,
 ) =>
-  Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(github))),
+    Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
     Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Host.layer({}, models)),

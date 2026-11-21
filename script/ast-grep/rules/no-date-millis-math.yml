@@ -1,0 +1,10 @@
+id: no-date-millis-math
+language: Tsx
+message: "Use `DateTime.addDuration` or `DateTime.subtractDuration`, not millisecond math on a `Date`."
+severity: error
+files:
+  - "packages/*/src/**"
+rule:
+  any:
+    - pattern: new Date($DATE.getTime() + $AMOUNT)
+    - pattern: new Date($DATE.getTime() - $AMOUNT)

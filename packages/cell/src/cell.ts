@@ -57,6 +57,8 @@ export class Activity extends Context.Service<
     readonly configuring: Semaphore.Semaphore
     readonly closedIdle: Ref.Ref<boolean>
     readonly pulledAt: Ref.Ref<Option.Option<DateTime.Utc>>
+    // oxlint-disable-next-line ren/no-comments -- The chats whose files or diff a person asked for since the last pull: Ren keeps their place on their hands.
+    readonly touched: Ref.Ref<ReadonlySet<string>>
   }
 >()("@ren/cell/Cell/Activity") {}
 
@@ -208,6 +210,7 @@ export const activityLayer = Layer.effect(
     configuring: Semaphore.make(1),
     closedIdle: Ref.make(false),
     pulledAt: Ref.make(Option.none<DateTime.Utc>()),
+    touched: Ref.make<ReadonlySet<string>>(new Set()),
   }),
 )
 

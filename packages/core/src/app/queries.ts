@@ -164,3 +164,5 @@ export const find = Effect.fnUntraced(function* (
 })
 
 export const visibleSpace = AgentQueries.visibleSpace
+
+export const targetSpace = AgentQueries.targetSpace

@@ -1,6 +1,6 @@
 export * as WorkspaceFiles from "./workspace-files.js"
 
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import type { HandConnections } from "@ren/brain/hand/connections"
 import type { Session } from "@ren/schema/session"
 import { Context, Effect, FileSystem, Layer, Schema } from "effect"
 import { dirname, resolve } from "node:path"
@@ -42,7 +42,7 @@ export const layerLocal = (directory: string) =>
     }),
   )
 
-export const layerEnvironment = (connections: EnvironmentConnections.Interface, sessionId: Session.ID) =>
+export const layerEnvironment = (connections: HandConnections.Interface, sessionId: Session.ID) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {

@@ -13,7 +13,7 @@ End-to-end tests across server, client, CLI and app (Playwright), and the chaos 
 
 ## Dependencies
 
-Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestEnvironment` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Ren Host API's `environments.access` and `host.refresh` for the environment each session was placed on. The issuer keeps no sessions: it answers the sync checkpoints and restore with no sessions, and refuses each upload. The real-stack cases run the real Ren server with Postgres instead, so sessions sync and restore there.
+Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestHand` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Ren Host API's `environments.access` and `host.refresh` for the environment each session was placed on. The issuer keeps no sessions: it answers the sync checkpoints and restore with no sessions, and refuses each upload. The real-stack cases run the real Ren server with Postgres instead, so sessions sync and restore there.
 
 ## Two runners
 
@@ -29,8 +29,8 @@ Playwright's `testDir` is `./tests`, and `bunfig.toml` sets the Bun test root to
 `script/serve.ts` creates an isolated database, migrates it and starts three processes, then drops the database on shutdown:
 
 - The server on `E2E_PORT` (default 4010). API and CLI specs call it directly through `serverURL`.
-- The app on `E2E_APP_PORT` (default 4011), served under `/app/` and calling the server cross-origin with credentials. Playwright's `baseURL` is the app origin, so specs navigate to `/app/...`; `appURL` in `tests/lib/servers.ts` includes the `/app` base.
-- A mailbox on `E2E_MAILBOX_PORT` (default 4012). `GET /?to=<email>` returns the last email the server logged for that address, so specs read codes and links from real emails.
+- The app on `E2E_APP_PORT` (default 4011), served at the root and calling the server cross-origin with credentials. Playwright's `baseURL` is the app origin (`appOrigin` in `tests/lib/servers.ts`), so specs navigate to the app's paths.
+- A mailbox on `E2E_MAILBOX_PORT` (default 4012). `GET /?to=<email>` returns the last email the server logged for that address, so specs read codes and links from real emails. `POST /script` with `{ reply?, tools? }` returns a marker; a chat message that contains it makes the stub model call those tools and give that reply (`script` in `tests/lib/servers.ts`).
 
 ## Chaos harness
 
@@ -42,7 +42,7 @@ chaos/
     control.ts   GET /environments/:id and the /environments/changes long poll the cell reads
     faults/      the fault proxy that sits on every link
     adapters/    executor (local process, Docker), E2B, Cloudflare
-    drivers/     Environment API client, Brain API and OpenCode session driver over TestCell
+    drivers/     Hand API client, Brain API and OpenCode session driver over TestCell
     provider/    scripted model provider, test issuer, live model selection, LiteLLM key admin,
                  and the chaos environment providers that read the lane's containers from a file
     server-main.ts  the Ren server with the chaos environment providers in place of Docker

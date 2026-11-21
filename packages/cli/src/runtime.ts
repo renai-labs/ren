@@ -25,7 +25,7 @@ export const describe = (
     }
   if (CliError.isCliError(error) && error._tag !== "UserError") return { type: "UsageError", message: error.message }
   if (Predicate.isTagged(error, "UnauthorizedError"))
-    return { type: "UnauthorizedError", message: "Not logged in. Run ren2 login." }
+    return { type: "UnauthorizedError", message: "Not logged in. Run ren login." }
   const schema = reported.find((type) => error instanceof type)
   if (!schema) return { type: "CliError", message: message(error) }
   const encoded = Schema.encodeUnknownSync(schema)(error)

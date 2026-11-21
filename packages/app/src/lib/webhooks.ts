@@ -81,7 +81,7 @@ export const requestOptions = (client: Runtime.Context["client"], id: string) =>
     queryFn: () => client["webhook-request"].get({ id }),
   })
 
-export const listInput = (spaceId: string) => ({ spaceId, page: 1, pageSize: 50 })
+export const listInput = (spaceId?: string) => ({ ...(spaceId && { spaceId }), page: 1, pageSize: 50 })
 
 export const defaultAgent = "default"
 

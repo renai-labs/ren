@@ -1,7 +1,7 @@
 import { Memory } from "@ren/schema/memory"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
-import { ForbiddenError, InvalidRequestError, NotFoundError } from "../errors.js"
+import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
@@ -39,12 +39,12 @@ export const MemoryGroup = HttpApiGroup.make("memory")
     HttpApiEndpoint.put("memory.write", "/memory/file", {
       payload: Memory.WriteInput,
       success: HttpApiSchema.NoContent,
-      error: [NotFoundError, ForbiddenError, InvalidRequestError],
+      error: [NotFoundError, ForbiddenError, InvalidRequestError, ConflictError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "memory.write",
         summary: "Write a memory file",
-        description: `Create a memory file or replace its whole content. Keep each fact to one short line and each file on one topic; prefer an edit for a small change. ${scope}`,
+        description: `Create a memory file or replace its whole content. Pass mode create to fail instead of replacing a file that exists. Keep each fact to one short line and each file on one topic; prefer an edit for a small change. ${scope}`,
       }),
     ),
   )

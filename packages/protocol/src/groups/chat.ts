@@ -80,13 +80,17 @@ export const ChatGroup = HttpApiGroup.make("chat")
   .add(
     HttpApiEndpoint.get("chat.models", "/sessions/:id/models", {
       params: { id: Session.ID },
-      success: Schema.Array(SessionModel.Choice),
+      query: Schema.Struct({
+        spaceId: Schema.optional(Space.ID).annotate({ description: "The space the session starts in." }),
+      }),
+      success: SessionModel.Choices,
+      error: NotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "chat.models",
         summary: "List models for a new session",
         description:
-          "Return the models and variants a session with this ID may start with, before it exists. Pass one as `model` to `session.create`. Once the session runs, `model.list` in the Chat API lists them.",
+          "Return the models and variants a session with this ID may start with, before it exists, and its default. Pass one as `model` to `session.create`. Once the session runs, `model.list` in the Chat API lists them.",
       }),
     ),
   )

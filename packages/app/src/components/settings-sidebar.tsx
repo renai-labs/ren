@@ -1,14 +1,20 @@
 import { useRef, useState } from "react"
+import { cn } from "cn"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation } from "@tanstack/react-router"
 import {
   IconAdjustmentsHorizontal,
   IconArrowLeft,
+  IconBrain,
+  IconChartBar,
+  IconCpu,
   IconMessagesFilled,
   IconBuilding,
+  IconCreditCard,
   IconKey,
   IconSearch,
   IconServer,
+  IconShield,
   IconUsers,
 } from "@tabler/icons-react"
 import { Kbd } from "@ren/ui/kbd"
@@ -22,7 +28,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@ren/ui/sidebar"
-import { Footer, Header, Section, sidebarRow } from "./sidebar-parts.js"
+import { Footer, Header, Section, sidebarMenu, sidebarRow } from "./sidebar-parts.js"
 import { canAdministerOptions } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Keyboard } from "../platform/keyboard.js"
@@ -37,7 +43,6 @@ export const settingsSections = [
         label: "Preferences",
         icon: IconAdjustmentsHorizontal,
       },
-      { id: "credentials", to: "/settings/credentials", label: "Credentials", icon: IconKey },
     ],
   },
   {
@@ -45,8 +50,20 @@ export const settingsSections = [
     items: [
       { id: "general", to: "/settings/general", label: "General", icon: IconBuilding, admin: true },
       { id: "members", to: "/settings/members", label: "Members", icon: IconUsers, admin: true },
+      {
+        id: "permissions",
+        to: "/settings/permissions",
+        label: "Permissions",
+        icon: IconShield,
+        admin: true,
+      },
+      { id: "memory", to: "/settings/memory", label: "Memory", icon: IconBrain },
       { id: "providers", to: "/settings/providers", label: "Providers", icon: IconServer },
+      { id: "credentials", to: "/settings/credentials", label: "Credentials", icon: IconKey },
       { id: "channels", to: "/settings/channels", label: "Channels", icon: IconMessagesFilled },
+      { id: "machines", to: "/settings/machines", label: "Machines", icon: IconCpu, admin: true },
+      { id: "usage", to: "/settings/usage", label: "Usage", icon: IconChartBar, admin: true },
+      { id: "billing", to: "/settings/billing", label: "Billing & plans", icon: IconCreditCard, admin: true },
     ],
   },
 ] as const
@@ -56,7 +73,7 @@ function SettingsMenu(props: {
   section: string | undefined
 }) {
   return (
-    <SidebarMenu className="gap-1">
+    <SidebarMenu className={sidebarMenu}>
       {props.items.map((item) => (
         <SidebarMenuItem key={item.id}>
           <SidebarMenuButton
@@ -100,7 +117,7 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="gap-0 p-0">
         <Header onSearch={props.onSearch} />
-        <SidebarMenu className="gap-1 px-0.5">
+        <SidebarMenu className={cn(sidebarMenu, "px-0.5")}>
           <SidebarMenuItem>
             <SidebarMenuButton className={sidebarRow} tooltip="Back to app" render={<Link to="/" />}>
               <IconArrowLeft />

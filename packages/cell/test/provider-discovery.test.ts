@@ -21,7 +21,6 @@ it.live("brains discover providers independently with their own keys and keep on
             const path = new URL(request.url).pathname
             calls.push([path, request.headers.get("authorization")])
             if (path.startsWith("/first/") && state.firstDown) return new Response(null, { status: 503 })
-            if (path.endsWith("/search/providers")) return Response.json([])
             return Response.json({
               baseUrl: `${new URL(request.url).origin}/${path.split("/")[1]}/v1`,
               models: [
@@ -52,7 +51,7 @@ it.live("brains discover providers independently with their own keys and keep on
       ["first", "chat"],
       ["second", "chat"],
     ])
-    expect(calls).toHaveLength(4)
+    expect(calls).toHaveLength(2)
     expect(calls.every((call) => call[1] === `Bearer key-${call[0].split("/")[1]}`)).toBe(true)
     state.firstDown = true
     state.second = "new-chat"
@@ -85,7 +84,6 @@ it.live("a removed provider's in-flight discovery cannot restore its catalog", (
           fetch: (request) =>
             Effect.runPromise(
               Effect.gen(function* () {
-                if (new URL(request.url).pathname.endsWith("/search/providers")) return Response.json([])
                 yield* Deferred.succeed(started, undefined)
                 yield* Deferred.await(release)
                 return Response.json({

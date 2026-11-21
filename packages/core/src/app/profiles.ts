@@ -1,13 +1,13 @@
 export * as AppProfiles from "./profiles.js"
 
 import { Database } from "@ren/db/database"
-import type { App } from "@ren/schema/app"
+import { App } from "@ren/schema/app"
 import { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Pagination } from "@ren/util/pagination"
 import { Slug } from "@ren/util/slug"
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
 import { Actor } from "../actor.js"
@@ -66,6 +66,145 @@ const notFound = new Primitive.NotFound({ message: "Profile not found." })
 
 const isSlug = Schema.is(AppProfile.Slug)
 
+// oxlint-disable-next-line ren/no-comments -- Installing an app installs the apps it depends on, to App.maxDepth levels. Each one that no profile reaches where this profile was installed (the spaces it was added to, or every space) gets a profile of its own, of this profile's kind and name, numbered when that app has one of that name. From then on each is an app like any other.
+export const installDependencies = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  id: AppProfile.ID,
+  into: { readonly spaceIds: ReadonlyArray<Space.ID>; readonly allSpaces: boolean; readonly name?: string },
+) {
+  const row = (yield* transaction.select().from(profiles).where(eq(profiles.id, id))).at(0)
+  if (!row) return
+  const base = into.name ?? row.name
+  const edges = Database.Schema.app_dependency
+  const tree = new Set<App.ID>()
+  let pending: ReadonlyArray<App.ID> = [row.app_id]
+  let level = 1
+  while (pending.length && level < App.maxDepth) {
+    const found = yield* transaction
+      .select({ id: edges.dependency_app_id })
+      .from(edges)
+      .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, edges.dependency_app_id))
+      .where(
+        and(
+          inArray(edges.app_id, [...pending]),
+          isNull(Database.Schema.app.archived_at),
+          or(isNotNull(Database.Schema.app.organization_id), AppQueries.isListed),
+        ),
+      )
+    pending = [...new Set(found.map((edge) => edge.id))].filter((each) => each !== row.app_id && !tree.has(each))
+    for (const each of pending) tree.add(each)
+    level += 1
+  }
+  if (!tree.size) return
+  const owners = new Map(
+    (into.spaceIds.length
+      ? yield* transaction
+          .select({ id: spaces.id, kind: spaces.kind, ownerUserId: spaces.owner_user_id })
+          .from(spaces)
+          .where(inArray(spaces.id, [...into.spaceIds]))
+      : []
+    ).map((space) => [space.id, space]),
+  )
+  const existing = yield* transaction
+    .select()
+    .from(profiles)
+    .where(and(eq(profiles.organization_id, row.organization_id), inArray(profiles.app_id, [...tree])))
+  const listings = Map.groupBy(
+    existing.length
+      ? yield* transaction
+          .select()
+          .from(listed)
+          .where(
+            inArray(
+              listed.profile_id,
+              existing.map((each) => each.id),
+            ),
+          )
+      : [],
+    (listing) => listing.profile_id,
+  )
+  yield* Effect.forEach(
+    [...tree],
+    Effect.fnUntraced(function* (appId) {
+      const own = existing.filter((other) => other.app_id === appId)
+      const names = new Set(own.map((other) => other.name.toLowerCase()))
+      const create = (values: { readonly all_spaces: boolean }) =>
+        Effect.gen(function* () {
+          const created = AppProfile.ID.create()
+          yield* transaction.insert(profiles).values({
+            id: created,
+            organization_id: row.organization_id,
+            app_id: appId,
+            slug: Slug.free(row.slug, new Set(own.map((other) => other.slug)), AppProfile.maximumSlugLength),
+            name:
+              Array.from({ length: names.size + 1 }, (_, index) => {
+                const suffix = index === 0 ? "" : ` ${index + 1}`
+                return `${base.slice(0, Primitive.maximumNameLength - suffix.length).trimEnd()}${suffix}`
+              }).find((candidate) => !names.has(candidate.toLowerCase())) ?? base,
+            kind: row.kind,
+            user_id: row.user_id,
+            all_spaces: values.all_spaces,
+            created_by_user_id: row.created_by_user_id,
+          })
+          return created
+        })
+      if (row.kind === "private") {
+        if (own.some((other) => other.all_spaces || (other.kind === "private" && other.user_id === row.user_id))) return
+        yield* create({ all_spaces: false })
+        return
+      }
+      if (into.allSpaces) {
+        if (!own.some((other) => other.all_spaces)) yield* create({ all_spaces: true })
+        return
+      }
+      const missing = into.spaceIds.filter((spaceId) => {
+        const space = owners.get(spaceId)
+        return !own.some(
+          (other) =>
+            other.all_spaces ||
+            (listings.get(other.id) ?? []).some((listing) => listing.space_id === spaceId) ||
+            (other.kind === "private" && space?.kind === "private" && space.ownerUserId === other.user_id),
+        )
+      })
+      if (!missing.length) return
+      const created = yield* create({ all_spaces: false })
+      yield* transaction.insert(listed).values(missing.map((space_id) => ({ profile_id: created, space_id })))
+    }),
+    { discard: true },
+  )
+})
+
+// oxlint-disable-next-line ren/no-comments -- A space added to an existing profile gets its dependencies one space at a time, named after that space ("Customer Success · Sales Kit"), not after the space the profile was first made for.
+export const installDependenciesInEach = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  id: AppProfile.ID,
+  spaceIds: ReadonlyArray<Space.ID>,
+) {
+  if (!spaceIds.length) return
+  const row = (yield* transaction
+    .select({ name: Database.Schema.app.name })
+    .from(profiles)
+    .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, profiles.app_id))
+    .where(eq(profiles.id, id))).at(0)
+  if (!row) return
+  const named = new Map(
+    (yield* transaction
+      .select({ id: spaces.id, name: spaces.name })
+      .from(spaces)
+      .where(inArray(spaces.id, [...spaceIds]))).map((space) => [space.id, space.name]),
+  )
+  yield* Effect.forEach(
+    spaceIds,
+    (spaceId) =>
+      installDependencies(transaction, id, {
+        spaceIds: [spaceId],
+        allSpaces: false,
+        ...(named.has(spaceId) && { name: `${named.get(spaceId)} · ${row.name}` }),
+      }),
+    { discard: true },
+  )
+})
+
 // oxlint-disable-next-line ren/no-comments -- P13: a custom app's first profile is shared, lists only its owner space, and takes the owner space's name.
 export const createOwner = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -92,6 +231,7 @@ export const createOwner = Effect.fnUntraced(function* (
     created_by_user_id: input.createdBy,
   })
   yield* transaction.insert(listed).values({ profile_id: id, space_id: input.spaceId })
+  yield* installDependencies(transaction, id, { spaceIds: [input.spaceId], allSpaces: false })
   return id
 })
 
@@ -581,6 +721,58 @@ export const layer = Layer.effect(
         return yield* new Primitive.Forbidden({ message: "A shared profile cannot link a private profile." })
     })
 
+    const reachOf = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      profile: {
+        readonly kind: AppProfile.Kind
+        readonly userId: Auth.UserID | null
+        readonly allSpaces: boolean
+        readonly spaceIds: ReadonlyArray<Space.ID>
+      },
+    ) {
+      if (!profile.allSpaces && profile.kind === "shared") return profile.spaceIds
+      return (yield* transaction
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(
+          and(
+            eq(spaces.organization_id, actor.organizationId),
+            isNull(spaces.archived_at),
+            profile.allSpaces
+              ? undefined
+              : and(eq(spaces.kind, "private"), eq(spaces.owner_user_id, profile.userId ?? actor.userId)),
+          ),
+        )).map((row) => row.id)
+    })
+
+    const checkName = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      profile: { readonly id?: AppProfile.ID; readonly appId: App.ID; readonly name: string },
+      spaceIds: ReadonlyArray<Space.ID>,
+    ) {
+      const name = profile.name.trim().toLowerCase()
+      const clashes = yield* Effect.forEach(spaceIds, (spaceId) =>
+        reachable(transaction, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) }).pipe(
+          Effect.map((reached) =>
+            reached.some(
+              (other) =>
+                other.appId === profile.appId && other.id !== profile.id && other.name.trim().toLowerCase() === name,
+            )
+              ? [spaceId]
+              : [],
+          ),
+        ),
+      )
+      const clash = clashes.flat().at(0)
+      if (!clash) return
+      const space = (yield* transaction.select({ name: spaces.name }).from(spaces).where(eq(spaces.id, clash))).at(0)
+      return yield* new Primitive.Conflict({
+        message: `An account named “${profile.name.trim()}” is already in ${space?.name ?? "this space"}.`,
+      })
+    })
+
     const writeLink = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       profileId: AppProfile.ID,
@@ -609,6 +801,7 @@ export const layer = Layer.effect(
     ) {
       const changed = yield* database.transaction((transaction) =>
         Effect.gen(function* () {
+          yield* AppQueries.lock(transaction, actor)
           const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.access)
           const holds = holdsOf(actor, row, (yield* listedOf(transaction, actor, [row.id])).get(row.id) ?? [])
           if (typeof input.allSpaces === "boolean" && !allowed(actor, AppProfilePolicy.actions.allSpaces, holds))
@@ -619,6 +812,17 @@ export const layer = Layer.effect(
             ...add.map((space) => ({ id: space, action: AppProfilePolicy.actions.addSpace })),
             ...remove.map((space) => ({ id: space, action: AppProfilePolicy.actions.removeSpace })),
           ])
+          yield* checkName(
+            transaction,
+            actor,
+            { id: row.id, appId: row.app_id, name: row.name },
+            yield* reachOf(transaction, actor, {
+              kind: "shared",
+              userId: null,
+              allSpaces: input.allSpaces === true,
+              spaceIds: add,
+            }),
+          )
           if (add.length)
             yield* transaction
               .insert(listed)
@@ -630,6 +834,9 @@ export const layer = Layer.effect(
               .where(and(eq(listed.profile_id, row.id), inArray(listed.space_id, [...remove])))
           if (typeof input.allSpaces === "boolean")
             yield* transaction.update(profiles).set({ all_spaces: input.allSpaces }).where(eq(profiles.id, row.id))
+          if (input.allSpaces === true)
+            yield* installDependencies(transaction, row.id, { spaceIds: add, allSpaces: true })
+          else yield* installDependenciesInEach(transaction, row.id, add)
           yield* touch(transaction, row.id)
           const left = yield* transaction
             .select({ space: listed.space_id })
@@ -647,11 +854,16 @@ export const layer = Layer.effect(
           }
         }),
       )
-      // oxlint-disable-next-line ren/no-comments -- A shared profile that no space uses any more is deleted, with its sign-ins, as a delete does.
-      if (changed.unused) {
-        yield* store.removeForProfile(changed.info.id)
-        yield* database.db.delete(profiles).where(eq(profiles.id, changed.info.id)).pipe(Effect.orDie)
-      }
+      if (changed.unused)
+        yield* database.db
+          .delete(profiles)
+          .where(
+            and(
+              eq(profiles.id, changed.info.id),
+              sql`not exists (select 1 from ${credentials} where ${credentials.profile_id} = ${profiles.id})`,
+            ),
+          )
+          .pipe(Effect.orDie)
       yield* invalidate(changed.labels)
       return changed.info
     })
@@ -724,6 +936,17 @@ export const layer = Layer.effect(
               return yield* new Primitive.Forbidden({ message: "You cannot create profiles." })
             const isPrivate = input.kind === "private"
             const spaceIds = yield* listOf(transaction, actor, input)
+            yield* checkName(
+              transaction,
+              actor,
+              input,
+              yield* reachOf(transaction, actor, {
+                kind: input.kind,
+                userId: isPrivate ? actor.userId : null,
+                allSpaces: input.allSpaces ?? false,
+                spaceIds,
+              }),
+            )
             const first = (yield* transaction
               .select({ id: profiles.id })
               .from(profiles)
@@ -769,6 +992,7 @@ export const layer = Layer.effect(
             yield* Effect.forEach(input.links ?? [], (link) =>
               checkLink(transaction, actor, row, link).pipe(Effect.andThen(writeLink(transaction, id, link))),
             )
+            yield* installDependencies(transaction, id, { spaceIds, allSpaces: input.allSpaces === true })
             return { info: yield* infoOf(transaction, actor, id), labels: yield* labelsOf(transaction, id) }
           }),
         )
@@ -780,11 +1004,26 @@ export const layer = Layer.effect(
         const changed = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.update)
-            if (input.name)
+            if (input.name) {
+              yield* checkName(
+                transaction,
+                actor,
+                { id: row.id, appId: row.app_id, name: input.name },
+                yield* reachOf(transaction, actor, {
+                  kind: row.kind,
+                  userId: row.user_id,
+                  allSpaces: row.all_spaces,
+                  spaceIds: (yield* transaction
+                    .select({ id: listed.space_id })
+                    .from(listed)
+                    .where(eq(listed.profile_id, row.id))).map((each) => each.id),
+                }),
+              )
               yield* transaction
                 .update(profiles)
                 .set({ name: input.name, updated_at: sql`now()` })
                 .where(eq(profiles.id, row.id))
+            }
             return { info: yield* infoOf(transaction, actor, row.id), labels: yield* labelsOf(transaction, row.id) }
           }),
         )
@@ -831,21 +1070,22 @@ export const layer = Layer.effect(
         return changed.info
       }),
 
-      promote: Effect.fn("AppProfiles.promote")(function* (actor, id) {
+      promote: Effect.fn("AppProfiles.promote")(function* (actor, id, input) {
         const changed = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            yield* AppQueries.lock(transaction, actor)
             const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.promote)
             if (row.kind !== "private") return yield* new Primitive.Conflict({ message: "The profile is shared." })
+            yield* checkSpaces(transaction, actor, holdsOf(actor, { ...row, kind: "shared", user_id: null }, []), [
+              { id: input.spaceId, action: AppProfilePolicy.actions.addSpace },
+            ])
+            yield* checkName(transaction, actor, { id: row.id, appId: row.app_id, name: row.name }, [input.spaceId])
             yield* transaction
               .update(profiles)
               .set({ kind: "shared", user_id: null, updated_at: sql`now()` })
               .where(eq(profiles.id, row.id))
-            const own = yield* spacesOf(transaction, actor)
-            if (own.length)
-              yield* transaction
-                .insert(listed)
-                .values(own.map((space_id) => ({ profile_id: row.id, space_id })))
-                .onConflictDoNothing()
+            yield* transaction.insert(listed).values({ profile_id: row.id, space_id: input.spaceId })
+            yield* installDependenciesInEach(transaction, row.id, [input.spaceId])
             return {
               info: yield* infoOf(transaction, actor, row.id),
               labels: yield* labelsOf(transaction, row.id),

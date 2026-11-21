@@ -6,7 +6,7 @@ import { PatchFiles } from "./patch-files.js"
 import { TimelineText } from "./timeline-text.js"
 import { ToolState } from "./tool-state.js"
 
-export type Kind = "command" | "file" | "edit" | "search" | "web" | "agent" | "tool"
+export type Kind = "command" | "file" | "edit" | "search" | "web" | "agent" | "ren" | "tool"
 
 export type Status = "running" | "completed" | "failed"
 
@@ -54,12 +54,23 @@ const actions: Readonly<Record<string, string>> = {
   ren_session_list: "Listing sessions",
   ren_session_get: "Reading session",
   ren_session_messages: "Reading messages",
+  ren_task_list: "Listing tasks",
   kernel_manage_browsers: "Managing browser",
   kernel_computer_action: "Using browser",
   kernel_execute_playwright_code: "Running Playwright",
   kernel_manage_replays: "Recording replay",
   kernel_browser_curl: "Fetching in browser",
   kernel_exec_command: "Running in browser VM",
+  kernel_browser_repl: "Using browser",
+  browser_manage_browsers: "Managing browser",
+  browser_browser_repl: "Using browser",
+  browser_computer_action: "Using browser",
+  browser_execute_playwright_code: "Running Playwright",
+  browser_manage_browser_files: "Managing browser files",
+  browser_manage_profiles: "Managing browser profiles",
+  browser_manage_replays: "Recording replay",
+  browser_browser_curl: "Fetching in browser",
+  browser_exec_command: "Running in browser VM",
 }
 
 const results: Readonly<Record<string, string>> = {
@@ -112,6 +123,7 @@ const kinds: Readonly<Record<string, Kind>> = {
   bash: "command",
   execute: "command",
   kernel_exec_command: "command",
+  browser_exec_command: "command",
   read: "file",
   write: "edit",
   show_file: "file",
@@ -120,10 +132,11 @@ const kinds: Readonly<Record<string, Kind>> = {
   apply_patch: "edit",
   grep: "search",
   glob: "search",
-  websearch: "search",
+  websearch: "web",
   tool_search: "search",
   webfetch: "web",
   kernel_browser_curl: "web",
+  browser_browser_curl: "web",
   subagent: "agent",
   task: "agent",
 }
@@ -156,8 +169,6 @@ const providers: Readonly<Record<string, string>> = {
 
 const subjectKeys = ["description", "query", "url", "path", "pattern", "name"]
 
-const formatters: { list?: Intl.ListFormat } = {}
-
 const lookup = <A>(table: Readonly<Record<string, A>>, key: string) =>
   Object.hasOwn(table, key) ? table[key] : undefined
 
@@ -173,7 +184,24 @@ const basename = (value: unknown) => {
 const count = (value: unknown, noun: string) =>
   Array.isArray(value) ? `${value.length} ${value.length === 1 ? noun : `${noun}s`}` : undefined
 
-export const kind = (tool: SessionMessage.Tool): Kind => lookup(kinds, tool.name) ?? "tool"
+const call =
+  /\btools\s*(?:\.\s*([A-Za-z0-9_-]+)|\[\s*["'`]([^"'`]+)["'`]\s*\])\s*(?:\.\s*([A-Za-z0-9_]+)|\[\s*["'`]([^"'`]+)["'`]\s*\])\s*\(/u
+
+export const codeCall = (code: unknown) => {
+  const found = call.exec(text(code) ?? "")
+  const namespace = found?.at(1) ?? found?.at(2)
+  const name = found?.at(3) ?? found?.at(4)
+  return namespace && name ? { namespace, name } : undefined
+}
+
+export const renAction = (name: string) => lookup(actions, `ren_${name}`)
+
+const renCall = (tool: SessionMessage.Tool) => {
+  const found = tool.name === "execute" ? codeCall(ToolState.input(tool).code) : undefined
+  return found?.namespace === "ren" ? found.name : undefined
+}
+
+export const kind = (tool: SessionMessage.Tool): Kind => (renCall(tool) ? "ren" : (lookup(kinds, tool.name) ?? "tool"))
 
 export const status = (tool: SessionMessage.Tool): Status => {
   if (tool.state.status === "streaming" || tool.state.status === "running") return "running"
@@ -186,10 +214,17 @@ export const hidden = (tool: SessionMessage.Tool) =>
   (tool.name === "question" && (tool.state.status === "streaming" || tool.state.status === "running"))
 
 export const label = (tool: SessionMessage.Tool) => {
+  const ren = renCall(tool)
+  if (ren) return renAction(ren) ?? "Using Ren"
   const action = lookup(actions, tool.name) ?? capitalize(tool.name.replaceAll(/[_-]+/g, " "))
   const state = status(tool)
   if (state === "failed") return lookup(failures, tool.name) ?? action
   return state === "completed" ? (lookup(results, tool.name) ?? action) : action
+}
+
+export const shellLabel = (tool: SessionMessage.Tool, options: { readonly running: boolean }) => {
+  if (!ToolState.backgrounded(tool)) return label(tool)
+  return options.running ? "Running in background" : "Ran in background"
 }
 
 export const webSearchProvider = (provider: unknown) => {
@@ -198,17 +233,17 @@ export const webSearchProvider = (provider: unknown) => {
   return `${lookup(providers, value) ?? capitalize(value)} web search`
 }
 
-export const name = (tool: SessionMessage.Tool) =>
-  tool.name === "websearch"
-    ? webSearchProvider(ToolState.metadata(tool).provider)
-    : (lookup(names, tool.name) ?? tool.name)
+export const name = (tool: SessionMessage.Tool) => {
+  if (tool.name === "websearch") return webSearchProvider(ToolState.metadata(tool).provider)
+  return renCall(tool) ? "Ren" : (lookup(names, tool.name) ?? tool.name)
+}
 
 type Subject = (
   input: Readonly<Record<string, unknown>>,
   metadata: Readonly<Record<string, unknown>>,
 ) => string | undefined
 
-const command: Subject = (input, metadata) => text(input.command) ?? text(metadata.command)
+const shellCommand: Subject = (input, metadata) => text(input.command) ?? text(metadata.command)
 const file: Subject = (input) => basename(input.filePath) ?? basename(input.path)
 const directory: Subject = (input) => text(input.path)
 const workspace = /^.*\/workspace\/[^/]+\/?/u
@@ -222,8 +257,8 @@ const delegated: Subject = (input, metadata) => text(input.description) ?? text(
 
 const subjects: Readonly<Record<string, Subject>> = {
   experimental_image_generate: (input) => text(input.prompt),
-  shell: command,
-  bash: command,
+  shell: shellCommand,
+  bash: shellCommand,
   execute: (input) => text(input.code)?.split("\n").at(0),
   read: file,
   write: file,
@@ -249,6 +284,11 @@ const generic: Subject = (input) =>
 export const subtitle = (tool: SessionMessage.Tool) =>
   (lookup(subjects, tool.name) ?? generic)(ToolState.input(tool), ToolState.metadata(tool))
 
+export const command = (tool: SessionMessage.Tool) =>
+  tool.name === "bash" || tool.name === "shell"
+    ? shellCommand(ToolState.input(tool), ToolState.metadata(tool))
+    : undefined
+
 export const output = (tool: SessionMessage.Tool) => {
   const value = ToolState.output(tool)
   if (tool.name === "experimental_image_generate" && value && /^Image job \S+ started in background\b/u.test(value))
@@ -272,6 +312,9 @@ export const errorSummary = (tool: string, message: string) => {
 export const dismissed = (tool: SessionMessage.Tool) =>
   tool.name === "question" && Boolean(ToolState.error(tool)?.includes("dismissed this question"))
 
+export const standsAlone = (items: ReadonlyArray<GroupItem>) =>
+  (items.length === 1 && items.at(0)?.type !== "text") || items.every((item) => item.type === "reasoning")
+
 export const group = (items: ReadonlyArray<GroupItem>) => {
   const tools = items.flatMap((item) => {
     if (item.type === "shell") return ["Shell"]
@@ -281,9 +324,9 @@ export const group = (items: ReadonlyArray<GroupItem>) => {
   if (tools.length === 0 && thoughts === 0) return { title: "Updates", count: 0 }
   const total = tools.length || thoughts
   const thought = thoughts === 1 ? "Thought" : "Thoughts"
-  formatters.list ??= new Intl.ListFormat("en", { style: "long", type: "conjunction" })
-  const list = formatters.list
-  return { title: `Used ${total} ${tools.length ? list.format([...new Set(tools)]) : thought}`, count: total }
+  const names = [...new Set(tools)]
+  const list = names.length > 2 ? `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}` : names.join(" and ")
+  return { title: `Used ${total} ${tools.length ? list : thought}`, count: total }
 }
 
 const urlPattern = /https?:\/\/[^\s<>"'`)\]]+/g

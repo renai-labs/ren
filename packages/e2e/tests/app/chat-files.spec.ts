@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises"
 import { expect, test } from "@playwright/test"
 import { Schema } from "effect"
 import { createOrganization, serverURL } from "../lib/servers.js"
@@ -13,7 +12,7 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
+  await page.goto("/")
   const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await message.fill("Plan the launch")
   await message.press("Enter")
@@ -56,12 +55,6 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   const thumbnail = attached.getByRole("img", { name: "screenshot.png" })
   await expect(thumbnail).toHaveJSProperty("naturalWidth", 1)
 
-  const download = page.waitForEvent("download")
-  await attached.getByRole("button", { name: "Download plan.txt" }).click()
-  const saved = await download
-  expect(saved.suggestedFilename()).toBe("plan.txt")
-  expect(await readFile(await saved.path(), "utf8")).toBe("ship on friday")
-
   await page.reload()
   await expect(attached.getByText(/\.(txt|md|png)$/)).toHaveCount(4)
   expect(
@@ -99,4 +92,24 @@ test("a member attaches files to a chat by picking, dropping and pasting; they u
   await expect(page.getByText(/This chat cannot use the space’s drive/)).toBeVisible()
   await expect(message).toHaveValue("Read these")
   await expect(attached.getByText("plan.txt", { exact: true })).toBeVisible()
+})
+
+test("attachment cards show an icon for the type of file", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Plan the launch")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const attached = page.getByRole("main")
+  await attached.locator("input[type=file]").setInputFiles([
+    { name: "report.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") },
+    { name: "q3.xlsx", mimeType: "application/octet-stream", buffer: Buffer.from("rows") },
+  ])
+  await expect(attached.getByText(/^Uploading/)).toHaveCount(0)
+  const iconOf = (name: string) =>
+    attached.locator("[data-slot=attachment]", { hasText: name }).locator("[data-file-icon]")
+  await expect(iconOf("report.pdf")).toHaveAttribute("data-file-icon", "pdf")
+  await expect(iconOf("q3.xlsx")).toHaveAttribute("data-file-icon", "sheet")
 })

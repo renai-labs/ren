@@ -1,42 +1,62 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { Composer, type ChatSession } from "@ren/chat"
+import {
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from "react"
+import { Composer, ComposerHistory, Mentions, type ChatSession } from "@ren/chat"
+import { Drive } from "@ren/schema/drive"
+import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
 import { toast } from "@ren/ui/sonner"
-import { useQuery } from "@tanstack/react-query"
 import {
   IconApps,
+  IconLayoutGridAdd,
   IconArrowUp,
+  IconChevronDown,
   IconChevronRight,
-  IconClipboardText,
+  IconFolder,
+  IconGitBranch,
+  IconMessage,
+  IconQuote,
+  IconSubtask,
+  IconSparkles,
   IconLoader2,
   IconPaperclip,
+  IconPlayerPlay,
   IconPlayerStopFilled,
   IconPlus,
   IconTerminal2,
   IconX,
 } from "@tabler/icons-react"
-import { GitHubMark } from "../../icons/brands.js"
-import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-  AttachmentTrigger,
-} from "@ren/ui/attachment"
-import { Avatar, AvatarGroup, AvatarGroupCount } from "@ren/ui/avatar"
-import { Kbd } from "@ren/ui/kbd"
+import { AttachmentGroup } from "@ren/ui/attachment"
+import { Avatar } from "@ren/ui/avatar"
+import { FileIcon } from "@ren/ui/file-icon"
 import { Separator } from "@ren/ui/separator"
-import { Command, CommandGroup, CommandItem, CommandList } from "@ren/ui/command"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from "@ren/ui/command"
 import { Spinner } from "@ren/ui/spinner"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
-import { DropOverlay, UploadChips } from "./attachments.js"
+import { formatBytes, plural } from "../../lib/format.js"
+import { UploadChips } from "./attachments.js"
+import { DropOverlay } from "../../components/drop-overlay.js"
+import { PastedChip } from "./pasted-chip.js"
+import { ImageSet } from "../../components/image-set.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
+import { Artifacts } from "../../lib/artifacts.js"
 import { AppAvatarFallback, AppAvatarImage, AppIcon } from "../../components/app-icon.js"
 import { Button } from "@ren/ui/button"
 import {
@@ -45,23 +65,32 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Input } from "@ren/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@ren/ui/popover"
-import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
+import { ProfileDialog, useAddManaged, type ProfileTarget } from "../../components/profile-dialog.js"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
 import { RepositoriesDialog } from "./repositories-picker.js"
+import { StatusDot } from "../../components/app-list.js"
+import { isBundle, statusAction, statusLabel, waitsForUser, type CatalogApp, type Status } from "../../lib/apps.js"
 import { useApps } from "../../lib/use-app.js"
-import { useSpaces } from "../../lib/use-spaces.js"
-import { gaps, isSpaceApp } from "../../lib/apps.js"
-import { useStep } from "../../lib/use-step.js"
-import { RouterContext } from "../../lib/router-context.js"
+import { errorMessage } from "../../lib/errors.js"
+import { connectTarget, useSpaceApps } from "./use-space-apps.js"
+import { ComposerMotion } from "../../lib/composer-motion.js"
+import { useCountdown } from "../../lib/use-countdown.js"
+import { useRoom } from "../../lib/use-room.js"
+import { IconAgent } from "../../icons/heroicons.js"
+import { Drafts } from "../../lib/drafts.js"
+import type { ShellHistory } from "../../lib/use-shell-history.js"
+import { Keyboard } from "../../platform/keyboard.js"
+import { ChatKeys } from "./chat-keys.js"
 
 function AddMenu(props: {
-  onInsert: (text: string) => void
   onAttach: () => void
+  onApps?: (() => void) | undefined
   onRepositories?: (() => void) | undefined
 }) {
   return (
@@ -78,7 +107,7 @@ function AddMenu(props: {
       >
         <IconPlus />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-52">
+      <DropdownMenuContent side="top" align="start" className="w-64">
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={props.onAttach}>
             <IconPaperclip />
@@ -87,14 +116,15 @@ function AddMenu(props: {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => props.onInsert("@")}>
-            <IconApps />
-            Apps
-            <Kbd className="ml-auto">@</Kbd>
-          </DropdownMenuItem>
+          {props.onApps ? (
+            <DropdownMenuItem onClick={props.onApps}>
+              <IconApps />
+              Apps
+            </DropdownMenuItem>
+          ) : null}
           {props.onRepositories ? (
             <DropdownMenuItem onClick={props.onRepositories}>
-              <GitHubMark />
+              <IconGitBranch />
               Repositories
             </DropdownMenuItem>
           ) : null}
@@ -104,48 +134,52 @@ function AddMenu(props: {
   )
 }
 
-function AppsStrip(props: { spaceId: string }) {
-  const { api } = RouterContext.useRouterContext()
-  const spaces = useSpaces()
-  const spaceName = spaces.spaceName
-  const space = spaces.spaces.find((each) => each.id === props.spaceId)
-  const from = {
-    spaceId: props.spaceId,
-    name: spaceName(props.spaceId),
-    members: space?.memberCount ?? 1,
-    private: space?.kind === "private",
-  }
+function useControlled(control: { value?: boolean | undefined; onChange?: ((value: boolean) => void) | undefined }) {
+  const [local, setLocal] = useState(false)
+  return [
+    control.value ?? local,
+    (next: boolean) => {
+      setLocal(next)
+      control.onChange?.(next)
+    },
+  ] as const
+}
+
+const addingApps = (state: { adding: boolean; empty: boolean; requested: boolean }) =>
+  state.adding || (state.empty && state.requested)
+
+function AppsStrip(props: {
+  spaceId: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  adding: boolean
+  onAddingChange: (adding: boolean) => void
+}) {
+  const space = useSpaceApps(props.spaceId)
   const [connecting, setConnecting] = useState<ProfileTarget & { fromAdding?: boolean }>()
-  const [open, setOpen] = useState(false)
-  const [adding, setAdding] = useState(false)
-  const reach = useQuery({
-    ...api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
-    retry: false,
+  const open = props.open
+  const setOpen = props.onOpenChange
+  const adding = props.adding
+  const setAdding = props.onAddingChange
+  const from = space.from
+  if (space.pending || !from) return null
+  const apps = [...new Set(space.profiles.map((profile) => profile.appId))].flatMap((appId) => {
+    const app = space.app(appId)
+    return app ? [{ app, status: space.status(appId), here: space.here(appId) }] : []
   })
-  const reached = reach.data?.profiles ?? []
-  const catalog = useApps(reached.map((profile) => profile.appId))
-  const profiles = reached
-    .filter((profile) => !isSpaceApp(catalog.of(profile.appId), spaces.spaces))
-    .map((profile) => ({
-      id: profile.id,
-      appId: profile.appId,
-      name: profile.name,
-      app: catalog.of(profile.appId)?.name ?? profile.appSlug,
-      icon: catalog.of(profile.appId)?.icon ?? undefined,
-      gaps: gaps(profile),
-    }))
-  if (reach.isPending || catalog.pending) return null
-  const apps = [...new Map(profiles.map((profile) => [profile.app, profile.icon] as const))]
-  const shown = apps.slice(0, 3)
-  const missing = profiles.filter((profile) => profile.gaps.length > 0).length
+  const only = apps.length === 1 ? apps[0] : undefined
+  const expired = apps.filter((each) => each.status === "expired").length
   const dialogs = (
     <>
       <AddAppDialog
-        space={{ id: props.spaceId, name: spaceName(props.spaceId) }}
-        added={new Set(profiles.map((profile) => profile.appId))}
-        onAdded={(added) => setConnecting({ appId: added.app.id, profileId: added.profileId, from, fromAdding: true })}
-        open={adding}
-        onOpenChange={setAdding}
+        space={{ id: props.spaceId, name: from.name }}
+        added={new Set(apps.map((each) => each.app.id))}
+        onPick={(app) => setConnecting({ appId: app.id, from, fromAdding: true })}
+        open={addingApps({ adding, empty: apps.length === 0, requested: open })}
+        onOpenChange={(next) => {
+          setAdding(next)
+          if (!next) setOpen(false)
+        }}
       />
       {connecting ? (
         <ProfileDialog
@@ -158,12 +192,12 @@ function AppsStrip(props: { spaceId: string }) {
       ) : null}
     </>
   )
-  if (profiles.length === 0)
+  if (apps.length === 0)
     return (
       <>
         <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" onClick={() => setAdding(true)}>
-          <IconApps />
-          Add apps
+          <IconLayoutGridAdd />
+          Add Apps
         </InputGroupButton>
         {dialogs}
       </>
@@ -175,67 +209,48 @@ function AppsStrip(props: { spaceId: string }) {
           render={
             <InputGroupButton
               size="sm"
-              className="-ml-1 font-normal"
-              aria-label={`Apps: ${apps.map(([app]) => app).join(", ")}${missing ? `, ${missing} not connected` : ""}`}
+              className="-ml-1 font-normal text-muted-foreground data-popup-open:text-foreground"
+              aria-label={`Apps: ${apps.map((each) => each.app.name).join(", ")}${expired ? `, ${expired} ${statusLabel.expired.toLowerCase()}` : ""}`}
             />
           }
         >
-          <AvatarGroup className="-space-x-1.5 *:data-[slot=avatar]:ring-card *:data-[slot=avatar-group-count]:ring-card">
-            {shown.map(([app, icon]) => (
-              // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-              <Avatar key={app} size="sm" className="data-[size=sm]:size-5">
-                <AppAvatarImage src={icon} />
-                <AppAvatarFallback name={app} />
-              </Avatar>
-            ))}
-            {apps.length > shown.length ? (
-              <AvatarGroupCount className="size-5 text-2xs group-has-data-[size=sm]/avatar-group:size-5">
-                +{apps.length - shown.length}
-              </AvatarGroupCount>
+          <span className="relative">
+            {only ? (
+              <AppIcon name={only.app.name} icon={only.app.icon} size="sm" className="size-4 rounded-sm" />
+            ) : (
+              <IconApps />
+            )}
+            {expired ? (
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-chart-3 ring-2 ring-card" />
             ) : null}
-          </AvatarGroup>
+          </span>
+          {only ? only.app.name : plural(apps.length, "app")}
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="w-80 gap-0 p-1">
           <PopoverTitle className="sr-only">Apps this chat can use</PopoverTitle>
-          {profiles.map((profile) => (
-            <div key={profile.id} className="group/row relative flex items-center gap-3 rounded-md p-2 hover:bg-accent">
-              <Avatar // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-                size="sm"
-                className="data-[size=sm]:size-5"
-              >
-                <AppAvatarImage src={profile.icon} />
-                <AppAvatarFallback name={profile.app} />
-              </Avatar>
-              <Button
-                variant="ghost"
-                className="h-auto min-w-0 flex-1 flex-col items-stretch gap-0 rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-md hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-                onClick={() => {
-                  setOpen(false)
-                  setConnecting({ appId: profile.appId, profileId: profile.id, from, edit: true })
-                }}
-              >
-                <span className="truncate text-sm">{profile.app}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {profile.gaps.length ? "Not connected" : "Connected"}
-                </span>
-              </Button>
-              {profile.gaps.length ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="relative shrink-0"
-                  onClick={() => {
-                    setOpen(false)
-                    setConnecting({ appId: profile.appId, profileId: profile.id, from })
-                  }}
-                >
-                  Connect
-                </Button>
-              ) : (
-                <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
-              )}
-            </div>
-          ))}
+          <Command filter={matchesAppName} className="h-auto rounded-none p-0">
+            <CommandInput placeholder="Search apps" aria-label="Search apps" />
+            <CommandList className="pt-1">
+              <CommandEmpty>No apps found</CommandEmpty>
+              <CommandGroup className="p-0">
+                {apps.map((each) => (
+                  <AppStatusItem
+                    key={each.app.id}
+                    app={each.app}
+                    status={each.status}
+                    onOpen={() => {
+                      setOpen(false)
+                      setConnecting({ appId: each.app.id, from })
+                    }}
+                    onAction={() => {
+                      setOpen(false)
+                      setConnecting(connectTarget({ appId: each.app.id, status: each.status, here: each.here }, from))
+                    }}
+                  />
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
           <Separator className="my-1" />
           <Button
             variant="ghost"
@@ -255,194 +270,482 @@ function AppsStrip(props: { spaceId: string }) {
   )
 }
 
-export type PromptInputBoot = Exclude<ChatSession.Boot, { readonly _tag: "Ready" }> | { readonly _tag: "Reconnecting" }
+const matchesAppName = (_appId: string, search: string, names?: ReadonlyArray<string>) =>
+  names?.some((name) => name.toLowerCase().includes(search.trim().toLowerCase())) ? 1 : 0
 
-function PromptInputStatus(props: { boot: PromptInputBoot; onRetry?: (() => void) | undefined }) {
-  if (props.boot._tag === "Failed")
-    return (
-      <span className="flex min-w-0 items-center gap-2 text-xs">
-        <span className="truncate text-destructive">
-          {props.boot.reason.split("\n").at(0)?.trim() || "The sandbox failed to start."}
-        </span>
-        <Button variant="link" size="sm" className="pointer-events-auto h-auto px-0" onClick={props.onRetry}>
-          Retry
-        </Button>
-      </span>
-    )
-  if (props.boot._tag === "Reconnecting")
-    return (
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        <IconLoader2 className="size-3.5 animate-spin" />
-        Reconnecting…
-      </span>
-    )
-  return <BootLine />
-}
-
-const bootPhrases = [
-  "Waking Ren up",
-  "Pulling up a chair",
-  "Laying out the tools",
-  "Reading the room",
-  "Sharpening pencils",
-  "Almost there",
-]
-
-function BootLine() {
-  const index = useStep({ last: bootPhrases.length - 1, everyMs: 2400 })
+function AppStatusItem(props: {
+  app: Pick<CatalogApp, "id" | "name" | "icon">
+  status: Status
+  onOpen: () => void
+  onAction: () => void
+}) {
+  const action = statusAction[props.status]
   return (
-    <output className="flex items-center gap-2 text-sm text-muted-foreground">
-      <span
-        key={index}
-        className="shimmer animate-in duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none motion-reduce:shimmer-none"
+    // ast-grep-ignore: require-item-group -- rows render inside the apps popover's CommandGroup
+    <CommandItem
+      value={props.app.id}
+      keywords={[props.app.name]}
+      className="gap-3 rounded-md p-2 [&>svg:last-child]:hidden"
+      onSelect={props.onOpen}
+    >
+      <Avatar // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
+        size="sm"
+        className="data-[size=sm]:size-5"
       >
-        {bootPhrases[index]}…
+        <AppAvatarImage src={props.app.icon ?? undefined} />
+        <AppAvatarFallback name={props.app.name} />
+      </Avatar>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm">{props.app.name}</span>
+        <span className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+          <StatusDot status={props.status} />
+          {statusLabel[props.status]}
+        </span>
       </span>
-    </output>
+      {action ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            props.onAction()
+          }}
+        >
+          {action}
+        </Button>
+      ) : (
+        <IconChevronRight className="text-muted-foreground" />
+      )}
+    </CommandItem>
   )
 }
 
-const lineCount = (text: string) => text.split("\n").length
+type MentionStatus = {
+  readonly app: Composer.MentionedApp
+  readonly status: Status
+}
 
-function PastedBlocks(props: {
-  pasted: ReadonlyArray<Composer.Pasted>
+const bundleStatus = (
+  mention: MentionStatus,
+  app: CatalogApp | undefined,
+  partOf: (slug: string) => { readonly app: CatalogApp; readonly status: Status | "absent" } | undefined,
+  options: { readonly added: boolean },
+): MentionStatus => {
+  if (!app || !isBundle(app)) return mention
+  const ready = app.dependsOn.every((slug) => {
+    const part = partOf(slug)
+    return !part || (part.status !== "absent" && !waitsForUser(part.status))
+  })
+  return { ...mention, status: options.added && ready ? "connected" : "missing" }
+}
+
+function useMentions(spaceId: string | undefined, suggest: Suggest | undefined, text: string) {
+  const mentioned = suggest?.mentioned(text) ?? []
+  const [adding, setAdding] = useState(false)
+  const full = useApps(mentioned.map((app) => app.id))
+  const partSlugs = mentioned.flatMap((app) => full.of(app.id)?.dependsOn ?? [])
+  const parts = useApps(partSlugs)
+  const space = useSpaceApps(spaceId, [
+    ...mentioned.map((app) => app.id),
+    ...partSlugs.flatMap((slug) => parts.of(slug)?.id ?? []),
+  ])
+  const addManaged = useAddManaged()
+  const statuses = space.pending
+    ? []
+    : mentioned.map((app) =>
+        bundleStatus(
+          { app, status: space.status(app.id) },
+          full.of(app.id),
+          (slug) => {
+            const part = parts.of(slug)
+            if (!part) return
+            return { app: part, status: space.here(part.id).length === 0 ? "absent" : space.status(part.id) }
+          },
+          { added: space.here(app.id).length > 0 },
+        ),
+      )
+  return {
+    space,
+    statuses,
+    adding,
+    send: (onSubmit: () => void) => {
+      const from = space.from
+      const missing = statuses.flatMap((each) => {
+        const app = space.app(each.app.id)
+        return app && each.status === "credits" && space.here(app.id).length === 0 ? [app] : []
+      })
+      if (missing.length === 0 || !from) return onSubmit()
+      setAdding(true)
+      void Promise.all(
+        missing.map((app) =>
+          addManaged(app, from).catch((error: unknown) =>
+            toast.error(`Couldn’t add ${app.name} to ${from.name}`, { description: errorMessage(error) }),
+          ),
+        ),
+      )
+        .then(onSubmit)
+        .finally(() => setAdding(false))
+    },
+  }
+}
+
+export type PromptInputBoot =
+  | Exclude<ChatSession.Boot, { readonly _tag: "Ready" }>
+  | { readonly _tag: "Reconnecting" }
+  | { readonly _tag: "Waiting"; readonly retryAt: number }
+
+function RetryCountdown(props: { retryAt: number }) {
+  return <span className="mr-auto">Reconnecting in {useCountdown(props.retryAt)}s…</span>
+}
+
+function PromptInputStatus(props: {
+  boot: Exclude<PromptInputBoot, { readonly _tag: "Checking" | "Starting" }>
+  onRetry?: (() => void) | undefined
+  onRetryNow?: (() => void) | undefined
+}) {
+  if (props.boot._tag === "Waiting")
+    return (
+      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <IconLoader2 className="size-3.5 animate-spin" />
+        <RetryCountdown retryAt={props.boot.retryAt} />
+        <Button variant="outline" size="sm" onClick={props.onRetryNow}>
+          Try now
+        </Button>
+      </div>
+    )
+  if (props.boot._tag === "Failed")
+    return (
+      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
+        <span className="mr-auto min-w-0 text-sm text-muted-foreground">Couldn’t start this chat</span>
+        <Popover>
+          <PopoverTrigger render={<Button variant="ghost" size="sm" />}>Details</PopoverTrigger>
+          <PopoverContent side="top" align="end" className="w-80">
+            <PopoverTitle>Startup error</PopoverTitle>
+            <p className="max-h-40 overflow-y-auto overscroll-contain font-mono text-xs/5 break-all whitespace-pre-wrap text-muted-foreground">
+              {props.boot.reason}
+            </p>
+          </PopoverContent>
+        </Popover>
+        <Button variant="outline" size="sm" onClick={props.onRetry}>
+          Retry
+        </Button>
+      </div>
+    )
+  if (props.boot._tag === "Stopped")
+    return (
+      <div className="pointer-events-none absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
+        <span className="mr-auto min-w-0 text-sm text-muted-foreground">
+          This space was shut down. Send a message or retry to start it again.
+        </span>
+        <Button variant="outline" size="sm" className="pointer-events-auto" onClick={props.onRetry}>
+          Retry
+        </Button>
+      </div>
+    )
+  return (
+    <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+      <IconLoader2 className="size-3.5 animate-spin" />
+      Reconnecting…
+    </span>
+  )
+}
+
+function ShellPrefix(props: { active: boolean }) {
+  if (!props.active) return null
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute top-4 left-4 font-mono leading-relaxed text-muted-foreground"
+    >
+      $
+    </span>
+  )
+}
+
+const linksOf = (text: string) =>
+  [...text.matchAll(/https?:\/\/[^\s<>"'`]+/gu)].map((match) => {
+    const url = (match.at(0) ?? "").replace(/[.,;:!?)\]}'"]+$/u, "")
+    return {
+      start: match.index,
+      end: match.index + url.length,
+      label: url,
+      icon: null,
+      color: "var(--link)",
+      file: false,
+      link: true,
+    }
+  })
+
+const placeholder = (input: { readonly status: unknown; readonly shell: boolean }) => {
+  if (input.status) return ""
+  return input.shell ? "e.g. git status" : "Ask anything, @ to mention"
+}
+
+function QuoteChips(props: {
+  quotes: ReadonlyArray<Composer.Quote>
   disabled: boolean | undefined
-  onShow: (id: string) => void
   onRemove: (id: string) => void
 }) {
   return (
-    <AttachmentGroup>
-      {props.pasted.map((block) => (
-        <Attachment key={block.id} size="sm">
-          <AttachmentMedia>
-            <IconClipboardText />
-          </AttachmentMedia>
-          <AttachmentContent>
-            <AttachmentTitle>Pasted text</AttachmentTitle>
-            <AttachmentDescription className="tabular-nums">
-              {lineCount(block.text)} {lineCount(block.text) === 1 ? "line" : "lines"}
-            </AttachmentDescription>
-          </AttachmentContent>
-          <AttachmentTrigger
-            aria-label="Show pasted text in the message"
+    <>
+      {props.quotes.map((quote) => (
+        <div
+          key={quote.id}
+          title={quote.text}
+          className="flex max-w-72 min-w-0 animate-in items-start gap-2 rounded-lg bg-muted/50 py-1.5 pr-1 pl-2.5 text-sm text-muted-foreground duration-150 ease-out fade-in-0 zoom-in-95 motion-reduce:animate-none"
+        >
+          <IconQuote aria-hidden className="mt-0.75 size-3.5 shrink-0" />
+          <span className="line-clamp-2 min-w-0 flex-1 leading-5 whitespace-pre-wrap">{quote.text}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Remove quote"
             disabled={props.disabled}
-            onClick={() => props.onShow(block.id)}
-          />
-          <AttachmentActions>
-            <AttachmentAction
-              aria-label="Remove pasted text"
-              disabled={props.disabled}
-              onClick={() => props.onRemove(block.id)}
-            >
-              <IconX />
-            </AttachmentAction>
-          </AttachmentActions>
-        </Attachment>
+            className="-my-0.75 shrink-0 text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5"
+            onClick={() => props.onRemove(quote.id)}
+          >
+            <IconX />
+          </Button>
+        </div>
       ))}
-    </AttachmentGroup>
+    </>
   )
 }
 
-function SuggestionMenu(props: { suggest: Suggest; below: boolean; onChoose: (value: string) => void }) {
+const categoryIcons = {
+  tasks: <IconSubtask />,
+  chats: <IconMessage />,
+  apps: <IconApps />,
+  agents: <IconAgent />,
+  files: <IconFolder />,
+  repos: <IconGitBranch />,
+}
+
+const mentionIcons: Partial<Record<Mentions.Kind, ReactNode>> = {
+  task: <IconSubtask />,
+  chat: <IconMessage />,
+  repository: <IconGitBranch />,
+  agent: <IconAgent />,
+  "ren-agent": <IconAgent />,
+  skill: <IconSparkles />,
+}
+
+function SuggestionIcon(props: { item: Suggest["items"][number] }) {
+  const item = props.item
+  if (item.kind === "app") return <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
+  if (item.kind === "category") return item.category ? categoryIcons[item.category] : null
+  if (item.kind === "command") return <IconTerminal2 />
+  if (item.kind === "repository") return <IconGitBranch />
+  if (item.kind === "folder") return <IconFolder />
+  if (item.kind === "file") return <FileIcon name={item.label} />
+  return mentionIcons[item.kind] ?? <IconAgent />
+}
+
+function SuggestionMenu(props: {
+  suggest: Suggest
+  anchor: RefObject<HTMLElement | null>
+  below: boolean
+  onChoose: (value: string) => void
+}) {
   const suggest = props.suggest
   const choose = props.onChoose
+  const room = useRoom(props.anchor, { open: suggest.open, prefer: props.below ? "below" : "above", want: 304 })
   if (!suggest.open) return null
+  const listed = [...new Set(suggest.items.map((item) => item.group))].map((heading) => ({
+    heading,
+    items: suggest.items.filter((item) => item.group === heading),
+  }))
   return (
     <Command
       value={suggest.active ?? ""}
       shouldFilter={false}
       className={cn(
-        "absolute inset-x-0 z-20 h-auto w-full rounded-xl bg-popover shadow-overlay",
-        props.below ? "top-full mt-2" : "bottom-full mb-2",
+        "absolute inset-x-0 z-20 flex h-auto w-full flex-col rounded-xl bg-popover shadow-overlay",
+        (room?.below ?? props.below) ? "top-full mt-2" : "bottom-full mb-2",
       )}
+      // oxlint-disable-next-line react/forbid-component-props -- the menu is only as tall as the room its pane leaves it
+      style={room ? { maxHeight: room.height } : undefined}
     >
-      <CommandList className="max-h-72">
-        <CommandGroup
-          heading={
-            <span className="flex items-center justify-between gap-2">
-              {suggest.label}
-              {suggest.searching ? (
-                <span className="flex items-center gap-1">
-                  <Spinner aria-hidden className="size-3" />
-                  Searching all apps
+      <CommandList className="max-h-72 min-h-0 flex-1" label={suggest.label}>
+        {suggest.searching && listed.length === 0 ? (
+          <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+            <Spinner aria-hidden className="size-3" />
+            Searching
+          </div>
+        ) : null}
+        {listed.map((group, index) => (
+          <CommandGroup
+            key={group.heading ?? ""}
+            heading={
+              group.heading ? (
+                <span className="flex items-center justify-between gap-2">
+                  {group.heading}
+                  {suggest.searching && index === 0 ? (
+                    <span className="flex items-center gap-1">
+                      <Spinner aria-hidden className="size-3" />
+                      Searching
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </span>
-          }
-        >
-          {suggest.items.map((item) => (
-            <CommandItem
-              key={item.value}
-              value={item.value}
-              onMouseDown={(event) => event.preventDefault()}
-              onSelect={() => choose(item.value)}
-            >
-              {item.kind === "command" ? <IconTerminal2 /> : null}
-              {item.kind === "repository" ? <GitHubMark /> : null}
-              {item.kind === "command" || item.kind === "repository" ? null : (
-                <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
-              )}
-              <span className="min-w-0 flex-1 truncate">
-                <span className="font-medium text-foreground">{item.label}</span>
-                {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
-              </span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
+              ) : undefined
+            }
+          >
+            {group.items.map((item) => (
+              <CommandItem
+                key={item.value}
+                value={item.value}
+                onMouseDown={(event) => event.preventDefault()}
+                onSelect={() => choose(item.value)}
+              >
+                <SuggestionIcon item={item} />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium text-foreground">{item.label}</span>
+                  {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
+                </span>
+                {item.status ? (
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <StatusDot status={item.status} />
+                    {statusLabel[item.status]}
+                  </span>
+                ) : null}
+                {item.kind === "category" || item.kind === "folder" ? (
+                  <CommandShortcut className="-mr-1 flex">
+                    <IconChevronRight stroke={2.75} />
+                  </CommandShortcut>
+                ) : null}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
       </CommandList>
     </Command>
   )
 }
 
-function SendIcon(props: { sending: boolean; stop: boolean }) {
+function SendIcon(props: { sending: boolean; stop: boolean; shell: boolean }) {
   if (props.sending) return <IconLoader2 className="animate-spin" />
   if (props.stop) return <IconPlayerStopFilled />
+  if (props.shell) return <IconPlayerPlay />
   return <IconArrowUp />
 }
 
-function SendButton(props: { blank: boolean; stop: boolean; sending: boolean; booting: boolean; onClick: () => void }) {
+const sendLabel = (props: { stop: boolean; shell: boolean }) => {
+  if (props.stop) return "Stop"
+  return props.shell ? "Run command" : "Send"
+}
+
+const half =
+  "text-inherit hover:bg-current/10 hover:text-inherit aria-expanded:bg-current/10 aria-expanded:text-inherit active:not-aria-[haspopup]:scale-100"
+
+interface Send {
+  readonly blank: boolean
+  readonly stop: boolean
+  readonly shell: boolean
+  readonly sending: boolean
+  readonly booting: boolean
+  readonly uploading: boolean
+  readonly onClick: () => void
+}
+
+const sendState = (props: Send) => ({
+  filled: !props.booting && (!props.blank || props.stop),
+  idle: props.blank && !props.stop && !props.booting && !props.sending,
+})
+
+function SendButton(props: Send & { split?: boolean }) {
+  const state = sendState(props)
+  const variant = state.filled ? "default" : "secondary"
   return (
     <InputGroupButton
-      variant={!props.blank || props.stop ? "default" : "secondary"}
+      variant={props.split ? "ghost" : variant}
       size="icon-sm"
-      className={cn("rounded-full", props.booting && "pointer-events-none opacity-50")}
-      aria-disabled={props.booting || undefined}
-      aria-label={props.stop ? "Stop" : "Send"}
+      className={cn(
+        props.split ? ["w-8.5 rounded-none pl-0.5", half] : "rounded-full",
+        props.booting && "pointer-events-none",
+        props.uploading && "pointer-events-none opacity-50",
+      )}
+      disabled={state.idle}
+      aria-disabled={props.booting || props.uploading || undefined}
+      aria-label={sendLabel(props)}
       onClick={props.onClick}
     >
-      <SendIcon sending={props.sending} stop={props.stop} />
+      <SendIcon sending={props.sending || props.booting} stop={props.stop} shell={props.shell} />
     </InputGroupButton>
   )
 }
 
-const textareaClass = (layout: { home: boolean; marked: boolean }) =>
+function SendPill(props: Send & { other: { readonly label: string; readonly onSelect: () => void } }) {
+  return (
+    <span
+      className={cn(
+        "flex h-8 items-center overflow-hidden rounded-full transition-colors duration-150 ease-out",
+        sendState(props).filled ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground",
+      )}
+    >
+      <SendButton {...props} split />
+      <span aria-hidden className="h-4 w-px shrink-0 bg-current opacity-20" />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <InputGroupButton
+              variant="ghost"
+              size="icon-sm"
+              className={cn("w-7 rounded-none pr-0.5 [&_svg:not([class*='size-'])]:size-3.5", half)}
+              aria-label="Send options"
+              disabled={props.blank || props.booting || props.uploading || props.sending}
+            />
+          }
+        >
+          <IconChevronDown />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="bottom" className="w-64">
+          <DropdownMenuGroup>
+            <DropdownMenuItem onClick={props.other.onSelect}>
+              {props.other.label}
+              <DropdownMenuShortcut>{ChatKeys.apple ? "⌘↵" : "Ctrl ↵"}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
+  )
+}
+
+const textareaClass = (layout: { home: boolean; marked: boolean; shell: boolean }) =>
   cn(
     "px-4 pt-4 leading-relaxed",
-    layout.home ? "min-h-24" : "max-h-60 min-h-16",
-    layout.marked && "text-transparent caret-foreground",
+    layout.home ? "max-h-80 min-h-24" : "max-h-60 min-h-16",
+    layout.marked && "text-transparent caret-foreground selection:text-transparent",
+    layout.shell && "pl-9 font-mono",
   )
 
 function composerState(
   props: {
     readonly boot?: PromptInputBoot | undefined
+    readonly preparing?: boolean | undefined
     readonly running?: boolean | undefined
     readonly sending?: boolean | undefined
     readonly onStop?: (() => void) | undefined
   },
-  draft: { readonly blank: boolean },
+  draft: { readonly blank: boolean; readonly adding: boolean; readonly shell: boolean },
 ) {
-  const booting = props.boot?._tag === "Starting"
+  const boot = props.boot
   return {
-    booting,
-    sending: props.sending === true,
-    status: props.boot && (draft.blank || booting) ? props.boot : undefined,
-    stop: Boolean(props.running && draft.blank && props.onStop),
+    booting: props.preparing === true,
+    sending: props.sending === true || draft.adding,
+    status: boot && boot._tag !== "Checking" && boot._tag !== "Starting" && draft.blank ? boot : undefined,
+    stop: Boolean(props.running && draft.blank && props.onStop && !draft.shell),
   }
 }
 
 function suggestionKey(suggest: Suggest, event: KeyboardEvent<HTMLTextAreaElement>, choose: (value: string) => void) {
   if (!suggest.open || event.nativeEvent.isComposing) return false
-  if ((event.key === "Enter" || event.key === "Tab") && suggest.active && !event.shiftKey) {
+  const opens =
+    event.key === "ArrowRight" &&
+    suggest.items.some((item) => item.value === suggest.active && (item.kind === "category" || item.kind === "folder"))
+  if ((event.key === "Enter" || event.key === "Tab" || opens) && suggest.active && !event.shiftKey) {
     event.preventDefault()
     choose(suggest.active)
     return true
@@ -454,55 +757,174 @@ function suggestionKey(suggest: Suggest, event: KeyboardEvent<HTMLTextAreaElemen
 
 function ComposerToolbar(props: {
   spaceId: string | undefined
-  onInsert: (character: string) => void
   onAttach: () => void
   onRepositories: () => void
+  shell: boolean
+  model: ReactNode
+  apps: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void } | undefined
   children: ReactNode
 }) {
+  const shell = props.shell
+  const [appsOpen, setAppsOpen] = useControlled({ value: props.apps?.open, onChange: props.apps?.onOpenChange })
+  const [adding, setAdding] = useState(false)
   return (
     <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
-      <AddMenu
-        onInsert={props.onInsert}
-        onAttach={props.onAttach}
-        onRepositories={props.spaceId ? props.onRepositories : undefined}
-      />
-      {props.spaceId ? <AppsStrip spaceId={props.spaceId} /> : null}
+      {shell ? null : (
+        <AddMenu
+          onAttach={props.onAttach}
+          onApps={props.spaceId ? () => setAdding(true) : undefined}
+          onRepositories={props.spaceId ? props.onRepositories : undefined}
+        />
+      )}
+      {props.spaceId && !shell ? (
+        <AppsStrip
+          spaceId={props.spaceId}
+          open={appsOpen}
+          onOpenChange={setAppsOpen}
+          adding={adding}
+          onAddingChange={setAdding}
+        />
+      ) : null}
+      {shell ? (
+        <span className="mr-auto pl-1 text-sm text-muted-foreground">Shell</span>
+      ) : (
+        <span aria-hidden className="ml-auto" />
+      )}
+      {shell ? null : props.model}
       {props.children}
     </InputGroupAddon>
   )
 }
 
+function startsShell(
+  draft: Composer.Draft,
+  next: string,
+  input: { readonly history: ShellHistory | undefined; readonly suggestOpen: boolean },
+) {
+  return (
+    next === "!" &&
+    input.history !== undefined &&
+    !input.suggestOpen &&
+    Composer.isBlank(draft) &&
+    draft.pasted.length === 0 &&
+    Composer.files(draft).length === 0 &&
+    Composer.quotes(draft).length === 0 &&
+    Composer.mentions(draft).length === 0
+  )
+}
+
+function shellKey(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  input: { readonly running: boolean; readonly text: string; readonly leave: () => void },
+) {
+  if (event.nativeEvent.isComposing) return false
+  const leaves =
+    (event.key === "Escape" && !input.running) ||
+    (event.key === "Backspace" && input.text === "" && event.currentTarget.selectionStart === 0)
+  if (leaves) event.preventDefault()
+  if (leaves) input.leave()
+  return leaves
+}
+
+function useShellMode(input: {
+  history: ShellHistory | undefined
+  draft: Composer.Draft
+  locked: boolean
+  uploading: boolean
+  onChange: (draft: Composer.Draft) => void
+  textarea: RefObject<HTMLTextAreaElement | null>
+  suggest: Suggest | undefined
+}) {
+  const history = input.history
+  const active = history !== undefined && Composer.isShell(input.draft)
+  const toggle = () => {
+    if (!history || input.locked) return
+    if (
+      !active &&
+      (input.uploading || Composer.files(input.draft).length > 0 || Composer.quotes(input.draft).length > 0)
+    )
+      return
+    input.onChange(Composer.withMode(input.draft, active ? "prompt" : "shell"))
+    history.reset()
+    input.suggest?.onClose()
+    input.textarea.current?.focus()
+  }
+  Keyboard.useKeyDown((event) => {
+    if (!ChatKeys.toggleShell(event)) return
+    event.preventDefault()
+    toggle()
+  })
+  return {
+    active,
+    toggle,
+    suggest: active ? undefined : input.suggest,
+  }
+}
+
+function pasteKind(event: ClipboardEvent<HTMLTextAreaElement>) {
+  const data = event.clipboardData
+  return Composer.paste(
+    { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: data.getData("text/plain") },
+    { readClipboardImage: false },
+  )
+}
+
 export function PromptInput(props: {
+  textareaRef?: Ref<HTMLTextAreaElement | null> | undefined
   value: Composer.Draft
   onChange: (draft: Composer.Draft) => void
-  onSubmit: () => void
+  onSubmit: (options: { readonly alternative: boolean }) => void
+  onChooseModel?: (() => void) | undefined
   placement: "home" | "chat"
   spaceId: string | undefined
   model: ReactNode
   boot?: PromptInputBoot | undefined
+  preparing?: boolean | undefined
   onRetry?: (() => void) | undefined
+  onRetryNow?: (() => void) | undefined
   running?: boolean | undefined
   onStop?: (() => void) | undefined
   sending?: boolean | undefined
   suggest?: Suggest | undefined
+  artifact?: Artifacts.Mention | undefined
+  history?: ShellHistory | undefined
   files: Target
+  header?: ReactNode
+  queue?: ReactNode
+  apps?: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void } | undefined
+  alternative?: string | undefined
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
+  useImperativeHandle<HTMLTextAreaElement | null, HTMLTextAreaElement | null>(props.textareaRef, () => textarea.current)
   const [repositories, setRepositories] = useState(false)
   const draft = props.value
   const uploads = useUploads(props.files, draft)
   const picker = useRef<HTMLInputElement>(null)
   const text = draft.text
   const blank = Composer.isBlank(draft)
-  const state = composerState(props, { blank })
-  const booting = state.booting
+  const mentions = useMentions(props.spaceId, props.suggest, text)
   const uploading = uploads.uploads.length > 0
+  const shellMode = useShellMode({
+    history: props.history,
+    draft,
+    locked: props.sending === true,
+    uploading,
+    onChange: props.onChange,
+    textarea,
+    suggest: props.suggest,
+  })
+  const shell = shellMode.active
+  const toggleShell = shellMode.toggle
+  const state = composerState(props, { blank, adding: mentions.adding, shell })
+  const booting = state.booting
   const change = (next: Composer.Draft) => props.onChange(next)
   const attach = (files: ReadonlyArray<File>) => {
-    if (!props.sending) uploads.add(files)
+    if (!props.sending && !shell) uploads.add(files)
   }
-  const submit = () => {
-    if (props.sending || booting) return
+  const history = Drafts.useHistory()
+  const [browsing, setBrowsing] = useState(ComposerHistory.idle)
+  const submit = (options: { readonly alternative: boolean }) => {
+    if (state.sending || booting) return
     if (uploading) {
       toast("Wait for the files to upload", {
         description: "Send the message once every file is uploaded, or remove the ones that failed.",
@@ -510,22 +932,29 @@ export function PromptInput(props: {
       return
     }
     if (blank) {
-      if (props.running) props.onStop?.()
+      if (state.stop) props.onStop?.()
       return
     }
-    props.onSubmit()
+    setBrowsing(ComposerHistory.idle)
+    mentions.send(() => props.onSubmit(options))
   }
   const home = props.placement === "home"
   const status = state.status
-  const send = (
-    <SendButton
-      blank={blank}
-      stop={state.stop}
-      sending={state.sending}
-      booting={booting || uploading}
-      onClick={submit}
-    />
-  )
+  const sendProps = {
+    blank,
+    stop: state.stop,
+    shell,
+    sending: state.sending,
+    booting,
+    uploading,
+    onClick: () => submit({ alternative: false }),
+  }
+  const send =
+    props.alternative && !shell ? (
+      <SendPill {...sendProps} other={{ label: props.alternative, onSelect: () => submit({ alternative: true }) }} />
+    ) : (
+      <SendButton {...sendProps} />
+    )
   const place = (next: string, cursor: number) =>
     requestAnimationFrame(() => {
       const node = textarea.current
@@ -533,25 +962,74 @@ export function PromptInput(props: {
       node.focus()
       node.setSelectionRange(cursor, cursor)
     })
-  const insert = (character: string) => {
-    const next = character === "/" && !text ? "/" : `${text}${text && !text.endsWith(" ") ? " " : ""}${character}`
-    change(Composer.withText(draft, next))
-    props.suggest?.onCursor(next, next.length)
-    place(next, next.length)
+  const browse = (node: HTMLTextAreaElement, direction: "up" | "down") => {
+    if (node.selectionStart !== node.selectionEnd) return false
+    const moved = ComposerHistory.navigate(browsing, direction, history.read(), draft, node.selectionStart)
+    if (!moved) return false
+    setBrowsing(moved.browsing)
+    change(Composer.fromHistory(draft, moved.entry))
+    place(moved.entry.text, moved.cursor === "start" ? 0 : moved.entry.text.length)
+    return true
+  }
+  const act = (action: ChatKeys.Action | "swallow", node: HTMLTextAreaElement) => {
+    if (action === "historyUp" || action === "historyDown") return browse(node, action === "historyUp" ? "up" : "down")
+    if (action === "send" || action === "sendOther") {
+      if (!blank) submit({ alternative: action === "sendOther" })
+      return true
+    }
+    if (action === "stop") props.onStop?.()
+    if (action === "chooseModel") props.onChooseModel?.()
+    return action !== "editQueued"
+  }
+  const recall = (direction: "up" | "down", event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const entry = props.history?.step(direction, text, event.currentTarget.selectionStart)
+    if (!entry) return
+    event.preventDefault()
+    change(Composer.withText(draft, entry.text))
+    place(entry.text, entry.cursor === "start" ? 0 : entry.text.length)
   }
   const choose = (value: string) => {
     const result = props.suggest?.onChoose(value, text, textarea.current?.selectionStart ?? text.length)
     if (!result) return
     const next = Composer.withText(draft, result.text)
-    change(result.mention ? Composer.withMention(next, result.mention) : next)
-    place(result.text, result.cursor)
+    const picked = result.picked ? Composer.withPicked(next, result.picked) : next
+    const mentioned = result.mention ? Composer.withMention(picked, result.mention) : picked
+    change(result.file ? Composer.withFile(mentioned, result.file) : mentioned)
+    if (result.focus !== false) place(result.text, result.cursor)
   }
-  const suggest = props.suggest
-  const marks = suggest?.marks(text) ?? []
+  const suggest = shellMode.suggest
+  const root = useRef<HTMLDivElement | null>(null)
+  ComposerMotion.useComposer(root, { placement: props.placement })
+  const artifact = props.artifact
+  const ranges = Artifacts.mentionRanges(text, artifact)
+  const mentioned = [
+    ...(suggest?.marks(text) ?? [])
+      .filter((mark) => !ranges.some((range) => mark.start < range.end && mark.end > range.start))
+      // oxlint-disable-next-line oxc/no-map-spread -- a draft has a few marks, and each one gets its kind's icon
+      .map((mark) => ({ ...mark, glyph: mentionIcons[mark.kind] })),
+    ...ranges.map((range) => ({
+      start: range.start,
+      end: range.end,
+      label: artifact?.title ?? "",
+      icon: null,
+      color: "var(--primary)",
+      file: false,
+    })),
+  ]
+  const marks = [
+    ...mentioned,
+    ...linksOf(text).filter((link) => !mentioned.some((mark) => link.start < mark.end && link.end > mark.start)),
+  ].toSorted((a, b) => a.start - b.start)
+  const attachments =
+    Composer.files(draft).length + uploads.uploads.length + Composer.quotes(draft).length + draft.pasted.length > 0
   return (
-    <div className="relative flex flex-col gap-2">
-      {suggest ? <SuggestionMenu suggest={suggest} below={home} onChoose={choose} /> : null}
-      <DropOverlay onFiles={attach} />
+    <div ref={root} className="relative flex flex-col gap-2">
+      {suggest ? <SuggestionMenu suggest={suggest} anchor={root} below={home} onChoose={choose} /> : null}
+      <DropOverlay
+        title="Drop files to attach"
+        detail={`Up to ${Session.maxDriveFiles} files, ${formatBytes(Drive.maxUploadBytes)} each`}
+        onFiles={attach}
+      />
       <Input
         ref={picker}
         type="file"
@@ -562,37 +1040,74 @@ export function PromptInput(props: {
           event.target.value = ""
         }}
       />
-      <UploadChips
-        spaceId={props.files.spaceId}
-        files={Composer.files(draft)}
-        uploads={uploads.uploads}
-        disabled={props.sending}
-        onRetry={uploads.retry}
-        onCancel={uploads.cancel}
-        onRemove={uploads.remove}
-      />
-      {draft.pasted.length > 0 ? (
-        <PastedBlocks
-          pasted={draft.pasted}
-          disabled={props.sending}
-          onShow={(id) => change(Composer.showPasted(draft, id, text.length).draft)}
-          onRemove={(id) => change(Composer.removePasted(draft, id))}
-        />
-      ) : null}
+      <div className="flex flex-wrap items-center gap-1 empty:hidden">{props.header}</div>
       {repositories && props.spaceId ? (
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
-      <InputGroup className="rounded-xl bg-card shadow-soft dark:bg-card">
-        {status ? (
-          <span className="pointer-events-none absolute top-4 left-4 flex">
-            <PromptInputStatus boot={status} onRetry={props.onRetry} />
-          </span>
+      {props.queue}
+      <InputGroup
+        data-shell={shell}
+        className="rounded-xl bg-card shadow-soft data-[shell=true]:border-primary data-[shell=true]:ring-3 data-[shell=true]:ring-primary/15 dark:bg-card"
+        onDragOver={(event) => {
+          if (suggest && event.dataTransfer.types.includes(Mentions.fileDragType)) event.preventDefault()
+        }}
+        onDrop={(event) => {
+          const path = event.dataTransfer.getData(Mentions.fileDragType)
+          if (!suggest || !path) return
+          event.preventDefault()
+          const result = Mentions.insertFile(text, path, textarea.current?.selectionStart ?? text.length)
+          change(Composer.withText(draft, result.text))
+          place(result.text, result.cursor)
+        }}
+      >
+        {attachments ? (
+          <InputGroupAddon align="block-start" className="px-3 pt-3">
+            <ImageSet>
+              <AttachmentGroup className="w-full py-0">
+                <UploadChips
+                  spaceId={props.files.spaceId}
+                  files={Composer.files(draft)}
+                  uploads={uploads.uploads}
+                  disabled={props.sending}
+                  onRetry={uploads.retry}
+                  onCancel={uploads.cancel}
+                  onRemove={uploads.remove}
+                />
+                <QuoteChips
+                  quotes={Composer.quotes(draft)}
+                  disabled={props.sending}
+                  onRemove={(id) => change(Composer.withoutQuote(draft, id))}
+                />
+                {draft.pasted.map((block) => (
+                  <PastedChip
+                    key={block.id}
+                    text={block.text}
+                    disabled={props.sending}
+                    onEdit={() => change(Composer.showPasted(draft, block.id, text.length).draft)}
+                    onRemove={() => change(Composer.removePasted(draft, block.id))}
+                  />
+                ))}
+              </AttachmentGroup>
+            </ImageSet>
+          </InputGroupAddon>
         ) : null}
+        {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
         <MentionOverlay textarea={textarea} text={text} marks={marks} />
         <InputGroupTextarea
+          dir="auto"
           value={text}
           onChange={(event) => {
             const next = event.target.value
+            setBrowsing(ComposerHistory.idle)
+            if (shell) {
+              props.history?.reset()
+              change(Composer.withText(draft, next))
+              return
+            }
+            if (startsShell(draft, next, { history: props.history, suggestOpen: props.suggest?.open === true })) {
+              change(Composer.withMode(draft, "shell"))
+              return
+            }
             change(Composer.withText(draft, next))
             props.suggest?.onCursor(next, event.target.selectionStart)
           }}
@@ -600,12 +1115,10 @@ export function PromptInput(props: {
           onPaste={(event) => {
             const data = event.clipboardData
             const pasted = data.getData("text/plain")
-            const kind = Composer.paste(
-              { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: pasted },
-              { readClipboardImage: false },
-            )
-            if (kind === "text") return
+            const kind = pasteKind(event)
+            if (kind === "text" || (shell && kind === "block")) return
             event.preventDefault()
+            if (shell) return
             if (kind === "attachment")
               attach(
                 data.files.length > 0
@@ -616,6 +1129,13 @@ export function PromptInput(props: {
           }}
           ref={textarea}
           onKeyDown={(event) => {
+            if (shell) {
+              if (shellKey(event, { running: props.running === true, text, leave: toggleShell })) return
+              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                recall(event.key === "ArrowUp" ? "up" : "down", event)
+                return
+              }
+            }
             if (suggest && suggestionKey(suggest, event, choose)) return
             const removed = suggest?.unmention(text, {
               key: event.key,
@@ -628,26 +1148,37 @@ export function PromptInput(props: {
               place(removed.text, removed.cursor)
               return
             }
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
-            event.preventDefault()
-            submit()
+            const action = ChatKeys.intent(
+              {
+                key: event.key,
+                metaKey: event.metaKey,
+                ctrlKey: event.ctrlKey,
+                shiftKey: event.shiftKey,
+                altKey: event.altKey,
+                repeat: event.repeat,
+                isComposing: event.nativeEvent.isComposing,
+              },
+              { apple: ChatKeys.apple, running: Boolean(props.running) },
+            )
+            if (action && act(action, event.currentTarget)) event.preventDefault()
           }}
-          placeholder={status ? "" : "Ask anything, @ to add an app"}
-          aria-label="Message"
-          readOnly={state.sending || booting}
-          aria-busy={booting || undefined}
+          placeholder={placeholder({ status, shell })}
+          aria-label={shell ? "Command" : "Message"}
+          readOnly={state.sending}
           // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
           autoFocus
           rows={1}
-          className={textareaClass({ home, marked: marks.length > 0 })}
+          className={textareaClass({ home, marked: marks.length > 0, shell })}
         />
+        <ShellPrefix active={shell} />
         <ComposerToolbar
           spaceId={props.spaceId}
-          onInsert={insert}
           onAttach={() => picker.current?.click()}
           onRepositories={() => setRepositories(true)}
+          shell={shell}
+          model={props.model}
+          apps={props.apps}
         >
-          {props.model}
           {send}
         </ComposerToolbar>
       </InputGroup>

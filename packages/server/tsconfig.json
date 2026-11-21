@@ -12,7 +12,7 @@
     { "path": "../core/tsconfig.src.json" },
     { "path": "../db/tsconfig.src.json" },
     { "path": "../egress-api/tsconfig.src.json" },
-    { "path": "../environment-api/tsconfig.src.json" },
+    { "path": "../hand-api/tsconfig.src.json" },
     { "path": "../executor/tsconfig.src.json" },
     { "path": "../host-api/tsconfig.src.json" },
     { "path": "../opencode-transcript/tsconfig.src.json" },

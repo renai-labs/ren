@@ -3,6 +3,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
+import { Hand } from "@ren/schema/hand"
 import { Space } from "@ren/schema/space"
 import {
   ConfigProvider,
@@ -89,7 +90,8 @@ const it = testEffect(
           BRAIN_KEYS: encodeKey(key),
           REN_INTEGRATIONS_KEYS: encodeKey(integrationsKey),
           REN_URL: "https://api.ren.test",
-          REN_INTEGRATIONS_URL: "https://mcp.ren.test/managed",
+          REN_PREVIOUS_HOSTS: "api.old.ren.test=api.ren.test",
+          REN_INTEGRATIONS_URL: "https://mcp.ren.test",
           ...TestDrives.config,
         }),
       ),
@@ -115,6 +117,16 @@ const modelKey = Effect.gen(function* () {
 })
 
 describe("CredentialSource.layerMinted", () => {
+  it.effect("a brain that started before REN_URL changed still gets its token on the previous host", () =>
+    Effect.gen(function* () {
+      const candidates = yield* (yield* CredentialSource.Minted).candidates(scope, [])
+      expect(candidates.find((candidate) => candidate.label === "REN")?.hosts).toEqual([
+        "api.ren.test",
+        "api.old.ren.test",
+      ])
+    }),
+  )
+
   it.effect("two mints of MODELS for one brain at once make one upstream mint; a 5xx is retried", () =>
     Effect.gen(function* () {
       yield* Ref.set(grants, 0)
@@ -158,17 +170,14 @@ describe("CredentialSource.layerMinted", () => {
       }),
   )
 
-  it.effect("a brain gets REN for Ren's own host (REN_URL): its host token, in place of the placeholder", () =>
-    Effect.gen(function* () {
-      const source = yield* CredentialSource.Minted
-      const ren = (yield* source.candidates(scope, [])).find((candidate) => candidate.label === "REN")
-      expect(ren).toMatchObject({ hosts: ["api.ren.test"], inject: { op: "replace", in: ["header"] } })
-      if (!ren) return
-      const value = yield* source.value(ren, scope)
-      if (Option.isNone(value) || value.value.value.type !== "key")
-        return yield* Effect.die(new Error("expected a key"))
-      expect(Redacted.value(value.value.value.value).slice(0, 2)).toBe("ey")
-    }),
+  it.effect(
+    "a remote hand gets DRIVE for its space's drive, which its executor mounts, and none of the brain's own keys",
+    () =>
+      Effect.gen(function* () {
+        const source = yield* CredentialSource.Minted
+        const hand = { ...scope, workload: { kind: "hand" as const, id: Hand.ID.make("env_01"), generation: 1 } }
+        expect((yield* source.candidates(hand, [])).map((candidate) => candidate.label)).toEqual(["DRIVE"])
+      }),
   )
 
   it.effect(

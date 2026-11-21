@@ -20,6 +20,12 @@ export const Choice = Schema.Struct({
   variants: Schema.Array(Variant),
 }).annotate({ identifier: "SessionModel.Choice" })
 
+export interface Choices extends Schema.Schema.Type<typeof Choices> {}
+export const Choices = Schema.Struct({
+  models: Schema.Array(Choice),
+  default: Schema.optionalKey(Ref).annotate({ description: "The model a session starts with when it names none." }),
+}).annotate({ identifier: "SessionModel.Choices" })
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   ...Choice.fields,

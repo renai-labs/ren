@@ -2,6 +2,7 @@ import { Option, Result, Schema } from "effect"
 import { ProductEvents } from "../lib/product-events.js"
 import { Analytics } from "./analytics.js"
 import { DraftStore } from "./draft-store.js"
+import { Notifications } from "./notifications.js"
 import type { Platform } from "./platform.js"
 
 const prefix = "ren."
@@ -12,10 +13,23 @@ const decodeShared = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.String, value: Schema.UndefinedOr(Schema.String) }),
 )
 
-export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
+export function createWebPlatform(stores: {
+  readonly large?: DraftStore.Large | undefined
+  readonly chatCache?: Platform.ChatCache | undefined
+}): Platform.Info {
+  const notifications = Notifications.make()
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   const posthogKey = import.meta.env.VITE_POSTHOG_KEY
   const posthogUiHost = import.meta.env.VITE_POSTHOG_UI_HOST
+  const listeners = new Set<(key: string | null) => void>()
+  const notify = (key: string | null) => {
+    for (const listener of listeners) listener(key)
+  }
+  window.addEventListener("storage", (event) => {
+    if (event.storageArea !== localStorage) return
+    if (event.key === null) notify(null)
+    else if (event.key.startsWith(prefix)) notify(event.key.slice(prefix.length))
+  })
   const serverUrl = import.meta.env.VITE_REN_API_URL ?? window.location.origin
   return {
     ...(posthogKey && {
@@ -29,7 +43,7 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
     }),
     platform: "web",
     serverUrl,
-    appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/u, ""),
+    appUrl: window.location.origin,
     authorizationQuery: new URLSearchParams(window.location.search).has("sig")
       ? window.location.search.slice(1)
       : undefined,
@@ -45,15 +59,31 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       const response = await globalThis.fetch(form.uploadUrl, { method: "POST", body, signal })
       if (!response.ok) throw new Error(`The upload failed (${response.status}).`)
     },
+    windowStorage: {
+      get: (key) => sessionStorage.getItem(prefix + key) ?? undefined,
+      set: (key, value) => sessionStorage.setItem(prefix + key, value),
+      remove: (key) => sessionStorage.removeItem(prefix + key),
+    },
     storage: {
       get: (key) => localStorage.getItem(prefix + key) ?? undefined,
-      set: (key, value) => localStorage.setItem(prefix + key, value),
-      remove: (key) => localStorage.removeItem(prefix + key),
+      set: (key, value) => {
+        localStorage.setItem(prefix + key, value)
+        notify(key)
+      },
+      remove: (key) => {
+        localStorage.removeItem(prefix + key)
+        notify(key)
+      },
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
     },
+    ...(stores.chatCache && { chatCache: stores.chatCache }),
     drafts: DraftStore.make({
       storage: Result.getOrUndefined(Result.try(() => window.localStorage)),
       prefix: draftPrefix,
-      large,
+      large: stores.large,
       watch: (handler) => {
         const changed = (event: StorageEvent) => handler(event.key)
         window.addEventListener("storage", changed)
@@ -90,21 +120,41 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       if (popup) popup.opener = null
       return popup
     },
-    notify: async (title, body) => {
-      if (!("Notification" in window) || Notification.permission !== "granted") return
-      if (document.visibilityState === "visible" && document.hasFocus()) return
-      const notification = new Notification(title, body === undefined ? undefined : { body })
-      notification.addEventListener("click", () => {
-        window.focus()
-        notification.close()
-      })
-    },
+    notify: notifications.notify,
+    notificationPermission: notifications.permission,
     requestNotifications: async () => {
       if (!("Notification" in window)) return false
       if (Notification.permission !== "default") return Notification.permission === "granted"
       return (await Notification.requestPermission().catch(() => "denied")) === "granted"
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
+    copyImage: (src) =>
+      navigator.clipboard.write([
+        new ClipboardItem({
+          "image/png": new Promise<Blob>((resolve, reject) => {
+            const image = new Image()
+            image.crossOrigin = "anonymous"
+            image.onerror = () => reject(new Error("The image failed to load"))
+            image.onload = () => {
+              const canvas = document.createElement("canvas")
+              canvas.width = image.naturalWidth
+              canvas.height = image.naturalHeight
+              canvas.getContext("2d")?.drawImage(image, 0, 0)
+              canvas.toBlob(
+                (png) => (png ? resolve(png) : reject(new Error("The image failed to encode"))),
+                "image/png",
+              )
+            }
+            image.src = src
+          }),
+        }),
+      ]),
+    saveFile: (url, name) => {
+      const link = document.createElement("a")
+      link.href = url
+      link.download = name
+      link.click()
+    },
     onLifecycle: (listener) => {
       const visibility = () => {
         if (document.visibilityState === "visible") listener("foreground")
@@ -116,6 +166,10 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
         document.removeEventListener("visibilitychange", visibility)
         window.removeEventListener("online", online)
       }
+    },
+    markSignedIn: (signedIn) => {
+      const secure = window.location.protocol === "https:" ? "; Secure" : ""
+      document.cookie = `ren_signed_in=1; Path=/; Max-Age=${signedIn ? 7_776_000 : 0}; SameSite=Lax${secure}`
     },
   }
 }

@@ -1,7 +1,7 @@
 export * as Runtime from "./runtime.js"
 
 import { ClientError, Ren } from "@ren/client"
-import { RenQuery } from "@ren/client/react"
+import { Invalidation, RenQuery } from "@ren/client/react"
 import { hashKey, MutationCache, QueryClient } from "@tanstack/react-query"
 import { createRouter } from "@tanstack/react-router"
 import { RouteSkeleton } from "../components/route-skeleton.js"
@@ -22,21 +22,6 @@ export interface Context {
   readonly productEvents: ReturnType<typeof ProductEvents.make>
 }
 
-const invalidates: Readonly<Record<string, ReadonlyArray<string>>> = {
-  task: ["task", "task-activity", "label", "link"],
-  "task-comment": ["task-activity"],
-  "space-member": ["space-member", "space"],
-  "app-profile": ["app-profile", "app-profile-reach", "app"],
-  "app-profile-reach": ["app-profile", "app-profile-reach", "app"],
-  credential: ["credential", "app-profile", "app-profile-reach"],
-  "credential-connect": ["app-profile", "app-profile-reach"],
-  schedule: ["schedule", "schedule-run"],
-  webhook: ["webhook", "webhook-request"],
-  "channel-mapping": ["channel-mapping", "channel-connect"],
-  "channel-install": ["channel-install", "channel-mapping", "channel-connect"],
-  chat: [],
-}
-
 export function make(platform: Platform.Info) {
   const client = Ren.make({ baseUrl: platform.serverUrl, fetch: platform.fetch })
   const api = RenQuery.make(client)
@@ -46,7 +31,7 @@ export function make(platform: Platform.Info) {
       onSuccess: (_data, _variables, _context, mutation) => {
         const group = mutation.options.mutationKey?.[0]
         if (typeof group !== "string") return
-        const groups = invalidates[group] ?? [group]
+        const groups = Invalidation.affected(group)
         return queryClient.invalidateQueries({
           predicate: (query) => groups.some((name) => name === query.queryKey[0]),
         })
@@ -75,6 +60,14 @@ export function make(platform: Platform.Info) {
       if (data !== undefined) analytics.identify(data.user)
     })
   }
+  const markSignedIn = platform.markSignedIn
+  if (markSignedIn !== undefined) {
+    const sessionHash = hashKey(Auth.authKeys.session())
+    queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success" || event.query.queryHash !== sessionHash) return
+      markSignedIn(event.action.data !== null)
+    })
+  }
   const context: Context = {
     platform,
     queryClient,
@@ -91,14 +84,13 @@ export function make(platform: Platform.Info) {
       if (error instanceof Error && "_tag" in error && error.name === error._tag) return
       analytics?.captureException(error)
     },
-    basepath: "/app",
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
     defaultPendingMs: 1000,
     defaultPendingMinMs: 500,
     defaultPendingComponent: RouteSkeleton,
     defaultErrorComponent: RouteError,
-    scrollRestoration: true,
+    scrollRestoration: (options) => !options.location.pathname.includes("/sessions/"),
     parseSearch: OAuthSearch.parse,
     stringifySearch: OAuthSearch.stringify,
   })

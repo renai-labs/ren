@@ -7,7 +7,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@re
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
 import { isSlugTaken, organizationSlug, slugAvailabilityOptions } from "../lib/auth.js"
-import { useDebouncedValue } from "../lib/use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { resetSession } from "../lib/chat.js"
 import { RouterContext } from "../lib/router-context.js"
 
@@ -22,7 +22,7 @@ export function CreateOrganizationForm(props: {
   const [takenSlug, setTakenSlug] = useState("")
   const [pending, setPending] = useState(false)
   const slug = organizationSlug(name)
-  const debounced = useDebouncedValue(slug, 350)
+  const debounced = Debounce.useValue(slug, 350)
   const availability = useQuery({
     ...slugAvailabilityOptions(auth, debounced),
     enabled: debounced !== "" && debounced === slug,

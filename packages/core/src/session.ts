@@ -1,14 +1,18 @@
 export * as Session from "./session.js"
 
+import { BrainSettings } from "@ren/brain/settings"
 import { Database } from "@ren/db/database"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
 import type { SessionLinks } from "@ren/schema/session/links"
+import type { SessionUsage } from "@ren/schema/session/usage"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
+import { Settings } from "@ren/schema/settings"
 import { Space } from "@ren/schema/space"
+import type { Usage } from "@ren/schema/usage"
 import {
   and,
   asc,
@@ -27,9 +31,10 @@ import {
   type SQL,
 } from "drizzle-orm"
 import type { NonEmptyReadonlyArray } from "effect/Array"
-import { Array, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore, Struct } from "effect"
+import { Array, Context, DateTime, Duration, Effect, Layer, Option, Result, Schema, Semaphore, Struct } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
+import { Billing } from "./billing.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
@@ -64,8 +69,13 @@ export type Interface = Primitive.Interface<typeof Session.definition> & {
     id: Session.ID,
     query: { readonly limit?: number | undefined; readonly cursor?: string | undefined },
   ) => Effect.Effect<SessionMessage.Page, Primitive.NotFound | Primitive.Invalid | Busy | PageTooLarge>
-  readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
+  readonly models: (
+    actor: Actor.Info,
+    id: Session.ID,
+    options?: { readonly spaceId?: Space.ID | undefined },
+  ) => Effect.Effect<SessionModel.Choices, Primitive.NotFound>
   readonly links: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionLinks.Info, Primitive.NotFound>
+  readonly usage: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionUsage.Info, Primitive.NotFound>
   readonly pullRequests: (
     actor: Actor.Info,
     id: Session.ID,
@@ -84,7 +94,7 @@ const notFound = new Primitive.NotFound({ message: "Session not found." })
 
 const spaceNotFound = new Primitive.NotFound({ message: "Space not found." })
 
-const updatedAt = sql<Date>`coalesce(to_timestamp(${Database.Schema.opencode_session.time_updated} / 1000.0), ${Database.Schema.agent_session.created_at})`
+const updatedAt = sql<Date>`coalesce(to_timestamp(${OpenCodeStore.state.updatedAt} / 1000.0), ${Database.Schema.agent_session.created_at})`
 
 const anyOf = <TColumn extends Column>(
   column: TColumn,
@@ -95,12 +105,12 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({
       session: Database.Schema.agent_session,
-      opencode: OpenCodeStore.summary,
+      opencode: OpenCodeStore.state,
       membershipId: SpaceQueries.membership.id,
     })
     .from(Database.Schema.agent_session)
     .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
-    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
 
 type Row = Effect.Success<ReturnType<typeof select>>[number]
@@ -109,6 +119,7 @@ const toInfo = (row: Row): Session.Info => ({
   id: row.session.id,
   spaceId: row.session.space_id,
   createdBy: row.session.created_by,
+  agentId: row.session.agent_id,
   origin: row.session.origin,
   harness: row.session.harness,
   title: row.opencode?.title ?? null,
@@ -183,11 +194,12 @@ export const layer = Layer.effect(
     const catalog = yield* Models.Service
     const codecs = yield* TranscriptCodec.Registry
     const pulls = yield* PullRequest.Service
+    const billing = yield* Billing.Service
     const historyAdmitted = yield* Semaphore.make(historyReads + historyWaiting)
     const historyReading = yield* Semaphore.make(historyReads)
     const historyMemory = yield* Semaphore.make(historyMemoryBytes)
 
-    const models = (actor: Actor.Info) =>
+    const choices = (actor: Actor.Info) =>
       catalog.catalog(actor.organizationId).pipe(
         Effect.orDie,
         Effect.map((found) =>
@@ -293,7 +305,7 @@ export const layer = Layer.effect(
         .pipe(Effect.timeoutOrElse({ duration: historyReadsWithin, orElse: () => Effect.fail(busy) }))
     })
 
-    const linked = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
+    const rootOf = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
       const session = (yield* database.db
         .select({ rootId: Database.Schema.agent_session.root_id })
         .from(Database.Schema.agent_session)
@@ -306,6 +318,11 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)).at(0)
       if (!session) return yield* notFound
       yield* read(actor, session.rootId)
+      return session.rootId
+    })
+
+    const linked = Effect.fnUntraced(function* (actor: Actor.Info, id: Session.ID) {
+      yield* rootOf(actor, id)
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const tasks = yield* TaskQueries.select(transaction, actor)
@@ -378,8 +395,7 @@ export const layer = Layer.effect(
               ),
               anyOf(Database.Schema.agent_session.agent_id, input.agentId),
               anyOf(Database.Schema.agent_session.origin, input.origin),
-              input.status &&
-                (input.status === "busy" ? isNotNull : isNull)(Database.Schema.opencode_session.time_suspended),
+              input.status && (input.status === "busy" ? isNotNull : isNull)(OpenCodeStore.state.timeSuspended),
               OpenCodeStore.search(input.search),
               (input.archived ? isNotNull : isNull)(Database.Schema.agent_session.archived_at),
               input.from && gte(time, DateTime.toDateUtc(input.from)),
@@ -411,7 +427,7 @@ export const layer = Layer.effect(
         const model = input.model
         if (
           model &&
-          !(yield* models(actor)).some(
+          !(yield* choices(actor)).some(
             (item) =>
               item.id === model.id &&
               item.providerID === model.providerID &&
@@ -419,7 +435,7 @@ export const layer = Layer.effect(
           )
         )
           return yield* modelNotFound
-        const start: Session.StartInput = {
+        const start: Omit<Session.StartInput, "hand"> = {
           sessionId: input.id,
           harness: "opencode",
           interactive: true,
@@ -450,11 +466,17 @@ export const layer = Layer.effect(
                 const existing = yield* sessions.get(input.id).pipe(Effect.orDie)
                 if (existing.createdBy !== actor.userId || existing.spaceId !== input.spaceId)
                   return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
-                return yield* brain.start(start, {
-                  organizationId: actor.organizationId,
-                  spaceId: input.spaceId,
-                  brainId: existing.brainId,
-                })
+                const stored = yield* Schema.decodeUnknownEffect(Session.StartInput)(
+                  (yield* read(actor, input.id)).session.start_input ?? { sessionId: input.id, harness: "opencode" },
+                ).pipe(Effect.orDie)
+                return yield* brain.start(
+                  { ...start, hand: stored.hand },
+                  {
+                    organizationId: actor.organizationId,
+                    spaceId: input.spaceId,
+                    brainId: existing.brainId,
+                  },
+                )
               }),
             ),
             Effect.catchTags({
@@ -475,7 +497,7 @@ export const layer = Layer.effect(
             if (row.session.archived_at) return toInfo(row)
             yield* transaction
               .update(Database.Schema.agent_session)
-              .set({ archived_at: new Date() })
+              .set({ archived_at: sql`now()` })
               .where(eq(Database.Schema.agent_session.id, id))
             return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
           }),
@@ -492,7 +514,71 @@ export const layer = Layer.effect(
         if (Option.isNone(admitted)) return yield* busy
         return admitted.value
       }),
-      models: Effect.fn("Session.models")(models),
+      models: Effect.fn("Session.models")(function* (actor, _id, options) {
+        const spaceId = options?.spaceId
+        if (spaceId) yield* visibleSpace(actor, spaceId)
+        const listed = yield* choices(actor)
+        const settings = Database.Schema.settings
+        const agent = Database.Schema.agent
+        const rows = yield* database.db
+          .select({ ownerId: settings.owner_id, settings: settings.settings })
+          .from(settings)
+          .where(
+            inArray(settings.owner_id, [Database.Schema.renOwner, actor.organizationId, ...(spaceId ? [spaceId] : [])]),
+          )
+          .pipe(Effect.orDie)
+        const primary = (yield* database.db
+          .select({ name: agent.name, settings: settings.settings })
+          .from(agent)
+          .leftJoin(settings, eq(settings.owner_id, agent.id))
+          .where(and(isNull(agent.organization_id), isNull(agent.archived_at), eq(agent.is_subagent, false)))
+          .orderBy(asc(agent.name))
+          .limit(1)
+          .pipe(Effect.orDie)).at(0)
+        const decode = (stored: unknown) => Schema.decodeUnknownEffect(Settings.Info)(stored).pipe(Effect.orDie)
+        const layer = (ownerId: string | undefined) => {
+          const row = rows.find((each) => each.ownerId === ownerId)
+          return row
+            ? Effect.map(decode(row.settings), (decoded) => ({ hash: null, settings: decoded }))
+            : Effect.succeed({ hash: null })
+        }
+        const resolved = BrainSettings.resolve(
+          {
+            ren: yield* layer(Database.Schema.renOwner),
+            organization: yield* layer(actor.organizationId),
+            space: yield* layer(spaceId),
+            agents: primary
+              ? [
+                  {
+                    name: primary.name,
+                    description: null,
+                    isSubagent: false,
+                    hash: "",
+                    settings: yield* decode(primary.settings ?? {}),
+                  },
+                ]
+              : [],
+          },
+          { agent: null, model: Option.none() },
+          (model) =>
+            Option.map(
+              Option.fromUndefinedOr(
+                listed.find((item) => item.providerID === model.endpointId && item.id === model.modelId),
+              ),
+              (item) => ({ variants: item.variants.map((variant) => variant.id) }),
+            ),
+        )
+        if (Result.isFailure(resolved)) return { models: listed }
+        const model = resolved.success.primary.model
+        return {
+          models: listed,
+          default: {
+            id: model.modelId,
+            providerID: model.endpointId,
+            ...(model.variant && { variant: model.variant }),
+          },
+        }
+      }),
       links: Effect.fn("Session.links")(function* (actor: Actor.Info, id: Session.ID) {
         const found = yield* linked(actor, id)
         return {
@@ -517,6 +603,30 @@ export const layer = Layer.effect(
           ),
         }
       }),
+      usage: Effect.fn("Session.usage")(function* (actor: Actor.Info, id: Session.ID) {
+        const root = yield* rootOf(actor, id)
+        const events = Database.Schema.usage_event
+        const rows = yield* database.db
+          .select({ type: events.type, cost: sql`coalesce(sum(${events.cost_micro_usd}), 0)`.mapWith(Number) })
+          .from(events)
+          .where(
+            and(eq(events.organization, actor.organizationId), eq(events.root_session, root), eq(events.payer, "ren")),
+          )
+          .groupBy(events.type)
+          .pipe(Effect.orDie)
+        const cost = (type: Usage.Event["type"]) => rows.find((row) => row.type === type)?.cost ?? 0
+        const priced = yield* billing.price(actor.organizationId, {
+          models: cost("model.call"),
+          tools: cost("api.call"),
+        })
+        return {
+          total: priced.models + priced.tools,
+          models: priced.models,
+          tools: priced.tools,
+          currency: "usd" as const,
+          source: priced.source,
+        }
+      }),
       pullRequests: Effect.fn("Session.pullRequests")(function* (actor: Actor.Info, id: Session.ID) {
         const found = yield* linked(actor, id)
         return yield* pulls.read(
@@ -535,20 +645,23 @@ export const layer = Layer.effect(
       ) {
         const row = yield* read(actor, id, actions.retry)
         yield* brain.retry(id)
-        if (!message || row.opencode) return
+        // oxlint-disable-next-line ren/no-comments -- A chat that never reached its brain starts again; without a message, with the first message it was created with.
+        if (row.opencode) return
         const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(
           row.session.start_input ?? { sessionId: id, harness: row.session.harness },
         ).pipe(Effect.orDie)
         yield* brain
           .start(
-            {
-              ...start,
-              initialMessage: {
-                messageId: Session.MessageID.make(message.id),
-                prompt: { text: message.text, ...(message.files && { files: message.files }) },
-                sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
-              },
-            },
+            message
+              ? {
+                  ...start,
+                  initialMessage: {
+                    messageId: Session.MessageID.make(message.id),
+                    prompt: { text: message.text, ...(message.files && { files: message.files }) },
+                    sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
+                  },
+                }
+              : start,
             { organizationId: actor.organizationId, spaceId: row.session.space_id, brainId: row.session.brain_id },
           )
           .pipe(Effect.catchTag("BrainRejectedError", Effect.die))

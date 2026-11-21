@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test"
 import { Schema } from "effect"
 import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
 
-test("a member arranges the factory, moves a card and restores the single-space board", async ({ page }) => {
+test("a member writes the factory spec, moves a card and moves a task to an agent on the space board", async ({
+  page,
+}) => {
   await createOrganization(page.request, { name: "Margaret Hamilton" })
   const response = await page.request.post(`${serverURL}/spaces`, {
     headers: { origin: appOrigin },
@@ -10,14 +12,6 @@ test("a member arranges the factory, moves a card and restores the single-space 
   })
   expect(response.ok()).toBe(true)
   const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
-  await page.goto(`/app/spaces/${space.id}`)
-  await page.getByRole("link", { name: "Factory", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Remove ren from the factory", exact: true })).toBeDisabled()
-  await expect(
-    page.getByText("Spaces without their own primary agents use global agents as the default factory order.", {
-      exact: true,
-    }),
-  ).toBeVisible()
   await Promise.all(
     ["plan", "build"].map(async (name) => {
       const created = await page.request.post(`${serverURL}/agents`, {
@@ -39,52 +33,42 @@ test("a member arranges the factory, moves a card and restores the single-space 
   })
   expect(newer.ok()).toBe(true)
 
-  await page.goto(`/app/spaces/${space.id}`)
-  await page.getByRole("link", { name: "Factory", exact: true }).click()
-  const factory = page.getByRole("list", { name: "Factory", exact: true }).getByRole("listitem")
-  const add = async (name: string) => {
-    await page.getByRole("button", { name: "Add agent", exact: true }).click()
-    await page.getByRole("menuitem", { name, exact: true }).click()
-  }
-  await add("build")
-  await expect(page.getByRole("button", { name: "Move build up", exact: true })).toBeDisabled()
-  await add("plan")
-  await page.getByRole("button", { name: "Move plan up", exact: true }).click()
-  await expect(factory).toHaveText([/^plan/, /^build/])
-  await add("ren")
-  await expect(factory).toHaveText([/^plan/, /^build/, /^ren/])
-  await page.getByRole("button", { name: "Remove ren from the factory", exact: true }).click()
-  await expect(factory).toHaveText([/^plan/, /^build/])
+  await page.goto(`/spaces/${space.id}/factory?view=spec`)
+  const spec = page.getByRole("textbox", { name: "Factory spec", exact: true })
+  await spec.fill("agents:\n  - agent: plan\n    to: [{ agent: nobody }]\n")
+  await expect(page.getByText("agents.0.to.0.agent: nobody is not in the factory.", { exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled()
+  await spec.fill("agents:\n  - agent: plan\n    to: [{ agent: build, max: 2 }]\n  - agent: build\n")
+  await page.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled()
   await page.reload()
-  await expect(factory).toHaveText([/^plan/, /^build/])
+  await expect(spec).toHaveValue(
+    "maxHandoffs: 20\nagents:\n  - agent: plan\n    to:\n      - agent: build\n        max: 2\n  - agent: build\n",
+  )
+  await page.getByRole("tab", { name: "Flow", exact: true }).click()
+  await expect(page.getByRole("application", { name: /^How tasks move between the agents/ })).toBeVisible()
 
-  await page.goto("/app/tasks?group=status&direction=asc")
+  await page.goto(`/spaces/${space.id}/tasks`)
   await page.getByRole("button", { name: "Display options" }).click()
-  await page.getByRole("button", { name: "Board", exact: true }).click()
+  await page.getByRole("combobox", { name: "Group by" }).click()
+  await page.getByRole("option", { name: "Agent", exact: true }).click()
   await page.keyboard.press("Escape")
-  await page.getByRole("combobox", { name: "Board space" }).click()
-  await page.getByRole("option", { name: "Flight", exact: true }).click()
-  const board = page.getByRole("region", { name: "Task board", exact: true })
-  await expect(board.getByRole("heading")).toHaveText(["No agent", "plan", "build"])
-  await expect(board.getByRole("button", { name: /^Check the / })).toHaveText([
-    "Check the guidance system",
-    "Check the landing sequence",
-  ])
-  await board.getByRole("button", { name: "Actions for Check the guidance system" }).click()
-  await page.getByRole("menuitem", { name: "Move to agent", exact: true }).hover()
+  await page.getByRole("checkbox", { name: "Select Check the guidance system", exact: true }).check()
+  const selection = page.getByRole("region", { name: "Selected tasks", exact: true })
+  await selection.getByRole("button", { name: "Move", exact: true }).click()
   await page.getByRole("menuitem", { name: "build", exact: true }).click()
+  await page.getByRole("button", { name: "Display options" }).click()
+  await page.getByRole("tab", { name: "Board", exact: true }).click()
+  await page.keyboard.press("Escape")
+  const build = page.getByRole("region", { name: "build", exact: true })
+  await expect(build.getByRole("link", { name: "Check the guidance system", exact: true })).toBeVisible()
   await expect(
-    board
-      .getByRole("region", { name: "build", exact: true })
-      .getByRole("button", { name: "Check the guidance system", exact: true }),
+    page
+      .getByRole("region", { name: "No agent", exact: true })
+      .getByRole("link", { name: "Check the landing sequence" }),
   ).toBeVisible()
   await page.reload()
-  await expect(board.getByRole("heading")).toHaveText(["No agent", "plan", "build"])
-  await expect(
-    board
-      .getByRole("region", { name: "build", exact: true })
-      .getByRole("button", { name: "Check the guidance system", exact: true }),
-  ).toBeVisible()
-  await board.getByRole("button", { name: "Check the guidance system", exact: true }).click()
+  await expect(build.getByRole("link", { name: "Check the guidance system", exact: true })).toBeVisible()
+  await build.getByRole("link", { name: "Check the guidance system", exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}`))
 })

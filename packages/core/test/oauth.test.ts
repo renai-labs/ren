@@ -54,6 +54,7 @@ const it = testEffect(
             { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
           ]),
           REN_URL: "https://ren.test",
+          REN_PREVIOUS_HOSTS: "old.ren.test=ren.test",
         }),
       ),
     ),
@@ -110,13 +111,14 @@ const second = Effect.fnUntraced(function* (found: Found, slug: string) {
 
 const connect = Effect.fnUntraced(function* (
   found: Found,
-  options: { readonly profileId?: AppProfile.ID; readonly reconnect?: boolean } = {},
+  options: { readonly profileId?: AppProfile.ID; readonly reconnect?: boolean; readonly returnTo?: string } = {},
 ) {
   const service = yield* OAuth.Service
   const result = yield* service.connect(found.actor, {
     profileId: options.profileId ?? found.profile.id,
     item: { mcp: "linear" },
     ...(options.reconnect && { reconnect: true }),
+    ...(options.returnTo && { returnTo: options.returnTo }),
   })
   if (!("redirectUrl" in result)) return yield* Effect.die(new Error("expected a redirect"))
   return new URL(result.redirectUrl)
@@ -220,6 +222,28 @@ describe("OAuth.connect: client, scope, resource and PKCE (tests 9, 10, 11, 32)"
       const document = yield* connect(yield* setup())
       expect(document.searchParams.get("client_id")).toBe("https://ren.test/oauth/client.json")
       expect(server.seen.map((seen) => seen.path)).not.toContain("/register")
+    }),
+  )
+
+  it.live("on a previous host, the client document and the code exchange keep that host's addresses", () =>
+    Effect.gen(function* () {
+      yield* reset({ metadata: { client_id_metadata_document_supported: true } })
+      const service = yield* OAuth.Service
+      expect(yield* service.clientMetadata(Option.some("old.ren.test"))).toMatchObject({
+        client_id: "https://old.ren.test/oauth/client.json",
+        redirect_uris: ["https://old.ren.test/oauth/callback"],
+      })
+      expect(yield* service.clientMetadata(Option.some("other.test"))).toMatchObject({
+        client_id: "https://ren.test/oauth/client.json",
+      })
+      const signIn = yield* connect(yield* setup())
+      yield* service.callback(
+        { state: signIn.searchParams.get("state") ?? "", code: "c", host: "old.ren.test" },
+        Option.none(),
+      )
+      expect(server.seen.find((seen) => seen.path === "/token")?.form.get("redirect_uri")).toBe(
+        "https://old.ren.test/oauth/callback",
+      )
     }),
   )
 
@@ -349,8 +373,40 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           reason: "StateInvalid: used",
           app: Option.none(),
           space: Option.none(),
+          returnTo: Option.none(),
         })
       }),
+  )
+
+  it.live("a connect that names where to return keeps it with the session, and the callback gives it back", () =>
+    Effect.gen(function* () {
+      yield* reset()
+      const service = yield* OAuth.Service
+      const database = yield* Database.Service
+      const found = yield* setup()
+      const returnTo = "ren-dev:///connected"
+      const approved = yield* connect(found, { returnTo })
+      const returnToOf = (state: string | null) =>
+        database.db
+          .select({ return_to: Database.Schema.oauth_session.return_to })
+          .from(Database.Schema.oauth_session)
+          .where(eq(Database.Schema.oauth_session.state, state ?? ""))
+      expect(yield* returnToOf(approved.searchParams.get("state"))).toEqual([{ return_to: returnTo }])
+      expect(
+        yield* service.callback({ state: approved.searchParams.get("state") ?? "", code: "c1" }, Option.none()),
+      ).toMatchObject({ ok: true, returnTo: Option.some(returnTo) })
+      const denied = yield* connect(yield* setup(), { returnTo: "ren-preview://192.168.1.6:8081/connected" })
+      expect(
+        yield* service.callback(
+          { state: denied.searchParams.get("state") ?? "", error: "access_denied" },
+          Option.none(),
+        ),
+      ).toMatchObject({ ok: false, returnTo: Option.some("ren-preview://192.168.1.6:8081/connected") })
+      const plain = yield* connect(yield* setup())
+      expect(
+        yield* service.callback({ state: plain.searchParams.get("state") ?? "", code: "c1" }, Option.none()),
+      ).toMatchObject({ ok: true, returnTo: Option.none() })
+    }),
   )
 
   it.live(
@@ -570,31 +626,35 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
     }),
   )
 
-  it.live("400 invalid_grant and GitHub's 200 bad_refresh_token are fatal; server errors are temporary", () =>
-    Effect.gen(function* () {
-      const refresh = yield* CredentialRefresh.Service
-      const answers: ReadonlyArray<{
-        readonly status: number
-        readonly body: unknown
-        readonly after: "ok" | "reconnect"
-      }> = [
-        { status: 503, body: { error: "invalid_grant" }, after: "ok" },
-        { status: 400, body: { error: { code: "x" } }, after: "ok" },
-        { status: 200, body: { error: "bad_refresh_token" }, after: "reconnect" },
-        { status: 400, body: { error: "invalid_grant" }, after: "reconnect" },
-      ]
-      const statuses = yield* Effect.forEach(answers, (answer) =>
-        Effect.gen(function* () {
-          const database = yield* Database.Service
-          yield* database.db.delete(Database.Schema.credential)
-          const id = yield* signedIn(() => OAuthServer.bearer("tok_1", { refresh_token: "ref_1", expires_in: 3600 }))
-          server.options = { token: () => ({ status: answer.status, body: answer.body }) }
-          yield* refresh.refresh(id, {})
-          return (yield* stored(LABEL))?.row.status
-        }),
-      )
-      expect(statuses).toEqual(answers.map((answer) => answer.after))
-    }),
+  it.live(
+    "400 invalid_grant, GitHub's 200 bad_refresh_token and any 401 are fatal; server errors and unknown 400s are temporary",
+    () =>
+      Effect.gen(function* () {
+        const refresh = yield* CredentialRefresh.Service
+        const answers: ReadonlyArray<{
+          readonly status: number
+          readonly body: unknown
+          readonly after: "ok" | "reconnect"
+        }> = [
+          { status: 503, body: { error: "invalid_grant" }, after: "ok" },
+          { status: 400, body: { error: { code: "x" } }, after: "ok" },
+          { status: 400, body: { error: { message: "Invalid token!", stack: null } }, after: "ok" },
+          { status: 200, body: { error: "bad_refresh_token" }, after: "reconnect" },
+          { status: 400, body: { error: "invalid_grant" }, after: "reconnect" },
+          { status: 401, body: { error: { message: "Invalid token!", stack: null } }, after: "reconnect" },
+        ]
+        const statuses = yield* Effect.forEach(answers, (answer) =>
+          Effect.gen(function* () {
+            const database = yield* Database.Service
+            yield* database.db.delete(Database.Schema.credential)
+            const id = yield* signedIn(() => OAuthServer.bearer("tok_1", { refresh_token: "ref_1", expires_in: 3600 }))
+            server.options = { token: () => ({ status: answer.status, body: answer.body }) }
+            yield* refresh.refresh(id, {})
+            return (yield* stored(LABEL))?.row.status
+          }),
+        )
+        expect(statuses).toEqual(answers.map((answer) => answer.after))
+      }),
   )
 
   it.live("a token with an expiry and no refresh token needs a reconnect only at its expiry", () =>

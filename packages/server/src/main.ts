@@ -1,5 +1,8 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
+import { BrainProvider } from "@ren/core/brain-provider"
 import { Access } from "@ren/core/access"
+import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
+import { ArtifactCloudflare } from "@ren/core/artifact-provider/cloudflare"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
 import { CredentialSource } from "@ren/core/credential-source"
@@ -16,7 +19,10 @@ import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainPush } from "@ren/core/brain-push"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
+import { Bundles } from "@ren/core/bundles"
+import { ProviderCheck } from "@ren/core/provider-check"
 import { Brains } from "@ren/core/brains"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelProvider } from "@ren/core/channel-provider"
@@ -31,12 +37,13 @@ import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Integrations } from "@ren/core/integrations"
 import { Deployment } from "@ren/core/deployment"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Docker } from "@ren/core/environment-provider/docker"
-import { Environments } from "@ren/core/environments"
+import { HandProvider } from "@ren/core/hand-provider"
+import { Docker } from "@ren/core/machine-provider/docker"
+import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -44,10 +51,10 @@ import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
-import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
+import { E2BSandbox } from "@ren/core/machine-provider/e2b"
 import { SandboxUsage } from "@ren/core/sandbox-usage"
 import { Usage } from "@ren/core/usage"
-import { LocalSandbox } from "@ren/core/sandbox-provider/local"
+import { LocalSandbox } from "@ren/core/machine-provider/local"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { TranscriptCodec } from "@ren/core/transcript-codec"
@@ -59,7 +66,8 @@ import { Observability } from "@ren/schema/observability"
 import { PostHog } from "@ren/telemetry/posthog"
 import { Telemetry } from "@ren/telemetry/telemetry"
 import { Config, Effect, Layer, Option, References } from "effect"
-import { FetchHttpClient, HttpRouter } from "effect/http"
+import { FetchHttpClient, type HttpClient, HttpRouter } from "effect/http"
+import type { ChildProcessSpawner } from "effect/process"
 import { PersistedQueue } from "effect/persistence"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -71,13 +79,31 @@ import { SlackApp } from "@ren/core/slack-app"
 import { SlackTaskCard } from "@ren/core/slack-task-card"
 import { TaskCard } from "@ren/core/task-card"
 import { EgressControl } from "@ren/core/egress-control"
+import { MachineNetwork } from "@ren/core/machine-network"
+import { AppResolve } from "@ren/core/app/resolve"
 
-const host = Layer.unwrap(
+// oxlint-disable-next-line ren/no-comments -- Where brains run: local processes, E2B sandboxes, or cells. One setting picks the brain host, the machine providers and the egress.
+const sandboxProvider = Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(Config.withDefault("local"))
+
+// oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
+const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
+
+// oxlint-disable-next-line ren/no-comments -- One proxy login per machine for brains and remote hands. An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
+const sandboxEgress = Layer.unwrap(
+  Effect.map(sandboxProvider, (provider) => (provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig)),
+).pipe(Layer.provide(CredentialCallers.layer), Layer.provide(envelope))
+
+const environmentNetwork = MachineNetwork.layer.pipe(Layer.provide([AppResolve.layer, Bundles.layer]))
+
+// oxlint-disable-next-line ren/no-comments -- Remote hands need what brains need: the egress, Ren's code and the host list of their template.
+const environments = Hands.layer.pipe(Layer.provide([sandboxEgress, Bundles.layer, environmentNetwork]))
+
+// oxlint-disable-next-line ren/no-comments -- The deployment's brain providers. A Ren whose brains run in cells registers none, so a space's provider checks pass.
+const brainProviders = Layer.unwrap(
   Effect.gen(function* () {
-    const provider = yield* Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(
-      Config.withDefault("local"),
-    )
-    if (provider === "cell") return BrainHost.layerCell
+    const provider = yield* sandboxProvider
+    if (provider === "cell") return BrainProvider.layer([])
+    if (provider === "e2b") return BrainProvider.layer([E2BSandbox.provider])
     const root = yield* Config.String("LOCAL_BRAIN_ROOT").pipe(Config.withDefault(join(tmpdir(), "ren-brains")))
     const entry = yield* Config.String("LOCAL_BRAIN_ENTRY").pipe(
       Config.withDefault(join(import.meta.dir, "../../cell/src/bun.ts")),
@@ -86,26 +112,55 @@ const host = Layer.unwrap(
       Config.withDefault(join(import.meta.dir, "../../executor/src/main.ts")),
     )
     const owner = yield* Config.option(Config.Int("LOCAL_BRAIN_OWNER"))
-    return BrainHost.layerSandbox.pipe(
-      Layer.provide(
-        BrainLifecycle.layer.pipe(
-          // oxlint-disable-next-line ren/no-comments -- An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
-          Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
-        ),
-      ),
-      Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
-      Layer.provide(
-        provider === "e2b"
-          ? E2BSandbox.layer
-          : LocalSandbox.layer({
-              entry,
-              executor,
-              root,
-              ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
-            }),
-      ),
-    )
+    return BrainProvider.layer([
+      LocalSandbox.provider({
+        entry,
+        executor,
+        root,
+        ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
+      }),
+    ])
   }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- E2B makes hands as well as brains: its templates are co-located hands today.
+const handProviders = Layer.unwrap<
+  HandProvider.Registry,
+  Config.ConfigError,
+  HttpClient.HttpClient | ChildProcessSpawner.ChildProcessSpawner,
+  Config.ConfigError,
+  never
+>(
+  Effect.gen(function* () {
+    const provider = yield* sandboxProvider
+    if (provider === "e2b") return HandProvider.layer([E2BSandbox.provider])
+    return HandProvider.layer([Docker.provider])
+  }),
+)
+
+const host = Layer.unwrap(
+  Effect.map(sandboxProvider, (provider) =>
+    provider === "cell"
+      ? BrainHost.layerCell
+      : BrainHost.layerSandbox.pipe(
+          Layer.provide(
+            BrainLifecycle.layer.pipe(
+              Layer.provide(sandboxEgress),
+              Layer.provide(Bundles.layer),
+              Layer.provide(environmentNetwork),
+            ),
+          ),
+          Layer.merge(SandboxUsage.layer.pipe(Layer.provide(Usage.layer))),
+          Layer.merge(Layer.effectDiscard(ProviderCheck.run.pipe(Effect.orDie))),
+        ),
+  ),
+)
+
+const artifactProvider = Layer.unwrap(
+  Effect.map(
+    Config.Literals(["workerd", "cloudflare"], "ARTIFACT_PROVIDER").pipe(Config.withDefault("workerd")),
+    (provider) => (provider === "cloudflare" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer),
+  ),
 )
 
 const models = Layer.unwrap(
@@ -113,9 +168,6 @@ const models = Layer.unwrap(
     Models.layer(isConfigured ? [RenInferenceProvider.make] : []),
   ),
 ).pipe(Layer.provide(FetchHttpClient.layer), Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
-
-// oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
-const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),
@@ -156,10 +208,14 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide(IntakeOrigins.layer),
   Layer.provide([
     Layer.mergeAll(
-      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provideMerge(host), Layer.provide(CredentialEnv.layer)),
+      Layer.mergeAll(Brains.layer, BrainPush.layer, SpaceShutdown.layer).pipe(
+        Layer.provideMerge(host),
+        Layer.provideMerge(environments),
+        Layer.provide(CredentialEnv.layer),
+      ),
       Retention.layer,
       RenInferenceRemoval.layer,
-      BillingEnrollment.layer.pipe(Layer.provide(Billing.layerConfig)),
+      BillingEnrollment.layer.pipe(Layer.provideMerge(Billing.layerConfig)),
     ),
     Layer.mergeAll(
       Layer.mergeAll(ChannelNotice.layer, TaskCard.layer).pipe(
@@ -167,7 +223,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       ),
       ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer)),
     ).pipe(Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])))),
-    Mailer.layer,
+    AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
@@ -175,9 +231,11 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provideMerge(queue),
   Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([models, Environments.layer, GitHubApp.layer, Integrations.layer]),
+  Layer.provide([models, GitHubApp.layer, Integrations.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
-  Layer.provide(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provideMerge(brainProviders),
+  Layer.provide(handProviders),
+  Layer.provide(artifactProvider),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide(PostHog.layer),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

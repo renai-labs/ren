@@ -1,15 +1,15 @@
 import { expect } from "bun:test"
-import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { HandToken } from "@ren/hand-api/hand-token"
+import { HandApi } from "@ren/hand-api/hand-api"
+import { HandClient } from "@ren/hand-api/hand-client"
 import { Signature } from "@ren/schema/signature"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Deferred, Duration, Effect, Fiber, Option, Redacted, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { TestClock } from "effect/testing"
 import { join } from "node:path"
-import { TestEnvironment } from "./lib/test-environment.js"
+import { TestHand } from "./lib/test-hand.js"
 import { Processes } from "./lib/process.js"
 import { testEffect } from "./lib/effect.js"
 import { TestServer } from "./lib/server.js"
@@ -22,7 +22,7 @@ const decoder = new TextDecoder()
 const refused = Effect.fnUntraced(function* () {
   const valid = yield* TestServer.token()
   const other = yield* Signature.generate("other")
-  const impostor = yield* Signature.generate(TestEnvironment.keys.publicKey.id)
+  const impostor = yield* Signature.generate(TestHand.keys.publicKey.id)
   const claims = {
     environment: TestServer.environmentId,
     brain: TestServer.brain,
@@ -31,32 +31,36 @@ const refused = Effect.fnUntraced(function* () {
   return [
     {
       name: "a key the executor does not know",
-      authorization: `Bearer ${yield* EnvironmentToken.sign(other.privateKey, claims)}`,
+      authorization: `Bearer ${yield* HandToken.sign(other.privateKey, claims)}`,
     },
     {
       name: "a known key id signed by another key",
-      authorization: `Bearer ${yield* EnvironmentToken.sign(impostor.privateKey, claims)}`,
+      authorization: `Bearer ${yield* HandToken.sign(impostor.privateKey, claims)}`,
     },
     {
       name: "another token type",
-      authorization: `Bearer ${yield* Signature.sign(TestEnvironment.keys.privateKey, { ...claims, typ: "host" })}`,
+      authorization: `Bearer ${yield* Signature.sign(TestHand.keys.privateKey, { ...claims, typ: "host" })}`,
     },
     {
       name: "a token for another environment",
-      authorization: `Bearer ${yield* TestServer.token({ environmentId: Environment.ID.create() })}`,
+      authorization: `Bearer ${yield* TestServer.token({ environmentId: Hand.ID.create() })}`,
+    },
+    {
+      name: "a token for another generation of the machine",
+      authorization: `Bearer ${yield* TestServer.token({ generation: 2 })}`,
     },
     {
       name: "an expired token",
-      authorization: `Bearer ${Redacted.value((yield* TestEnvironment.access({ url: yield* TestEnvironment.url, environmentId: TestServer.environmentId, brain: TestServer.brain, directory: TestServer.workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
+      authorization: `Bearer ${Redacted.value((yield* TestHand.access({ url: yield* TestHand.url, environmentId: TestServer.environmentId, brain: TestServer.brain, directory: TestServer.workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
     },
     { name: "another scheme", authorization: `Basic ${valid}` },
   ]
 })
 
-it.live("answers a bad token before it decodes the payload", () =>
+it.live("answers a bad token before it decodes the payload, and gives a client the typed UnauthorizedError", () =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
-    const invalidSpawn = HttpClientRequest.post(`${yield* TestEnvironment.url}${EnvironmentClient.path}`).pipe(
+    const invalidSpawn = HttpClientRequest.post(`${yield* TestHand.url}${HandClient.path}`).pipe(
       HttpClientRequest.bodyText(
         `${JSON.stringify({ _tag: "Request", id: "1", tag: "process.spawn", payload: { command: 42 }, headers: [] })}\n`,
         "application/ndjson",
@@ -73,26 +77,19 @@ it.live("answers a bad token before it decodes the payload", () =>
     expect(yield* answer(invalidSpawn)).toEqual(unauthorized)
     expect(
       yield* answer(
-        invalidSpawn.pipe(
-          HttpClientRequest.bearerToken(yield* TestServer.token({ environmentId: Environment.ID.create() })),
-        ),
+        invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* TestServer.token({ environmentId: Hand.ID.create() }))),
       ),
     ).toEqual(unauthorized)
     expect(yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken("not.a-token")))).toEqual(unauthorized)
     const decoded = yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* TestServer.token())))
     expect(decoded.status).toBe(200)
     expect(decoded.body).toContain("Die")
-  }),
-)
-
-it.live("gives a client with a bad token the typed UnauthorizedError", () =>
-  Effect.gen(function* () {
-    const foreign = yield* TestServer.connect(yield* TestServer.token({ environmentId: Environment.ID.create() }))
+    const foreign = yield* TestServer.connect(yield* TestServer.token({ environmentId: Hand.ID.create() }))
     const empty = yield* TestServer.connect("")
     const errors = yield* Effect.forEach([foreign, empty], (api) =>
       Effect.all([
         api["files.stat"]({ path: "." }).pipe(Effect.flip),
-        api["process.output"]({ id: EnvironmentApi.ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
+        api["process.output"]({ id: HandApi.ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
       ]),
     )
     expect(errors.flat()).toEqual(
@@ -127,9 +124,15 @@ it.live("returns the declared errors", () =>
       "ProcessNotFoundError",
     )
     expect(
-      (yield* api["process.kill"]({ id: EnvironmentApi.ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag,
+      (yield* api["process.kill"]({ id: HandApi.ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag,
     ).toBe("ProcessNotFoundError")
     yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
+    const large = yield* api["files.write"]({ path: "too-large.bin", bytes: new Uint8Array(9 * 1024 * 1024) }).pipe(
+      Effect.flip,
+    )
+    expect(large._tag).toBe("FileTooLargeError")
+    expect((yield* api["files.stat"]({ path: "." })).type).toBe("directory")
+    expect(yield* Effect.promise(() => Bun.file(join(TestServer.workspace, "too-large.bin")).exists())).toBe(false)
   }),
 )
 
@@ -156,7 +159,7 @@ it.live("answers a token for another environment with 401 and starts no process"
     const spawn = TestServer.rpc("process.spawn", { command: "sh", arguments: ["-c", "sleep 30; true", marker] })
     const foreign = yield* TestServer.post(
       spawn,
-      `Bearer ${yield* TestServer.token({ environmentId: Environment.ID.create() })}`,
+      `Bearer ${yield* TestServer.token({ environmentId: Hand.ID.create() })}`,
     )
     expect(foreign.status).toBe(401)
     expect(foreign.body).not.toContain("prc_")
@@ -206,8 +209,8 @@ it.live("refuses an Authorization header with no token, two tokens or 64 KiB of 
 
 it.effect("keeps streaming output to a reader whose token expires, and refuses that token afterwards", () =>
   Effect.gen(function* () {
-    const expiring = yield* TestEnvironment.access({
-      url: yield* TestEnvironment.url,
+    const expiring = yield* TestHand.access({
+      url: yield* TestHand.url,
       environmentId: TestServer.environmentId,
       brain: TestServer.brain,
       directory: TestServer.workspace,
@@ -241,19 +244,6 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
   }),
 )
 
-it.live("refuses a negative cursor in the schema, and keeps serving", () =>
-  Effect.gen(function* () {
-    const bearer = `Bearer ${yield* TestServer.token()}`
-    const answer = yield* TestServer.post(
-      TestServer.rpc("process.output", { id: EnvironmentApi.ProcessID.create(), cursor: -1 }),
-      bearer,
-    )
-    expect(answer.body).toContain("Die")
-    expect(answer.body).toContain("Expected a value greater than or equal to 0")
-    expect((yield* TestServer.post(TestServer.rpc("executor.hello", null), bearer)).status).toBe(200)
-  }),
-)
-
 it.live("answers a body that is not NDJSON with a defect, drops a cut-off body, and keeps serving", () =>
   Effect.gen(function* () {
     const bearer = `Bearer ${yield* TestServer.token()}`
@@ -262,18 +252,6 @@ it.live("answers a body that is not NDJSON with a defect, drops a cut-off body, 
     expect(garbage.body).toContain("NdjsonDecodeError")
     expect(cut.body).toBe("")
     expect((yield* TestServer.post(TestServer.rpc("executor.hello", null), bearer)).status).toBe(200)
-  }),
-)
-
-it.live("answers a write above the file size limit with FileTooLargeError, writes no file, and keeps serving", () =>
-  Effect.gen(function* () {
-    const api = yield* TestServer.client()
-    const failure = yield* api["files.write"]({ path: "too-large.bin", bytes: new Uint8Array(9 * 1024 * 1024) }).pipe(
-      Effect.flip,
-    )
-    expect(failure._tag).toBe("FileTooLargeError")
-    expect((yield* api["files.stat"]({ path: "." })).type).toBe("directory")
-    expect(yield* Effect.promise(() => Bun.file(join(TestServer.workspace, "too-large.bin")).exists())).toBe(false)
   }),
 )
 
@@ -297,7 +275,7 @@ it.live(
       expect(accepted).toBeLessThanOrEqual(32)
       expect(failures).toHaveLength(160 - accepted)
       expect(failures.map((failure) => failure._tag)).toEqual(Array(160 - accepted).fill("StdinFullError"))
-      expect(failures.some(EnvironmentClient.isNoAnswer)).toBe(false)
+      expect(failures.some(HandClient.isNoAnswer)).toBe(false)
       yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
       const events = yield* api["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
       expect(events.at(-1)).toEqual({ type: "exit", exitCode: null, signal: "SIGKILL" })

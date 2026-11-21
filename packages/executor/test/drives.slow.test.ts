@@ -1,16 +1,16 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
-import { DriveEnvironment } from "./lib/drive-environment.js"
+import { DriveHand } from "./lib/drive-hand.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(FetchHttpClient.layer.pipe(Layer.orDie))
 
-const remote = DriveEnvironment.remote
+const remote = DriveHand.remote
 
-const started = DriveEnvironment.start
+const started = DriveHand.start
 
-describe.skipIf(!DriveEnvironment.hasDocker)("drives.mount", () => {
+describe.skipIf(!DriveHand.hasDocker)("drives.mount", () => {
   it.live(
     "mounts a drive once however often it is asked, even while rclone is slow, mounts it again after rclone dies, and fails with rclone's error when the keys are refused or with the error of a folder it cannot make",
     () =>

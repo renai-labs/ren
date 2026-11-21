@@ -955,7 +955,14 @@ func (p *Proxy) writeResponse(w http.ResponseWriter, resp *http.Response) {
 			w.Header().Set("Content-Length", strconv.FormatInt(int64(n), 10))
 		}
 		w.WriteHeader(resp.StatusCode)
-		if _, err := io.Copy(w, buf.StreamingReader()); err != nil {
+		// Ren: a body of unknown length that no transform read may be a stream,
+		// such as an RPC stream: flush each write, as httputil.ReverseProxy does,
+		// so its small events reach the client at once (fork change 13).
+		var out io.Writer = w
+		if flusher, ok := w.(http.Flusher); ok && buf.Len() < 0 && resp.ContentLength == -1 {
+			out = flushWriter{w, flusher}
+		}
+		if _, err := io.Copy(out, buf.StreamingReader()); err != nil {
 			p.logger.Warn("response body copy error", slog.String("error", err.Error()))
 		}
 	} else {
@@ -967,6 +974,18 @@ func (p *Proxy) writeResponse(w http.ResponseWriter, resp *http.Response) {
 			}
 		}
 	}
+}
+
+// Ren: flushWriter flushes after each write (fork change 13).
+type flushWriter struct {
+	io.Writer
+	flusher http.Flusher
+}
+
+func (f flushWriter) Write(b []byte) (int, error) {
+	n, err := f.Writer.Write(b)
+	f.flusher.Flush()
+	return n, err
 }
 
 // buildTransport creates the HTTP transport used for upstream requests.

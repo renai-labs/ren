@@ -6,8 +6,7 @@ export const Route = createFileRoute("/_authed/_shell/settings/_admin/members")(
   head: () => ({ meta: [{ title: "Members · Ren" }] }),
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({
-      page: Schema.optional(Schema.Number),
-      tab: Schema.optional(Schema.Literals(["members", "invitations"])),
+      tab: Schema.optional(Schema.Literals(["members", "invitations", "links"])),
     }),
   ),
   component: MembersSettingsPage,

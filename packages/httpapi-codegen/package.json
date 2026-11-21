@@ -11,7 +11,7 @@
   "scripts": {
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --timeout 5000 --only-failures",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b",
+    "typecheck": "tsrs -b",
     "test:all": "bun ../../script/signoff/record.ts bun test --timeout 5000 --only-failures"
   },
   "dependencies": {
@@ -21,6 +21,6 @@
   "devDependencies": {
     "@effect/platform-bun": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "tsrs": "catalog:"
   }
 }

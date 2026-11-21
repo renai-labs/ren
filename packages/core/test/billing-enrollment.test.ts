@@ -18,6 +18,7 @@ describe("BillingEnrollment", () => {
       const billing = Layer.succeed(
         Billing.Service,
         Billing.Service.of({
+          ...Billing.none,
           ensureCustomer: (customer) =>
             Queue.offer(asked, customer).pipe(
               Effect.andThen(Ref.getAndUpdate(refusals, (left) => left - 1)),

@@ -1,18 +1,17 @@
+import { Seed, Tasks } from "@ren/client/react"
 import { SkeletonRows } from "../../components/page.js"
+import { Breadcrumb } from "../../components/breadcrumb.js"
 import { useState, type ReactNode } from "react"
-import type { TaskInfo, TaskUpdateInput } from "@ren/client"
+import type { TaskInfo } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
-import { getRouteApi, Link, useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import {
   IconArrowUpLeft,
   IconCalendarDue,
   IconCheck,
   IconChecklist,
-  IconChevronRight,
   IconCube,
   IconDots,
-  IconGhostFilled,
   IconHandStop,
   IconHistory,
   IconMessage,
@@ -21,6 +20,7 @@ import {
   IconTag,
   IconUserCircle,
 } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Calendar } from "@ren/ui/calendar"
@@ -51,8 +51,8 @@ import { formatDate } from "@ren/ui/time"
 import { errorMessage } from "../../lib/errors.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Seed } from "../../lib/seed.js"
-import { allTasksKey, refreshEvery } from "../../lib/tasks.js"
+import { TaskLink, TasksLink } from "./task-scope.js"
+import { TaskScopeContext } from "./task-scope-context.js"
 import { useAgents } from "../../lib/use-agents.js"
 import { useLabels } from "../../lib/use-labels.js"
 import { useMembers, type Member } from "../../lib/use-members.js"
@@ -80,42 +80,31 @@ function PropertySection(props: { title: string; children: ReactNode }) {
   )
 }
 
-const route = getRouteApi("/_authed/_shell/tasks/$taskId/")
-
-type Patch = Omit<TaskUpdateInput, "id">
+type Patch = Tasks.Patch
 
 type Assignment = { agentId?: string | null; ownerId?: string | null; spaceId?: string }
 
 const failed = (title: string) => (error: Error) => toast.error(title, { description: errorMessage(error) })
 
-function pickShown(patch: Patch): Partial<TaskInfo> {
-  return {
-    ...(patch.title && { title: patch.title }),
-    ...(patch.status && { status: patch.status }),
-    ...(patch.priority !== undefined && { priority: patch.priority }),
-    ...(patch.dueAt !== undefined && { dueAt: patch.dueAt }),
-  }
-}
-
-export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | null }) {
+export function TaskPage(props: {
+  taskId: string
+  sessionId: string | undefined
+  onOpenSession: (session: string | undefined) => void
+  session: ((dock: ReactNode) => ReactNode) | null
+}) {
   const { api, queryClient } = RouterContext.useRouterContext()
-  const params = route.useParams()
-  const search = route.useSearch()
-  const navigate = useNavigate()
-  const navigateHere = route.useNavigate()
-  const openSession = (session: string | undefined) =>
-    void navigateHere({ search: (previous) => ({ ...previous, session }) })
+  const open = TaskScopeContext.useOpen()
+  const openSession = props.onOpenSession
   const stored = useSuspenseQuery({
-    ...api.task.get.queryOptions({ idOrSlug: params.taskId }),
-    refetchInterval: refreshEvery,
-    ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), allTasksKey()], params.taskId),
+    ...api.task.get.queryOptions({ idOrSlug: props.taskId }),
+    refetchInterval: Tasks.refreshEvery,
+    ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), Tasks.allKey()], props.taskId),
   }).data
   const update = useMutation(api.task.update.mutationOptions())
   const assign = useMutation(api.task.assign.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
   const [archiving, setArchiving] = useState(false)
-  const pending = update.isPending ? update.variables : undefined
-  const task: TaskInfo = pending ? { ...stored, ...pickShown(pending) } : stored
+  const task = Tasks.withPatch(stored, update.isPending ? update.variables : undefined)
   const change = (patch: Patch) =>
     update.mutate({ id: task.id, ...patch }, { onError: failed("Couldn’t save the task") })
   const reassign = (target: Assignment) =>
@@ -170,20 +159,20 @@ export function TaskPage(props: { session: ((dock: ReactNode) => ReactNode) | nu
             {
               onSuccess: () => {
                 toast.success(`${task.identifier} archived`)
-                void navigate({ to: "/tasks" })
+                open.tasks()
               },
               onError: failed("Couldn’t archive the task"),
             },
           )
         }
       />
-      <Sheet open={search.session !== undefined} onOpenChange={(open) => (open ? undefined : openSession(undefined))}>
+      <Sheet open={props.sessionId !== undefined} onOpenChange={(open) => (open ? undefined : openSession(undefined))}>
         <SheetContent className="data-[side=right]:sm:max-w-3xl">
           <SheetHeader>
             <SheetTitle>Task session</SheetTitle>
             <SheetDescription>Chat with the agent working on this task.</SheetDescription>
           </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col [--container-chat:--spacing(192)]">
             {props.session?.(task.humanReview ? <ReviewCard task={task} /> : null)}
           </div>
         </SheetContent>
@@ -214,25 +203,23 @@ function TaskHeader(props: {
       },
     )
   return (
-    <header className="mx-8 flex h-15 shrink-0 items-center gap-2.5 border-b pt-1 text-sm max-md:pl-6">
-      <Link to="/tasks" className="font-medium">
-        Tasks
-      </Link>
-      <IconChevronRight className="size-4 text-muted-foreground" />
-      {task.parent ? (
-        <>
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: task.parent.id }}
-            className="max-w-60 truncate text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
-          >
-            {task.parent.title}
-          </Link>
-          <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
-        </>
-      ) : null}
-      <IconChecklist aria-label={task.identifier} className="size-4 shrink-0 text-muted-foreground" />
-      <span className="truncate font-medium">{task.title}</span>
+    <Breadcrumb.Header className="h-15 gap-2.5 border-b pt-1 text-sm">
+      <Breadcrumb.Root
+        ancestors={[
+          { key: "tasks", content: <TasksLink>Tasks</TasksLink> },
+          ...(task.parent
+            ? [
+                {
+                  key: task.parent.id,
+                  content: <TaskLink taskId={task.parent.id}>{task.parent.title}</TaskLink>,
+                },
+              ]
+            : []),
+        ]}
+      >
+        <IconChecklist aria-label={task.identifier} className="size-4 shrink-0" />
+        <span className="truncate">{task.title}</span>
+      </Breadcrumb.Root>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button className="ml-auto" aria-label={`Start a session for ${task.title}`} />}>
           <IconPlayerPlay />
@@ -295,7 +282,7 @@ function TaskHeader(props: {
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-    </header>
+    </Breadcrumb.Header>
   )
 }
 
@@ -309,16 +296,15 @@ function TaskArticle(props: {
     <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 self-start pt-12 pb-24">
       <h1 className="sr-only">{task.title}</h1>
       {task.parent ? (
-        <Link
-          to="/tasks/$taskId"
-          params={{ taskId: task.parent.id }}
+        <TaskLink
+          taskId={task.parent.id}
           title={`Back to ${task.parent.identifier}`}
           className="-mb-3 flex h-7 w-fit max-w-full items-center gap-1.5 rounded-full border bg-muted px-2.5 text-xs text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
         >
           <IconArrowUpLeft className="size-3.5 shrink-0" />
           <IconChecklist className="size-3.5 shrink-0" />
           <span className="truncate font-medium text-foreground">{task.parent.title}</span>
-        </Link>
+        </TaskLink>
       ) : null}
       <Textarea
         key={`title-${task.title}`}
@@ -424,7 +410,7 @@ function Subtasks(props: { task: TaskInfo }) {
   const task = props.task
   const listed = useQuery({
     ...api.task.list.queryOptions({ parentId: task.id, includeDone: true, page: 1, pageSize: pickerPageSize }),
-    refetchInterval: refreshEvery,
+    refetchInterval: Tasks.refreshEvery,
   })
   const subtasks = listed.data?.items ?? []
   const total = task.subtasks?.total ?? 0
@@ -452,17 +438,16 @@ function Subtasks(props: { task: TaskInfo }) {
       </div>
       {listed.isPending && total > 0 ? <SkeletonRows count={Math.min(total, 3)} label="Loading sub-tasks" /> : null}
       {subtasks.map((subtask) => (
-        <Link
+        <TaskLink
           key={subtask.id}
-          to="/tasks/$taskId"
-          params={{ taskId: subtask.id }}
+          taskId={subtask.id}
           className="-mx-2 flex h-9 items-center gap-2 rounded-lg px-2 text-sm transition-colors duration-150 ease-out hover:bg-muted"
         >
           <PriorityIcon priority={subtask.priority} />
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{subtask.identifier}</span>
           <StatusIcon task={subtask} />
           <span className="truncate font-medium">{subtask.title}</span>
-        </Link>
+        </TaskLink>
       ))}
     </section>
   )
@@ -498,7 +483,7 @@ function PriorityProperty(props: { task: TaskInfo; onChange: (patch: Patch) => v
 
 function AssigneeIcon(props: { task: TaskInfo; owner: Member | undefined }) {
   const owner = props.owner
-  if (props.task.agentId) return <IconGhostFilled />
+  if (props.task.agentId) return <IconAgent />
   if (owner?.name) return <PersonAvatar name={owner.name} image={owner.image} />
   return <IconUserCircle />
 }
@@ -556,7 +541,7 @@ function AssigneeList(props: { task: TaskInfo; assigned: boolean; onAssign: (tar
             data-checked={task.agentId === agent.id}
             onSelect={() => props.onAssign({ agentId: agent.id })}
           >
-            <IconGhostFilled />
+            <IconAgent />
             {agent.name}
           </CommandItem>
         ))}

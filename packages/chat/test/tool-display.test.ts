@@ -33,6 +33,13 @@ const tool = (
 }
 
 describe("tool display", () => {
+  test("names the Browser app's tools without the provider", () => {
+    expect(ToolDisplay.label(tool("browser_browser_repl", "running"))).toBe("Using browser")
+    expect(ToolDisplay.label(tool("browser_manage_browsers", "completed"))).toBe("Managing browser")
+    expect(ToolDisplay.kind(tool("browser_browser_curl", "running"))).toBe("web")
+    expect(ToolDisplay.kind(tool("browser_exec_command", "running"))).toBe("command")
+  })
+
   test("presents native image submission without claiming the image is finished", () => {
     const input = { prompt: "Mount Fuji at sunrise", path: "/workspace/images/fuji.png" }
     const completed = tool("experimental_image_generate", "completed", input, {
@@ -101,9 +108,26 @@ describe("tool display", () => {
     expect(ToolDisplay.subtitle(tool("shell", "streaming"))).toBeUndefined()
   })
 
+  test("gives the full command of shell tools only", () => {
+    expect(ToolDisplay.command(tool("bash", "completed", { command: "git log\n  | head" }))).toBe("git log\n  | head")
+    expect(ToolDisplay.command(tool("shell", "running", {}, { metadata: { command: "ls" } }))).toBe("ls")
+    expect(ToolDisplay.command(tool("execute", "completed", { code: "const a = 1" }))).toBeUndefined()
+  })
+
   test("cleans terminal escapes from command output only", () => {
     expect(ToolDisplay.output(tool("shell", "completed", {}, { output: "\u001b[31mred\u001b[0m\r\n" }))).toBe("red\n")
     expect(ToolDisplay.output(tool("read", "completed", {}, { output: "a\r\nb" }))).toBe("a\r\nb")
+  })
+
+  test("a Code Mode call to Ren's own tools shows as Ren, named by the tool it calls", () => {
+    const search = tool("execute", "running", { code: 'return await tools.ren.search({ query: "linear" })' })
+    expect(ToolDisplay.kind(search)).toBe("ren")
+    expect(ToolDisplay.name(search)).toBe("Ren")
+    expect(ToolDisplay.label(search)).toBe("Searching catalog")
+    expect(ToolDisplay.label(tool("execute", "completed", { code: 'await tools["ren"].task_list({})' }))).toBe(
+      "Listing tasks",
+    )
+    expect(ToolDisplay.kind(tool("execute", "running", { code: "await tools.github.list_issues({})" }))).toBe("command")
   })
 
   test("uses the output as the error when execute fails with an ok status", () => {
@@ -155,6 +179,18 @@ describe("tool display", () => {
     expect(ToolDisplay.group([reasoning, reasoning])).toEqual({ title: "Used 2 Thoughts", count: 2 })
     expect(ToolDisplay.group([reasoning])).toEqual({ title: "Used 1 Thought", count: 1 })
     expect(ToolDisplay.group([{ type: "notice" }])).toEqual({ title: "Updates", count: 0 })
+  })
+
+  test("a group of one step, or of only thoughts, shows its rows without the group", () => {
+    const reasoning: SessionMessage.Reasoning = { type: "reasoning", text: "Planning" }
+    const commentary: SessionMessage.Content = { type: "text", text: "Looking around." }
+    expect(ToolDisplay.standsAlone([tool("read", "completed")])).toBe(true)
+    expect(ToolDisplay.standsAlone([{ type: "shell" }])).toBe(true)
+    expect(ToolDisplay.standsAlone([reasoning, reasoning])).toBe(true)
+    expect(ToolDisplay.standsAlone([commentary])).toBe(false)
+    expect(ToolDisplay.standsAlone([reasoning, commentary])).toBe(false)
+    expect(ToolDisplay.standsAlone([tool("read", "completed"), reasoning])).toBe(false)
+    expect(ToolDisplay.standsAlone([tool("read", "completed"), tool("grep", "completed")])).toBe(false)
   })
 
   test("lists unique web search links without trailing punctuation", () => {

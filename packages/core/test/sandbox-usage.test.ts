@@ -1,4 +1,6 @@
+import { HandProvider } from "../src/hand-provider.js"
 import { expect } from "bun:test"
+import { BrainProvider } from "../src/brain-provider.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { asc } from "drizzle-orm"
@@ -6,7 +8,7 @@ import { ConfigProvider, Effect, Fiber, Latch, Layer, Option } from "effect"
 import { HttpClient, HttpClientResponse, UrlParams } from "effect/http"
 import { DurableRunner } from "../src/durable-runner.js"
 import { SandboxUsage } from "../src/sandbox-usage.js"
-import { E2BSandbox } from "../src/sandbox-provider/e2b.js"
+import { E2BSandbox } from "../src/machine-provider/e2b.js"
 import { Usage } from "../src/usage.js"
 import { testEffect } from "./lib/effect.js"
 
@@ -85,7 +87,7 @@ const it = testEffect(
   SandboxUsage.layer.pipe(
     Layer.provideMerge(Usage.layer),
     Layer.provide(
-      E2BSandbox.layer.pipe(
+      Layer.merge(BrainProvider.layer([E2BSandbox.provider]), HandProvider.layer([E2BSandbox.provider])).pipe(
         Layer.provide(e2b),
         Layer.provide(
           ConfigProvider.layer(
@@ -169,6 +171,21 @@ it.live(
       yield* usage.sweep
       expect((yield* stored).map((row) => row.id)).toEqual(["e-paused", "e-late", "e-killed"])
     }).pipe(Effect.ensuring(Effect.sync(() => listed.splice(events.length)))),
+)
+
+it.live("records a remote hand's runs as the hand's workload, with no brain", () =>
+  Effect.gen(function* () {
+    const usage = yield* SandboxUsage.Service
+    listed.push(
+      run("e-hand", "paused", "2026-10-29T07:15:00Z", {
+        sandbox_metadata: { ...tags, brain: "env_01M5VZPQGNDCJ83K6SSKJMWH91", generation: "2", kind: "hand" },
+        execution: tenMinutes,
+      }),
+    )
+    yield* usage.sweep
+    const hand = (yield* stored).find((row) => row.id === "e-hand")
+    expect(hand).toMatchObject({ workload: "hand:env_01M5VZPQGNDCJ83K6SSKJMWH91:2", brain: null, space: "spc_01" })
+  }).pipe(Effect.ensuring(Effect.sync(() => listed.splice(events.length)))),
 )
 
 it.live("a sweep that starts while another reads E2B does nothing", () =>

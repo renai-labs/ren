@@ -1,10 +1,12 @@
+import { Database } from "bun:sqlite"
 import { expect, setDefaultTimeout } from "bun:test"
 import { TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
-import { Environment } from "@ren/schema/environment"
+import { TestHand, testEffect } from "@ren/executor/testing"
+import { Hand } from "@ren/schema/hand"
 import type { Drive } from "@ren/schema/drive"
 import type { Reference } from "@ren/schema/reference"
-import { Effect, Fiber } from "effect"
+import { Sync } from "@ren/schema/sync"
+import { Effect, Fiber, Schema } from "effect"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -14,10 +16,10 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(30_000)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const stub = Shared.stub()
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 const root = join(workspace, ".ren", "references")
 
 const pathOf = (github: TestGitHub.Instance, commit: string) =>
@@ -25,13 +27,19 @@ const pathOf = (github: TestGitHub.Instance, commit: string) =>
 
 const fresh = () => TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
 
-const open = (github: TestGitHub.Instance, references: ReadonlyArray<Reference.Info>, drives?: Drive.Availability) =>
-  Effect.flatMap(TestEnvironment.url, (url) =>
+const open = (
+  github: TestGitHub.Instance,
+  references: ReadonlyArray<Reference.Info>,
+  drives?: Drive.Availability,
+  options?: Parameters<typeof ReferenceChat.open>[4],
+) =>
+  Effect.flatMap(TestHand.url, (url) =>
     ReferenceChat.open(
       { url, environmentId, directoryOf: (sessionId) => join(workspace, sessionId) },
       github,
       references,
       drives,
+      options,
     ),
   )
 
@@ -43,6 +51,103 @@ const docsOf = (github: TestGitHub.Instance): Reference.Info => ({
   repository: github.url,
   description: "Product docs",
 })
+
+it.live(
+  "a chat whose space has no hand now loses its file and shell tools at the next pull, and is told so; they come back with the hand",
+  () =>
+    Effect.gen(function* () {
+      const chat = yield* open(yield* fresh(), [])
+      const before = yield* chat.turn(stub.script(), 1)
+      yield* chat.pull([], { hasHand: false })
+      const without = yield* chat.turn(stub.script(), 1)
+      yield* chat.pull([], { hasHand: true })
+      const back = yield* chat.turn(stub.script(), 1)
+      expect(
+        [before, without, back].map((call) => {
+          const request = JSON.stringify(call.body)
+          return {
+            tools: ["read", "shell"].filter((tool) => call.tools.includes(tool)),
+            isToldLastItHasTools:
+              request.lastIndexOf("Your file and shell tools run") > request.lastIndexOf("no file or shell tools"),
+          }
+        }),
+      ).toEqual([
+        { tools: ["read", "shell"], isToldLastItHasTools: true },
+        { tools: [], isToldLastItHasTools: false },
+        { tools: ["read", "shell"], isToldLastItHasTools: true },
+      ])
+    }),
+)
+
+it.live(
+  "a chat that had a turn without a hand, restored onto a new machine with a hand, is told last that its tools are back",
+  () =>
+    Effect.gen(function* () {
+      const folder = yield* Effect.acquireRelease(
+        Effect.promise(() => mkdtemp(join(tmpdir(), "ren-restore-"))),
+        (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+      )
+      const database = join(folder, "opencode.db")
+      const github = yield* fresh()
+      const source = yield* open(github, [], undefined, { database })
+      yield* source.turn(stub.script(), 1)
+      yield* source.pull([], { hasHand: false })
+      yield* source.turn(stub.script(), 1)
+      const rows = (sql: string) => {
+        const db = new Database(database, { readonly: true })
+        const found = db.query(sql).all(source.sessionId)
+        db.close()
+        return found
+      }
+      const session = Schema.decodeUnknownSync(Sync.OpenCodeSessionRow)(
+        rows("select * from session_v2 where id = ?").at(0),
+      )
+      const messages = Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeMessageRow))(
+        rows("select id, session_id, type, seq, data from session_message where session_id = ? order by seq, id"),
+      )
+      const target = yield* open(github, [], undefined, {
+        restore: {
+          chat: {
+            id: source.sessionId,
+            harness: "opencode",
+            harnessVersion: null,
+            parentId: null,
+            revertMessageId: null,
+            session,
+            inbox: [],
+            directory: source.directory,
+          },
+          session,
+          messages,
+        },
+      })
+      yield* target.pull([], { hasHand: true, directory: Hand.Directory.make(source.directory) })
+      const call = yield* target.turn(stub.script(), 1)
+      const request = JSON.stringify(call.body)
+      expect({
+        tools: ["read", "shell"].filter((tool) => call.tools.includes(tool)),
+        isToldLastItHasTools:
+          request.lastIndexOf("Your file and shell tools run") > request.lastIndexOf("no file or shell tools"),
+      }).toEqual({ tools: ["read", "shell"], isToldLastItHasTools: true })
+    }),
+)
+
+it.live(
+  "a chat that started with no tools gets a workspace at the pull that gives it a folder, and keeps its history",
+  () =>
+    Effect.gen(function* () {
+      const chat = yield* open(yield* fresh(), [], undefined, { hasWorkspace: false })
+      const first = stub.script()
+      const before = yield* chat.turn(first, 1)
+      yield* chat.pull([], { hasHand: true, directory: Hand.Directory.make(chat.directory) })
+      const after = yield* chat.turn(stub.script(), 1)
+      expect({
+        before: ["read", "shell"].filter((tool) => before.tools.includes(tool)),
+        after: ["read", "shell"].filter((tool) => after.tools.includes(tool)),
+        keepsHistory: JSON.stringify(after.body.messages).includes(first.marker),
+      }).toEqual({ before: [], after: ["read", "shell"], keepsHistory: true })
+    }),
+)
 
 it.live("a chat reads a file of a public reference with the read tool, at a path with the commit", () =>
   Effect.gen(function* () {

@@ -18,6 +18,9 @@
       "path": "../client/tsconfig.src.json"
     },
     {
+      "path": "../protocol/tsconfig.src.json"
+    },
+    {
       "path": "../schema/tsconfig.src.json"
     }
   ]

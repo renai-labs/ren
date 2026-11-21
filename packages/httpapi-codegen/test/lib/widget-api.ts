@@ -3,6 +3,11 @@ import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api
 
 const Widget = Schema.Struct({ id: Schema.String, name: Schema.String })
 
+const Tag = Schema.String.check(Schema.isStartingWith("tag_")).pipe(
+  Schema.brand("Widget.Tag"),
+  Schema.annotate({ identifier: "Widget.Tag" }),
+)
+
 export const Api = HttpApi.make("test").add(
   HttpApiGroup.make("widget")
     .add(
@@ -24,10 +29,10 @@ export const Api = HttpApi.make("test").add(
     )
     .add(
       HttpApiEndpoint.patch("widget.update", "/widgets/:id", {
-        params: { id: Schema.String },
+        params: { id: Schema.String.annotate({ identifier: "Widget.ID" }) },
         payload: Schema.Struct({
           name: Schema.optional(Schema.String.annotate({ description: "Widget name" })),
-          tags: Schema.optional(Schema.Array(Schema.String)),
+          tags: Schema.optional(Schema.Array(Tag)),
           settings: Schema.optional(Schema.Struct({ color: Schema.String })),
         }),
         success: Widget,

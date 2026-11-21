@@ -1,4 +1,5 @@
 import { Loading } from "@ren/ui/loading"
+import { RelativeTime } from "@ren/util/relative-time"
 import { cn } from "cn"
 import { useState } from "react"
 import type { TaskActivityInfo, TaskActor, TaskEventInfo } from "@ren/client"
@@ -11,7 +12,6 @@ import {
   IconCirclePlus,
   IconFlagCheck,
   IconHandStop,
-  IconGhostFilled,
   IconLink,
   IconMessage,
   IconPencil,
@@ -20,131 +20,58 @@ import {
   IconTag,
   IconArrowBackUp,
 } from "@tabler/icons-react"
+import { IconAgent } from "../../icons/heroicons.js"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ChatReact } from "@ren/chat/react"
+import { Tasks } from "@ren/client/react"
 import { Session } from "@ren/schema/session"
+import { TaskEvent } from "@ren/schema/task-event"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
 import { toast } from "@ren/ui/sonner"
-import { formatDateTime, formatRelative } from "@ren/ui/time"
+import { formatDateTime } from "@ren/ui/time"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Item, ItemHeader } from "@ren/ui/item"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@ren/ui/trace"
-import { StatusGlyph, statusOf } from "../../components/task-meta.js"
+import { StatusGlyph } from "../../components/task-meta.js"
 import { Markdown } from "../../components/markdown.js"
 import { errorMessage } from "../../lib/errors.js"
-import { taskActivityOptions } from "../../lib/tasks.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useAgents } from "../../lib/use-agents.js"
 import { useNow } from "../../lib/use-now.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 
-type Names = {
+type Names = TaskEvent.Names & {
   readonly actor: (actor: TaskActor) => string
   readonly image: (actor: TaskActor) => string | undefined
-  readonly agent: (agentId: string | null) => string | undefined
-  readonly person: (userId: string | null) => string | undefined
-  readonly space: (spaceId: string) => string
 }
 
 function useNames(): Names {
   const agents = useAgents()
   const members = useMembers()
   const spaces = useSpaces()
-  const agent = (agentId: string | null) => agents.agent(agentId)?.name
-  const person = (userId: string | null) => members.member(userId)?.name
-  return {
-    agent,
-    person,
+  const names: TaskEvent.Names = {
+    agent: (agentId) => agents.agent(agentId)?.name,
+    person: (userId) => members.member(userId)?.name,
     space: spaces.spaceName,
+  }
+  return {
+    ...names,
     image: (actor) => (actor.agentId ? undefined : (members.member(actor.userId)?.image ?? undefined)),
-    actor: (actor) => (actor.agentId ? (agent(actor.agentId) ?? "Agent") : (person(actor.userId) ?? "Ren")),
+    actor: (actor) => TaskEvent.actorName(actor, names),
   }
-}
-
-const fields = { title: "title", description: "description", priority: "priority", dueAt: "due date" } as const
-
-const assignment = (data: Extract<TaskEventInfo["data"], { _tag: "assigned" }>, names: Names) => {
-  const moved = data.fromSpaceId === data.toSpaceId ? undefined : `moved it to ${names.space(data.toSpaceId)}`
-  const assignee = names.agent(data.toAgentId) ?? names.person(data.toOwnerId)
-  const changed = data.fromAgentId !== data.toAgentId || data.fromOwnerId !== data.toOwnerId
-  const handoff = data.fromAgentId !== null && data.toAgentId !== null
-  const assigned = assignee ? `${handoff ? "handed off to" : "assigned it to"} ${assignee}` : "removed the assignee"
-  return [changed ? assigned : undefined, moved].filter(Boolean).join(" and ") || "changed the assignment"
-}
-
-type EventData = TaskEventInfo["data"]
-
-const parentChange = (data: Extract<EventData, { _tag: "parent" }>) => {
-  if (data.to === null) return "made this a task of its own"
-  return data.from === null ? "made this a sub-task" : "moved this sub-task to another parent"
-}
-
-type Of<Tag extends EventData["_tag"]> = Extract<EventData, { _tag: Tag }>
-
-const statusChange = (data: Of<"status">) =>
-  `${data.automation ? "merged a pull request and " : ""}changed status from ${statusOf(data.from).label} to ${statusOf(data.to).label}`
-
-const started = (data: Of<"started">, names: Names) =>
-  `started ${names.agent(data.agentId) ?? "an agent"} in ${data.mode === "new" ? "a new" : "the last"} session`
-
-const reviewed = (data: Of<"reviewed">) => (data.decision === "approved" ? "approved the review" : "requested changes")
-
-const labels = (data: Of<"label">) => `changed labels to ${data.to.join(", ") || "none"}`
-
-const links = (data: Of<"link">) => (data.added.length > 0 ? "added a link" : "removed a link")
-
-const plainText = {
-  created: "created the task",
-  archived: "archived the task",
-  review_requested: "requested a human review",
-  finished: "finished the task",
-} as const
-
-const detailedText = (data: Exclude<EventData, { _tag: keyof typeof plainText }>, names: Names) => {
-  switch (data._tag) {
-    case "status":
-      return statusChange(data)
-    case "started":
-      return started(data, names)
-    case "assigned":
-      return assignment(data, names)
-    case "reviewed":
-      return reviewed(data)
-    case "field":
-      return `changed the ${fields[data.field]}`
-    case "label":
-      return labels(data)
-    case "link":
-      return links(data)
-    case "parent":
-      return parentChange(data)
-  }
-}
-
-const isPlain = (data: EventData): data is Extract<EventData, { _tag: keyof typeof plainText }> =>
-  data._tag in plainText
-
-const eventText = (data: EventData, names: Names) => (isPlain(data) ? plainText[data._tag] : detailedText(data, names))
-
-const eventNote = (event: TaskEventInfo) => {
-  if (event.data._tag === "review_requested") return event.data.reason
-  if (event.data._tag === "reviewed") return event.data.comment
-  if (event.data._tag === "assigned") return event.data.note
-  if (event.data._tag === "finished") return event.data.note
-  return null
 }
 
 const when = (at: string) => (
   <time dateTime={at} title={formatDateTime(at)}>
-    {formatRelative(at)}
+    {RelativeTime.format(at)}
   </time>
 )
 
 function ActorMark(props: { actor: TaskActor; names: Names }) {
-  if (props.actor.agentId) return <IconGhostFilled />
+  if (props.actor.agentId) return <IconAgent />
   const image = props.names.image(props.actor)
   return (
     <Avatar size="sm" className="data-[size=sm]:size-4">
@@ -261,7 +188,7 @@ function Events(props: {
   return (
     <Trace className="relative gap-4 pl-3.5 before:absolute before:inset-y-2.5 before:left-5.5 before:w-px before:bg-border">
       {props.events.map((event) => {
-        const note = eventNote(event)
+        const note = TaskEvent.note(event.data)
         const data = event.data
         if (data._tag === "started")
           return (
@@ -281,7 +208,7 @@ function Events(props: {
                 <EventMark event={event} />
               </TraceIcon>
               <TraceTitle>
-                {props.names.actor(event.actor)} {eventText(event.data, props.names)}{" "}
+                {props.names.actor(event.actor)} {TaskEvent.describe(event.data, props.names)}{" "}
                 <span className="text-muted-foreground/70">· {when(event.createdAt)}</span>
               </TraceTitle>
             </TraceLine>
@@ -385,7 +312,7 @@ export function TaskActivity(props: { taskId: string; onOpenSession: (sessionId:
   const { client } = RouterContext.useRouterContext()
   const names = useNames()
   const now = useNow()
-  const activity = useQuery(taskActivityOptions(client, props.taskId))
+  const activity = useQuery(Tasks.activity(client, props.taskId))
   return (
     <section className="flex flex-col gap-5">
       <h2 className="text-md font-semibold">Activity</h2>
@@ -394,7 +321,7 @@ export function TaskActivity(props: { taskId: string; onOpenSession: (sessionId:
           <Trace>
             <TraceLine>
               <TraceIcon>
-                <IconGhostFilled />
+                <IconAgent />
               </TraceIcon>
               <TraceTitle>Task activity</TraceTitle>
             </TraceLine>

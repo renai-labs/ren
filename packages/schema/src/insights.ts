@@ -16,12 +16,18 @@ export const GroupBy = Schema.Literals([
   "hour",
   "day",
   "week",
+  "space",
   "member",
   "agent",
   "model",
   "provider",
 ]).annotate({ identifier: "Insights.GroupBy" })
 export type GroupBy = typeof GroupBy.Type
+
+export const EventType = Schema.Literals(["model.call", "sandbox.compute", "api.call"]).annotate({
+  identifier: "Insights.EventType",
+})
+export type EventType = typeof EventType.Type
 
 export const OrderBy = Schema.Literals(["cost", "tokens", "calls", "sessions", "tasksDone"]).annotate({
   identifier: "Insights.OrderBy",
@@ -36,7 +42,9 @@ export const TimeZone = Schema.String.check(
 
 export interface Query extends Schema.Schema.Type<typeof Query> {}
 export const Query = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Schema.optional(Space.ID).annotate({
+    description: "Without it, the whole organization, which only admins and owners can read.",
+  }),
   from: Schema.DateTimeUtc,
   to: Schema.DateTimeUtc.annotate({ description: "The end of the range, not included." }),
   timezone: TimeZone.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed("UTC"))).annotate({
@@ -54,6 +62,9 @@ export const Query = Schema.Struct({
   }),
   payer: Schema.optional(Usage.Payer).annotate({ description: "Task numbers do not change." }),
   kind: Schema.optional(Usage.Kind).annotate({ description: "Task numbers do not change." }),
+  type: Schema.optional(Schema.Array(EventType)).annotate({
+    description: "Usage of these event types: model calls, sandbox compute or tool calls. Task numbers do not change.",
+  }),
   orderBy: OrderBy.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed("cost" as const))).annotate({
     description: "Descending. Only for a grouping that is not time.",
   }),
@@ -89,20 +100,29 @@ export const Cost = Schema.Struct({
     description: "Provider cost on the organization’s own keys, in millionths of a US dollar.",
   }),
   unpricedCalls: Schema.Number.annotate({ description: "Model calls with no cost." }),
+  models: Schema.Number.annotate({ description: "Model calls, on either payer, in millionths of a US dollar." }),
+  compute: Schema.Number.annotate({ description: "Sandbox compute, in millionths of a US dollar." }),
+  tools: Schema.Number.annotate({
+    description: "Tool calls through Ren’s managed apps, in millionths of a US dollar.",
+  }),
 }).annotate({ identifier: "Insights.Cost" })
 
 export interface Row extends Schema.Schema.Type<typeof Row> {}
 export const Row = Schema.Struct({
   key: Schema.NullOr(Schema.String).annotate({
     description:
-      "The bucket start (ISO, UTC), user ID, agent name, served model or provider. Null for the whole range and for usage that names no one.",
+      "The bucket start (ISO, UTC), space ID, user ID, agent name, served model or provider. Null for the whole range, for usage that names no one, and for usage in no space: calls with a member’s inference key.",
   }),
-  label: Schema.NullOr(Schema.String).annotate({ description: "The user’s name, for a member row." }),
+  label: Schema.NullOr(Schema.String).annotate({
+    description:
+      "The user’s name, for a member row. The space’s name, for a space row: `(archived)` after an archived space, and `Private space · <owner>` for another person’s private space.",
+  }),
   sessions: Schema.Number.annotate({ description: "Root sessions that spent." }),
   calls: Schema.Number,
   errors: Schema.Number,
   tokens: Tokens,
   cost: Cost,
+  computeMs: Schema.Number.annotate({ description: "Sandbox time, in milliseconds." }),
   tasksDone: Schema.NullOr(Schema.Number).annotate({
     description: "Tasks done now, at their latest move to done. Null for model and provider rows.",
   }),

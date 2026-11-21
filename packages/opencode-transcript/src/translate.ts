@@ -3,7 +3,7 @@ export * as Translate from "./translate.js"
 import type { Agent } from "@opencode/schema/agent"
 import type { Command } from "@opencode/schema/command"
 import type { EventManifest } from "@opencode/schema/event-manifest"
-import type { FileSystem } from "@opencode/schema/filesystem"
+import type { FileSystem as OpenCodeFileSystem } from "@opencode/schema/filesystem"
 import type { Form as OpenCodeForm } from "@opencode/schema/form"
 import type { Permission as OpenCodePermission } from "@opencode/schema/permission"
 import type { Session as OpenCodeSession } from "@opencode/schema/session"
@@ -14,6 +14,7 @@ import type { Shell as OpenCodeShell } from "@opencode/schema/shell"
 import type { Skill } from "@opencode/schema/skill"
 import type { Vcs } from "@opencode/schema/vcs"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
+import { FileSystem } from "@ren/schema/file-system"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { ScheduleOrigin } from "@ren/schema/schedule-origin"
@@ -53,6 +54,11 @@ const taskOf = (value: unknown) =>
     () => Option.flatMap(decodeUserText(value), (decoded) => TaskAssignment.parse(decoded.text)),
   )
 
+const FromPresentation = Schema.Struct({
+  metadata: Schema.Struct({ displayText: Schema.String, comments: Schema.Array(SessionMessage.Quote) }),
+})
+const decodePresentation = Schema.decodeUnknownOption(FromPresentation)
+
 const WithUploads = Schema.Struct({ metadata: Schema.Struct({ files: Schema.Array(SessionMessage.DriveFile) }) })
 const decodeUploads = Schema.decodeUnknownOption(WithUploads)
 
@@ -69,6 +75,7 @@ const withMetadata = (value: unknown): unknown => {
   const webhook = decodeWebhook(value)
   const uploads = decodeUploads(value)
   const task = taskOf(value)
+  const presentation = decodePresentation(value)
   return {
     ...value,
     ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
@@ -76,6 +83,12 @@ const withMetadata = (value: unknown): unknown => {
     ...(Option.isSome(schedule) && { schedule: schedule.value.metadata.schedule }),
     ...(Option.isSome(webhook) && { webhook: webhook.value.metadata.webhook }),
     ...(Option.isSome(task) && { task: task.value }),
+    ...(Option.isSome(presentation) && {
+      presentation: {
+        displayText: presentation.value.metadata.displayText,
+        comments: presentation.value.metadata.comments,
+      },
+    }),
     ...(Option.isSome(uploads) && {
       uploads: uploads.value.metadata.files,
       ...(Predicate.hasProperty(value, "files") && {
@@ -227,7 +240,7 @@ export type MessageCompatibility = Checked<
     skill: "translated"
     synthetic: "translated"
     system: "translated"
-    user: "translated"
+    user: { reshaped: "presentation comes from metadata.displayText and metadata.comments" }
   }
 >
 
@@ -243,7 +256,7 @@ const readShell = Schema.decodeUnknownOption(Schema.toType(Shell.Info))
 const readAgent = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Agent))
 const readSkill = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Skill))
 const readCommand = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Command))
-const readFile = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.File))
+const readFile = Schema.decodeUnknownOption(Schema.toType(FileSystem.Entry))
 const readVcs = Schema.decodeUnknownOption(Schema.toType(SessionVcs.Info))
 
 const Typed = Schema.Struct({ type: Schema.String })
@@ -308,6 +321,6 @@ export const skill = (info: Skill.Info) => readSkill(info)
 
 export const command = (info: Command.Info) => readCommand(info)
 
-export const file = (entry: FileSystem.Entry) => readFile(entry)
+export const file = (entry: OpenCodeFileSystem.Entry) => readFile(entry)
 
 export const vcs = (info: Vcs.Info) => readVcs(info)

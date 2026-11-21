@@ -12,6 +12,12 @@ const maxPathBytes = 768
 
 const maxNameBytes = 255
 
+// oxlint-disable-next-line ren/no-comments -- The largest file in a drive, from an upload or from a chat's output; a deployment can set a lower one (DRIVE_MAX_FILE_SIZE).
+export const maxFileBytes = 100 * 1024 * 1024
+
+// oxlint-disable-next-line ren/no-comments -- The largest file the apps let a person upload, a round number under maxFileBytes.
+export const maxUploadBytes = 100_000_000
+
 export const Path = Schema.String.check(Schema.isNonEmpty({ message: "Path is required." }))
   .pipe(
     Schema.decode(SchemaTransformation.transform({ decode: (path) => path.normalize("NFC"), encode: (path) => path })),
@@ -47,33 +53,12 @@ const scope = {
   ),
 }
 
-export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
-export const ListInput = Schema.Struct({
-  ...scope,
-  folder: Schema.optional(
-    Path.annotate({ description: "The folder to list, such as `reports`. Omit it for the root." }),
-  ),
-  cursor: Schema.optional(
-    Schema.String.annotate({ description: "The `cursor` of the previous page, to list the next one." }),
-  ),
-}).annotate({ identifier: "Drive.ListInput" })
-
 export interface File extends Schema.Schema.Type<typeof File> {}
 export const File = Schema.Struct({
   path: Schema.String.annotate({ description: "The file’s path inside its drive." }),
   size: Schema.Int,
   modifiedAt: Schema.DateTimeUtc,
 }).annotate({ identifier: "Drive.File" })
-
-export interface Listing extends Schema.Schema.Type<typeof Listing> {}
-export const Listing = Schema.Struct({
-  folders: Schema.Array(Schema.String).annotate({ description: "The paths of the folders directly in the folder." }),
-  files: Schema.Array(File).annotate({ description: "The files directly in the folder." }),
-  cursor: Schema.NullOr(Schema.String).annotate({ description: "Null on the last page." }),
-}).annotate({ identifier: "Drive.Listing", description: "One page of a folder, sorted by path." })
-
-export interface PathInput extends Schema.Schema.Type<typeof PathInput> {}
-export const PathInput = Schema.Struct({ ...scope, path: Path }).annotate({ identifier: "Drive.PathInput" })
 
 export const Disposition = Schema.Literals(["attachment", "inline"]).annotate({
   identifier: "Drive.Disposition",
@@ -155,8 +140,11 @@ export const Availability = Schema.Union([
 })
 export type Availability = typeof Availability.Type
 
-export const uploadsOf = (sessionId: string, messageId: string) => `chats/${sessionId}/uploads/${messageId}`
+export const chatsFolder = "chats/"
 
-export const outputsOf = (sessionId: string) => `chats/${sessionId}/outputs`
+export const uploadsOf = (sessionId: string, messageId: string) => `${chatsFolder}${sessionId}/uploads/${messageId}`
 
-export const typeOf = (name: string) => Option.getOrElse(Mime.getType(name), () => "application/octet-stream")
+export const outputsOf = (sessionId: string) => `${chatsFolder}${sessionId}/outputs`
+
+export const typeOf = (name: string) =>
+  /\.[cm]?ts$/iu.test(name) ? "text/typescript" : Option.getOrElse(Mime.getType(name), () => "application/octet-stream")

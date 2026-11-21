@@ -13,7 +13,6 @@ import { environmentTemplateRelations } from "./environment.sql.js"
 import { sessionRelations } from "./session.sql.js"
 import { settingsRelations } from "./settings.sql.js"
 import { spaceRelations } from "./space.sql.js"
-import { spaceEnvironmentTemplateRelations } from "./space-environment-template.sql.js"
 import { taskRelations } from "./task.sql.js"
 
 const make = makeWithDefaults({
@@ -22,7 +21,6 @@ const make = makeWithDefaults({
     ...sessionRelations,
     ...authRelations,
     ...environmentTemplateRelations,
-    ...spaceEnvironmentTemplateRelations,
     ...agentRelations,
     ...appRelations,
     ...appListingRelations,
@@ -45,6 +43,8 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/db/Database") {}
+
+export const contains = (text: string) => `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
 
 export const layer = Layer.effect(
   Service,

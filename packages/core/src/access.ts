@@ -6,16 +6,20 @@ import { and, not, or, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import type { Actor } from "./actor.js"
 import { AgentPolicy } from "./agent/policy.js"
+import { BillingPolicy } from "./billing/policy.js"
+import { ArtifactPolicy } from "./artifact/policy.js"
 import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelMappingPolicy } from "./channel-mapping/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
 import { MemoryPolicy } from "./memory/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
+import { OrganizationInviteLinkPolicy } from "./organization-invite-link/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
 import { DrivePolicy } from "./drives/policy.js"
-import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
+import { MachineTemplatePolicy } from "./machine-templates/policy.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
+import { InsightsPolicy } from "./insights/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
 import { SchedulePolicy } from "./schedule/policy.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -93,8 +97,9 @@ export const where = (plan: Plan, facts: ReadonlyMap<string, SQL>): SQL => {
 
 export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SpacePolicy.documents,
+  ...OrganizationInviteLinkPolicy.documents,
   ...SessionPolicy.documents,
-  ...EnvironmentTemplatePolicy.documents,
+  ...MachineTemplatePolicy.documents,
   ...SettingsPolicy.documents,
   ...MemoryPolicy.documents,
   ...DrivePolicy.documents,
@@ -109,7 +114,10 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...ChannelMappingPolicy.documents,
   ...SchedulePolicy.documents,
   ...WebhookPolicy.documents,
+  ...ArtifactPolicy.documents,
   ...InfraPolicy.documents,
+  ...BillingPolicy.documents,
+  ...InsightsPolicy.documents,
 ])
 
 export const layer = Layer.effect(

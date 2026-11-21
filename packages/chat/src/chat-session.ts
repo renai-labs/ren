@@ -1,10 +1,10 @@
 export * as ChatSession from "./chat-session.js"
 
 import { ClientError, Ren } from "@ren/client/chat/effect"
+import type { FileSystem } from "@ren/schema/file-system"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import type { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -17,6 +17,7 @@ import {
   DateTime,
   Deferred,
   Effect,
+  Duration,
   Fiber,
   Option,
   Predicate,
@@ -25,9 +26,11 @@ import {
   Schedule,
   Semaphore,
   Stream,
+  Struct,
   SubscriptionRef,
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
+import { ChatCache } from "./chat-cache.js"
 import { ChatState } from "./chat-state.js"
 import { Connection } from "./connection.js"
 import { Hydrate } from "./hydrate.js"
@@ -46,9 +49,17 @@ const autoApproveRetries = 2
 const refreshBefore = 60_000
 
 const startingPollMs = 2_000
+const unreachableAfter = "20 seconds"
+const retryCap = "30 seconds"
+const retryLimit = "2 minutes"
+
+export const sendRetry = Schedule.exponential(startingPollMs).pipe(
+  Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.fromInputUnsafe(retryCap)))),
+  Schedule.upTo({ duration: retryLimit }),
+)
 
 // oxlint-disable-next-line ren/no-comments -- Ren refuses a page of saved history over its size limit with 413 (E111); the runtime asks again for fewer messages.
-export const savedPageSizes = [100, 50, 25, 5, 1]
+export const savedPageSizes = [messagePageLimit, 5, 1]
 
 const savedRetries = 3
 
@@ -95,7 +106,11 @@ export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{
 export interface Options {
   readonly sessionID: Session.ID
   readonly access: (input: { readonly unreachable: boolean }) => Effect.Effect<Session.ClientAccess, unknown>
+  // oxlint-disable-next-line ren/no-comments -- Starts the chat again after its space was shut down (Ren's `chat.retry`). A prompt to a stopped chat calls it first; reads and reconnects never do.
+  readonly restart?: Effect.Effect<void, unknown>
   readonly saved?: (query: { readonly limit: number }) => Effect.Effect<SessionMessage.Page, unknown>
+  // oxlint-disable-next-line ren/no-comments -- The chat's newest turns on this device: they paint before any network call, and the brain's read replaces them (#254).
+  readonly cache?: ChatCache.Cache
   readonly outbox?: {
     readonly load: Effect.Effect<ReadonlyArray<Outbox.Kept>>
     readonly keep: (items: ReadonlyArray<Outbox.Kept>) => Effect.Effect<void>
@@ -104,14 +119,18 @@ export interface Options {
   readonly sender?: SessionMessage.Sender
   readonly handoff?: Handoff
   readonly autoApprove?: boolean
-  readonly connection?: Partial<Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay">>
+  readonly connection?: Partial<
+    Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay" | "flushInterval">
+  >
   readonly onError?: (error: unknown) => Effect.Effect<void>
 }
 
 export type Boot =
+  | { readonly _tag: "Checking" }
   | { readonly _tag: "Ready" }
   | { readonly _tag: "Starting"; readonly phase: string }
   | { readonly _tag: "Failed"; readonly reason: string }
+  | { readonly _tag: "Stopped" }
 
 export interface Handoff {
   readonly id: SessionMessage.ID
@@ -128,6 +147,7 @@ export interface Mentions {
 
 export interface PromptInput extends Mentions {
   readonly text: string
+  readonly presentation?: SessionMessage.Presentation
   readonly files?: ReadonlyArray<SessionMessage.DriveFile>
   readonly delivery?: SessionInbox.Delivery
   readonly id?: SessionMessage.ID
@@ -195,15 +215,34 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         )
       : ChatState.empty,
   )
-  const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
-  const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Ready" })
+  const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Checking" })
+  if (options.cache) {
+    const cache = options.cache
+    yield* cache.read.pipe(
+      Effect.flatMap((items) =>
+        items?.length
+          ? SubscriptionRef.update(state, (current) =>
+              current.messages[root] ? current : Hydrate.cached(current, root, items),
+            )
+          : Effect.void,
+      ),
+      Effect.forkIn(scope),
+    )
+    yield* SubscriptionRef.changes(state).pipe(
+      Stream.filter((current) => Boolean(current.messages[root]) && !current.partial.has(root)),
+      Stream.map((current) => ChatState.messages(current, root).filter((message) => !current.outbox.has(message.id))),
+      Stream.debounce(ChatCache.writeDelay),
+      Stream.runForEach((messages) => cache.write(ChatCache.newestTurns(messages))),
+      Effect.forkIn(scope),
+    )
+  }
   const events = yield* PubSub.unbounded<SessionEvent.Event>()
   const reads = yield* Reads.make<unknown>()
   const accessLock = yield* Semaphore.make(1)
   const wanted = new Map<string, Reducer.Read>()
   const settling = new Map<string, Fiber.Fiber<void>>()
   const histories = new Map<string, Deferred.Deferred<void, unknown>>()
-  const sends = { tail: Deferred.makeUnsafe<void>() }
+  const sends = { tail: Deferred.makeUnsafe<void>(), stops: 0 }
   Deferred.doneUnsafe(sends.tail, Effect.void)
   const cached: { current: Option.Option<{ readonly access: Session.ReadyAccess; readonly client: Client }> } = {
     current: Option.none(),
@@ -222,7 +261,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const kept = yield* Ref.make(options.outbox ? yield* options.outbox.load : [])
   const keep = (f: (items: ReadonlyArray<Outbox.Kept>) => ReadonlyArray<Outbox.Kept>) =>
-    options.outbox ? Ref.updateAndGet(kept, f).pipe(Effect.flatMap(options.outbox.keep)) : Effect.void
+    Ref.updateAndGet(kept, f).pipe(
+      Effect.flatMap((items) => (options.outbox ? options.outbox.keep(items) : Effect.void)),
+    )
   const unkeep = (id: SessionMessage.ID) => keep((items) => items.filter((item) => item.id !== id))
 
   const savedPage = (sizes: ReadonlyArray<number>): Effect.Effect<SessionMessage.Page, unknown> => {
@@ -248,9 +289,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     shown.saved = true
     return savedPage(savedPageSizes).pipe(
       Effect.flatMap((page) =>
-        update((current) =>
-          current.messages[root] ? current : Hydrate.messages(current, root, { items: page.items, cursor: {} }),
-        ),
+        update((current) => (current.messages[root] ? current : Hydrate.saved(current, root, page))),
       ),
       Effect.catch(report),
       Effect.forkIn(scope),
@@ -260,6 +299,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const client = accessLock.withPermits(1)(
     Effect.gen(function* () {
+      const currentBoot = yield* SubscriptionRef.get(boot)
+      if (currentBoot._tag === "Failed") return yield* new AccessFailed({ cause: new Error(currentBoot.reason) })
+      if (currentBoot._tag === "Stopped")
+        return yield* new AccessFailed({ cause: new Error("The space was shut down") })
       const now = yield* Clock.currentTimeMillis
       if (
         Option.isSome(cached.current) &&
@@ -277,6 +320,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             return SubscriptionRef.set(boot, { _tag: "Failed", reason: answer.reason }).pipe(
               Effect.andThen(showSaved),
               Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))),
+            )
+          if (answer.status === "stopped")
+            return SubscriptionRef.set(boot, { _tag: "Stopped" }).pipe(
+              Effect.andThen(showSaved),
+              Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error("The space was shut down") }))),
             )
           return SubscriptionRef.set(boot, { _tag: "Starting", phase: answer.phase }).pipe(
             Effect.andThen(showSaved),
@@ -366,8 +414,13 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             select: (current) => current.messages[read.sessionID],
             load: (before) =>
               Effect.gen(function* () {
-                const oldest = before?.at(0)?.id
-                const complete = before && !(yield* SubscriptionRef.get(state)).cursor[read.sessionID]
+                const known = yield* SubscriptionRef.get(state)
+                const partial = known.partial.has(read.sessionID)
+                const shown = known.loaded.has(read.sessionID) ? (before ?? []) : []
+                const ids = new Set<string>(shown.map((message) => message.id))
+                const oldest = shown.at(0)?.id
+                const covered = (items: ReadonlyArray<SessionMessage.Info>) =>
+                  partial ? items.some((item) => item.id === oldest) : items.some((item) => ids.has(item.id))
                 const fetch = (cursor?: string): Effect.Effect<SessionMessage.Page, unknown> =>
                   api.session
                     .messages({
@@ -377,7 +430,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                     })
                     .pipe(
                       Effect.flatMap((page) =>
-                        oldest && page.cursor.next && (complete || !page.items.some((item) => item.id === oldest))
+                        oldest && page.cursor.next && !covered(page.items)
                           ? fetch(page.cursor.next).pipe(
                               Effect.map((older) => ({
                                 items: [...page.items, ...older.items],
@@ -387,7 +440,16 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                           : Effect.succeed(page),
                       ),
                     )
-                return yield* fetch()
+                const page = yield* fetch()
+                const overlap = partial
+                  ? -1
+                  : shown.findIndex((message) => page.items.some((item) => item.id === message.id))
+                if (overlap === -1) return page
+                const next = known.cursor[read.sessionID]
+                return {
+                  items: [...page.items, ...shown.slice(0, overlap).toReversed()],
+                  cursor: next ? { next } : {},
+                } satisfies SessionMessage.Page
               }),
             apply: (current, page) => Hydrate.messages(current, read.sessionID, page),
           })
@@ -425,7 +487,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const quietly = (effect: Effect.Effect<void, unknown>) =>
     effect.pipe(
       Effect.catch((error) =>
-        Effect.flatMap(SubscriptionRef.get(status), (current) =>
+        Effect.flatMap(SubscriptionRef.get(connection.status), (current) =>
           current === "connected" ? report(error) : Effect.void,
         ),
       ),
@@ -433,7 +495,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const refresh = (read: Reducer.Read) =>
     Effect.gen(function* () {
-      if ((yield* SubscriptionRef.get(status)) !== "connected") return
+      if ((yield* SubscriptionRef.get(connection.status)) !== "connected") return
       yield* reads.run(Reducer.key(read), load(read)).pipe(quietly, Effect.forkIn(scope))
     })
 
@@ -458,7 +520,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         return reads.invalidate(key)
       }
       if (command._tag === "Rename") {
-        if ((yield* SubscriptionRef.get(status)) !== "connected") return
+        if ((yield* SubscriptionRef.get(connection.status)) !== "connected") return
         return yield* reads
           .run(key, load(command.read))
           .pipe(
@@ -521,16 +583,20 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       )
     })
 
-  const connection = yield* Connection.make({
+  const connection: Connection.Connection = yield* Connection.make({
     ...options.connection,
     subscribe: Effect.map(client, (api) => api.event.subscribe()),
+    canReconnect: Effect.map(
+      SubscriptionRef.get(boot),
+      (current) => current._tag !== "Failed" && current._tag !== "Stopped",
+    ),
     onFrames,
+    onUnreachable: lost,
     onStatus: (next) =>
-      Effect.gen(function* () {
+      Effect.sync(() => {
         if (next !== "connected") reads.invalidate()
         // oxlint-disable-next-line ren/no-comments -- A parked brain may be asleep or gone: the next read or send asks Ren first, which wakes it (E128).
         if (next === "reconnecting" || next === "parked") cached.current = Option.none()
-        yield* SubscriptionRef.set(status, next)
       }),
   })
 
@@ -602,6 +668,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     const id = input.id ?? SessionMessage.ID.create()
     const files = input.files?.length ? input.files : undefined
     const delivery = input.delivery ?? "steer"
+    const presentation = Struct.pick(input, ["presentation"])
     const now = yield* DateTime.now
     const fresh = Outbox.isFresh(yield* SubscriptionRef.get(state), root, id)
     yield* update((current) =>
@@ -612,6 +679,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           id,
           text: input.text,
           delivery,
+          ...presentation,
           ...(options.sender && { sender: options.sender }),
           ...(input.agents && { agents: input.agents }),
           ...(files && { uploads: files }),
@@ -619,26 +687,37 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         now,
       ),
     )
-    yield* keep((items) => [
-      ...items.filter((item) => item.id !== id),
-      {
-        id,
-        text: input.text,
-        delivery,
-        ...(input.agents && { agents: input.agents }),
-        ...(input.skills && { skills: input.skills }),
-        ...(files && { files }),
-      },
-    ])
+    const entry = {
+      id,
+      text: input.text,
+      delivery,
+      ...presentation,
+      ...(input.agents && { agents: input.agents }),
+      ...(input.skills && { skills: input.skills }),
+      ...(files && { files }),
+    }
+    yield* keep((items) =>
+      items.some((item) => item.id === id) ? items.map((item) => (item.id === id ? entry : item)) : [...items, entry],
+    )
+    const stopped = (yield* SubscriptionRef.get(boot))._tag
+    if ((stopped === "Stopped" || stopped === "Failed") && options.restart) {
+      yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+      yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
+    }
     yield* connection.wake
+    const stopsAtEnqueue = sends.stops
+    const unreachableTimer: { current: Option.Option<Fiber.Fiber<void>> } = { current: Option.none() }
     yield* send(
       Effect.gen(function* () {
+        if (sends.stops !== stopsAtEnqueue)
+          return yield* new AccessFailed({ cause: new Error("An earlier send could not reach Ren") })
         const api = yield* applySelection(input.model, delivery)
         return yield* api.session.prompt({
           sessionID: root,
           id,
           text: input.text,
           delivery,
+          ...presentation,
           ...(input.resume === false && { resume: false }),
           ...(input.agents && { agents: input.agents }),
           ...(input.skills && { skills: input.skills }),
@@ -646,18 +725,37 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         })
       }).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() => {
-            if (!isUnauthorized(error)) return
-            reach.unreachable = true
-            cached.current = Option.none()
+          Effect.gen(function* () {
+            if (!isUnreachable(error)) return
+            if (isUnauthorized(error)) {
+              reach.unreachable = true
+              cached.current = Option.none()
+            }
+            if (Option.isSome(unreachableTimer.current)) return
+            unreachableTimer.current = Option.some(
+              yield* Effect.sleep(unreachableAfter).pipe(
+                Effect.andThen(update((current) => Outbox.stall(current, id, "unreachable"))),
+                Effect.forkIn(scope),
+              ),
+            )
           }),
         ),
-        Effect.retry({ while: isUnreachable, schedule: Schedule.spaced(startingPollMs) }),
+        Effect.retry({ while: isUnreachable, schedule: sendRetry }),
+        Effect.catchIf(isUnreachable, (cause) =>
+          Effect.sync(() => {
+            sends.stops += 1
+          }).pipe(Effect.andThen(Effect.fail(new AccessFailed({ cause })))),
+        ),
+        Effect.ensuring(
+          Effect.suspend(() =>
+            Option.isSome(unreachableTimer.current) ? Fiber.interrupt(unreachableTimer.current.value) : Effect.void,
+          ),
+        ),
       ),
     ).pipe(
       Effect.tapError((error) =>
         error instanceof AccessFailed
-          ? Effect.void
+          ? update((current) => Outbox.stall(current, id, "unsent"))
           : unkeep(id).pipe(
               Effect.andThen(fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void),
             ),
@@ -670,6 +768,44 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     ])
     if (!echoed) yield* execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })
     return id
+  })
+
+  const retryMessage = Effect.fnUntraced(function* (id: SessionMessage.ID) {
+    const stalled = (yield* SubscriptionRef.get(state)).stalled
+    const unsent = (yield* Ref.get(kept)).filter((item) => stalled.get(item.id) === "unsent")
+    yield* Effect.forEach(
+      unsent.slice(0, unsent.findIndex((item) => item.id === id) + 1),
+      (item) => update((current) => Outbox.resume(current, item.id)).pipe(Effect.andThen(prompt(item))),
+      { discard: true },
+    ).pipe(Effect.catchTag("ChatSession.AccessFailed", () => Effect.void))
+  })
+
+  const retryUnsent = Effect.gen(function* () {
+    const stalled = (yield* SubscriptionRef.get(state)).stalled
+    const newest = (yield* Ref.get(kept)).findLast((item) => stalled.get(item.id) === "unsent")
+    if (newest) yield* retryMessage(newest.id)
+  })
+
+  const removeMessage = Effect.fnUntraced(function* (id: SessionMessage.ID) {
+    if ((yield* SubscriptionRef.get(state)).stalled.get(id) !== "unsent") return null
+    const item = (yield* Ref.get(kept)).find((entry) => entry.id === id) ?? null
+    yield* unkeep(id)
+    yield* update((current) => Outbox.rollback(current, root, id))
+    return item
+  })
+
+  const retry = Effect.gen(function* () {
+    if ((yield* SubscriptionRef.get(boot))._tag !== "Failed") return
+    if (!options.restart) return yield* new AccessFailed({ cause: new Error("This chat cannot start again") })
+    yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+    yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
+    yield* connection.wake
+    yield* Effect.forEach(
+      yield* Ref.get(kept),
+      (item) =>
+        update((current) => Outbox.resume(current, item.id)).pipe(Effect.andThen(prompt(item)), Effect.catch(report)),
+      { discard: true },
+    ).pipe(Effect.forkIn(scope))
   })
 
   const command = Effect.fnUntraced(function* (input: CommandInput) {
@@ -737,6 +873,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
                   text: item.payload.text,
                   delivery: "queue",
                   resume: false,
+                  ...(item.payload.presentation && { presentation: item.payload.presentation }),
                   ...(item.payload.agents && { agents: item.payload.agents }),
                   ...(item.payload.uploads && {
                     files: item.payload.uploads.map((file) => ({ path: file.path, name: file.name })),
@@ -980,7 +1117,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   // oxlint-disable-next-line ren/no-comments -- Typing in a parked chat asks Ren for access, which wakes its brain before the send; at most once per 5 minutes (E130).
   const prepared = { at: Number.NEGATIVE_INFINITY }
   const typing = Effect.gen(function* () {
-    if ((yield* SubscriptionRef.get(status)) !== "parked") return
+    if ((yield* SubscriptionRef.get(connection.status)) !== "parked") return
     const now = yield* Clock.currentTimeMillis
     if (now - prepared.at < prepareEveryMs) return
     prepared.at = now
@@ -995,13 +1132,18 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   return {
     sessionID: root,
     state,
-    status,
+    status: connection.status,
+    retryAt: connection.retryAt,
     boot,
     open,
     enrich,
     loadMore,
     reveal,
     prompt,
+    retryMessage,
+    retryUnsent,
+    removeMessage,
+    retry,
     compact,
     revert,
     undo,
@@ -1013,6 +1155,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     queueInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "queue"),
     reorderInput,
     wake: connection.wake,
+    retryNow: connection.retryNow,
     typing,
     resync: connection.resync,
     foreground: connection.foreground,
@@ -1020,13 +1163,15 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     agents: Effect.flatMap(client, (api) => api.agent.list({ sessionID: root })),
     skills: Effect.flatMap(client, (api) => api.skill.list({ sessionID: root })),
     commands: Effect.flatMap(client, (api) => api.command.list({ sessionID: root })),
-    searchFiles: (query: string, type?: SessionCatalog.FileType) =>
+    searchFiles: (query: string, type?: FileSystem.EntryType) =>
       Effect.flatMap(client, (api) => api.file.search({ sessionID: root, query, ...(type && { type }) })),
     listFiles: (path: string) =>
       Effect.flatMap(client, (api) => api.file.list({ sessionID: root, ...(path && { path }) })),
     readFile: (path: string) => Effect.flatMap(client, (api) => api.file.read({ sessionID: root, path })),
-    vcs: Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root })),
-    vcsDiff: (mode: SessionVcs.Mode) => Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode })),
+    vcs: (path: string) => Effect.flatMap(client, (api) => api.vcs.get({ sessionID: root, ...(path && { path }) })),
+    vcsProjects: Effect.flatMap(client, (api) => api.vcs.projects({ sessionID: root })),
+    vcsDiff: (mode: SessionVcs.Mode, path: string) =>
+      Effect.flatMap(client, (api) => api.vcs.diff({ sessionID: root, mode, ...(path && { path }) })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
     stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),
@@ -1034,8 +1179,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       send(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
     autoApprove,
     replyPermission,
-    webSearchProviders: (sessionID: Session.ID) =>
-      Effect.flatMap(client, (api) => api.websearch.providers({ sessionID })),
     replyWebSearch: (form: Form.Info, selection: string | false) =>
       connection.wake.pipe(
         Effect.andThen(
@@ -1043,7 +1186,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             form,
             selection,
             events,
-            lost: SubscriptionRef.changes(status).pipe(
+            lost: SubscriptionRef.changes(connection.status).pipe(
               Stream.drop(1),
               Stream.filter((next) => next === "reconnecting" || next === "parked"),
               Stream.runHead,

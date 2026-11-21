@@ -1,11 +1,12 @@
 export * as SpaceQueries from "./queries.js"
 
+import type { MachineProvider } from "../machine-provider.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Effect } from "effect"
+import { Effect, Equal } from "effect"
 import type { Access } from "../access.js"
 import { Actor } from "../actor.js"
 import { SessionPolicy } from "../session/policy.js"
@@ -28,6 +29,51 @@ export const where: ReadonlyMap<string, SQL> = new Map([
   [SpacePolicy.facts.private, eq(Database.Schema.space.kind, "private")],
   [SessionPolicy.facts.spaceMember, isNotNull(membership.id)],
 ])
+
+export const hand = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "hand_placement" | "environment_template_id">,
+): Space.Hand => {
+  if (row.hand_placement === "none") return { placement: "none" }
+  if (row.hand_placement === "remote" && row.environment_template_id)
+    return { placement: "remote", environmentTemplateId: row.environment_template_id }
+  return { placement: "colocated" }
+}
+
+export const handColumns = (hand: Space.Hand) => ({
+  hand_placement: hand.placement,
+  environment_template_id: hand.placement === "remote" ? hand.environmentTemplateId : null,
+})
+
+export const brainMachine = (
+  row: Pick<typeof Database.Schema.space.$inferSelect, "brain_provider" | "brain_template_id">,
+  deploymentProvider: MachineProvider.ID | null,
+): Space.BrainMachine => ({
+  provider: row.brain_provider ?? deploymentProvider,
+  environmentTemplateId: row.brain_template_id,
+})
+
+export const machines = (
+  row: Pick<
+    typeof Database.Schema.space.$inferSelect,
+    "brain_provider" | "brain_template_id" | "hand_placement" | "environment_template_id"
+  >,
+  deploymentProvider: MachineProvider.ID | null,
+) => ({ brain: brainMachine(row, deploymentProvider), hand: hand(row) })
+
+export const brainColumns = (brain: Space.BrainMachine) => ({
+  brain_provider: brain.provider,
+  brain_template_id: brain.environmentTemplateId,
+})
+
+// oxlint-disable-next-line ren/no-comments -- Whether an update changes the space's brain or hand. Each such change takes the next compute_revision: each brain applies it at its next start or wake, and shows it as pending until then.
+export const isComputeChanged = (
+  current: ReturnType<typeof machines>,
+  input: Pick<Space.UpdateInput, "brain" | "hand">,
+) =>
+  !Equal.equals(
+    [brainColumns(input.brain ?? current.brain), handColumns(input.hand ?? current.hand)],
+    [brainColumns(current.brain), handColumns(current.hand)],
+  )
 
 export const slugs = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -104,4 +150,34 @@ export const actsIn = Effect.fnUntraced(function* (
       resource: SessionPolicy.resource(row.membershipId),
     }),
   )
+})
+
+// oxlint-disable-next-line ren/no-comments -- Cancels the pending requests that match `where`. Used when a request is moot: the person joined another way, the space was archived, or the person left the organization.
+export const cancelJoinRequests = (transaction: Database.Transaction, where: SQL | undefined) =>
+  transaction
+    .update(Database.Schema.space_join_request)
+    .set({ status: "cancelled", decided_at: sql`now()` })
+    .where(and(eq(Database.Schema.space_join_request.status, "pending"), where))
+
+// oxlint-disable-next-line ren/no-comments -- Puts a person who is already in the organization into the spaces, and closes their pending requests to join them. Returns the spaces they were not in.
+export const admit = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  userId: Auth.UserID,
+  spaceIds: ReadonlyArray<Space.ID>,
+) {
+  if (spaceIds.length === 0) return []
+  const added = (yield* transaction
+    .insert(Database.Schema.space_member)
+    .values(spaceIds.map((spaceId) => ({ id: Space.MembershipID.create(), space_id: spaceId, user_id: userId })))
+    .onConflictDoNothing()
+    .returning({ spaceId: Database.Schema.space_member.space_id })).map((row) => row.spaceId)
+  if (added.length === 0) return []
+  yield* cancelJoinRequests(
+    transaction,
+    and(
+      eq(Database.Schema.space_join_request.user_id, userId),
+      inArray(Database.Schema.space_join_request.space_id, added),
+    ),
+  )
+  return added
 })

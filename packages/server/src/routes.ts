@@ -4,10 +4,13 @@ import { RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
+import { Artifacts } from "@ren/core/artifacts"
 import { Agent } from "@ren/core/agent"
 import { App } from "@ren/core/app"
 import { AppRegistry } from "@ren/core/app/registry"
+import { McpInspect } from "@ren/core/mcp-inspect"
 import { AgentMembership } from "@ren/core/agent/membership"
+import { Billing } from "@ren/core/billing"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
@@ -18,12 +21,15 @@ import { ChannelTurns } from "@ren/core/channel-turns"
 import { ChannelEventRun } from "@ren/core/channel-event-run"
 import { Intake } from "@ren/core/intake"
 import { IntakeThreads } from "@ren/core/intake-threads"
-import { EnvironmentTemplates } from "@ren/core/environment-templates"
+import { MachineTemplates } from "@ren/core/machine-templates"
+import { Feedback } from "@ren/core/feedback"
 import { Health } from "@ren/core/health"
 import { InfraSpecs } from "@ren/core/infra-specs"
+import { Favicon } from "@ren/core/favicon"
 import { Insights } from "@ren/core/insights"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
+import { FileSystem } from "@ren/core/file-system"
 import { Memory } from "@ren/core/memory"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { ScheduleTrigger } from "@ren/core/schedule-trigger"
@@ -32,8 +38,10 @@ import { Webhooks } from "@ren/core/webhooks"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
+import { OrganizationInviteLink } from "@ren/core/organization-invite-link"
 import { Space } from "@ren/core/space"
-import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
+import { SpaceJoinRequest } from "@ren/core/space/join-request"
+import { SpaceInviteLink } from "@ren/core/space/invite-link"
 import { SpaceMember } from "@ren/core/space/member"
 import { PullRequest } from "@ren/core/pull-request"
 import { ReferenceCheck } from "@ren/core/reference-check"
@@ -51,9 +59,11 @@ import { Api } from "./api.js"
 import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AppHandler } from "./handlers/api/app.js"
-import { AppRegistryHandler } from "./handlers/api/app-registry.js"
+import { AppRegistryHandler, AppToolsHandler } from "./handlers/api/app-registry.js"
+import { McpInspectHandler } from "./handlers/api/mcp-inspect.js"
 import { AppProfileHandler, AppProfileReachHandler } from "./handlers/api/app-profile.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
+import { BillingHandler } from "./handlers/api/billing.js"
 import { ChatHandler } from "./handlers/api/chat.js"
 import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
@@ -62,11 +72,14 @@ import { ChannelConnectHandler, ChannelInstallHandler, ChannelMappingHandler } f
 import { RepositoryHandler } from "./handlers/api/repository.js"
 import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
+import { ArtifactLinkRoutes } from "./artifact-link-routes.js"
+import { FaviconRoutes } from "./favicon-routes.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
 import { WebhookRoutes } from "./webhook-routes.js"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
+import { FeedbackHandler } from "./handlers/api/feedback.js"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InfraHandler } from "./handlers/api/infra.js"
 import { InsightsHandler } from "./handlers/api/insights.js"
@@ -75,19 +88,24 @@ import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
 import { DriveHandler } from "./handlers/api/drive.js"
-import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
+import { FilesHandler } from "./handlers/api/files.js"
+import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
-import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
+import { HostHandsHandler } from "./handlers/ren-host/hand.js"
+import { ArtifactHandler } from "./handlers/api/artifact.js"
+import { HostArtifactsHandler } from "./handlers/ren-host/artifacts.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SessionHandler } from "./handlers/api/session.js"
+import { OrganizationInviteLinkHandler, OrganizationJoinLinkHandler } from "./handlers/api/organization-invite-link.js"
 import { SpaceHandler } from "./handlers/api/space.js"
-import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
+import { SpaceJoinRequestHandler } from "./handlers/api/space-join-request.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
+import { JoinLinkHandler, SpaceInviteLinkHandler } from "./handlers/api/space-invite-link.js"
 import { SpaceSettingsHandler } from "./handlers/api/space-settings.js"
 import { TaskHandler } from "./handlers/api/task.js"
 import { LinkHandler } from "./handlers/api/link.js"
@@ -170,18 +188,25 @@ export const layer = Layer.mergeAll(
         InvitationHandler,
         SpaceHandler,
         SpaceMemberHandler,
-        EnvironmentTemplateHandler,
-        EnvironmentProviderHandler,
-        SpaceEnvironmentTemplateHandler,
+        SpaceJoinRequestHandler,
+        SpaceInviteLinkHandler,
+        JoinLinkHandler,
+        OrganizationInviteLinkHandler,
+        OrganizationJoinLinkHandler,
+        MachineTemplateHandler,
+        MachineProviderHandler,
         SpaceSettingsHandler,
         OrganizationSettingsHandler,
         MemoryHandler,
         DriveHandler,
+        FilesHandler,
         AgentHandler,
         AppHandler,
         AppProfileHandler,
         AppProfileReachHandler,
         AppRegistryHandler,
+        AppToolsHandler,
+        McpInspectHandler,
         AgentMembershipHandler,
         SessionHandler,
         ChatHandler,
@@ -194,11 +219,13 @@ export const layer = Layer.mergeAll(
         ScheduleRunHandler,
         WebhookHandler,
         WebhookRequestHandler,
+        ArtifactHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
         OAuthAppHandler,
         RenInferenceHandler,
+        BillingHandler,
         ChannelInstallHandler,
         ChannelMappingHandler,
         ChannelConnectHandler,
@@ -206,6 +233,7 @@ export const layer = Layer.mergeAll(
         SignInHandler,
         InfraHandler,
         InsightsHandler,
+        FeedbackHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Compression]),
       Layer.provide([
@@ -213,10 +241,14 @@ export const layer = Layer.mergeAll(
         Invitation.layer,
         Space.layer,
         SpaceMember.layer,
-        EnvironmentTemplates.layer,
-        SpaceEnvironmentTemplate.layer,
+        SpaceJoinRequest.layer,
+        SpaceInviteLink.layer,
+        OrganizationInviteLink.layer,
+        MachineTemplates.layer,
         Memory.layer,
-        Insights.layer.pipe(Layer.provide(Space.layer)),
+        FileSystem.layer.pipe(Layer.provide(Memory.layer)),
+        Insights.layer,
+        Feedback.layer,
         settingsAndAgents,
         InfraSpecs.layer.pipe(
           Layer.provide([
@@ -236,10 +268,16 @@ export const layer = Layer.mergeAll(
         ),
         schedules,
         webhooks,
+        Artifacts.layer,
         App.layer,
         AppRegistry.layer,
+        McpInspect.layer,
         AgentMembership.layer,
-        Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+        Session.layer.pipe(
+          Layer.provide(SessionRunner.layer),
+          Layer.provide(BrainRegistry.layer),
+          Layer.provide(Billing.layerConfig),
+        ),
         OAuthApps.layer,
         ChannelInstalls.layer,
         RepositoryHosts.layer,
@@ -248,8 +286,9 @@ export const layer = Layer.mergeAll(
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([HostPullHandler, HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
+      Layer.provide([HostPullHandler, HostModelsHandler, HostHandsHandler, HostArtifactsHandler, HostTokenHandler]),
       Layer.provide(Brains.hostAuthentication),
+      Layer.provide(Artifacts.layer),
     ),
     HttpApiBuilder.layer(UsageIngestApi).pipe(
       Layer.provide(UsageHandler),
@@ -260,6 +299,8 @@ export const layer = Layer.mergeAll(
     RenMcp.layer,
     SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
+    FaviconRoutes.layer.pipe(Layer.provide(Favicon.layer)),
+    ArtifactLinkRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(intake),
       Layer.provide(SlackTaskActions.layer),
@@ -272,7 +313,8 @@ export const layer = Layer.mergeAll(
     Layer.provide(SyncHandler),
     Layer.provide([
       Brains.hostAuthentication,
-      bodyLimit(Sync.maxBodyBytes),
+      // oxlint-disable-next-line ren/no-comments -- At most two of the largest uploads at once, so many brains that sync large messages together do not run the server out of memory.
+      bodyLimit(Sync.maxBodyBytes, { inFlightBytes: 2 * Sync.maxBodyBytes }),
       SessionSync.layer,
       ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
       Task.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),

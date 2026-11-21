@@ -7,8 +7,7 @@ export const password = "correct horse battery"
 
 export const serverURL = `http://127.0.0.1:${ports.server}`
 export const appOrigin = `http://127.0.0.1:${ports.app}`
-export const appURL = `${appOrigin}/app`
-const mailboxURL = `http://127.0.0.1:${ports.mailbox}`
+export const mailboxURL = `http://127.0.0.1:${ports.mailbox}`
 
 export const uniqueEmail = (label: string) => `${label}-${crypto.randomUUID()}@example.com`
 
@@ -70,6 +69,19 @@ export async function inviteMember(request: APIRequestContext, email: string, ro
   return Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json()).id
 }
 
+export async function createSpace(request: APIRequestContext, name: string) {
+  const created = await request.post(`${serverURL}/spaces`, { headers: { origin: appOrigin }, data: { name } })
+  expect(created.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await created.json()).id
+}
+
+export async function spaceNames(request: APIRequestContext) {
+  const response = await request.get(`${serverURL}/spaces?page=1&pageSize=50`)
+  expect(response.ok()).toBe(true)
+  const page = Schema.Struct({ items: Schema.Array(Schema.Struct({ name: Schema.String })) })
+  return Schema.decodeUnknownSync(page)(await response.json()).items.map((space) => space.name)
+}
+
 export async function organizationName(request: APIRequestContext) {
   const me = Schema.Struct({ organization: Schema.Struct({ name: Schema.String }) })
   return Schema.decodeUnknownSync(me)(await (await request.get(`${serverURL}/me`)).json()).organization.name
@@ -87,4 +99,16 @@ export async function addMember(
     data: { invitationId },
   })
   expect(accepted.ok()).toBe(true)
+}
+
+export async function script(
+  request: APIRequestContext,
+  input: {
+    readonly reply?: string
+    readonly tools?: ReadonlyArray<{ readonly name: string; readonly input: unknown }>
+  },
+) {
+  const response = await request.post(`${mailboxURL}/script`, { data: input })
+  expect(response.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
 }

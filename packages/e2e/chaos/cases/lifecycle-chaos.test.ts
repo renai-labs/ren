@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { Session } from "@ren/schema/session"
 import { SessionDriver } from "../lib/drivers/session.js"
+import type { FaultProxy } from "../lib/faults/proxy.js"
 import { Ledger } from "../lib/ledger.js"
 import { Platform } from "../lib/platform.js"
 import { ModelProvider } from "../lib/provider/model.js"
@@ -15,6 +16,7 @@ const actions = [
   "send-shell",
   "send-shell",
   "send-text",
+  "queue",
   "freeze-executor",
   "kill-executor",
   "replace-executor",
@@ -23,6 +25,9 @@ const actions = [
   "short-token",
   "restart-cell",
   "cut-environment",
+  "cut-user",
+  "issuer-503",
+  "provider-503",
 ] as const
 
 interface Sent {
@@ -32,7 +37,11 @@ interface Sent {
 }
 
 describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and network faults (U2, U3)", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: {
+    stack?: Stack.Instance
+    environment?: Stack.Hand
+    session?: Awaited<ReturnType<Stack.Instance["session"]>>
+  } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
@@ -47,7 +56,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
   afterAll(() => lane.stack?.dispose())
 
   test.each(Array.from({ length: sequences }, (_, index) => Wait.seed + 100 + index))(
-    `seed %i: ${length} faults end every turn, keep each message once and each effect at most once, and the session recovers`,
+    `seed %i: ${length} faults end every turn, keep each message once and each effect at most once`,
     async (seed) => {
       const stack = current().stack
       const environment = current().environment
@@ -55,14 +64,20 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
       const access = () => stack.access(Stack.freshKey("lifecycle"), Date.now() + 4 * 60_000)
       stack.ren.refresh(() => ({ type: "grant", access: access() }))
       const session = await stack.session({ models: access(), environment })
+      lane.session = session
+      const rules: Array<FaultProxy.Rule> = []
       const healing: Array<Promise<void>> = []
       const later = (ms: number, heal: () => Promise<void> | void) =>
         // ast-grep-ignore: no-test-sleep -- the seeded duration of a fault is part of the sequence
         healing.push(Bun.sleep(ms).then(heal))
-      const send = async (steps: ReadonlyArray<ModelProvider.Step>, marker: string | undefined): Promise<Sent> => {
+      const send = async (
+        steps: ReadonlyArray<ModelProvider.Step>,
+        marker: string | undefined,
+        delivery?: Session.Delivery,
+      ): Promise<Sent> => {
         const messageId = Session.MessageID.create()
         const attempt = () =>
-          session.turn(steps, marker ?? "lifecycle", { messageId }).then(
+          session.turn(steps, marker ?? "lifecycle", { messageId, ...(delivery && { delivery }) }).then(
             () => true,
             () => false,
           )
@@ -75,6 +90,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
       const effects: Readonly<Record<(typeof actions)[number], () => Promise<Sent | void>>> = {
         "send-shell": shell,
         "send-text": () => send([ModelProvider.text("plain")], undefined),
+        queue: () => send([ModelProvider.text("queued")], undefined, "queue"),
         "freeze-executor": async () => {
           await environment.instance.freeze()
           later(random.integer(2_000, 12_000), () => environment.instance.thaw())
@@ -98,6 +114,15 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
         },
         "restart-cell": () => stack.restartCell(),
         "cut-environment": async () => void environment.proxy.cutAll(),
+        "cut-user": async () => void stack.cellProxy.cutAll(),
+        "issuer-503": async () =>
+          void rules.push(
+            stack.renProxy.inject({ operation: "POST /host/models/refresh" }, { type: "status", status: 503 }),
+          ),
+        "provider-503": async () =>
+          void rules.push(
+            stack.providerProxy.inject({ operation: "POST /v1/chat/completions" }, { type: "status", status: 503 }),
+          ),
       }
       const sent = await Array.from(
         { length },
@@ -109,6 +134,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
         const result = await effects[action]()
         return result ? [...done, result] : done
       }, Promise.resolve([]))
+      for (const rule of rules) rule.cancel()
       await Promise.all(healing)
       await environment.instance.thaw()
       environment.proxy.partition(false)
@@ -122,17 +148,23 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
         sent.flatMap((entry) => (entry.marker ? [Ledger.count(environment.instance, entry.marker)] : [])),
       )
       expect(counts.filter((count) => count > 1)).toEqual([])
-      const recovered = Ledger.marker("recovered")
-      // ast-grep-ignore: no-test-sleep -- a cell asks Ren again at most 30 seconds after Ren last failed
-      await Bun.sleep(31_000)
-      const turn = await session.turn(
-        [ModelProvider.tool("shell", { command: Ledger.append(recovered) }), ModelProvider.text("ok")],
-        "recover",
-      )
-      await turn.script.called(2, 60_000)
-      await session.settled(60_000)
-      expect(await Ledger.count(environment.instance, recovered)).toBe(1)
     },
     900_000,
   )
+
+  test("after the seeded faults the session runs a new tool call once", async () => {
+    const session = lane.session
+    if (!session) throw new Error("no seeded sequence ran")
+    const environment = current().environment
+    const recovered = Ledger.marker("recovered")
+    // ast-grep-ignore: no-test-sleep -- a cell asks Ren again at most 30 seconds after Ren last failed
+    await Bun.sleep(31_000)
+    const turn = await session.turn(
+      [ModelProvider.tool("shell", { command: Ledger.append(recovered) }), ModelProvider.text("ok")],
+      "recover",
+    )
+    await turn.script.called(2, 60_000)
+    await session.settled(60_000)
+    expect(await Ledger.count(environment.instance, recovered)).toBe(1)
+  }, 300_000)
 })

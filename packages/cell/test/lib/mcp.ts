@@ -3,6 +3,7 @@ export * as McpPeer from "./mcp.js"
 import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { AppProfile } from "@ren/schema/app-profile"
+import { Mcp } from "@ren/schema/mcp"
 import { Deferred, Effect, Queue, Schema } from "effect"
 import { Shared } from "./shared.js"
 
@@ -11,7 +12,7 @@ type Declaration = AppCatalog.McpEntry["declaration"]
 export const catalog = (
   fingerprint: string,
   mcps: ReadonlyArray<
-    ({ readonly url: string } | { readonly transport: Declaration["transport"] }) & {
+    ({ readonly url: string } | { readonly transport: Declaration["transport"]; readonly url?: string }) & {
       readonly slug: string
       readonly auth?: Declaration["auth"]
       readonly timeouts?: Declaration["timeouts"]
@@ -39,14 +40,18 @@ export const catalog = (
         ? `MCP_${mcp.slug.toUpperCase().replaceAll("-", "_")}__${mcp.profile.slug.toUpperCase().replaceAll("-", "_")}`
         : null,
       ...(mcp.env && { env: mcp.env }),
+      ...("transport" in mcp && mcp.url && { url: mcp.url }),
       declaration: {
         name: "Docs",
         description: "Docs",
         transport: "transport" in mcp ? mcp.transport : { type: "remote", url: mcp.url },
         auth: mcp.auth ?? { type: "none" },
         ...(mcp.timeouts && { timeouts: mcp.timeouts }),
-        requiredCredentials:
-          mcp.auth?.type === "header" ? [{ kind: "secret", name: mcp.auth.credential, optional: false }] : [],
+        requiredCredentials: Mcp.credentialsOf(mcp.auth ?? { type: "none" }).map((name) => ({
+          kind: "secret" as const,
+          name,
+          optional: false,
+        })),
       },
     })),
   },

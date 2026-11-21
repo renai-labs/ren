@@ -2,12 +2,13 @@ import { useState, type ReactNode } from "react"
 import type { WebhookInfo } from "@ren/client"
 import { Webhooks } from "../../lib/webhooks.js"
 import { draftOf, FormContext, parserOf, type Form } from "./use-webhook-form.js"
+import { Equal } from "effect"
 
 export function WebhookFormProvider(props: { webhook: WebhookInfo; children: ReactNode }) {
   const [base, setBase] = useState(() => draftOf(props.webhook))
   const [draft, setDraft] = useState(base)
   const form: Form = {
-    state: { draft, changed: JSON.stringify(draft) !== JSON.stringify(base) },
+    state: { draft, changed: !Equal.equals(draft, base) },
     actions: {
       set: (patch) => setDraft((previous) => ({ ...previous, ...patch })),
       addCondition: (condition) =>

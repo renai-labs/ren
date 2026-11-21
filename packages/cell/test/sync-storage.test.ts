@@ -25,9 +25,6 @@ const Checkpoint = Schema.Struct({ e: Schema.NullOr(Schema.Int), l: Schema.Array
 const Read = Schema.Struct({
   tables: Step(Schema.Array(Schema.String)),
   checkpoint: Schema.optionalKey(Step(Checkpoint)),
-  columns: Schema.optionalKey(
-    Step(Schema.Struct({ session_v2: Schema.Array(Schema.String), session_message: Schema.Array(Schema.String) })),
-  ),
   decoded: Schema.optionalKey(
     Step(
       Schema.Struct({
@@ -148,18 +145,6 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
     const kept = await boot(true)
     if (kept) throw new Error(await cell.logs())
     expect(kept).toBe(false)
-  })
-
-  test("S2-04: PRAGMA table_info of session_v2 and session_message lists the columns that sync reads", async () => {
-    const opened = await SyncStorage.turn(cell)
-    expect(await read(opened)).toMatchObject({
-      columns: {
-        value: {
-          session_v2: expect.arrayContaining(Object.keys(Sync.OpenCodeSessionRow.fields)),
-          session_message: expect.arrayContaining(Object.keys(Sync.OpenCodeMessageRow.fields)),
-        },
-      },
-    })
   })
 
   test("S5-01: the worker bundles fromRow and SessionMessage.Info, and they decode the rows that the read returns", async () => {

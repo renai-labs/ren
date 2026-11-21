@@ -1,17 +1,7 @@
 import type { Area } from "./catalog.js"
 
-export const STAGES = ["backlog", "plan", "build", "review", "qa", "monitoring"] as const
-export type Stage = (typeof STAGES)[number]
+export type Stage = "backlog" | "plan" | "build" | "review" | "qa" | "monitoring"
 export type WorkStage = Exclude<Stage, "backlog">
-
-export const STAGE_TITLES: Record<Stage, string> = {
-  backlog: "Backlog",
-  plan: "Plan",
-  build: "Build",
-  review: "Review",
-  qa: "QA",
-  monitoring: "Monitoring",
-}
 
 export type LabelName =
   | "api"

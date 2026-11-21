@@ -124,66 +124,52 @@ it.live("Ren and Slack tools survive a server restart without transport sessions
   }),
 )
 
-it.live("each chat calls Ren MCP with the host token, its own chat and the sender of its latest prompt", () =>
-  Effect.gen(function* () {
-    const ren = yield* renAt()
-    const opened = yield* open(Option.some(ren.ren))
-    const ada = yield* opened.chat()
-    const grace = yield* opened.chat()
-    expect(yield* opened.call(ada, Option.some("usr_ada"))).toBe("first")
-    expect(yield* opened.call(grace, Option.some("usr_grace"))).toBe("first")
-    expect(
-      [ada, grace].map((sessionId) => [
-        ren.last(sessionId)?.get("authorization"),
-        ren.last(sessionId)?.get(HostMcp.userHeader),
-      ]),
-    ).toEqual([
-      ["Bearer host-1", "usr_ada"],
-      ["Bearer host-1", "usr_grace"],
-    ])
-  }),
-)
-
-it.live("a prompt from another member calls Ren as that member; a prompt with no sender keeps the last sender", () =>
-  Effect.gen(function* () {
-    const ren = yield* renAt()
-    const opened = yield* open(Option.some(ren.ren))
-    const sessionId = yield* opened.chat()
-    yield* opened.call(sessionId, Option.some("usr_ada"))
-    yield* opened.call(sessionId, Option.some("usr_grace"))
-    expect(ren.last(sessionId)?.get(HostMcp.userHeader)).toBe("usr_grace")
-    expect(yield* opened.call(sessionId, Option.none())).toBe("first")
-    expect(ren.last(sessionId)?.get(HostMcp.userHeader)).toBe("usr_grace")
-  }),
+it.live(
+  "each chat calls Ren MCP with the host token and its own chat; a prompt from another member calls Ren as that member, and a prompt with no sender keeps the last sender",
+  () =>
+    Effect.gen(function* () {
+      const ren = yield* renAt()
+      const opened = yield* open(Option.some(ren.ren))
+      const ada = yield* opened.chat()
+      const grace = yield* opened.chat()
+      expect(yield* opened.call(ada, Option.some("usr_ada"))).toBe("first")
+      expect(yield* opened.call(grace, Option.some("usr_grace"))).toBe("first")
+      expect(
+        [ada, grace].map((sessionId) => [
+          ren.last(sessionId)?.get("authorization"),
+          ren.last(sessionId)?.get(HostMcp.userHeader),
+        ]),
+      ).toEqual([
+        ["Bearer host-1", "usr_ada"],
+        ["Bearer host-1", "usr_grace"],
+      ])
+      yield* opened.call(ada, Option.some("usr_linus"))
+      expect(ren.last(ada)?.get(HostMcp.userHeader)).toBe("usr_linus")
+      expect(yield* opened.call(ada, Option.none())).toBe("first")
+      expect(ren.last(ada)?.get(HostMcp.userHeader)).toBe("usr_linus")
+      expect(ren.last(grace)?.get(HostMcp.userHeader)).toBe("usr_grace")
+    }),
 )
 
 const expiring = (name: string, minutes: number) =>
   `head.${Base64Url.encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + minutes * 60 }))}.${name}`
 
-it.live("a new host token reaches Ren at the next prompt once the token in use is near its expiry", () =>
-  Effect.gen(function* () {
-    const ren = yield* renAt(expiring("aging", 30))
-    const opened = yield* open(Option.some(ren.ren))
-    const sessionId = yield* opened.chat()
-    yield* opened.call(sessionId, Option.some("usr_ada"))
-    const replacement = expiring("replacement", 120)
-    yield* Ref.set(ren.current, Option.some(replacement))
-    yield* opened.call(sessionId, Option.some("usr_ada"))
-    expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${replacement}`)
-  }),
-)
-
-it.live("a newer host token leaves the Ren and channel servers connected while the token they use is valid", () =>
-  Effect.gen(function* () {
-    const fresh = expiring("fresh", 120)
-    const ren = yield* renAt(fresh)
-    const opened = yield* open(Option.some(ren.ren))
-    const sessionId = yield* opened.chat()
-    yield* opened.call(sessionId, Option.some("usr_ada"))
-    yield* Ref.set(ren.current, Option.some(expiring("newer", 121)))
-    yield* opened.call(sessionId, Option.some("usr_ada"))
-    expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${fresh}`)
-  }),
+it.live(
+  "a new host token reaches Ren at the next prompt once the token in use is near its expiry, and a newer one waits while the token in use is valid",
+  () =>
+    Effect.gen(function* () {
+      const ren = yield* renAt(expiring("aging", 30))
+      const opened = yield* open(Option.some(ren.ren))
+      const sessionId = yield* opened.chat()
+      yield* opened.call(sessionId, Option.some("usr_ada"))
+      const replacement = expiring("replacement", 120)
+      yield* Ref.set(ren.current, Option.some(replacement))
+      yield* opened.call(sessionId, Option.some("usr_ada"))
+      expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${replacement}`)
+      yield* Ref.set(ren.current, Option.some(expiring("newer", 121)))
+      yield* opened.call(sessionId, Option.some("usr_ada"))
+      expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${replacement}`)
+    }),
 )
 
 it.live("after a restart, a prompt with no sender calls Ren as the sender of the chat's latest message", () =>

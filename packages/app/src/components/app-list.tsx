@@ -1,17 +1,29 @@
-import type { ReactNode } from "react"
-import { IconChevronRight, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import { useState, type ReactNode } from "react"
+import { useQueries, useQuery } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
+import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Loading } from "@ren/ui/loading"
+import { formatUsdRate } from "@ren/ui/format"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
-import { Avatar, AvatarGroup } from "@ren/ui/avatar"
-import { AppAvatarFallback, AppAvatarImage, AppIcon, appTile } from "./app-icon.js"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
+import { AppIcon, appTile } from "./app-icon.js"
 import { DefaultIcon } from "./default-icon.js"
-import { gaps } from "../lib/apps.js"
+import { Markdown } from "./markdown.js"
+import { ToolbarSearch } from "./toolbar-search.js"
+import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
+import { McpInspect } from "../lib/mcp-inspect.js"
 import { cn } from "cn"
-import type { AppProfileInfo } from "@ren/client"
+import type { AppListingTool, AppProfileInfo } from "@ren/client"
+import { RouterContext } from "../lib/router-context.js"
+import { useApps } from "../lib/use-app.js"
 import { useSpaces } from "../lib/use-spaces.js"
-import type { CatalogApp } from "../lib/apps.js"
+import type { CatalogApp, Status } from "../lib/apps.js"
 
 type App = CatalogApp
 type AppProfile = AppProfileInfo
@@ -27,11 +39,16 @@ function AttentionDot() {
   )
 }
 
-export function AppSection(props: { title: string; count?: number | undefined; children: ReactNode }) {
+export function AppSection(props: {
+  title: string
+  heading?: ReactNode
+  count?: number | undefined
+  children: ReactNode
+}) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">
-        {props.title}
+        {props.heading ?? props.title}
         {props.count === undefined ? null : <span className="ml-1.5 text-muted-foreground">{props.count}</span>}
       </h2>
       <AppGrid label={props.title}>{props.children}</AppGrid>
@@ -39,7 +56,7 @@ export function AppSection(props: { title: string; count?: number | undefined; c
   )
 }
 
-function AppGrid(props: { label: string; children: ReactNode }) {
+export function AppGrid(props: { label: string; children: ReactNode }) {
   return (
     <div
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a grid of Item rows; Item renders a div
@@ -52,20 +69,30 @@ function AppGrid(props: { label: string; children: ReactNode }) {
   )
 }
 
-export function AppListingSample() {
+export function AppRowSample() {
   return (
-    <AppSection title="All apps">
-      {Array.from({ length: 6 }, (_, index) => (
-        <AppRow
-          key={index}
-          name="Team app"
-          caption="Tools for your team’s work"
-          action={
-            <Button variant="ghost" size="icon" aria-label="Add app to a space">
-              <IconPlus />
-            </Button>
-          }
-        />
+    <AppRow
+      name="Team app"
+      caption="Tools for your team’s work"
+      action={
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-10 [&_svg:not([class*='size-'])]:size-6"
+          aria-label="Add app to a space"
+        >
+          <IconPlus />
+        </Button>
+      }
+    />
+  )
+}
+
+export function AppListingSample(props: { title?: string | undefined; count?: number | undefined }) {
+  return (
+    <AppSection title={props.title ?? "All apps"}>
+      {Array.from({ length: props.count ?? 6 }, (_, index) => (
+        <AppRowSample key={index} />
       ))}
     </AppSection>
   )
@@ -123,51 +150,8 @@ export function AppRow(props: {
   )
 }
 
-export function SeeAllRow(props: {
-  apps: ReadonlyArray<{ id: string; name: string; icon?: string | null }>
-  more?: number | undefined
-  onOpen: () => void
-}) {
-  return (
-    <Item
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
-      role="listitem"
-      className="relative flex-nowrap gap-3 p-2 has-[[data-slot=app-open]:hover]:bg-muted"
-    >
-      <ItemMedia>
-        <AvatarGroup className="-space-x-3 *:data-[slot=avatar]:ring-background">
-          {props.apps.slice(0, 3).map((app) => (
-            // ast-grep-ignore: require-avatar-fallback -- AppAvatarFallback renders the AvatarFallback
-            <Avatar key={app.id} size="lg">
-              {app.icon ? <AppAvatarImage src={app.icon} /> : null}
-              <AppAvatarFallback name={app.name} />
-            </Avatar>
-          ))}
-        </AvatarGroup>
-      </ItemMedia>
-      <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle className="font-normal">
-          <Button
-            variant="ghost"
-            data-slot="app-open"
-            onClick={props.onOpen}
-            className="h-auto min-w-0 justify-start rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-lg hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-          >
-            See all
-          </Button>
-        </ItemTitle>
-        <ItemDescription>{plural(props.more ?? props.apps.length, "more app")}</ItemDescription>
-      </ItemContent>
-    </Item>
-  )
-}
-
 function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode }) {
   const app = props.app
-  const spaceName = useSpaces().spaceName
-  const mcps = Object.entries(app.mcps)
-  const skills = Object.entries(app.skills)
-  const tile = appTile(app)
   return (
     <div className="flex flex-1 flex-col gap-9 overflow-y-auto overscroll-contain px-7 pt-7 pb-10">
       <SheetHeader className="gap-4 p-0">
@@ -177,7 +161,7 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
             <SheetTitle className="flex items-center gap-1.5 text-lg/7">
               {app.name}
               {app.source === "registry" ? (
-                <IconRosetteDiscountCheckFilled aria-label="From Ren’s registry" className="size-4 text-chart-1" />
+                <IconRosetteDiscountCheckFilled aria-label="From Ren’s registry" className="size-4 text-link" />
               ) : null}
             </SheetTitle>
             <SheetDescription className="leading-5">{app.listing?.body ?? app.description}</SheetDescription>
@@ -186,26 +170,178 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
         </div>
       </SheetHeader>
       {props.children}
-      {mcps.length > 0 ? (
-        <SheetSection title="MCPs">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-            {mcps.map(([slug, mcp]) => (
-              <Entry
-                key={slug}
-                media={
-                  tile ? (
-                    <DefaultIcon kind="mcp" name={slug} tile={tile} />
-                  ) : (
-                    <AppIcon name={app.name} description={app.description} icon={app.icon} size="lg" />
-                  )
+      <AppSections app={app} />
+    </div>
+  )
+}
+
+type Listing = {
+  readonly pending: boolean
+  readonly tools: ReadonlyArray<AppListingTool>
+  readonly empty: string
+}
+
+function useCustomListings(app: App, mcps: NonNullable<App["mcps"]>) {
+  const { client } = RouterContext.useRouterContext()
+  const urls = Object.values(mcps).flatMap((mcp) =>
+    app.source === "custom" && mcp.transport.type === "remote" && URL.parse(mcp.transport.url)?.protocol === "https:"
+      ? [mcp.transport.url]
+      : [],
+  )
+  const queries = useQueries({ queries: urls.map((url) => McpInspect.options(client, url)) })
+  return (mcp: Mcp): Listing | undefined => {
+    if (app.source !== "custom") return undefined
+    if (mcp.transport.type === "local") return { pending: false, tools: [], empty: "Tools show after the first chat" }
+    const query = mcp.transport.type === "remote" ? queries[urls.indexOf(mcp.transport.url)] : undefined
+    if (!query) return { pending: false, tools: [], empty: "No tools listed." }
+    return { pending: query.isPending, tools: query.data?.tools ?? [], empty: McpInspect.noTools(query.data) }
+  }
+}
+
+const listingCaption = (listing: Listing | undefined, count: number) => {
+  if (!listing) return count > 0 ? `${plural(count, "tool")} · ` : null
+  if (listing.pending) return "Checking tools… · "
+  return listing.tools.length > 0
+    ? `${plural(listing.tools.length, "tool")} · `
+    : `${listing.empty.replace(/\.$/u, "")} · `
+}
+
+function OpenedMcp(props: {
+  app: App
+  slug: string
+  mcp: Mcp
+  listing: Listing | undefined
+  icon: ReactNode
+  onClose: () => void
+}) {
+  if (props.listing)
+    return <McpDialog mcp={props.mcp} listing={props.listing} sample={6} icon={props.icon} onClose={props.onClose} />
+  return (
+    <RegistryMcpDialog
+      appId={props.app.id}
+      slug={props.slug}
+      mcp={props.mcp}
+      count={props.app.listing?.toolCounts[props.slug] ?? 0}
+      icon={props.icon}
+      onClose={props.onClose}
+    />
+  )
+}
+
+function McpCards(props: { app: App; mcps: NonNullable<App["mcps"]> }) {
+  const app = props.app
+  const tile = appTile(app)
+  const [opened, setOpened] = useState<string>()
+  const listingOf = useCustomListings(app, props.mcps)
+  const openedMcp = opened === undefined ? undefined : props.mcps[opened]
+  const mcpIcon = (slug: string) =>
+    tile ? (
+      <DefaultIcon kind="mcp" name={slug} tile={tile} />
+    ) : (
+      <AppIcon name={app.name} description={app.description} icon={app.icon} size="lg" />
+    )
+  return (
+    <SheetSection title="MCPs">
+      <div className="-mx-2 grid grid-cols-2 gap-x-4 gap-y-1">
+        {Object.entries(props.mcps).map(([slug, mcp]) => {
+          const tools = app.listing?.toolCounts[slug] ?? 0
+          return (
+            <Tooltip key={slug} disabled={mcp.transport.type !== "managed"}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    aria-haspopup="dialog"
+                    onClick={() => setOpened(slug)}
+                    className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
+                  />
                 }
-                title={slug}
-                description={transportLabel(mcp.transport)}
-              />
-            ))}
-          </div>
-        </SheetSection>
+              >
+                {mcpIcon(slug)}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm">{slug}</span>
+                  <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+                    {listingCaption(listingOf(mcp), tools)}
+                    {mcp.transport.type === "managed"
+                      ? "Ren managed"
+                      : usageOf(props.mcps, mcp) || transportLabel(mcp.transport)}
+                    {mcp.transport.type === "managed" ? (
+                      <IconCoin aria-hidden data-icon="inline-end" className="size-3" />
+                    ) : null}
+                  </span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Uses Ren credits</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+      {opened && openedMcp ? (
+        <OpenedMcp
+          app={app}
+          slug={opened}
+          mcp={openedMcp}
+          listing={listingOf(openedMcp)}
+          icon={mcpIcon(opened)}
+          onClose={() => setOpened(undefined)}
+        />
       ) : null}
+    </SheetSection>
+  )
+}
+
+function DependencyCards(props: { app: App }) {
+  const navigate = useNavigate()
+  const apps = useApps(props.app.dependsOn)
+  const nested = useApps(props.app.dependsOn.flatMap((slug) => apps.of(slug)?.dependsOn ?? []))
+  return (
+    <SheetSection title="Apps">
+      <p className="-mt-3 text-sm text-muted-foreground">
+        Adding {props.app.name} to a space adds these apps too. Each one connects on its own.
+      </p>
+      <div className="-mx-2 grid grid-cols-2 gap-x-4 gap-y-1">
+        {props.app.dependsOn.map((slug) => {
+          const app = apps.of(slug)
+          const includes = (app?.dependsOn ?? []).map((each) => nested.of(each)?.name ?? each)
+          return (
+            <Button
+              key={slug}
+              variant="ghost"
+              disabled={!app}
+              onClick={() => {
+                if (app) void navigate({ to: "/apps/$appId", params: { appId: app.id } })
+              }}
+              className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
+            >
+              <AppIcon name={app?.name ?? slug} description={app?.description} icon={app?.icon} size="lg" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm">{app?.name ?? slug}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {includes.length > 0 ? `Includes ${includes.join(", ")}` : app?.description}
+                </span>
+              </span>
+            </Button>
+          )
+        })}
+      </div>
+    </SheetSection>
+  )
+}
+
+export function AppSections(props: { app: App }) {
+  const app = props.app
+  const spaceName = useSpaces().spaceName
+  const skills = Object.entries(app.skills ?? {})
+  const tile = appTile(app)
+  const categories = [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel)
+  const facts = [
+    ...(categories.length > 0 ? [["Category", categories.join(", ")] as const] : []),
+    ["Source", app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`],
+  ] as const
+  return (
+    <>
+      {app.dependsOn.length > 0 ? <DependencyCards app={app} /> : null}
+      {app.mcps && Object.keys(app.mcps).length > 0 ? <McpCards app={app} mcps={app.mcps} /> : null}
       {skills.length > 0 ? (
         <SheetSection title="Skills">
           <div className="grid grid-cols-2 gap-x-8 gap-y-5">
@@ -227,19 +363,17 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
           </div>
         </SheetSection>
       ) : null}
-      <SheetSection title="Metadata">
-        <dl className="grid grid-cols-2 gap-y-4 text-sm">
-          <dt className="text-muted-foreground">Source</dt>
-          <dd>{app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`}</dd>
-          <dt className="text-muted-foreground">Slug</dt>
-          <dd className="font-mono">{app.slug}</dd>
-          <dt className="text-muted-foreground">Capabilities</dt>
-          <dd>
-            {[skills.length ? "Skills" : undefined, mcps.length ? "MCP servers" : undefined].filter(Boolean).join(", ")}
-          </dd>
+      <SheetSection title="Information">
+        <dl className="divide-y rounded-xl border text-sm">
+          {facts.map(([term, value]) => (
+            <div key={term} className="grid grid-cols-[--spacing(40)_1fr] gap-4 px-4 py-3">
+              <dt className="text-muted-foreground">{term}</dt>
+              <dd className="min-w-0 truncate">{value}</dd>
+            </div>
+          ))}
         </dl>
       </SheetSection>
-    </div>
+    </>
   )
 }
 
@@ -257,7 +391,7 @@ export function AppSheet(props: {
         if (!open) props.onClose()
       }}
     >
-      <SheetContent className="gap-0 data-[side=right]:sm:max-w-3xl">
+      <SheetContent className="gap-0 data-[side=right]:sm:max-w-xl">
         {app ? (
           <AppDetails app={app} action={props.action}>
             {props.children}
@@ -270,11 +404,20 @@ export function AppSheet(props: {
   )
 }
 
-const transportLabel = (transport: App["mcps"][string]["transport"]) => {
+type Mcp = NonNullable<App["mcps"]>[string]
+
+const transportLabel = (transport: Mcp["transport"]) => {
   if (transport.type === "remote") return "streamable-http"
   if (transport.type === "local") return "stdio"
   if (transport.type === "managed") return "managed by Ren"
   return transport.provider
+}
+
+const usageOf = (mcps: NonNullable<App["mcps"]>, mcp: Mcp) => {
+  if (!hasManaged({ mcps })) return null
+  if (mcp.transport.type === "managed") return "Uses Ren credits"
+  if (mcp.auth.type === "none" && mcp.transport.type !== "provider") return null
+  return "Uses your account"
 }
 
 function Entry(props: {
@@ -311,16 +454,168 @@ function SheetSection(props: { title: string; actions?: ReactNode; children: Rea
   )
 }
 
+export function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListingTool> }) {
+  return (
+    <Collapsible defaultOpen render={<section aria-label={`${props.title} tools`} />}>
+      <div className="sticky top-0 z-10 bg-background pt-3">
+        <CollapsibleTrigger
+          render={<Button variant="ghost" className="group/group w-full justify-between px-2 font-medium" />}
+        >
+          <span className="flex items-baseline gap-1.5">
+            {props.title}
+            <span className="font-normal text-muted-foreground tabular-nums">{props.tools.length}</span>
+          </span>
+          <IconChevronRight
+            data-icon="inline-end"
+            className="text-muted-foreground transition-transform duration-150 ease-out group-aria-expanded/group:rotate-90"
+          />
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        <ul className="divide-y px-2 pb-2">
+          {props.tools.map((tool) => (
+            <li key={tool.name} className="flex flex-col gap-1 py-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                <span className="min-w-0 font-mono text-sm break-all">{tool.name}</span>
+                {tool.price ? (
+                  <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                    {tool.price.usd === 0 ? "Free" : `${formatUsdRate(tool.price.usd)} / ${tool.price.unit}`}
+                  </span>
+                ) : null}
+              </div>
+              {tool.description ? (
+                <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+              ) : null}
+              {tool.price?.note ? <p className="text-xs/5 text-muted-foreground">{tool.price.note}</p> : null}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+function RegistryMcpDialog(props: {
+  appId: string
+  slug: string
+  mcp: Mcp
+  count: number
+  icon: ReactNode
+  onClose: () => void
+}) {
+  const { api } = RouterContext.useRouterContext()
+  const listed = useQuery({
+    ...api["app-tools"].get.queryOptions({ idOrSlug: props.appId }),
+    enabled: props.count > 0,
+  })
+  const listing: Listing = {
+    pending: props.count > 0 && listed.isPending,
+    tools: listed.data?.[props.slug] ?? [],
+    empty: listed.isError
+      ? "Couldn’t load this MCP’s tools. Close and open it to try again."
+      : "The registry doesn’t list this MCP’s tools yet.",
+  }
+  return <McpDialog mcp={props.mcp} listing={listing} sample={props.count} icon={props.icon} onClose={props.onClose} />
+}
+
+function McpDialog(props: { mcp: Mcp; listing: Listing; sample: number; icon: ReactNode; onClose: () => void }) {
+  const [query, setQuery] = useState("")
+  const pending = props.listing.pending
+  const tools = props.listing.tools
+  const count = pending ? props.sample : tools.length
+  const needle = query.trim().toLowerCase()
+  const shown = tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(needle))
+  const groups = [
+    { title: "Read", tools: shown.filter((tool) => tool.readOnly) },
+    { title: "Write", tools: shown.filter((tool) => !tool.readOnly) },
+  ].filter((group) => group.tools.length > 0)
+  const empty = tools.length === 0 ? props.listing.empty : `No tools match “${query.trim()}”`
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+    >
+      <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="flex-row items-center justify-between gap-4 border-b py-4 pr-14 pl-6">
+          <div className="flex min-w-0 items-center gap-3">
+            {props.icon}
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle className="flex min-w-0 items-baseline gap-2">
+                <span className="truncate">{props.mcp.name}</span>
+                <span className="text-sm font-normal text-muted-foreground">MCP</span>
+              </DialogTitle>
+              {props.mcp.transport.type === "managed" ? (
+                <DialogDescription className="flex flex-wrap items-center gap-x-1 text-xs">
+                  Ren managed
+                  <IconCoin aria-hidden data-icon="inline-end" className="size-3" />· Uses Ren credits
+                </DialogDescription>
+              ) : null}
+            </div>
+          </div>
+          {count > 0 ? (
+            <ToolbarSearch label={`Search ${plural(count, "tool")}`} value={query} onChange={setQuery} />
+          ) : null}
+        </DialogHeader>
+        <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-3">
+          <Loading loading={pending} label="Loading tools">
+            {pending ? (
+              <ToolGroup
+                title="Read"
+                tools={Array.from({ length: Math.min(count, 6) }, (_, index) => ({
+                  name: `tool_${index}`,
+                  description: "What this tool does",
+                  readOnly: true,
+                }))}
+              />
+            ) : null}
+            {!pending && groups.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">{empty}</p>
+            ) : null}
+            {pending
+              ? null
+              : groups.map((group) => <ToolGroup key={group.title} title={group.title} tools={group.tools} />)}
+          </Loading>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function SpacePills(props: { profile: AppProfile }) {
+  const names = reachedSpaces(props.profile)
+  if (names.length === 0) return <span className="text-xs text-muted-foreground">Not in any space</span>
+  return names.map((name) => (
+    <Badge key={name} variant="secondary" className="rounded-full px-2 font-normal">
+      {name}
+    </Badge>
+  ))
+}
+
+export function StatusDot(props: { status: Status }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        props.status === "connected" && "bg-chart-2",
+        props.status === "credits" && "bg-muted-foreground",
+        (props.status === "expired" || props.status === "missing") && "bg-chart-3",
+      )}
+    />
+  )
+}
+
 export function AccountList(props: {
   title: string
+  app: Pick<CatalogApp, "mcps">
   actions?: ReactNode
   profiles: ReadonlyArray<AppProfile>
   empty?: string
-  caption: (profile: AppProfile) => string
-  action: (profile: AppProfile) => ReactNode
-  onOpen?: ((profile: AppProfile) => void) | undefined
+  note?: (profile: AppProfile) => string | null
+  onOpen: (profile: AppProfile) => void
 }) {
-  if (props.profiles.length === 0 && !props.actions) return null
   return (
     <section className="flex flex-col gap-3">
       <div className="flex min-h-6.5 items-center justify-between gap-2">
@@ -337,46 +632,31 @@ export function AccountList(props: {
       ) : (
         <div className="-mx-3 flex flex-col gap-1">
           {props.profiles.map((profile) => {
-            const missing = gaps(profile).length > 0
-            const open = props.onOpen
+            const status = statusOf(props.app, [profile])
+            const caption = [status === "connected" ? undefined : statusLabel[status], props.note?.(profile)]
+              .filter(Boolean)
+              .join(" · ")
             return (
               <div
                 key={profile.id}
                 className="group/row relative flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ease-out has-[[data-slot=account-open]:hover]:bg-muted"
               >
-                <span
-                  aria-hidden
-                  className={cn("size-2 shrink-0 rounded-full", missing ? "bg-chart-3" : "bg-chart-2")}
-                />
+                <StatusDot status={status} />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  {open ? (
-                    <Button
-                      variant="ghost"
-                      data-slot="account-open"
-                      onClick={() => open(profile)}
-                      className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-lg hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-                    >
-                      {profile.name}
-                    </Button>
-                  ) : (
-                    <span className="truncate text-sm">{profile.name}</span>
-                  )}
-                  <span className="truncate text-xs text-muted-foreground">
-                    {missing ? `Not connected · ${props.caption(profile)}` : props.caption(profile)}
-                  </span>
+                  <Button
+                    variant="ghost"
+                    data-slot="account-open"
+                    onClick={() => props.onOpen(profile)}
+                    className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 after:rounded-lg hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
+                  >
+                    {profile.name}
+                  </Button>
+                  {caption ? <span className="truncate text-xs text-muted-foreground">{caption}</span> : null}
                 </div>
-                <div
-                  className={cn(
-                    "relative flex shrink-0 items-center gap-1",
-                    open &&
-                      "transition-opacity duration-150 ease-out group-focus-within/row:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100",
-                  )}
-                >
-                  {props.action(profile)}
+                <div className="flex max-w-1/2 flex-wrap justify-end gap-1">
+                  <SpacePills profile={profile} />
                 </div>
-                {open && !missing ? (
-                  <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
-                ) : null}
+                <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
               </div>
             )
           })}

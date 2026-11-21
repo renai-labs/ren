@@ -15,7 +15,7 @@ Effect.gen(function* () {
   const update = yield* Effect.forkChild(Upgrade.notice)
   yield* Runtime.run(App.command, { version: Release.version })
   const newer = yield* Fiber.join(update)
-  if (Option.isSome(newer)) yield* output.diagnostic(`ren2 v${newer.value} is available. Run ren2 upgrade.`)
+  if (Option.isSome(newer)) yield* output.diagnostic(`ren v${newer.value} is available. Run ren upgrade.`)
 }).pipe(
   Effect.provide(Connection.layer.pipe(Layer.provideMerge(Credentials.layer))),
   Effect.provide(Output.layer),

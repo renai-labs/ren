@@ -202,6 +202,7 @@ export const oauth_session = pgTable(
     status: text().$type<OAuthSession.Status>().notNull().default("pending"),
     failure_reason: text(),
     same_account_as: text(),
+    return_to: text(),
     created_at: timestamp().defaultNow().notNull(),
     expires_at: timestamp().notNull(),
     consumed_at: timestamp(),

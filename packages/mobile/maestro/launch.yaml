@@ -1,0 +1,7 @@
+appId: ai.ren.app.dev
+---
+- launchApp
+- openLink: ren-dev://expo-development-client/?url=${METRO_URL}
+- extendedWaitUntil:
+    visible: Chats
+    timeout: 30000

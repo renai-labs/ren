@@ -3,6 +3,7 @@ export * as TimelineText from "./timeline-text.js"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { DateTime } from "effect"
+import { ChatState } from "./chat-state.js"
 import { Projection } from "./projection.js"
 
 export interface Retry {
@@ -55,6 +56,14 @@ export const duration = (millis: number) => {
   return total < 60 ? `${total}s` : `${Math.floor(total / 60)}m ${total % 60}s`
 }
 
+export const elapsed = (millis: number) => {
+  const total = Math.max(0, Math.floor(millis / 1000))
+  const pad = (value: number) => String(value).padStart(2, "0")
+  if (total < 60) return `${total}s`
+  if (total < 3600) return `${Math.floor(total / 60)}m ${pad(total % 60)}s`
+  return `${Math.floor(total / 3600)}h ${pad(Math.floor(total / 60) % 60)}m`
+}
+
 export const turnDuration = (
   user: SessionMessage.User | undefined,
   assistants: ReadonlyArray<SessionMessage.Assistant>,
@@ -80,7 +89,7 @@ const usage = (tokens: SessionMessage.TokenUsage | undefined) => {
   if (!tokens) return
   const input = tokens.input + tokens.cache.read + tokens.cache.write
   const output = tokens.output + tokens.reasoning
-  if (input + output <= 0) return
+  if (ChatState.contextTokens(tokens) <= 0) return
   formatters.compact ??= new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 })
   return `${formatters.compact.format(input)} in · ${formatters.compact.format(output)} out`
 }
@@ -131,6 +140,18 @@ export const shellError = (message: Pick<SessionMessage.Shell, "status" | "exit"
   if (message.status === "timeout") return "Timed out"
   if (message.status === "killed") return "Cancelled"
   return message.status === "exited" && message.exit ? `Exit ${message.exit}` : undefined
+}
+
+export const shellEnd = (shell: {
+  readonly state?: string | undefined
+  readonly exit?: number | undefined
+  readonly timeout?: boolean | undefined
+}) => {
+  if (shell.state === "cancelled") return { text: "Stopped", failed: false }
+  if (shell.timeout) return { text: "Timed out", failed: true }
+  if (shell.exit) return { text: `Exited with code ${shell.exit}`, failed: true }
+  if (shell.state === "error") return { text: "Failed", failed: true }
+  return { text: "Exited", failed: false }
 }
 
 export const mentions = (message: SessionMessage.User) =>

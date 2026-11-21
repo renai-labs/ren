@@ -2,10 +2,9 @@ export * as Theme from "./theme.js"
 
 import { createContext, use, useEffect } from "react"
 import type { ReactNode } from "react"
+import type { AppearancePreferences } from "../lib/appearance-preferences.js"
 
-export const preferences = ["system", "light", "dark"] as const
-
-export type Preference = (typeof preferences)[number]
+export type Preference = (typeof AppearancePreferences.themes)[number]
 
 const darkQuery = "(prefers-color-scheme: dark)"
 

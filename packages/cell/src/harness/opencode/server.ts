@@ -16,11 +16,10 @@ import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Skill } from "@opencode/core/skill"
 import { Vcs } from "@opencode/core/vcs"
-import { WebSearch } from "@opencode/core/websearch"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
-import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import type { HandConnections } from "@ren/brain/hand/connections"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
@@ -41,6 +40,7 @@ import {
   Struct,
 } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
+import type { ChildProcessSpawner } from "effect/process"
 import manifest from "../../../package.json"
 import { SessionID } from "@opencode/schema/session-id"
 import { Harness } from "../harness.js"
@@ -49,6 +49,7 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
+import { OpenCodeArtifacts } from "./artifacts.js"
 import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
@@ -66,6 +67,7 @@ export interface Options {
   readonly sources?: GitSources.Interface
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
+  readonly isRemoteHand?: boolean
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -73,7 +75,7 @@ export const open = Effect.fn("OpenCodeServer.open")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   options: Options,
 ) {
   const serverOptions = {
@@ -104,7 +106,7 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   options: Options,
 ) {
   return yield* make(
@@ -117,7 +119,13 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
-        [...replacements, ...Option.match(connections, { onNone: () => [], onSome: RenWorkspaceDriver.replacements })],
+        [
+          ...replacements,
+          ...Option.match(connections, {
+            onNone: () => [],
+            onSome: (found) => RenWorkspaceDriver.replacements(found, { isRemoteHand: options.isRemoteHand ?? false }),
+          }),
+        ],
       ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     refreshKey,
@@ -142,7 +150,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   >,
   initial: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   options: Options = {
     saved: Option.none(),
     directoryOf: (sessionId) => `/workspace/${sessionId}`,
@@ -204,6 +212,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     )
   const api = yield* client(fetch)
   const sources = options.sources ?? (yield* GitSources.make())
+  const ren = options.ren ?? Option.none()
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
@@ -251,12 +260,15 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       executions.get,
       options.directoryOf,
       sources,
-      Option.map(options.ren ?? Option.none(), (access) => ({
+      Option.map(ren, (access) => ({
         ...access,
         lastSpeaker,
       })),
       { egress: options.egress ?? false, lastUserMessage },
     ),
+  )
+  yield* Effect.forEach(Option.toArray(ren), (access) =>
+    plugins.register(OpenCodeArtifacts.make({ ren: access, connections, directoryOf: options.directoryOf })),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
@@ -301,18 +313,35 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
         ),
         Effect.flatMap(use),
       ),
+    git: (sessionId, use) =>
+      located(sessionId, Location.Service).pipe(
+        Effect.flatMap((location) =>
+          Option.match(
+            Option.flatMap(connections, (found) =>
+              Option.map(Option.fromNullishOr(location.workspaceID), (workspaceID) => ({
+                spawner: RenWorkspaceDriver.session(found, RenWorkspaceDriver.sessionIdOf(workspaceID)).spawner,
+                directory: location.directory,
+              })),
+            ),
+            {
+              onNone: () => Effect.fail(new Harness.Rejected({ message: `Session ${sessionId} has no environment` })),
+              onSome: Effect.succeed,
+            },
+          ),
+        ),
+        Effect.flatMap(use),
+      ),
     agents: (sessionId) => located(sessionId, Agent.Service).pipe(Effect.flatMap((agents) => agents.list())),
     skills: (sessionId) => located(sessionId, Skill.Service).pipe(Effect.flatMap((skills) => skills.list())),
     commands: (sessionId) => located(sessionId, Command.Service).pipe(Effect.flatMap((commands) => commands.list())),
     findFiles: (sessionId, input) =>
       located(sessionId, FileSystemSearch.Service).pipe(Effect.flatMap((search) => search.find(input))),
-    webSearchProviders: (sessionId) =>
-      located(sessionId, WebSearch.Service).pipe(Effect.flatMap((websearch) => websearch.providers())),
     credentials,
     sessions,
     transfer: Context.get(services, SessionTransfer.Service),
     workspaces: Context.get(services, Workspace.Service),
     hasEnvironmentConnections: Option.isSome(connections),
+    isRemoteHand: options.isRemoteHand ?? false,
     directoryOf: options.directoryOf,
     makeDirectory: options.makeDirectory ?? (() => Effect.void),
     activate: (sessionId) => located(sessionId, Effect.void),
@@ -339,7 +368,7 @@ export const client = (fetch: (request: Request) => Promise<Response>): Effect.E
     Effect.provideService(FetchHttpClient.Fetch, (input, init) => fetch(new Request(input, init))),
   )
 
-interface Environment {
+interface Hand {
   readonly files: FileSystem.Interface
   readonly vcs: Vcs.Interface
   readonly shell: Shell.Interface
@@ -354,7 +383,14 @@ export interface Instance {
   ) => Effect.Effect<A, E | Harness.NotFound>
   readonly environment: <A, E>(
     sessionId: string,
-    use: (services: Environment) => Effect.Effect<A, E>,
+    use: (services: Hand) => Effect.Effect<A, E>,
+  ) => Effect.Effect<A, E | Harness.NotFound | Harness.Rejected>
+  readonly git: <A, E>(
+    sessionId: string,
+    use: (hand: {
+      readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]
+      readonly directory: string
+    }) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E | Harness.NotFound | Harness.Rejected>
   readonly agents: (sessionId: string) => Effect.Effect<ReadonlyArray<Agent.Info>, Harness.NotFound>
   readonly skills: (sessionId: string) => Effect.Effect<ReadonlyArray<Skill.Info>, Harness.NotFound>
@@ -363,12 +399,12 @@ export interface Instance {
     sessionId: string,
     input: FileSystem.FindInput,
   ) => Effect.Effect<ReadonlyArray<FileSystem.Entry>, Harness.NotFound>
-  readonly webSearchProviders: (sessionId: string) => Effect.Effect<ReadonlyArray<WebSearch.Provider>, Harness.NotFound>
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
   readonly transfer: SessionTransfer.Interface
   readonly workspaces: Workspace.Interface
   readonly hasEnvironmentConnections: boolean
+  readonly isRemoteHand: boolean
   readonly directoryOf: (sessionId: string) => string
   readonly makeDirectory: (directory: string) => Effect.Effect<void>
   readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>

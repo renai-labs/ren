@@ -1,6 +1,6 @@
 # @ren/app
 
-The product SPA and its web host, built from shadcn's components in `@ren/ui`. Desktop and mobile hosts will import it through a dedicated entry point and supply their own `Platform`. Load the `react`, `interface` and `shadcn` skills before writing components.
+The product SPA and its web host, built from shadcn's components in `@ren/ui`. A desktop host will import it through a dedicated entry point and supply its own `Platform`. The mobile app (`packages/mobile`) has native screens and shares Ren's packages, not this one: logic it needs moves out of `src/` into the package that owns it. Load the `react`, `interface` and `shadcn` skills before writing components.
 
 ## Structure
 
@@ -10,7 +10,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
 - `src/routes/`: TanStack Router file routes. A route declares its loader, guard, search-param schema and pending and error components, then composes feature components. Keep logic out of routes.
 - `src/features/<domain>/`: product UI for one backend domain (components, query and mutation hooks, forms). Features never import each other; routes compose them. Each section of a page loads its own data; there is no page-level hook that returns a page object.
 - `src/components/`: app-wide compositions used by several features, such as the shell, the sidebars, the `Page` frame (`page.tsx`) and the theme provider.
-- `src/icons/`: every SVG the app draws. `heroicons.tsx` is the icon set (`vite.config.ts` aliases `@tabler/icons-react` to it), `brands.tsx` the brand marks, `logomark.tsx` Ren's mark, and `avatars/` the photo and logo presets as `.svg` files.
+- `src/icons/`: every SVG the app draws. `heroicons.tsx` is the icon set (`vite.config.ts` aliases `@tabler/icons-react` to it), `brands.tsx` the brand marks, `preferences.tsx` the filled icons no set has for the Preferences menus, `logomark.tsx` Ren's mark, and `avatars/` the photo and logo presets as `.svg` files.
 - `src/lib/`: the runtime (query client, API factory, auth client, router), preferences and the chat runtime. This is where effects and subscriptions live.
 
 ## Conventions
@@ -25,19 +25,19 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. D
 - In development, `LayoutShift.watch` logs every layout shift the user did not cause. Fix each one.
 - State lives in one place:
   - Server data lives in TanStack Query.
-  - Live chat state lives in `@ren/chat` atoms, read through `@ren/chat/react`; `useChatCacheBridge` writes a live title and status into the query cache.
-  - Only `features/session/chat-view.ts` reads the whole chat state during render. Components take its narrow values, never `ChatState.State`, so streaming doesn't re-render them.
+  - Live chat state lives in `@ren/chat` atoms, read through `@ren/chat/react`; `SessionPages.useLive` (`@ren/client/react`) writes a live title and status into the query cache.
+  - Only `ChatReact.useView` (`@ren/chat/react`), called from `features/session/use-chat.ts`, reads the whole chat state during render. Components take its narrow values, never `ChatState.State`, so streaming doesn't re-render them.
   - Anything shareable or restorable (filters, tabs, open panels, selection) lives in the URL as search params validated with Effect Schema.
   - Everything else lives in the component that owns it.
 - Auth goes through `better-auth/client` in `src/lib/auth.ts`. The session is a query (`sessionOptions(auth)`), guarded in `beforeLoad`.
-- Persist client-side settings with `Preference.make(key, schema, fallback)`. Keys carry a version (`theme.v1`); bump it when the shape changes.
+- Persist client-side settings with `Preference.make(key, schema, fallback)`. Keys carry a version (`theme.v1`); bump it when the shape changes. A settings row for one is `ChoiceRow` or `SwitchRow` from `src/components/preference-rows.tsx`.
 - Forms keep their values in component state and use shadcn's `Field` parts, with the error under the field and the submit button disabled while saving.
 - Toasts go through `toast` from `@ren/ui/sonner`.
 - Host capabilities come from `usePlatform()`. Check optional members before using them, because each host implements a different set. Keyboard shortcuts go through `Keyboard.useKeyDown`, file drops through `FileDrop.use`, and leaving the app through `platform.redirect`.
 
 ## Accepted exceptions
 
-- `features/session/use-chat.ts` (`useChat`) returns one object for a chat: the route's chat page and the task page's session sheet both render a chat from it, and its sections take narrow values from it. It reads the chat state through `useView` from `chat-view.ts`.
+- `features/session/use-chat.ts` (`useChat`) returns one object for a chat: the route's chat page and the task page's session sheet both render a chat from it, and its sections take narrow values from it. It reads the chat state through `ChatReact.useView`.
 - `lib/use-schedules.ts` (`useSchedules`) returns the list, filters and sheet state shared by the Scheduled page and a space's Scheduled tab.
 - Task list, task detail and task activity refresh every 5 seconds (`refreshEvery` in `lib/tasks.ts`), as main does, until tasks have a realtime subscription.
 

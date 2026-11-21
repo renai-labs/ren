@@ -88,7 +88,7 @@ export const make = Effect.gen(function* () {
   const listen = (webhookId: Webhook.ID, reason: Webhook.ModeReason) =>
     database.db
       .update(webhook)
-      .set({ mode: "listening", mode_reason: reason, updated_at: new Date() })
+      .set({ mode: "listening", mode_reason: reason, updated_at: sql`now()` })
       .where(and(eq(webhook.id, webhookId), eq(webhook.mode, "live")))
       .pipe(Effect.orDie)
 

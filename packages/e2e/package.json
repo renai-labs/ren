@@ -8,7 +8,7 @@
   "scripts": {
     "test": "playwright test",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b",
+    "typecheck": "tsrs -b",
     "chaos": "bun test --timeout 120000",
     "chaos:live": "CHAOS_MODE=live bun test --timeout 120000 chaos/cases/live-model.test.ts chaos/cases/litellm.test.ts chaos/cases/hot-reload-live.test.ts",
     "chaos:deployed": "CHAOS_MODE=deployed bun test --timeout 120000 chaos/cases/e2b.test.ts chaos/cases/soak.test.ts chaos/cases/hot-reload-e2b.test.ts chaos/cases/hot-reload-e2b-server.test.ts",
@@ -19,7 +19,7 @@
     "@effect/sql-pg": "catalog:",
     "@playwright/test": "catalog:",
     "@ren/brain": "workspace:*",
-    "@ren/environment-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/host-api": "workspace:*",
     "@ren/cell": "workspace:*",
     "@ren/client": "workspace:*",
@@ -32,7 +32,7 @@
     "@ren/util": "workspace:*",
     "@effect/platform-bun": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
+    "tsrs": "catalog:",
     "effect": "catalog:"
   }
 }

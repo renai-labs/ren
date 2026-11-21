@@ -5,12 +5,9 @@ import { Drive } from "../src/drive.js"
 const accepts = (path: string) => Exit.isSuccess(Schema.decodeUnknownExit(Drive.Path)(path))
 
 describe("Drive.Path", () => {
-  test.each(["q3.pdf", "reports/2026/q3.pdf", "notes v2.md", "résumé.pdf", ".env.example", "a..b"])(
-    "accepts %s",
-    (path) => {
-      expect(accepts(path)).toBe(true)
-    },
-  )
+  test.each(["reports/2026/q3.pdf", "a..b"])("accepts %s", (path) => {
+    expect(accepts(path)).toBe(true)
+  })
 
   test.each([
     "",
@@ -40,5 +37,16 @@ describe("Drive.Path", () => {
     const name = "a".repeat(255)
     expect(accepts([name, name, name].join("/"))).toBe(true)
     expect(accepts([name, name, name, name].join("/"))).toBe(false)
+  })
+})
+
+describe("Drive.typeOf", () => {
+  test("a TypeScript file is text, not an MPEG transport stream video", () => {
+    expect(["hello.ts", "worker.mts", "config.cts"].map(Drive.typeOf)).toEqual([
+      "text/typescript",
+      "text/typescript",
+      "text/typescript",
+    ])
+    expect(Drive.typeOf("clip.mp4")).toBe("video/mp4")
   })
 })

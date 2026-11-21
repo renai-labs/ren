@@ -21,40 +21,70 @@
     "transit": {
       "dependsOn": ["^transit"]
     },
-    "lint": {
-      "dependsOn": ["^typecheck"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts", "$TURBO_ROOT$/script/oxlint/**"],
-      "outputs": []
-    },
     "//#lint:root": {
-      "dependsOn": ["//#typecheck:root"],
-      "inputs": ["script/**", "oxlint.config.ts", "tsconfig.json"],
+      "inputs": ["$TURBO_DEFAULT$", "!docs/**", "!specs/**", "!**/*.md"],
       "outputs": []
     },
     "//#lint:rules": {
-      "inputs": ["packages/**/*.{ts,tsx}", "script/**", "!**/node_modules/**", "!**/generated/**", "!**/*.gen.ts"],
-      "outputs": []
-    },
-    "//#lint:unused": {
       "inputs": [
-        "packages/**",
+        "packages/**/*.{ts,tsx}",
         "script/**",
-        "knip.json",
-        "package.json",
-        "bun.lock",
-        "oxlint.config.ts",
-        ".opencode/plugins/**",
-        "!**/node_modules/**"
+        "!**/node_modules/**",
+        "!**/generated/**",
+        "!**/*.gen.ts",
+        "!packages/e2e/.runs/**",
+        "!**/.astro/**"
       ],
       "outputs": []
     },
-    "//#format:check": {
-      "inputs": ["**", "!**/node_modules/**", "!.turbo/**"],
+    "//#lint:unused": {
+      "inputs": ["$TURBO_DEFAULT$", "!docs/**", "!specs/**", "!**/*.md"],
       "outputs": []
+    },
+    "//#format:check": {
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": []
+    },
+    "@ren/mobile#check:bundle": {
+      "dependsOn": ["^transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!maestro/**",
+        "!**/*.md",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
+      "env": ["EXPO_PUBLIC_*"],
+      "outputs": []
+    },
+    "@ren/mobile#check:bundle:fast": {
+      "dependsOn": ["^transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!maestro/**",
+        "!**/*.md",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
+      "env": ["EXPO_PUBLIC_*"],
+      "outputs": []
+    },
+    "@ren/mobile#check:generated": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/ui/src/styles/index.css"],
+      "outputs": []
+    },
+    "@ren/mobile#check:doctor": {
+      "cache": false
     },
     "@ren/e2e#test": {
       "outputs": [],
       "cache": false
+    },
+    "@ren/site#check:routes": {
+      "inputs": ["src/pages/**", "script/check-routes.ts", "$TURBO_ROOT$/infra/aws/app-function.js"],
+      "outputs": []
     },
     "@ren/app#build": {
       "dependsOn": ["transit"],
@@ -69,6 +99,18 @@
     "test:all": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
+      "outputs": [],
+      "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"]
+    },
+    "@ren/site#test:all": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/script/test.ts",
+        "$TURBO_ROOT$/packages/test-harness/src/**",
+        "$TURBO_ROOT$/infra/aws/app-function.js"
+      ],
       "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
       "outputs": [],
       "passThroughEnv": ["REN_MEMORY_BUDGET_MIB", "REN_MEMORY_FLOOR_MIB", "REN_MEMORY_RESERVE_MIB"]

@@ -22,7 +22,10 @@ export class Service extends Context.Service<
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const http = yield* HttpClient.HttpClient
+    const http = HttpClient.mapRequest(
+      yield* HttpClient.HttpClient,
+      HttpClientRequest.setHeader("user-agent", `ren/${Release.version}`),
+    )
     const fs = yield* FileSystem.FileSystem
     const credentials = yield* Credentials.Service
     const url = process.env.REN_URL ?? Release.apiUrl
@@ -53,7 +56,7 @@ export const layer = Layer.effect(
         if (process.env.REN_TOKEN) return process.env.REN_TOKEN
         const origin = yield* server
         const stored = yield* credentials.get(origin)
-        if (!stored) return yield* Effect.fail(new Error(`Not logged in to ${origin.origin}. Run ren2 login.`))
+        if (!stored) return yield* Effect.fail(new Error(`Not logged in to ${origin.origin}. Run ren login.`))
         if (stored.expiresAt - 60_000 > (yield* Clock.currentTimeMillis)) return stored.accessToken
         const refreshed = yield* OAuth.discover(origin).pipe(
           Effect.flatMap((endpoints) =>

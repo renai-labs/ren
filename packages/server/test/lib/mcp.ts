@@ -18,7 +18,7 @@ const clientMetadata = {
   application_type: "native",
 }
 
-type App = ReturnType<typeof makeApp>
+type App = Pick<ReturnType<typeof makeApp>, "handler">
 
 const json =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -142,7 +142,7 @@ export const joinOrganization = async (app: App, ownerCookie: string, email: str
   return cookie
 }
 
-export const mcp = (app: App, body: unknown, headers: Record<string, string> = {}) =>
+export const mcp = (app: Pick<App, "handler">, body: unknown, headers: Record<string, string> = {}) =>
   app.handler(
     new Request(resource, {
       method: "POST",

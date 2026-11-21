@@ -1,0 +1,1 @@
+ALTER TABLE "oauth_session" ADD COLUMN "return_to" text;

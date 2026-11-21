@@ -1,3 +1,4 @@
+import { AppDetailSample } from "./app-detail.js"
 import { AppListingSample } from "./app-list.js"
 import { Loading } from "@ren/ui/loading"
 import { Button } from "@ren/ui/button"
@@ -5,39 +6,51 @@ import { Card } from "@ren/ui/card"
 import { Switch } from "@ren/ui/switch"
 import { Channels } from "../lib/channels.js"
 import { Routing } from "../lib/routing.js"
+import { inboxColumns } from "../lib/sessions.js"
 import { ChannelMark } from "./channel-mark.js"
 import { Textarea } from "@ren/ui/textarea"
 import { IconCircle, IconChevronDown } from "@tabler/icons-react"
 import { ChatSkeleton, ComposerFrame } from "./chat-skeleton.js"
 import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
-import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId } from "./page.js"
+import { PermissionRulesSample } from "./permission-rules.js"
+import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId, type PageWidth } from "./page.js"
 
-type SpaceSection = { title: string; description: (space: string) => string }
+type SpaceSection = { title: string; description?: (space: string) => string; width?: PageWidth }
 
-export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly overview: SpaceSection } = {
-  overview: { title: "Overview", description: (space) => `The name and description of ${space}.` },
+export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly inbox: SpaceSection } = {
+  inbox: { title: "Inbox", width: "full" },
+  overview: { title: "Overview", width: "wide" },
+  tasks: { title: "Tasks", width: "full" },
+  drive: { title: "Drive", width: "full" },
+  automations: { title: "Automations", width: "full" },
+  agents: { title: "Agents", description: (space) => `Agents that work in ${space}.` },
+  factory: {
+    title: "Factory",
+    description: (space) => `How tasks move between the agents in ${space}.`,
+    width: "full",
+  },
+  instructions: { title: "Instructions", description: (space) => `Guidance every agent follows in ${space}.` },
+  memory: {
+    title: "Memory",
+    description: (space) => `What agents remember between chats in ${space}.`,
+    width: "full",
+  },
+  permissions: {
+    title: "Permissions",
+    description: (space) => `Tools agents in ${space} can use, and which ones ask first.`,
+  },
   settings: {
     title: "Settings",
-    description: (space) => `The name, instructions and default model of ${space}.`,
+    description: (space) => `The name, description and default model of ${space}.`,
   },
+  compute: { title: "Compute", description: (space) => `Machines for ${space}’s brain and tools.` },
+  usage: { title: "Usage", width: "wide" },
   members: { title: "Members", description: (space) => `People who can use ${space}.` },
   apps: { title: "Apps", description: (space) => `Apps every chat in ${space} can use.` },
-  repositories: {
-    title: "Repositories",
-    description: (space) => `Repositories Ren can read in ${space}. To change code, ask Ren to clone one.`,
-  },
-  channels: {
-    title: "Channels",
-    description: (space) => `Channels where people can mention @Ren to work in ${space}.`,
-  },
-  credentials: { title: "Keys", description: (space) => `Keys every chat in ${space} can use.` },
-  schedules: { title: "Scheduled", description: (space) => `Work that starts in ${space} on a schedule.` },
-  webhooks: {
-    title: "Webhooks",
-    description: (space) => `URLs that start sessions in ${space} when another app sends a request.`,
-  },
-  factory: { title: "Factory", description: (space) => `Agents that work on tasks in ${space}.` },
+  repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
+  channels: { title: "Channels", description: (space) => `Where people mention @Ren to work in ${space}.` },
+  credentials: { title: "Secrets", description: (space) => `Secrets every chat in ${space} can use.` },
 }
 
 export function TasksSample() {
@@ -64,6 +77,48 @@ export function TasksSample() {
         </div>
       ))}
     </div>
+  )
+}
+
+export function FactorySample() {
+  return (
+    <Card className="mt-4 min-h-120 flex-1 gap-0 py-0 contain-size">
+      <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2 text-sm">
+        <span className="px-3">Flow</span>
+        <span className="px-3">spec.yaml</span>
+      </div>
+    </Card>
+  )
+}
+
+function TaskSkeleton() {
+  return (
+    <Loading label="Loading task" className="flex-1">
+      <div className="flex min-h-full flex-col gap-8 p-8 lg:flex-row">
+        <article className="flex flex-1 flex-col gap-6">
+          <h1 className="text-2xl font-semibold">Task title</h1>
+          <p>Task description and details.</p>
+          <h2 className="text-sm font-medium">Activity</h2>
+          <p className="text-sm text-muted-foreground">Task activity</p>
+        </article>
+        <aside className="flex w-64 flex-col gap-6 text-sm">
+          {["Status", "Priority", "Assignee", "Space", "Labels"].map((title) => (
+            <div key={title} className="flex flex-col gap-2">
+              <span>{title}</span>
+              <span className="text-muted-foreground">Task property</span>
+            </div>
+          ))}
+        </aside>
+      </div>
+    </Loading>
+  )
+}
+
+function TasksSkeleton() {
+  return (
+    <PageSkeleton title="Tasks" width="full" shape="tasks-first-load" actions={<div className="min-h-8" />}>
+      <TasksSample />
+    </PageSkeleton>
   )
 }
 
@@ -103,34 +158,25 @@ function SettingsSample() {
 }
 
 function SpaceSectionSample(props: { section: string }) {
-  const table = (columns: ReadonlyArray<string>) => (
-    <div className="flex flex-col gap-4">
-      <div className="min-h-8" />
-      <TableSample columns={columns} count={3} />
-    </div>
-  )
+  const table = (columns: ReadonlyArray<string>) => <TableSample columns={columns} count={3} />
+  if (props.section === "permissions") return <PermissionRulesSample />
   if (props.section === "members") return table(["Name", "Email", "Status", ""])
-  if (props.section === "credentials") return table(["Key", "Hosts", "Owner", ""])
+  if (props.section === "credentials") return table(["Secret", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
-  if (props.section === "schedules") return table(["Name", "Frequency", "Next run", "Status", ""])
+  if (props.section === "automations") return table(["Name", "Frequency", "Last run", "Next run", "Status", ""])
   if (props.section === "channels") return table(["Channel", "Provider", ""])
-  if (props.section === "factory") return <RowsSample count={3} />
-  if (props.section === "kanban")
+  if (props.section === "agents") return table(["Name", "Type", "Model", "Source", ""])
+  if (props.section === "factory") return <FactorySample />
+  if (props.section === "inbox") return table(inboxColumns)
+  if (props.section === "instructions")
     return (
-      <div className="flex gap-4 overflow-hidden">
-        {["Backlog", "Plan", "Build", "Review"].map((title) => (
-          <section key={title} className="flex w-72 shrink-0 flex-col gap-3">
-            <h2 className="text-sm font-medium">{title}</h2>
-            {Array.from({ length: 3 }, (_, index) => (
-              <Card key={index} className="gap-3 p-4">
-                <span className="text-sm">Task title</span>
-                <span className="text-xs text-muted-foreground">Task details</span>
-              </Card>
-            ))}
-          </section>
-        ))}
-      </div>
+      <Textarea
+        readOnly
+        aria-label="Space instructions"
+        placeholder="Instructions for your agents"
+        className="min-h-110 rounded-xl bg-card p-4 dark:bg-card"
+      />
     )
   return <RowsSample count={2} />
 }
@@ -138,74 +184,57 @@ function SpaceSectionSample(props: { section: string }) {
 export function SpaceSectionSkeleton() {
   const path = Routing.useRenderedPath()
   const shapeId = useShapeId("page")
+  const parts = path.split("/")
+  if (parts.at(3) === "tasks") return parts.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
   return (
     <Loading id={shapeId} label="Loading space">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-8">
-          <SpaceSectionSample section={path.split("/").at(3) ?? "overview"} />
+          <SpaceSectionSample section={parts.at(3) ?? "inbox"} />
         </div>
       </div>
     </Loading>
   )
 }
 
+function SpaceRouteSkeleton(props: { path: ReadonlyArray<string> }) {
+  const tab = props.path.at(3) ?? "inbox"
+  if (tab === "tasks") return props.path.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
+  const section = spaceSections[tab] ?? spaceSections.inbox
+  return (
+    <Page title={section.title} description={section.description?.("this space")} width={section.width} loading>
+      <SpaceSectionSample section={tab} />
+    </Page>
+  )
+}
+
 export function RouteSkeleton() {
   const path = Routing.useRenderedPath()
   if (path.startsWith("/sessions/")) return <ChatSkeleton />
-  if (path.startsWith("/tasks/"))
-    return (
-      <Loading label="Loading task" className="flex-1">
-        <div className="flex min-h-full flex-col gap-8 p-8 lg:flex-row">
-          <article className="flex flex-1 flex-col gap-6">
-            <h1 className="text-2xl font-semibold">Task title</h1>
-            <p>Task description and details.</p>
-            <h2 className="text-sm font-medium">Activity</h2>
-            <p className="text-sm text-muted-foreground">Task activity</p>
-          </article>
-          <aside className="flex w-64 flex-col gap-6 text-sm">
-            {["Status", "Priority", "Assignee", "Space", "Labels"].map((title) => (
-              <div key={title} className="flex flex-col gap-2">
-                <span>{title}</span>
-                <span className="text-muted-foreground">Task property</span>
-              </div>
-            ))}
-          </aside>
-        </div>
-      </Loading>
-    )
-  if (path.startsWith("/spaces/")) {
-    const tab = path.split("/").at(3) ?? "overview"
-    const section = spaceSections[tab] ?? spaceSections.overview
-    return (
-      <Page title={section.title} description={section.description("this space")} loading>
-        <SpaceSectionSample section={tab} />
-      </Page>
-    )
-  }
+  if (path.startsWith("/tasks/")) return <TaskSkeleton />
+  if (path === "/drive") return <PageSkeleton title="Drive" width="full" />
+  if (path === "/drive/artifacts") return <PageSkeleton title="Artifacts" width="full" />
+  if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton path={path.split("/")} />
   if (path === "/spaces")
     return (
-      <PageSkeleton
-        title="Spaces"
-        description="Each space gives a team its own credentials, apps and agents."
-        body="cards"
-      />
-    )
-  if (path === "/tasks")
-    return (
-      <PageSkeleton title="Tasks" width="full" shape="tasks-first-load">
-        <TasksSample />
+      <PageSkeleton title="Spaces" description="Each space gives a team its own credentials, apps and agents.">
+        <TableSample columns={["Space", "Description", "Members", ""]} />
       </PageSkeleton>
     )
-  if (path === "/schedules")
+  if (path === "/tasks") return <TasksSkeleton />
+  if (path === "/automations")
     return (
-      <PageSkeleton title="Scheduled" description="Work that starts on a schedule instead of a message.">
-        <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />
+      <PageSkeleton title="Automations" width="full">
+        <TableSample columns={["Name", "Frequency", "Last run", "Next run", "Status", ""]} />
       </PageSkeleton>
     )
-  if (path === "/marketplace")
+  if (path.startsWith("/apps/")) return <AppDetailSample />
+  if (path === "/apps")
     return (
       <PageSkeleton
-        title="Marketplace"
+        title="Apps"
+        width="wide"
+        actions={<div className="h-8 w-56" />}
         description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       >
         <AppListingSample />
@@ -255,8 +284,12 @@ function SettingsPageSkeleton() {
     general: "General",
     members: "Members",
     credentials: "Credentials",
+    memory: "Memory",
     providers: "Providers",
     channels: "Channels",
+    billing: "Billing & plans",
+    usage: "Usage",
+    permissions: "Permissions",
   }
   let body = <RowsSample />
   if (section === "members") body = <TableSample columns={["Name", "Email", "Role", ""]} />
@@ -298,11 +331,11 @@ function SettingsPageSkeleton() {
       <div className="flex flex-col gap-8">
         <Rows>
           {[
-            <Row key="email" title="Email" description="Contact support to change.">
-              <span className="text-sm">name@company.com</span>
-            </Row>,
             <Row key="name" title="Name">
               <span className="text-sm">Team member</span>
+            </Row>,
+            <Row key="email" title="Email" description="Contact support to change.">
+              <span className="text-sm">name@company.com</span>
             </Row>,
           ]}
         </Rows>
@@ -315,38 +348,53 @@ function SettingsPageSkeleton() {
             ]}
           </Rows>
         </Section>
-        <Section title="Chats">
+        <Section title="Typography">
           <Rows>
             {[
-              <Row key="detail" title="Detail" description="How much of Ren’s work a chat shows.">
-                <Button variant="outline">Compact</Button>
+              <Row key="ui-font" title="Interface font">
+                <Button variant="outline">SF Pro</Button>
               </Row>,
-              <Row key="delivery" title="Messages sent while Ren works">
-                <Button variant="outline">Steer</Button>
-              </Row>,
-              <Row
-                key="notify"
-                title="Notify me when Ren finishes or needs input"
-                description="Only while Ren’s tab is in the background."
-              >
-                <Switch aria-label="Notify me" />
+              <Row key="code-font" title="Code font">
+                <Button variant="outline">IBM Plex Mono</Button>
               </Row>,
             ]}
           </Rows>
         </Section>
-        <Section title="Organization">
+        <Section title="Timeline">
           <Rows>
             {[
+              <Row key="detail" title="Timeline detail">
+                <Button variant="outline">Compact</Button>
+              </Row>,
+              <Row key="width" title="Timeline width">
+                <Button variant="outline">Comfortable</Button>
+              </Row>,
               <Row
-                key="organization"
-                title="Organization"
-                description="Leaving archives your private space and deletes your personal credentials here."
+                key="background"
+                title="Background activity"
+                description="Running subagents and shells, above the composer."
               >
-                <Button variant="outline" size="sm">
-                  Leave organization
-                </Button>
+                <Button variant="outline">Left</Button>
               </Row>,
             ]}
+          </Rows>
+        </Section>
+        <Section title="Chats">
+          <Rows>
+            {[
+              <Row key="delivery" title="Messages sent while Ren works">
+                <Button variant="outline">Steer</Button>
+              </Row>,
+            ]}
+          </Rows>
+        </Section>
+        <Section title="Notifications">
+          <Rows>
+            {["Ren finishes", "Permissions", "Questions", "Errors", "Play a sound"].map((title) => (
+              <Row key={title} title={title} description="When Ren is done.">
+                <Switch aria-label={title} />
+              </Row>
+            ))}
           </Rows>
         </Section>
         <Section title="Security">
@@ -355,6 +403,17 @@ function SettingsPageSkeleton() {
               <Row key="password" title="Password">
                 <Button variant="outline" size="sm">
                   Change password
+                </Button>
+              </Row>,
+            ]}
+          </Rows>
+        </Section>
+        <Section title="Organization">
+          <Rows>
+            {[
+              <Row key="organization" title="Organization">
+                <Button variant="outline" size="sm">
+                  Leave organization
                 </Button>
               </Row>,
             ]}
@@ -369,11 +428,12 @@ function SettingsPageSkeleton() {
         {
           members: "Everyone in your organization.",
           providers: "Subscriptions your agents run on.",
-          credentials: "App accounts and keys you can use.",
+          credentials: "App accounts and secrets you can use.",
           channels: "Invoke Ren from where your team already works.",
+          permissions: "What agents in every space may do, and what they ask first.",
         }[section]
       }
-      actions={["members", "credentials", "providers"].includes(section) ? <div className="min-h-8" /> : undefined}
+      tabs={["members", "credentials", "permissions"].includes(section) ? <div className="min-h-8" /> : undefined}
       loading
     >
       {body}

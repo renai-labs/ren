@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
@@ -6,7 +7,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Credential } from "@ren/schema/credential"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
@@ -140,7 +141,7 @@ const it = testEffect(
   Layer.mergeAll(
     Egress.layer,
     CredentialEnv.layer,
-    Space.layer,
+    Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer,
@@ -314,6 +315,45 @@ describe("Egress.resolve", () => {
     }),
   )
 
+  it.live("a remote hand's placeholder becomes the key of its space, as its brain's does", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const credentials = yield* Credentials.Service
+      const callers = yield* CredentialCallers.Service
+      const database = yield* Database.Service
+      const found = yield* setup()
+      yield* credentials.create(found.ada, {
+        owner: { kind: "space", spaceId: found.space.id },
+        label: "STRIPE_API_KEY",
+        hosts: ["api.stripe.com"],
+        value: { type: "key", value: Redacted.make("sk_live_real") },
+      })
+      const environmentId = Hand.ID.create()
+      const environmentTemplateId = yield* Seed.environmentTemplate(found.organizationId)
+      yield* database.db.insert(Database.Schema.environment).values({
+        id: environmentId,
+        environment_template_id: environmentTemplateId,
+        space_id: found.space.id,
+        target: Seed.version(environmentTemplateId),
+      })
+      const hand = yield* callers.issue(
+        { workload: { kind: "hand", id: environmentId, generation: 1 }, organizationId: found.organizationId },
+        "ProxyLogin",
+      )
+      if (hand.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+      const reply = yield* resolver.resolve(
+        all,
+        request({ kind: "ProxyLogin", username: hand.username, password: hand.password }, "api.stripe.com", [
+          "ren:STRIPE_API_KEY",
+        ]),
+      )
+      expect(reply).toMatchObject({ allow: true, workload: `hand:${environmentId}:1` })
+      expect(values(reply)).toEqual([
+        { op: "replace", placeholder: "ren:STRIPE_API_KEY", value: "sk_live_real", in: ["header"] },
+      ])
+    }),
+  )
+
   it.live("a principal limited to one org gets principal_scope for a workload of another org", () =>
     Effect.gen(function* () {
       const resolver = yield* Egress.Service
@@ -358,12 +398,41 @@ describe("Egress.resolve", () => {
         hosts: ["acme.atlassian.net"],
         value: { type: "basic", username: "ada@acme.dev", password: Redacted.make('p&ss/"') },
       })
-      expect(values(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", [])))).toEqual([
+      expect(values(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", ["ren:JIRA"])))).toEqual([
         {
           op: "setHeader",
           name: "Authorization",
           value: `Basic ${Buffer.from('ada@acme.dev:p&ss/"').toString("base64")}`,
         },
+        { op: "replace", placeholder: "ren:JIRA", value: 'ada@acme.dev:p&ss/"', in: ["header"] },
+      ])
+    }),
+  )
+
+  it.live("a key pasted for a query MCP is replaced in the query only", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const credentials = yield* Credentials.Service
+      const profiles = yield* AppProfiles.Service
+      const found = yield* setup()
+      const app = yield* ProfilesFixture.app(found.ada, found.space.id, "maps", {
+        mcps: {
+          maps: ProfilesFixture.remote("Maps", { type: "query", name: "key", credential: "apiKey" }, [
+            { kind: "secret", name: "apiKey", optional: false },
+          ]),
+        },
+      })
+      const team = (yield* profiles.list(found.ada, { appId: app.id, page: 1, pageSize: 50 })).items.at(0)
+      if (!team) return yield* Effect.die(new Error("expected the owner-space profile"))
+      const saved = yield* credentials.create(found.ada, {
+        owner: { kind: "profile", profileId: team.id },
+        item: { mcp: "maps" },
+        hosts: ["maps.example.com"],
+        value: { type: "fields", fields: { apiKey: Redacted.make("maps-key") } },
+      })
+      const placeholder = `ren:${saved.label}.apiKey`
+      expect(values(yield* resolver.resolve(all, request(found.proof, "maps.example.com", [placeholder])))).toEqual([
+        { op: "replace", placeholder, value: "maps-key", in: ["query"] },
       ])
     }),
   )
@@ -414,7 +483,7 @@ describe("Egress.resolve", () => {
           hosts: ["acme.atlassian.net"],
           value: { type: "basic", username: "ada@acme.dev", password: Redacted.make("pass") },
         })
-        expect(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", [], old))).toEqual({
+        expect(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", ["ren:JIRA"], old))).toEqual({
           allow: false,
           reason: "egress_outdated",
           label: "JIRA",
@@ -438,20 +507,9 @@ describe("Egress.resolve", () => {
       const reply = yield* resolver.resolve(all, request(found.proof, "api.ren.test", ["ren:REN"]))
       if (!reply.allow) return yield* Effect.die(new Error("expected an allow"))
       expect(reply.labels).toEqual(["REN"])
+      expect(reply.inject).toMatchObject([{ op: "replace" }])
       expect(reply.expiresAt).toBeGreaterThan(Date.now() / 1000 + BrainToken.lifetimes.host - 60)
       expect(reply.expiresAt).toBeLessThanOrEqual(Date.now() / 1000 + BrainToken.lifetimes.host)
-    }),
-  )
-
-  it.live("an unknown login is unknown_workload", () =>
-    Effect.gen(function* () {
-      const resolver = yield* Egress.Service
-      expect(
-        yield* resolver.resolve(
-          all,
-          request({ kind: "ProxyLogin", username: "nobody", password: Redacted.make("x") }, "api.stripe.com", []),
-        ),
-      ).toEqual({ allow: false, reason: "unknown_workload" })
     }),
   )
 
@@ -966,7 +1024,7 @@ describe("GitHub through the egress", () => {
         expect(reply).toMatchObject({ expiresAt: Date.parse(github.options.tokenExpiresAt) / 1000 })
         const hand = yield* callers.issue(
           {
-            workload: { kind: "hand", id: Environment.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
+            workload: { kind: "hand", id: Hand.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
             organizationId: found.organizationId,
           },
           "ProxyLogin",

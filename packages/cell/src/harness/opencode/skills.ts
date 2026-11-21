@@ -6,7 +6,7 @@ import { Permission } from "@opencode/core/permission"
 import type { Plugin } from "@opencode/plugin/effect"
 import { Agent } from "@opencode/schema/agent"
 import { Skill } from "@opencode/schema/skill"
-import type { EnvironmentCopies } from "@ren/brain/environment/copies"
+import type { HandCopies } from "@ren/brain/hand/copies"
 import type { SkillSource } from "@ren/brain/skill/source"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Effect, Equal, Hash, Option, Ref, Schema, Struct } from "effect"
@@ -17,7 +17,7 @@ export interface Registration {
   readonly info: Skill.Info
   readonly identity: string
   readonly directory: string
-  readonly files: Option.Option<EnvironmentCopies.Copy>
+  readonly files: Option.Option<HandCopies.Copy>
   readonly source?: SkillSource.Pointer
 }
 
@@ -31,7 +31,7 @@ const noEnvironment =
 export const make = Effect.fnUntraced(function* (input: {
   readonly context: Pick<Plugin.Context, "skill" | "tool" | "session" | "agent" | "location">
   readonly isSession: boolean
-  readonly hasEnvironment: boolean
+  readonly hasWorkspace: boolean
   readonly sources: GitSources.Interface["skills"]
   readonly apps: Option.Option<AppCatalog.Info>
   readonly onPrompt: Effect.Effect<void>
@@ -47,7 +47,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const current = yield* Ref.make<ReadonlyArray<Registration>>([])
   const entriesOf = (apps: Option.Option<AppCatalog.Info>) =>
     Option.match(apps, { onNone: () => [], onSome: (info) => info.catalog.skills })
-  const hasEnvironment = input.hasEnvironment
+  const hasWorkspace = input.hasWorkspace
   const prepare = Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
     const previous = yield* Ref.get(current)
     const prepared = yield* Effect.forEach(
@@ -76,7 +76,7 @@ export const make = Effect.fnUntraced(function* (input: {
                 name: Skill.Name.make(entry.slug),
                 description: declaration.description,
                 path: AbsolutePath.make(`${directory}/skill.md`),
-                content: `${declaration.instructions}${hasFiles && !hasEnvironment ? noEnvironment : ""}`,
+                content: `${declaration.instructions}${hasFiles && !hasWorkspace ? noEnvironment : ""}`,
               },
             },
           ] satisfies ReadonlyArray<Registration>
@@ -110,7 +110,7 @@ export const make = Effect.fnUntraced(function* (input: {
           info: Struct.evolve(read.skill, {
             id: () => Skill.ID.make(entry.slug),
             path: () => AbsolutePath.make(`${directory}/skill.md`),
-            content: (text) => `${text}${hasEnvironment ? "" : noEnvironment}`,
+            content: (text) => `${text}${hasWorkspace ? "" : noEnvironment}`,
           }),
         }
         return [registration]
@@ -181,7 +181,7 @@ export const make = Effect.fnUntraced(function* (input: {
     isChanged,
     // oxlint-disable-next-line ren/no-comments -- The files of each loaded skill, for the copy before an environment tool.
     items: (): ReadonlyArray<OpenCodeCopies.Item> =>
-      hasEnvironment
+      hasWorkspace
         ? [...loaded.values()].flatMap((registration) =>
             Option.match(registration.files, {
               onNone: () => [],

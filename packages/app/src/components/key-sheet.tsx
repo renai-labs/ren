@@ -69,7 +69,7 @@ function useSave(key: Key, onDone: () => void) {
   }
 }
 
-function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() => void) | undefined }) {
+function KeyForm(props: { credential: Key; onClose: () => void }) {
   const key = props.credential
   const { api } = RouterContext.useRouterContext()
   const me = useMe()
@@ -97,7 +97,7 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
         setError("")
         void saving
           .save({ name, hosts: listed, owner, value })
-          .catch((failure: unknown) => setError(errorMessage(failure, "Couldn’t save the key. Try again.")))
+          .catch((failure: unknown) => setError(errorMessage(failure, "Couldn’t save the secret. Try again.")))
       }}
     >
       <SheetHeader>
@@ -126,16 +126,16 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
         </Field>
         {rotatable ? (
           <Field>
-            <FieldLabel htmlFor="key-value">New key</FieldLabel>
+            <FieldLabel htmlFor="key-value">New secret</FieldLabel>
             <Input
               id="key-value"
               type="password"
               autoComplete="off"
               value={value}
               onChange={(event) => setValue(event.currentTarget.value)}
-              placeholder="Paste to replace the current key"
+              placeholder="Paste to replace the current secret"
             />
-            <FieldDescription>Leave empty to keep the current key.</FieldDescription>
+            <FieldDescription>Leave empty to keep the current secret.</FieldDescription>
           </Field>
         ) : null}
         {owner === "" ? null : (
@@ -171,7 +171,7 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
               placeholder="api.stripe.com"
             />
             <FieldDescription>
-              Ren adds the key only to requests to these hosts. Separate them with commas.
+              Ren adds the secret only to requests to these hosts. Separate them with commas.
             </FieldDescription>
           </Field>
         )}
@@ -193,7 +193,7 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
         onOpenChange={setDeleting}
         confirmation={{
           title: `Delete ${key.label}?`,
-          description: `Chats that use ${key.label} lose it at once: their next request to ${key.hosts.includes(anyHost) ? "any website" : key.hosts.join(", ")} gets no key.`,
+          description: `Chats that use ${key.label} lose it at once: their next request to ${key.hosts.includes(anyHost) ? "any website" : key.hosts.join(", ")} gets no secret.`,
           action: "Delete",
         }}
         onConfirm={() =>
@@ -202,10 +202,9 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
             {
               onSuccess: () => {
                 toast.success(`${key.label} deleted`)
-                props.onRemoved?.()
                 props.onClose()
               },
-              onError: (failure) => toast.error("Couldn’t delete the key", { description: errorMessage(failure) }),
+              onError: (failure) => toast.error("Couldn’t delete the secret", { description: errorMessage(failure) }),
             },
           )
         }
@@ -214,22 +213,13 @@ function KeyForm(props: { credential: Key; onClose: () => void; onRemoved?: (() 
   )
 }
 
-export function KeySheet(props: {
-  credential: Key | undefined
-  onClose: () => void
-  onRemoved?: (() => void) | undefined
-}) {
+export function KeySheet(props: { credential: Key | undefined; onClose: () => void }) {
   return (
     <Sheet open={props.credential !== undefined} onOpenChange={(open) => (open ? undefined : props.onClose())}>
       <SheetContent // ast-grep-ignore: require-overlay-title -- KeyForm renders the SheetTitle
       >
         {props.credential ? (
-          <KeyForm
-            key={props.credential.id}
-            credential={props.credential}
-            onClose={props.onClose}
-            onRemoved={props.onRemoved}
-          />
+          <KeyForm key={props.credential.id} credential={props.credential} onClose={props.onClose} />
         ) : null}
       </SheetContent>
     </Sheet>

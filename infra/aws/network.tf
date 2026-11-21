@@ -96,6 +96,13 @@ resource "aws_lb_listener" "https" {
   }
 }
 
+resource "aws_lb_listener_certificate" "alias" {
+  count = var.alias_domain == null ? 0 : 1
+
+  listener_arn    = aws_lb_listener.https.arn
+  certificate_arn = aws_acm_certificate_validation.alias[0].certificate_arn
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80

@@ -2,17 +2,26 @@ export * as ClientCommand from "./client-command.js"
 
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 
-export type ID = "model.choose" | "session.compact" | "session.undo" | "session.redo"
+export type ID =
+  | "model.choose"
+  | "session.compact"
+  | "session.undo"
+  | "session.redo"
+  | "session.new"
+  | "panel.terminal"
+  | "file.open"
+  | "session.rename"
+  | "apps.open"
 
-export interface Option {
-  readonly id: string
+export interface Option<I extends string = string> {
+  readonly id: I
   readonly trigger: string
   readonly arguments?: boolean
+  readonly aliases?: ReadonlyArray<string>
   readonly type: "builtin" | "custom"
 }
 
-export interface Command extends Option {
-  readonly id: ID
+export interface Command extends Option<ID> {
   readonly description: string
   readonly type: "builtin"
 }
@@ -22,7 +31,15 @@ export const builtins: ReadonlyArray<Command> = [
   { id: "session.compact", trigger: "compact", description: "Compact chat", type: "builtin" },
   { id: "session.undo", trigger: "undo", description: "Undo last message", type: "builtin" },
   { id: "session.redo", trigger: "redo", description: "Restore undone messages", type: "builtin" },
+  { id: "session.new", trigger: "clear", aliases: ["new"], description: "New chat", type: "builtin" },
+  { id: "panel.terminal", trigger: "terminal", description: "Open the terminal", type: "builtin" },
+  { id: "file.open", trigger: "open", description: "Open a file", arguments: true, type: "builtin" },
+  { id: "session.rename", trigger: "rename", description: "Rename this chat", arguments: true, type: "builtin" },
+  { id: "apps.open", trigger: "apps", description: "Connect or manage apps", type: "builtin" },
 ]
+
+export const leavesComposer = (id: ID) =>
+  id === "panel.terminal" || id === "session.rename" || id === "apps.open" || id === "session.new"
 
 export const offered = (available: Readonly<Record<ID, boolean>>) => builtins.filter((item) => available[item.id])
 
@@ -33,7 +50,7 @@ export const parseSlashCommand = (text: string) => {
   return { name, input: separator === -1 ? "" : text.slice(separator).trim() }
 }
 
-export const parse = (options: ReadonlyArray<Option>, text: string) => {
+export const parse = <I extends string>(options: ReadonlyArray<Option<I>>, text: string) => {
   const command = parseSlashCommand(text)
   if (!command) return
   const option = options.find((item) => item.type === "builtin" && item.arguments && item.trigger === command.name)
@@ -46,6 +63,7 @@ export interface Suggestion {
   readonly trigger: string
   readonly description?: string | undefined
   readonly client?: ID
+  readonly aliases?: ReadonlyArray<string> | undefined
 }
 
 export const suggestions = (
@@ -54,7 +72,6 @@ export const suggestions = (
   query: string,
 ): ReadonlyArray<Suggestion> =>
   [
-    ...brain.map((item) => ({ value: item.name, trigger: item.name, description: item.description })),
     ...client
       .filter((item) => !brain.some((command) => command.name === item.trigger))
       .map((item) => ({
@@ -62,5 +79,9 @@ export const suggestions = (
         trigger: item.trigger,
         description: item.description,
         client: item.id,
+        aliases: item.aliases,
       })),
-  ].filter((item) => item.trigger.toLowerCase().includes(query.toLowerCase()))
+    ...brain.map((item) => ({ value: item.name, trigger: item.name, description: item.description })),
+  ].filter((item: Suggestion) =>
+    [item.trigger, ...(item.aliases ?? [])].some((name) => name.toLowerCase().includes(query.toLowerCase())),
+  )

@@ -1,5 +1,5 @@
-# The site and the web app: static builds in a private bucket behind CloudFront. The site is served
-# at the root, the app under /app/.
+# The site and the web app: static builds in a private bucket behind CloudFront. The site's files sit
+# at the bucket's root and the app's under /app/; both serve pages at the root of the domain.
 
 resource "aws_s3_bucket" "app" {
   bucket = "${var.name}-app-${data.aws_caller_identity.current.account_id}"
@@ -37,38 +37,24 @@ resource "aws_cloudfront_origin_access_control" "app" {
   signing_protocol                  = "sigv4"
 }
 
-# A path under /ren2/ (CLI releases) or with a file extension is a file and goes to the bucket. Without
-# one, a path under /app/ is a client route, so it gets the app's index; any other path is a site page,
-# so it gets that directory's index.
+# /install is the CLI installer, /ren/install.sh. A path under /ren/ (CLI releases) or with a file
+# extension is a file and goes to the bucket; the app's files sit under /app/. The app's pages are at the root, so any other path under /app is an old
+# link: it redirects to the same page without /app and sets the signed-in hint, because whoever opens it
+# wants the app. A site section gets that directory's index and /home the landing page. / gets the app
+# when the app has set the hint cookie and the landing page when it has not. Every other path is a page
+# of the app.
 resource "aws_cloudfront_function" "app" {
   name    = "${var.name}-app"
   runtime = "cloudfront-js-2.0"
   publish = true
-  code    = <<-EOF
-    function handler(event) {
-      var request = event.request
-      var uri = request.uri
-      if (uri === "/app") {
-        return { statusCode: 301, statusDescription: "Moved Permanently", headers: { location: { value: "/app/" } } }
-      }
-      if (uri.startsWith("/ren2/") || uri.split("/").pop().indexOf(".") !== -1) {
-        return request
-      }
-      if (uri.startsWith("/app/")) {
-        request.uri = "/app/index.html"
-      } else {
-        request.uri = uri.endsWith("/") ? uri + "index.html" : uri + "/index.html"
-      }
-      return request
-    }
-  EOF
+  code    = file("${path.module}/app-function.js")
 }
 
 resource "aws_cloudfront_distribution" "app" {
   enabled         = true
   is_ipv6_enabled = true
   comment         = "${var.name} app"
-  aliases         = [var.domain]
+  aliases         = concat([var.domain], local.alias_published ? [var.alias_domain.name] : [])
   http_version    = "http2"
   price_class     = "PriceClass_100"
 
@@ -94,7 +80,7 @@ resource "aws_cloudfront_distribution" "app" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.this.certificate_arn
+    acm_certificate_arn      = var.alias_domain == null ? aws_acm_certificate_validation.this.certificate_arn : aws_acm_certificate_validation.alias[0].certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }

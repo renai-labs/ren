@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width" /><title>Community notebook</title
+  ><style>
+    :root {
+      font: 16px/1.6 system-ui;
+      color: #203c38;
+      background: #f4f6ef;
+    }
+    main {
+      max-width: 740px;
+      margin: 6vh auto;
+      padding: 24px;
+    }
+    section {
+      background: white;
+      border: 1px solid #cad8cf;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+    input,
+    button {
+      font: inherit;
+      padding: 10px;
+      border: 1px solid #93ada0;
+      border-radius: 5px;
+    }
+    input {
+      width: 65%;
+    }
+    button {
+      cursor: pointer;
+      background: #203c38;
+      color: white;
+    }
+    li {
+      padding: 12px 0;
+    }
+    li button {
+      margin-left: 8px;
+      font-size: 0.8rem;
+    }
+    small {
+      color: #4b675c;
+    }
+  </style>
+  <main>
+    <small>LOCAL CANDIDATE · DURABLE OBJECT SQLITE</small>
+    <h1>Community notebook</h1>
+    <p>A guestbook and a shared realtime room. Messages stay after a restart.</p>
+    <section>
+      <h2>Guestbook</h2>
+      <form id="guest">
+        <label for="entry">Leave a note</label>
+        <p><input id="entry" maxlength="500" required /><button>Save</button></p>
+      </form>
+      <ul id="entries"></ul>
+    </section>
+    <section>
+      <h2>Realtime room</h2>
+      <p id="connection" role="status">Connecting…</p>
+      <ul id="messages" aria-live="polite"></ul>
+      <form id="chat">
+        <label for="message">Message</label>
+        <p><input id="message" maxlength="500" required /><button>Send</button></p>
+      </form>
+    </section>
+    <p id="error" role="alert"></p>
+  </main>
+  <script type="module">
+    const error = document.querySelector("#error")
+    async function request(path, options) {
+      const response = await fetch(path, options)
+      if (!response.ok) throw Error(await response.text())
+      return response.status === 204 ? null : response.json()
+    }
+    async function refresh() {
+      const data = await request("/api/entries")
+      document.querySelector("#entries").replaceChildren(
+        ...data.entries.map((entry) => {
+          const li = document.createElement("li"),
+            text = document.createElement("span")
+          text.textContent = entry.text
+          li.append(text)
+          for (const action of ["Edit", "Delete"]) {
+            const button = document.createElement("button")
+            button.textContent = action
+            button.onclick = async () => {
+              try {
+                if (action === "Delete") await request("/api/entries/" + entry.id, { method: "DELETE" })
+                else {
+                  const value = prompt("Edit your note", entry.text)
+                  if (value === null) return
+                  await request("/api/entries/" + entry.id, { method: "PUT", body: JSON.stringify({ text: value }) })
+                }
+                await refresh()
+              } catch (e) {
+                error.textContent = e.message
+              }
+            }
+            li.append(button)
+          }
+          return li
+        }),
+      )
+    }
+    document.querySelector("#guest").onsubmit = async (event) => {
+      event.preventDefault()
+      try {
+        await request("/api/entries/" + crypto.randomUUID(), {
+          method: "PUT",
+          body: JSON.stringify({ text: document.querySelector("#entry").value }),
+        })
+        event.target.reset()
+        await refresh()
+      } catch (e) {
+        error.textContent = e.message
+      }
+    }
+    function show(message) {
+      const li = document.createElement("li")
+      li.textContent = message.text
+      document.querySelector("#messages").append(li)
+    }
+    const socket = new WebSocket(location.origin.replace(/^http/, "ws") + "/room")
+    socket.onopen = () => (document.querySelector("#connection").textContent = "Connected · shared room")
+    socket.onclose = () => (document.querySelector("#connection").textContent = "Disconnected · reload to reconnect")
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data)
+      if (message.error) error.textContent = message.error
+      else show(message)
+    }
+    document.querySelector("#chat").onsubmit = (event) => {
+      event.preventDefault()
+      if (socket.readyState !== WebSocket.OPEN) {
+        error.textContent = "Room is disconnected"
+        return
+      }
+      socket.send(document.querySelector("#message").value)
+      event.target.reset()
+    }
+    try {
+      await refresh()
+      ;(await request("/api/messages")).forEach(show)
+    } catch (e) {
+      error.textContent = e.message
+    }
+  </script>
+</html>

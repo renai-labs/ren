@@ -16,9 +16,17 @@ export type Display = typeof Display.Type
 
 export const preference = Preference.make("tasks.display.v1", Display, {
   layout: "list",
-  groupBy: "space",
+  groupBy: "status",
   orderBy: "created",
   direction: "desc",
   showEmpty: false,
-  properties: ["status", "priority", "assignee", "labels"],
+  properties: ["status", "priority", "assignee", "space", "labels"],
 })
+
+export const scoped = (display: Display, spaceId: string | undefined) => {
+  const groupBy = spaceId && display.groupBy === "space" ? "status" : display.groupBy
+  return {
+    groupBy,
+    properties: display.properties.filter((property) => property !== "space" || (!spaceId && groupBy !== "space")),
+  }
+}

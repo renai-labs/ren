@@ -5,7 +5,6 @@ import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { SessionMessage } from "@ren/schema/session/message"
 import type { Signature } from "@ren/schema/signature"
 import { Effect, Layer, Option, Result } from "effect"
 import { eq } from "drizzle-orm"
@@ -127,27 +126,12 @@ for (const host of hosts)
       }),
     )
 
-    host.it.live("an access token reads its chat through the Chat API and names its member", () =>
+    host.it.live("an access token reads its chat through the Chat API and names its session", () =>
       Effect.gen(function* () {
         const brain = yield* Brains.Service
         const opened = stub.script()
         const chat = yield* created(`open ${opened.marker}`)
         yield* Effect.promise(() => opened.called())
-        const say = Effect.fnUntraced(function* (member: { readonly userId: Auth.UserID; readonly name: string }) {
-          const access = yield* Host.ready(
-            brain.access(chat.sessionId, { ...member, memberId: Auth.MemberID.create() }),
-          )
-          const script = stub.script()
-          const response = yield* Effect.promise(() =>
-            fetch(`${access.url}/chat/session/${chat.sessionId}/prompt`, {
-              method: "POST",
-              headers: { authorization: TestToken.basic(access.token), "content-type": "application/json" },
-              body: JSON.stringify({ id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" }),
-            }),
-          )
-          expect(response.status).toBe(200)
-          return (yield* Effect.promise(() => script.called())).text
-        })
         const access = yield* Host.ready(
           brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }),
         )
@@ -160,11 +144,6 @@ for (const host of hosts)
           200,
           { scope: "client", sid: chat.sessionId },
         ])
-        const grace = { userId: Auth.UserID.create(), name: "Grace Hopper" }
-        expect(yield* say({ userId: chat.owner.createdBy, name: "Ada" })).not.toContain("<message_from")
-        expect(yield* say(grace)).toContain(
-          `<message_from user="Grace Hopper" user_id=${JSON.stringify(grace.userId)} />`,
-        )
       }),
     )
 

@@ -10,7 +10,7 @@ import { DateTime } from "effect"
 
 export type Activity = "idle" | "running"
 
-export type PendingStatus = "starting" | "steering" | "stranded" | "queued"
+export type PendingStatus = "starting" | "steering" | "stranded" | "queued" | "unsent" | "unreachable"
 
 export type PendingUpdate = SessionInbox.Info | SessionInbox.Delivery | undefined
 
@@ -30,8 +30,13 @@ export interface State {
   readonly expired: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly shells: Readonly<Record<string, Shell.Info>> | undefined
   readonly outbox: ReadonlySet<string>
+  readonly stalled: ReadonlyMap<string, "unsent" | "unreachable">
   readonly compacting: Readonly<Record<string, Compacting>>
   readonly history: ReadonlySet<string>
+  // oxlint-disable-next-line ren/no-comments -- Sessions that show a page of Ren's saved history with older messages behind it: the brain's read stops at its oldest message (#253).
+  readonly partial: ReadonlySet<string>
+  // oxlint-disable-next-line ren/no-comments -- Sessions whose messages came from a read, not only from events or a prompt: only those can be a complete history or need older pages to cover what shows.
+  readonly loaded: ReadonlySet<string>
   readonly connection: number
   readonly activeOverlay: ReadonlyMap<string, Activity | undefined> | undefined
   readonly pendingOverlay: Readonly<Record<string, ReadonlyMap<string, PendingUpdate>>>
@@ -48,8 +53,11 @@ export const empty: State = {
   expired: {},
   shells: undefined,
   outbox: new Set(),
+  stalled: new Map(),
   compacting: {},
   history: new Set(),
+  partial: new Set(),
+  loaded: new Set(),
   connection: 0,
   activeOverlay: undefined,
   pendingOverlay: {},
@@ -68,6 +76,13 @@ export const drop = <V>(record: Readonly<Record<string, V>>, id: string): Readon
 export const messages = (state: State, sessionID: string): ReadonlyArray<SessionMessage.Info> =>
   state.messages[sessionID] ?? none
 
+export const model = (state: State, sessionID: string) =>
+  state.info[sessionID]?.model ??
+  messages(state, sessionID).findLast(
+    (message): message is SessionMessage.Assistant | SessionMessage.ModelSwitched =>
+      message.type === "assistant" || message.type === "model-switched",
+  )?.model
+
 export const pending = (state: State, sessionID: string): ReadonlyArray<SessionInbox.Info> =>
   state.pending[sessionID] ?? none
 
@@ -83,6 +98,8 @@ export const pendingStatus = (state: State, sessionID: string, inboxID: string):
   const items = pending(state, sessionID)
   const item = items.find((entry) => entry.id === inboxID && entry.type === "user")
   if (!item) return undefined
+  const stalled = state.stalled.get(inboxID)
+  if (stalled) return stalled
   if (item.delivery === "queue") return "queued"
   const list = messages(state, sessionID)
   const boundary = list.findLastIndex((entry) => entry.type === "idle")
@@ -95,6 +112,18 @@ export const pendingStatus = (state: State, sessionID: string, inboxID: string):
     ? "steering"
     : "starting"
 }
+
+export const pendingStatuses = (state: State, sessionID: string): ReadonlyMap<string, PendingStatus> =>
+  new Map(
+    pending(state, sessionID).flatMap((item) => {
+      const status = item.type === "user" ? pendingStatus(state, sessionID, item.id) : undefined
+      return status ? [[item.id, status] as const] : []
+    }),
+  )
+
+export const knows = (state: State, sessionID: string, id: string) =>
+  messages(state, sessionID).some((message) => message.id === id) ||
+  pending(state, sessionID).some((item) => item.id === id)
 
 export const visibleMessages = (
   list: ReadonlyArray<SessionMessage.Info>,
@@ -127,6 +156,24 @@ export const revertMessageID = (state: State, sessionID: string) => state.info[s
 
 export const visible = (state: State, sessionID: string) =>
   visibleMessages(messages(state, sessionID), pending(state, sessionID), revertMessageID(state, sessionID))
+
+export const contextTokens = (tokens: SessionMessage.TokenUsage) =>
+  tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
+
+export const contextStep = (state: State, sessionID: string) => {
+  const list = messages(state, sessionID)
+  const boundary = revertMessageID(state, sessionID)
+  const boundaryIndex = boundary ? list.findIndex((item) => item.id === boundary) : -1
+  if (boundary && boundaryIndex === -1) return
+  const end = boundaryIndex === -1 ? list.length : boundaryIndex
+  const compactionIndex = list.findLastIndex(
+    (item, index) => item.type === "compaction" && item.status === "completed" && index < end,
+  )
+  return list.findLast(
+    (item, index): item is SessionMessage.Assistant & { tokens: SessionMessage.TokenUsage } =>
+      item.type === "assistant" && Boolean(item.tokens) && index > compactionIndex && index < end,
+  )
+}
 
 export const userMessages = (state: State, sessionID: string) =>
   messages(state, sessionID).filter((item): item is SessionMessage.User => item.type === "user")

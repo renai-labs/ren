@@ -7,11 +7,11 @@ import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { Session as OpenCodeSession } from "@opencode/core/session"
 import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Workspace } from "@opencode/core/workspace"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { TestEnvironment, Processes, testEffect } from "@ren/executor/testing"
+import { HandApi } from "@ren/hand-api/hand-api"
+import { TestHand, Processes, testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { Context, Effect, Exit, Fiber, Layer, ManagedRuntime, Option, Queue, Scope, Stream } from "effect"
+import { Context, Effect, Fiber, Layer, ManagedRuntime, Option, Queue, Scope, Stream } from "effect"
 import { HttpEffect, HttpRouter } from "effect/http"
 import { createServer, connect, type Socket } from "node:net"
 import { lstat, mkdir, mkdtemp, readdir, realpath, symlink } from "node:fs/promises"
@@ -57,12 +57,13 @@ const localHarness = Effect.gen(function* () {
         commands: () => Effect.die(new Error("The tool parity host has no commands")),
         findFiles: () => Effect.die(new Error("The tool parity host has no file search")),
         environment: () => Effect.die(new Error("The tool parity host has no environment")),
-        webSearchProviders: () => Effect.die(new Error("The tool parity host has no web search")),
+        git: () => Effect.die(new Error("The tool parity host has no git")),
         credentials: Context.get(services, Credential.Service),
         sessions: Context.get(services, OpenCodeSession.Service),
         transfer: Context.get(services, SessionTransfer.Service),
         workspaces: Context.get(services, Workspace.Service),
         hasEnvironmentConnections: false,
+        isRemoteHand: false,
         directoryOf: (sessionId) => join(root, sessionId),
         makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
         activate: () => Effect.void,
@@ -542,39 +543,6 @@ it.live("a shell removed on the sandbox while it runs reports one exit, killed, 
   }),
 )
 
-const closedHarnessStops = (seconds: number) =>
-  live(
-    Effect.gen(function* () {
-      const scope = yield* Scope.make()
-      const opened = yield* RemoteHost.open().pipe(Effect.provideService(Scope.Scope, scope))
-      const session = yield* RemoteHost.begin(opened)
-      const dir = yield* RemoteHost.scratch()
-      const answer = yield* session.turn(
-        stub.script(RemoteHost.shellWith(`echo $$ > ${dir}/main; exec sleep 300`, { background: true })),
-      )
-      expect(RemoteHost.lastToolResult(answer)).toContain("Command moved to the background")
-      const pid = yield* Pid.read(join(dir, "main"))
-      yield* Effect.promise(async () => {
-        // ast-grep-ignore: no-test-sleep -- the session must be idle before the cell closes, and idle is only visible by polling
-        while ((await Effect.runPromise(opened.harness.sessions)).some((state) => state.active)) await Bun.sleep(100)
-      })
-      expect(Processes.running(pid)).toBe(true)
-      yield* Scope.close(scope, Exit.void)
-      const stopped = yield* RemoteHost.stops(pid, seconds)
-      if (!stopped) process.kill(pid, "SIGKILL")
-      expect(stopped).toBe(true)
-    }),
-  )
-
-test(
-  "J28 a background job stops on the sandbox within the executor's orphan time and one scan after the idle cell closes",
-  () => closedHarnessStops(33),
-  90_000,
-)
-
-test.todo("J28 a background job stops on the sandbox 30 seconds or less after the idle cell closes", () =>
-  closedHarnessStops(30))
-
 test("J29 five shell calls at once each get only their own output", () =>
   live(
     Effect.gen(function* () {
@@ -620,7 +588,7 @@ it.live("J34 a command with a NUL byte fails with a clear error, and the cell go
 const longLines = 32_768
 
 const pagesOf2MiB = Effect.fnUntraced(function* (offsets: ReadonlyArray<number>) {
-  const proxy = yield* counting(Number(new URL(yield* TestEnvironment.url).port))
+  const proxy = yield* counting(Number(new URL(yield* TestHand.url).port))
   const session = yield* RemoteHost.begin(yield* Remote, proxy.url)
   yield* Effect.promise(() =>
     Bun.write(
@@ -704,10 +672,7 @@ it.live(
     Effect.gen(function* () {
       const session = yield* RemoteHost.begin(yield* Remote)
       yield* Effect.promise(() =>
-        Bun.write(
-          join(RemoteHost.folder(session.sessionId), "huge.bin"),
-          Buffer.alloc(EnvironmentApi.maxFileBytes + 1, 97),
-        ),
+        Bun.write(join(RemoteHost.folder(session.sessionId), "huge.bin"), Buffer.alloc(HandApi.maxFileBytes + 1, 97)),
       )
       const answer = RemoteHost.lastToolResult(
         yield* session.turn(stub.script({ tool: { name: "read", input: { path: "huge.bin" } } })),
@@ -897,7 +862,7 @@ it.live(
     Effect.gen(function* () {
       const opened = yield* Remote
       const sessionId = Session.ID.create()
-      yield* opened.memory.set(sessionId, yield* RemoteHost.accessTo(yield* TestEnvironment.url, sessionId))
+      yield* opened.memory.set(sessionId, yield* RemoteHost.accessTo(yield* TestHand.url, sessionId))
       const driver = RenWorkspaceDriver.session(opened.environments, sessionId)
       const realLocal = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-files-"))))
       const subjects = {

@@ -1,3 +1,4 @@
+import { AuthError, AuthForm } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
@@ -13,13 +14,10 @@ import {
 } from "../../components/auth-layout.js"
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { describeAuthError } from "../../lib/auth.js"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const route = getRouteApi("/signup")
-
-const emailRejections = new Set(["DISPOSABLE_EMAIL", "UNDELIVERABLE_EMAIL_DOMAIN", "ALIAS_EMAIL"])
 
 function PasswordStep(props: {
   email: string
@@ -61,7 +59,7 @@ function PasswordStep(props: {
             disabled={props.pending}
             onChange={(event) => props.onPasswordChange(event.currentTarget.value)}
           />
-          <FieldDescription>At least 8 characters</FieldDescription>
+          <FieldDescription>{AuthForm.passwordHint}</FieldDescription>
         </Field>
         <Button type="submit" className="h-10 w-full" disabled={props.pending}>
           {props.pending ? <Spinner data-icon="inline-start" /> : null}
@@ -98,20 +96,23 @@ export function SignupPage() {
     setStep("details")
   }
   const continueWithDetails = () => {
-    if (!name.trim()) {
-      setError("Enter your name.")
+    const nameFailure = AuthForm.nameError(name)
+    if (nameFailure) {
+      setError(nameFailure)
       return
     }
-    if (!email.includes("@")) {
-      setEmailError("Enter a valid email address.")
+    const emailFailure = AuthForm.emailError(email)
+    if (emailFailure) {
+      setEmailError(emailFailure)
       return
     }
     setError("")
     setStep("password")
   }
   const createAccount = async () => {
-    if (password.length < 8) {
-      setError("Use at least 8 characters.")
+    const passwordFailure = AuthForm.passwordError(password)
+    if (passwordFailure) {
+      setError(passwordFailure)
       return
     }
     setError("")
@@ -119,8 +120,8 @@ export function SignupPage() {
     const result = await auth.signUp.email({ name: name.trim(), email, password })
     if (result.error !== null) {
       setPending(false)
-      const failure = describeAuthError(result.error)
-      if (emailRejections.has(failure.code)) {
+      const failure = AuthError.describe(result.error)
+      if (AuthForm.isEmailRejection(failure.code)) {
         setEmailError(failure.message)
         setStep("details")
       } else setError(failure.message)

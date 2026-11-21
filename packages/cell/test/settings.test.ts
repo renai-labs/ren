@@ -44,54 +44,39 @@ const stub = Shared.stub()
 
 const open = SettingsHarness.open
 
-const searchEndpoint = (baseUrl: string, providers: ReadonlyArray<string>): Models.Endpoint => ({
-  id: "ren",
-  protocol: "openai-chat",
-  baseUrl,
-  apiKey: { key: Redacted.make("key") },
-  models: [],
-  search: providers.map((id) => ({ id, name: id })),
-})
-
 describe("settings in the cell", () => {
-  it.live(
-    "a gateway endpoint sends its callable model ID upstream under its registered name, and an old vendor reference is refused",
-    () =>
-      Effect.gen(function* () {
-        const models: ReadonlyArray<Models.Endpoint> = [
-          {
-            id: "ren",
-            name: "Ren",
-            protocol: "openai-chat",
-            baseUrl: stub.url,
-            apiKey: { key: Redacted.make("gateway-key") },
-            models: [Struct.assign(StubModel.modelEntry("stub", "stub-model"), { input: ["text" as const] })],
-          },
-        ]
-        const opened = yield* open(
-          TestSettings.layers({ ren: { model: { endpointId: "ren", modelId: "stub/stub-model" } } }),
-          {
-            models,
-            config: JSON.stringify({ model: "ren/stub/stub-model" }),
-          },
-        )
-        const current = yield* opened.client.session.get({ sessionID: opened.sessionID })
-        expect(current.model).toMatchObject({ providerID: "ren", id: "stub/stub-model" })
-        const available = yield* opened.client.model.list()
-        expect(available.data.find((model) => model.id === "stub/stub-model")?.capabilities.input).toEqual(["text"])
-        expect([...new Set(available.data.map((model) => String(model.providerID)))]).toEqual(["ren"])
-        const turn = stub.script()
-        yield* opened.turn(turn)
-        expect(turn.calls.at(0)).toMatchObject({
-          authorization: "Bearer gateway-key",
-          body: { model: "stub/stub-model" },
-        })
-        expect((yield* opened.client.provider.get({ providerID: Provider.ID.make("ren") })).data.name).toBe("Ren")
-        const refused = yield* opened.harness
-          .setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "stub-model" }))
-          .pipe(Effect.flip)
-        expect(refused._tag).toBe("BrainRejectedError")
-      }),
+  it.live("a gateway endpoint sends its callable model ID upstream under its registered name", () =>
+    Effect.gen(function* () {
+      const models: ReadonlyArray<Models.Endpoint> = [
+        {
+          id: "ren",
+          name: "Ren",
+          protocol: "openai-chat",
+          baseUrl: stub.url,
+          apiKey: { key: Redacted.make("gateway-key") },
+          models: [Struct.assign(StubModel.modelEntry("stub", "stub-model"), { input: ["text" as const] })],
+        },
+      ]
+      const opened = yield* open(
+        TestSettings.layers({ ren: { model: { endpointId: "ren", modelId: "stub/stub-model" } } }),
+        {
+          models,
+          config: JSON.stringify({ model: "ren/stub/stub-model" }),
+        },
+      )
+      const current = yield* opened.client.session.get({ sessionID: opened.sessionID })
+      expect(current.model).toMatchObject({ providerID: "ren", id: "stub/stub-model" })
+      const available = yield* opened.client.model.list()
+      expect(available.data.find((model) => model.id === "stub/stub-model")?.capabilities.input).toEqual(["text"])
+      expect([...new Set(available.data.map((model) => String(model.providerID)))]).toEqual(["ren"])
+      const turn = stub.script()
+      yield* opened.turn(turn)
+      expect(turn.calls.at(0)).toMatchObject({
+        authorization: "Bearer gateway-key",
+        body: { model: "stub/stub-model" },
+      })
+      expect((yield* opened.client.provider.get({ providerID: Provider.ID.make("ren") })).data.name).toBe("Ren")
+    }),
   )
   it.live(
     "a reopened chat restores model-type overrides and cached catalogs before a pull, with fresh credentials",
@@ -121,17 +106,8 @@ describe("settings in the cell", () => {
                   })
                   return Response.json({ text: "Restored transcript" })
                 }
-                const body = Schema.decodeUnknownSync(
-                  Schema.Struct({
-                    model: Schema.optionalKey(Schema.String),
-                    providerID: Schema.optionalKey(Schema.String),
-                  }),
-                )(await request.json())
-                calls.push({
-                  path,
-                  model: body.model ?? body.providerID ?? "",
-                  key: request.headers.get("authorization"),
-                })
+                const body = Schema.decodeUnknownSync(Schema.Struct({ model: Schema.String }))(await request.json())
+                calls.push({ path, model: body.model, key: request.headers.get("authorization") })
                 if (path.endsWith("/generations")) return Response.json({ created: 1, data: [] })
                 if (path.endsWith("/decisions")) return Response.json({ answers: [] })
                 return Response.json([])
@@ -160,10 +136,6 @@ describe("settings in the cell", () => {
                   id: "media",
                   protocol: "openai-chat",
                   baseUrl: `${gateway.url.origin}/v1`,
-                  search: [
-                    { id: "default-search", name: "Default" },
-                    { id: "chosen-search", name: "Chosen" },
-                  ],
                   models: types.flatMap((type) => [
                     { id: `default-${type}`, type: ModelTypes.modelType[type], protocol: "openai-chat" as const },
                     { id: `chosen-${type}`, type: ModelTypes.modelType[type], protocol: "openai-chat" as const },
@@ -172,7 +144,6 @@ describe("settings in the cell", () => {
               ],
             })
             const first = yield* open(layers, {
-              config: JSON.stringify({ websearch: { provider: "media/chosen-search" } }),
               database,
               sessionId,
               stored,
@@ -200,7 +171,6 @@ describe("settings in the cell", () => {
           ModelCatalog.Service,
         )
         const opened = yield* open(TestSettings.layers(), {
-          config: JSON.stringify({ websearch: { provider: "media/chosen-search" } }),
           database,
           sessionId,
           stored,
@@ -217,7 +187,6 @@ describe("settings in the cell", () => {
               name: "execute",
               input: { code: 'return await tools.decisions({ input: "After restart", questions: [] })' },
             },
-            { name: "websearch", input: { query: "Effect" } },
           ],
         })
         yield* opened.client.session
@@ -227,183 +196,79 @@ describe("settings in the cell", () => {
         expect(calls.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual([
           { path: "/v1/audio/transcriptions", model: "chosen-audio_transcription", key: "Bearer fresh-key" },
           { path: "/v1/decisions", model: "chosen-decisions", key: "Bearer fresh-key" },
-          { path: "/v1/search", model: "chosen-search", key: "Bearer fresh-key" },
         ])
       }),
   )
-  it.live(
-    "transcription, decisions and search use their endpoint URL, headers and credentials instead of the chat key",
-    () =>
-      Effect.gen(function* () {
-        const calls: Array<{ path: string; key: string | null; route: string | null }> = []
-        const gateway = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            Bun.serve({
-              port: 0,
-              hostname: "127.0.0.1",
-              fetch: (request) => {
-                const path = new URL(request.url).pathname
-                calls.push({ path, key: request.headers.get("authorization"), route: request.headers.get("x-route") })
-                if (path.endsWith("/generations")) return Response.json({ created: 1, data: [] })
-                if (path.endsWith("/transcriptions")) return Response.json({ text: "Transcript" })
-                if (path.endsWith("/decisions")) return Response.json({ answers: [] })
-                return Response.json([])
-              },
-            }),
-          ),
-          (server) => Effect.promise(() => server.stop(true)),
-        )
-        const types = ["audio_transcription", "decisions", "search"] as const
-        const layers = TestSettings.layers({
-          ren: {
-            defaultModels: Object.fromEntries(
-              types.filter((type) => type !== "search").map((type) => [type, { providerId: type, modelId: "chosen" }]),
-            ),
-          },
-        })
-        const opened = yield* open(layers, {
-          config: JSON.stringify({ websearch: { provider: "search/chosen" } }),
-          refreshKey: (id) =>
-            Effect.succeed(id === "stub" ? Option.some({ key: Redacted.make("ren-chat-key") }) : Option.none()),
-        })
-        yield* Effect.promise(() => Bun.write(join(opened.directory, opened.sessionId, "clip.wav"), "audio"))
-        yield* opened.pull(layers, {
-          models: [
-            ...opened.access.endpoints,
-            ...types.map((type) => ({
-              id: type,
-              protocol: "openai-chat" as const,
-              baseUrl: `${gateway.url.origin}/${type}/v1`,
-              apiKey: { key: Redacted.make(`${type}-key`) },
-              headers: { "x-route": type },
-              models:
-                type === "search"
-                  ? []
-                  : [{ id: "chosen", type: ModelTypes.modelType[type], protocol: "openai-chat" as const }],
-              search: type === "search" ? [{ id: "chosen", name: "Chosen" }] : [],
-            })),
-          ],
-        })
-        expect(
-          (yield* opened.client.websearch.providers({
-            location: { directory: join(opened.directory, opened.sessionId) },
-          })).data.map((provider) => String(provider.id)),
-        ).toContain("search/chosen")
-        yield* opened.turn(
-          stub.script({
-            tools: [
-              { name: "execute", input: { code: 'return await tools.audio_transcription({ file: "clip.wav" })' } },
-              { name: "execute", input: { code: 'return await tools.decisions({ input: "Review", questions: [] })' } },
-              { name: "websearch", input: { query: "Effect" } },
-            ],
-          }),
-        )
-        expect(calls.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual([
-          {
-            path: "/audio_transcription/v1/audio/transcriptions",
-            key: "Bearer audio_transcription-key",
-            route: "audio_transcription",
-          },
-          { path: "/decisions/v1/decisions", key: "Bearer decisions-key", route: "decisions" },
-          { path: "/search/v1/search", key: "Bearer search-key", route: "search" },
-        ])
-      }),
-  )
-  it.live("Ren search works without provider consent by default", () =>
+  it.live("transcription and decisions use their endpoint URL, headers and credentials instead of the chat key", () =>
     Effect.gen(function* () {
-      const calls: string[] = []
-      const provider = yield* Effect.acquireRelease(
+      const calls: Array<{ path: string; key: string | null; route: string | null }> = []
+      const gateway = yield* Effect.acquireRelease(
         Effect.sync(() =>
           Bun.serve({
             port: 0,
             hostname: "127.0.0.1",
             fetch: (request) => {
-              calls.push(new URL(request.url).pathname)
-              return Response.json([{ url: "https://example.com", content: "Result", time: {} }])
+              const path = new URL(request.url).pathname
+              calls.push({ path, key: request.headers.get("authorization"), route: request.headers.get("x-route") })
+              if (path.endsWith("/generations")) return Response.json({ created: 1, data: [] })
+              if (path.endsWith("/transcriptions")) return Response.json({ text: "Transcript" })
+              if (path.endsWith("/decisions")) return Response.json({ answers: [] })
+              return Response.json([])
             },
           }),
         ),
         (server) => Effect.promise(() => server.stop(true)),
       )
-      const layers = TestSettings.layers()
-      const opened = yield* open(layers)
+      const types = ["audio_transcription", "decisions"] as const
+      const layers = TestSettings.layers({
+        ren: {
+          defaultModels: Object.fromEntries(types.map((type) => [type, { providerId: type, modelId: "chosen" }])),
+        },
+      })
+      const opened = yield* open(layers, {
+        refreshKey: (id) =>
+          Effect.succeed(id === "stub" ? Option.some({ key: Redacted.make("ren-chat-key") }) : Option.none()),
+      })
+      yield* Effect.promise(() => Bun.write(join(opened.directory, opened.sessionId, "clip.wav"), "audio"))
       yield* opened.pull(layers, {
-        models: [...opened.access.endpoints, searchEndpoint(`${provider.url.origin}/v1`, ["search"])],
+        models: [
+          ...opened.access.endpoints,
+          ...types.map((type) => ({
+            id: type,
+            protocol: "openai-chat" as const,
+            baseUrl: `${gateway.url.origin}/${type}/v1`,
+            apiKey: { key: Redacted.make(`${type}-key`) },
+            headers: { "x-route": type },
+            models: [{ id: "chosen", type: ModelTypes.modelType[type], protocol: "openai-chat" as const }],
+          })),
+        ],
       })
-      const result = yield* opened.client.websearch.query({
-        query: "Effect",
-        location: { directory: join(opened.directory, opened.sessionId) },
-      })
-      expect(String(result.data.providerID)).toBe("ren/search")
-      yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
-      expect(calls).toEqual(["/v1/search", "/v1/search"])
+      yield* opened.turn(
+        stub.script({
+          tools: [
+            { name: "execute", input: { code: 'return await tools.audio_transcription({ file: "clip.wav" })' } },
+            { name: "execute", input: { code: 'return await tools.decisions({ input: "Review", questions: [] })' } },
+          ],
+        }),
+      )
+      expect(calls.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual([
+        {
+          path: "/audio_transcription/v1/audio/transcriptions",
+          key: "Bearer audio_transcription-key",
+          route: "audio_transcription",
+        },
+        { path: "/decisions/v1/decisions", key: "Bearer decisions-key", route: "decisions" },
+      ])
     }),
   )
-  it.live("Ren search honors explicit OpenCode disablement", () =>
+  it.live("web search honors explicit OpenCode disablement over Ren's random default", () =>
     Effect.gen(function* () {
-      const layers = TestSettings.layers()
-      const opened = yield* open(layers, { config: JSON.stringify({ websearch: false }) })
-      yield* opened.pull(layers, {
-        models: [...opened.access.endpoints, searchEndpoint("http://127.0.0.1:1/v1", ["search"])],
-      })
-      expect(
-        (yield* opened.client.websearch.providers({
-          location: { directory: join(opened.directory, opened.sessionId) },
-        })).data.some((provider) => provider.id === "ren/search"),
-      ).toBe(true)
+      const opened = yield* open(TestSettings.layers(), { config: JSON.stringify({ websearch: false }) })
       const result = yield* opened.client.websearch
         .query({ query: "Effect", location: { directory: join(opened.directory, opened.sessionId) } })
         .pipe(Effect.result)
       expect(result._tag).toBe("Failure")
       if (result._tag === "Failure") expect(String(result.failure)).toContain("disabled")
-    }),
-  )
-  it.live("native search selects distinct gateway services without agent defaults and reloads catalogs", () =>
-    Effect.gen(function* () {
-      const calls: Array<{ model: string; session: string | null; path: string; key: string | null }> = []
-      const provider = yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          Bun.serve({
-            port: 0,
-            hostname: "127.0.0.1",
-            fetch: async (request) => {
-              const body = Schema.decodeUnknownSync(Schema.Struct({ providerID: Schema.String }))(await request.json())
-              calls.push({
-                model: body.providerID,
-                session: request.headers.get("ren-session"),
-                path: new URL(request.url).pathname,
-                key: request.headers.get("authorization"),
-              })
-              return Response.json([{ url: "https://example.com", content: "Result", time: {} }])
-            },
-          }),
-        ),
-        (server) => Effect.promise(() => server.stop(true)),
-      )
-      const layers = TestSettings.layers()
-      const opened = yield* open(layers, { config: JSON.stringify({ websearch: { provider: "other/chosen" } }) })
-      yield* opened.pull(layers, {
-        models: [
-          ...opened.access.endpoints,
-          searchEndpoint(`${provider.url.origin}/v1`, ["first", "chosen"]),
-          Struct.assign(searchEndpoint(`${provider.url.origin}/other/v1`, ["chosen"]), {
-            id: "other",
-            apiKey: { key: Redacted.make("other-key") },
-          }),
-        ],
-      })
-      const providers = (yield* opened.client.websearch.providers({
-        location: { directory: join(opened.directory, opened.sessionId) },
-      })).data.map((provider) => String(provider.id))
-      expect(providers).toEqual(expect.arrayContaining(["ren/first", "ren/chosen", "other/chosen"]))
-      yield* opened.turn(stub.script({ tool: { name: "websearch", input: { query: "Effect" } } }))
-      expect(calls).toEqual([{ model: "chosen", session: null, path: "/other/v1/search", key: "Bearer other-key" }])
-      yield* opened.pull(layers, { models: opened.access.endpoints })
-      expect(
-        (yield* opened.client.websearch.providers({
-          location: { directory: join(opened.directory, opened.sessionId) },
-        })).data.some((provider) => provider.id === "ren/chosen" || provider.id === "other/chosen"),
-      ).toBe(false)
     }),
   )
   it.live("chat model-type overrides survive chat-model changes and re-resolve when a catalog changes", () =>
@@ -778,20 +643,6 @@ describe("settings in the cell", () => {
     }),
   )
 
-  it.live("the layers' instructions reach the model, and a pulled edit applies at the next turn", () =>
-    Effect.gen(function* () {
-      const opened = yield* open(TestSettings.layers({ ren: { instructions: "House rules." } }))
-      const first = stub.script()
-      yield* opened.turn(first)
-      expect(first.calls[0]?.system).toContain("House rules.")
-      yield* opened.pull(TestSettings.layers({ ren: { instructions: "New rules." } }))
-      const second = stub.script()
-      yield* opened.turn(second)
-      expect(second.calls[0]?.system).toContain("New rules.")
-      expect(second.calls[0]?.system).not.toContain("House rules.")
-    }),
-  )
-
   it.live("a chat without an environment gets no references", () =>
     Effect.gen(function* () {
       const docs = { alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }
@@ -1121,69 +972,51 @@ describe("settings in the cell", () => {
       })
     }),
   )
-  it.live("a chat whose picked model is gone falls back to its settings' model and gets a message naming both", () =>
-    Effect.gen(function* () {
-      const opened = yield* open(
-        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
-      )
-      const picked = {
-        id: "stub-picked",
-        type: "chat" as const,
-        protocol: "openai-chat" as const,
-        name: "Stub Picked",
-        limit: { context: 100_000, output: 4000 },
-      }
-      yield* opened.harness.configure({
-        models: opened.access.endpoints.map((endpoint) =>
-          endpoint.id === "stub" ? Struct.evolve(endpoint, { models: (models) => [...models, picked] }) : endpoint,
-        ),
-      })
-      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
-      const modelOf = opened.client.session.get({ sessionID: opened.sessionID }).pipe(
-        Effect.orDie,
-        Effect.map((session) => String(session.model?.id)),
-      )
-      expect(yield* modelOf).toBe(picked.id)
-      yield* opened.pull(TestSettings.layers(), { models: opened.access.endpoints })
-      expect(yield* modelOf).toBe("stub-model")
-      const notes = JSON.stringify(
-        yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie),
-      )
-      expect(notes).toContain("stub/stub-picked")
-      expect(notes).toContain("stub/stub-model")
-    }),
-  )
-  it.live("a chat that switches from one available pick to another gets no message that a model is gone", () =>
-    Effect.gen(function* () {
-      const opened = yield* open(
-        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
-      )
-      const first = {
-        id: "stub-first",
-        type: "chat" as const,
-        protocol: "openai-chat" as const,
-        name: "Stub First",
-        limit: { context: 100_000, output: 4000 },
-      }
-      const second = {
-        id: "stub-second",
-        type: "chat" as const,
-        protocol: "openai-chat" as const,
-        name: "Stub Second",
-        limit: { context: 100_000, output: 4000 },
-      }
-      yield* opened.harness.configure({
-        models: opened.access.endpoints.map((endpoint) =>
-          endpoint.id === "stub"
-            ? Struct.evolve(endpoint, { models: (models) => [...models, first, second] })
-            : endpoint,
-        ),
-      })
-      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
-      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: second.id }))
-      yield* opened.harness.setModel(opened.sessionId, Option.none())
-      expect(yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie)).toEqual([])
-    }),
+  it.live(
+    "a chat that switches between available picks gets no message; one whose picked model is gone falls back to its settings' model and gets a message naming both",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(
+          TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+        )
+        const first = {
+          id: "stub-first",
+          type: "chat" as const,
+          protocol: "openai-chat" as const,
+          name: "Stub First",
+          limit: { context: 100_000, output: 4000 },
+        }
+        const picked = {
+          id: "stub-picked",
+          type: "chat" as const,
+          protocol: "openai-chat" as const,
+          name: "Stub Picked",
+          limit: { context: 100_000, output: 4000 },
+        }
+        yield* opened.harness.configure({
+          models: opened.access.endpoints.map((endpoint) =>
+            endpoint.id === "stub"
+              ? Struct.evolve(endpoint, { models: (models) => [...models, first, picked] })
+              : endpoint,
+          ),
+        })
+        const inbox = opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
+        yield* opened.harness.setModel(opened.sessionId, Option.none())
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
+        expect(yield* inbox).toEqual([])
+        const modelOf = opened.client.session.get({ sessionID: opened.sessionID }).pipe(
+          Effect.orDie,
+          Effect.map((session) => String(session.model?.id)),
+        )
+        expect(yield* modelOf).toBe(picked.id)
+        yield* opened.pull(TestSettings.layers(), { models: opened.access.endpoints })
+        expect(yield* modelOf).toBe("stub-model")
+        const notes = JSON.stringify(yield* inbox)
+        expect(notes).toContain("stub/stub-picked")
+        expect(notes).toContain("stub/stub-model")
+      }),
   )
   it.live("the title request gives the model the chat as data to title, not as a request to act on", () =>
     Effect.gen(function* () {

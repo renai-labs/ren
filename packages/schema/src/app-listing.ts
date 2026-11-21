@@ -2,6 +2,7 @@ export * as AppListing from "./app-listing.js"
 
 import { Effect, Schema } from "effect"
 import { AppIdentity } from "./app/identity.js"
+import { Mcp } from "./mcp.js"
 import { Primitive } from "./primitive.js"
 
 export const Categories = Schema.Record(
@@ -12,6 +13,19 @@ export const Categories = Schema.Record(
   description: "Discovery labels by group, such as { roles: [engineer], functions: [research] }.",
 })
 
+export interface Tool extends Schema.Schema.Type<typeof Tool> {}
+export const Tool = Schema.Struct({
+  name: Schema.NonEmptyString,
+  description: Schema.String,
+  readOnly: Schema.Boolean.annotate({ description: "The tool only reads, as the MCP’s readOnlyHint says." }),
+  price: Schema.optionalKey(Mcp.ToolPrice),
+}).annotate({ identifier: "AppListing.Tool" })
+
+export const Tools = Schema.Record(Primitive.Slug, Schema.Array(Tool)).annotate({
+  identifier: "AppListing.Tools",
+  description: "The tools each MCP of the app offers, by MCP slug, as its tools/list returns them.",
+})
+
 export interface Input extends Schema.Schema.Type<typeof Input> {}
 export const Input = Schema.Struct({
   body: Schema.NullOr(Schema.String)
@@ -19,7 +33,26 @@ export const Input = Schema.Struct({
     .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(null))),
   categories: Categories.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   examplePrompts: Schema.Array(Schema.NonEmptyString).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
+  tools: Schema.Record(
+    Primitive.Slug,
+    Schema.Array(
+      Schema.Struct({
+        ...Tool.fields,
+        readOnly: Tool.fields.readOnly.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))),
+      }),
+    ),
+  ).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "AppListing.Input" })
+
+export interface Summary extends Schema.Schema.Type<typeof Summary> {}
+export const Summary = Schema.Struct({
+  body: Schema.NullOr(Schema.String),
+  categories: Categories,
+  examplePrompts: Schema.Array(Schema.String),
+  toolCounts: Schema.Record(Primitive.Slug, Schema.Int).annotate({
+    description: "How many tools each MCP of the app offers, by MCP slug. app-tools.get returns the tools.",
+  }),
+}).annotate({ identifier: "AppListing.Summary" })
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
@@ -27,6 +60,7 @@ export const Info = Schema.Struct({
   body: Schema.NullOr(Schema.String),
   categories: Categories,
   examplePrompts: Schema.Array(Schema.String),
+  tools: Tools,
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),

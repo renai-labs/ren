@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Billing } from "@ren/core/billing"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
@@ -41,12 +42,16 @@ const customers = Effect.runSync(Queue.unbounded<Billing.Customer>())
 
 const billing = Layer.succeed(
   Billing.Service,
-  Billing.Service.of({ ensureCustomer: (customer) => Queue.offer(customers, customer).pipe(Effect.asVoid) }),
+  Billing.Service.of({
+    ...Billing.none,
+    ensureCustomer: (customer) => Queue.offer(customers, customer).pipe(Effect.asVoid),
+  }),
 )
 
 const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>
   Auth.layer.pipe(
     Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
+    Layer.provideMerge(AccountDeletion.layer),
     Layer.provideMerge(EgressControl.layerNone),
     Layer.provideMerge(
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
@@ -218,17 +223,22 @@ describe("Auth", () => {
     }),
   )
 
-  it.live("signs back in to the oldest organization", () =>
+  it.live("signs back in to the organization used last", () =>
     Effect.gen(function* () {
       const session = sessionCookie(yield* register("frances@example.org"))
       const first = (yield* get("/get-session", session)).session.activeOrganizationId
-      expect((yield* post("/organization/create", { name: "Side Project", slug: "side" }, session)).status).toBe(200)
+      const side = yield* post("/organization/create", { name: "Side Project", slug: "side" }, session).pipe(
+        Effect.flatMap(json),
+      )
+      const signInAgain = () =>
+        post("/sign-in/email", { email: "frances@example.org", password: "correct horse battery staple" }).pipe(
+          Effect.flatMap((signIn) => get("/get-session", sessionCookie(signIn))),
+          Effect.map((found) => found.session.activeOrganizationId),
+        )
 
-      const signIn = yield* post("/sign-in/email", {
-        email: "frances@example.org",
-        password: "correct horse battery staple",
-      })
-      expect((yield* get("/get-session", sessionCookie(signIn))).session.activeOrganizationId).toBe(first)
+      expect(yield* signInAgain()).toBe(side.id)
+      expect((yield* post("/organization/set-active", { organizationId: first }, session)).status).toBe(200)
+      expect(yield* signInAgain()).toBe(first)
     }),
   )
 
@@ -414,6 +424,7 @@ describe("Auth", () => {
             checkAccountCreation: (email) => Effect.runPromise(guard.checkAccountCreation(email)),
             hasVerifiedAlias: (email) => Effect.runPromise(guard.hasVerifiedAlias(email)),
           },
+          accountDeletion: { isArchived: () => Promise.resolve(false) },
           provisioning: {
             createInitialMemberships: () => Promise.resolve(),
             activatePendingMemberships: () => Promise.resolve(),

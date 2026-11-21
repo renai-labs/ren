@@ -3,7 +3,7 @@ import type { SessionLinksInfo, SessionLinksIssue } from "@ren/client"
 import type { Session } from "@ren/schema/session"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconArchive, IconChecklist, IconDots, IconLink } from "@tabler/icons-react"
+import { IconArchive, IconChecklist, IconDots, IconLink, IconPencil } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -67,22 +67,29 @@ function LinkGroup(props: { label: string; rows: ReadonlyArray<LinkRow> }) {
   )
 }
 
-function ChatLinks(props: { sessionId: Session.ID; open: boolean }) {
+function useChatLinks(sessionId: Session.ID) {
   const { api } = RouterContext.useRouterContext()
+  const linked = useQuery(api.link.session.links.queryOptions({ id: sessionId }))
+  const links = linked.data ?? noLinks
+  const pulled = useQuery({
+    ...api.link.session.pullRequests.queryOptions({ id: sessionId }),
+    enabled: links.pullRequests.length > 0,
+  })
+  return {
+    links,
+    pulls: new Map(pulled.data?.map((pull) => [pull.url, pull])),
+    refresh: () => {
+      void linked.refetch()
+      if (links.pullRequests.length > 0) void pulled.refetch()
+    },
+  }
+}
+
+function ChatLinks(props: Pick<ReturnType<typeof useChatLinks>, "links" | "pulls">) {
   const navigate = useNavigate()
   const platform = Platform.usePlatform()
-  const links =
-    useQuery({
-      ...api.link.session.links.queryOptions({ id: props.sessionId }),
-      enabled: props.open,
-      staleTime: 0,
-    }).data ?? noLinks
-  const pullRequests = useQuery({
-    ...api.link.session.pullRequests.queryOptions({ id: props.sessionId }),
-    enabled: props.open && links.pullRequests.length > 0,
-    staleTime: 0,
-  }).data
-  const pulls = new Map(pullRequests?.map((pull) => [pull.url, pull]))
+  const links = props.links
+  const pulls = props.pulls
   return (
     <>
       <LinkGroup
@@ -125,9 +132,11 @@ function ChatLinks(props: { sessionId: Session.ID; open: boolean }) {
 export function ChatActions(props: {
   sessionId: Session.ID
   archive: { readonly title: string; readonly onArchive: () => Promise<unknown> } | undefined
+  onRename?: (() => void) | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  const chatLinks = useChatLinks(props.sessionId)
   const write = Platform.usePlatform().writeClipboardText
   const copyLink = () =>
     void write?.(window.location.href).then(
@@ -136,25 +145,39 @@ export function ChatActions(props: {
     )
   return (
     <>
-      <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenu
+        open={open}
+        onOpenChange={(next: boolean) => {
+          setOpen(next)
+          if (next) chatLinks.refresh()
+        }}
+      >
         <DropdownMenuTrigger
           render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Chat actions" />}
         >
           <IconDots />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72">
-          <ChatLinks sessionId={props.sessionId} open={open} />
-          {write ? (
+        <DropdownMenuContent align="end" className="w-72" finalFocus={false}>
+          <ChatLinks links={chatLinks.links} pulls={chatLinks.pulls} />
+          {write || props.onRename ? (
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={copyLink}>
-                <IconLink />
-                Copy link
-              </DropdownMenuItem>
+              {props.onRename ? (
+                <DropdownMenuItem onClick={props.onRename}>
+                  <IconPencil />
+                  Rename chat
+                </DropdownMenuItem>
+              ) : null}
+              {write ? (
+                <DropdownMenuItem onClick={copyLink}>
+                  <IconLink />
+                  Copy link
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           ) : null}
           {props.archive ? (
             <>
-              {write ? <DropdownMenuSeparator /> : null}
+              {write || props.onRename ? <DropdownMenuSeparator /> : null}
               <DropdownMenuGroup>
                 <DropdownMenuItem variant="destructive" onClick={() => setArchiving(true)}>
                   <IconArchive />

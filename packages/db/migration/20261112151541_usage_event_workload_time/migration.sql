@@ -1,0 +1,1 @@
+CREATE INDEX "usage_event_workload_time_idx" ON "usage_event" ("workload","time");

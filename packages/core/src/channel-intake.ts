@@ -186,8 +186,10 @@ export const worker = Effect.fnUntraced(function* (provider: ChannelProvider.Pro
       (sum, file) => {
         const url = `data:${file.mime};base64,${base64(file.bytes)}`
         const bytes = Session.fileBytes(url)
-        if (sum.bytes + bytes > Session.maxFileBytes)
-          sum.skipped.push(`(${file.name} is not attached: a message’s files total at most 10 MB.)`)
+        if (bytes > Session.inlineLimitOf(file.mime) || sum.bytes + bytes > Session.maxInlineBytes)
+          sum.skipped.push(
+            `(${file.name} is not attached; it is in the space’s drive. Inline files: ${Session.inlineLimits}, 20 MiB per message.)`,
+          )
         else {
           sum.bytes += bytes
           sum.files.push({ url, name: file.name })

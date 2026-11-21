@@ -40,6 +40,7 @@ const listProperties = [
   { value: "status", label: "Status" },
   { value: "priority", label: "Priority" },
   { value: "assignee", label: "Assignee" },
+  { value: "space", label: "Space" },
   { value: "labels", label: "Labels" },
   { value: "due", label: "Due date" },
   { value: "created", label: "Created" },
@@ -78,7 +79,11 @@ function Choice(props: {
   )
 }
 
-export function DisplayOptions(props: { value: TaskDisplay.Display; onChange: (value: TaskDisplay.Display) => void }) {
+export function DisplayOptions(props: {
+  value: TaskDisplay.Display
+  inSpace?: boolean | undefined
+  onChange: (value: TaskDisplay.Display) => void
+}) {
   const [open, setOpen] = useState(false)
   const set = (patch: Partial<TaskDisplay.Display>) => props.onChange({ ...props.value, ...patch })
   return (
@@ -106,7 +111,7 @@ export function DisplayOptions(props: { value: TaskDisplay.Display; onChange: (v
             <Choice
               key={choice.key}
               label={choice.label}
-              options={choice.options}
+              options={choice.options.filter((option) => !(props.inSpace && option.value === "space"))}
               value={props.value[choice.key]}
               onChange={(value) => set({ [choice.key]: value })}
             />
@@ -121,30 +126,32 @@ export function DisplayOptions(props: { value: TaskDisplay.Display; onChange: (v
           <span className="font-medium">List options</span>
           <span className="text-muted-foreground">Display properties</span>
           <div className="flex flex-wrap gap-1.5">
-            {listProperties.map((property) => {
-              const shown = props.value.properties.includes(property.value)
-              return (
-                <Button
-                  key={property.value}
-                  variant={shown ? "secondary" : "outline"}
-                  size="sm"
-                  aria-pressed={shown}
-                  className={cn(
-                    "h-6 rounded-full px-2.5",
-                    shown ? "border-transparent" : "bg-transparent text-muted-foreground dark:bg-transparent",
-                  )}
-                  onClick={() =>
-                    set({
-                      properties: shown
-                        ? props.value.properties.filter((value) => value !== property.value)
-                        : [...props.value.properties, property.value],
-                    })
-                  }
-                >
-                  {property.label}
-                </Button>
-              )
-            })}
+            {listProperties
+              .filter((property) => property.value !== "space" || !(props.inSpace || props.value.groupBy === "space"))
+              .map((property) => {
+                const shown = props.value.properties.includes(property.value)
+                return (
+                  <Button
+                    key={property.value}
+                    variant={shown ? "secondary" : "outline"}
+                    size="sm"
+                    aria-pressed={shown}
+                    className={cn(
+                      "h-6 rounded-full px-2.5",
+                      shown ? "border-transparent" : "bg-transparent text-muted-foreground dark:bg-transparent",
+                    )}
+                    onClick={() =>
+                      set({
+                        properties: shown
+                          ? props.value.properties.filter((value) => value !== property.value)
+                          : [...props.value.properties, property.value],
+                      })
+                    }
+                  >
+                    {property.label}
+                  </Button>
+                )
+              })}
           </div>
         </div>
       </PopoverContent>

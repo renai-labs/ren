@@ -1,7 +1,6 @@
 export * as Models from "./models.js"
 
 import { Schema, Struct } from "effect"
-import { SearchProvider } from "./search-provider.js"
 
 export interface ApiKey extends Schema.Schema.Type<typeof ApiKey> {}
 export const ApiKey = Schema.Struct({
@@ -75,11 +74,6 @@ export const Endpoint = Schema.Struct({
   headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   apiKey: ApiKey,
   models: Schema.Array(Info),
-  search: Schema.optionalKey(
-    SearchProvider.Providers.annotate({
-      description: "The search providers the endpoint serves at `POST {baseUrl}/search`. Absent means none.",
-    }),
-  ),
 }).annotate({ identifier: "Models.Endpoint" })
 
 const uniqueIds = Schema.makeFilter(
@@ -110,7 +104,7 @@ export const catalog = (access: Access): Catalog => ({
 export interface Registration extends Schema.Schema.Type<typeof Registration> {}
 export const Registration = Schema.Struct({
   ...Endpoint.mapFields(Struct.pick(["id", "name", "protocol", "baseUrl", "headers"])).fields,
-  catalog: Schema.Union([Schema.Literal("inference"), Endpoint.mapFields(Struct.pick(["models", "search"]))]),
+  catalog: Schema.Union([Schema.Literal("inference"), Endpoint.mapFields(Struct.pick(["models"]))]),
 }).annotate({ identifier: "Models.Registration" })
 
 export const Providers = Schema.Array(Registration).check(uniqueIds).annotate({ identifier: "Models.Providers" })
@@ -118,8 +112,8 @@ export type Providers = typeof Providers.Type
 
 export const registrations = (catalog: Catalog): Providers =>
   catalog.endpoints.map((endpoint) => ({
-    ...Struct.omit(endpoint, ["models", "search"]),
-    catalog: Struct.pick(endpoint, ["models", "search"]),
+    ...Struct.omit(endpoint, ["models"]),
+    catalog: Struct.pick(endpoint, ["models"]),
   }))
 
 export interface InferenceCatalog extends Schema.Schema.Type<typeof InferenceCatalog> {}

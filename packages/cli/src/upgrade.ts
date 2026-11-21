@@ -38,17 +38,17 @@ const isNewer = (candidate: string, current: string) => {
   return right ? left > right : false
 }
 
-const host = () => (process.env.REN2_HOST_URL ?? Release.host).replace(/\/$/u, "")
+const host = () => (process.env.REN_HOST_URL ?? Release.host).replace(/\/$/u, "")
 
 const latest = Effect.fn("Upgrade.latest")(function* (origin: string) {
   const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
-  const text = yield* http.get(`${origin}/ren2/latest.txt`).pipe(Effect.flatMap((response) => response.text))
+  const text = yield* http.get(`${origin}/ren/latest.txt`).pipe(Effect.flatMap((response) => response.text))
   return yield* Schema.decodeUnknownEffect(Version)(text.trim())
 })
 
 const minimum = Effect.fn("Upgrade.minimum")(function* (origin: string) {
   const http = yield* HttpClient.HttpClient
-  const response = yield* http.get(`${origin}/ren2/minimum.txt`)
+  const response = yield* http.get(`${origin}/ren/minimum.txt`)
   if (response.status === 403 || response.status === 404) return null
   if (response.status !== 200) return yield* Effect.fail(new Error(`minimum.txt answered ${response.status}`))
   return yield* Schema.decodeUnknownEffect(Version)((yield* response.text).trim())
@@ -78,7 +78,7 @@ export const run = Effect.fn("Upgrade.run")(function* (
   const fs = yield* FileSystem.FileSystem
   const http = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
   if (!Release.compiled)
-    return yield* new Output.Failure({ message: "This ren2 runs from source. Pull and rebuild it to update." })
+    return yield* new Output.Failure({ message: "This ren runs from source. Pull and rebuild it to update." })
   const origin = host()
   const pinned = Option.map(input.version, (version) => version.replace(/^v/u, ""))
   const wanted = Option.isSome(pinned)
@@ -93,12 +93,12 @@ export const run = Effect.fn("Upgrade.run")(function* (
     return yield* output.result(
       Upgraded,
       { from: current, to: current, upgraded: false },
-      `ren2 v${current} is up to date.`,
+      `ren v${current} is up to date.`,
     )
-  const asset = `ren2-${process.platform}-${process.arch}`
-  const url = `${origin}/ren2/releases/${wanted}/${asset}`
-  const unavailable = () => new Output.Failure({ message: `Couldn’t download ren2 v${wanted}.` })
-  yield* output.progress(`Downloading ren2 v${wanted}…`)
+  const asset = `ren-${process.platform}-${process.arch}`
+  const url = `${origin}/ren/releases/${wanted}/${asset}`
+  const unavailable = () => new Output.Failure({ message: `Couldn’t download ren v${wanted}.` })
+  yield* output.progress(`Downloading ren v${wanted}…`)
   const bytes = new Uint8Array(
     yield* http.get(url).pipe(
       Effect.flatMap((response) => response.arrayBuffer),
@@ -121,16 +121,16 @@ export const run = Effect.fn("Upgrade.run")(function* (
         new Response(
           Bun.spawn([temporary, "--version"], { stdin: "ignore", stdout: "pipe", stderr: "ignore" }).stdout,
         ).text(),
-      catch: () => new Output.Failure({ message: "The downloaded ren2 could not start." }),
+      catch: () => new Output.Failure({ message: "The downloaded ren could not start." }),
     })
-    if (reported.trim() !== `ren2 v${wanted}`)
-      return yield* new Output.Failure({ message: "The downloaded ren2 reports the wrong version." })
+    if (reported.trim() !== `ren v${wanted}`)
+      return yield* new Output.Failure({ message: "The downloaded ren reports the wrong version." })
     yield* fs.rename(temporary, executable)
   }).pipe(Effect.ensuring(fs.remove(temporary).pipe(Effect.ignore)))
   yield* output.result(
     Upgraded,
     { from: current, to: wanted, upgraded: true },
-    `Upgraded ren2 v${current} → v${wanted}.`,
+    `Upgraded ren v${current} → v${wanted}.`,
   )
 })
 
@@ -153,7 +153,7 @@ export const required = Effect.fn("Upgrade.required")(function* (options: {
 })
 
 export const gate = Effect.gen(function* () {
-  if (!Release.compiled || process.env.REN2_NO_UPDATE_CHECK) return
+  if (!Release.compiled || process.env.REN_NO_UPDATE_CHECK) return
   const needed = yield* required({
     host: host(),
     cache: join(Directories.config(), "minimum.json"),
@@ -165,7 +165,7 @@ export const gate = Effect.gen(function* () {
   )
   if (Option.isSome(needed))
     return yield* new Output.Failure({
-      message: `ren2 v${Release.version} no longer works with Ren, which needs v${needed.value} or later. Run ren2 upgrade.`,
+      message: `ren v${Release.version} no longer works with Ren, which needs v${needed.value} or later. Run ren upgrade.`,
     })
 })
 
@@ -176,7 +176,7 @@ export const notice = Effect.gen(function* () {
     output.format !== "pretty" ||
     !process.stderr.isTTY ||
     Boolean(process.env.CI) ||
-    Boolean(process.env.REN2_NO_UPDATE_CHECK) ||
+    Boolean(process.env.REN_NO_UPDATE_CHECK) ||
     process.argv.includes("upgrade")
   if (quiet) return Option.none<string>()
   return yield* available({

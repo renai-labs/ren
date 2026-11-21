@@ -1,9 +1,11 @@
 @import "tailwindcss";
 @source "../**/*.{ts,tsx}";
 @import "./fonts.css";
+@import "./font-choices.css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./factory.css";
+@import "./file-icon.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -16,6 +18,9 @@
 }
 
 :root {
+  --ren-code-size: calc(1em * var(--code-scale, 1));
+  --ren-code-terminal-size: calc(var(--text-xs) * var(--code-scale, 1));
+  --ren-code-inline-size: calc(0.9em * var(--code-scale, 1));
   --skullet-base: var(--muted);
   --skullet-highlight: var(--accent);
   --skullet-radius: var(--radius);
@@ -40,6 +45,7 @@
   --border: rgba(0, 0, 0, 0.08);
   --input: rgba(0, 0, 0, 0.08);
   --ring: #0065cc;
+  --link: #1967d2;
 
   --avatar-from: #b5b5b5;
   --avatar-to: #555555;
@@ -52,7 +58,14 @@
   --chart-5: #5d5d5d;
   --chart-6: #8250df;
 
+  --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
+  --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
+
+  --diff-addition-word: color-mix(in srgb, var(--chart-2) 30%, transparent);
+  --diff-deletion-word: color-mix(in srgb, var(--chart-4) 30%, transparent);
+
   --radius: 8px;
+  --shimmer-duration: 1.2s;
 
   --sidebar: #f2f2f2;
   --sidebar-foreground: #464646;
@@ -89,6 +102,7 @@
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.08);
   --ring: #268bff;
+  --link: #8ab4f8;
 
   --chart-1: #268bff;
   --chart-2: #53c878;
@@ -96,6 +110,12 @@
   --chart-4: #f47780;
   --chart-5: #a3a3a3;
   --chart-6: #a371f7;
+
+  --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
+  --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
+
+  --diff-addition-word: color-mix(in srgb, var(--chart-2) 30%, transparent);
+  --diff-deletion-word: color-mix(in srgb, var(--chart-4) 30%, transparent);
 
   --sidebar: #101010;
   --sidebar-foreground: #c4c4c4;
@@ -112,10 +132,10 @@
 }
 
 @theme inline {
-  --font-sans: "SF Pro Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--user-font-sans,) "SF Pro Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
-  --font-avatar: ui-rounded, "SF Pro Rounded", "SF Pro Variable", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-avatar: ui-rounded, "SF Pro Rounded", var(--font-sans);
+  --font-mono: var(--user-font-mono,) "IBM Plex Mono", ui-monospace, monospace;
 
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -157,6 +177,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
   --color-avatar-from: var(--avatar-from);
   --color-avatar-to: var(--avatar-to);
   --color-avatar-foreground: var(--avatar-foreground);
@@ -176,9 +197,23 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+::highlight(ren-find-hit),
+::highlight(ren-file-hit) {
+  background-color: var(--find-hit);
+}
+
+::highlight(ren-find-active),
+::highlight(ren-file-active) {
+  background-color: var(--find-active);
+  color: var(--background);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  [tabindex="-1"]:focus {
+    outline: none;
   }
   html {
     @apply font-sans;
@@ -216,4 +251,10 @@
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
+}
+
+:focus-visible:not(input, textarea, [contenteditable="true"]),
+[data-slot="attachment"]:focus-within {
+  --ring: transparent;
+  outline: none;
 }

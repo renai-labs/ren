@@ -12,7 +12,7 @@
       "path": "./tsconfig.src.json"
     },
     {
-      "path": "../environment-api/tsconfig.src.json"
+      "path": "../hand-api/tsconfig.src.json"
     },
     {
       "path": "../schema/tsconfig.src.json"

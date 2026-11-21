@@ -65,7 +65,10 @@ describe("SessionRunner", () => {
       expect(
         turn.body.messages.filter((message) => JSON.stringify(message.content ?? "").includes(script.marker)),
       ).toHaveLength(1)
-      expect(turn.text).toStartWith("GitHub acme/api · octocat\n---")
+      expect([
+        turn.text.startsWith("GitHub acme/api · octocat\n"),
+        turn.text.endsWith(`again ${script.marker}`),
+      ]).toEqual([true, true])
     }),
   )
 })

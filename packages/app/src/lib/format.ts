@@ -1,3 +1,6 @@
+import { Bytes } from "@ren/util/bytes"
+import { NumberFormat } from "@ren/util/number-format"
+
 export const initials = (name: string) =>
   name
     .split(/\s+/u)
@@ -23,13 +26,10 @@ export const formText = (form: FormData, name: string) => {
   return typeof value === "string" ? value : ""
 }
 
-const byteUnits = ["B", "KB", "MB", "GB"] as const
+export const formatBytes = Bytes.format
 
-export function formatBytes(bytes: number) {
-  const exponent = Math.min(
-    byteUnits.length - 1,
-    Math.max(0, Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1000))),
-  )
-  const value = bytes / 1000 ** exponent
-  return `${exponent === 0 ? value : value.toFixed(value < 10 ? 1 : 0)} ${byteUnits[exponent]}`
-}
+export const formatCount = NumberFormat.count
+
+export const formatTokens = NumberFormat.tokens
+
+export const formatMicroUsd = NumberFormat.microUsd

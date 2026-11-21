@@ -18,15 +18,9 @@ import {
   type PeriodId,
   type PeriodSummary,
 } from "../lib/factory/analytics.js"
-import {
-  formatCompactUsd,
-  formatCount,
-  formatLongDay,
-  formatShortDuration,
-  formatTokens,
-  formatUsd,
-} from "../lib/factory/format.js"
+import { formatCompactUsd, formatLongDay, formatShortDuration } from "../lib/factory/format.js"
 import { addDays, startOfMonth } from "../lib/factory/time.js"
+import { formatCount, formatTokens, formatUsd } from "./format.js"
 import type { FactoryWorld } from "../lib/factory/types.js"
 
 const EMBEDDED_NEEDS = 3

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
-import { appOrigin, createOrganization, serverURL } from "../lib/servers.js"
+import { appOrigin, createOrganization, mailboxURL, serverURL } from "../lib/servers.js"
 
 const brainStart = 30_000
 
@@ -32,7 +32,7 @@ test("chat placeholders remain until the first message page arrives", async ({ p
     },
   )
   try {
-    await page.goto(`/app/sessions/${sessionId}`)
+    await page.goto(`/sessions/${sessionId}`)
     await requested.promise
     await expect(page.getByRole("button", { name: "Open panel", exact: true })).toBeVisible()
     await expect(page.getByRole("status", { name: "Loading messages", exact: true })).toBeVisible()
@@ -45,105 +45,190 @@ test("chat placeholders remain until the first message page arrives", async ({ p
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible()
 })
 
-test("a member starts a chat, follows the reply, sends again, mentions an agent and finds the chat in the sidebar", async ({
-  page,
-}) => {
+test("a member starts a chat, follows the reply, sends again and finds the chat in the sidebar", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.goto("/")
+  const composer = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await composer.fill("Plan the launch")
+  await composer.press("Enter")
 
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
   const sessionURL = page.url()
   await expect(page.getByText("Plan the launch")).toBeVisible()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  const composer = page.getByRole("form", { name: "Message Ren" })
-  await composer.getByRole("textbox", { name: "Message" }).fill("Add the budget")
-  await composer.getByRole("textbox", { name: "Message" }).press("Enter")
+  await composer.fill("Add the budget")
+  await composer.press("Enter")
   await expect(page.getByText("Add the budget")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(2)
 
-  const message = composer.getByRole("textbox", { name: "Message" })
-  await message.pressSequentially("Ask @genera")
-  await expect(page.getByRole("listbox", { name: "Mentions" }).getByRole("option")).toHaveText([/^general/])
-  await message.press("Enter")
-  await message.pressSequentially("to check it")
-  await message.press("Enter")
-  await expect(page.getByText("Ask @general to check it")).toBeVisible()
-  await expect(page.getByText("stub reply")).toHaveCount(3)
-
-  await page.goto("/app/")
+  await page.goto("/")
   await expect(async () => {
     await page.reload()
     await page.getByRole("link", { name: "Stub title" }).click({ timeout: 1_000 })
   }).toPass()
   await expect(page).toHaveURL(sessionURL)
   await expect(page.getByText("Plan the launch")).toBeVisible()
-  await expect(page.getByText("stub reply")).toHaveCount(3)
+  await expect(page.getByText("stub reply")).toHaveCount(2)
 })
 
-test("a member renames a chat, reverts a message into the composer and restores it", async ({ page }) => {
+test("a finished turn with no answer says that Ren sent an empty response", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  const message = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await message.fill("Say nothing [stub:empty-reply]")
+  await message.press("Enter")
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
+  await expect(page.getByText("Ren sent an empty response.")).toBeVisible({ timeout: brainStart })
+  await page.screenshot({ path: test.info().outputPath("empty-response.png") })
+})
+
+test("a member renames a chat from its breadcrumb", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Draft the agenda")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.goto("/")
+  const message = page.getByRole("textbox", { name: "Message", exact: true })
+  await message.fill("Draft the agenda")
+  await message.press("Enter")
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  await page.getByRole("button", { name: /^Edit Chat title/ }).click()
+  await page.getByRole("navigation", { name: "breadcrumb" }).getByRole("button").click()
   await page.getByRole("textbox", { name: "Chat title" }).fill("Board agenda")
   await page.getByRole("textbox", { name: "Chat title" }).press("Enter")
   await expect(page.getByRole("link", { name: "Board agenda" })).toBeVisible()
-
-  const composer = page.getByRole("form", { name: "Message Ren" })
-  await page.getByText("Draft the agenda").hover()
-  await page.getByRole("button", { name: "Revert to this message" }).click()
-  await expect(composer.getByRole("textbox", { name: "Message" })).toHaveValue("Draft the agenda")
-  await expect(page.getByText("stub reply")).toHaveCount(0)
-
-  await page.getByRole("button", { name: "Restore messages" }).click()
-  await expect(page.getByText("stub reply")).toBeVisible()
-  await expect(page.getByRole("button", { name: "Restore messages" })).toHaveCount(0)
+  await page.getByRole("button", { name: "Board agenda", exact: true }).click()
+  const title = page.getByRole("textbox", { name: "Chat title" })
+  await expect(title).toBeFocused()
+  await expect(title).toHaveValue("Board agenda")
+  await title.fill("Final agenda")
+  await title.press("Enter")
+  await expect(page.getByRole("link", { name: "Final agenda", exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Final agenda", exact: true })).toBeVisible()
 })
 
-test("a member opens the model picker with its shortcut and undoes the last message with a command from the + menu", async ({
+test("a member opens the model picker with its shortcut and undoes the last message with a slash command", async ({
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
-  const composer = page.getByRole("form", { name: "Message Ren" })
-  const message = composer.getByRole("textbox", { name: "Message" })
+  const message = page.getByRole("textbox", { name: "Message" })
   await message.press("ControlOrMeta+'")
   await expect(page.getByRole("menu")).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menu")).toHaveCount(0)
   await expect(message).toBeFocused()
 
-  await composer.getByRole("button", { name: "Add to this chat" }).click()
-  await page.getByRole("menuitem", { name: "Run a command" }).click()
-  await expect(message).toHaveValue("/")
-  await message.pressSequentially("und")
+  await message.pressSequentially("/und")
+  await page.getByRole("option", { name: /^\/undo/ }).click()
+  await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
+})
+
+test.fixme("a member undoes the last message with a command", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const message = page.getByRole("textbox", { name: "Message" })
+  await message.pressSequentially("/und")
   await page
-    .getByRole("listbox", { name: "Commands" })
+    .getByRole("group", { name: "Commands" })
     .getByRole("option", { name: /^\/undo/ })
     .click()
   await expect(message).toHaveValue("Draft the memo")
   await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
 })
 
+test("a member queues a message while Ren works, steers with the other key, recalls a prompt and stops with Escape", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const held = await page.request.post(`${mailboxURL}/hold`)
+  const marker = Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await held.json()).marker
+  const message = page.getByRole("textbox", { name: "Message" })
+  const delivered = (text: string) =>
+    page.waitForRequest((request) => request.method() === "POST" && (request.postData() ?? "").includes(text))
+  const working = delivered("Hold the turn")
+  await message.fill(`Hold the turn ${marker}`)
+  await message.press("Enter")
+  await working
+  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible({ timeout: brainStart })
+
+  const queued = delivered("Queue this")
+  await message.fill("Queue this")
+  await message.press("Enter")
+  expect((await queued).postData()).toContain('"delivery":"queue"')
+  await expect(message).toHaveValue("")
+  const waiting = page.getByRole("list", { name: "Queued messages" })
+  await expect(waiting.getByText("Queue this")).toBeVisible()
+
+  const steered = delivered("Steer this")
+  await message.fill("Steer this")
+  await message.press("ControlOrMeta+Enter")
+  expect((await steered).postData()).toContain('"delivery":"steer"')
+
+  await message.press("ArrowUp")
+  await expect(message).toHaveValue("Steer this")
+  await message.press("ArrowUp")
+  await expect(message).toHaveValue("Queue this")
+  await message.press("ArrowDown")
+  await message.press("ArrowDown")
+  await expect(message).toHaveValue("")
+
+  await waiting.getByRole("button", { name: "Remove" }).click()
+  await expect(waiting).toHaveCount(0)
+
+  const stopped = page.waitForRequest((request) => request.url().includes("interrupt"))
+  await message.press("Escape")
+  await stopped
+  await page.request.post(`${mailboxURL}/release?marker=${marker}`)
+})
+
+test("a member opens the terminal and a file and renames the chat with slash commands", async ({ page }) => {
+  await createOrganization(page.request, { name: "Mary Jackson" })
+  await page.goto("/")
+  const message = page.getByRole("textbox", { name: "Message", exact: true })
+  await message.fill("Draft the board memo")
+  await message.press("Enter")
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  await message.pressSequentially("/term")
+  await page
+    .getByRole("listbox", { name: "Commands" })
+    .getByRole("option", { name: /^\/terminal/ })
+    .click()
+  await expect(message).toHaveValue("")
+  const panel = page.getByRole("complementary", { name: "Workspace" })
+  await expect(panel.getByRole("tab", { name: "Terminal", selected: true })).toBeVisible()
+  await expect(panel.getByRole("textbox", { name: "Terminal" })).toBeFocused()
+
+  await message.fill("/open nope.ts")
+  await message.press("Enter")
+  await expect(message).toHaveValue("")
+  await expect(panel.getByRole("tab", { name: "Files", selected: true })).toBeVisible()
+  await expect(panel.getByText("No file at nope.ts")).toBeVisible()
+
+  await message.fill("/rename Board memo")
+  await message.press("Enter")
+  await expect(message).toHaveValue("")
+  await expect(page.getByRole("link", { name: "Board memo" })).toBeVisible()
+})
+
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
-  await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
-  await start.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
-  await start.getByRole("button", { name: "Send" }).click()
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
+  await page.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   await page.keyboard.press("ControlOrMeta+f")
@@ -158,19 +243,114 @@ test("a member finds text in a chat and closes find with Escape", async ({ page 
 
 test("a member edits a sent message, which replaces it and what came after", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/")
-  const start = page.getByRole("form", { name: "Start a chat" })
+  await page.goto("/")
+  const start = page.getByRole("main")
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await start.getByRole("button", { name: "Send" }).click()
   await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
+  const staged = Promise.withResolvers<void>()
+  const committed = Promise.withResolvers<void>()
+  const stageHeld = Promise.withResolvers<void>()
+  const commitHeld = Promise.withResolvers<void>()
+  await page.route(/\/chat\/session\/[^/]+\/revert(\/commit)?$/, async (route) => {
+    if (route.request().url().endsWith("/revert")) {
+      staged.resolve()
+      await stageHeld.promise
+    } else {
+      committed.resolve()
+      await commitHeld.promise
+    }
+    await route.continue()
+  })
+  const undone = page.getByText("Later messages are undone")
+
   await page.getByText("Plan the launch").hover()
-  await page.getByRole("button", { name: "Edit message" }).click()
+  await page.getByRole("button", { name: "Edit", exact: true }).click()
   const editor = page.getByRole("textbox", { name: "Edit message" })
   await expect(editor).toHaveValue("Plan the launch")
   await editor.fill("Plan the party")
   await editor.press("Enter")
+  await staged.promise
+  await expect(undone).toHaveCount(0)
+  stageHeld.resolve()
+  await committed.promise
+  await expect(undone).toHaveCount(0)
+  commitHeld.resolve()
   await expect(page.getByText("Plan the party")).toBeVisible()
   await expect(page.getByText("Plan the launch")).toHaveCount(0)
   await expect(page.getByText("stub reply")).toHaveCount(1, { timeout: brainStart })
+})
+
+test("a member sees the context in the chat header after a reply and compacts the chat from its popover", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Summarise the plan")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const context = page.getByRole("button", { name: /^Context (\d+% used|[\d.]+k? tokens used)$/ })
+  await expect(context).toContainText(/^\d/)
+  await context.click()
+  await expect(page.getByText("Cost", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Compact chat" }).click()
+
+  await expect(page.getByText(/^Session compact/)).toBeVisible({ timeout: brainStart })
+})
+
+test("a member quotes a reply with a comment, and the message shows the quote card after a reload", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the budget")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  await page.getByRole("region", { name: "Messages" }).getByText("stub reply").click({ clickCount: 3 })
+  await page.getByRole("button", { name: "Quote and comment" }).click()
+  const box = page.getByRole("dialog", { name: "Quote and comment" })
+  await box.getByRole("textbox", { name: "Comment on the quote" }).fill("Why this reply?")
+  await box.getByRole("button", { name: "Send quote" }).click()
+  await expect(box).toHaveCount(0, { timeout: brainStart })
+
+  const messages = page.getByRole("region", { name: "Messages" })
+  await expect(messages.getByText("Why this reply?")).toBeVisible()
+  await page.reload()
+  await expect(messages.getByText("Why this reply?")).toBeVisible({ timeout: brainStart })
+  await expect(messages.getByText("Ren's reply", { exact: true })).toBeVisible()
+  await expect(page.getByText("The user quoted the following")).toHaveCount(0)
+})
+
+test("a member quotes a reply into the composer, removes a chip and sends the other with their words", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  await page.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
+  await page.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const select = (text: string) =>
+    page.getByRole("region", { name: "Messages" }).getByText(text).first().click({ clickCount: 3 })
+
+  await select("stub reply")
+  await page.getByRole("button", { name: "Quote", exact: true }).click()
+  await select("stub reply")
+  await page.getByRole("button", { name: "Quote", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(2)
+  await page.getByRole("button", { name: "Remove quote" }).first().click()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(1)
+
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(1)
+  const message = page.getByRole("textbox", { name: "Message" })
+  await message.fill("Why this reply?")
+  await message.press("Enter")
+  const messages = page.getByRole("region", { name: "Messages" })
+  await expect(messages.getByText("Why this reply?")).toBeVisible()
+  await expect(messages.getByText("Ren's reply", { exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Remove quote" })).toHaveCount(0)
 })

@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite"
+import { BunServices } from "@effect/platform-bun"
 import type { OpenCodeSync } from "@ren/opencode-transcript/opencode-sync"
 import { Observability } from "@ren/schema/observability"
 import { Session } from "@ren/schema/session"
@@ -43,6 +44,7 @@ import { HotReload } from "./hot-reload.js"
 import { Reconcile } from "./reconcile.js"
 import { Scheduler } from "./scheduler.js"
 import { Sync } from "./sync.js"
+import { CodeUpdate } from "./code-update.js"
 
 const vars = Schema.decodeUnknownSync(Env.Vars)(process.env)
 const brainId = vars.REN_BRAIN_ID
@@ -113,13 +115,26 @@ const base = Layer.mergeAll(Cell.activityLayer, Cell.hostLayer).pipe(
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(Brain.layer, Chat.layer, Scheduler.layer).pipe(
     Layer.provideMerge(Restore.layer),
+    Layer.provideMerge(
+      CodeUpdate.layerProcess({
+        home,
+        script: process.env.REN_START_SCRIPT ?? "/opt/ren/start.js",
+        version: vars.REN_BRAIN_VERSION ?? manifest.version,
+        restart: Effect.sleep("500 millis").pipe(
+          Effect.andThen(Effect.sync(() => process.kill(process.pid, "SIGTERM"))),
+          Effect.forkDetach,
+          Effect.asVoid,
+        ),
+      }).pipe(Layer.provide(BunServices.layer)),
+    ),
     Layer.provideMerge(HotReload.layer),
     Layer.provideMerge(
       OpenCodeHarness.layerProcess(harnessDatabase, {
         workspace,
         allow: ["/tmp/", ...caches.map((path) => `${path}/`)],
-      }).pipe(Layer.provide([HostAccess.connections, harnessStorage])),
+      }).pipe(Layer.provide(harnessStorage)),
     ),
+    Layer.provideMerge(HostAccess.connections),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),
     Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
     Layer.provideMerge(PostHog.layer),

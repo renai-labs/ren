@@ -61,12 +61,32 @@ export const SpaceArchive = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["space"]["archive"]({ ...request.params }),
   )
 
+export const SpaceShutdown = (input: Command.Command.Config.Infer<typeof Commands.SpaceShutdown>) =>
+  Operation.run(
+    ClientApi.groups["space"].endpoints["space.shutdown"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space"]["shutdown"]({ ...request.params, ...request.payload }),
+  )
+
 export const SpaceMemberList = (input: Command.Command.Config.Infer<typeof Commands.SpaceMemberList>) =>
   Operation.run(
     ClientApi.groups["space-member"].endpoints["space-member.list"],
     {
-      query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { spaceId: "<space>", status: "--status", page: "--page", pageSize: "--page-size" },
+      query: {
+        spaceId: input["spaceId"],
+        userId: input["userId"],
+        status: input["status"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { spaceId: "<space>", userId: "--user-id", status: "--status", page: "--page", pageSize: "--page-size" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
@@ -95,6 +115,56 @@ export const SpaceMemberArchive = (input: Command.Command.Config.Infer<typeof Co
     ClientApi.groups["space-member"].endpoints["space-member.archive"],
     { params: { id: input["id"] }, labels: { id: "<member>" } },
     (client, request) => client["space-member"]["archive"]({ ...request.params }),
+  )
+
+export const SpaceJoinRequestList = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestList>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.list"],
+    {
+      query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { spaceId: "--space", status: "--status", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-join-request"]["list"]({ ...request.query }),
+  )
+
+export const SpaceJoinRequestCreate = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestCreate>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.create"],
+    {
+      payload: { spaceId: input["spaceId"], note: input["note"] },
+      input: input["input"],
+      labels: { spaceId: "--space", note: "--note" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-join-request"]["create"]({ ...request.payload }),
+  )
+
+export const SpaceJoinRequestApprove = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestApprove>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.approve"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<request>" } },
+    (client, request) => client["space-join-request"]["approve"]({ ...request.params, ...request.payload }),
+  )
+
+export const SpaceJoinRequestDecline = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestDecline>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.decline"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<request>" } },
+    (client, request) => client["space-join-request"]["decline"]({ ...request.params, ...request.payload }),
+  )
+
+export const SpaceJoinRequestCancel = (input: Command.Command.Config.Infer<typeof Commands.SpaceJoinRequestCancel>) =>
+  Operation.run(
+    ClientApi.groups["space-join-request"].endpoints["space-join-request.cancel"],
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<request>" } },
+    (client, request) => client["space-join-request"]["cancel"]({ ...request.params, ...request.payload }),
   )
 
 export const AgentMembershipList = (input: Command.Command.Config.Infer<typeof Commands.AgentMembershipList>) =>
@@ -135,50 +205,6 @@ export const AgentMembershipArchive = (input: Command.Command.Config.Infer<typeo
     ClientApi.groups["agent-membership"].endpoints["agent-membership.archive"],
     { params: { id: input["id"] }, labels: { id: "<membership>" } },
     (client, request) => client["agent-membership"]["archive"]({ ...request.params }),
-  )
-
-export const SpaceEnvironmentTemplateList = (
-  input: Command.Command.Config.Infer<typeof Commands.SpaceEnvironmentTemplateList>,
-) =>
-  Operation.run(
-    ClientApi.groups["space-environment-template"].endpoints["space-environment-template.list"],
-    {
-      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { spaceId: "<space>", page: "--page", pageSize: "--page-size" },
-      lookups: {
-        spaceId: (client, value) =>
-          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
-    (client, request) => client["space-environment-template"]["list"]({ ...request.query }),
-  )
-
-export const SpaceEnvironmentTemplateCreate = (
-  input: Command.Command.Config.Infer<typeof Commands.SpaceEnvironmentTemplateCreate>,
-) =>
-  Operation.run(
-    ClientApi.groups["space-environment-template"].endpoints["space-environment-template.create"],
-    {
-      payload: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
-      input: input["input"],
-      labels: { spaceId: "<space>", environmentTemplateId: "--template" },
-      lookups: {
-        spaceId: (client, value) =>
-          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-        environmentTemplateId: (client, value) =>
-          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
-    (client, request) => client["space-environment-template"]["create"]({ ...request.payload }),
-  )
-
-export const SpaceEnvironmentTemplateArchive = (
-  input: Command.Command.Config.Infer<typeof Commands.SpaceEnvironmentTemplateArchive>,
-) =>
-  Operation.run(
-    ClientApi.groups["space-environment-template"].endpoints["space-environment-template.archive"],
-    { params: { id: input["id"] }, labels: { id: "<environment>" } },
-    (client, request) => client["space-environment-template"]["archive"]({ ...request.params }),
   )
 
 export const SpaceSettingsGet = (input: Command.Command.Config.Infer<typeof Commands.SpaceSettingsGet>) =>
@@ -476,6 +502,8 @@ export const AppProfileCreate = (input: Command.Command.Config.Infer<typeof Comm
       },
       lookups: {
         appId: (client, value) => client["app"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        spaceIds: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["app-profile"]["create"]({ ...request.payload }),
@@ -508,6 +536,8 @@ export const AppProfileAccess = (input: Command.Command.Config.Infer<typeof Comm
       lookups: {
         id: (client, value) =>
           client["app-profile"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        add: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        remove: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["app-profile"]["access"]({ ...request.params, ...request.payload }),
@@ -537,11 +567,14 @@ export const AppProfilePromote = (input: Command.Command.Config.Infer<typeof Com
     ClientApi.groups["app-profile"].endpoints["app-profile.promote"],
     {
       params: { id: input["id"] },
+      payload: { spaceId: input["spaceId"] },
       input: input["input"],
-      labels: { id: "<profile>" },
+      labels: { id: "<profile>", spaceId: "--space" },
       lookups: {
         id: (client, value) =>
           client["app-profile"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["app-profile"]["promote"]({ ...request.params, ...request.payload }),
@@ -551,8 +584,14 @@ export const AppRegistryList = (input: Command.Command.Config.Infer<typeof Comma
   Operation.run(
     ClientApi.groups["app-registry"].endpoints["app-registry.list"],
     {
-      query: { query: input["query"], category: input["category"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { query: "--query", category: "--category", page: "--page", pageSize: "--page-size" },
+      query: {
+        query: input["query"],
+        category: input["category"],
+        slugs: input["slugs"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { query: "--query", category: "--category", slugs: "--slugs", page: "--page", pageSize: "--page-size" },
     },
     (client, request) => client["app-registry"]["list"]({ ...request.query }),
   )
@@ -633,6 +672,7 @@ export const TaskList = (input: Command.Command.Config.Infer<typeof Commands.Tas
         priority: input["priority"],
         agentId: input["agentId"],
         ownerId: input["ownerId"],
+        search: input["search"],
         label: input["label"],
         humanReview: input["humanReview"],
         linkedTo: input["linkedTo"],
@@ -646,6 +686,7 @@ export const TaskList = (input: Command.Command.Config.Infer<typeof Commands.Tas
         priority: "--priority",
         agentId: "--agent",
         ownerId: "--owner-id",
+        search: "--search",
         label: "--label",
         humanReview: "--human-review",
         linkedTo: "--linked-to",
@@ -657,8 +698,6 @@ export const TaskList = (input: Command.Command.Config.Infer<typeof Commands.Tas
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
         agentId: (client, value) =>
           client["agent"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-        parentId: (client, value) =>
-          client["task"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["task"]["list"]({ ...request.query }),
@@ -1242,6 +1281,55 @@ export const WebhookRequestGet = (input: Command.Command.Config.Infer<typeof Com
     (client, request) => client["webhook-request"]["get"]({ ...request.params, ...request.payload }),
   )
 
+export const ArtifactList = (input: Command.Command.Config.Infer<typeof Commands.ArtifactList>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.list"],
+    {
+      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["artifact"]["list"]({ ...request.query }),
+  )
+
+export const ArtifactGet = (input: Command.Command.Config.Infer<typeof Commands.ArtifactGet>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<artifact>" } },
+    (client, request) => client["artifact"]["get"]({ ...request.params }),
+  )
+
+export const ArtifactUpdate = (input: Command.Command.Config.Infer<typeof Commands.ArtifactUpdate>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.update"],
+    {
+      params: { id: input["id"] },
+      payload: { title: input["title"], name: input["name"] },
+      input: input["input"],
+      labels: { id: "<artifact>", title: "--title", name: "--name" },
+      lookups: {
+        id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["artifact"]["update"]({ ...request.params, ...request.payload }),
+  )
+
+export const ArtifactArchive = (input: Command.Command.Config.Infer<typeof Commands.ArtifactArchive>) =>
+  Operation.run(
+    ClientApi.groups["artifact"].endpoints["artifact.archive"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<artifact>" },
+      lookups: {
+        id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["artifact"]["archive"]({ ...request.params }),
+  )
+
 export const CredentialList = (input: Command.Command.Config.Infer<typeof Commands.CredentialList>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.list"],
@@ -1445,6 +1533,40 @@ export const EnvironmentTemplateArchive = (
       },
     },
     (client, request) => client["environment-template"]["archive"]({ ...request.params }),
+  )
+
+export const EnvironmentTemplateRetryBuild = (
+  input: Command.Command.Config.Infer<typeof Commands.EnvironmentTemplateRetryBuild>,
+) =>
+  Operation.run(
+    ClientApi.groups["environment-template"].endpoints["environment-template.retryBuild"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<template>" },
+      lookups: {
+        id: (client, value) =>
+          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["environment-template"]["retryBuild"]({ ...request.params, ...request.payload }),
+  )
+
+export const EnvironmentTemplateAffectedSpaces = (
+  input: Command.Command.Config.Infer<typeof Commands.EnvironmentTemplateAffectedSpaces>,
+) =>
+  Operation.run(
+    ClientApi.groups["environment-template"].endpoints["environment-template.affectedSpaces"],
+    {
+      params: { id: input["id"] },
+      input: input["input"],
+      labels: { id: "<template>" },
+      lookups: {
+        id: (client, value) =>
+          client["environment-template"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["environment-template"]["affectedSpaces"]({ ...request.params, ...request.payload }),
   )
 
 export const OauthAppList = (input: Command.Command.Config.Infer<typeof Commands.OauthAppList>) =>
@@ -1654,6 +1776,32 @@ export const SpaceProfiles = (input: Command.Command.Config.Infer<typeof Command
     (client, request) => client["app-profile-reach"]["space"]["profiles"]({ ...request.params }),
   )
 
+export const SpaceInviteLinkGet = (input: Command.Command.Config.Infer<typeof Commands.SpaceInviteLinkGet>) =>
+  Operation.run(
+    ClientApi.groups["space-invite-link"].endpoints["space-invite-link.get"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-invite-link"]["get"]({ ...request.params }),
+  )
+
+export const SpaceInviteLinkReset = (input: Command.Command.Config.Infer<typeof Commands.SpaceInviteLinkReset>) =>
+  Operation.run(
+    ClientApi.groups["space-invite-link"].endpoints["space-invite-link.reset"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<space>" },
+      lookups: {
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["space-invite-link"]["reset"]({ ...request.params }),
+  )
+
 export const SessionProfiles = (input: Command.Command.Config.Infer<typeof Commands.SessionProfiles>) =>
   Operation.run(
     ClientApi.groups["app-profile-reach"].endpoints["session.profiles"],
@@ -1678,6 +1826,19 @@ export const SessionLinks = (input: Command.Command.Config.Infer<typeof Commands
       },
     },
     (client, request) => client["link"]["session"]["links"]({ ...request.params }),
+  )
+
+export const SessionUsage = (input: Command.Command.Config.Infer<typeof Commands.SessionUsage>) =>
+  Operation.run(
+    ClientApi.groups["link"].endpoints["session.usage"],
+    {
+      params: { id: input["id"] },
+      labels: { id: "<session>" },
+      lookups: {
+        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["link"]["session"]["usage"]({ ...request.params }),
   )
 
 export const SessionPullRequests = (input: Command.Command.Config.Infer<typeof Commands.SessionPullRequests>) =>
@@ -1706,6 +1867,13 @@ export const TaskPullRequests = (input: Command.Command.Config.Infer<typeof Comm
     (client, request) => client["link"]["task"]["pullRequests"]({ ...request.params }),
   )
 
+export const AppToolsGet = (input: Command.Command.Config.Infer<typeof Commands.AppToolsGet>) =>
+  Operation.run(
+    ClientApi.groups["app-tools"].endpoints["app-tools.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<app>" } },
+    (client, request) => client["app-tools"]["get"]({ ...request.params }),
+  )
+
 export const AppProfileDelete = (input: Command.Command.Config.Infer<typeof Commands.AppProfileDelete>) =>
   Operation.run(
     ClientApi.groups["app-profile-reach"].endpoints["app-profile.delete"],
@@ -1724,8 +1892,13 @@ export const ScheduleRunList = (input: Command.Command.Config.Infer<typeof Comma
   Operation.run(
     ClientApi.groups["schedule-run"].endpoints["schedule-run.list"],
     {
-      query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
-      labels: { scheduleId: "<schedule>", page: "--page", pageSize: "--page-size" },
+      query: {
+        scheduleId: input["scheduleId"],
+        status: input["status"],
+        page: input["page"],
+        pageSize: input["pageSize"],
+      },
+      labels: { scheduleId: "<schedule>", status: "--status", page: "--page", pageSize: "--page-size" },
       lookups: {
         scheduleId: (client, value) =>
           client["schedule"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
@@ -1766,9 +1939,9 @@ export const MemoryWrite = (input: Command.Command.Config.Infer<typeof Commands.
   Operation.run(
     ClientApi.groups["memory"].endpoints["memory.write"],
     {
-      payload: { path: input["path"], spaceId: input["spaceId"], content: input["content"] },
+      payload: { path: input["path"], spaceId: input["spaceId"], content: input["content"], mode: input["mode"] },
       input: input["input"],
-      labels: { path: "<path>", spaceId: "--space", content: "--content" },
+      labels: { path: "<path>", spaceId: "--space", content: "--content", mode: "--mode" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
@@ -1818,20 +1991,6 @@ export const MemoryDelete = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["memory"]["delete"]({ ...request.query }),
   )
 
-export const DriveList = (input: Command.Command.Config.Infer<typeof Commands.DriveList>) =>
-  Operation.run(
-    ClientApi.groups["drive"].endpoints["drive.list"],
-    {
-      query: { spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
-      labels: { spaceId: "--space", folder: "--folder", cursor: "--cursor" },
-      lookups: {
-        spaceId: (client, value) =>
-          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
-    (client, request) => client["drive"]["list"]({ ...request.query }),
-  )
-
 export const DriveDownload = (input: Command.Command.Config.Infer<typeof Commands.DriveDownload>) =>
   Operation.run(
     ClientApi.groups["drive"].endpoints["drive.download"],
@@ -1846,27 +2005,55 @@ export const DriveDownload = (input: Command.Command.Config.Infer<typeof Command
     (client, request) => client["drive"]["download"]({ ...request.query }),
   )
 
-export const DriveDelete = (input: Command.Command.Config.Infer<typeof Commands.DriveDelete>) =>
+export const FilesList = (input: Command.Command.Config.Infer<typeof Commands.FilesList>) =>
   Operation.run(
-    ClientApi.groups["drive"].endpoints["drive.delete"],
+    ClientApi.groups["files"].endpoints["files.list"],
     {
-      query: { path: input["path"], spaceId: input["spaceId"] },
-      labels: { path: "<path>", spaceId: "--space" },
+      query: { source: input["source"], spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
+      labels: { source: "--source", spaceId: "--space", folder: "--folder", cursor: "--cursor" },
       lookups: {
         spaceId: (client, value) =>
           client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
-    (client, request) => client["drive"]["delete"]({ ...request.query }),
+    (client, request) => client["files"]["list"]({ ...request.query }),
+  )
+
+export const FilesRead = (input: Command.Command.Config.Infer<typeof Commands.FilesRead>) =>
+  Operation.run(
+    ClientApi.groups["files"].endpoints["files.read"],
+    {
+      query: { path: input["path"], source: input["source"], spaceId: input["spaceId"] },
+      labels: { path: "<path>", source: "--source", spaceId: "--space" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["files"]["read"]({ ...request.query }),
+  )
+
+export const FilesDelete = (input: Command.Command.Config.Infer<typeof Commands.FilesDelete>) =>
+  Operation.run(
+    ClientApi.groups["files"].endpoints["files.delete"],
+    {
+      query: { path: input["path"], source: input["source"], spaceId: input["spaceId"] },
+      labels: { path: "<path>", source: "--source", spaceId: "--space" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["files"]["delete"]({ ...request.query }),
   )
 
 export const CredentialConnect = (input: Command.Command.Config.Infer<typeof Commands.CredentialConnect>) =>
   Operation.run(
     ClientApi.groups["credential-connect"].endpoints["credential.connect"],
     {
-      payload: { profileId: input["profileId"], reconnect: input["reconnect"] },
+      payload: { profileId: input["profileId"], reconnect: input["reconnect"], returnTo: input["returnTo"] },
       input: input["input"],
-      labels: { profileId: "--profile", reconnect: "--reconnect" },
+      labels: { profileId: "--profile", reconnect: "--reconnect", returnTo: "--return-to" },
       lookups: {
         profileId: (client, value) =>
           client["app-profile"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
@@ -1875,11 +2062,25 @@ export const CredentialConnect = (input: Command.Command.Config.Infer<typeof Com
     (client, request) => client["credential-connect"]["credential"]["connect"]({ ...request.payload }),
   )
 
+export const McpInspect = (input: Command.Command.Config.Infer<typeof Commands.McpInspect>) =>
+  Operation.run(
+    ClientApi.groups["mcp-inspect"].endpoints["mcp.inspect"],
+    { payload: { url: input["url"] }, input: input["input"], labels: { url: "<url>" } },
+    (client, request) => client["mcp-inspect"]["mcp"]["inspect"]({ ...request.payload }),
+  )
+
 export const EnvironmentProviderList = () =>
   Operation.run(
     ClientApi.groups["environmentProvider"].endpoints["environmentProvider.list"],
     { labels: {} },
     (client) => client["environmentProvider"]["list"](),
+  )
+
+export const EnvironmentProviderBrains = () =>
+  Operation.run(
+    ClientApi.groups["environmentProvider"].endpoints["environmentProvider.brains"],
+    { labels: {} },
+    (client) => client["environmentProvider"]["brains"](),
   )
 
 export const ChannelProviderList = () =>
@@ -1934,7 +2135,125 @@ export const RenInferenceConnectionRemove = (
     (client, request) => client["ren-inference"]["connection"]["remove"]({ ...request.params }),
   )
 
+export const RenInferenceKeyList = () =>
+  Operation.run(ClientApi.groups["ren-inference"].endpoints["ren-inference.key.list"], { labels: {} }, (client) =>
+    client["ren-inference"]["key"]["list"](),
+  )
+
+export const RenInferenceKeyUsage = (input: Command.Command.Config.Infer<typeof Commands.RenInferenceKeyUsage>) =>
+  Operation.run(
+    ClientApi.groups["ren-inference"].endpoints["ren-inference.key.usage"],
+    { query: { period: input["period"] }, labels: { period: "--period" } },
+    (client, request) => client["ren-inference"]["key"]["usage"]({ ...request.query }),
+  )
+
+export const RenInferenceKeyCreate = (input: Command.Command.Config.Infer<typeof Commands.RenInferenceKeyCreate>) =>
+  Operation.run(
+    ClientApi.groups["ren-inference"].endpoints["ren-inference.key.create"],
+    {
+      payload: { name: input["name"], expiresIn: input["expiresIn"] },
+      input: input["input"],
+      labels: { name: "--name", expiresIn: "--expires-in" },
+    },
+    (client, request) => client["ren-inference"]["key"]["create"]({ ...request.payload }),
+  )
+
+export const RenInferenceKeyRevoke = (input: Command.Command.Config.Infer<typeof Commands.RenInferenceKeyRevoke>) =>
+  Operation.run(
+    ClientApi.groups["ren-inference"].endpoints["ren-inference.key.revoke"],
+    { params: { id: input["id"] }, labels: { id: "<key>" } },
+    (client, request) => client["ren-inference"]["key"]["revoke"]({ ...request.params }),
+  )
+
+export const OrganizationInviteLinkCreate = (
+  input: Command.Command.Config.Infer<typeof Commands.OrganizationInviteLinkCreate>,
+) =>
+  Operation.run(
+    ClientApi.groups["organization-invite-link"].endpoints["organization-invite-link.create"],
+    {
+      payload: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
+      input: input["input"],
+      labels: { spaceIds: "--space-ids", expiresIn: "--expires-in" },
+      lookups: {
+        spaceIds: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["organization-invite-link"]["create"]({ ...request.payload }),
+  )
+
+export const OrganizationInviteLinkList = () =>
+  Operation.run(
+    ClientApi.groups["organization-invite-link"].endpoints["organization-invite-link.list"],
+    { labels: {} },
+    (client) => client["organization-invite-link"]["list"](),
+  )
+
+export const OrganizationInviteLinkRevoke = (
+  input: Command.Command.Config.Infer<typeof Commands.OrganizationInviteLinkRevoke>,
+) =>
+  Operation.run(
+    ClientApi.groups["organization-invite-link"].endpoints["organization-invite-link.revoke"],
+    { params: { id: input["id"] }, labels: { id: "<link>" } },
+    (client, request) => client["organization-invite-link"]["revoke"]({ ...request.params }),
+  )
+
 export const RepositoryList = () =>
   Operation.run(ClientApi.groups["repository"].endpoints["repository.list"], { labels: {} }, (client) =>
     client["repository"]["list"](),
+  )
+
+export const BillingGet = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.get"], { labels: {} }, (client) =>
+    client["billing"]["get"](),
+  )
+
+export const BillingPlanList = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.plan.list"], { labels: {} }, (client) =>
+    client["billing"]["plan"]["list"](),
+  )
+
+export const BillingInvoiceList = (input: Command.Command.Config.Infer<typeof Commands.BillingInvoiceList>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.invoice.list"],
+    { query: { page: input["page"], perPage: input["perPage"] }, labels: { page: "--page", perPage: "--per-page" } },
+    (client, request) => client["billing"]["invoice"]["list"]({ ...request.query }),
+  )
+
+export const BillingInvoiceUrl = (input: Command.Command.Config.Infer<typeof Commands.BillingInvoiceUrl>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.invoice.url"],
+    { params: { id: input["id"] }, labels: { id: "<invoice>" } },
+    (client, request) => client["billing"]["invoice"]["url"]({ ...request.params }),
+  )
+
+export const BillingSubscribe = (input: Command.Command.Config.Infer<typeof Commands.BillingSubscribe>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.subscribe"],
+    { payload: { plan: input["plan"] }, input: input["input"], labels: { plan: "--plan" } },
+    (client, request) => client["billing"]["subscribe"]({ ...request.payload }),
+  )
+
+export const BillingChangePlan = (input: Command.Command.Config.Infer<typeof Commands.BillingChangePlan>) =>
+  Operation.run(
+    ClientApi.groups["billing"].endpoints["billing.change-plan"],
+    { payload: { plan: input["plan"] }, input: input["input"], labels: { plan: "--plan" } },
+    (client, request) => client["billing"]["change-plan"]({ ...request.payload }),
+  )
+
+export const BillingCancel = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.cancel"], { labels: {} }, (client) =>
+    client["billing"]["cancel"](),
+  )
+
+export const BillingPortal = () =>
+  Operation.run(ClientApi.groups["billing"].endpoints["billing.portal"], { labels: {} }, (client) =>
+    client["billing"]["portal"](),
+  )
+
+export const FeedbackReport = (input: Command.Command.Config.Infer<typeof Commands.FeedbackReport>) =>
+  Operation.run(
+    ClientApi.groups["feedback"].endpoints["feedback.report"],
+    { payload: { message: input["message"] }, input: input["input"], labels: { message: "<message>" } },
+    (client, request) => client["feedback"]["report"]({ ...request.payload }),
   )

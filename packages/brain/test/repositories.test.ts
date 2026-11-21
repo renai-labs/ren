@@ -1,5 +1,5 @@
 import { expect } from "bun:test"
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { testEffect } from "@ren/executor/testing"
 import { GitHost } from "@ren/schema/git-host"
 import { Effect, Fiber, Layer, Ref } from "effect"
@@ -106,8 +106,8 @@ it.live("a chat starts while GitHub holds the lookup; ready waits for it and giv
             url: `${github.hosts.api}/repos/acme/docs/tarball/${commit}`,
             headers: {},
             folder: ".",
-            maxBytes: EnvironmentApi.maxReferenceBytes,
-            maxFiles: EnvironmentApi.maxReferenceFiles,
+            maxBytes: HandApi.maxReferenceBytes,
+            maxFiles: HandApi.maxReferenceFiles,
             links: "skip",
           },
         },

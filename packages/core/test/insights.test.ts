@@ -3,12 +3,13 @@ import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import type { Insights as InsightsSchema } from "@ren/schema/insights"
 import { Models } from "@ren/schema/models"
-import type { Space } from "@ren/schema/space"
+import type { Space as SpaceSchema } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
 import { TaskLink } from "@ren/schema/task-link"
 import { and, eq } from "drizzle-orm"
 import { DateTime, Effect } from "effect"
 import { Insights } from "../src/insights.js"
+import { Space } from "../src/space.js"
 import { Task } from "../src/task.js"
 import { Seed } from "./lib/seed.js"
 import { TaskFixture } from "./lib/task-fixture.js"
@@ -18,7 +19,7 @@ const it = TaskFixture.harness().it
 const org = TaskFixture.org
 
 const spend = Effect.fnUntraced(function* (
-  space: { readonly id: Space.ID; readonly organizationId: Auth.OrganizationID },
+  space: { readonly id: SpaceSchema.ID; readonly organizationId: Auth.OrganizationID },
   time: DateTime.Utc,
   fields: Partial<typeof Database.Schema.usage_event.$inferInsert> = {},
   call: Partial<Usage.ModelCall> = {},
@@ -57,7 +58,7 @@ const memberOf = Effect.fnUntraced(function* (userId: Auth.UserID) {
 })
 
 const query = (
-  spaceId: Space.ID,
+  spaceId: SpaceSchema.ID | undefined,
   from: DateTime.Utc,
   to: DateTime.Utc,
   fields: Partial<InsightsSchema.Query> = {},
@@ -101,7 +102,8 @@ describe("Insights", () => {
             calls: 3,
             errors: 1,
             tokens: { input: 3000, output: 300, reasoning: 0, cacheRead: 0, cacheWrite: 15 },
-            cost: { ren: 5000, customer: 5000, unpricedCalls: 1 },
+            cost: { ren: 5000, customer: 5000, unpricedCalls: 1, models: 10_000, compute: 0, tools: 0 },
+            computeMs: 0,
             tasksDone: 0,
             prsMerged: 0,
             prsLinked: 0,
@@ -111,7 +113,7 @@ describe("Insights", () => {
     }).pipe(Effect.provide(Insights.layer)),
   )
 
-  it.live("a sandbox run adds its cost to the space, as its own provider, with no calls, sessions or tokens", () =>
+  it.live("sandbox runs and tool calls cost apart from models, with no calls, sessions or tokens", () =>
     Effect.gen(function* () {
       const insights = yield* Insights.Service
       const o = yield* org
@@ -125,29 +127,98 @@ describe("Insights", () => {
         cost_micro_usd: 269_064,
         data: { sandbox_id: "sbx_1", duration_ms: 1_818_000, vcpu_ms: 14_544_000, memory_mib_ms: 14_893_056_000 },
       })
+      yield* spend(o.factory, from, {
+        source: "ren-integrations",
+        type: "api.call",
+        provider: "exa",
+        cost_micro_usd: 1000,
+        data: { mcp: "exa", tool: "search" },
+      })
 
       const total = yield* insights.query(o.ada, query(o.factory.id, from, to))
-      expect(total.rows.map((row) => [row.sessions, row.calls, row.tokens.input, row.cost.ren])).toEqual([
-        [1, 1, 1000, 274_064],
+      expect(
+        total.rows.map((row) => [row.sessions, row.calls, row.tokens.input, row.cost.ren, row.computeMs, row.cost]),
+      ).toEqual([
+        [
+          1,
+          1,
+          1000,
+          275_064,
+          1_818_000,
+          { ren: 275_064, customer: 0, unpricedCalls: 0, models: 5000, compute: 269_064, tools: 1000 },
+        ],
       ])
       const byProvider = yield* insights.query(o.ada, query(o.factory.id, from, to, { groupBy: "provider" }))
       expect(byProvider.rows.map((row) => [row.key, row.calls, row.cost.ren])).toEqual([
         ["e2b", 0, 269_064],
         ["anthropic", 1, 5000],
+        ["exa", 0, 1000],
       ])
+      const models = yield* insights.query(
+        o.ada,
+        query(o.factory.id, from, to, { groupBy: "provider", type: ["model.call"] }),
+      )
+      expect(models.rows.map((row) => [row.key, row.cost.ren])).toEqual([["anthropic", 5000]])
     }).pipe(Effect.provide(Insights.layer)),
   )
 
-  it.live("a person who cannot see the space gets NotFound", () =>
-    Effect.gen(function* () {
-      const insights = yield* Insights.Service
-      const o = yield* org
-      const now = yield* DateTime.now
-      const error = yield* insights
-        .query(o.grace, query(o.factory.id, now, DateTime.add(now, { hours: 1 })))
-        .pipe(Effect.flip)
-      expect(error._tag).toBe("Primitive.NotFound")
-    }).pipe(Effect.provide(Insights.layer)),
+  it.live(
+    "a person who cannot see the space gets NotFound, and a member who is not an admin cannot read the organization",
+    () =>
+      Effect.gen(function* () {
+        const insights = yield* Insights.Service
+        const o = yield* org
+        const now = yield* DateTime.now
+        const error = yield* insights
+          .query(o.grace, query(o.factory.id, now, DateTime.add(now, { hours: 1 })))
+          .pipe(Effect.flip)
+        expect(error._tag).toBe("Primitive.NotFound")
+        const organization = yield* insights
+          .query(o.ada, query(undefined, now, DateTime.add(now, { hours: 1 })))
+          .pipe(Effect.flip)
+        expect(organization._tag).toBe("Primitive.Forbidden")
+      }).pipe(Effect.provide(Insights.layer)),
+  )
+
+  it.live(
+    "the organization's usage adds up its spaces and its inference keys, and hides another person's private space",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const insights = yield* Insights.Service
+        const spaces = yield* Space.Service
+        const o = yield* org
+        const from = utc("2026-10-01T00:00:00Z")
+        const to = utc("2026-10-02T00:00:00Z")
+        const old = yield* spaces.create(o.ada, { name: "Old" })
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ kind: "private", owner_user_id: o.grace.userId })
+          .where(eq(Database.Schema.space.id, o.eng.id))
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ archived_at: DateTime.toDateUtc(from) })
+          .where(eq(Database.Schema.space.id, old.id))
+        yield* spend(o.factory, from)
+        yield* spend(o.eng, from, { cost_micro_usd: 3000 })
+        yield* spend(old, from, { cost_micro_usd: 2000 })
+        yield* spend(o.factory, from, {
+          workload: "inference-key:ifk_ada",
+          space: null,
+          member: yield* memberOf(o.ada.userId),
+          cost_micro_usd: 1000,
+        })
+
+        const total = yield* insights.query(o.admin, query(undefined, from, to))
+        expect(total.rows.map((row) => [row.calls, row.cost.ren])).toEqual([[4, 11_000]])
+        const bySpace = yield* insights.query(o.admin, query(undefined, from, to, { groupBy: "space" }))
+        expect(bySpace.rows.map((row) => [row.key, row.label, row.cost.ren])).toEqual([
+          [o.factory.id, "Factory", 5000],
+          [o.eng.id, "Private space · Ada", 3000],
+          [old.id, "Old (archived)", 2000],
+          [null, null, 1000],
+        ])
+      }).pipe(Effect.provide(Insights.layer)),
   )
 
   it.live("day buckets follow the time zone, and a day with no data is a row of zeros", () =>

@@ -3,7 +3,14 @@
   "ignore": ["repos/**", "**/generated/**", "**/*.gen.ts"],
   "workspaces": {
     ".": {
-      "entry": ["script/**/*.ts", "oxlint.config.ts", ".opencode/plugins/*.ts"],
+      "entry": [
+        "script/**/*.ts",
+        "oxlint.config.ts",
+        ".opencode/plugins/*.ts",
+        "infra/cloudflare/dispatcher.js",
+        "infra/aws/app-function.js"
+      ],
+      "ignoreBinaries": ["fmt"],
       "ignoreDependencies": ["@opencode/plugin"]
     },
     "packages/*": {
@@ -14,6 +21,7 @@
         "src/worker.ts",
         "src/bun.ts",
         "e2b/stage.ts",
+        "machine/bundle.ts",
         "test/lib/environment-worker.ts",
         "test/lib/sync-storage-worker.ts",
         "test/lib/crash-host.ts",
@@ -24,8 +32,13 @@
       "ignoreBinaries": ["celld", "e2b", "mktemp"],
       "ignoreDependencies": ["cloudflare"]
     },
+    "packages/chat": {
+      "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"],
+      "ignoreDependencies": ["@ren/protocol"]
+    },
     "packages/core": {
-      "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "script/**/*.ts"]
+      "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "test/fixtures/artifacts/**/_worker.js", "script/**/*.ts"],
+      "ignoreDependencies": ["cloudflare"]
     },
     "packages/executor": {
       "entry": ["test/**/*.test.ts"],
@@ -47,14 +60,22 @@
       "ignoreDependencies": ["@ren/server"]
     },
     "packages/site": {
-      "entry": ["src/layouts/legal.astro"],
+      "entry": ["src/layouts/legal.astro", "test/**/*.test.ts", "script/**/*.ts"],
       "ignoreDependencies": ["react-dom", "@types/react-dom"]
     },
     "packages/httpapi-codegen": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"]
+    },
+    "packages/mobile": {
+      "entry": ["script/**/*.ts", "fingerprint.config.js"],
+      "ignoreDependencies": [
+        "@expo-google-fonts/ibm-plex-mono",
+        "@expo-google-fonts/inter",
+        "react-native-drawer-layout"
+      ]
     }
   },
-  "ignoreDependencies": ["tailwindcss", "@fontsource/ibm-plex-mono", "auth", "turbo", "@typescript/native-preview"],
+  "ignoreDependencies": ["tailwindcss", "@fontsource/ibm-plex-mono", "auth", "turbo"],
   "ignoreIssues": {
     "packages/server/src/primitive.ts": ["duplicates"]
   }

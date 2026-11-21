@@ -1,5 +1,5 @@
 /* oxlint-disable react/only-export-components, eslint/no-restricted-imports, react/forbid-component-props -- stands in for @tabler/icons-react (aliased in vite.config.ts): filled Heroicons under Tabler's names, Tabler for the rest; the one place that imports Heroicons and maps Tabler's color prop to style */
-import type { ComponentType, SVGProps } from "react"
+import { useId, type ComponentType, type SVGProps } from "react"
 import {
   AdjustmentsHorizontalIcon,
   ArchiveBoxIcon,
@@ -12,6 +12,7 @@ import {
   ArrowRightIcon,
   ArrowRightStartOnRectangleIcon,
   ArrowTopRightOnSquareIcon,
+  ArrowTurnUpRightIcon,
   ArrowUpIcon,
   ArrowUpLeftIcon,
   ArrowUpRightIcon,
@@ -34,6 +35,7 @@ import {
   CalendarIcon,
   ChartBarIcon,
   ChartBarSquareIcon,
+  ChartPieIcon,
   ChatBubbleLeftEllipsisIcon,
   ChatBubbleLeftIcon,
   ChatBubbleOvalLeftIcon,
@@ -74,6 +76,7 @@ import {
   GlobeAltIcon,
   HandRaisedIcon,
   HashtagIcon,
+  InboxIcon,
   InformationCircleIcon,
   KeyIcon,
   LanguageIcon,
@@ -100,15 +103,16 @@ import {
   PlusIcon,
   PowerIcon,
   PresentationChartLineIcon,
-  PuzzlePieceIcon,
   QuestionMarkCircleIcon,
   QueueListIcon,
+  RectangleStackIcon,
   ServerIcon,
   ShieldCheckIcon,
   ShieldExclamationIcon,
   SignalIcon,
   SparklesIcon,
   Squares2X2Icon,
+  SquaresPlusIcon,
   StopIcon,
   SunIcon,
   SwatchIcon,
@@ -157,13 +161,102 @@ const wrap = (Hero: ComponentType<SVGProps<SVGSVGElement>>, weight = 0) => {
   return HeroIcon
 }
 
+const SquaresPlus = wrap(SquaresPlusIcon)
+
+export function IconLayoutGridAdd({ className, ...rest }: Props) {
+  return <SquaresPlus className={["-scale-y-100", className].filter(Boolean).join(" ")} {...rest} />
+}
+
+const lobes = [
+  [7, 5.5, 3],
+  [4.6, 9, 2.9],
+  [5, 13.2, 3],
+  [8, 15.2, 2.6],
+  [13, 5.5, 3],
+  [15.4, 9, 2.9],
+  [15, 13.2, 3],
+  [12, 15.2, 2.6],
+] as const
+
+function BrainIcon(props: SVGProps<SVGSVGElement>) {
+  const mask = useId()
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
+      <mask id={mask}>
+        <g fill="white" stroke="none">
+          {lobes.map((lobe) => (
+            <circle key={lobe.join()} cx={lobe[0]} cy={lobe[1]} r={lobe[2]} />
+          ))}
+          <rect x={5} y={4} width={10} height={12} />
+        </g>
+        <path
+          d="M10 2.5v15.5M1.2 10.5h2.8c1.1 0 2 .9 2 2M18.8 10.5H16c-1.1 0-2 .9-2 2"
+          fill="none"
+          stroke="black"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </mask>
+      <rect width={20} height={20} mask={`url(#${mask})`} />
+    </svg>
+  )
+}
+
+function PromptIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M3.5 5.5 8 10l-4.5 4.5M10.5 15h6" />
+    </svg>
+  )
+}
+
+export const IconPrompt = wrap(PromptIcon)
+
+const hexNet = [
+  [10, 3],
+  [16.06, 6.5],
+  [16.06, 13.5],
+  [10, 17],
+  [3.94, 13.5],
+  [3.94, 6.5],
+] as const
+
+function HexNetIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden={props["aria-label"] ? undefined : true} {...props}>
+      <path
+        d={hexNet.map((point) => `M10 10L${point[0]} ${point[1]}`).join("")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        strokeLinecap="round"
+      />
+      <circle cx={10} cy={10} r={2.6} />
+      {hexNet.map((point) => (
+        <circle key={point.join()} cx={point[0]} cy={point[1]} r={1.8} />
+      ))}
+    </svg>
+  )
+}
+
+export const IconAgent = wrap(HexNetIcon)
 export const IconActivity = wrap(ChartBarSquareIcon)
 export const IconAdjustmentsHorizontal = wrap(AdjustmentsHorizontalIcon)
 export const IconAlertCircle = wrap(ExclamationCircleIcon)
 export const IconAlertOctagon = wrap(ExclamationCircleIcon)
 export const IconAlertTriangle = wrap(ExclamationTriangleIcon)
 export const IconAntennaBars5 = wrap(SignalIcon)
-export const IconApps = wrap(PuzzlePieceIcon)
+export const IconApps = wrap(Squares2X2Icon)
 export const IconArchive = wrap(ArchiveBoxIcon)
 export const IconArrowBackUp = wrap(ArrowUturnLeftIcon)
 export const IconArrowDown = wrap(ArrowDownIcon)
@@ -180,10 +273,11 @@ export const IconAt = wrap(AtSymbolIcon)
 export const IconAtom = wrap(BeakerIcon)
 export const IconBan = wrap(NoSymbolIcon)
 export const IconBook = wrap(BookOpenIcon)
-export const IconBrain = wrap(LightBulbIcon)
+export const IconBrain = wrap(BrainIcon)
 export const IconBrowser = wrap(WindowIcon)
 export const IconBuilding = wrap(BuildingOffice2Icon)
 export const IconBuildingFactory2 = wrap(WrenchScrewdriverIcon)
+export const IconBulb = wrap(LightBulbIcon)
 export const IconCalendar = wrap(CalendarIcon)
 export const IconCalendarDue = wrap(CalendarDaysIcon)
 export const IconCalendarEvent = wrap(CalendarDateRangeIcon)
@@ -191,6 +285,7 @@ export const IconCalendarMonth = wrap(CalendarDaysIcon)
 export const IconCalendarWeek = wrap(CalendarDaysIcon)
 export const IconChartBar = wrap(ChartBarIcon)
 export const IconChartLine = wrap(PresentationChartLineIcon)
+export const IconChartPie = wrap(ChartPieIcon)
 export const IconCheck = wrap(CheckIcon)
 export const IconChecklist = wrap(ClipboardDocumentCheckIcon)
 export const IconChevronDown = wrap(ChevronDownIcon)
@@ -204,6 +299,7 @@ export const IconClipboardText = wrap(ClipboardDocumentListIcon)
 export const IconClock = wrap(ClockIcon)
 export const IconCode = wrap(CodeBracketIcon)
 export const IconCopy = wrap(DocumentDuplicateIcon)
+export const IconCornerUpRight = wrap(ArrowTurnUpRightIcon)
 export const IconCpu = wrap(CpuChipIcon)
 export const IconCreditCard = wrap(CreditCardIcon)
 export const IconCube = wrap(CubeIcon)
@@ -233,16 +329,19 @@ export const IconHandStop = wrap(HandRaisedIcon)
 export const IconHash = wrap(HashtagIcon)
 export const IconHelpCircle = wrap(QuestionMarkCircleIcon)
 export const IconHistory = wrap(ClockIcon)
+export const IconInbox = wrap(InboxIcon)
 export const IconInfoCircle = wrap(InformationCircleIcon)
 export const IconKey = wrap(KeyIcon)
 export const IconLanguage = wrap(LanguageIcon)
 export const IconLayoutDashboard = wrap(Squares2X2Icon)
 export const IconLayoutGrid = wrap(BuildingStorefrontIcon)
 export const IconLayoutGridFilled = wrap(Squares2X2Icon)
+
 export const IconLayoutKanban = wrap(ViewColumnsIcon)
 export const IconLifebuoy = wrap(LifebuoyIcon)
 export const IconLink = wrap(LinkIcon)
 export const IconLinkOff = wrap(LinkSlashIcon)
+export const IconList = wrap(ListBulletIcon)
 export const IconListCheck = wrap(ListBulletIcon)
 export const IconListSearch = wrap(MagnifyingGlassIcon)
 export const IconLock = wrap(LockClosedIcon)
@@ -256,6 +355,7 @@ export const IconMaximize = wrap(ArrowsPointingOutIcon)
 export const IconMessage = wrap(ChatBubbleLeftIcon)
 export const IconMessageChatbot = wrap(ChatBubbleLeftEllipsisIcon)
 export const IconMessageCircle = wrap(ChatBubbleOvalLeftIcon)
+export const IconMessageReport = wrap(ChatBubbleLeftEllipsisIcon)
 export const IconMicrophone = wrap(MicrophoneIcon)
 export const IconMinimize = wrap(ArrowsPointingInIcon)
 export const IconMinus = wrap(MinusIcon)
@@ -265,6 +365,7 @@ export const IconPalette = wrap(SwatchIcon)
 export const IconPaperclip = wrap(PaperClipIcon)
 export const IconPencil = wrap(PencilIcon)
 export const IconPhoto = wrap(PhotoIcon)
+export const IconPhotoOff = wrap(PhotoIcon)
 export const IconPhotoUp = wrap(PhotoIcon)
 export const IconPin = wrap(BookmarkIcon)
 export const IconPinnedOff = wrap(BookmarkSlashIcon)
@@ -289,6 +390,7 @@ export const IconShield = wrap(ShieldCheckIcon)
 export const IconShieldLock = wrap(ShieldCheckIcon)
 export const IconShieldQuestion = wrap(ShieldExclamationIcon)
 export const IconSparkles = wrap(SparklesIcon)
+export const IconStack2 = wrap(RectangleStackIcon)
 export const IconSubtask = wrap(QueueListIcon)
 export const IconSun = wrap(SunIcon)
 export const IconTag = wrap(TagIcon)
@@ -311,7 +413,4 @@ export const IconWifiOff = wrap(SignalIcon)
 export const IconWorld = wrap(GlobeAltIcon)
 export const IconWorldSearch = wrap(GlobeAltIcon)
 export const IconWorldWww = wrap(GlobeAltIcon)
-export const IconLayoutSidebar = wrap(ViewColumnsIcon)
-export const IconLayoutSidebarRight = wrap(ViewColumnsIcon)
-export const IconLayoutSidebarRightCollapse = wrap(ViewColumnsIcon)
 export const IconMessages = wrap(ChatBubbleLeftRightIcon)

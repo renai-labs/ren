@@ -32,6 +32,17 @@ describe("timeline text", () => {
     expect(TimelineText.retryStatus([retrying, assistant("msg_after", [])])).toBeUndefined()
   })
 
+  test("elapsed pads the trailing unit: 12s, 1m 05s, 1h 02m", () => {
+    expect(TimelineText.elapsed(0)).toBe("0s")
+    expect(TimelineText.elapsed(12_400)).toBe("12s")
+    expect(TimelineText.elapsed(59_999)).toBe("59s")
+    expect(TimelineText.elapsed(60_000)).toBe("1m 00s")
+    expect(TimelineText.elapsed(65_000)).toBe("1m 05s")
+    expect(TimelineText.elapsed(3_599_000)).toBe("59m 59s")
+    expect(TimelineText.elapsed(3_720_000)).toBe("1h 02m")
+    expect(TimelineText.elapsed(-5_000)).toBe("0s")
+  })
+
   test("formats a duration in seconds, then minutes and seconds", () => {
     expect(TimelineText.duration(4_400)).toBe("4s")
     expect(TimelineText.duration(59_600)).toBe("1m 0s")
@@ -159,6 +170,14 @@ describe("timeline text", () => {
     expect(TimelineText.shellError(shell({ exit: 2 }))).toBe("Exit 2")
     expect(TimelineText.shellError(shell({ exit: 0 }))).toBeUndefined()
     expect(TimelineText.shellError(shell({ status: "running" }))).toBeUndefined()
+  })
+
+  test("names how a background command ended, with a stop before its exit code", () => {
+    expect(TimelineText.shellEnd({ state: "cancelled", exit: 130 })).toEqual({ text: "Stopped", failed: false })
+    expect(TimelineText.shellEnd({ timeout: true })).toEqual({ text: "Timed out", failed: true })
+    expect(TimelineText.shellEnd({ state: "error", exit: 2 })).toEqual({ text: "Exited with code 2", failed: true })
+    expect(TimelineText.shellEnd({ state: "error" })).toEqual({ text: "Failed", failed: true })
+    expect(TimelineText.shellEnd({ exit: 0 })).toEqual({ text: "Exited", failed: false })
   })
 
   test("highlights mention ranges in order and skips overlaps", () => {

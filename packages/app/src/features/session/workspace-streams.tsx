@@ -1,14 +1,7 @@
 import { type ReactNode, useRef, useState } from "react"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
-import {
-  IconArrowLeft,
-  IconArrowRight,
-  IconDeviceDesktop,
-  IconHandFinger,
-  IconRefresh,
-  IconWorld,
-} from "@tabler/icons-react"
+import { IconArrowLeft, IconArrowRight, IconHandFinger, IconRefresh, IconWorld } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@ren/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@ren/ui/input-group"
@@ -27,18 +20,6 @@ function Waiting(props: { icon: ReactNode; title: string; description: string })
         <EmptyDescription>{props.description}</EmptyDescription>
       </EmptyHeader>
     </Empty>
-  )
-}
-
-export function ComputerTab() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <Waiting
-        icon={<IconDeviceDesktop />}
-        title="Computer"
-        description="The environment’s desktop streams here once it’s connected."
-      />
-    </div>
   )
 }
 

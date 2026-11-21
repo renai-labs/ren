@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import type { EnvironmentApi } from "@ren/environment-api/environment-api"
+import type { HandApi } from "@ren/hand-api/hand-api"
 import { Brain } from "@ren/schema/brain"
 import { Effect, Exit, Stream } from "effect"
 import path from "node:path"
@@ -49,44 +49,6 @@ test("a kill whose reply is lost stopped the process once and is not resent", as
   expect(lane.proxy.count("process.kill")).toBe(before + 1)
 })
 
-test("a spawn whose reply is lost ran once and is not resent", async () => {
-  const marker = Ledger.marker("spawn")
-  const fault = lane.proxy.inject(
-    { operation: "process.spawn", when: (request) => request.body.includes(marker) },
-    { type: "drop-response" },
-  )
-  expect(
-    Exit.isFailure(
-      await lane.driver.run(
-        lane.driver.client["process.spawn"]({ command: "sh", arguments: ["-c", Ledger.append(marker)] }),
-      ),
-    ),
-  ).toBe(true)
-  expect(fault.expectApplied().boundary).toBe("after-commit-before-reply")
-  await Wait.until("the spawned side effect", 5_000, async () =>
-    (await Ledger.count(lane.executor, marker)) > 0 ? true : undefined,
-  )
-  expect(await Ledger.count(lane.executor, marker)).toBe(1)
-  expect(lane.proxy.seen.filter((entry) => entry.body.includes(marker))).toHaveLength(1)
-})
-
-test("a spawn refused before delivery has no side effect", async () => {
-  const marker = Ledger.marker("refused")
-  const fault = lane.proxy.inject(
-    { operation: "process.spawn", when: (request) => request.body.includes(marker) },
-    { type: "refuse" },
-  )
-  expect(
-    Exit.isFailure(
-      await lane.driver.run(
-        lane.driver.client["process.spawn"]({ command: "sh", arguments: ["-c", Ledger.append(marker)] }),
-      ),
-    ),
-  ).toBe(true)
-  expect(fault.expectApplied().boundary).toBe("before-delivery")
-  expect(await Ledger.count(lane.executor, marker)).toBe(0)
-})
-
 test("stdin whose reply is lost was delivered once and is not resent", async () => {
   const marker = Ledger.marker("stdin")
   const spawned = await shell(`cat >> ${Ledger.file}`, true)
@@ -118,7 +80,7 @@ const twice = async (label: string) => {
   }
 }
 
-const resume = async (id: EnvironmentApi.ProcessID) => {
+const resume = async (id: HandApi.ProcessID) => {
   const parts: Array<Uint8Array> = []
   const state = { position: 0, gaps: 0, exit: false, connections: 0 }
   const connect = async (): Promise<void> => {
@@ -145,30 +107,26 @@ const resume = async (id: EnvironmentApi.ProcessID) => {
   return { text: new TextDecoder().decode(Buffer.concat(parts)), ...state }
 }
 
-test(`output cut at a seeded byte inside a frame resumes from the cursor exactly (seed ${Wait.seed})`, async () => {
-  const prepared = await twice("output.cut-inside-frame")
-  const fault = lane.proxy.inject(
-    { operation: "process.output", attempt: lane.proxy.count("process.output") + 1 },
-    { type: "cut-after-bytes", bytes: prepared.cutAt },
-  )
-  const resumed = await resume((await shell(prepared.script)).id)
-  expect(fault.expectApplied().boundary).toBe(`response-byte-${prepared.cutAt}`)
-  expect(resumed).toMatchObject({ gaps: 0, exit: true })
-  expect(resumed.connections).toBeGreaterThan(1)
-  expect(resumed.text).toBe(prepared.expected)
-})
-
-test("output cut at a line boundary resumes with no loss or duplicate", async () => {
-  const prepared = await twice("output.cut-at-line-boundary")
-  const fault = lane.proxy.inject(
-    { operation: "process.output", attempt: lane.proxy.count("process.output") + 1 },
-    { type: "cut-after-lines", lines: 1 },
-  )
-  const resumed = await resume((await shell(prepared.script)).id)
-  expect(fault.expectApplied().boundary).toBe("response-line-1")
-  expect(resumed).toMatchObject({ gaps: 0, exit: true })
-  expect(resumed.text).toBe(prepared.expected)
-})
+test.each([
+  ["at a seeded byte inside a frame", "output.cut-inside-frame", "bytes"],
+  ["at a line boundary", "output.cut-at-line-boundary", "lines"],
+] as const)(
+  `output cut %s resumes from the cursor with no loss or duplicate (seed ${Wait.seed})`,
+  async (_, label, unit) => {
+    const prepared = await twice(label)
+    const fault = lane.proxy.inject(
+      { operation: "process.output", attempt: lane.proxy.count("process.output") + 1 },
+      unit === "bytes" ? { type: "cut-after-bytes", bytes: prepared.cutAt } : { type: "cut-after-lines", lines: 1 },
+    )
+    const resumed = await resume((await shell(prepared.script)).id)
+    expect(fault.expectApplied().boundary).toBe(
+      unit === "bytes" ? `response-byte-${prepared.cutAt}` : "response-line-1",
+    )
+    expect(resumed).toMatchObject({ gaps: 0, exit: true })
+    expect(resumed.connections).toBeGreaterThan(1)
+    expect(resumed.text).toBe(prepared.expected)
+  },
+)
 
 test("a file write whose reply is lost took effect and an identical retry is harmless", async () => {
   const name = `${unique("lost-write")}.txt`

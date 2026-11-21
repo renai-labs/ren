@@ -1,4 +1,5 @@
 import { afterAll, describe, expect } from "bun:test"
+import { BrainProviders } from "./lib/brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -49,7 +50,7 @@ afterAll(() => tokens.stop(true))
 const it = testEffect(
   Layer.mergeAll(
     CredentialRefresh.layer,
-    Space.layer,
+    Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer,
@@ -473,6 +474,46 @@ describe("Credentials: move and copy (owner-access §4 rules 2 to 4)", () => {
         expect(failure(foreign)).toContain("Primitive.NotFound")
       }),
   )
+
+  it.live("a sign-in that nobody holds is not copied either, so two owners never share one refresh token", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credentials.Service
+      const database = yield* Database.Service
+      const envelope = yield* Envelope.Service
+      const setup = yield* team()
+      const id = Credential.ID.create()
+      const value = yield* envelope.seal(
+        Redacted.make(
+          JSON.stringify({
+            type: "oauth",
+            accessToken: "tok_1",
+            refresh: {
+              refreshToken: "ref_1",
+              clientId: "client",
+              tokenEndpoint: "https://auth.example.com/token",
+              tokenEndpointAuth: "none",
+            },
+          }),
+        ),
+        { organizationId: setup.organizationId, kind: "credential", id },
+      )
+      yield* database.db.insert(Database.Schema.credential).values({
+        id,
+        organization_id: setup.organizationId,
+        owner: "space",
+        space_id: setup.space.id,
+        label: "MCP_ADNOVA",
+        type: "oauth",
+        value,
+        hosts: ["app.adnova.ai"],
+        inject: { op: "setHeader", name: "Authorization", format: "Bearer {value}" },
+        created_by_user_id: setup.ada.userId,
+      })
+      const copied = yield* Effect.exit(credentials.copy(setup.ada, id, { owner: { kind: "org" } }))
+      expect(failure(copied)).toContain("Primitive.Forbidden")
+      expect(failure(copied)).toContain("sign in again")
+    }),
+  )
 })
 
 describe("Credentials: lookup (README §6.3, §6.4)", () => {
@@ -511,31 +552,25 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
       const candidates = [candidate("OPENAI_API_KEY", "space", ["*"])]
       const found = Credentials.match(candidates, { host: "api.openai.com", placeholders: ["ren:OPENAI_API_KEY"] })
       expect(found.ok && found.matches.map((matched) => matched.candidate.label)).toEqual(["OPENAI_API_KEY"])
-      expect(Credentials.match(candidates, { host: "api.openai.com", placeholders: [] })).toEqual({
-        ok: true,
-        matches: [],
-      })
     }),
   )
 
-  it.effect("two credentials that inject by host for one host, without a placeholder, are ambiguous", () =>
-    Effect.sync(() => {
-      const header: Credential.Inject = { op: "setHeader", name: "Authorization", format: "Bearer {value}" }
-      const candidates = [
-        candidate("GITHUB", "space", ["api.github.com"], header),
-        candidate("GITHUB_BOT", "org", ["api.github.com"], header),
-      ]
-      expect(Credentials.match(candidates, { host: "api.github.com", placeholders: [] })).toEqual({
-        ok: false,
-        reason: "ambiguous",
-      })
-      const one = Credentials.match(candidates.slice(0, 1), { host: "api.github.com", placeholders: [] })
-      expect(one.ok && one.matches.map((matched) => matched.candidate.label)).toEqual(["GITHUB"])
-      expect(Credentials.match(candidates, { host: "api.stripe.com", placeholders: [] })).toEqual({
-        ok: true,
-        matches: [],
-      })
-    }),
+  it.effect(
+    "a request without a placeholder gets no credential; one that sets a header goes in by its placeholder",
+    () =>
+      Effect.sync(() => {
+        const header: Credential.Inject = { op: "setHeader", name: "Authorization", format: "Bearer {value}" }
+        const candidates = [
+          candidate("GITHUB", "space", ["api.github.com"], header),
+          candidate("GITHUB_BOT", "org", ["api.github.com"], header),
+        ]
+        expect(Credentials.match(candidates, { host: "api.github.com", placeholders: [] })).toEqual({
+          ok: true,
+          matches: [],
+        })
+        const found = Credentials.match(candidates, { host: "api.github.com", placeholders: ["ren:GITHUB_BOT"] })
+        expect(found.ok && found.matches.map((matched) => matched.candidate.label)).toEqual(["GITHUB_BOT"])
+      }),
   )
 
   it.live(

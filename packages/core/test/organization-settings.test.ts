@@ -21,12 +21,16 @@ const settings = {
 }
 
 describe("OrganizationSettings", () => {
-  it.live("only org admins edit org settings, and every member reads them", () =>
+  it.live("an org reads empty settings until an admin edits them; only admins edit, and every member reads", () =>
     Effect.gen(function* () {
       const organization = yield* OrganizationSettings.Service
       const organizationId = yield* Seed.organization()
       const admin = yield* Seed.actor(organizationId, "admin")
       const member = yield* Seed.actor(organizationId, "member")
+      expect(yield* organization.get(member, organizationId)).toMatchObject({
+        settings: { permissions: [], references: [] },
+        updatedAt: null,
+      })
       expect((yield* Effect.flip(organization.update(member, organizationId, { settings })))._tag).toBe(
         "Primitive.Forbidden",
       )
@@ -34,18 +38,6 @@ describe("OrganizationSettings", () => {
       expect(updated.settings).toEqual(settings)
       expect(yield* organization.get(member, organizationId)).toMatchObject({ settings, canUpdate: false })
       expect((yield* organization.get(admin, organizationId)).canUpdate).toBe(true)
-    }),
-  )
-
-  it.live("an org with no row reads as empty settings", () =>
-    Effect.gen(function* () {
-      const organization = yield* OrganizationSettings.Service
-      const organizationId = yield* Seed.organization()
-      const member = yield* Seed.actor(organizationId, "member")
-      expect(yield* organization.get(member, organizationId)).toMatchObject({
-        settings: { permissions: [], references: [] },
-        updatedAt: null,
-      })
     }),
   )
 

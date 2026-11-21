@@ -12,7 +12,7 @@ const wordEnd = (text: string, from: number) => {
 
 export function useSmoothText(text: string, options: { streaming: boolean }) {
   const streaming = options.streaming
-  const [shown, setShown] = useState(text.length)
+  const [shown, setShown] = useState(streaming ? 0 : text.length)
   const behind = shown < text.length
   useEffect(() => {
     if (!behind) return

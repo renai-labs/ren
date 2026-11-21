@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import type { PullEnv } from "@ren/host-api/ren-host-api"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Auth } from "@ren/schema/auth"
-import { Brain } from "@ren/schema/brain"
+import { Hand } from "@ren/schema/hand"
 import { Credential } from "@ren/schema/credential"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
@@ -82,14 +82,14 @@ export interface Request {
 
 export interface Matched {
   readonly candidate: Candidate
-  readonly placeholder: Option.Option<{ readonly text: string; readonly field: Option.Option<string> }>
+  readonly placeholder: { readonly text: string; readonly field: Option.Option<string> }
 }
 
 export type Match =
   | { readonly ok: true; readonly matches: ReadonlyArray<Matched> }
   | {
       readonly ok: false
-      readonly reason: "host_not_allowed" | "credential_missing" | "ambiguous"
+      readonly reason: "host_not_allowed" | "credential_missing"
       readonly label?: string
     }
 
@@ -105,25 +105,13 @@ const allowsHost = (candidate: Candidate, request: Request) =>
 const byOrder = (candidates: ReadonlyArray<Candidate>) =>
   candidates.toSorted((left, right) => lookupOrder.indexOf(left.owner) - lookupOrder.indexOf(right.owner))
 
-// oxlint-disable-next-line ren/no-comments -- README §6.3. A placeholder takes the first credential of its label in the lookup order; that credential must allow the host. Without placeholders, the credentials that inject by host (`setHeader`, `route`) for this host apply, and two labels for one host are `ambiguous`.
+// oxlint-disable-next-line ren/no-comments -- README §6.3. A placeholder takes the first credential of its label in the lookup order; that credential must allow the host. A credential goes in only by its placeholder, so a request without one gets none, and the egress sends it without asking Ren.
 export const match = (candidates: ReadonlyArray<Candidate>, request: Request): Match => {
   const ordered = byOrder(candidates)
   const placeholders = request.placeholders.flatMap((text) => {
     const parsed = parse(text)
     return parsed ? [{ text, ...parsed }] : []
   })
-  if (placeholders.length === 0) {
-    const byHost = ordered.filter(
-      (candidate) =>
-        candidate.inject.op !== "replace" &&
-        candidate.inject.op !== "awsSign" &&
-        candidate.source !== "provider" &&
-        allowsHost(candidate, request),
-    )
-    const chosen = [...new Map(byHost.toReversed().map((candidate) => [candidate.label, candidate])).values()]
-    if (chosen.length > 1) return { ok: false, reason: "ambiguous" }
-    return { ok: true, matches: chosen.map((candidate) => ({ candidate, placeholder: Option.none() })) }
-  }
   const matches: Array<Matched> = []
   for (const placeholder of placeholders) {
     const labelled = ordered.filter((candidate) => candidate.label === placeholder.label)
@@ -133,7 +121,7 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
     const candidate = allowed.at(0)
     if (labelled.length === 0) return { ok: false, reason: "credential_missing", label: placeholder.label }
     if (!candidate) return { ok: false, reason: "host_not_allowed", label: placeholder.label }
-    matches.push({ candidate, placeholder: Option.some({ text: placeholder.text, field: placeholder.field }) })
+    matches.push({ candidate, placeholder: { text: placeholder.text, field: placeholder.field } })
   }
   return { ok: true, matches }
 }
@@ -233,21 +221,33 @@ const listed = Database.Schema.app_profile_space
 
 const fence = (actor: Actor.Info) => Actor.fenced(actor, members.space_id) ?? sql`true`
 
+// oxlint-disable-next-line ren/no-comments -- A workload acts for one space: a brain's, a co-located hand's (its brain's), or a remote hand's (one space per environment, PS8).
 export const scopeOf = Effect.fnUntraced(function* (
   client: Pick<Database.Transaction, "select">,
   workload: Workload.Info,
 ) {
-  const brainId = workload.kind === "brain" ? workload.id : Brain.ID.make(`brn_${workload.id.slice(4)}`)
-  const found = (yield* client
-    .select({ brain: Database.Schema.brain, space: Database.Schema.space })
-    .from(Database.Schema.brain)
-    .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
-    .where(eq(Database.Schema.brain.id, brainId))).at(0)
+  const spaces = Database.Schema.space
+  const remote =
+    workload.kind === "hand"
+      ? (yield* client
+          .select({ space: spaces })
+          .from(Database.Schema.environment)
+          .innerJoin(spaces, eq(spaces.id, Database.Schema.environment.space_id))
+          .where(eq(Database.Schema.environment.id, workload.id))).at(0)
+      : undefined
+  const brainId = workload.kind === "brain" ? workload.id : Hand.brainOf(workload.id)
+  const found =
+    remote ??
+    (yield* client
+      .select({ space: spaces })
+      .from(Database.Schema.brain)
+      .innerJoin(spaces, eq(spaces.id, Database.Schema.brain.space_id))
+      .where(eq(Database.Schema.brain.id, brainId))).at(0)
   if (!found) return Option.none<Scope>()
   return Option.some({
-    organizationId: found.brain.organization_id,
+    organizationId: found.space.organization_id,
     workload,
-    spaceId: Option.some(found.brain.space_id),
+    spaceId: Option.some(found.space.id),
     person:
       found.space.kind === "private" && !found.space.archived_at
         ? Option.fromNullishOr(found.space.owner_user_id)
@@ -803,9 +803,13 @@ export const layer = Layer.effect(
           const label = ProfileLabel.labelOf(input.item, found.profile.slug)
           const item = declared.find((entry) => entry.label === label)
           if (!item) return yield* new Primitive.NotFound({ message: "The app has no such item." })
-          if (item.kind === "oauth" || item.kind === "provider")
+          if (["oauth", "provider"].includes(item.kind))
             return yield* new Primitive.Invalid({ message: "This item connects with a sign-in.", field: "item" })
-          yield* checkAnyHost(owner, input.hosts, Credential.defaultInject(input.value.type))
+          const inject: Credential.Inject =
+            item.mcp?.auth.type === "query"
+              ? { op: "replace", in: ["query"] }
+              : Credential.defaultInject(input.value.type)
+          yield* checkAnyHost(owner, input.hosts, inject)
           const exchanged = yield* exchange(sealedOf(input.value))
           const created = yield* insert(actor, owner, {
             label,
@@ -814,7 +818,7 @@ export const layer = Layer.effect(
             value: exchanged.value,
             expiresAt: exchanged.expiresAt,
             hosts: input.hosts,
-            inject: Credential.defaultInject(input.value.type),
+            inject,
             delivery: "egress",
             accountUserId: null,
             madeFor: item.madeFor,
@@ -936,7 +940,16 @@ export const layer = Layer.effect(
         id: Credential.ID,
         input: Credential.MoveInput,
       ) {
-        const found = yield* find(actor, id, actions.copy)
+        const found = yield* find(actor, id, actions.copy).pipe(
+          Effect.catchTag("Primitive.Forbidden", () =>
+            Effect.fail(
+              new Primitive.Forbidden({
+                message:
+                  "You cannot copy this credential. Ren copies only pasted secrets you can change; for a sign-in, sign in again for the new owner or move it.",
+              }),
+            ),
+          ),
+        )
         yield* checkTarget(actor, input.owner, "copy")
         yield* checkDelivery(actor, input.owner, found.row.delivery)
         const value = yield* openRow(found.row)

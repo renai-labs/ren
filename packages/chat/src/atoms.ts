@@ -1,13 +1,14 @@
 export * as ChatAtoms from "./atoms.js"
 
+import type { FileSystem } from "@ren/schema/file-system"
 import type { Session } from "@ren/schema/session"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionVcs } from "@ren/schema/session/vcs"
 import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Queue, Stream, SubscriptionRef } from "effect"
 import type { HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
+import type { ChatCache } from "./chat-cache.js"
 import { ChatSession } from "./chat-session.js"
 import { ChatState } from "./chat-state.js"
 import { Family } from "./family.js"
@@ -22,15 +23,29 @@ export interface View {
   readonly sessionID: Session.ID
 }
 
+export interface TimelineView {
+  readonly root: Session.ID
+  readonly detail?: TimelineDetail.Detail | undefined
+}
+
+export interface ChildView extends View {
+  readonly detail?: TimelineDetail.Detail | undefined
+}
+
 export interface FileQuery {
   readonly root: Session.ID
   readonly query: string
-  readonly type?: SessionCatalog.FileType
+  readonly type?: FileSystem.EntryType
 }
 
 export interface PathView {
   readonly root: Session.ID
   readonly path: string
+}
+
+export interface FoldersView {
+  readonly root: Session.ID
+  readonly opened: ReadonlyArray<string>
 }
 
 export interface ShellView extends View {
@@ -44,14 +59,16 @@ export interface Options<R, ER> {
     sessionID: Session.ID,
     input: { readonly unreachable: boolean },
   ) => Effect.Effect<Session.ClientAccess, unknown, R>
+  readonly restart?: (sessionID: Session.ID) => Effect.Effect<void, unknown, R>
   readonly saved?: (
     sessionID: Session.ID,
     query: { readonly limit: number },
   ) => Effect.Effect<SessionMessage.Page, unknown, R>
   readonly outbox?: (sessionID: Session.ID) => NonNullable<ChatSession.Options["outbox"]>
+  readonly cache?: (sessionID: Session.ID) => ChatCache.Cache
   readonly sender?: SessionMessage.Sender
-  readonly detail?: TimelineDetail.Detail
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
+  readonly connection?: ChatSession.Options["connection"]
 }
 
 export const handoffLimit = 40
@@ -94,12 +111,15 @@ export const make = <R, ER>(options: Options<R, ER>) => {
           const opened = yield* ChatSession.make({
             sessionID,
             access: (input) => options.access(sessionID, input).pipe(Effect.provide(context)),
+            ...(options.restart && { restart: options.restart(sessionID).pipe(Effect.provide(context)) }),
             ...(saved && {
               saved: (query: { readonly limit: number }) => saved(sessionID, query).pipe(Effect.provide(context)),
             }),
             ...(options.sender && { sender: options.sender }),
             ...(handed && { handoff: handed }),
             ...(options.outbox && { outbox: options.outbox(sessionID) }),
+            ...(options.cache && { cache: options.cache(sessionID) }),
+            ...(options.connection && { connection: options.connection }),
           })
           yield* opened.open(sessionID).pipe(
             Effect.andThen(opened.enrich(sessionID)),
@@ -122,9 +142,13 @@ export const make = <R, ER>(options: Options<R, ER>) => {
               ),
             ).pipe(
               Stream.runForEach((event) =>
-                event === "online"
-                  ? opened.wake.pipe(Effect.andThen(opened.resync("The network connection is back")))
-                  : opened.foreground,
+                (event === "online"
+                  ? opened.wake.pipe(
+                      Effect.andThen(opened.retryNow),
+                      Effect.andThen(opened.resync("The network connection is back")),
+                    )
+                  : opened.foreground
+                ).pipe(Effect.andThen(opened.retryUnsent)),
               ),
               Effect.forkScoped,
             )
@@ -146,9 +170,11 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const status = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.status))
 
+  const retryAt = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.retryAt))
+
   const boot = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.boot))
 
-  const project = (get: Atom.AtomContext, view: View) =>
+  const project = (get: Atom.AtomContext, view: View, detail: TimelineDetail.Detail | undefined) =>
     AsyncResult.map(get(state(view.root)), (current): Projection.Projection => {
       const previous = Option.flatMap(get.self<AsyncResult.AsyncResult<Projection.Projection>>(), AsyncResult.value)
       return Projection.project({
@@ -158,13 +184,13 @@ export const make = <R, ER>(options: Options<R, ER>) => {
         queuedCompactionIDs: ChatState.pending(current, view.sessionID).flatMap((item) =>
           item.type === "compaction" ? [item.id] : [],
         ),
-        ...(options.detail && { detail: options.detail }),
+        ...(detail && { detail }),
         ...(Option.isSome(previous) && { previous: previous.value.rows }),
       })
     })
 
-  const timeline = Atom.family((sessionID: Session.ID) =>
-    Atom.make((get) => project(get, { root: sessionID, sessionID })),
+  const timeline = Atom.family((view: TimelineView) =>
+    Atom.make((get) => project(get, { root: view.root, sessionID: view.root }, view.detail)),
   )
 
   const reader = Atom.family((view: View) =>
@@ -175,10 +201,10 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     ),
   )
 
-  const child = Atom.family((view: View) =>
+  const child = Atom.family((view: ChildView) =>
     Atom.make((get) => {
-      get.mount(reader(view))
-      return project(get, view)
+      get.mount(reader({ root: view.root, sessionID: view.sessionID }))
+      return project(get, view, view.detail)
     }),
   )
 
@@ -236,14 +262,47 @@ export const make = <R, ER>(options: Options<R, ER>) => {
       return Effect.flatMap(get.result(session(root)), read)
     })
 
-  const folder = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.listFiles(view.path)))
+  const folder = Atom.family((view: PathView) =>
+    workspace(view.root, (opened) => opened.listFiles(view.path)).pipe(Atom.setIdleTTL("5 minutes")),
+  )
 
-  const file = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.readFile(view.path)))
+  const folders = Atom.family((view: FoldersView) =>
+    Atom.make(
+      (get) => new Map(["", ...view.opened].map((path) => [path, get(folder({ root: view.root, path }))] as const)),
+    ),
+  )
 
-  const vcs = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcs))
+  const fileExists = Atom.family((view: PathView) =>
+    Atom.make((get) => {
+      get(running(view.root))
+      const slash = view.path.lastIndexOf("/")
+      const listed = get
+        .result(folder({ root: view.root, path: view.path.slice(0, slash + 1) }))
+        .pipe(Effect.map((page) => page.entries.some((entry) => entry.type === "file" && entry.path === view.path)))
+      if (slash >= 0) return Effect.map(listed, (found) => (found ? view.path : undefined))
+      return Effect.flatMap(listed, (found) =>
+        found
+          ? Effect.succeed(view.path)
+          : Effect.flatMap(get.result(session(view.root)), (opened) => opened.searchFiles(view.path, "file")).pipe(
+              Effect.map((matches) => {
+                const named = matches.filter((entry) => entry.path.split("/").at(-1) === view.path)
+                return named.length === 1 ? named.at(0)?.path : undefined
+              }),
+            ),
+      )
+    }),
+  )
 
-  const vcsDiff = Atom.family((view: { readonly root: Session.ID; readonly mode: SessionVcs.Mode }) =>
-    workspace(view.root, (opened) => opened.vcsDiff(view.mode)),
+  const file = Atom.family((view: PathView) =>
+    workspace(view.root, (opened) => opened.readFile(view.path)).pipe(Atom.setIdleTTL("5 minutes")),
+  )
+
+  const vcs = Atom.family((view: PathView) => workspace(view.root, (opened) => opened.vcs(view.path)))
+
+  const vcsProjects = Atom.family((root: Session.ID) => workspace(root, (opened) => opened.vcsProjects))
+
+  const vcsDiff = Atom.family((view: PathView & { readonly mode: SessionVcs.Mode }) =>
+    workspace(view.root, (opened) => opened.vcsDiff(view.mode, view.path)),
   )
 
   const runningShells = Atom.family((root: Session.ID) =>
@@ -252,12 +311,6 @@ export const make = <R, ER>(options: Options<R, ER>) => {
         onNone: () => undefined,
         onSome: (current) => current.shells,
       }),
-    ),
-  )
-
-  const webSearchProviders = Atom.family((view: View) =>
-    Atom.make((get) =>
-      Effect.flatMap(get.result(session(view.root)), (opened) => opened.webSearchProviders(view.sessionID)),
     ),
   )
 
@@ -303,6 +356,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     session,
     state,
     status,
+    retryAt,
     boot,
     attention,
     timeline,
@@ -313,10 +367,12 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     commands,
     files,
     folder,
+    folders,
+    fileExists,
     file,
     vcs,
+    vcsProjects,
     vcsDiff,
-    webSearchProviders,
     shellRunning,
     runningShells,
     shell,

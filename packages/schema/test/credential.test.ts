@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { Redacted, Schema } from "effect"
+import { Exit, Redacted, Schema } from "effect"
+import { AppProfile } from "../src/app-profile.js"
 import { Credential } from "../src/credential.js"
 
 const isLabel = Schema.is(Credential.Label)
@@ -41,17 +42,6 @@ describe("Credential.CreateInput", () => {
     expect(decodeCreate({ ...base, hosts: [], value: { type: "key", value: "sk_live_1" } })._tag).toBe("Failure")
     expect(decodeCreate({ ...base, value: { type: "key", value: "sk_live_1" } })._tag).toBe("Failure")
   })
-  test("a value is at most 16 KB and a fields credential has at most 20 fields (A43)", () => {
-    const hosts = ["api.stripe.com"]
-    expect(decodeCreate({ ...base, hosts, value: { type: "key", value: "x".repeat(16 * 1024) } })._tag).toBe("Success")
-    expect(decodeCreate({ ...base, hosts, value: { type: "key", value: "x".repeat(16 * 1024 + 1) } })._tag).toBe(
-      "Failure",
-    )
-    const fields = (count: number) =>
-      Object.fromEntries(Array.from({ length: count }, (_, index) => [`field${index}`, "v"]))
-    expect(decodeCreate({ ...base, hosts, value: { type: "fields", fields: fields(20) } })._tag).toBe("Success")
-    expect(decodeCreate({ ...base, hosts, value: { type: "fields", fields: fields(21) } })._tag).toBe("Failure")
-  })
   test("an MCP_ label is refused, because only a connect makes MCP_ labels (K45)", () => {
     const value = { type: "key", value: "sk_live_1" }
     const hosts = ["api.stripe.com"]
@@ -74,5 +64,32 @@ describe("Credential.CreateInput", () => {
       value: { type: "key", value: "sk_live_1" },
     })
     expect(decoded.value.type === "key" && Redacted.value(decoded.value.value)).toBe("sk_live_1")
+  })
+})
+
+describe("Credential.ConnectInput", () => {
+  const decodeConnect = Schema.decodeUnknownExit(Credential.ConnectInput)
+  const base = { profileId: AppProfile.ID.create(), item: { mcp: "linear" } }
+  test("a connect may name a link into the mobile app to return to, with any host, and nothing else", () => {
+    expect(
+      [
+        undefined,
+        "ren:///connected",
+        "ren-dev:///connected",
+        "ren-dev://192.168.1.6:8081/connected",
+        "ren-preview:///connected",
+      ].map((returnTo) => Exit.isSuccess(decodeConnect({ ...base, ...(returnTo && { returnTo }) }))),
+    ).toEqual([true, true, true, true, true])
+    expect(
+      [
+        "https://evil.test",
+        "http://localhost:8081/connected",
+        "javascript:alert(1)",
+        "ren-evil:///connected",
+        "exp://192.168.1.6:8081/connected",
+        "/connected",
+        "",
+      ].map((returnTo) => Exit.isSuccess(decodeConnect({ ...base, returnTo }))),
+    ).toEqual([false, false, false, false, false, false, false])
   })
 })

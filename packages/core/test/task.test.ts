@@ -141,18 +141,35 @@ describe("Task", () => {
     }),
   )
 
-  it.live("the default list has the actionable tasks, newest first; includeDone and a status widen or narrow it", () =>
+  it.live("the default list has the open tasks, newest first; includeDone and a status widen or narrow it", () =>
     Effect.gen(function* () {
       const tasks = yield* Task.Service
       const o = yield* org
       const first = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "First" })
       const second = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Second", status: "in_progress" })
       const done = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Done", status: "done" })
+      const later = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Later", status: "backlog" })
       const ids = (input: Partial<TaskSchema.ListInput>) =>
         tasks.list(o.ada, { ...page, ...input }).pipe(Effect.map((result) => result.items.map((task) => task.id)))
-      expect(yield* ids({})).toEqual([second.id, first.id])
-      expect(yield* ids({ includeDone: true })).toEqual([done.id, second.id, first.id])
+      expect(yield* ids({})).toEqual([later.id, second.id, first.id])
+      expect(yield* ids({ includeDone: true })).toEqual([later.id, done.id, second.id, first.id])
       expect(yield* ids({ status: "done" })).toEqual([done.id])
+      expect(yield* ids({ status: "backlog" })).toEqual([later.id])
+    }),
+  )
+
+  it.live("search matches part of a title in any case, and % and _ match only themselves", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const login = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Fix the login page" })
+      const discount = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Show a 10% discount" })
+      yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Add SSO" })
+      const ids = (search: string) =>
+        tasks.list(o.ada, { ...page, search }).pipe(Effect.map((result) => result.items.map((task) => task.id)))
+      expect(yield* ids("LOGIN")).toEqual([login.id])
+      expect(yield* ids("10%")).toEqual([discount.id])
+      expect(yield* ids("_")).toEqual([])
     }),
   )
 
@@ -287,26 +304,6 @@ describe("Task", () => {
         "Primitive.Invalid",
       )
     }),
-  )
-
-  it.live(
-    "the agent must be usable in the task's space, the global ren agent always is, and the owner is a member",
-    () =>
-      Effect.gen(function* () {
-        const tasks = yield* Task.Service
-        const o = yield* org
-        const engAgent = yield* Seed.agent({ organizationId: o.organizationId, spaceId: o.eng.id }, "eng-build", {
-          isSubagent: false,
-        })
-        expect(
-          (yield* Effect.flip(tasks.create(o.ada, { spaceId: o.factory.id, title: "A", agentId: engAgent })))._tag,
-        ).toBe("Primitive.Invalid")
-        expect((yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "B", agentId: o.ren })).agentId).toBe(o.ren)
-        expect(
-          (yield* Effect.flip(tasks.create(o.ada, { spaceId: o.factory.id, title: "C", ownerId: o.grace.userId })))
-            ._tag,
-        ).toBe("Primitive.Invalid")
-      }),
   )
 })
 

@@ -16,17 +16,37 @@ export type PrimitiveSlug = string
 
 export type BrainScope = "session" | "space"
 
+export type EnvironmentProviderID = string
+
+export type EnvironmentTemplateID = string
+
+export type SpaceShutdownReport = { finishedAt: string; problems: Array<string> }
+
 export type SpaceMembershipID = string
 
 export type FactoryStartMode = "new" | "continue"
 
+export type SpaceJoinRequestID = string
+
 export type SpaceAssignmentID = string
 
-export type EnvironmentTemplateID = string
+export type SpaceJoinRequestStatus = "pending" | "approved" | "declined" | "cancelled"
 
-export type EnvironmentProviderID = string
+export type SpaceInviteLinkToken = string
 
-export type SpaceEnvironmentTemplateID = string
+export type SpaceInviteLinkState = "joinable" | "member" | "outside" | "invalid"
+
+export type OrganizationInviteLinkID = string
+
+export type OrganizationInviteLinkToken = string
+
+export type OrganizationInviteLinkState = "pending" | "expired" | "revoked" | "invalid"
+
+export type HostNamePattern = string
+
+export type EnvironmentTemplateBuildStatus = "queued" | "building" | "ready" | "failed"
+
+export type EnvironmentTemplateAffectedSpaces = { spaces: Array<{ id: string; name: string }> }
 
 export type SessionModel = { endpointId: string; modelId: string; variant?: string }
 
@@ -44,8 +64,6 @@ export type ReferenceDescription = string
 
 export type MemoryPath = string
 
-export type DriveFile = { path: string; size: number; modifiedAt: string }
-
 export type WriteResultUpload = {
   uploadId: string
   uploadUrl: string
@@ -54,6 +72,19 @@ export type WriteResultUpload = {
 }
 
 export type DriveLink = { url: string; expiresAt: string }
+
+export type FileSystemEntryType = "file" | "directory"
+
+export type FileSystemAction = "upload" | "write" | "remove"
+
+export type FileSystemContent = {
+  path: string
+  mime: string
+  size: number
+  encoding: "utf8" | "base64"
+  content: string
+  truncated: boolean
+}
 
 export type AgentID = string
 
@@ -67,7 +98,7 @@ export type CredentialOAuthApp = { kind: "oauth_app"; name: string; description?
 
 export type CredentialOption = { label: string; value: string; hint?: string }
 
-export type AppPackages = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
+export type PackagesInfo = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
 
 export type CredentialEnvName = string
 
@@ -96,6 +127,19 @@ export type AppProfileItemStatus = "ok" | "missing" | "reconnect" | "unavailable
 export type CredentialID = string
 
 export type AppProfileOAuthAppGate = { name: string; isConfigured: boolean }
+
+export type McpToolPrice = { usd: number; unit: string; note?: string }
+
+export type McpInspectionServer = {
+  name?: string
+  title?: string
+  version?: string
+  description?: string
+  icon?: string
+  websiteUrl?: string
+}
+
+export type McpInspectionClient = "metadata-document" | "registration" | "oauth-app"
 
 export type AgentMembershipID = string
 
@@ -128,9 +172,13 @@ export type SessionStartingAccess = { status: "starting"; phase: string }
 
 export type SessionFailedAccess = { status: "failed"; reason: string }
 
+export type SessionStoppedAccess = { status: "stopped" }
+
 export type SessionMessageID = string
 
 export type SessionModelRef = { id: string; providerID: string; variant?: string }
+
+export type SessionMessageQuote = { type: "quote"; text: string; comment?: string; source?: string }
 
 export type SessionMessageFileSource = { type: "inline" } | { type: "uri"; uri: string }
 
@@ -148,11 +196,19 @@ export type WebhookOriginInfo = { webhookId: string; name: string; requestId: st
 
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
-export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
+export type SessionMessageSyntheticMetadata = {
+  source?: string
+  childID?: string
+  shellID?: string
+  jobID?: string
+  state?: string
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  timeout?: boolean
+}
 
 export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
 
-export type SessionMessageText = { type: "text"; text: string }
+export type SessionMessageText = { type: "text"; text: string; time?: { created: number; completed?: number } }
 
 export type SessionMessageReasoning = {
   type: "reasoning"
@@ -187,7 +243,7 @@ export type TaskID = string
 
 export type TaskSubtasks = { total: number; done: number }
 
-export type TaskStatus = "todo" | "in_progress" | "done" | "dismissed"
+export type TaskStatus = "backlog" | "todo" | "in_progress" | "done" | "dismissed"
 
 export type TaskPriority = "low" | "medium" | "high"
 
@@ -225,6 +281,8 @@ export type SessionLinksLinkedPullRequest = { url: string; number: number }
 
 export type SessionLinksIssue = { kind: "github_issue" | "linear_issue"; url: string }
 
+export type SessionUsageSource = "provider" | "billed"
+
 export type PullRequestState = "open" | "draft" | "merged" | "closed"
 
 export type ScheduleID = string
@@ -237,9 +295,9 @@ export type SchedulePauseReason = "user" | "owner_left" | "agent_removed" | "fai
 
 export type ScheduleRunID = string
 
-export type ScheduleRunTrigger = "timed" | "manual"
-
 export type ScheduleRunStatus = "pending" | "started" | "skipped" | "failed"
+
+export type ScheduleRunTrigger = "timed" | "manual"
 
 export type ScheduleRunReason =
   | "previous_run_busy"
@@ -273,6 +331,10 @@ export type WebhookTestOutcome = "answered" | "passed" | "ignored" | "duplicate"
 
 export type WebhookReplayed = { replayed: number; remaining: number }
 
+export type ArtifactID = string
+
+export type ArtifactDeploymentID = string
+
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -298,6 +360,50 @@ export type RenInferenceConnectResult = { url: string }
 export type RenInferenceTone = "ok" | "warn" | "error"
 
 export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
+
+export type RenInferenceKeyStatus = "active" | "revoke_pending" | "revoked" | "expired"
+
+export type AuthMemberID = string
+
+export type UsagePayer = "ren" | "customer"
+
+export type RenInferenceKeySecret = { secret: string; baseUrl: string }
+
+export type RenInferenceHarnessTarget =
+  | { kind: "claude-user-settings" }
+  | { kind: "codex-provider-configuration" }
+  | { kind: "codex-profile"; profileName: string }
+  | { kind: "codex-model-catalog"; profileName: string }
+  | { kind: "opencode-user-configuration" }
+  | { kind: "pi-model-catalog" }
+  | { kind: "hermes-provider-configuration" }
+  | { kind: "hermes-environment" }
+
+export type BillingSummary = {
+  plan: string
+  planStatus: string | null
+  renewsAt: string | null
+  pendingPlan: string | null
+  availableMicroUsd: number
+  grantedMicroUsd: number
+}
+
+export type BillingPlan = {
+  key: string
+  name: string
+  priceCents: number
+  creditsMicroUsd: number
+  description: string | null
+  tagline: string | null
+  badge: string | null
+  sortOrder: number
+}
+
+export type BillingInvoiceStatus = "paid" | "pending" | "processing" | "failed" | "cancelled"
+
+export type BillingLink = { url: string }
+
+export type BillingCheckout = { checkoutUrl: string }
 
 export type ChannelInstallID = string
 
@@ -335,7 +441,14 @@ export type InfraProblem = { path: string; message: string }
 
 export type InsightsTokens = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
 
-export type InsightsCost = { ren: number; customer: number; unpricedCalls: number }
+export type InsightsCost = {
+  ren: number
+  customer: number
+  unpricedCalls: number
+  models: number
+  compute: number
+  tools: number
+}
 
 export type HealthInfo = { status: HealthStatus; version: string }
 
@@ -357,11 +470,36 @@ export type InvitationPreview = {
   inviter: { name: string | null; email: string } | null
 }
 
+export type SpaceInviteLinkJoined = { organizationId: AuthOrganizationID; spaceId: SpaceID; slug: string }
+
+export type OrganizationInviteLinkJoined = { organizationId: AuthOrganizationID; spaceId: SpaceID; slug: string }
+
 export type AppProfileSpaceRef = { id: SpaceID; name: string }
 
 export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string; also: PrimitiveSlug }
 
 export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
+
+export type EnvironmentProviderInfo = {
+  id: EnvironmentProviderID
+  title: string
+  description: string
+  configSchema: JsonValue
+  canLimitHosts: boolean
+  canColocate: boolean
+}
+
+export type SpaceBrainMachine = {
+  provider: EnvironmentProviderID | null
+  environmentTemplateId: EnvironmentTemplateID | null
+}
+
+export type SpaceHand =
+  | { placement: "colocated" }
+  | { placement: "remote"; environmentTemplateId: EnvironmentTemplateID }
+  | { placement: "none" }
+
+export type SpaceCompute = { isPending: boolean; shutdown: "running" | null; lastShutdown: SpaceShutdownReport | null }
 
 export type SpaceMemberActive = {
   id: SpaceMembershipID
@@ -386,33 +524,48 @@ export type SpaceMemberPending = {
   archivedAt: string | null
 }
 
-export type EnvironmentTemplateInfo = {
-  id: EnvironmentTemplateID
-  organizationId: AuthOrganizationID
-  name: string
-  description: string | null
-  provider: EnvironmentProviderID
-  config: JsonValue
-  sessionsPerEnvironment: number
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
-
-export type EnvironmentProviderInfo = {
-  id: EnvironmentProviderID
-  title: string
-  description: string
-  configSchema: JsonValue
-}
-
-export type SpaceEnvironmentTemplateInfo = {
-  id: SpaceEnvironmentTemplateID
+export type SpaceJoinRequestInfo = {
+  id: SpaceJoinRequestID
   spaceId: SpaceID
-  environmentTemplateId: EnvironmentTemplateID
+  userId: AuthUserID
+  name: string
+  email: string
+  image: string | null
+  note: string | null
+  status: SpaceJoinRequestStatus
+  decidedBy: AuthUserID | null
   createdAt: string
-  archivedAt: string | null
+  decidedAt: string | null
 }
+
+export type SpaceInviteLinkInfo = { spaceId: SpaceID; token: SpaceInviteLinkToken; uses: number; createdAt: string }
+
+export type SpaceInviteLinkPreview = {
+  state: SpaceInviteLinkState
+  organization: { id: AuthOrganizationID; name: string } | null
+  space: { id: SpaceID; slug: string; name: string } | null
+}
+
+export type OrganizationInviteLinkInfo = {
+  id: OrganizationInviteLinkID
+  token: OrganizationInviteLinkToken
+  spaces: Array<{ id: SpaceID; name: string }>
+  createdBy: { id: AuthUserID; name: string }
+  uses: number
+  expiresAt: string
+  createdAt: string
+}
+
+export type OrganizationInviteLinkPreview = {
+  state: OrganizationInviteLinkState
+  organization: { id: AuthOrganizationID; name: string; logo: string | null } | null
+  inviter: { name: string } | null
+  spaces: Array<{ id: SpaceID; name: string }>
+}
+
+export type EnvironmentTemplateNetworking =
+  | { type: "unrestricted" }
+  | { type: "limited"; allowPackageManagers: boolean; allowMcpServers: boolean; allowedHosts: Array<HostNamePattern> }
 
 export type ModelTypesDefaults = {
   image_generation?: ModelTypesModelRef
@@ -434,7 +587,13 @@ export type ReferenceInfo = {
 
 export type MemoryFile = { path: MemoryPath; content: string }
 
-export type DriveListing = { folders: Array<string>; files: Array<DriveFile>; cursor: string | null }
+export type FileSystemEntry = {
+  path: string
+  type: FileSystemEntryType
+  size?: number
+  modifiedAt?: string
+  mime?: string
+}
 
 export type TaskEventAssigned = {
   _tag: "assigned"
@@ -457,7 +616,7 @@ export type CredentialSecret = { kind: "secret"; name: CredentialFieldName; desc
 
 export type CredentialWhen = { name: CredentialFieldName; op: "eq" | "neq"; value: string }
 
-export type AppEnvironment = { packages?: AppPackages; buildCommands?: Array<string> }
+export type PackagesSetup = { packages?: PackagesInfo; buildCommands?: Array<string> }
 
 export type CredentialName = CredentialEnvName | CredentialFieldName
 
@@ -481,6 +640,13 @@ export type AppProfileLink = { appId: AppID; profileId: AppProfileID | null }
 
 export type CredentialProfileOwner = { kind: "profile"; profileId: AppProfileID }
 
+export type AppListingTool = { name: string; description: string; readOnly: boolean; price?: McpToolPrice }
+
+export type McpInspectionAuth =
+  | { type: "none" }
+  | { type: "oauth"; scopes: Array<string>; client: McpInspectionClient }
+  | { type: "bearer" | "basic" | "unknown" }
+
 export type AgentMembershipInfo = {
   id: AgentMembershipID
   spaceId: SpaceID
@@ -497,6 +663,7 @@ export type SessionInfo = {
   id: SessionID
   spaceId: SpaceID
   createdBy: AuthUserID
+  agentId: AgentID | null
   origin: SessionOrigin
   harness: SessionHarness
   title: string | null
@@ -508,7 +675,11 @@ export type SessionInfo = {
   filesResetAt: string | null
 }
 
-export type SessionClientAccess = SessionReadyAccess | SessionStartingAccess | SessionFailedAccess
+export type SessionClientAccess =
+  | SessionReadyAccess
+  | SessionStartingAccess
+  | SessionFailedAccess
+  | SessionStoppedAccess
 
 export type SessionMessageAgentSwitched = {
   id: SessionMessageID
@@ -552,6 +723,8 @@ export type SessionMessageModelSwitched = {
   model: SessionModelRef
   previous?: SessionModelRef
 }
+
+export type SessionMessagePresentation = { displayText: string; comments: Array<SessionMessageQuote> }
 
 export type SessionMessageFileAttachment = {
   data: string
@@ -673,9 +846,19 @@ export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comm
 
 export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from: string | null; to: string | null }
 
+export type SessionUsageInfo = {
+  total: number
+  models: number
+  tools: number
+  currency: "usd"
+  source: SessionUsageSource
+}
+
 export type PullRequestInfo = { url: string; number: number; title: string | null; state: PullRequestState | null }
 
 export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
+
+export type ScheduleLastRun = { id: ScheduleRunID; scheduledAt: string; status: ScheduleRunStatus }
 
 export type ScheduleRunInfo = {
   id: ScheduleRunID
@@ -686,7 +869,7 @@ export type ScheduleRunInfo = {
   status: ScheduleRunStatus
   reason: ScheduleRunReason | null
   error: string | null
-  sessionId: SessionID
+  sessionId: SessionID | null
 }
 
 export type WebhookLastRequest = {
@@ -739,6 +922,20 @@ export type WebhookTested = {
   title: string | null
 }
 
+export type ArtifactInfo = {
+  id: ArtifactID
+  spaceId: SpaceID
+  title: string
+  name: string | null
+  entry: string | null
+  url: string | null
+  pendingDeploymentId: ArtifactDeploymentID | null
+  publishedDeploymentId: ArtifactDeploymentID | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
@@ -783,6 +980,105 @@ export type RenInferenceConnection = {
   canReconnect: boolean
   canManage: boolean
   meters: Array<RenInferenceMeter>
+}
+
+export type RenInferenceKeyOwner = { memberId: AuthMemberID; name: string | null }
+
+export type RenInferenceModelUsage = {
+  model: string
+  payer: UsagePayer
+  calls: number
+  failed: number
+  inputTokens: number
+  outputTokens: number
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  cost: number
+}
+
+export type RenInferenceHarnessOperation =
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "set-object-path"
+      keyPath: Array<string>
+      value: JsonValue
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "remove-object-path"
+      keyPath: Array<string>
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "upsert-toml-table"
+      tableName: string | null
+      entries: { [x: string]: string | number | boolean }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "upsert-yaml-mapping"
+      keyPath: Array<string>
+      value: { [x: string]: JsonValue }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "append-unique-list-item"
+      listKey: string
+      identity: { key: string; value: string }
+      item: { [x: string]: JsonValue }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "replace-ren-owned-file"
+      format: "json" | "jsonc" | "toml" | "yaml"
+      value: { [x: string]: JsonValue }
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "remove-ren-owned-file"
+    }
+  | {
+      target: RenInferenceHarnessTarget
+      description: string
+      containsSecret: boolean
+      optional?: boolean
+      kind: "set-environment-variables"
+      entries: { [x: string]: string }
+    }
+
+export type RenInferenceHarnessVerificationStep =
+  | { kind: "file-exists"; target: RenInferenceHarnessTarget }
+  | { kind: "models-reachable" }
+
+export type BillingInvoice = {
+  id: string
+  number: string
+  status: BillingInvoiceStatus
+  amountCents: number
+  currency: string
+  issuedAt: string
 }
 
 export type ChannelInstallInfo = {
@@ -859,6 +1155,7 @@ export type InsightsRow = {
   errors: number
   tokens: InsightsTokens
   cost: InsightsCost
+  computeMs: number
   tasksDone: number | null
   prsMerged: number | null
   prsLinked: number | null
@@ -866,39 +1163,49 @@ export type InsightsRow = {
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
-export type AppListingInfo = {
-  appId: AppID
+export type AppListingSummary = {
   body: string | null
   categories: AppListingCategories
   examplePrompts: Array<string>
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
+  toolCounts: { [x: PrimitiveSlug]: number }
 }
+
+export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
 
 export type FactoryEntry = { agentId: string; maxRuns?: number; finish?: true; to?: Array<FactoryEdge> }
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
-export type EnvironmentTemplatePage = {
-  items: Array<EnvironmentTemplateInfo>
-  page: number
-  pageSize: number
-  total: number
-}
+export type SpaceJoinRequestPage = { items: Array<SpaceJoinRequestInfo>; page: number; pageSize: number; total: number }
 
-export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
+export type OrganizationInviteLinkList = { items: Array<OrganizationInviteLinkInfo> }
 
-export type SpaceEnvironmentTemplatePage = {
-  items: Array<SpaceEnvironmentTemplateInfo>
-  page: number
-  pageSize: number
-  total: number
+export type EnvironmentTemplateInfo = {
+  id: EnvironmentTemplateID
+  organizationId: AuthOrganizationID
+  name: string
+  description: string | null
+  provider: EnvironmentProviderID
+  config: JsonValue
+  sessionsPerEnvironment: number
+  networking: EnvironmentTemplateNetworking
+  buildStatus: EnvironmentTemplateBuildStatus
+  image: string | null
+  buildError: string | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
 }
 
 export type PermissionRuleList = Array<PermissionRule>
 
 export type ReferenceList = Array<ReferenceInfo>
+
+export type FileSystemPage = {
+  entries: Array<FileSystemEntry>
+  cursor: string | null
+  actions: Array<FileSystemAction>
+}
 
 export type CredentialSkillRequirement = CredentialEnv | CredentialOAuthApp
 
@@ -977,6 +1284,18 @@ export type CredentialOwner =
   | { kind: "person"; userId: AuthUserID }
   | CredentialProfileOwner
 
+export type AppListingTools = { [x: PrimitiveSlug]: Array<AppListingTool> }
+
+export type McpInspectionResult = {
+  reachable: boolean
+  server: McpInspectionServer | null
+  auth: McpInspectionAuth
+  tools: Array<AppListingTool> | null
+  readOnlyInferred: number
+  source: "tools-list" | "server-card" | null
+  problem: string | null
+}
+
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
 
 export type TaskCommentInfo = {
@@ -997,6 +1316,7 @@ export type SessionMessageUser = {
   id: SessionMessageID
   time: { created: number }
   text: string
+  presentation?: SessionMessagePresentation
   files?: Array<SessionMessageFileAttachment>
   uploads?: Array<SessionMessageDriveFile>
   agents?: Array<SessionMessageAgentAttachment>
@@ -1028,6 +1348,8 @@ export type SessionMessageCompaction =
   | SessionMessageCompactionRunning
   | SessionMessageCompactionCompleted
   | SessionMessageCompactionFailed
+
+export type SessionModelChoices = { models: Array<SessionModelChoice>; default?: SessionModelRef }
 
 export type SessionLinksInfo = {
   tasks: Array<SessionLinksLinkedTask>
@@ -1093,6 +1415,7 @@ export type ScheduleInfo = {
   status: ScheduleStatus
   pausedReason: SchedulePauseReason | null
   nextRunAt: string | null
+  lastRun: ScheduleLastRun | null
   createdAt: string
   updatedAt: string
   archivedAt: string | null
@@ -1104,7 +1427,54 @@ export type WebhookRequestPage = { items: Array<WebhookRequestInfo>; page: numbe
 
 export type WebhookTestResult = { items: Array<WebhookTested> }
 
+export type ArtifactPage = { items: Array<ArtifactInfo>; page: number; pageSize: number; total: number }
+
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
+
+export type RenInferenceKey = {
+  id: string
+  name: string
+  prefix: string
+  status: RenInferenceKeyStatus
+  owner: RenInferenceKeyOwner
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+  canRevoke: boolean
+}
+
+export type RenInferenceCreatedKey = {
+  id: string
+  name: string
+  prefix: string
+  status: RenInferenceKeyStatus
+  owner: RenInferenceKeyOwner
+  expiresAt: string | null
+  lastUsedAt: string | null
+  createdAt: string
+  canRevoke: boolean
+  secret: string
+  baseUrl: string
+}
+
+export type RenInferenceKeyUsage = {
+  keyId: string
+  charged: number
+  calls: number
+  failed: number
+  models: Array<RenInferenceModelUsage>
+}
+
+export type RenInferenceHarnessPlan = {
+  schemaVersion: number
+  setupPlan: {
+    operations: Array<RenInferenceHarnessOperation>
+    verificationSteps: Array<RenInferenceHarnessVerificationStep>
+  }
+  warnings: Array<string>
+}
+
+export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
 
@@ -1138,9 +1508,27 @@ export type InfraApplied = { changes: Array<InfraChange>; lock: InfraLock }
 
 export type InsightsResult = { rows: Array<InsightsRow> }
 
+export type AppRegistryInfo = {
+  id: AppID
+  slug: PrimitiveSlug
+  name: string
+  description: string
+  icon: string | null
+  listing: AppListingSummary
+  managed: boolean
+  revision: number
+}
+
 export type FactoryInfo = { maxHandoffs?: number; agents: Array<FactoryEntry> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
+
+export type EnvironmentTemplatePage = {
+  items: Array<EnvironmentTemplateInfo>
+  page: number
+  pageSize: number
+  total: number
+}
 
 export type SettingsInfo = {
   instructions?: string
@@ -1158,14 +1546,6 @@ export type SkillContent = {
   instructions: string
   files?: { [x: string]: string }
 }
-
-export type SkillSummary =
-  | { type: "content"; description: string; requiredCredentials?: Array<CredentialSkillRequirement> }
-  | {
-      type: "upstream"
-      requiredCredentials?: Array<CredentialSkillRequirement>
-      upstream: { url: string; ref?: string; path: string }
-    }
 
 export type AppProfileInfo = {
   id: AppProfileID
@@ -1263,6 +1643,8 @@ export type TaskEventInfo = {
 
 export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize: number; total: number }
 
+export type RenInferenceKeyList = { baseUrl: string; keys: Array<RenInferenceKey> }
+
 export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelPlaceInfo = {
@@ -1277,6 +1659,8 @@ export type ChannelPlaceInfo = {
 
 export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
+export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
+
 export type SpaceInfo = {
   id: SpaceID
   organizationId: AuthOrganizationID
@@ -1286,11 +1670,16 @@ export type SpaceInfo = {
   name: string
   description: string | null
   brainScope: BrainScope
+  brain: SpaceBrainMachine
+  hand: SpaceHand
+  compute: SpaceCompute
   memberCount: number
   membershipId: SpaceMembershipID | null
   factory: FactoryInfo
   canUpdate: boolean
   canJoin: boolean
+  canRequestJoin: boolean
+  joinRequestId: SpaceJoinRequestID | null
   canAddMember: boolean
   canRemoveMember: boolean
   canArchive: boolean
@@ -1316,6 +1705,7 @@ export type AgentInfo = {
   description: string | null
   isSubagent: boolean
   settings: SettingsInfo
+  canUpdate: boolean
   createdAt: string
   updatedAt: string
   archivedAt: string | null
@@ -1357,7 +1747,9 @@ export type McpInfo = {
         tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
         client?: { clientId: string; resource?: string; redirectUri?: string }
       }
+    | { type: "bearer"; credential: CredentialName }
     | { type: "header"; name: string; credential: CredentialName }
+    | { type: "query"; name: string; credential: CredentialName }
     | { type: "basic"; username: CredentialName; password: CredentialName }
   timeouts?: McpTimeouts
   requiredCredentials?: Array<CredentialRequirement>
@@ -1397,7 +1789,7 @@ export type AppInfo = {
   description: string
   icon: string | null
   requiredCredentials?: Array<CredentialRequirement>
-  environment?: AppEnvironment
+  environment?: PackagesSetup
   skills: { [x: PrimitiveSlug]: SkillInfo }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
@@ -1406,21 +1798,6 @@ export type AppInfo = {
   createdAt: string
   updatedAt: string
   archivedAt: string | null
-}
-
-export type AppRegistryInfo = {
-  id: AppID
-  slug: PrimitiveSlug
-  name: string
-  description: string
-  icon: string | null
-  listing: AppListingInfo
-  requiredCredentials?: Array<CredentialRequirement>
-  environment?: AppEnvironment
-  mcps: { [x: PrimitiveSlug]: McpInfo }
-  skills: { [x: PrimitiveSlug]: SkillSummary }
-  dependsOn?: Array<PrimitiveSlug>
-  revision: number
 }
 
 export type InfraPulledApp = {
@@ -1432,7 +1809,7 @@ export type InfraPulledApp = {
   dependsOn?: Array<PrimitiveSlug>
   webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
   icon?: string
-  environment?: AppEnvironment
+  environment?: PackagesSetup
 }
 
 export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
@@ -1440,8 +1817,6 @@ export type SessionMessageContent = SessionMessageText | SessionMessageReasoning
 export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
 
 export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
-
-export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
 
 export type InfraPulledSpace = {
   name: string
@@ -1503,6 +1878,14 @@ export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly m
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnauthorizedError"
 
+export type ConflictError = {
+  readonly _tag: "ConflictError"
+  readonly message: string
+  readonly resource?: string | undefined
+}
+export const isConflictError = (value: unknown): value is ConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
+
 export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
 export const isForbiddenError = (value: unknown): value is ForbiddenError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
@@ -1523,14 +1906,6 @@ export type InvalidRequestError = {
 export const isInvalidRequestError = (value: unknown): value is InvalidRequestError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidRequestError"
 
-export type ConflictError = {
-  readonly _tag: "ConflictError"
-  readonly message: string
-  readonly resource?: string | undefined
-}
-export const isConflictError = (value: unknown): value is ConflictError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
-
 export type UnavailableError = {
   readonly _tag: "UnavailableError"
   readonly message: string
@@ -1546,6 +1921,8 @@ export const isTooLargeError = (value: unknown): value is TooLargeError =>
 export type HealthGetOutput = HealthInfo
 
 export type MeGetOutput = AuthMe
+
+export type MeRequestDeletionOutput = void
 
 export type InvitationPreviewInput = { readonly id: { readonly id: string }["id"] }
 
@@ -1611,6 +1988,14 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["factory"]
   readonly name?: {
     readonly factory?: {
@@ -1630,6 +2015,14 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["name"]
   readonly description?: {
     readonly factory?: {
@@ -1649,6 +2042,14 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["description"]
   readonly brainScope?: {
     readonly factory?: {
@@ -1668,7 +2069,69 @@ export type SpaceUpdateInput = {
     readonly name?: string | null
     readonly description?: string | null | null
     readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
   }["brainScope"]
+  readonly brain?: {
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly finish?: true
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
+  }["brain"]
+  readonly hand?: {
+    readonly factory?: {
+      readonly maxHandoffs?: number
+      readonly agents: ReadonlyArray<{
+        readonly agentId: string
+        readonly maxRuns?: number
+        readonly finish?: true
+        readonly to?: ReadonlyArray<{
+          readonly agentId: string
+          readonly max?: number
+          readonly else?: string
+          readonly start?: "new" | "continue"
+        }>
+      }>
+    } | null
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly brainScope?: ("session" | "space") | null
+    readonly brain?: { readonly provider: string | null; readonly environmentTemplateId: string | null } | null
+    readonly hand?:
+      | (
+          | { readonly placement: "colocated" }
+          | { readonly placement: "remote"; readonly environmentTemplateId: string }
+          | { readonly placement: "none" }
+        )
+      | null
+  }["hand"]
 }
 
 export type SpaceUpdateOutput = SpaceInfo
@@ -1677,27 +2140,42 @@ export type SpaceArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type SpaceArchiveOutput = SpaceInfo
 
+export type SpaceShutdownInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceShutdownOutput = SpaceInfo
+
 export type SpaceMemberListInput = {
-  readonly spaceId: {
-    readonly spaceId: string
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
   }["spaceId"]
+  readonly userId?: {
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
+    readonly status?: ("active" | "pending") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["userId"]
   readonly status?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
   }["status"]
   readonly page: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
   readonly pageSize: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
+    readonly userId?: string | undefined
     readonly status?: ("active" | "pending") | undefined
     readonly page: number
     readonly pageSize: number
@@ -1718,6 +2196,91 @@ export type SpaceMemberArchiveInput = { readonly id: { readonly id: string | str
 
 export type SpaceMemberArchiveOutput = SpaceMemberInfo
 
+export type SpaceJoinRequestListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly status?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("pending" | "approved" | "declined" | "cancelled") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type SpaceJoinRequestListOutput = SpaceJoinRequestPage
+
+export type SpaceJoinRequestCreateInput = {
+  readonly spaceId: { readonly spaceId: string; readonly note?: string | undefined }["spaceId"]
+  readonly note?: { readonly spaceId: string; readonly note?: string | undefined }["note"]
+}
+
+export type SpaceJoinRequestCreateOutput = SpaceJoinRequestInfo
+
+export type SpaceJoinRequestApproveInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceJoinRequestApproveOutput = SpaceJoinRequestInfo
+
+export type SpaceJoinRequestDeclineInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceJoinRequestDeclineOutput = SpaceJoinRequestInfo
+
+export type SpaceJoinRequestCancelInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceJoinRequestCancelOutput = SpaceJoinRequestInfo
+
+export type SpaceInviteLinkGetInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceInviteLinkGetOutput = SpaceInviteLinkInfo
+
+export type SpaceInviteLinkResetInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceInviteLinkResetOutput = SpaceInviteLinkInfo
+
+export type JoinLinkPreviewInput = { readonly token: { readonly token: string }["token"] }
+
+export type JoinLinkPreviewOutput = SpaceInviteLinkPreview
+
+export type JoinLinkAcceptInput = { readonly token: { readonly token: string }["token"] }
+
+export type JoinLinkAcceptOutput = SpaceInviteLinkJoined
+
+export type OrganizationInviteLinkCreateInput = {
+  readonly spaceIds: { readonly spaceIds: ReadonlyArray<string>; readonly expiresIn: "1d" | "7d" | "30d" }["spaceIds"]
+  readonly expiresIn: { readonly spaceIds: ReadonlyArray<string>; readonly expiresIn: "1d" | "7d" | "30d" }["expiresIn"]
+}
+
+export type OrganizationInviteLinkCreateOutput = OrganizationInviteLinkInfo
+
+export type OrganizationInviteLinkListOutput = OrganizationInviteLinkList
+
+export type OrganizationInviteLinkRevokeInput = { readonly id: { readonly id: string }["id"] }
+
+export type OrganizationInviteLinkRevokeOutput = void
+
+export type OrganizationJoinLinkPreviewInput = { readonly token: { readonly token: string }["token"] }
+
+export type OrganizationJoinLinkPreviewOutput = OrganizationInviteLinkPreview
+
+export type OrganizationJoinLinkAcceptInput = { readonly token: { readonly token: string }["token"] }
+
+export type OrganizationJoinLinkAcceptOutput = OrganizationInviteLinkJoined
+
 export type EnvironmentTemplateListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]
   readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
@@ -1736,6 +2299,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["name"]
   readonly description?: {
     readonly name: string
@@ -1743,6 +2314,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["description"]
   readonly provider: {
     readonly name: string
@@ -1750,6 +2329,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["provider"]
   readonly config: {
     readonly name: string
@@ -1757,6 +2344,14 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["config"]
   readonly sessionsPerEnvironment: {
     readonly name: string
@@ -1764,7 +2359,30 @@ export type EnvironmentTemplateCreateInput = {
     readonly provider: string
     readonly config: JsonValue
     readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
   }["sessionsPerEnvironment"]
+  readonly networking: {
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerEnvironment?: number
+    readonly networking?:
+      | { readonly type: "unrestricted" }
+      | {
+          readonly type: "limited"
+          readonly allowPackageManagers: boolean
+          readonly allowMcpServers: boolean
+          readonly allowedHosts: ReadonlyArray<string>
+        }
+  }["networking"]
 }
 
 export type EnvironmentTemplateCreateOutput = EnvironmentTemplateInfo
@@ -1776,25 +2394,86 @@ export type EnvironmentTemplateUpdateInput = {
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["name"]
   readonly description?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["description"]
   readonly config?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["config"]
   readonly sessionsPerEnvironment?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
     readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
   }["sessionsPerEnvironment"]
+  readonly networking?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly config?: JsonValue | undefined
+    readonly sessionsPerEnvironment?: number | undefined
+    readonly networking?:
+      | (
+          | { readonly type: "unrestricted" }
+          | {
+              readonly type: "limited"
+              readonly allowPackageManagers: boolean
+              readonly allowMcpServers: boolean
+              readonly allowedHosts: ReadonlyArray<string>
+            }
+        )
+      | undefined
+  }["networking"]
 }
 
 export type EnvironmentTemplateUpdateOutput = EnvironmentTemplateInfo
@@ -1803,29 +2482,17 @@ export type EnvironmentTemplateArchiveInput = { readonly id: { readonly id: stri
 
 export type EnvironmentTemplateArchiveOutput = EnvironmentTemplateInfo
 
+export type EnvironmentTemplateRetryBuildInput = { readonly id: { readonly id: string }["id"] }
+
+export type EnvironmentTemplateRetryBuildOutput = EnvironmentTemplateInfo
+
+export type EnvironmentTemplateAffectedSpacesInput = { readonly id: { readonly id: string }["id"] }
+
+export type EnvironmentTemplateAffectedSpacesOutput = EnvironmentTemplateAffectedSpaces
+
 export type EnvironmentProviderListOutput = EnvironmentProviderInfos
 
-export type SpaceEnvironmentTemplateListInput = {
-  readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]
-  readonly page: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["pageSize"]
-}
-
-export type SpaceEnvironmentTemplateListOutput = SpaceEnvironmentTemplatePage
-
-export type SpaceEnvironmentTemplateCreateInput = {
-  readonly spaceId: { readonly spaceId: string; readonly environmentTemplateId: string }["spaceId"]
-  readonly environmentTemplateId: {
-    readonly spaceId: string
-    readonly environmentTemplateId: string
-  }["environmentTemplateId"]
-}
-
-export type SpaceEnvironmentTemplateCreateOutput = SpaceEnvironmentTemplateInfo
-
-export type SpaceEnvironmentTemplateArchiveInput = { readonly id: { readonly id: string }["id"] }
-
-export type SpaceEnvironmentTemplateArchiveOutput = SpaceEnvironmentTemplateInfo
+export type EnvironmentProviderBrainsOutput = EnvironmentProviderInfos
 
 export type SpaceSettingsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
@@ -1914,9 +2581,30 @@ export type MemoryReadInput = {
 export type MemoryReadOutput = MemoryFile
 
 export type MemoryWriteInput = {
-  readonly spaceId?: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["spaceId"]
-  readonly path: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["path"]
-  readonly content: { readonly spaceId?: string | null; readonly path: string; readonly content: string }["content"]
+  readonly spaceId?: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["spaceId"]
+  readonly path: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["path"]
+  readonly content: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["content"]
+  readonly mode?: {
+    readonly spaceId?: string | null
+    readonly path: string
+    readonly content: string
+    readonly mode?: "create" | "replace" | null
+  }["mode"]
 }
 
 export type MemoryWriteOutput = void
@@ -1968,26 +2656,6 @@ export type MemoryDeleteInput = {
 
 export type MemoryDeleteOutput = void
 
-export type DriveListInput = {
-  readonly spaceId?: {
-    readonly spaceId?: string | undefined
-    readonly folder?: string | undefined
-    readonly cursor?: string | undefined
-  }["spaceId"]
-  readonly folder?: {
-    readonly spaceId?: string | undefined
-    readonly folder?: string | undefined
-    readonly cursor?: string | undefined
-  }["folder"]
-  readonly cursor?: {
-    readonly spaceId?: string | undefined
-    readonly folder?: string | undefined
-    readonly cursor?: string | undefined
-  }["cursor"]
-}
-
-export type DriveListOutput = DriveListing
-
 export type DriveStartUploadInput = {
   readonly spaceId?: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["spaceId"]
   readonly path: { readonly spaceId?: string | null; readonly path: string; readonly size: number }["path"]
@@ -2016,12 +2684,74 @@ export type DriveDownloadInput = {
 
 export type DriveDownloadOutput = DriveLink
 
-export type DriveDeleteInput = {
-  readonly spaceId?: { readonly spaceId?: string | undefined; readonly path: string }["spaceId"]
-  readonly path: { readonly spaceId?: string | undefined; readonly path: string }["path"]
+export type FilesListInput = {
+  readonly source: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["source"]
+  readonly spaceId?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["spaceId"]
+  readonly folder?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["folder"]
+  readonly cursor?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly folder?: string | undefined
+    readonly cursor?: string | undefined
+  }["cursor"]
 }
 
-export type DriveDeleteOutput = void
+export type FilesListOutput = FileSystemPage
+
+export type FilesReadInput = {
+  readonly source: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["source"]
+  readonly spaceId?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["spaceId"]
+  readonly path: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["path"]
+}
+
+export type FilesReadOutput = FileSystemContent
+
+export type FilesDeleteInput = {
+  readonly source: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["source"]
+  readonly spaceId?: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["spaceId"]
+  readonly path: {
+    readonly source: "drive" | "memory"
+    readonly spaceId?: string | undefined
+    readonly path: string
+  }["path"]
+}
+
+export type FilesDeleteOutput = void
 
 export type AgentListInput = {
   readonly spaceId?: {
@@ -2487,7 +3217,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -2667,7 +3399,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -2847,7 +3581,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3027,7 +3763,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3207,7 +3945,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3387,7 +4127,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3567,7 +4309,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3747,7 +4491,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -3927,7 +4673,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4107,7 +4855,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4287,7 +5037,9 @@ export type AppCreateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4470,7 +5222,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4649,7 +5403,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -4828,7 +5584,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5007,7 +5765,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5186,7 +5946,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5365,7 +6127,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5544,7 +6308,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5723,7 +6489,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -5902,7 +6670,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6081,7 +6851,9 @@ export type AppUpdateInput = {
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
+          | { readonly type: "bearer"; readonly credential: string | string }
           | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+          | { readonly type: "query"; readonly name: string; readonly credential: string | string }
           | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
         readonly timeouts?: { readonly startup?: number; readonly catalog?: number; readonly execution?: number }
         readonly requiredCredentials?: ReadonlyArray<
@@ -6306,7 +7078,10 @@ export type AppProfileLinkInput = {
 
 export type AppProfileLinkOutput = AppProfileInfo
 
-export type AppProfilePromoteInput = { readonly id: { readonly id: string }["id"] }
+export type AppProfilePromoteInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId: { readonly spaceId: string }["spaceId"]
+}
 
 export type AppProfilePromoteOutput = AppProfileInfo
 
@@ -6330,24 +7105,35 @@ export type AppRegistryListInput = {
   readonly query?: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["query"]
   readonly category?: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["category"]
+  readonly slugs?: {
+    readonly query?: string | undefined
+    readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["slugs"]
   readonly page: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
   readonly pageSize: {
     readonly query?: string | undefined
     readonly category?: string | undefined
+    readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["pageSize"]
@@ -6358,6 +7144,14 @@ export type AppRegistryListOutput = AppRegistryPage
 export type AppRegistryGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
 export type AppRegistryGetOutput = AppRegistryInfo
+
+export type AppToolsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type AppToolsGetOutput = AppListingTools
+
+export type McpInspectMcpInspectInput = { readonly url: { readonly url: string }["url"] }
+
+export type McpInspectMcpInspectOutput = McpInspectionResult
 
 export type AgentMembershipListInput = {
   readonly spaceId?: {
@@ -6731,18 +7525,22 @@ export type ChatPrepareInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatPrepareOutput = void
 
-export type ChatModelsInput = { readonly id: { readonly id: string }["id"] }
+export type ChatModelsInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId?: { readonly spaceId?: string | undefined }["spaceId"]
+}
 
-export type ChatModelsOutput = Array<SessionModelChoice>
+export type ChatModelsOutput = SessionModelChoices
 
 export type TaskListInput = {
   readonly spaceId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6752,11 +7550,12 @@ export type TaskListInput = {
   }["spaceId"]
   readonly status?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6766,11 +7565,12 @@ export type TaskListInput = {
   }["status"]
   readonly includeDone?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6780,11 +7580,12 @@ export type TaskListInput = {
   }["includeDone"]
   readonly priority?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6794,11 +7595,12 @@ export type TaskListInput = {
   }["priority"]
   readonly agentId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6808,11 +7610,12 @@ export type TaskListInput = {
   }["agentId"]
   readonly ownerId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6820,13 +7623,29 @@ export type TaskListInput = {
     readonly page: number
     readonly pageSize: number
   }["ownerId"]
-  readonly label?: {
+  readonly search?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
+    readonly label?: string | undefined
+    readonly humanReview?: boolean | undefined
+    readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
+  readonly label?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly includeDone?: boolean | undefined
+    readonly priority?: ("low" | "medium" | "high") | undefined
+    readonly agentId?: string | undefined
+    readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6836,11 +7655,12 @@ export type TaskListInput = {
   }["label"]
   readonly humanReview?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6850,11 +7670,12 @@ export type TaskListInput = {
   }["humanReview"]
   readonly linkedTo?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6864,11 +7685,12 @@ export type TaskListInput = {
   }["linkedTo"]
   readonly parentId?: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6878,11 +7700,12 @@ export type TaskListInput = {
   }["parentId"]
   readonly page: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6892,11 +7715,12 @@ export type TaskListInput = {
   }["page"]
   readonly pageSize: {
     readonly spaceId?: string | undefined
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | undefined
     readonly includeDone?: boolean | undefined
     readonly priority?: ("low" | "medium" | "high") | undefined
     readonly agentId?: string | undefined
     readonly ownerId?: string | undefined
+    readonly search?: string | undefined
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
@@ -6917,7 +7741,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -6930,7 +7754,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -6943,7 +7767,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -6956,7 +7780,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -6969,7 +7793,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -6982,7 +7806,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -6995,7 +7819,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7008,7 +7832,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7021,7 +7845,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7034,7 +7858,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7047,7 +7871,7 @@ export type TaskCreateInput = {
     readonly spaceId: string
     readonly title: string
     readonly description?: string | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null
     readonly labels?: ReadonlyArray<string> | null
     readonly links?: ReadonlyArray<string> | null
@@ -7065,7 +7889,7 @@ export type TaskUpdateInput = {
   readonly title?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7076,7 +7900,7 @@ export type TaskUpdateInput = {
   readonly description?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7087,7 +7911,7 @@ export type TaskUpdateInput = {
   readonly status?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7098,7 +7922,7 @@ export type TaskUpdateInput = {
   readonly priority?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7109,7 +7933,7 @@ export type TaskUpdateInput = {
   readonly labels?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7120,7 +7944,7 @@ export type TaskUpdateInput = {
   readonly dueAt?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7131,7 +7955,7 @@ export type TaskUpdateInput = {
   readonly addLinks?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7142,7 +7966,7 @@ export type TaskUpdateInput = {
   readonly removeLinks?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7153,7 +7977,7 @@ export type TaskUpdateInput = {
   readonly parentId?: {
     readonly title?: string | null
     readonly description?: string | null | null
-    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly status?: ("backlog" | "todo" | "in_progress" | "done" | "dismissed") | null
     readonly priority?: ("low" | "medium" | "high") | null | null
     readonly labels?: ReadonlyArray<string> | null
     readonly dueAt?: string | null | null
@@ -7267,6 +8091,10 @@ export type TaskActivityListOutput = TaskActivityPage
 export type LinkSessionLinksInput = { readonly id: { readonly id: string }["id"] }
 
 export type LinkSessionLinksOutput = SessionLinksInfo
+
+export type LinkSessionUsageInput = { readonly id: { readonly id: string }["id"] }
+
+export type LinkSessionUsageOutput = SessionUsageInfo
 
 export type LinkSessionPullRequestsInput = { readonly id: { readonly id: string }["id"] }
 
@@ -7545,9 +8373,30 @@ export type ScheduleRunInput = { readonly id: { readonly id: string }["id"] }
 export type ScheduleRunOutput = ScheduleInfo
 
 export type ScheduleRunListInput = {
-  readonly scheduleId: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["scheduleId"]
-  readonly page: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+  readonly scheduleId: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["scheduleId"]
+  readonly status?: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly page: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly scheduleId: string
+    readonly status?: ("pending" | "started" | "skipped" | "failed") | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
 }
 
 export type ScheduleRunListOutput = ScheduleRunPage
@@ -8021,6 +8870,38 @@ export type WebhookRequestGetInput = { readonly id: { readonly id: string }["id"
 
 export type WebhookRequestGetOutput = WebhookRequestDetail
 
+export type ArtifactListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ArtifactListOutput = ArtifactPage
+
+export type ArtifactGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type ArtifactGetOutput = ArtifactInfo
+
+export type ArtifactUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly title?: { readonly title?: string | null; readonly name?: string | null | null }["title"]
+  readonly name?: { readonly title?: string | null; readonly name?: string | null | null }["name"]
+}
+
+export type ArtifactUpdateOutput = ArtifactInfo
+
+export type ArtifactArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ArtifactArchiveOutput = ArtifactInfo
+
 export type CredentialListInput = {
   readonly owner?: {
     readonly owner?: ("org" | "space" | "person" | "profile") | undefined
@@ -8210,18 +9091,27 @@ export type CredentialConnectCredentialConnectInput = {
   readonly profileId: {
     readonly profileId: string
     readonly item: { readonly mcp: string }
-    readonly reconnect?: boolean | undefined
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
   }["profileId"]
   readonly item: {
     readonly profileId: string
     readonly item: { readonly mcp: string }
-    readonly reconnect?: boolean | undefined
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
   }["item"]
   readonly reconnect?: {
     readonly profileId: string
     readonly item: { readonly mcp: string }
-    readonly reconnect?: boolean | undefined
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
   }["reconnect"]
+  readonly returnTo?: {
+    readonly profileId: string
+    readonly item: { readonly mcp: string }
+    readonly reconnect?: boolean | null
+    readonly returnTo?: string | null
+  }["returnTo"]
 }
 
 export type CredentialConnectCredentialConnectOutput = WriteResultRedirect | CredentialInfo
@@ -8515,6 +9405,94 @@ export type RenInferenceConnectionRenameOutput = RenInferenceConnection
 export type RenInferenceConnectionRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type RenInferenceConnectionRemoveOutput = void
+
+export type RenInferenceKeyListOutput = RenInferenceKeyList
+
+export type RenInferenceKeyUsageInput = { readonly period: { readonly period: "7d" | "30d" | "90d" | "all" }["period"] }
+
+export type RenInferenceKeyUsageOutput = Array<RenInferenceKeyUsage>
+
+export type RenInferenceKeyCreateInput = {
+  readonly name: { readonly name: string; readonly expiresIn: "7d" | "30d" | "1y" | "never" }["name"]
+  readonly expiresIn: { readonly name: string; readonly expiresIn: "7d" | "30d" | "1y" | "never" }["expiresIn"]
+}
+
+export type RenInferenceKeyCreateOutput = RenInferenceCreatedKey
+
+export type RenInferenceKeyRevokeInput = { readonly id: { readonly id: string }["id"] }
+
+export type RenInferenceKeyRevokeOutput = void
+
+export type RenInferenceKeySecretInput = { readonly id: { readonly id: string }["id"] }
+
+export type RenInferenceKeySecretOutput = RenInferenceKeySecret
+
+export type RenInferenceHarnessPlanInput = {
+  readonly harnessId: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["harnessId"]
+  readonly keyEnvVar?: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["keyEnvVar"]
+  readonly withOptional?: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["withOptional"]
+  readonly schemaVersions: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["schemaVersions"]
+  readonly supportedMutationKinds: {
+    readonly harnessId: "claude-code" | "opencode" | "codex" | "pi" | "hermes"
+    readonly keyEnvVar?: string | undefined
+    readonly withOptional?: boolean | undefined
+    readonly schemaVersions: ReadonlyArray<number>
+    readonly supportedMutationKinds: ReadonlyArray<string>
+  }["supportedMutationKinds"]
+}
+
+export type RenInferenceHarnessPlanOutput = RenInferenceHarnessPlan
+
+export type BillingGetOutput = BillingSummary
+
+export type BillingPlanListOutput = Array<BillingPlan>
+
+export type BillingInvoiceListInput = {
+  readonly page: { readonly page: number; readonly perPage: number }["page"]
+  readonly perPage: { readonly page: number; readonly perPage: number }["perPage"]
+}
+
+export type BillingInvoiceListOutput = BillingInvoicePage
+
+export type BillingInvoiceUrlInput = { readonly id: { readonly id: string }["id"] }
+
+export type BillingInvoiceUrlOutput = BillingLink
+
+export type BillingSubscribeInput = { readonly plan: { readonly plan: string }["plan"] }
+
+export type BillingSubscribeOutput = BillingCheckout
+
+export type BillingChangePlanInput = { readonly plan: { readonly plan: string }["plan"] }
+
+export type BillingChangePlanOutput = void
+
+export type BillingCancelOutput = void
+
+export type BillingPortalOutput = BillingLink
 
 export type ChannelInstallListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]
@@ -8869,7 +9847,9 @@ export type InfraPullInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -9008,6 +9988,14 @@ export type InfraPullInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -9257,7 +10245,9 @@ export type InfraPullInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -9396,6 +10386,14 @@ export type InfraPullInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -9645,7 +10643,9 @@ export type InfraPullInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -9784,6 +10784,14 @@ export type InfraPullInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -10038,7 +11046,9 @@ export type InfraPlanInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -10177,6 +11187,14 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -10426,7 +11444,9 @@ export type InfraPlanInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -10565,6 +11585,14 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -10814,7 +11842,9 @@ export type InfraPlanInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -10953,6 +11983,14 @@ export type InfraPlanInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -11207,7 +12245,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -11346,6 +12386,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -11597,7 +12645,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -11736,6 +12786,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -11987,7 +13045,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -12126,6 +13186,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -12377,7 +13445,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -12516,6 +13586,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -12767,7 +13845,9 @@ export type InfraApplyInput = {
                           readonly redirectUri?: string
                         }
                       }
+                    | { readonly type: "bearer"; readonly credential: string | string }
                     | { readonly type: "header"; readonly name: string; readonly credential: string | string }
+                    | { readonly type: "query"; readonly name: string; readonly credential: string | string }
                     | { readonly type: "basic"; readonly username: string | string; readonly password: string | string }
                   readonly timeouts?: {
                     readonly startup?: number
@@ -12906,6 +13986,14 @@ export type InfraApplyInput = {
             readonly provider: string
             readonly config: JsonValue
             readonly sessionsPerEnvironment?: number
+            readonly networking?:
+              | { readonly type: "unrestricted" }
+              | {
+                  readonly type: "limited"
+                  readonly allowPackageManagers: boolean
+                  readonly allowMcpServers: boolean
+                  readonly allowedHosts: ReadonlyArray<string>
+                }
           }
           readonly memory?: { readonly [x: string]: string }
           readonly factory?: {
@@ -12949,174 +14037,205 @@ export type InfraApplyInput = {
 export type InfraApplyOutput = InfraApplied
 
 export type InsightsQueryInput = {
-  readonly spaceId: {
-    readonly spaceId: string
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["spaceId"]
   readonly from: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["from"]
   readonly to: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["to"]
   readonly timezone: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["timezone"]
   readonly groupBy: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["groupBy"]
   readonly userId?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["userId"]
   readonly agent?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["agent"]
   readonly model?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["model"]
   readonly payer?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["payer"]
   readonly kind?: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["kind"]
-  readonly orderBy: {
-    readonly spaceId: string
+  readonly type?: {
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
+    readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
+    readonly limit: number
+  }["type"]
+  readonly orderBy: {
+    readonly spaceId?: string | undefined
+    readonly from: string
+    readonly to: string
+    readonly timezone: string
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
+    readonly userId?: ReadonlyArray<string> | undefined
+    readonly agent?: ReadonlyArray<string> | undefined
+    readonly model?: ReadonlyArray<string> | undefined
+    readonly payer?: ("ren" | "customer") | undefined
+    readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["orderBy"]
   readonly limit: {
-    readonly spaceId: string
+    readonly spaceId?: string | undefined
     readonly from: string
     readonly to: string
     readonly timezone: string
-    readonly groupBy: "none" | "hour" | "day" | "week" | "member" | "agent" | "model" | "provider"
+    readonly groupBy: "none" | "hour" | "day" | "week" | "space" | "member" | "agent" | "model" | "provider"
     readonly userId?: ReadonlyArray<string> | undefined
     readonly agent?: ReadonlyArray<string> | undefined
     readonly model?: ReadonlyArray<string> | undefined
     readonly payer?: ("ren" | "customer") | undefined
     readonly kind?: ("primary" | "compaction" | "title" | "generate") | undefined
+    readonly type?: ReadonlyArray<"model.call" | "sandbox.compute" | "api.call"> | undefined
     readonly orderBy: "cost" | "tokens" | "calls" | "sessions" | "tasksDone"
     readonly limit: number
   }["limit"]
 }
 
 export type InsightsQueryOutput = InsightsResult
+
+export type FeedbackReportInput = { readonly message: { readonly message: string }["message"] }
+
+export type FeedbackReportOutput = void

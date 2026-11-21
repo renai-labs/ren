@@ -2,8 +2,10 @@ export * as BetterAuth from "./better-auth.js"
 
 import { cimd } from "@better-auth/cimd"
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
+import { expo } from "@better-auth/expo"
 import { mcp } from "@better-auth/mcp"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import type { SpaceProvisioning } from "@ren/core/space/provisioning"
@@ -11,8 +13,8 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { BASE_ERROR_CODES, betterAuth } from "better-auth"
-import type { BetterAuthPlugin } from "better-auth"
-import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
+import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth"
+import { APIError, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
 import { genericOAuth } from "better-auth/plugins/generic-oauth"
 import { Option, Schema } from "effect"
@@ -49,6 +51,7 @@ export interface Input {
     readonly checkAccountCreation: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
     readonly hasVerifiedAlias: (email: string) => Promise<boolean>
   }
+  readonly accountDeletion: { readonly isArchived: (userId: string) => Promise<boolean> }
   readonly provisioning: {
     readonly createInitialMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly activatePendingMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
@@ -84,6 +87,8 @@ const ids = new Map<string, () => string>([
 export const mcpScope = "ren"
 
 export const organizationClaim = "ren_org"
+
+const mobileOrigins = Auth.mobileSchemes.map((scheme) => `${scheme}://`)
 
 const ActiveOrganization = Schema.Struct({ activeOrganizationId: Schema.String })
 
@@ -139,12 +144,33 @@ const emailCodes = (input: Input) =>
     },
   })
 
+const joinLinkCookie = "join_link"
+
+const JoinLinkBody = Schema.toStandardSchemaV1(Schema.Struct({ token: Schema.String }))
+
+const joinLink = {
+  id: "ren-join-link",
+  endpoints: {
+    rememberJoinLink: createAuthEndpoint("/join-link/remember", { method: "POST", body: JoinLinkBody }, async (ctx) => {
+      const cookie = ctx.context.createAuthCookie(joinLinkCookie, { maxAge: 60 * 60 })
+      ctx.setCookie(cookie.name, ctx.body.token, cookie.attributes)
+      return ctx.json({ ok: true })
+    }),
+  },
+} satisfies BetterAuthPlugin
+
 const provisionOrganization =
   (input: Input) =>
-  async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(session: Session) => {
+  async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(
+    session: Session,
+    ctx: GenericEndpointContext | null,
+  ) => {
+    const cookie = ctx?.context.createAuthCookie(joinLinkCookie)
+    const joinToken = (cookie && ctx?.getCookie(cookie.name)) || ""
+    if (cookie && joinToken) ctx?.setCookie(cookie.name, "", { ...cookie.attributes, maxAge: 0 })
     if (session.activeOrganizationId) return { data: session }
-    const organization = await DefaultOrganization.provision(input.database, session.userId).catch((error: unknown) =>
-      input.logFailure("Default organization provisioning failed", error, session.userId),
+    const organization = await DefaultOrganization.provision(input.database, session.userId, joinToken).catch(
+      (error: unknown) => input.logFailure("Default organization provisioning failed", error, session.userId),
     )
     if (!organization) return { data: session }
     if (organization.user) {
@@ -156,6 +182,18 @@ const provisionOrganization =
         .catch((error: unknown) => input.logFailure("Billing enrollment failed to start", error, session.userId))
     }
     return { data: { ...session, activeOrganizationId: organization.id } }
+  }
+
+const refuseArchived =
+  (input: Input) =>
+  async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(
+    session: Session,
+    ctx: GenericEndpointContext | null,
+  ) => {
+    if (await input.accountDeletion.isArchived(session.userId)) {
+      throw new APIError("FORBIDDEN", { message: `This account is being deleted. Contact ${AccountDeletion.support}.` })
+    }
+    return provisionOrganization(input)(session, ctx)
   }
 
 const guardRequests = (input: Input) =>
@@ -234,6 +272,7 @@ const slackSignIn = (slack: NonNullable<Input["slack"]>) => ({
   clientId: slack.clientId,
   clientSecret: slack.clientSecret,
   scopes: ["openid", "email", "profile"],
+  requireEmailVerification: true,
   accountSubject: (context: { readonly profile: unknown }) => {
     const profile = Schema.decodeUnknownSync(SlackProfile)(context.profile)
     return `${profile["https://slack.com/team_id"]}:${profile["https://slack.com/user_id"]}`
@@ -302,7 +341,7 @@ export const make = (input: Input) => {
       "/email-otp/request-email-change",
       "/email-otp/change-email",
     ],
-    trustedOrigins: [...input.trustedOrigins],
+    trustedOrigins: [...input.trustedOrigins, ...mobileOrigins],
     database: (options) => {
       const adapter = drizzleAdapter(input.database, { provider: "pg", schema: Database.Schema })(options)
       return {
@@ -335,7 +374,11 @@ export const make = (input: Input) => {
         requireEmailVerification: true,
       },
       ...(input.github && {
-        github: { clientId: input.github.clientId, clientSecret: input.github.clientSecret },
+        github: {
+          clientId: input.github.clientId,
+          clientSecret: input.github.clientSecret,
+          requireEmailVerification: true,
+        },
       }),
     },
     account: {
@@ -345,7 +388,7 @@ export const make = (input: Input) => {
       user: { create: { before: guardAccountCreation(input) } },
       session: {
         create: {
-          before: provisionOrganization(input),
+          before: refuseArchived(input),
           after: async (session) => input.github?.sync(session.userId),
         },
       },
@@ -360,6 +403,7 @@ export const make = (input: Input) => {
     },
     plugins: [
       bearer(),
+      expo(),
       emailCodes(input),
       organizationPlugin,
       jwt({ disableSettingJwtHeader: true }),
@@ -391,6 +435,7 @@ export const make = (input: Input) => {
         }),
       ),
       consentOrganization(input),
+      joinLink,
       genericOAuth({ config: input.slack ? [slackSignIn(input.slack)] : [] }),
       indexes,
     ],

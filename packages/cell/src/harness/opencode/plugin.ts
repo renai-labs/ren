@@ -7,10 +7,10 @@ import { Agent, Model, Provider } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { EnvironmentCopies } from "@ren/brain/environment/copies"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { HandCopies } from "@ren/brain/hand/copies"
 import { DriveFiles } from "@ren/brain/reference/drive-files"
-import type { EnvironmentClient } from "@ren/environment-api/environment-client"
+import type { HandClient } from "@ren/hand-api/hand-client"
 import { Drives } from "@ren/brain/reference/drives"
 import { BrainSettings } from "@ren/brain/settings"
 import { UsageClaims } from "@ren/brain/usage-claims"
@@ -22,13 +22,14 @@ import type { ModelTypes } from "@ren/schema/model-types"
 import { Channel } from "@ren/schema/channel"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { WebhookOrigin } from "@ren/schema/webhook-origin"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import {
   Clock,
   Deferred,
   Effect,
+  Equal,
   Option,
   Predicate,
   Record,
@@ -43,7 +44,7 @@ import { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
-import { OpenCodeSearch } from "./search-provider.js"
+import { OpenCodeActivity } from "./activity.js"
 import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -51,7 +52,7 @@ import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
 import type { GitSources } from "../../git-sources.js"
 import { OpenCodeCopies } from "./copies.js"
-import { OpenCodeEnvironmentTools } from "./environment-tools.js"
+import { OpenCodeHandTools } from "./hand-tools.js"
 import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
 import type { HarnessConfig } from "../config.js"
@@ -236,7 +237,7 @@ const withoutModel = (value: unknown) =>
 const maxErrorDepth = 8
 
 const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
-  const failure = EnvironmentConnections.failureOf(value)
+  const failure = HandConnections.failureOf(value)
   if (failure) return failure
   if (depth > maxErrorDepth || !Predicate.isObject(value)) return undefined
   return ["cause", "error", "reason"]
@@ -279,7 +280,7 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
           const instance = (yield* Ref.get(instances)).get(sessionId)
           if (!next || !instance) return
           const previous = Option.getOrUndefined(yield* Ref.getAndSet(instance.installed, Option.some(next)))
-          if (JSON.stringify(previous?.resolved) !== JSON.stringify(next.resolved)) yield* instance.reload
+          if (!Equal.equals(previous?.resolved, next.resolved)) yield* instance.reload
           const sessionID = SessionID.make(sessionId)
           const info = Option.getOrUndefined(yield* instance.session.get({ sessionID }).pipe(Effect.option))
           if (!info) return
@@ -296,6 +297,13 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
   } satisfies Chats
 })
 
+export const sessionOf = (location: Plugin.Context["location"], directoryOf: (sessionId: string) => string) => {
+  const sessionId = location.workspaceID
+    ? RenWorkspaceDriver.sessionIdOf(location.workspaceID)
+    : basename(location.directory)
+  return { sessionId, isSession: Boolean(location.workspaceID) || directoryOf(sessionId) === location.directory }
+}
+
 export const make = (
   desired: Ref.Ref<HarnessConfig.Snapshot>,
   locations: Ref.Ref<ReadonlyArray<HarnessConfig.Location>>,
@@ -303,7 +311,7 @@ export const make = (
   renew: (endpointId: string) => Effect.Effect<boolean>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<EnvironmentConnections.Interface>,
+  connections: Option.Option<HandConnections.Interface>,
   settings: Option.Option<Chats>,
   confinement: Option.Option<Confinement>,
   approvals: (
@@ -327,10 +335,6 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (Option.isNone(connections))
-          yield* tool.transform((editor) => {
-            for (const id of OpenCodeEnvironmentTools.names) editor.remove(id)
-          })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
@@ -361,10 +365,9 @@ export const make = (
         }
         const turns = { running: new Set<string>(), ended: [] as Array<(sessionID: string) => Effect.Effect<void>> }
         const workspaceID = context.location.workspaceID
-        const sessionId = workspaceID
-          ? RenWorkspaceDriver.sessionIdOf(workspaceID)
-          : basename(context.location.directory)
-        const isSession = Boolean(workspaceID) || directoryOf(sessionId) === context.location.directory
+        const session = sessionOf(context.location, directoryOf)
+        const sessionId = session.sessionId
+        const isSession = session.isSession
         if (Option.isSome(connections) && workspaceID) {
           const own = RenWorkspaceDriver.sessionIdOf(workspaceID)
           turns.ended.push((sessionID) =>
@@ -445,6 +448,13 @@ export const make = (
           )
         }
         const initial = yield* Ref.get(desired)
+        const installed = yield* Ref.make(Option.fromUndefinedOr(initial.chats.get(sessionId)))
+        // oxlint-disable-next-line ren/no-comments -- One rule: a chat's file and shell tools leave its tool list unless it has a hand now: environments, a workspace, and a space with a hand. A chat created without a workspace never gets one; a space that loses its hand takes them at the next pull and gives them back with the hand.
+        yield* tool.transform((editor) => {
+          const hasHand = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.hasHand !== false
+          if (Option.isSome(connections) && workspaceID && hasHand) return
+          for (const id of OpenCodeHandTools.names) editor.remove(id)
+        })
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(
           (yield* Ref.get(appConflicts)).length ? { ...initial, apps: Option.none<AppCatalog.Info>() } : initial,
@@ -453,7 +463,7 @@ export const make = (
           context,
           boundary: boundaryOf(context.location),
           isSession,
-          hasEnvironment: Boolean(workspaceID),
+          hasWorkspace: Boolean(workspaceID),
           apps: (yield* Ref.get(applied)).apps,
           channels: initial.channels,
           sessionId,
@@ -462,19 +472,35 @@ export const make = (
         const refreshSkills = yield* Ref.make<Effect.Effect<void>>(Effect.void)
         const copies = Option.map(
           Option.filter(connections, () => Boolean(workspaceID)),
-          (each) => EnvironmentCopies.make(each, Session.ID.make(sessionId)),
+          (each) => HandCopies.make(each, Session.ID.make(sessionId)),
         )
-        const hasEnvironment = Option.isSome(copies)
+        const hasWorkspace = Option.isSome(copies)
         const skills = yield* OpenCodeSkills.make({
           context,
           isSession,
-          hasEnvironment,
+          hasWorkspace,
           sources: sources.skills,
           apps: (yield* Ref.get(applied)).apps,
           onPrompt: Effect.flatten(Ref.get(refreshSkills)),
         })
-        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's references and skills.
-        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [skills.items]
+        // oxlint-disable-next-line ren/no-comments -- R53: one record of copies for the chat's apps' setup, references and skills.
+        const copySources: Array<() => ReadonlyArray<OpenCodeCopies.Item>> = [
+          () =>
+            Option.match(
+              Option.flatMap(Ref.getUnsafe(applied).apps, (info) => HandCopies.setupOf(info.catalog.apps)),
+              {
+                onNone: () => [],
+                onSome: (item) => [
+                  {
+                    path: item.path,
+                    copy: item.copy,
+                    note: (message: string) => `${message}. The next turn sets it up again.`,
+                  },
+                ],
+              },
+            ),
+          skills.items,
+        ]
         yield* OpenCodeCopies.make({
           context,
           copies,
@@ -494,8 +520,6 @@ export const make = (
         })
         if (Option.isSome(settings)) {
           const shared = settings.value
-          const saved = initial.chats.get(sessionId)
-          const installed = yield* Ref.make(Option.fromUndefinedOr(saved))
           const agentOf = (name: string | undefined) =>
             Option.flatMap(Ref.getUnsafe(installed), (chat) =>
               Option.fromUndefinedOr(
@@ -525,7 +549,7 @@ export const make = (
           })
           const references = yield* OpenCodeReferences.make({
             context,
-            hasEnvironment,
+            hasWorkspace,
             repositories: sources.repositories,
             references: Effect.sync(() =>
               Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
@@ -533,8 +557,8 @@ export const make = (
             drives: () => Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives,
           })
           copySources.push(references.items)
-          const spaceDrive = `${Environment.sharedDirectoryOf({ directory: folder })}/${Drives.root}/space`
-          const onSpaceDrive = <A>(use: (client: EnvironmentClient.Client) => Effect.Effect<A, DriveFiles.Refused>) =>
+          const spaceDrive = `${Hand.sharedDirectoryOf({ directory: folder })}/${Drives.root}/space`
+          const onSpaceDrive = <A>(use: (client: HandClient.Client) => Effect.Effect<A, DriveFiles.Refused>) =>
             Effect.gen(function* () {
               const drive = references.items().find((item) => item.path === spaceDrive)
               if (Option.isNone(copies) || Option.isNone(connections) || !drive) {
@@ -555,12 +579,12 @@ export const make = (
               )
             })
           yield* tool.transform((editor) => {
-            if (!hasEnvironment || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
+            if (!hasWorkspace || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
               return
             editor.add({
               name: SessionMessage.showFileTool,
               description:
-                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced.",
+                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced. An .html file of at most 5 MB is shown as a page in a sandboxed frame, for a visual answer such as a chart, a table or a layout. Write it as one self-contained file: CSS and scripts inline, images as data URIs. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. The page shows inline in the reply, as wide as the reply (about 720px on a computer, 360px on a phone) and as tall as its content, on the chat’s background. Leave html, body and the outer element without a background, an outer card or border, a banner title or side padding; Ren adds an 8px gutter. A box that needs its own background gets 16px padding and `var(--radius)` corners. Give charts fixed pixel heights, use fluid widths, and let the content set the height: no `vh` units and no `height: 100%` on html or body. Use the app’s CSS variables, never fixed colors, so the page fits light and dark themes: `--background`, `--foreground`, `--muted`, `--muted-foreground`, `--card`, `--card-foreground`, `--secondary`, `--secondary-foreground`, `--accent`, `--accent-foreground`, `--primary`, `--primary-foreground`, `--destructive`, `--border`, `--ring`, `--chart-1` to `--chart-6`, `--radius`, `--font-sans` and `--font-mono`. The base styles set the background, the text color, the font and 14px text.",
               input: Schema.Struct({
                 path: Schema.NonEmptyString.annotate({ description: "The path of the file on the environment." }),
               }),
@@ -706,9 +730,15 @@ export const make = (
           }
           OpenCodeModelTools.register(editor, modelTools)
         })
-        yield* context.websearch.transform((editor) =>
-          OpenCodeSearch.register(editor, { current: applied, keyFor: refreshKey }),
+        yield* tool.transform(OpenCodeActivity.register)
+        yield* context.session.hook("context", (event) =>
+          Effect.sync(() => {
+            OpenCodeActivity.request(event.tools)
+            if (Object.keys(event.tools).length > 0)
+              event.system.push({ type: "text", text: OpenCodeActivity.instruction })
+          }),
         )
+        yield* context.websearch.transform((editor) => editor.default.set(editor.default.get() ?? "random"))
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
             delete event.headers[Models.personHeader]
@@ -746,7 +776,7 @@ export const make = (
           applying.withPermit(
             Effect.gen(function* () {
               if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
-              const modelChanged = JSON.stringify(snapshot.models) !== JSON.stringify((yield* Ref.get(applied)).models)
+              const modelChanged = !Equal.equals(snapshot.models, (yield* Ref.get(applied)).models)
               yield* Ref.set(models, snapshot.models)
               if (modelChanged) {
                 yield* integration.reload()
@@ -760,10 +790,7 @@ export const make = (
               const before = (yield* Ref.get(applied)).apps
               const apps = conflicts.length ? before : snapshot.apps
               yield* Ref.set(applied, { ...snapshot, apps })
-              if (isSession) {
-                yield* tool.reload()
-                yield* context.websearch.reload()
-              }
+              if (isSession) yield* tool.reload()
               yield* mcp.apply(apps, snapshot.channels)
               if (!conflicts.length) yield* skills.apply(prepared)
               yield* synced

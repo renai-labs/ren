@@ -29,11 +29,11 @@ const calendar = (
   requiredCredentials,
 })
 
-const crm = (header: string): Mcp.Declaration => ({
+const crm = (name: string, type: "header" | "query" = "header"): Mcp.Declaration => ({
   name: "CRM",
   description: "CRM",
   transport: { type: "remote", url: "https://crm.example.com/mcp" },
-  auth: { type: "header", name: header, credential: "apiKey" },
+  auth: { type, name, credential: "apiKey" },
   requiredCredentials: [{ kind: "secret", name: "apiKey", optional: false }],
 })
 
@@ -49,7 +49,7 @@ const single = Effect.fnUntraced(function* (definition: Parameters<typeof Seed.a
 
 describe("profile items (§9 rule 4, §12)", () => {
   it.live(
-    "binding hash: a URL path change and a new scope give reconnect; a header rename and a dropped scope do not",
+    "binding hash: a URL path change, a new scope and a header key moved to the query give reconnect; a header rename and a dropped scope do not",
     () =>
       Effect.gen(function* () {
         const apps = yield* App.Service
@@ -88,6 +88,12 @@ describe("profile items (§9 rule 4, §12)", () => {
         expect(
           yield* edit({ calendar: calendar("https://cal.example.com/v2/mcp", ["read"]), crm: crm("X-Key") }),
         ).toEqual({ Calendar: "reconnect", CRM: "ok" })
+        expect(
+          yield* edit({
+            calendar: calendar("https://cal.example.com/v2/mcp", ["read"]),
+            crm: crm("key", "query"),
+          }),
+        ).toEqual({ Calendar: "reconnect", CRM: "reconnect" })
       }),
   )
 

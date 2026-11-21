@@ -2,6 +2,7 @@ export * as Auth from "./auth.js"
 
 import { fetchClientMetadataResource } from "@better-auth/cimd/node"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { Mailer } from "@ren/core/mailer"
@@ -12,7 +13,7 @@ import { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
 import { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/util/environment"
+import { Hand } from "@ren/util/environment"
 import { verifyJwsAccessToken } from "better-auth/oauth2"
 import { Cause, Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
 import { BetterAuth } from "./better-auth.js"
@@ -23,6 +24,10 @@ interface Interface {
   readonly getSession: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
   readonly getAccessToken: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
   readonly actAs: (caller: Caller) => Effect.Effect<Option.Option<AuthenticatedSession>>
+  readonly addMember: (input: {
+    readonly userId: Auth.UserID
+    readonly organizationId: Auth.OrganizationID
+  }) => Effect.Effect<void>
   readonly mcpChallenge: string
   readonly getActiveMembership: (
     session: AuthenticatedSession,
@@ -68,6 +73,7 @@ export const layer = Layer.effect(
     const database = yield* AuthDatabase.Service
     const mailer = yield* Mailer.Service
     const signupGuard = yield* SignupGuard.Service
+    const accountDeletion = yield* AccountDeletion.Service
     const provisioning = yield* SpaceProvisioning.Service
     const inferenceRemoval = yield* RenInferenceRemoval.Service
     const billingEnrollment = yield* BillingEnrollment.Service
@@ -85,7 +91,7 @@ export const layer = Layer.effect(
       googleClientSecret: Config.Redacted("GOOGLE_CLIENT_SECRET"),
       appURL: Config.String("APP_URL"),
       skipEmailVerification: Config.Boolean("SKIP_EMAIL_VERIFICATION").pipe(Config.withDefault(false)),
-      local: Environment.local,
+      local: Hand.local,
     })
     if (config.skipEmailVerification && !config.local) {
       return yield* Effect.die(new Error("SKIP_EMAIL_VERIFICATION requires NODE_ENV=development or test"))
@@ -133,6 +139,7 @@ export const layer = Layer.effect(
         checkAccountCreation: (email) => runPromise(signupGuard.checkAccountCreation(email)),
         hasVerifiedAlias: (email) => runPromise(signupGuard.hasVerifiedAlias(email)),
       },
+      accountDeletion: { isArchived: (userId) => runPromise(accountDeletion.isArchived(Auth.UserID.make(userId))) },
       provisioning: {
         createInitialMemberships: (organizationId, user) =>
           runPromise(
@@ -170,6 +177,7 @@ export const layer = Layer.effect(
         }),
       )
       if (!member?.user) return Option.none<AuthenticatedSession>()
+      if (yield* accountDeletion.isArchived(Auth.UserID.make(caller.userId))) return Option.none<AuthenticatedSession>()
       const user: typeof Auth.User.Encoded = member.user
       return Option.some<AuthenticatedSession>({
         user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
@@ -182,6 +190,7 @@ export const layer = Layer.effect(
       getSession: Effect.fn("Auth.getSession")(function* (headers: Headers) {
         const session = yield* Effect.promise(() => auth.api.getSession({ headers }))
         if (!session) return Option.none()
+        if (yield* accountDeletion.isArchived(Auth.UserID.make(session.user.id))) return Option.none()
         const user: typeof Auth.User.Encoded = session.user
         return Option.some({
           user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
@@ -204,6 +213,12 @@ export const layer = Layer.effect(
         return yield* actAs({ userId: claims.value.sub, organizationId: claims.value[BetterAuth.organizationClaim] })
       }),
       actAs,
+      addMember: Effect.fn("Auth.addMember")(function* (input: {
+        readonly userId: Auth.UserID
+        readonly organizationId: Auth.OrganizationID
+      }) {
+        yield* Effect.promise(() => auth.api.addMember({ body: { ...input, role: "member" } }))
+      }),
       mcpChallenge: `Bearer resource_metadata="${new URL(`/.well-known/oauth-protected-resource${mcpPath}`, config.baseURL).href}", scope="${BetterAuth.mcpScope}"`,
       getActiveMembership: Effect.fn("Auth.getActiveMembership")(function* (
         session: AuthenticatedSession,

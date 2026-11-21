@@ -3,6 +3,7 @@ import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
+import { readdirSync } from "node:fs"
 import { DateTime, Effect, Layer, Option, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
@@ -68,7 +69,7 @@ test("the timeline atom of a session shows a prompt and its reply as rows", () =
   Effect.gen(function* () {
     const made = yield* setup
     const brain = made.brain
-    const timeline = made.atoms.timeline(brain.id)
+    const timeline = made.atoms.timeline({ root: brain.id })
     yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(timeline)))
     yield* made.until(
       made.atoms.status(brain.id),
@@ -140,11 +141,54 @@ test("the file atom searches the session only once the mention has a query", () 
     expect(AsyncResult.isSuccess(found) && found.value).toEqual([{ path: "launch-plan.md", type: "file" }])
   }).pipe(Effect.scoped, Effect.runPromise))
 
+const withFolders = Effect.gen(function* () {
+  const folder = { directory: "" }
+  const made = yield* setupWith((path, next) => {
+    if (!path.includes("/file/list")) return next()
+    const requested = new URL(path, "http://cell").searchParams.get("path") ?? ""
+    const entries = readdirSync(`${folder.directory}/${requested}`, { withFileTypes: true }).map((entry) => ({
+      path: `${requested}${entry.name}`,
+      type: entry.isDirectory() ? "directory" : "file",
+    }))
+    return Promise.resolve(Response.json({ entries, cursor: null, actions: [] }))
+  })
+  folder.directory = made.brain.directory
+  return made
+})
+
+test("fileExists confirms a file in a folder, and a bare name only when exactly one file has it", () =>
+  Effect.gen(function* () {
+    const made = yield* withFolders
+    const root = made.brain.id
+    yield* Effect.promise(() =>
+      Promise.all([
+        Bun.write(`${made.brain.directory}/README.md`, "# Readme"),
+        Bun.write(`${made.brain.directory}/src/app.tsx`, "export {}"),
+        Bun.write(`${made.brain.directory}/src/only.ts`, "export {}"),
+        Bun.write(`${made.brain.directory}/src/twin.ts`, "export {}"),
+        Bun.write(`${made.brain.directory}/lib/twin.ts`, "export {}"),
+      ]),
+    )
+    const check = (path: string) =>
+      Effect.gen(function* () {
+        const atom = made.atoms.fileExists({ root, path })
+        yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(atom)))
+        const settled = yield* made.until(atom, AsyncResult.isSuccess)
+        return AsyncResult.isSuccess(settled) ? settled.value : "pending"
+      })
+    expect(yield* check("README.md")).toBe("README.md")
+    expect(yield* check("src/app.tsx")).toBe("src/app.tsx")
+    expect(yield* check("src/missing.ts")).toBeUndefined()
+    expect(yield* check("only.ts")).toBe("src/only.ts")
+    expect(yield* check("twin.ts")).toBeUndefined()
+    expect(yield* check("missing.ts")).toBeUndefined()
+  }).pipe(Effect.scoped, Effect.runPromise))
+
 test("the child atom of a subagent session reads its transcript through the root session", () =>
   Effect.gen(function* () {
     const made = yield* setup
     const brain = made.brain
-    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.timeline(brain.id))))
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.timeline({ root: brain.id }))))
     yield* made.until(
       made.atoms.status(brain.id),
       (value) => AsyncResult.isSuccess(value) && value.value === "connected",

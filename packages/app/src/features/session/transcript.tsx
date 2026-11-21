@@ -1,56 +1,41 @@
-import { DateTime, Option } from "effect"
-import { useState, type ReactNode } from "react"
+import { DateTime } from "effect"
+import { flushSync } from "react-dom"
 import {
-  AppConnect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  type Ref,
+  type TouchEvent,
+  type UIEvent,
+  type WheelEvent,
+} from "react"
+import {
+  Activity,
   ChannelReply,
   ChatState,
-  PatchFiles,
   Projection,
-  ShownFile,
+  TimelineDetail,
   TimelineRow,
   TimelineText,
-  ToolDisplay,
-  ToolState,
+  TranscriptBlocks,
+  TurnProblems,
   type ChatAtoms,
 } from "@ren/chat"
-import { ChatReact } from "@ren/chat/react"
-import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
 import { AppConnectCard } from "./app-connect.js"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
-import type { Shell } from "@ren/schema/shell"
-import {
-  IconBrain,
-  IconChevronDown,
-  IconChevronRight,
-  IconClipboardText,
-  IconClock,
-  IconCopy,
-  IconFile,
-  IconInfoCircle,
-  IconPencil,
-  IconChecklist,
-  IconWebhook,
-} from "@tabler/icons-react"
-import { AsyncResult } from "effect/reactivity"
-import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
-import {
-  Attachment,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentGroup,
-  AttachmentMedia,
-  AttachmentTitle,
-  AttachmentTrigger,
-} from "@ren/ui/attachment"
-import { CodeBlock, CodeBlockContent, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from "@ren/ui/code-block"
-import { InputGroup, InputGroupAddon, InputGroupTextarea } from "@ren/ui/input-group"
+import { Kbd, KbdGroup } from "@ren/ui/kbd"
+import { FindBar, type FindBarProps } from "@ren/ui/find-bar"
 import { Marker, MarkerContent, MarkerIcon } from "@ren/ui/marker"
-import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@ren/ui/message"
+import { Message, MessageContent, MessageFooter } from "@ren/ui/message"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -58,42 +43,38 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
 } from "@ren/ui/message-scroller"
 import { Spinner } from "@ren/ui/spinner"
-import {
-  Trace,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceDescription,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
-} from "@ren/ui/trace"
-import { DriveFileCards } from "./attachments.js"
+import { FileOutputs } from "./file-outputs.js"
+import { QuoteSelection, type QuoteProps } from "./quote.js"
 import { Markdown } from "../../components/markdown.js"
-import { toolIcons } from "./tool-icons.js"
+import { MarkdownScroll } from "../../components/markdown-link.js"
+import { ImageSet } from "../../components/image-set.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
-import { useSubagentCard } from "./chat-view.js"
-import { providerLabel, type ProblemHandlers } from "./turn-problems.js"
-import { MessagesSkeleton } from "../../components/chat-skeleton.js"
+import { MessagesSpinner } from "../../components/chat-skeleton.js"
+import { TranscriptScroll } from "../../lib/transcript-scroll.js"
+import { useNow } from "../../lib/use-now.js"
+import { LiveActivity, type LiveLine } from "./live-activity.js"
+import { useOpenActivity } from "./open-panel.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { ImageLightbox } from "../../components/image-lightbox.js"
-import { withAppMentions } from "@ren/ui/app-mention"
 import { ChannelMark } from "../../components/channel-mark.js"
-import { ChannelOrigin } from "./channel-origin.js"
 import { useMentionedApps } from "../../lib/use-app.js"
-import type { CatalogApp } from "../../lib/apps.js"
-import { useSmoothText } from "../../lib/use-smooth-text.js"
-import { formatRun, localTimeZone } from "../../lib/schedules.js"
-import { WorkspaceImage } from "./workspace-image.js"
+import { isShellNotice } from "./chat-view.js"
+import { ShellNoticeStep, SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
+import { revealOnHover } from "./message-actions.js"
+import { useTerminalShells } from "./terminal-shells.js"
+import { CopyButton, UserMessage, type Person } from "./user-message.js"
 
-interface Person {
-  readonly name: string
-  readonly image: string | undefined
+export interface TranscriptHandle {
+  readonly page: (direction: -1 | 1) => void
+  readonly toEnd: () => void
 }
 
 export interface TranscriptProps {
+  readonly handle?: Ref<TranscriptHandle> | undefined
+  readonly files?: boolean | undefined
+  readonly quote?: QuoteProps | undefined
   readonly view: ChatAtoms.View
   readonly spaceId?: string | undefined
   readonly messages: ReadonlyArray<SessionMessage.Info>
@@ -101,6 +82,10 @@ export interface TranscriptProps {
   readonly activeMessageID: string | undefined
   readonly busy: boolean
   readonly working: boolean
+  readonly starting?: boolean | undefined
+  readonly asking?: boolean | undefined
+  readonly simple?: boolean | undefined
+  readonly waiting?: boolean | undefined
   readonly statuses: ReadonlyMap<string, ChatState.PendingStatus>
   readonly viewer: Person & { readonly id: string }
   readonly people: ReadonlyMap<string, Person>
@@ -108,481 +93,23 @@ export interface TranscriptProps {
   readonly loading?: boolean | undefined
   readonly loadingHistory: boolean
   readonly onLoadMore: () => void
+  readonly find?: FindBarProps | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onEdit?: ((message: SessionMessage.User, text: string) => void) | undefined
-  readonly expanded?: boolean | undefined
+  readonly onRetry?: ((id: SessionMessage.ID) => void) | undefined
+  readonly onRemove?: ((id: SessionMessage.ID) => void) | undefined
+  readonly fold: boolean
+  readonly detail: TimelineDetail.Detail
+  readonly foldMessages?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
   readonly onTryAgain?: ((text: string) => void) | undefined
   readonly onContinue?: (() => void) | undefined
+  readonly onConnected?: ((app: string) => void) | undefined
   readonly onChangeModel?: (() => void) | undefined
   readonly onStop?: (() => void) | undefined
-}
-
-type Step =
-  | {
-      readonly kind: "reasoning"
-      readonly key: string
-      readonly content: SessionMessage.Reasoning
-      readonly running: boolean
-    }
-  | { readonly kind: "tool"; readonly key: string; readonly tool: SessionMessage.Tool }
-  | { readonly kind: "shell"; readonly key: string; readonly message: SessionMessage.Shell }
-  | { readonly kind: "notice"; readonly key: string; readonly message: SessionMessage.Info }
-  | { readonly kind: "text"; readonly key: string; readonly text: string; readonly streaming: boolean }
-
-type Block =
-  | { readonly kind: "user"; readonly key: string; readonly message: SessionMessage.User }
-  | { readonly kind: "steps"; readonly key: string; readonly turn: string; readonly steps: Step[] }
-  | {
-      readonly kind: "answer"
-      readonly key: string
-      readonly turn: string
-      readonly text: string
-      readonly streaming: boolean
-    }
-  | { readonly kind: "reply"; readonly key: string; readonly tool: SessionMessage.Tool }
-  | { readonly kind: "file"; readonly key: string; readonly file: SessionMessage.DriveFile }
-  | {
-      readonly kind: "connect"
-      readonly key: string
-      readonly connects: ReadonlyArray<{ readonly appId: string; readonly spaceId: string }>
-    }
-  | { readonly kind: "row"; readonly key: string; readonly row: TimelineRow.Row }
-
-const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
-
-function stepsOf(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): Step[] | undefined {
-  if (row._tag === "Thinking") {
-    const content = Projection.resolveContent(byId.get(row.ref.messageID), row.ref.partID)
-    return content?.type === "reasoning"
-      ? [{ kind: "reasoning", key: TimelineRow.key(row), content, running: true }]
-      : []
-  }
-  if (row._tag === "Shell") {
-    const message = byId.get(row.messageID)
-    return message?.type === "shell" ? [{ kind: "shell", key: TimelineRow.key(row), message }] : []
-  }
-  if (row._tag !== "AssistantPart") return undefined
-  const group = row.group
-  const refs = group.type === "part" ? [group.ref] : group.refs
-  return refs.flatMap((reference): Step[] => {
-    const message = byId.get(reference.messageID)
-    const key = `${reference.messageID}:${reference.partID}`
-    if (reference.partID === reference.messageID) {
-      if (message?.type === "shell") return [{ kind: "shell", key, message }]
-      return message ? [{ kind: "notice", key, message }] : []
-    }
-    const content = Projection.resolveContent(message, reference.partID)
-    if (content?.type === "reasoning")
-      return [{ kind: "reasoning", key, content, running: streaming(message) && !content.time?.completed }]
-    if (content?.type === "tool") return ToolDisplay.hidden(content) ? [] : [{ kind: "tool", key, tool: content }]
-    return []
-  })
-}
-
-function partBlock(row: TimelineRow.Row, byId: ReadonlyMap<string, SessionMessage.Info>): Block | undefined {
-  if (row._tag !== "AssistantPart" || row.group.type !== "part") return undefined
-  const message = byId.get(row.group.ref.messageID)
-  const content = Projection.resolveContent(message, row.group.ref.partID)
-  if (content?.type === "text")
-    return {
-      kind: "answer",
-      key: TimelineRow.key(row),
-      turn: row.userMessageID,
-      text: content.text,
-      streaming: streaming(message),
-    }
-  return content?.type === "tool" ? toolBlock(content, TimelineRow.key(row)) : undefined
-}
-
-function toolBlock(content: SessionMessage.Tool, key: string): Block | undefined {
-  if (ChannelReply.shown(content)) return { kind: "reply", key, tool: content }
-  const connects = AppConnect.of(content)
-  if (connects.length > 0) return { kind: "connect", key, connects }
-  const shown = Option.getOrUndefined(ShownFile.of(content))
-  return shown && { kind: "file", key, file: shown }
-}
-
-function pushSteps(blocks: Block[], key: string, turn: string, steps: Step[]) {
-  const last = blocks.at(-1)
-  if (last?.kind === "steps" && last.turn === turn) last.steps.push(...steps)
-  else if (steps.length > 0) blocks.push({ kind: "steps", key, turn, steps })
-}
-
-function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap<string, SessionMessage.Info>) {
-  return rows.reduce<Block[]>((blocks, row) => {
-    if (row._tag === "TurnGap") return blocks
-    if (row._tag === "UserMessage") {
-      const message = byId.get(row.userMessageID)
-      if (message?.type === "user") blocks.push({ kind: "user", key: TimelineRow.key(row), message })
-      return blocks
-    }
-    const part = partBlock(row, byId)
-    const steps = part ? undefined : stepsOf(row, byId)
-    if (part) blocks.push(part)
-    else if (steps) pushSteps(blocks, TimelineRow.key(row), row.userMessageID, steps)
-    else blocks.push({ kind: "row", key: TimelineRow.key(row), row })
-    return blocks
-  }, [])
-}
-
-function groupTurns(blocks: ReadonlyArray<Block>) {
-  const lastSteps = new Map(
-    blocks.flatMap((block, index) => (block.kind === "steps" ? [[block.turn, index] as const] : [])),
-  )
-  return blocks.reduce<Block[]>((grouped, block, index) => {
-    if (block.kind !== "steps" && block.kind !== "answer") {
-      grouped.push(block)
-      return grouped
-    }
-    if (block.kind === "answer" && (lastSteps.get(block.turn) ?? -1) < index) {
-      grouped.push(block)
-      return grouped
-    }
-    const items: Step[] =
-      block.kind === "steps"
-        ? block.steps
-        : [{ kind: "text", key: block.key, text: block.text, streaming: block.streaming }]
-    const last = grouped.at(-1)
-    if (last?.kind === "steps" && last.turn === block.turn) last.steps.push(...items)
-    else grouped.push({ kind: "steps", key: block.key, turn: block.turn, steps: [...items] })
-    return grouped
-  }, [])
-}
-
-const isPasteBlock = (text: string) => text.length >= 2000 || text.split("\n").length >= 20
-
-function splitPasted(text: string) {
-  const separator = text.indexOf("\n\n")
-  const head = separator === -1 ? text : text.slice(0, separator)
-  const tail = separator === -1 ? "" : text.slice(separator + 2)
-  if (tail && isPasteBlock(tail) && !isPasteBlock(head)) return { typed: head, pasted: tail }
-  if (isPasteBlock(text)) return { typed: "", pasted: text }
-  return { typed: text, pasted: undefined }
-}
-
-function PastedChip(props: { text: string }) {
-  const [open, setOpen] = useState(false)
-  const lines = props.text.split("\n").length
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <Attachment size="sm">
-        <AttachmentMedia>
-          <IconClipboardText />
-        </AttachmentMedia>
-        <AttachmentContent>
-          <AttachmentTitle>Pasted text</AttachmentTitle>
-          <AttachmentDescription className="tabular-nums">
-            {lines === 1 ? "1 line" : `${lines} lines`}
-          </AttachmentDescription>
-        </AttachmentContent>
-        <AttachmentTrigger aria-label={open ? "Hide pasted text" : "Show pasted text"} onClick={() => setOpen(!open)} />
-      </Attachment>
-      {open ? (
-        <CodeBlock size="sm" className="w-full">
-          <CodeBlockContent wrap className="max-h-64">
-            {props.text}
-          </CodeBlockContent>
-        </CodeBlock>
-      ) : null}
-    </div>
-  )
-}
-
-function FileChips(props: { files: ReadonlyArray<SessionMessage.FileAttachment> }) {
-  return (
-    <AttachmentGroup className="max-w-full justify-end-safe">
-      {props.files.map((file, index) => {
-        const image = file.mime.startsWith("image/") && file.source.type === "inline" && file.data
-        return (
-          // oxlint-disable-next-line react/no-array-index-key -- two attachments can share a name and type
-          <Attachment key={`${file.name ?? file.mime}-${index}`} size="sm">
-            {image ? (
-              <AttachmentMedia variant="image">
-                <ImageLightbox
-                  src={`data:${file.mime};base64,${file.data}`}
-                  alt={file.name ?? "Image"}
-                  className="size-full cursor-zoom-in"
-                >
-                  <img src={`data:${file.mime};base64,${file.data}`} alt={file.name ?? "Image"} />
-                </ImageLightbox>
-              </AttachmentMedia>
-            ) : (
-              <AttachmentMedia>
-                <IconFile />
-              </AttachmentMedia>
-            )}
-            <AttachmentContent>
-              <AttachmentTitle>{file.name ?? "Attachment"}</AttachmentTitle>
-              <AttachmentDescription>{file.mime}</AttachmentDescription>
-            </AttachmentContent>
-          </Attachment>
-        )
-      })}
-    </AttachmentGroup>
-  )
-}
-
-function EditPrompt(props: { text: string; onCancel: () => void; onSave: (text: string) => void }) {
-  const [text, setText] = useState(props.text)
-  const save = () => {
-    if (!text.trim() || text.trim() === props.text.trim()) props.onCancel()
-    else props.onSave(text.trim())
-  }
-  return (
-    <div className="flex flex-col gap-1.5">
-      <InputGroup className="rounded-xl bg-card dark:bg-card">
-        <InputGroupTextarea
-          value={text}
-          aria-label="Edit message"
-          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the editor opens because the person asked to edit
-          autoFocus
-          className="max-h-60 min-h-16 px-4 pt-3 text-base/relaxed"
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") props.onCancel()
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
-            event.preventDefault()
-            save()
-          }}
-        />
-        <InputGroupAddon align="block-end" className="justify-end gap-2 px-3 pt-0 pb-3">
-          <Button variant="ghost" size="sm" onClick={props.onCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={save}>
-            Send
-          </Button>
-        </InputGroupAddon>
-      </InputGroup>
-      <p className="px-1 text-xs text-muted-foreground">
-        Sending replaces this message and removes everything after it.
-      </p>
-    </div>
-  )
-}
-
-function CopyButton(props: { text: string }) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      className="text-muted-foreground"
-      aria-label="Copy"
-      onClick={() => void navigator.clipboard.writeText(props.text)}
-    >
-      <IconCopy />
-    </Button>
-  )
-}
-
-function ScheduleOrigin(props: { schedule: NonNullable<SessionMessage.User["schedule"]> }) {
-  return (
-    <Marker className="justify-end text-xs">
-      <MarkerIcon>
-        <IconClock />
-      </MarkerIcon>
-      <MarkerContent>
-        Scheduled ·{" "}
-        <Link to="/schedules" search={{ schedule: props.schedule.scheduleId }}>
-          {props.schedule.name}
-        </Link>{" "}
-        · {formatRun(props.schedule.scheduledAt, localTimeZone())}
-      </MarkerContent>
-    </Marker>
-  )
-}
-
-function WebhookOrigin(props: { webhook: NonNullable<SessionMessage.User["webhook"]>; spaceId: string | undefined }) {
-  return (
-    <Marker className="justify-end text-xs">
-      <MarkerIcon>
-        <IconWebhook />
-      </MarkerIcon>
-      <MarkerContent>
-        Webhook · {props.webhook.name} · {formatRun(props.webhook.receivedAt, localTimeZone())}
-        {props.spaceId ? (
-          <>
-            {" · "}
-            <Link
-              to="/spaces/$spaceId/webhooks/$webhookId"
-              params={{ spaceId: props.spaceId, webhookId: props.webhook.webhookId }}
-              search={{ tab: "requests", request: props.webhook.requestId }}
-            >
-              View request
-            </Link>
-          </>
-        ) : null}
-      </MarkerContent>
-    </Marker>
-  )
-}
-
-const requestStart = "\n\n<webhook_request>"
-
-function WebhookRequest(props: { request: string }) {
-  const [open, setOpen] = useState(false)
-  const bytes = new TextEncoder().encode(props.request).length
-  return (
-    <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
-      <Button
-        variant="ghost"
-        className="justify-start gap-2 rounded-none px-3.5"
-        aria-expanded={open}
-        onClick={() => setOpen((previous) => !previous)}
-      >
-        {open ? <IconChevronDown data-icon="inline-start" /> : <IconChevronRight data-icon="inline-start" />}
-        Request
-        <span className="text-muted-foreground">{bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`}</span>
-      </Button>
-      {open ? (
-        <CodeBlock size="sm" className="rounded-none border-0">
-          <CodeBlockContent wrap className="max-h-80">
-            {props.request}
-          </CodeBlockContent>
-        </CodeBlock>
-      ) : null}
-    </div>
-  )
-}
-
-function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) {
-  const [open, setOpen] = useState(false)
-  const rest = props.task.brief
-  return (
-    <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
-      <div className="relative flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 ease-out hover:bg-muted/50">
-        <IconChecklist className="size-4.5 shrink-0 text-muted-foreground" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-xs text-muted-foreground">
-            Task assigned<span className="font-mono"> · {props.task.identifier}</span>
-          </span>
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: props.task.taskId }}
-            className="truncate font-medium after:absolute after:inset-0"
-          >
-            {props.task.title}
-          </Link>
-        </div>
-        {rest ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="relative z-10 text-muted-foreground"
-            aria-label={open ? "Hide the brief" : "Show the brief"}
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-          >
-            <IconChevronDown className={cn("transition-transform duration-150 ease-out", open && "rotate-180")} />
-          </Button>
-        ) : null}
-      </div>
-      {open && rest ? (
-        <p className="max-h-72 overflow-y-auto overscroll-contain border-t px-3.5 py-3 whitespace-pre-wrap text-muted-foreground">
-          {rest}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-function UserBody(props: { message: SessionMessage.User; spaceId: string | undefined }) {
-  if (props.message.task) return <TaskHandoff task={props.message.task} />
-  const at = props.message.webhook ? props.message.text.indexOf(requestStart) : -1
-  if (at >= 0)
-    return (
-      <>
-        <UserText message={props.message} text={props.message.text.slice(0, at)} spaceId={props.spaceId} />
-        <WebhookRequest request={props.message.text.slice(at + 2)} />
-      </>
-    )
-  return <UserText message={props.message} spaceId={props.spaceId} />
-}
-
-function UserText(props: { message: SessionMessage.User; text?: string; spaceId: string | undefined }) {
-  const parts = splitPasted(props.text ?? props.message.text)
-  const apps = useMentionedApps(parts.typed)
-  const files = props.message.files ?? []
-  const uploads = props.message.uploads ?? []
-  return (
-    <>
-      {uploads.length > 0 ? (
-        <DriveFileCards spaceId={props.spaceId} files={uploads} className="max-w-full justify-end-safe" />
-      ) : null}
-      {files.length > 0 ? <FileChips files={files} /> : null}
-      {parts.pasted ? <PastedChip text={parts.pasted} /> : null}
-      {parts.typed ? (
-        <Bubble variant="muted" align="end">
-          <BubbleContent className="rounded-xl rounded-tr-lg px-4 py-2 text-base leading-[1.6] whitespace-pre-wrap">
-            {withAppMentions(parts.typed, apps)}
-          </BubbleContent>
-        </Bubble>
-      ) : null}
-    </>
-  )
-}
-
-function UserFooter(props: { text: string; pending: boolean; onEdit?: (() => void) | undefined }) {
-  return (
-    <MessageFooter className="justify-end gap-1">
-      {props.pending ? <span className="px-1 text-xs text-muted-foreground">Pending</span> : null}
-      {props.onEdit ? (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Edit"
-          onClick={props.onEdit}
-        >
-          <IconPencil />
-        </Button>
-      ) : null}
-      <CopyButton text={props.text} />
-    </MessageFooter>
-  )
-}
-
-function UserMessage(props: {
-  message: SessionMessage.User
-  spaceId: string | undefined
-  person: Person
-  pending: boolean
-  editing: boolean
-  onEdit?: (() => void) | undefined
-  onCancel: () => void
-  onSave: (text: string) => void
-}) {
-  return (
-    <Message
-      align="end"
-      data-turn={props.message.id}
-      className={cn("scroll-mt-16", props.editing ? "w-full @transcript:-mr-13.5" : "w-auto @transcript:-mr-13.5")}
-    >
-      <MessageAvatar className="ml-3.5">
-        <Avatar size="sm">
-          {props.person.image ? <AvatarImage src={props.person.image} alt="" /> : null}
-          <AvatarFallback>{props.person.name.charAt(0)}</AvatarFallback>
-        </Avatar>
-      </MessageAvatar>
-      <MessageContent className={props.editing ? "w-full" : undefined}>
-        <MessageHeader className="px-0">{props.person.name}</MessageHeader>
-        {props.message.schedule ? <ScheduleOrigin schedule={props.message.schedule} /> : null}
-        {props.message.webhook ? <WebhookOrigin webhook={props.message.webhook} spaceId={props.spaceId} /> : null}
-        {props.message.channel ? <ChannelOrigin origin={props.message.channel} /> : null}
-        {props.editing ? (
-          <EditPrompt text={props.message.text} onCancel={props.onCancel} onSave={props.onSave} />
-        ) : (
-          <>
-            <UserBody message={props.message} spaceId={props.spaceId} />
-            <UserFooter text={props.message.text} pending={props.pending} onEdit={props.onEdit} />
-          </>
-        )}
-      </MessageContent>
-    </Message>
-  )
+  readonly background?: { readonly blocking: boolean; readonly onMove: () => void } | undefined
 }
 
 function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
@@ -610,398 +137,18 @@ function ChannelReplyMessage(props: { tool: SessionMessage.Tool }) {
   )
 }
 
-function Output(props: { text: string; failed?: boolean | undefined }) {
-  return (
-    <CodeBlock size="sm" variant={props.failed ? "destructive" : "default"}>
-      <CodeBlockContent wrap className="max-h-64">
-        {props.text}
-      </CodeBlockContent>
-    </CodeBlock>
-  )
-}
-
-const traceStatus = (state: { running?: boolean | undefined; failed?: boolean | undefined }) => {
-  if (state.running) return "running"
-  return state.failed ? "error" : undefined
-}
-
-function Expandable(props: { content: ReactNode; className?: string | undefined; children: ReactNode }) {
-  if (!props.content) return props.children
-  return (
-    <TraceCollapsible>
-      <TraceCollapsibleTrigger>{props.children}</TraceCollapsibleTrigger>
-      <TraceCollapsibleContent className={props.className}>{props.content}</TraceCollapsibleContent>
-    </TraceCollapsible>
-  )
-}
-
-function StepDetail(props: {
-  output: string | undefined
-  failed: boolean | undefined
-  images: ReadonlyArray<SessionMessage.ToolFileContent>
-}) {
-  const images = props.images
-  return (
-    <>
-      {images.map((image) => (
-        <ImageLightbox key={image.uri} src={image.uri} alt={image.name?.split("/").at(-1) ?? "Image"}>
-          <img
-            src={image.uri}
-            alt={image.name ?? "Image"}
-            className="max-h-64 w-fit max-w-full rounded-md border bg-muted object-contain"
-          />
-        </ImageLightbox>
-      ))}
-      {props.output && !(images.length > 0 && props.output === "Image read successfully") ? (
-        <Output text={props.output} failed={props.failed} />
-      ) : null}
-    </>
-  )
-}
-
-function StepRow(props: {
-  icon: ReactNode
-  verb: string
-  subject?: string | undefined
-  running?: boolean
-  failed?: boolean
-  output?: string | undefined
-  images?: ReadonlyArray<SessionMessage.ToolFileContent> | undefined
-}) {
-  const images = props.images ?? []
-  const detail =
-    props.output || images.length > 0 ? (
-      <StepDetail output={props.output} failed={props.failed} images={images} />
-    ) : undefined
-  return (
-    <Trace>
-      <Expandable content={detail} className="flex flex-col gap-2">
-        <TraceLine status={traceStatus(props)}>
-          <TraceIcon>{props.running ? <Spinner /> : props.icon}</TraceIcon>
-          <TraceTitle className="shrink-0">{props.verb}</TraceTitle>
-          {props.subject ? (
-            <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{props.subject}</TraceDescription>
-          ) : null}
-        </TraceLine>
-      </Expandable>
-    </Trace>
-  )
-}
-
-const lineVariant = (type: string) => {
-  if (type === "addition") return "added"
-  return type === "deletion" ? "removed" : "default"
-}
-
-function FileDiff(props: { file: PatchFiles.File; titled: boolean }) {
-  return (
-    <CodeBlock size="sm">
-      {props.titled ? (
-        <CodeBlockHeader>
-          <CodeBlockTitle>{props.file.path}</CodeBlockTitle>
-        </CodeBlockHeader>
-      ) : null}
-      <CodeBlockContent wrap className="max-h-64">
-        {props.file.view.diff.hunks
-          .flatMap((hunk) => hunk.lines)
-          .map((line, index) => (
-            // oxlint-disable-next-line react/no-array-index-key -- diff lines have no identity besides their place
-            <CodeBlockLine key={index} variant={lineVariant(line.type)}>
-              {line.text.replace(/\n$/u, "")}
-            </CodeBlockLine>
-          ))}
-      </CodeBlockContent>
-    </CodeBlock>
-  )
-}
-
-function DiffStep(props: { tool: SessionMessage.Tool; icon: ReactNode; files: ReadonlyArray<PatchFiles.File> }) {
-  const additions = props.files.reduce((total, file) => total + file.additions, 0)
-  const deletions = props.files.reduce((total, file) => total + file.deletions, 0)
-  return (
-    <Trace>
-      <TraceCollapsible>
-        <TraceCollapsibleTrigger>
-          <TraceLine>
-            <TraceIcon>{props.icon}</TraceIcon>
-            <TraceTitle className="shrink-0">{ToolDisplay.label(props.tool)}</TraceTitle>
-            <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">
-              {ToolDisplay.subtitle(props.tool)}
-            </TraceDescription>
-            <TraceDescription>
-              +{additions} −{deletions}
-            </TraceDescription>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-2">
-          {props.files.map((file) => (
-            <FileDiff key={file.path} file={file} titled={props.files.length > 1} />
-          ))}
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
-}
-
-function LiveShell(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; shellID: Shell.ID }) {
-  const pending = props.tool.state.status === "streaming" || props.tool.state.status === "running"
-  const live = ChatReact.useShellRunning(props.view.root, props.shellID)
-  const running = pending || live
-  const streamed = AsyncResult.getOrElse(
-    ChatReact.useShellOutput({ ...props.view, shellID: props.shellID, running }),
-    () => "",
-  )
-  const failed = !running && ToolDisplay.status(props.tool) === "failed"
-  return (
-    <StepRow
-      icon={<toolIcons.command />}
-      verb={ToolDisplay.label(props.tool)}
-      subject={ToolDisplay.subtitle(props.tool)}
-      running={running}
-      failed={failed}
-      output={streamed ? TimelineText.shellOutput(streamed) : ToolDisplay.output(props.tool)}
-    />
-  )
-}
-
-type Card = ReturnType<typeof useSubagentCard>
-
-function subagentTitle(card: Card) {
-  if (card.needsInput) return "Needs your input"
-  if (card.status === "failed") return "Failed to delegate"
-  return card.status === "running" || card.status === "delegating" ? "Delegating" : "Delegated"
-}
-
-function subagentState(card: Card, tool: SessionMessage.Tool) {
-  const failed = card.status === "failed"
-  return {
-    child: card.child?.startsWith("ses_") ? Session.ID.make(card.child) : undefined,
-    running: card.status === "running" || card.status === "delegating",
-    failed,
-    error: failed ? (ToolDisplay.error(tool) ?? ToolDisplay.output(tool)) : undefined,
-  }
-}
-
-function SubagentError(props: { error: string; onOpen: (() => void) | undefined }) {
-  return (
-    <>
-      <Output text={props.error} failed />
-      {props.onOpen ? (
-        <Button variant="link" size="sm" className="px-0" onClick={props.onOpen}>
-          Open subagent
-        </Button>
-      ) : null}
-    </>
-  )
-}
-
-function Opener(props: { label: string; onOpen: (() => void) | undefined; children: ReactNode }) {
-  if (!props.onOpen) return props.children
-  return (
-    // oxlint-disable-next-line react/forbid-elements -- the whole trace line opens the subagent, and Trace styles its button
-    <button type="button" aria-label={props.label} onClick={props.onOpen}>
-      {props.children}
-    </button>
-  )
-}
-
-function SubagentStep(props: {
-  tool: SessionMessage.Tool
-  view: ChatAtoms.View
-  onOpenChild: (id: Session.ID) => void
-}) {
-  const card = useSubagentCard(props.view, props.tool)
-  const state = subagentState(card, props.tool)
-  const child = state.child
-  const open = child ? () => props.onOpenChild(child) : undefined
-  const error = state.error
-  const running = state.running
-  return (
-    <Trace>
-      <Opener label={`Open ${card.title}`} onOpen={error ? undefined : open}>
-        <Expandable
-          content={error ? <SubagentError error={error} onOpen={open} /> : undefined}
-          className="flex flex-col items-start gap-2"
-        >
-          <TraceLine status={traceStatus(state)}>
-            <TraceIcon>{running ? <Spinner /> : <toolIcons.agent />}</TraceIcon>
-            <TraceTitle className="shrink-0">{subagentTitle(card)}</TraceTitle>
-            <TraceDescription className="min-w-0 shrink truncate">{card.description ?? card.title}</TraceDescription>
-            {card.activity && running ? (
-              <TraceDescription className="min-w-0 shrink truncate font-mono text-xs">{card.activity}</TraceDescription>
-            ) : null}
-            {open && !error ? (
-              <TraceIcon>
-                <IconChevronRight />
-              </TraceIcon>
-            ) : null}
-          </TraceLine>
-        </Expandable>
-      </Opener>
-    </Trace>
-  )
-}
-
-function ToolStep(props: { tool: SessionMessage.Tool; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
-  const tool = props.tool
-  const shellID = ToolState.liveShellID(tool)
-  if (shellID) return <LiveShell tool={tool} view={props.view} shellID={shellID} />
-  const status = ToolDisplay.status(tool)
-  const error = ToolDisplay.error(tool)
-  const Icon = toolIcons[ToolDisplay.kind(tool)]
-  if (tool.name === "subagent" || tool.name === "task")
-    return <SubagentStep tool={tool} view={props.view} onOpenChild={props.onOpenChild} />
-  const changed =
-    PatchFiles.isFileChange(tool) && status === "completed" ? PatchFiles.patchFiles(PatchFiles.toolFiles(tool)) : []
-  if (changed.length > 0) return <DiffStep tool={tool} icon={<Icon />} files={changed} />
-  return (
-    <StepRow
-      icon={<Icon />}
-      verb={ToolDisplay.label(tool)}
-      subject={[ToolDisplay.subtitle(tool), ToolDisplay.matches(tool)].filter(Boolean).join(" · ") || undefined}
-      running={status === "running"}
-      failed={status === "failed"}
-      output={error ?? ToolDisplay.output(tool)}
-      images={
-        "content" in tool.state
-          ? tool.state.content.filter(
-              (item): item is SessionMessage.ToolFileContent => item.type === "file" && item.mime.startsWith("image/"),
-            )
-          : []
-      }
-    />
-  )
-}
-
-function ReasoningStep(props: { step: Extract<Step, { kind: "reasoning" }> }) {
-  const text = props.step.content.text.trim()
-  return (
-    <Trace>
-      <Expandable content={text ? <Markdown className="text-sm/relaxed">{text}</Markdown> : undefined}>
-        <TraceLine status={props.step.running ? "running" : undefined}>
-          <TraceIcon>
-            <IconBrain />
-          </TraceIcon>
-          <TraceTitle>{props.step.running ? "Thinking" : "Thought"}</TraceTitle>
-        </TraceLine>
-      </Expandable>
-    </Trace>
-  )
-}
-
-function ShellStep(props: { message: SessionMessage.Shell }) {
-  const message = props.message
-  const error = TimelineText.shellError(message)
-  return (
-    <StepRow
-      icon={<toolIcons.command />}
-      verb={message.status === "running" ? "Running" : "Ran"}
-      subject={message.command}
-      running={message.status === "running"}
-      failed={Boolean(error)}
-      output={message.output?.output ? TimelineText.shellOutput(message.output.output) : (error ?? "No output")}
-    />
-  )
-}
-
-function NoticeStep(props: { message: SessionMessage.Info }) {
-  const notice = TimelineText.notice(props.message)
-  if (!notice) return null
-  return (
-    <Trace>
-      <TraceLine>
-        <TraceIcon>
-          <IconInfoCircle />
-        </TraceIcon>
-        <TraceTitle>{notice.title}</TraceTitle>
-        {notice.detail ? (
-          <TraceDescription className="min-w-0 shrink truncate">{notice.detail}</TraceDescription>
-        ) : null}
-      </TraceLine>
-    </Trace>
-  )
-}
-
-function StepItem(props: { step: Step; view: ChatAtoms.View; onOpenChild: (id: Session.ID) => void }) {
-  const step = props.step
-  if (step.kind === "reasoning") return <ReasoningStep step={step} />
-  if (step.kind === "tool") return <ToolStep tool={step.tool} view={props.view} onOpenChild={props.onOpenChild} />
-  if (step.kind === "text") return null
-  if (step.kind === "shell") return <ShellStep message={step.message} />
-  return <NoticeStep message={step.message} />
-}
-
-function workedLabel(props: { running: boolean; workedFor: string | undefined }) {
-  if (props.running) return "Working"
-  return props.workedFor ? `Worked for ${props.workedFor}` : "Worked"
-}
-
-function Steps(props: {
-  expanded?: boolean | undefined
-  steps: ReadonlyArray<Step>
-  workedFor: string | undefined
-  running: boolean
-  view: ChatAtoms.View
-  onOpenChild: (id: Session.ID) => void
-}) {
-  const count = props.steps.filter((step) => step.kind !== "text").length
-  const runs = props.steps.reduce<Array<{ key: string; text?: Extract<Step, { kind: "text" }>; steps: Step[] }>>(
-    (all, step) => {
-      const last = all.at(-1)
-      if (step.kind === "text") all.push({ key: step.key, text: step, steps: [] })
-      else if (last && !last.text) last.steps.push(step)
-      else all.push({ key: step.key, steps: [step] })
-      return all
-    },
-    [],
-  )
-  return (
-    <Trace>
-      <TraceCollapsible defaultOpen={props.expanded === true}>
-        <TraceCollapsibleTrigger>
-          <TraceLine status={props.running ? "running" : undefined}>
-            <TraceIcon>
-              <IconClock />
-            </TraceIcon>
-            <TraceTitle>{workedLabel(props)}</TraceTitle>
-            <TraceDescription>{count === 1 ? "1 step" : `${count} steps`}</TraceDescription>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-3">
-          {runs.map((run) =>
-            run.text ? (
-              <SmoothMarkdown
-                key={run.key}
-                text={run.text.text}
-                streaming={run.text.streaming}
-                className="text-sm/relaxed text-foreground"
-              />
-            ) : (
-              <Trace key={run.key}>
-                {run.steps.map((step) => (
-                  <StepItem key={step.key} step={step} view={props.view} onOpenChild={props.onOpenChild} />
-                ))}
-              </Trace>
-            ),
-          )}
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
-}
-
 function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; context: Context }) {
   const row = props.row
-  const assistants = props.context.turns.get(row.userMessageID) ?? []
-  const last = assistants.at(-1)
   return (
     <TurnProblem
-      kind={row.kind}
+      problem={TurnProblems.of({
+        kind: row.kind,
+        text: row.text,
+        assistants: props.context.turns.get(row.userMessageID) ?? [],
+        modelNames: props.context.modelNames,
+        admin: props.context.admin,
+      })}
       text={row.text}
-      provider={providerLabel(last?.model.providerID ?? "the model provider")}
-      model={last ? (props.context.modelNames.get(last.model.id) ?? last.model.id) : "This model"}
-      midTurn={assistants.some((message) => message.content.some((content) => content.type === "tool"))}
-      admin={props.context.admin}
       handlers={props.context.handlers(row.userMessageID)}
     />
   )
@@ -1010,19 +157,9 @@ function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; con
 function RetryRow(props: { row: Extract<TimelineRow.Row, { _tag: "Retry" }>; context: Context }) {
   const row = props.row
   if (props.context.activeMessageID !== row.userMessageID) return null
-  const last = (props.context.turns.get(row.userMessageID) ?? []).at(-1)
-  const retry = last?.retry
-  if (!last || !retry) return null
-  return (
-    <TurnRetrying
-      kind={retry.error.type}
-      text={retry.error.message}
-      provider={providerLabel(last.model.providerID)}
-      at={DateTime.toEpochMillis(retry.at)}
-      attempt={retry.attempt}
-      handlers={props.context.handlers(row.userMessageID)}
-    />
-  )
+  const retrying = TurnProblems.retrying(props.context.turns.get(row.userMessageID) ?? [])
+  if (!retrying) return null
+  return <TurnRetrying retrying={retrying} handlers={props.context.handlers(row.userMessageID)} />
 }
 
 function Separator(props: { children: ReactNode }) {
@@ -1049,6 +186,14 @@ function NoticeRow(props: { messageID: string; context: Context }) {
   if (!message) return null
   if (message.type === "compaction") return <Separator>{TimelineText.compaction(message)}</Separator>
   if (message.type === "model-switched") return <ModelSwitched message={message} context={props.context} />
+  if (isShellNotice(message))
+    return (
+      <Message>
+        <MessageContent>
+          <ShellNoticeStep message={message} />
+        </MessageContent>
+      </Message>
+    )
   const notice = TimelineText.notice(message)
   if (!notice) return null
   return (
@@ -1076,6 +221,7 @@ function LoadEarlier(props: { onVisible: () => void }) {
       ref={(node) => {
         if (!node) return
         const observer = new IntersectionObserver((entries) => {
+          if (node.closest("[data-pending-scroll]")) return
           if (entries.some((entry) => entry.isIntersecting)) props.onVisible()
         })
         observer.observe(node)
@@ -1087,7 +233,7 @@ function LoadEarlier(props: { onVisible: () => void }) {
 
 interface Context {
   readonly admin: boolean
-  readonly handlers: (userMessageID: string) => ProblemHandlers
+  readonly handlers: (userMessageID: string) => TurnProblems.Handlers
   readonly modelNames: ReadonlyMap<string, string>
   readonly byId: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
@@ -1096,6 +242,7 @@ interface Context {
 
 function UserBlock(props: {
   message: SessionMessage.User
+  rowKey: string
   transcript: TranscriptProps
   editing: boolean
   onEditing: (id: string | undefined) => void
@@ -1103,7 +250,6 @@ function UserBlock(props: {
   const transcript = props.transcript
   const message = props.message
   const status = transcript.statuses.get(message.id)
-  const pending = status === "starting" || status === "steering" || status === "stranded"
   const senderId = message.sender?.userId
   const person =
     senderId && senderId !== transcript.viewer.id
@@ -1114,10 +260,14 @@ function UserBlock(props: {
     <UserMessage
       message={message}
       spaceId={transcript.spaceId}
+      fold={transcript.foldMessages === true}
+      reveal={transcript.find?.match?.row === props.rowKey}
       person={person}
-      pending={pending}
+      status={status}
       editing={props.editing}
-      onEdit={edit && !pending ? () => props.onEditing(message.id) : undefined}
+      onEdit={edit && (status === undefined || status === "queued") ? () => props.onEditing(message.id) : undefined}
+      onRetry={transcript.onRetry && (() => transcript.onRetry?.(message.id))}
+      onRemove={transcript.onRemove && (() => transcript.onRemove?.(message.id))}
       onCancel={() => props.onEditing(undefined)}
       onSave={(text) => {
         props.onEditing(undefined)
@@ -1127,37 +277,12 @@ function UserBlock(props: {
   )
 }
 
-function SmoothMarkdown(props: {
-  text: string
-  streaming: boolean
-  className: string
-  apps?: ReadonlyArray<CatalogApp> | undefined
-  root?: Session.ID | undefined
-  images?: ReadonlyMap<string, string> | undefined
-}) {
-  const text = useSmoothText(props.text, { streaming: props.streaming })
-  const root = props.root
-  return (
-    <Markdown
-      streaming={props.streaming || text.length < props.text.length}
-      apps={props.apps}
-      className={props.className}
-      workspaceImage={
-        root
-          ? (path, alt) => <WorkspaceImage root={root} path={path} alt={alt} src={props.images?.get(path)} />
-          : undefined
-      }
-    >
-      {text}
-    </Markdown>
-  )
-}
-
 function AnswerBlock(props: {
   text: string
   streaming: boolean
   copy: string | undefined
   root: Session.ID
+  files: boolean
   messages: ReadonlyArray<SessionMessage.Info>
 }) {
   const apps = useMentionedApps(props.text)
@@ -1182,10 +307,11 @@ function AnswerBlock(props: {
     <Message>
       <MessageContent>
         <Bubble variant="ghost">
-          <BubbleContent className="text-base leading-[1.7]">
+          <BubbleContent data-searchable="" data-quotable="Ren's reply" className="text-base leading-[1.7]">
             <SmoothMarkdown
               text={props.text}
               root={props.root}
+              files={props.files}
               images={images}
               streaming={props.streaming}
               apps={apps}
@@ -1193,31 +319,78 @@ function AnswerBlock(props: {
             />
           </BubbleContent>
         </Bubble>
-        {props.copy ? (
-          <MessageFooter>
+        {props.copy === undefined ? null : (
+          <MessageFooter
+            aria-hidden={props.copy === "" || undefined}
+            inert={props.copy === ""}
+            className={cn(revealOnHover, props.copy === "" && "invisible")}
+          >
             <CopyButton text={props.copy} />
           </MessageFooter>
-        ) : null}
+        )}
+      </MessageContent>
+    </Message>
+  )
+}
+
+function TurnSteps(props: {
+  block: Extract<TranscriptBlocks.Block, { kind: "steps" }>
+  folded: boolean
+  simple: boolean
+  workedFor: string | undefined
+}) {
+  const openPanel = useOpenActivity()
+  const turn = props.block.turn
+  return (
+    <Message>
+      <MessageContent>
+        {props.folded ? (
+          <Steps
+            steps={props.block.steps}
+            workedFor={props.workedFor}
+            onOpen={props.simple && openPanel ? () => openPanel({ kind: "activity", turn }) : undefined}
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <StepRuns steps={props.block.steps} />
+          </div>
+        )}
       </MessageContent>
     </Message>
   )
 }
 
 function BlockView(props: {
-  block: Block
+  block: TranscriptBlocks.Block | LiveSlot | FilesGroup
   transcript: TranscriptProps
   context: Context
   editing: string | undefined
   onEditing: (id: string | undefined) => void
-  activeTurn: string | undefined
   copyOf: (turn: string, key: string) => string | undefined
   workedFor: (turn: string) => string | undefined
 }) {
   const block = props.block
+  if (block.kind === "files")
+    return (
+      <Message>
+        <MessageContent>
+          <FileOutputs spaceId={props.transcript.spaceId} files={block.files} />
+        </MessageContent>
+      </Message>
+    )
+  if (block.kind === "live")
+    return (
+      <Message>
+        <MessageContent>
+          <TurnLine transcript={props.transcript} turns={props.context.turns} />
+        </MessageContent>
+      </Message>
+    )
   if (block.kind === "user")
     return (
       <UserBlock
         message={block.message}
+        rowKey={block.key}
         transcript={props.transcript}
         editing={props.editing === block.message.id}
         onEditing={props.onEditing}
@@ -1225,23 +398,18 @@ function BlockView(props: {
     )
   if (block.kind === "steps")
     return (
-      <Message>
-        <MessageContent>
-          <Steps
-            expanded={props.transcript.expanded}
-            steps={block.steps}
-            running={props.activeTurn === block.turn}
-            workedFor={props.workedFor(block.turn)}
-            view={props.transcript.view}
-            onOpenChild={props.transcript.onOpenChild}
-          />
-        </MessageContent>
-      </Message>
+      <TurnSteps
+        block={block}
+        folded={props.transcript.fold}
+        simple={props.transcript.simple === true}
+        workedFor={props.workedFor(block.turn)}
+      />
     )
   if (block.kind === "answer")
     return (
       <AnswerBlock
         root={props.transcript.view.root}
+        files={props.transcript.files === true}
         messages={props.transcript.messages}
         text={block.text}
         streaming={block.streaming}
@@ -1249,6 +417,16 @@ function BlockView(props: {
       />
     )
   if (block.kind === "reply") return <ChannelReplyMessage tool={block.tool} />
+  if (block.kind === "empty")
+    return (
+      <Message>
+        <MessageContent>
+          <Marker variant="default">
+            <MarkerContent>Ren sent an empty response.</MarkerContent>
+          </Marker>
+        </MessageContent>
+      </Message>
+    )
   if (block.kind === "connect")
     return (
       <Message>
@@ -1258,6 +436,7 @@ function BlockView(props: {
               key={`${connect.appId}:${connect.spaceId}`}
               appId={connect.appId}
               spaceId={connect.spaceId}
+              onConnected={props.transcript.onConnected}
             />
           ))}
         </MessageContent>
@@ -1267,7 +446,7 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent>
-          <DriveFileCards spaceId={props.transcript.spaceId} files={[block.file]} />
+          <FileOutputs spaceId={props.transcript.spaceId} files={[block.file]} />
         </MessageContent>
       </Message>
     )
@@ -1275,8 +454,214 @@ function BlockView(props: {
 }
 
 function History(props: { loading: boolean; onLoadMore: () => void }) {
-  if (!props.loading) return <LoadEarlier onVisible={props.onLoadMore} />
-  return <MessagesSkeleton label="Loading earlier messages" />
+  return (
+    <div className="absolute inset-x-0 top-0 flex h-6 items-center justify-center text-xs text-muted-foreground">
+      {props.loading ? (
+        <output className="flex animate-in items-center gap-2 delay-300 duration-200 fade-in-0 fill-mode-backwards motion-reduce:animate-none">
+          <Spinner />
+          Loading earlier messages
+        </output>
+      ) : (
+        <LoadEarlier onVisible={props.onLoadMore} />
+      )}
+    </div>
+  )
+}
+
+const markerOf = (props: TranscriptProps, live: { readonly busy: boolean }) => {
+  if (props.starting) return { label: "Starting your computer", labelled: true }
+  if (!live.busy && !props.working) return props.waiting ? { label: "Working on the next step", labelled: true } : null
+  return { label: "Working on the next step", labelled: props.working || props.background?.blocking === true }
+}
+
+type LiveSlot = { readonly kind: "live"; readonly key: string; readonly turn: string }
+
+type FilesGroup = {
+  readonly kind: "files"
+  readonly key: string
+  readonly files: ReadonlyArray<SessionMessage.DriveFile>
+}
+
+const groupFiles = (blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot>) =>
+  blocks.reduce<Array<TranscriptBlocks.Block | LiveSlot | FilesGroup>>((grouped, block) => {
+    const last = grouped.at(-1)
+    if (block.kind !== "file") grouped.push(block)
+    else if (last?.kind === "files") grouped[grouped.length - 1] = { ...last, files: [...last.files, block.file] }
+    else grouped.push({ kind: "files", key: block.key, files: [block.file] })
+    return grouped
+  }, [])
+
+const shownBlocks = (
+  blocks: ReadonlyArray<TranscriptBlocks.Block>,
+  live: { readonly simple: boolean; readonly turn: string | undefined; readonly line: boolean },
+): ReadonlyArray<TranscriptBlocks.Block | LiveSlot> => {
+  const turn = live.turn
+  if (!live.simple || !turn || !live.line) return blocks
+  const step = blocks.findIndex((block) => block.kind === "steps" && block.turn === turn)
+  const at = step === -1 ? blocks.findIndex((block) => block.kind === "user" && block.message.id === turn) + 1 : step
+  if (at === 0) return blocks
+  const slot: LiveSlot = { kind: "live", key: `live:${turn}`, turn }
+  return [...blocks.slice(0, at), slot, ...blocks.slice(at)].filter(
+    (block) => !(block.kind === "steps" && block.turn === turn),
+  )
+}
+
+const liveOf = (
+  props: TranscriptProps,
+  blocks: ReadonlyArray<TranscriptBlocks.Block>,
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
+) => {
+  const waiting = props.starting === true || props.waiting === true
+  const newest = blocks.findLast((block) => block.kind === "user")
+  const pending = waiting && newest?.kind === "user" ? newest.message.id : undefined
+  return { turn: props.busy ? props.activeMessageID : pending, line: liveLine(props, turns) !== undefined }
+}
+
+const liveLine = (
+  props: TranscriptProps,
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
+): LiveLine | undefined => {
+  if (props.starting) return { text: "Starting your computer", kind: "starting" }
+  if (props.asking) return { text: "Waiting for your answer", kind: "waiting" }
+  return Activity.current(turns.get(props.activeMessageID ?? "") ?? [])
+}
+
+function TurnLine(props: {
+  transcript: TranscriptProps
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+}) {
+  const openPanel = useOpenActivity()
+  const transcript = props.transcript
+  const turn = transcript.activeMessageID
+  const line = liveLine(transcript, props.turns)
+  if (!line) return null
+  return (
+    <LiveActivity line={line} onOpen={openPanel && turn ? () => openPanel({ kind: "activity", turn }) : undefined} />
+  )
+}
+
+function LiveMarker(props: {
+  transcript: TranscriptProps
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+  busy: boolean
+}) {
+  const transcript = props.transcript
+  if (!markerOf(transcript, { busy: props.busy })) return null
+  return (
+    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
+    <MessageScrollerItem messageId="working" aria-hidden className="invisible">
+      <Message>
+        <MessageContent>
+          <TurnLine transcript={transcript} turns={props.turns} />
+        </MessageContent>
+      </Message>
+    </MessageScrollerItem>
+  )
+}
+
+function TurnMarker(props: {
+  simple: boolean
+  transcript: TranscriptProps
+  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+  busy: boolean
+}) {
+  if (props.simple) return <LiveMarker transcript={props.transcript} turns={props.turns} busy={props.busy} />
+  return (
+    <WorkingMarker marker={markerOf(props.transcript, { busy: props.busy })} background={props.transcript.background} />
+  )
+}
+
+function WorkingMarker(props: { marker: ReturnType<typeof markerOf>; background: TranscriptProps["background"] }) {
+  if (!props.marker) return null
+  const labelled = props.marker.labelled
+  const label = props.marker.label
+  return (
+    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
+    <MessageScrollerItem messageId="working">
+      <Marker
+        key={label}
+        className={cn(
+          "animate-in duration-200 ease-out fade-in-0 motion-reduce:animate-none",
+          props.background && "min-h-6.5",
+        )}
+      >
+        <MarkerContent
+          aria-hidden={!labelled}
+          className={cn(
+            "shimmer whitespace-nowrap transition-opacity duration-150 motion-reduce:shimmer-none",
+            !labelled && "w-0 overflow-hidden opacity-0",
+          )}
+        >
+          {label}
+        </MarkerContent>
+        {props.background ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Press Ctrl+B to move running work to the background"
+            inert={!props.background.blocking}
+            className={cn(
+              "transition-opacity duration-150 motion-reduce:transition-none",
+              !props.background.blocking && "opacity-0",
+            )}
+            onClick={props.background.onMove}
+          >
+            Move to background
+            <KbdGroup className="text-muted-foreground">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>B</Kbd>
+            </KbdGroup>
+          </Button>
+        ) : null}
+      </Marker>
+    </MessageScrollerItem>
+  )
+}
+
+const liveItems = 20
+
+const freshMs = 2000
+
+function useSentAnchor(
+  blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot | FilesGroup>,
+  statuses: ReadonlyMap<string, ChatState.PendingStatus>,
+) {
+  const users = blocks.filter((block) => block.kind === "user")
+  const now = useNow()
+  const [queued, setQueued] = useState<ReadonlySet<string>>(() => new Set())
+  const [fresh, setFresh] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(users.map((block) => [block.key, false])),
+  )
+  const waiting = [...statuses.keys()].filter((id) => !queued.has(id))
+  if (waiting.length > 0) setQueued(new Set([...queued, ...waiting]))
+  const last = users.at(-1)
+  if (last && !fresh.has(last.key))
+    setFresh(
+      new Map([
+        ...fresh,
+        [last.key, !queued.has(last.message.id) && DateTime.toEpochMillis(last.message.time.created) > now - freshMs],
+      ]),
+    )
+  return last && fresh.get(last.key) === true ? last.key : undefined
+}
+
+function useWatchedTurns(running: string | undefined) {
+  const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set())
+  if (running && !watched.has(running)) setWatched(new Set([...watched, running]))
+  return { live: (turn: string | undefined) => turn !== undefined && (turn === running || watched.has(turn)) }
+}
+
+const scrollUpKeys = new Set(["ArrowUp", "PageUp", "Home"])
+
+function useFollow(options: { readonly paused: boolean }) {
+  const [paused, setPaused] = useState(options.paused)
+  return {
+    following: !paused,
+    pause: () => {
+      if (!paused) flushSync(() => setPaused(true))
+    },
+    resume: () => setPaused(false),
+  }
 }
 
 function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMessage.Info>): Context {
@@ -1301,53 +686,187 @@ function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMess
 }
 
 export function Transcript(props: TranscriptProps) {
-  const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
+  const session = props.view.sessionID
+  const [opening, setOpening] = useState(() => ({ session, place: TranscriptScroll.placeOf(session) }))
+  if (opening.session !== session) setOpening({ session, place: TranscriptScroll.placeOf(session) })
+  const place = opening.place
+  const follow = useFollow({ paused: place !== undefined })
+  const [shown, setShown] = useState(false)
+  if (!props.loading && !shown) setShown(true)
+  if (props.loading && !shown)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {props.more && !props.loadingHistory ? <LoadEarlier onVisible={props.onLoadMore} /> : null}
+        <MessagesSpinner />
+      </div>
+    )
+  return (
+    <ImageSet>
+      <StepsProvider
+        view={props.view}
+        detail={props.detail}
+        files={props.files === true}
+        onOpenChild={props.onOpenChild}
+      >
+        <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
+          <TranscriptScroller transcript={props} follow={follow} place={place} />
+        </MessageScrollerProvider>
+      </StepsProvider>
+    </ImageSet>
+  )
+}
+
+function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<TranscriptBlocks.Block> }) {
+  const match = props.find.match
+  const row = props.blocks.find(
+    (block) =>
+      block.key === match?.row || (block.kind === "steps" && block.steps.some((step) => step.key === match?.row)),
+  )?.key
+  return (
+    <div className="absolute top-2 right-4 z-10">
+      <FindBar {...props.find} match={row && match ? { row, occurrence: match.occurrence } : undefined} />
+    </div>
+  )
+}
+
+function TranscriptScroller(input: {
+  transcript: TranscriptProps
+  follow: ReturnType<typeof useFollow>
+  place: ReadonlyArray<TranscriptScroll.Spot> | undefined
+}) {
+  const props = input.transcript
+  const follow = input.follow
+  const place = input.place
+  const scroller = useMessageScroller()
+  const terminal = useTerminalShells(props.view.root)
+  const touchY = useRef(0)
+  const lastTop = useRef(0)
+  const lastHeight = useRef(0)
+  const pause = (viewport: HTMLElement) => {
+    if ((viewport.querySelector<HTMLElement>("[data-message-scroller-spacer]")?.offsetHeight ?? 0) > 0) return
+    follow.pause()
+  }
+  const toEnd = () => {
+    flushSync(follow.resume)
+    scroller.scrollToEnd()
+  }
+  const viewport = useRef<HTMLDivElement>(null)
+  useImperativeHandle(props.handle, () => ({
+    page: (direction) => {
+      const element = viewport.current
+      if (!element) return
+      if (direction < 0) pause(element)
+      element.scrollBy({ top: direction * element.clientHeight * 0.9 })
+    },
+    toEnd,
+  }))
+  const hidden = new Set<string>(props.messages.filter(terminal.message).map((message) => message.id))
+  const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(
+    props.messages.filter((message) => !hidden.has(message.id)).map((message) => [message.id, message]),
+  )
+  const rows = props.rows.filter(
+    (row) =>
+      !hidden.has(row.userMessageID) && !((row._tag === "Notice" || row._tag === "Shell") && hidden.has(row.messageID)),
+  )
   const context = contextOf(props, byId)
   const turns = context.turns
-  const blocks = groupTurns(blocksOf(props.rows, byId))
+  const activeTurn = props.busy ? props.activeMessageID : undefined
+  const watched = useWatchedTurns(activeTurn)
+  const blocks = TranscriptBlocks.withEmptyReplies(
+    TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(rows, byId), {
+      live: (turn) => turn === activeTurn,
+      fold: props.fold,
+    }),
+    turns,
+    activeTurn,
+  )
+  const simple = props.simple === true
+  const shown = groupFiles(shownBlocks(blocks, { simple, ...liveOf(props, blocks, turns) }))
+  const live = props.busy || watched.live(props.activeMessageID)
+  const sent = useSentAnchor(shown, props.statuses)
+  const easing = TranscriptScroll.useSendGlide(sent)
+  TranscriptScroll.useOnSent(sent, follow.resume)
+  const pinned = follow.following && props.find === undefined
+  const from = TranscriptScroll.useOpening(shown, { all: props.find !== undefined, place })
+  TranscriptScroll.useKeptPlace(viewport, place, {
+    session: props.view.sessionID,
+    following: pinned,
+    more: props.more,
+    loading: props.loadingHistory,
+    onLoadMore: props.onLoadMore,
+  })
   const [editing, setEditing] = useState<string>()
   const lastAnswer = new Map(
     blocks.flatMap((block) => (block.kind === "answer" ? [[block.turn, block.key] as const] : [])),
   )
-  const activeTurn = props.busy ? props.activeMessageID : undefined
   const workedFor = (turn: string) => {
     const user = byId.get(turn)
     const milliseconds = TimelineText.turnDuration(user?.type === "user" ? user : undefined, turns.get(turn) ?? [])
     return milliseconds === undefined ? undefined : TimelineText.duration(milliseconds)
   }
-  const copyOf = (turn: string, key: string) =>
-    lastAnswer.get(turn) === key && activeTurn !== turn ? TimelineText.copyText(turns.get(turn) ?? [])?.text : undefined
-  const empty =
-    props.empty && blocks.length === 0 && !props.busy && !props.more && !props.loadingHistory && !props.loading
+  const copyOf = (turn: string, key: string) => {
+    if (lastAnswer.get(turn) !== key) return
+    return activeTurn === turn ? "" : TimelineText.copyText(turns.get(turn) ?? [])?.text
+  }
+  const pending = [props.busy, props.more, props.loadingHistory, props.loading].some(Boolean)
+  const empty = props.empty && blocks.length === 0 && !pending
   return (
-    <MessageScrollerProvider autoScroll>
+    <MarkdownScroll value={pause}>
       <MessageScroller className="@container flex-1">
+        <QuoteSelection quote={props.quote} root={viewport} />
         <MessageScrollerViewport
+          ref={viewport}
+          data-scroll-restoration-id="transcript"
           preserveScrollOnPrepend
-          className="scrollbar-gutter-both outline-none focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)]"
+          pinEnd={pinned}
+          data-easing={easing}
+          className="relative scrollbar-gutter-both outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth data-placing:invisible motion-reduce:scroll-auto"
+          onWheel={(event: WheelEvent<HTMLDivElement>) => {
+            if (event.deltaY < 0) pause(event.currentTarget)
+            else if (TranscriptScroll.atBottom(event.currentTarget)) toEnd()
+          }}
+          onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
+            touchY.current = event.touches[0]?.clientY ?? 0
+          }}
+          onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
+            if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
+          }}
+          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+            if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
+          }}
+          onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
+            const viewport = event.currentTarget
+            viewport.dataset.pointer = ""
+            if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
+              pause(event.currentTarget)
+          }}
+          onBlur={(event: FocusEvent<HTMLDivElement>) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) delete event.currentTarget.dataset.pointer
+          }}
+          onScroll={(event: UIEvent<HTMLDivElement>) => {
+            const viewport = event.currentTarget
+            const down = viewport.scrollTop > lastTop.current
+            const up = viewport.scrollTop < lastTop.current - 1 && viewport.scrollHeight >= lastHeight.current
+            lastTop.current = viewport.scrollTop
+            lastHeight.current = viewport.scrollHeight
+            if (viewport.hasAttribute("data-placing")) return
+            TranscriptScroll.keepPlace(props.view.sessionID, viewport)
+            if (up) pause(viewport)
+            if (!follow.following && down && TranscriptScroll.atBottom(viewport)) toEnd()
+          }}
         >
-          <MessageScrollerContent className="relative mx-auto w-full max-w-3xl p-6">
-            {props.more ? (
-              <MessageScrollerItem
-                messageId="history"
-                className={props.loadingHistory ? "mb-6" : "absolute inset-x-6 top-1"}
-              >
-                <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} />
-              </MessageScrollerItem>
-            ) : null}
-            {props.loading ? (
-              <MessageScrollerItem messageId="loading">
-                <MessagesSkeleton />
-              </MessageScrollerItem>
-            ) : null}
-            {blocks.map((block) => (
+          {props.more && from === 0 ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
+          <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
+            {shown.slice(from).map((block, index) => (
               <MessageScrollerItem
                 key={block.key}
                 messageId={block.key}
-                {...(block.kind === "user" && {
-                  scrollAnchor: true,
-                  className: "@transcript:-mr-13.5 @transcript:pr-13.5",
-                })}
+                data-row-key={block.key}
+                scrollAnchor={block.key === sent}
+                className={cn(
+                  block.kind === "user" && "@transcript:-mr-13.5 @transcript:pr-13.5",
+                  from + index >= shown.length - liveItems && "[content-visibility:visible]",
+                )}
               >
                 <BlockView
                   block={block}
@@ -1355,7 +874,6 @@ export function Transcript(props: TranscriptProps) {
                   context={context}
                   editing={editing}
                   onEditing={setEditing}
-                  activeTurn={activeTurn}
                   copyOf={copyOf}
                   workedFor={workedFor}
                 />
@@ -1366,17 +884,12 @@ export function Transcript(props: TranscriptProps) {
                 <EmptyState>{props.empty}</EmptyState>
               </MessageScrollerItem>
             ) : null}
-            {props.working ? (
-              <MessageScrollerItem messageId="working">
-                <Marker>
-                  <MarkerContent className="shimmer motion-reduce:shimmer-none">Working on the next step</MarkerContent>
-                </Marker>
-              </MessageScrollerItem>
-            ) : null}
+            <TurnMarker simple={simple} transcript={props} turns={turns} busy={live} />
           </MessageScrollerContent>
         </MessageScrollerViewport>
+        {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
         <MessageScrollerButton />
       </MessageScroller>
-    </MessageScrollerProvider>
+    </MarkdownScroll>
   )
 }

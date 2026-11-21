@@ -4,26 +4,66 @@ import { useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import { Button } from "@ren/ui/button"
 import { Switch } from "@ren/ui/switch"
+import { Preference } from "../../lib/preference.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
 import { Page, Row, Rows, Section } from "../../components/page.js"
 import { useMe } from "../../lib/use-me.js"
+import { useSignOut } from "../../lib/use-sign-out.js"
 import { errorMessage } from "../../lib/errors.js"
 import { resetSession } from "../../lib/chat.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
-import { Choice, deliveries, details, PasswordDialog, ThemePicker } from "../../components/settings-shared.js"
+import {
+  backgroundActivities,
+  deliveries,
+  PasswordDialog,
+  ThemePicker,
+  timelineWidths,
+  stepPlaces,
+} from "../../components/settings-shared.js"
+import { ChoiceRow, SwitchRow } from "../../components/preference-rows.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AvatarPicker } from "../../components/avatar-picker.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
+import { AppearancePreferences } from "../../lib/appearance-preferences.js"
+import { TimelineDetailSetting } from "./timeline-detail-setting.js"
+import { TypographySection } from "./typography-section.js"
+import { LayoutSetting } from "./layout-setting.js"
+
+const resettable = [
+  AppearancePreferences.theme,
+  AppearancePreferences.layout,
+  AppearancePreferences.uiFont,
+  AppearancePreferences.uiSize,
+  AppearancePreferences.codeFont,
+  AppearancePreferences.codeSize,
+  ChatPreferences.timelineDetail,
+  ChatPreferences.steps,
+  ChatPreferences.foldMessages,
+  ChatPreferences.timelineWidth,
+  ChatPreferences.backgroundActivity,
+  ChatPreferences.followUp,
+  ChatPreferences.notifications,
+  TimeZone.chosen,
+]
+
+const notificationRows = [
+  { kind: "finished", title: "Ren finishes", description: "When Ren is done." },
+  { kind: "permissions", title: "Permissions", description: "When Ren needs a permission." },
+  { kind: "questions", title: "Questions", description: "When Ren asks a question." },
+  { kind: "errors", title: "Errors", description: "When a turn fails." },
+] as const satisfies ReadonlyArray<{ kind: ChatPreferences.NotificationKind; title: string; description: string }>
 
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
   const me = useMe()
-  const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
-  const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
-  const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
-  const [timeZone, setTimeZone] = useState(() => TimeZone.chosen.read(platform.storage) ?? "")
+  const notifications = Preference.usePreference(ChatPreferences.notifications)
+  const [permission, setPermission] = useState(() => platform.notificationPermission?.())
+  const timeZone = Preference.usePreference(TimeZone.chosen) ?? ""
+  const setPreference = Preference.useSetPreference()
+  const allDefault = Preference.useAllDefault(resettable)
+  const reset = Preference.useReset(resettable)
   const rename = useMutation({
     mutationFn: async (name: string) => {
       const result = await auth.updateUser({ name })
@@ -43,7 +83,10 @@ export function PreferencesPage() {
     onError: (error) => toast.error("Couldn’t change your photo", { description: errorMessage(error) }),
   })
   const navigate = useNavigate()
+  const signOut = useSignOut()
+  const deletion = useMutation(api.me.requestDeletion.mutationOptions())
   const [leaving, setLeaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const user = me.user
   const organization = me.organization
   const leave = async () => {
@@ -56,29 +99,50 @@ export function PreferencesPage() {
     resetSession(queryClient)
     await navigate({ to: "/" })
   }
-  const chooseDetail = (value: string) => {
-    const next = value === "detailed" ? "detailed" : "compact"
-    ChatPreferences.detail.write(platform.storage, next)
-    setDetail(next)
-  }
-  const chooseFollowUp = (value: string) => {
-    const next = value === "queue" ? "queue" : "steer"
-    ChatPreferences.followUp.write(platform.storage, next)
-    setFollowUp(next)
-  }
-  const chooseNotify = (enabled: boolean) => {
-    if (enabled) void platform.requestNotifications?.()
-    ChatPreferences.notify.write(platform.storage, enabled)
-    setNotify(enabled)
+  const deleteAccount = () =>
+    deletion
+      .mutateAsync(undefined, {
+        onError: (error) => toast.error("Couldn’t delete your account", { description: errorMessage(error) }),
+      })
+      .then(async () => {
+        toast.success("We’ve received your request", {
+          description: "Your account will be deleted, and we’ll email you again when it’s done.",
+        })
+        await signOut()
+      })
+  const changeNotification = async (
+    key: ChatPreferences.NotificationKind | "sound",
+    change: { readonly enabled: boolean },
+  ) => {
+    if (change.enabled && key !== "sound") {
+      const granted = await platform.requestNotifications?.()
+      setPermission(platform.notificationPermission?.())
+      if (granted === false) return
+    }
+    setPreference(ChatPreferences.notifications, {
+      ...ChatPreferences.notifications.read(platform.storage),
+      [key]: change.enabled,
+    })
   }
   return (
-    <Page title="Preferences">
+    <Page
+      title="Preferences"
+      actions={
+        <Button
+          variant="outline"
+          disabled={allDefault}
+          onClick={() => {
+            const undo = reset()
+            toast.success("Preferences reset to defaults", { action: { label: "Undo", onClick: undo } })
+          }}
+        >
+          Reset to defaults
+        </Button>
+      }
+    >
       <Rows>
         {[
-          <Row key="email" title="Email" description="Contact support to change.">
-            <span className="text-sm text-muted-foreground">{user.email}</span>
-          </Row>,
-          <Row key="photo" title="Photo" description="Shown beside your name across Ren.">
+          <Row key="photo" title="Photo">
             <AvatarPicker
               kind="person"
               label="Your photo"
@@ -95,10 +159,83 @@ export function PreferencesPage() {
               onCommit={(name: string) => rename.mutateAsync(name)}
             />
           </Row>,
+          <Row key="email" title="Email" description="Contact support to change.">
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+          </Row>,
         ]}
       </Rows>
       <Section title="Appearance">
-        <Rows>{[<ThemePicker key="theme" />]}</Rows>
+        <Rows>{[<ThemePicker key="theme" />, <LayoutSetting key="layout" />]}</Rows>
+      </Section>
+      <TypographySection />
+      <Section title="Timeline">
+        <Rows>
+          {[
+            <TimelineDetailSetting key="detail" />,
+            <ChoiceRow
+              key="steps"
+              title="Ren’s steps"
+              description="How the chat shows the steps Ren took."
+              preference={ChatPreferences.steps}
+              options={stepPlaces}
+            />,
+            <SwitchRow key="fold-messages" title="Fold long messages" preference={ChatPreferences.foldMessages} />,
+            <ChoiceRow
+              key="timeline-width"
+              title="Timeline width"
+              preference={ChatPreferences.timelineWidth}
+              options={timelineWidths}
+            />,
+            <ChoiceRow
+              key="background"
+              title="Background activity"
+              description="Running subagents and shells, above the composer."
+              preference={ChatPreferences.backgroundActivity}
+              options={backgroundActivities}
+            />,
+          ]}
+        </Rows>
+      </Section>
+      <Section title="Chats">
+        <Rows>
+          {[
+            <ChoiceRow
+              key="delivery"
+              title="Messages sent while Ren works"
+              preference={ChatPreferences.followUp}
+              options={deliveries}
+            />,
+          ]}
+        </Rows>
+      </Section>
+      <Section title="Notifications">
+        {permission === "denied" ? (
+          <p className="text-xs text-muted-foreground">
+            Your browser blocks notifications from Ren. Allow them in its site settings.
+          </p>
+        ) : null}
+        <Rows>
+          {[
+            ...notificationRows.map((row) => (
+              <Row key={row.kind} title={row.title} description={row.description}>
+                <Switch
+                  checked={notifications[row.kind]}
+                  disabled={permission === "denied"}
+                  onCheckedChange={(enabled) => void changeNotification(row.kind, { enabled })}
+                  aria-label={row.title}
+                />
+              </Row>
+            )),
+            <Row key="sound" title="Play a sound" description="With every notification.">
+              <Switch
+                checked={notifications.sound}
+                disabled={permission === "denied" || notificationRows.every((row) => !notifications[row.kind])}
+                onCheckedChange={(enabled) => void changeNotification("sound", { enabled })}
+                aria-label="Play a sound"
+              />
+            </Row>,
+          ]}
+        </Rows>
       </Section>
       <Section title="Time">
         <Rows>
@@ -109,39 +246,17 @@ export function PreferencesPage() {
                 value={timeZone}
                 variant="ghost"
                 className="gap-2 text-muted-foreground"
-                onChange={(value) => {
-                  TimeZone.chosen.write(platform.storage, value || null)
-                  setTimeZone(value)
-                }}
+                onChange={(value) => setPreference(TimeZone.chosen, value || null)}
               />
             </Row>,
           ]}
         </Rows>
       </Section>
-      <Section title="Chats">
+      <Section title="Security">
         <Rows>
           {[
-            <Row key="detail" title="Detail" description="How much of Ren’s work a chat shows.">
-              <Choice label="Detail" options={details} value={detail} onChange={chooseDetail} />
-            </Row>,
-            <Row key="delivery" title="Messages sent while Ren works">
-              <Choice
-                label="Messages sent while Ren works"
-                options={deliveries}
-                value={followUp}
-                onChange={chooseFollowUp}
-              />
-            </Row>,
-            <Row
-              key="notify"
-              title="Notify me when Ren finishes or needs input"
-              description="Only while Ren’s tab is in the background."
-            >
-              <Switch
-                checked={notify}
-                onCheckedChange={chooseNotify}
-                aria-label="Notify me when Ren finishes or needs input"
-              />
+            <Row key="password" title="Password">
+              <PasswordDialog />
             </Row>,
           ]}
         </Rows>
@@ -149,11 +264,7 @@ export function PreferencesPage() {
       <Section title="Organization">
         <Rows>
           {[
-            <Row
-              key="leave"
-              title={organization.name}
-              description="Leaving archives your private space and deletes your personal credentials here."
-            >
+            <Row key="leave" title={organization.name}>
               <Button variant="outline" size="sm" onClick={() => setLeaving(true)}>
                 Leave organization
               </Button>
@@ -172,14 +283,28 @@ export function PreferencesPage() {
           onConfirm={leave}
         />
       </Section>
-      <Section title="Security">
+      <Section title="Account">
         <Rows>
           {[
-            <Row key="password" title="Password">
-              <PasswordDialog />
+            <Row key="delete" title="Delete account" description="Ren deletes your account and its data within 7 days.">
+              <Button variant="outline" size="sm" onClick={() => setDeleting(true)}>
+                Delete my account
+              </Button>
             </Row>,
           ]}
         </Rows>
+        <ConfirmDialog
+          open={deleting}
+          onOpenChange={setDeleting}
+          confirmation={{
+            title: "Delete your account?",
+            description:
+              "You’ll be signed out everywhere and can’t sign in again. Ren deletes your account and its data within 7 days, and emails you when it’s done.",
+            action: "Delete account",
+            working: "Deleting…",
+          }}
+          onConfirm={deleteAccount}
+        />
       </Section>
     </Page>
   )

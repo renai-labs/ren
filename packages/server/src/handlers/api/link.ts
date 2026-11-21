@@ -16,6 +16,11 @@ export const LinkHandler = HttpApiBuilder.group(Api, "link", (handlers) =>
           Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
         ),
       )
+      .handle("session.usage", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) => sessions.usage(actor, request.params.id)).pipe(
+          Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
+        ),
+      )
       .handle("session.pullRequests", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => sessions.pullRequests(actor, request.params.id)).pipe(
           Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),

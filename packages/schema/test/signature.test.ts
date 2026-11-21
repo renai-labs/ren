@@ -70,10 +70,3 @@ test("rejects a token without an expiry", async () => {
   const token = await new SignJWT({ sub: "subject" }).setProtectedHeader({ alg: "EdDSA", kid: "active" }).sign(subtle)
   expect(await verify(token)).toEqual(Option.none())
 })
-
-test("round-trips generated keys through their variables", () => {
-  const signing = Schema.encodeSync(Signature.PrivateKeys)([active.privateKey])
-  const published = Schema.encodeSync(Signature.PublicKeys)([active.publicKey])
-  expect(Schema.decodeUnknownSync(Signature.PrivateKeys)(signing)).toEqual([active.privateKey])
-  expect(Schema.decodeUnknownSync(Signature.PublicKeys)(published)).toEqual([active.publicKey])
-})

@@ -1,13 +1,13 @@
 import { useState } from "react"
 import type { ScheduleInfo } from "@ren/client"
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import type { Filters } from "../components/filter-menu.js"
-import { useDebouncedValue } from "./use-debounced-value.js"
+import { Debounce } from "@ren/client/react"
 import { useNow } from "./use-now.js"
 import { useSpaces } from "./use-spaces.js"
 import { errorMessage } from "./errors.js"
-import { pageSize, currentPage, lastPageAfterRemoval } from "./pagination.js"
+import { Pages } from "./pages.js"
 import { localTimeZone, scheduleListInput, type ScheduleSearch } from "./schedules.js"
 import { RouterContext } from "./router-context.js"
 import { Loader } from "./loader.js"
@@ -22,33 +22,23 @@ export function useSchedules(options: {
   spaceId?: string
   setSearch: (update: Partial<ScheduleSearch>, navigation?: { readonly replace?: boolean }) => void
 }) {
-  const { api } = RouterContext.useRouterContext()
+  const { api, client } = RouterContext.useRouterContext()
   const search = options.search
   const spaces = useSpaces()
   const now = useNow()
-  const page = currentPage(search)
   const [query, setQuery] = useState("")
-  const text = useDebouncedValue(query.trim(), 250)
-  const schedules = useQuery({
-    ...api.schedule.list.queryOptions(scheduleListInput(search, { page, pageSize, text, spaceId: options.spaceId })),
+  const text = Debounce.useValue(query.trim(), 250)
+  const pages = useInfiniteQuery({
+    ...Pages.schedules(client, scheduleListInput(search, { text, spaceId: options.spaceId })),
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
-  const [sheet, setSheet] = useState<{
-    open: boolean
-    id: string | undefined
-    key: number
-  }>(() => ({
-    open: search.schedule !== undefined,
-    id: search.schedule,
+  const items = pages.data?.pages.flatMap((page) => page.items)
+  const [sheet, setSheet] = useState<{ open: boolean; key: number; schedule: ScheduleInfo | undefined }>({
+    open: false,
     key: 0,
-  }))
-  const listed = schedules.data?.items.find((schedule) => schedule.id === sheet.id)
-  const fetched = useQuery({
-    ...api.schedule.get.queryOptions({ idOrSlug: sheet.id ?? "" }),
-    enabled: sheet.id !== undefined && !listed,
+    schedule: undefined,
   })
-  const editing = listed ?? fetched.data
   const pause = useMutation(api.schedule.pause.mutationOptions())
   const resume = useMutation(api.schedule.resume.mutationOptions())
   const archive = useMutation(api.schedule.archive.mutationOptions())
@@ -56,12 +46,12 @@ export function useSchedules(options: {
   const filters = filtersOf(search)
   const toggling = (schedule: ScheduleInfo) =>
     (pause.isPending && pause.variables.id === schedule.id) || (resume.isPending && resume.variables.id === schedule.id)
-  const total = schedules.data?.total ?? 0
   return {
-    page,
-    total,
-    schedules: schedules.data?.items,
-    stale: schedules.isPlaceholderData,
+    schedules: items,
+    stale: pages.isPlaceholderData,
+    more: pages.hasNextPage,
+    loadingMore: pages.isFetchingNextPage,
+    loadMore: () => void pages.fetchNextPage(),
     filtered: text !== "" || Object.values(filters).some((values) => values.length > 0),
     spaceId: options.spaceId,
     spaces: spaces.joined,
@@ -69,27 +59,16 @@ export function useSchedules(options: {
     now,
     zone: localTimeZone(),
     query,
-    setQuery: (value: string) => {
-      setQuery(value)
-      if (search.page) options.setSearch({ page: undefined }, { replace: true })
-    },
+    setQuery,
     filters,
     setFilters: (next: Filters) =>
       options.setSearch({
-        page: undefined,
         filters: Object.values(next).some((values) => values.length > 0) ? next : undefined,
       }),
-    sheet: {
-      open: sheet.open && (sheet.id === undefined || editing !== undefined),
-      key: sheet.key,
-      schedule: sheet.id === undefined ? undefined : editing,
-    },
-    create: () => setSheet((previous) => ({ open: true, id: undefined, key: previous.key + 1 })),
-    edit: (schedule: ScheduleInfo) => setSheet((previous) => ({ open: true, id: schedule.id, key: previous.key + 1 })),
-    closeSheet: () => {
-      setSheet((previous) => ({ ...previous, open: false }))
-      if (search.schedule) options.setSearch({ schedule: undefined }, { replace: true })
-    },
+    sheet,
+    create: () => setSheet((previous) => ({ open: true, key: previous.key + 1, schedule: undefined })),
+    edit: (schedule: ScheduleInfo) => setSheet((previous) => ({ open: true, key: previous.key + 1, schedule })),
+    closeSheet: () => setSheet((previous) => ({ ...previous, open: false })),
     isActive: (schedule: ScheduleInfo) =>
       toggling(schedule) ? schedule.status !== "active" : schedule.status === "active",
     toggle: (schedule: ScheduleInfo) => {
@@ -105,11 +84,7 @@ export function useSchedules(options: {
     setDeleting,
     remove: (schedule: ScheduleInfo) =>
       archive.mutateAsync({ id: schedule.id }).then(
-        () => {
-          toast.success("Schedule deleted")
-          const last = lastPageAfterRemoval(page, total, pageSize)
-          if (last !== page) options.setSearch({ page: last })
-        },
+        () => toast.success("Schedule deleted"),
         (error: unknown) => toast.error("Could not delete the schedule", { description: errorMessage(error) }),
       ),
   }

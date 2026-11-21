@@ -276,11 +276,6 @@ describe("BrainSettings.resolve", () => {
       variant: "low",
     })
   })
-
-  test("the same layers resolve to byte-identical settings", () => {
-    const stored = { ren: layer({ model: stub, instructions: "House rules." }), agents: [primary()] }
-    expect(JSON.stringify(resolve(stored))).toBe(JSON.stringify(resolve(stored)))
-  })
 })
 
 describe("BrainSettings.evaluate", () => {

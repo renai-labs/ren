@@ -4,8 +4,6 @@ import { Observability } from "@ren/schema/observability"
 import {
   checkResourceAllowed,
   discoverAuthorizationServerMetadata,
-  discoverOAuthServerInfo,
-  extractWWWAuthenticateParams,
   registerClient,
   type AuthorizationServerMetadata,
   type OAuthServerInfo,
@@ -38,11 +36,13 @@ import type { Actor } from "./actor.js"
 import { ProfileItems } from "./app/profile-items.js"
 import { ProfileLabel } from "./app/profile-label.js"
 import { CredentialRefresh } from "./credential-refresh.js"
+import { Deployment } from "./deployment.js"
 import { SignIn } from "./credential/sign-in.js"
 import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
 import { ProviderConnect } from "./mcp-provider/connect.js"
+import { McpInspect } from "./mcp-inspect.js"
 import { OAuthFetch } from "./oauth-fetch.js"
 import { OAuthToken } from "./oauth-token.js"
 import { Primitive } from "./primitive.js"
@@ -53,6 +53,7 @@ export interface Callback {
   readonly iss?: string
   readonly error?: string
   readonly errorDescription?: string
+  readonly host?: string | undefined
 }
 
 type Settled =
@@ -62,6 +63,7 @@ type Settled =
 export type Outcome = Settled & {
   readonly app: Option.Option<{ readonly name: string; readonly icon: string | null }>
   readonly space: Option.Option<string>
+  readonly returnTo: Option.Option<string>
 }
 
 export interface Interface {
@@ -74,7 +76,7 @@ export interface Interface {
   >
   readonly callback: (input: Callback, browser: Option.Option<Auth.UserID>) => Effect.Effect<Outcome>
   readonly session: (actor: Actor.Info, id: string) => Effect.Effect<OAuthSession.Info, Primitive.NotFound>
-  readonly clientMetadata: Effect.Effect<Readonly<Record<string, unknown>>>
+  readonly clientMetadata: (host: Option.Option<string>) => Effect.Effect<Readonly<Record<string, unknown>>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/OAuth") {}
@@ -110,16 +112,11 @@ type Existing = {
   readonly wanted: ReadonlyArray<string>
 }
 
-interface Discovery {
-  readonly challengeScope: Option.Option<string>
-  readonly info: OAuthServerInfo
-}
-
 const invalid = (message: string) => new Primitive.Invalid({ message })
 
 // oxlint-disable-next-line ren/no-comments -- §7 rule 5 (S5, K46, K47): the challenge's scope, else the resource's, else the org app's or the declaration's. A reconnect adds the granted and wanted scopes; `offline_access` is added when the server lists it.
 const scopesOf = (
-  discovery: Option.Option<Discovery>,
+  discovery: Option.Option<McpInspect.Discovery>,
   app: Option.Option<OrgApp>,
   auth: OAuthDeclaration,
   existing: Option.Option<Existing>,
@@ -198,7 +195,7 @@ const endpointsOf = (
   })
 }
 
-// oxlint-disable-next-line ren/no-comments -- §10a rule 4: an OAuth MCP item signs in here; a provider MCP item is section 10; an env key or a header MCP takes a pasted value.
+// oxlint-disable-next-line ren/no-comments -- §10a rule 4: an OAuth MCP item signs in here; a provider MCP item is section 10; an env key or a bearer, header, query or basic MCP takes a pasted value.
 interface Target {
   readonly declaration: Mcp.Declaration
   readonly auth: OAuthDeclaration
@@ -243,6 +240,17 @@ export const layer = Layer.effect(
     const providerConnect = yield* ProviderConnect.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
     const callbackUrl = `${base}/oauth/callback`
+    const renames = yield* Deployment.previousHosts.pipe(Effect.orDie)
+    // oxlint-disable-next-line ren/no-comments -- A connection made on a previous host keeps that host's client document and callback, so its server still accepts Ren (REN_PREVIOUS_HOSTS).
+    const baseOf = (host: Option.Option<string>) => {
+      const url = new URL(base)
+      return Option.match(
+        Option.filter(host, (found) =>
+          renames.some((rename) => rename.previous === found && rename.current === url.host),
+        ),
+        { onNone: () => base, onSome: (found) => `${url.protocol}//${found}` },
+      )
+    }
     const clientDocument = `${base}/oauth/client.json`
 
     const seal = (
@@ -300,7 +308,6 @@ export const layer = Layer.effect(
       return Option.some(app)
     })
 
-    // oxlint-disable-next-line ren/no-comments -- §7 rules 2, 3 and 12 (K9, S6): an initialize without a token gives the challenge; then protected-resource metadata and the server's metadata in the RFC 8414 and OpenID orders (MCP SDK, which also checks that the metadata names the issuer it was asked for).
     const discover = Effect.fnUntraced(function* (url: string) {
       const probe = yield* Effect.tryPromise({
         try: () =>
@@ -311,22 +318,19 @@ export const layer = Layer.effect(
               jsonrpc: "2.0",
               id: 1,
               method: "initialize",
-              params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "Ren", version: "1" } },
+              params: {
+                protocolVersion: McpInspect.protocolVersion,
+                capabilities: {},
+                clientInfo: { name: "Ren", version: "1" },
+              },
             }),
           }),
         catch: () => invalid("Ren could not reach the MCP server."),
       })
       if (probe.ok) return yield* invalid("This server does not ask for sign-in.")
-      const challenge = extractWWWAuthenticateParams(probe)
-      const info = yield* Effect.tryPromise({
-        try: () =>
-          discoverOAuthServerInfo(url, {
-            ...(challenge.resourceMetadataUrl && { resourceMetadataUrl: challenge.resourceMetadataUrl }),
-            fetchFn: http.fetch,
-          }),
-        catch: (cause) => invalid(`Ren could not read the server's sign-in metadata: ${String(cause)}`),
-      })
-      return { challengeScope: Option.fromNullishOr(challenge.scope), info } satisfies Discovery
+      return yield* McpInspect.discover(http.fetch, url, probe).pipe(
+        Effect.mapError((cause) => invalid(`Ren could not read the server's sign-in metadata: ${cause}`)),
+      )
     })
 
     const register = (info: OAuthServerInfo, metadata: AuthorizationServerMetadata) =>
@@ -359,7 +363,7 @@ export const layer = Layer.effect(
       actor: Actor.Info,
       app: Option.Option<OrgApp>,
       auth: OAuthDeclaration,
-      discovery: Option.Option<Discovery>,
+      discovery: Option.Option<McpInspect.Discovery>,
     ) {
       if (Option.isSome(app)) {
         const secret = app.value.client_secret
@@ -378,12 +382,10 @@ export const layer = Layer.effect(
       const metadata = Option.getOrUndefined(
         Option.flatMap(info, (found) => Option.fromNullishOr(found.authorizationServerMetadata)),
       )
-      if (
-        metadata?.client_id_metadata_document_supported === true &&
-        metadata.token_endpoint_auth_methods_supported?.includes("none")
-      )
+      const strategy = McpInspect.clientOf(metadata)
+      if (strategy === "metadata-document")
         return { clientId: clientDocument, tokenEndpointAuth: "none" } satisfies Client
-      if (metadata?.registration_endpoint && Option.isSome(info)) return yield* register(info.value, metadata)
+      if (strategy === "registration" && metadata && Option.isSome(info)) return yield* register(info.value, metadata)
       return yield* invalid("This server lets Ren register no client; set up an OAuth app (AppNotConfigured).")
     })
 
@@ -396,6 +398,7 @@ export const layer = Layer.effect(
       const existing = yield* existingOf(found.profile.id, label)
       if (Option.isSome(existing) && !input.reconnect) return yield* store.get(actor, existing.value.id)
       const credentialId = Option.match(existing, { onNone: () => Credential.ID.create(), onSome: (row) => row.id })
+      const returnTo = input.returnTo ?? null
       const madeFor = ProfileItems.madeFor(declaration)
       const transport = declaration.transport
       if (transport.type === "provider")
@@ -411,6 +414,7 @@ export const layer = Layer.effect(
           integration: transport.integration,
           state: Random.token(32),
           callbackUrl,
+          returnTo,
         })
       const target = targetOf(declaration)
       if (Result.isFailure(target)) return yield* target.failure
@@ -473,6 +477,7 @@ export const layer = Layer.effect(
           state,
           code_verifier: verifier,
           scope: scopes.join(" "),
+          return_to: returnTo,
           client_info: yield* seal(actor.organizationId, "oauth_session", id, Schema.encodeSync(ClientJson)(client)),
           ...sessionDiscovery(endpoints.success),
           expires_at: expiresAt,
@@ -676,11 +681,12 @@ export const layer = Layer.effect(
           reason: consumed.failure,
           app: Option.none(),
           space: Option.none(),
+          returnTo: Option.none(),
         } satisfies Outcome
       const taken = consumed.success
       const shown = yield* shownOf(taken.profile_id)
       const settled: Settled = yield* settle(taken, input, now, browser)
-      return { ...settled, ...shown } satisfies Outcome
+      return { ...settled, ...shown, returnTo: Option.fromNullishOr(taken.return_to) } satisfies Outcome
     }, Observability.Trace.connectorCallback)
 
     const settle = Effect.fnUntraced(function* (
@@ -723,7 +729,7 @@ export const layer = Layer.effect(
       const answered = yield* OAuthToken.post(http.fetch, discovered.value.tokenEndpoint, client, {
         grant_type: "authorization_code",
         code: input.code,
-        redirect_uri: callbackUrl,
+        redirect_uri: `${baseOf(Option.fromNullishOr(input.host))}/oauth/callback`,
         code_verifier: taken.code_verifier,
         resource: taken.resource ?? undefined,
       }).pipe(Effect.option)
@@ -768,14 +774,15 @@ export const layer = Layer.effect(
       connect,
       callback,
       session,
-      clientMetadata: Effect.succeed({
-        client_id: clientDocument,
-        client_name: "Ren",
-        redirect_uris: [callbackUrl],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      }),
+      clientMetadata: (host) =>
+        Effect.succeed({
+          client_id: `${baseOf(host)}/oauth/client.json`,
+          client_name: "Ren",
+          redirect_uris: [`${baseOf(host)}/oauth/callback`],
+          grant_types: ["authorization_code", "refresh_token"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
     })
   }),
 )
@@ -830,9 +837,10 @@ export const layerRefresher = Layer.effect(
         ).pipe(Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })))
         if (Result.isFailure(answered)) {
           const failure = answered.failure
-          if (OAuthToken.isFatal(failure, OAuthToken.refreshFatal))
-            return yield* new CredentialRefresh.Fatal({ message: failure.code })
-          return yield* new CredentialRefresh.Transient({ message: `${failure.status} ${failure.code}` })
+          const message = [failure.status, failure.code, failure.description].filter(Boolean).join(" ")
+          if (failure.status === 401 || OAuthToken.isFatal(failure, OAuthToken.refreshFatal))
+            return yield* new CredentialRefresh.Fatal({ message })
+          return yield* new CredentialRefresh.Transient({ message })
         }
         const token = answered.success
         return Option.some({

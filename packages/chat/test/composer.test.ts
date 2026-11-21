@@ -36,6 +36,15 @@ describe("Composer draft", () => {
     expect(Composer.decode(JSON.stringify({ text: 4 }))).toEqual(Composer.empty)
   })
 
+  test("keeps the shell mode and its text through storage, and a draft without a mode is a prompt", () => {
+    const shell = Composer.withMode(draft("git status"), "shell")
+    expect(Composer.decode(Composer.encode(shell))).toEqual(shell)
+    expect(Composer.isShell(Composer.decode(Composer.encode(shell)))).toBe(true)
+    expect(Composer.encode(Composer.emptyShell)).toBeDefined()
+    expect(Composer.isShell(Composer.decode(Composer.encode(draft("hello"))))).toBe(false)
+    expect(Composer.withMode(shell, "prompt")).toEqual(draft("git status"))
+  })
+
   test("stores nothing for a blank draft so the key can be removed", () => {
     expect(Composer.encode(draft("  \n"))).toBeUndefined()
     expect(Composer.encode({ ...draft(""), model: { id: "gpt", providerID: "openai" } })).toBeDefined()
@@ -54,6 +63,15 @@ describe("Composer draft", () => {
     const failed = Composer.restore(Composer.empty, draft("Plan the launch"), id)
     expect(Composer.retryID(failed)).toBe(id)
     expect(Composer.retryID({ ...failed, text: "Plan the launch now" })).toBeUndefined()
+  })
+
+  test("recalls a removed message after the text in the composer, on a new paragraph, with its files", () => {
+    const file = { path: "/a.png", name: "a.png", mime: "image/png", size: 1 }
+    expect(Composer.recall(draft("typing"), { text: "removed", files: [file] })).toEqual({
+      ...draft("typing\n\nremoved"),
+      files: [file],
+    })
+    expect(Composer.recall(Composer.empty, { text: "removed" })).toEqual(draft("removed"))
   })
 
   test("restores an unsent draft only when the composer is untouched, otherwise keeps the new text after it", () => {
@@ -134,11 +152,11 @@ describe("Composer submission", () => {
     )
   })
 
-  test("a steer carries the picked model and clears it; a queued prompt keeps it for later", () => {
+  test("a picked model stays picked after a send, until the person picks another; a steer carries it", () => {
     const picked = { ...draft("Next"), model: { id: "b", providerID: "p" } }
     const steer = Composer.submission(picked, options)
     expect(steer?.model).toEqual({ id: "b", providerID: "p" })
-    expect(steer?.next).toEqual(Composer.empty)
+    expect(steer?.next).toEqual({ ...Composer.empty, model: { id: "b", providerID: "p" } })
     const queue = Composer.submission(picked, { ...options, alternative: true })
     expect(queue?.model).toBeUndefined()
     expect(queue?.next).toEqual({ ...Composer.empty, model: { id: "b", providerID: "p" } })
@@ -240,7 +258,6 @@ describe("Composer model", () => {
 
 describe("Composer lists", () => {
   test("hides OpenCode's built-in skills and commands, which members can't use in Ren", () => {
-    expect(Composer.hidden).toEqual({ skills: ["opencode", "report"], commands: ["init", "review"] })
     expect(
       Composer.offeredSkills([
         { id: "opencode", name: "opencode" },

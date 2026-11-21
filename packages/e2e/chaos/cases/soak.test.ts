@@ -13,7 +13,7 @@ import { Stack } from "../lib/stack.js"
 import { Wait } from "../lib/wait.js"
 
 describe.skipIf(Platform.wrangler !== undefined || Platform.soak !== undefined)("a soaked local cell", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Hand } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")

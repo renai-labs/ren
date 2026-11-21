@@ -17,7 +17,7 @@ Internal contracts between Ren and a session's host. Not public: not in `openapi
 
 - Request and answer shapes (`Session.StartInput`, `Session.Started`, …). They live in `@ren/schema`, because hosts and Ren use them outside HTTP too.
 - Ren's public endpoints (`@ren/protocol`).
-- The Environment API, its client and the environment token (`@ren/environment-api`).
+- The Hand API, its client and the hand token (`@ren/hand-api`).
 
 ## Notes
 

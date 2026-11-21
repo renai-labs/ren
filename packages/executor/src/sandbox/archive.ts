@@ -1,9 +1,9 @@
 export * as SandboxArchive from "./archive.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { Deferred, Duration, Effect, Exit, Stream } from "effect"
-import { type FileHandle, lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises"
-import { basename, dirname, join, resolve, sep } from "node:path"
+import { type FileHandle, lstat, mkdir, open, readdir, rename, rm, stat } from "node:fs/promises"
+import { basename, dirname, join, relative, resolve, sep } from "node:path"
 
 const decoder = new TextDecoder()
 
@@ -107,21 +107,86 @@ export const stallAfter = Duration.seconds(60)
 
 const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
 
+export const pack = (workspace: string) =>
+  Effect.fn("Executor.pack")(function* (input: HandApi.PackInput) {
+    const root = resolve(workspace, input.path)
+    const target = new URL(input.url)
+    const failed = (message: string) => new HandApi.ArchiveError({ url: `${target.origin}${target.pathname}`, message })
+    const fileSystem = (path: string) => (cause: unknown) =>
+      new HandApi.FileSystemError({ path, message: messageOf(cause) })
+    const found = yield* Effect.tryPromise({
+      try: () => stat(root),
+      catch: (cause) =>
+        cause instanceof Error && "code" in cause && cause.code === "ENOENT"
+          ? new HandApi.FileNotFoundError({ path: input.path })
+          : fileSystem(input.path)(cause),
+    })
+    if (!found.isDirectory())
+      return yield* new HandApi.WrongKindError({
+        path: input.path,
+        actual: found.isFile() ? "file" : "other",
+      })
+    const entries = yield* Effect.tryPromise({
+      try: () => readdir(root, { recursive: true, withFileTypes: true }),
+      catch: fileSystem(input.path),
+    })
+    const named = entries.map((entry) => ({ entry, path: relative(root, join(entry.parentPath, entry.name)) }))
+    const odd = named.find((each) => !each.entry.isFile() && !each.entry.isDirectory())
+    if (odd)
+      return yield* failed(
+        odd.entry.isSymbolicLink()
+          ? `The folder has a link at ${odd.path}, and the executor packs only files`
+          : `The folder has a special file at ${odd.path}, and the executor packs only files`,
+      )
+    const files = named.filter((each) => each.entry.isFile())
+    if (files.length === 0) return yield* failed("The folder has no files")
+    if (files.length > input.maxFiles) return yield* failed(`The folder has more than ${input.maxFiles} files`)
+    const sized = yield* Effect.forEach(
+      files,
+      (each) =>
+        Effect.tryPromise({ try: () => lstat(join(root, each.path)), catch: fileSystem(each.path) }).pipe(
+          Effect.map((stats) => ({ path: each.path, size: stats.size })),
+        ),
+      { concurrency: 16 },
+    )
+    const large = sized.find((each) => each.size > input.maxFileBytes)
+    if (large) return yield* failed(`${large.path} is larger than ${input.maxFileBytes} bytes`)
+    if (sized.reduce((total, each) => total + each.size, 0) > input.maxBytes)
+      return yield* failed(`The folder is larger than ${input.maxBytes} bytes`)
+    const folder = basename(root) || "folder"
+    const archive = yield* Effect.tryPromise({
+      try: async () =>
+        new Bun.Archive(
+          Object.fromEntries(
+            await Promise.all(
+              sized.map(
+                async (each) => [`${folder}/${each.path}`, await Bun.file(join(root, each.path)).bytes()] as const,
+              ),
+            ),
+          ),
+          { compress: "gzip" },
+        ).bytes(),
+      catch: fileSystem(input.path),
+    })
+    const response = yield* Effect.tryPromise({
+      try: (signal) => fetch(input.url, { method: "PUT", body: archive, signal }),
+      catch: (cause) => failed(`Could not upload the archive: ${messageOf(cause)}`),
+    })
+    if (!response.ok) return yield* failed(`The upload answered ${response.status}`)
+  })
+
 // oxlint-disable-next-line ren/no-comments -- Downloads into a staging folder beside the path and renames it at the end, so the path exists only with every file in it. R41: one download runs for each path; a second unpack waits for it, and downloads itself when the first was interrupted.
 export const unpack = (workspace: string) => {
-  const running = new Map<
-    string,
-    Deferred.Deferred<Exit.Exit<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>>
-  >()
-  const download = (input: EnvironmentApi.UnpackInput, target: string) =>
+  const running = new Map<string, Deferred.Deferred<Exit.Exit<void, HandApi.ArchiveError | HandApi.FileSystemError>>>()
+  const download = (input: HandApi.UnpackInput, target: string) =>
     Effect.gen(function* () {
-      const failed = (message: string) => new EnvironmentApi.ArchiveError({ url: input.url, message })
+      const failed = (message: string) => new HandApi.ArchiveError({ url: input.url, message })
       const fileSystem = (path: string) => (cause: unknown) =>
-        new EnvironmentApi.FileSystemError({ path, message: messageOf(cause) })
+        new HandApi.FileSystemError({ path, message: messageOf(cause) })
       const staging = `${target}.${crypto.randomUUID()}.staging`
       const totals = { bytes: 0, files: 0 }
-      const maxBytes = input.maxBytes ?? EnvironmentApi.maxUnpackBytes
-      const maxFiles = input.maxFiles ?? EnvironmentApi.maxUnpackFiles
+      const maxBytes = input.maxBytes ?? HandApi.maxUnpackBytes
+      const maxFiles = input.maxFiles ?? HandApi.maxUnpackFiles
       const writing: { file: FileHandle | undefined; destination: string } = { file: undefined, destination: staging }
       const close = Effect.promise(async () => {
         await writing.file?.close().catch(() => undefined)
@@ -153,9 +218,7 @@ export const unpack = (workspace: string) => {
           catch: fileSystem(destination),
         })
       }
-      const write = (
-        event: Event,
-      ): Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError> => {
+      const write = (event: Event): Effect.Effect<void, HandApi.ArchiveError | HandApi.FileSystemError> => {
         if (event.type === "start") return start(event)
         if (event.type === "end") return close
         const file = writing.file
@@ -227,16 +290,16 @@ export const unpack = (workspace: string) => {
       ),
     )
   const once = (
-    input: EnvironmentApi.UnpackInput,
+    input: HandApi.UnpackInput,
     target: string,
-  ): Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError> =>
+  ): Effect.Effect<void, HandApi.ArchiveError | HandApi.FileSystemError> =>
     Effect.suspend(() => {
       const current = running.get(target)
       if (current)
         return Deferred.await(current).pipe(
           Effect.flatMap((exit) => (Exit.hasInterrupts(exit) ? once(input, target) : exit)),
         )
-      const done = Deferred.makeUnsafe<Exit.Exit<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>>()
+      const done = Deferred.makeUnsafe<Exit.Exit<void, HandApi.ArchiveError | HandApi.FileSystemError>>()
       running.set(target, done)
       return Effect.flatMap(isThere(target), (isUnpacked) => (isUnpacked ? Effect.void : download(input, target))).pipe(
         Effect.onExit((exit) =>
@@ -247,7 +310,7 @@ export const unpack = (workspace: string) => {
         ),
       )
     })
-  return Effect.fn("Executor.unpack")(function* (input: EnvironmentApi.UnpackInput) {
+  return Effect.fn("Executor.unpack")(function* (input: HandApi.UnpackInput) {
     yield* once(input, resolve(workspace, input.path))
   })
 }

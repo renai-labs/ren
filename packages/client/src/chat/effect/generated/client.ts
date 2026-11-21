@@ -82,6 +82,7 @@ type SessionPromptInput = {
   readonly delivery: SessionPromptRequest["payload"]["delivery"]
   readonly resume?: SessionPromptRequest["payload"]["resume"]
   readonly files?: SessionPromptRequest["payload"]["files"]
+  readonly presentation?: SessionPromptRequest["payload"]["presentation"]
   readonly agents?: SessionPromptRequest["payload"]["agents"]
   readonly skills?: SessionPromptRequest["payload"]["skills"]
 }
@@ -94,6 +95,7 @@ const EndpointSessionPrompt = (raw: RawClient["session"]) => (input: SessionProm
       delivery: input["delivery"],
       resume: input["resume"],
       files: input["files"],
+      presentation: input["presentation"],
       agents: input["agents"],
       skills: input["skills"],
     },
@@ -396,30 +398,38 @@ const adaptGroupFile = (raw: RawClient["file"]) => ({
 })
 
 type VcsGetRequest = Parameters<RawClient["vcs"]["vcs.get"]>[0]
-type VcsGetInput = { readonly sessionID: VcsGetRequest["params"]["sessionID"] }
+type VcsGetInput = {
+  readonly sessionID: VcsGetRequest["params"]["sessionID"]
+  readonly path?: VcsGetRequest["query"]["path"]
+}
 const EndpointVcsGet = (raw: RawClient["vcs"]) => (input: VcsGetInput) =>
-  raw["vcs.get"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+  raw["vcs.get"]({ params: { sessionID: input["sessionID"] }, query: { path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type VcsProjectsRequest = Parameters<RawClient["vcs"]["vcs.projects"]>[0]
+type VcsProjectsInput = { readonly sessionID: VcsProjectsRequest["params"]["sessionID"] }
+const EndpointVcsProjects = (raw: RawClient["vcs"]) => (input: VcsProjectsInput) =>
+  raw["vcs.projects"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
 
 type VcsDiffRequest = Parameters<RawClient["vcs"]["vcs.diff"]>[0]
 type VcsDiffInput = {
   readonly sessionID: VcsDiffRequest["params"]["sessionID"]
+  readonly path?: VcsDiffRequest["query"]["path"]
   readonly mode?: VcsDiffRequest["query"]["mode"]
   readonly context?: VcsDiffRequest["query"]["context"]
 }
 const EndpointVcsDiff = (raw: RawClient["vcs"]) => (input: VcsDiffInput) =>
   raw["vcs.diff"]({
     params: { sessionID: input["sessionID"] },
-    query: { mode: input["mode"], context: input["context"] },
+    query: { path: input["path"], mode: input["mode"], context: input["context"] },
   }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupVcs = (raw: RawClient["vcs"]) => ({ get: EndpointVcsGet(raw), diff: EndpointVcsDiff(raw) })
-
-type WebsearchProvidersRequest = Parameters<RawClient["websearch"]["websearch.providers"]>[0]
-type WebsearchProvidersInput = { readonly sessionID: WebsearchProvidersRequest["params"]["sessionID"] }
-const EndpointWebsearchProviders = (raw: RawClient["websearch"]) => (input: WebsearchProvidersInput) =>
-  raw["websearch.providers"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
-
-const adaptGroupWebsearch = (raw: RawClient["websearch"]) => ({ providers: EndpointWebsearchProviders(raw) })
+const adaptGroupVcs = (raw: RawClient["vcs"]) => ({
+  get: EndpointVcsGet(raw),
+  projects: EndpointVcsProjects(raw),
+  diff: EndpointVcsDiff(raw),
+})
 
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),
@@ -431,7 +441,6 @@ const adaptClient = (raw: RawClient) => ({
   command: adaptGroupCommand(raw["command"]),
   file: adaptGroupFile(raw["file"]),
   vcs: adaptGroupVcs(raw["vcs"]),
-  websearch: adaptGroupWebsearch(raw["websearch"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

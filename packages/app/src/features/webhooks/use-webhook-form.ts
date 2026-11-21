@@ -3,6 +3,7 @@ import type { WebhookInfo, WebhookParser, WebhookSignature } from "@ren/client"
 import { Webhooks } from "../../lib/webhooks.js"
 
 export interface Draft {
+  readonly name: string
   readonly message: string
   readonly agent: string
   readonly runAsMe: boolean
@@ -31,6 +32,7 @@ export const FormContext = createContext<Form | undefined>(undefined)
 export const draftOf = (webhook: WebhookInfo): Draft => {
   const parser: WebhookParser = webhook.parser ?? {}
   return {
+    name: webhook.name,
     message: webhook.message ?? "",
     agent: Webhooks.agentValueOf(webhook.agentId),
     runAsMe: false,

@@ -5,7 +5,7 @@ import { Platform } from "../platform/platform.js"
 import { errorMessage } from "./errors.js"
 import { RouterContext } from "./router-context.js"
 
-export function useSignIn(onOpened?: (item: AppProfileItem) => void) {
+export function useSignIn(onOpened?: (item: AppProfileItem) => void, onFailed?: () => void) {
   const platform = Platform.usePlatform()
   const { api } = RouterContext.useRouterContext()
   const connect = useMutation(api["credential-connect"].credential.connect.mutationOptions())
@@ -18,6 +18,7 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void) {
     ) => {
       if (!("mcp" in item.item)) {
         tab?.close()
+        onFailed?.()
         return
       }
       connect.mutate(
@@ -39,6 +40,7 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void) {
           onError: (error) => {
             tab?.close()
             toast.error(`Could not sign in with ${item.name}`, { description: errorMessage(error) })
+            onFailed?.()
           },
         },
       )

@@ -2,6 +2,7 @@ export * as Harness from "./harness.js"
 
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
+import type { FileSystem } from "@ren/schema/file-system"
 import type { Form } from "@ren/schema/form"
 import type { Models } from "@ren/schema/models"
 import type { Permission } from "@ren/schema/permission"
@@ -25,6 +26,7 @@ interface SessionState extends Reconcile.Snapshot {
   readonly id: string
   readonly root: boolean
   readonly progress: string
+  readonly background: boolean
   readonly resend: (id: string) => Effect.Effect<void>
   readonly wait: (ms: number) => Effect.Effect<void>
   readonly interrupt: Effect.Effect<void>
@@ -49,6 +51,7 @@ interface Prompt extends Mentions {
   readonly delivery: SessionInbox.Delivery
   readonly resume?: boolean | undefined
   readonly files?: ReadonlyArray<Session.DriveFile> | undefined
+  readonly presentation?: SessionMessage.Presentation | undefined
   readonly sender: Option.Option<Sender>
 }
 
@@ -109,24 +112,19 @@ export interface Chat {
   readonly commands: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Command>, NotFound>
   readonly files: (
     sessionId: Session.ID,
-    search: { readonly query: string; readonly type?: SessionCatalog.FileType; readonly limit?: number },
-  ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound>
+    search: { readonly query: string; readonly type?: FileSystem.EntryType; readonly limit?: number },
+  ) => Effect.Effect<ReadonlyArray<FileSystem.Entry>, NotFound>
   readonly listFiles: (
     sessionId: Session.ID,
     path: string | undefined,
-  ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound | Rejected>
-  readonly readFile: (
-    sessionId: Session.ID,
-    path: string,
-  ) => Effect.Effect<SessionCatalog.FileContent, NotFound | Rejected>
-  readonly vcs: (sessionId: Session.ID) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
+  ) => Effect.Effect<FileSystem.Page, NotFound | Rejected>
+  readonly readFile: (sessionId: Session.ID, path: string) => Effect.Effect<FileSystem.Content, NotFound | Rejected>
+  readonly vcs: (sessionId: Session.ID, path: string | undefined) => Effect.Effect<SessionVcs.Info, NotFound | Rejected>
+  readonly vcsProjects: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionVcs.Project>, NotFound | Rejected>
   readonly vcsDiff: (
     sessionId: Session.ID,
-    options: { readonly mode: SessionVcs.Mode; readonly context?: number },
+    options: { readonly mode: SessionVcs.Mode; readonly context?: number; readonly path?: string },
   ) => Effect.Effect<ReadonlyArray<SessionInfo.FileDiff>, NotFound | Rejected>
-  readonly webSearchProviders: (
-    sessionId: Session.ID,
-  ) => Effect.Effect<ReadonlyArray<SessionCatalog.WebSearchProvider>, NotFound>
   readonly replyPermission: (
     sessionId: Session.ID,
     requestId: Permission.RequestID,
@@ -157,7 +155,7 @@ export interface Chat {
 interface Transcript {
   readonly has: (chat: Session.ID) => Effect.Effect<boolean>
   readonly start: (
-    input: Session.StartInput & { readonly directory?: string },
+    input: Omit<Session.StartInput, "hand"> & { readonly directory?: string },
   ) => Effect.Effect<void, BrainRejectedError>
   readonly restore: (data: {
     readonly chat: Sync.RestoredChat

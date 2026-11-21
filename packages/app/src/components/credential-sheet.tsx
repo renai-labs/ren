@@ -100,7 +100,7 @@ export function CredentialSheet(props: {
               {
                 onSuccess: () => {
                   props.onOpenChange(false)
-                  toast.success("Key saved")
+                  toast.success("Secret saved")
                 },
                 onError: (failure) => setError(errorMessage(failure)),
               },
@@ -120,7 +120,7 @@ export function CredentialSheet(props: {
               </FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="credential-key">Key</FieldLabel>
+              <FieldLabel htmlFor="credential-key">Secret</FieldLabel>
               <Input
                 id="credential-key"
                 name="value"
@@ -140,7 +140,7 @@ export function CredentialSheet(props: {
               <Field>
                 <FieldLabel htmlFor="credential-hosts">Websites</FieldLabel>
                 <Input id="credential-hosts" name="hosts" required placeholder="api.stripe.com" />
-                <FieldDescription>Ren adds the key only to requests to these hosts.</FieldDescription>
+                <FieldDescription>Ren adds the secret only to requests to these hosts.</FieldDescription>
               </Field>
             )}
             {error ? <FieldError>{error}</FieldError> : null}
@@ -149,7 +149,7 @@ export function CredentialSheet(props: {
             <SheetClose render={<Button variant="ghost" />}>Cancel</SheetClose>
             <Button type="submit" disabled={create.isPending}>
               {create.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Save key
+              Save secret
             </Button>
           </SheetFooter>
         </form>

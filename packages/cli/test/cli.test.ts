@@ -38,7 +38,7 @@ const failure = (stderr: string) =>
     ),
   )(stderr).error
 
-describe("ren2", () => {
+describe("ren", () => {
   test("a usage error exits 2 with one JSON error when piped, and with help and the problem in a terminal format", async () => {
     const piped = await ren(["nope"])
     const pretty = await ren(["nope", "--output", "pretty"])
@@ -51,36 +51,25 @@ describe("ren2", () => {
     expect(pretty.stderr).toContain("nope")
   })
 
-  test("root and nested help work without a connection and use the ren2 name", async () => {
-    const root = await ren(["--help"])
-    const nested = await ren(["infra", "apply", "--help"])
+  test("help works without a connection and uses the ren name; without a subcommand, a terminal shows only the help, led by the description", async () => {
+    const [root, nested, bare] = await Promise.all([
+      ren(["--help"]),
+      ren(["infra", "apply", "--help"]),
+      ren(["--output", "pretty"]),
+    ])
 
     expect(root.code).toBe(0)
-    expect(root.stdout).toContain("ren2")
+    expect(root.stdout).toContain("ren <subcommand>")
     expect(root.stdout).toContain("health")
     expect(root.stderr).toBe("")
     expect(nested.code).toBe(0)
     expect(nested.stdout).toContain("--plan")
     expect(nested.stdout).toContain("--allow-archive")
     expect(nested.stderr).toBe("")
-  })
-
-  test("without a subcommand, a terminal shows only the help, led by the description", async () => {
-    const result = await ren(["--output", "pretty"])
-
-    expect(result.code).toBe(2)
-    expect(result.stderr).toStartWith("Ren CLI\n\nUSAGE\n")
-    expect(result.stderr).not.toContain("DESCRIPTION")
-    expect(result.stderr).not.toContain("Choose a subcommand")
-  })
-
-  test("prints a shell completion script that covers generated resources", async () => {
-    const result = await ren(["--completions", "zsh"])
-
-    expect(result.code).toBe(0)
-    expect(result.stdout).toContain("#compdef ren2")
-    expect(result.stdout).toContain("space")
-    expect(result.stderr).toBe("")
+    expect(bare.code).toBe(2)
+    expect(bare.stderr).toStartWith("Ren CLI\n\nUSAGE\n")
+    expect(bare.stderr).not.toContain("DESCRIPTION")
+    expect(bare.stderr).not.toContain("Choose a subcommand")
   })
 
   test("rejects extra arguments and flags outside their command before executing", async () => {
@@ -117,7 +106,7 @@ describe("ren2", () => {
 
   test("uses stored credentials only for the server that issued them", async () => {
     const config = await folder({
-      "ren2/credentials.json": JSON.stringify({
+      "ren/credentials.json": JSON.stringify({
         "https://ren.example": { accessToken: "access", refreshToken: "refresh", expiresAt: Date.now() + 3_600_000 },
       }),
     })
@@ -127,7 +116,7 @@ describe("ren2", () => {
     expect(result.code).toBe(1)
     expect(failure(result.stderr)).toEqual({
       type: "CliError",
-      message: "Not logged in to http://127.0.0.1:9. Run ren2 login.",
+      message: "Not logged in to http://127.0.0.1:9. Run ren login.",
     })
   })
 

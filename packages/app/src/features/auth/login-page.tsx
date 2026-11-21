@@ -1,3 +1,4 @@
+import { AuthError, AuthForm } from "@ren/client"
 import { Link, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { IconMail } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -14,7 +15,6 @@ import {
   SocialButton,
 } from "../../components/auth-layout.js"
 import { useState } from "react"
-import { describeAuthError } from "../../lib/auth.js"
 import { useCompleteAuth } from "./use-complete-auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -35,15 +35,15 @@ export function LoginPage() {
   const [pending, setPending] = useState<"password" | "code" | null>(null)
   const back = () => {
     setError("")
-    setStep(step === "code" ? "password" : "email")
+    setStep("email")
+  }
+  const checkEmail = () => {
+    const failure = AuthForm.emailError(email)
+    setError(failure)
+    return failure === ""
   }
   const continueWithEmail = () => {
-    if (!email.includes("@")) {
-      setError("Enter a valid email address.")
-      return
-    }
-    setError("")
-    setStep("password")
+    if (checkEmail()) setStep("password")
   }
   const signIn = async () => {
     setError("")
@@ -54,7 +54,7 @@ export function LoginPage() {
       return
     }
     setPending(null)
-    const failure = describeAuthError(result.error)
+    const failure = AuthError.describe(result.error)
     if (failure.code === "EMAIL_NOT_VERIFIED") {
       await navigate({ to: "/verify-email", search: { ...destination, email } })
       return
@@ -62,7 +62,7 @@ export function LoginPage() {
     setError(failure.message)
   }
   const sendCode = async () => {
-    setError("")
+    if (!checkEmail()) return
     setPending("code")
     const result = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
     setPending(null)
@@ -70,17 +70,17 @@ export function LoginPage() {
       setStep("code")
       return
     }
-    setError(describeAuthError(result.error).message)
+    setError(AuthError.describe(result.error).message)
   }
   const verifyCode = async (otp: string) => {
     const result = await auth.signIn.emailOtp({ email, otp })
-    if (result.error !== null) return describeAuthError(result.error)
+    if (result.error !== null) return AuthError.describe(result.error)
     await completeAuth()
     return
   }
   const resendCode = async () => {
     const result = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" })
-    return result.error === null ? undefined : describeAuthError(result.error)
+    return result.error === null ? undefined : AuthError.describe(result.error)
   }
   if (step === "code")
     return (
@@ -93,16 +93,6 @@ export function LoginPage() {
     return (
       <AuthLayout>
         <FormError>{error}</FormError>
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-10 w-full"
-          disabled={pending !== null}
-          onClick={() => void sendCode()}
-        >
-          {pending === "code" ? <Spinner data-icon="inline-start" /> : <IconMail data-icon="inline-start" />}
-          Email sign-in code
-        </Button>
         <form
           onSubmit={(event) => {
             event.preventDefault()
@@ -189,8 +179,18 @@ export function LoginPage() {
               onChange={(event) => ((value: string) => setEmail(value))(event.currentTarget.value)}
             />
           </Field>
-          <Button type="submit" className="h-10 w-full">
+          <Button type="submit" className="h-10 w-full" disabled={pending !== null}>
             Continue
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-10 w-full"
+            disabled={pending !== null}
+            onClick={() => void sendCode()}
+          >
+            {pending === "code" ? <Spinner data-icon="inline-start" /> : <IconMail data-icon="inline-start" />}
+            Email me a sign-in code
           </Button>
         </FieldGroup>
       </form>

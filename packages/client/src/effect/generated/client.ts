@@ -20,7 +20,13 @@ const adaptGroupHealth = (raw: RawClient["health"]) => ({ get: EndpointHealthGet
 
 const EndpointMeGet = (raw: RawClient["me"]) => () => raw["me.get"]({}).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupMe = (raw: RawClient["me"]) => ({ get: EndpointMeGet(raw) })
+const EndpointMeRequestDeletion = (raw: RawClient["me"]) => () =>
+  raw["me.requestDeletion"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupMe = (raw: RawClient["me"]) => ({
+  get: EndpointMeGet(raw),
+  requestDeletion: EndpointMeRequestDeletion(raw),
+})
 
 type InvitationPreviewRequest = Parameters<RawClient["invitation"]["invitation.preview"]>[0]
 type InvitationPreviewInput = { readonly id: InvitationPreviewRequest["params"]["id"] }
@@ -63,6 +69,8 @@ type SpaceUpdateInput = {
   readonly name?: SpaceUpdateRequest["payload"]["name"]
   readonly description?: SpaceUpdateRequest["payload"]["description"]
   readonly brainScope?: SpaceUpdateRequest["payload"]["brainScope"]
+  readonly brain?: SpaceUpdateRequest["payload"]["brain"]
+  readonly hand?: SpaceUpdateRequest["payload"]["hand"]
 }
 const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInput) =>
   raw["space.update"]({
@@ -72,6 +80,8 @@ const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInpu
       name: input["name"],
       description: input["description"],
       brainScope: input["brainScope"],
+      brain: input["brain"],
+      hand: input["hand"],
     },
   }).pipe(Effect.mapError(mapClientError))
 
@@ -80,24 +90,37 @@ type SpaceArchiveInput = { readonly id: SpaceArchiveRequest["params"]["id"] }
 const EndpointSpaceArchive = (raw: RawClient["space"]) => (input: SpaceArchiveInput) =>
   raw["space.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type SpaceShutdownRequest = Parameters<RawClient["space"]["space.shutdown"]>[0]
+type SpaceShutdownInput = { readonly id: SpaceShutdownRequest["params"]["id"] }
+const EndpointSpaceShutdown = (raw: RawClient["space"]) => (input: SpaceShutdownInput) =>
+  raw["space.shutdown"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupSpace = (raw: RawClient["space"]) => ({
   list: EndpointSpaceList(raw),
   get: EndpointSpaceGet(raw),
   create: EndpointSpaceCreate(raw),
   update: EndpointSpaceUpdate(raw),
   archive: EndpointSpaceArchive(raw),
+  shutdown: EndpointSpaceShutdown(raw),
 })
 
 type SpaceMemberListRequest = Parameters<RawClient["space-member"]["space-member.list"]>[0]
 type SpaceMemberListInput = {
-  readonly spaceId: SpaceMemberListRequest["query"]["spaceId"]
+  readonly spaceId?: SpaceMemberListRequest["query"]["spaceId"]
+  readonly userId?: SpaceMemberListRequest["query"]["userId"]
   readonly status?: SpaceMemberListRequest["query"]["status"]
   readonly page: SpaceMemberListRequest["query"]["page"]
   readonly pageSize: SpaceMemberListRequest["query"]["pageSize"]
 }
 const EndpointSpaceMemberList = (raw: RawClient["space-member"]) => (input: SpaceMemberListInput) =>
   raw["space-member.list"]({
-    query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+    query: {
+      spaceId: input["spaceId"],
+      userId: input["userId"],
+      status: input["status"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 type SpaceMemberCreateRequest = Parameters<RawClient["space-member"]["space-member.create"]>[0]
@@ -116,6 +139,138 @@ const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
   list: EndpointSpaceMemberList(raw),
   create: EndpointSpaceMemberCreate(raw),
   archive: EndpointSpaceMemberArchive(raw),
+})
+
+type SpaceJoinRequestListRequest = Parameters<RawClient["space-join-request"]["space-join-request.list"]>[0]
+type SpaceJoinRequestListInput = {
+  readonly spaceId?: SpaceJoinRequestListRequest["query"]["spaceId"]
+  readonly status?: SpaceJoinRequestListRequest["query"]["status"]
+  readonly page: SpaceJoinRequestListRequest["query"]["page"]
+  readonly pageSize: SpaceJoinRequestListRequest["query"]["pageSize"]
+}
+const EndpointSpaceJoinRequestList = (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestListInput) =>
+  raw["space-join-request.list"]({
+    query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceJoinRequestCreateRequest = Parameters<RawClient["space-join-request"]["space-join-request.create"]>[0]
+type SpaceJoinRequestCreateInput = {
+  readonly spaceId: SpaceJoinRequestCreateRequest["payload"]["spaceId"]
+  readonly note?: SpaceJoinRequestCreateRequest["payload"]["note"]
+}
+const EndpointSpaceJoinRequestCreate = (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestCreateInput) =>
+  raw["space-join-request.create"]({ payload: { spaceId: input["spaceId"], note: input["note"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SpaceJoinRequestApproveRequest = Parameters<RawClient["space-join-request"]["space-join-request.approve"]>[0]
+type SpaceJoinRequestApproveInput = { readonly id: SpaceJoinRequestApproveRequest["params"]["id"] }
+const EndpointSpaceJoinRequestApprove =
+  (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestApproveInput) =>
+    raw["space-join-request.approve"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+type SpaceJoinRequestDeclineRequest = Parameters<RawClient["space-join-request"]["space-join-request.decline"]>[0]
+type SpaceJoinRequestDeclineInput = { readonly id: SpaceJoinRequestDeclineRequest["params"]["id"] }
+const EndpointSpaceJoinRequestDecline =
+  (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestDeclineInput) =>
+    raw["space-join-request.decline"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+type SpaceJoinRequestCancelRequest = Parameters<RawClient["space-join-request"]["space-join-request.cancel"]>[0]
+type SpaceJoinRequestCancelInput = { readonly id: SpaceJoinRequestCancelRequest["params"]["id"] }
+const EndpointSpaceJoinRequestCancel = (raw: RawClient["space-join-request"]) => (input: SpaceJoinRequestCancelInput) =>
+  raw["space-join-request.cancel"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceJoinRequest = (raw: RawClient["space-join-request"]) => ({
+  list: EndpointSpaceJoinRequestList(raw),
+  create: EndpointSpaceJoinRequestCreate(raw),
+  approve: EndpointSpaceJoinRequestApprove(raw),
+  decline: EndpointSpaceJoinRequestDecline(raw),
+  cancel: EndpointSpaceJoinRequestCancel(raw),
+})
+
+type SpaceInviteLinkGetRequest = Parameters<RawClient["space-invite-link"]["space-invite-link.get"]>[0]
+type SpaceInviteLinkGetInput = { readonly id: SpaceInviteLinkGetRequest["params"]["id"] }
+const EndpointSpaceInviteLinkGet = (raw: RawClient["space-invite-link"]) => (input: SpaceInviteLinkGetInput) =>
+  raw["space-invite-link.get"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type SpaceInviteLinkResetRequest = Parameters<RawClient["space-invite-link"]["space-invite-link.reset"]>[0]
+type SpaceInviteLinkResetInput = { readonly id: SpaceInviteLinkResetRequest["params"]["id"] }
+const EndpointSpaceInviteLinkReset = (raw: RawClient["space-invite-link"]) => (input: SpaceInviteLinkResetInput) =>
+  raw["space-invite-link.reset"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceInviteLink = (raw: RawClient["space-invite-link"]) => ({
+  get: EndpointSpaceInviteLinkGet(raw),
+  reset: EndpointSpaceInviteLinkReset(raw),
+})
+
+type JoinLinkPreviewRequest = Parameters<RawClient["join-link"]["join-link.preview"]>[0]
+type JoinLinkPreviewInput = { readonly token: JoinLinkPreviewRequest["params"]["token"] }
+const EndpointJoinLinkPreview = (raw: RawClient["join-link"]) => (input: JoinLinkPreviewInput) =>
+  raw["join-link.preview"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+type JoinLinkAcceptRequest = Parameters<RawClient["join-link"]["join-link.accept"]>[0]
+type JoinLinkAcceptInput = { readonly token: JoinLinkAcceptRequest["params"]["token"] }
+const EndpointJoinLinkAccept = (raw: RawClient["join-link"]) => (input: JoinLinkAcceptInput) =>
+  raw["join-link.accept"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupJoinLink = (raw: RawClient["join-link"]) => ({
+  preview: EndpointJoinLinkPreview(raw),
+  accept: EndpointJoinLinkAccept(raw),
+})
+
+type OrganizationInviteLinkCreateRequest = Parameters<
+  RawClient["organization-invite-link"]["organization-invite-link.create"]
+>[0]
+type OrganizationInviteLinkCreateInput = {
+  readonly spaceIds: OrganizationInviteLinkCreateRequest["payload"]["spaceIds"]
+  readonly expiresIn: OrganizationInviteLinkCreateRequest["payload"]["expiresIn"]
+}
+const EndpointOrganizationInviteLinkCreate =
+  (raw: RawClient["organization-invite-link"]) => (input: OrganizationInviteLinkCreateInput) =>
+    raw["organization-invite-link.create"]({
+      payload: { spaceIds: input["spaceIds"], expiresIn: input["expiresIn"] },
+    }).pipe(Effect.mapError(mapClientError))
+
+const EndpointOrganizationInviteLinkList = (raw: RawClient["organization-invite-link"]) => () =>
+  raw["organization-invite-link.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type OrganizationInviteLinkRevokeRequest = Parameters<
+  RawClient["organization-invite-link"]["organization-invite-link.revoke"]
+>[0]
+type OrganizationInviteLinkRevokeInput = { readonly id: OrganizationInviteLinkRevokeRequest["params"]["id"] }
+const EndpointOrganizationInviteLinkRevoke =
+  (raw: RawClient["organization-invite-link"]) => (input: OrganizationInviteLinkRevokeInput) =>
+    raw["organization-invite-link.revoke"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOrganizationInviteLink = (raw: RawClient["organization-invite-link"]) => ({
+  create: EndpointOrganizationInviteLinkCreate(raw),
+  list: EndpointOrganizationInviteLinkList(raw),
+  revoke: EndpointOrganizationInviteLinkRevoke(raw),
+})
+
+type OrganizationJoinLinkPreviewRequest = Parameters<
+  RawClient["organization-join-link"]["organization-join-link.preview"]
+>[0]
+type OrganizationJoinLinkPreviewInput = { readonly token: OrganizationJoinLinkPreviewRequest["params"]["token"] }
+const EndpointOrganizationJoinLinkPreview =
+  (raw: RawClient["organization-join-link"]) => (input: OrganizationJoinLinkPreviewInput) =>
+    raw["organization-join-link.preview"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+type OrganizationJoinLinkAcceptRequest = Parameters<
+  RawClient["organization-join-link"]["organization-join-link.accept"]
+>[0]
+type OrganizationJoinLinkAcceptInput = { readonly token: OrganizationJoinLinkAcceptRequest["params"]["token"] }
+const EndpointOrganizationJoinLinkAccept =
+  (raw: RawClient["organization-join-link"]) => (input: OrganizationJoinLinkAcceptInput) =>
+    raw["organization-join-link.accept"]({ params: { token: input["token"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOrganizationJoinLink = (raw: RawClient["organization-join-link"]) => ({
+  preview: EndpointOrganizationJoinLinkPreview(raw),
+  accept: EndpointOrganizationJoinLinkAccept(raw),
 })
 
 type EnvironmentTemplateListRequest = Parameters<RawClient["environment-template"]["environment-template.list"]>[0]
@@ -142,6 +297,7 @@ type EnvironmentTemplateCreateInput = {
   readonly provider: EnvironmentTemplateCreateRequest["payload"]["provider"]
   readonly config: EnvironmentTemplateCreateRequest["payload"]["config"]
   readonly sessionsPerEnvironment: EnvironmentTemplateCreateRequest["payload"]["sessionsPerEnvironment"]
+  readonly networking: EnvironmentTemplateCreateRequest["payload"]["networking"]
 }
 const EndpointEnvironmentTemplateCreate =
   (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateCreateInput) =>
@@ -152,6 +308,7 @@ const EndpointEnvironmentTemplateCreate =
         provider: input["provider"],
         config: input["config"],
         sessionsPerEnvironment: input["sessionsPerEnvironment"],
+        networking: input["networking"],
       },
     }).pipe(Effect.mapError(mapClientError))
 
@@ -162,6 +319,7 @@ type EnvironmentTemplateUpdateInput = {
   readonly description?: EnvironmentTemplateUpdateRequest["payload"]["description"]
   readonly config?: EnvironmentTemplateUpdateRequest["payload"]["config"]
   readonly sessionsPerEnvironment?: EnvironmentTemplateUpdateRequest["payload"]["sessionsPerEnvironment"]
+  readonly networking?: EnvironmentTemplateUpdateRequest["payload"]["networking"]
 }
 const EndpointEnvironmentTemplateUpdate =
   (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateUpdateInput) =>
@@ -172,6 +330,7 @@ const EndpointEnvironmentTemplateUpdate =
         description: input["description"],
         config: input["config"],
         sessionsPerEnvironment: input["sessionsPerEnvironment"],
+        networking: input["networking"],
       },
     }).pipe(Effect.mapError(mapClientError))
 
@@ -183,60 +342,45 @@ const EndpointEnvironmentTemplateArchive =
   (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateArchiveInput) =>
     raw["environment-template.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type EnvironmentTemplateRetryBuildRequest = Parameters<
+  RawClient["environment-template"]["environment-template.retryBuild"]
+>[0]
+type EnvironmentTemplateRetryBuildInput = { readonly id: EnvironmentTemplateRetryBuildRequest["params"]["id"] }
+const EndpointEnvironmentTemplateRetryBuild =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateRetryBuildInput) =>
+    raw["environment-template.retryBuild"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+type EnvironmentTemplateAffectedSpacesRequest = Parameters<
+  RawClient["environment-template"]["environment-template.affectedSpaces"]
+>[0]
+type EnvironmentTemplateAffectedSpacesInput = { readonly id: EnvironmentTemplateAffectedSpacesRequest["params"]["id"] }
+const EndpointEnvironmentTemplateAffectedSpaces =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateAffectedSpacesInput) =>
+    raw["environment-template.affectedSpaces"]({ params: { id: input["id"] }, payload: {} }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
 const adaptGroupEnvironmentTemplate = (raw: RawClient["environment-template"]) => ({
   list: EndpointEnvironmentTemplateList(raw),
   get: EndpointEnvironmentTemplateGet(raw),
   create: EndpointEnvironmentTemplateCreate(raw),
   update: EndpointEnvironmentTemplateUpdate(raw),
   archive: EndpointEnvironmentTemplateArchive(raw),
+  retryBuild: EndpointEnvironmentTemplateRetryBuild(raw),
+  affectedSpaces: EndpointEnvironmentTemplateAffectedSpaces(raw),
 })
 
 const EndpointEnvironmentProviderList = (raw: RawClient["environmentProvider"]) => () =>
   raw["environmentProvider.list"]({}).pipe(Effect.mapError(mapClientError))
 
+const EndpointEnvironmentProviderBrains = (raw: RawClient["environmentProvider"]) => () =>
+  raw["environmentProvider.brains"]({}).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupEnvironmentProvider = (raw: RawClient["environmentProvider"]) => ({
   list: EndpointEnvironmentProviderList(raw),
-})
-
-type SpaceEnvironmentTemplateListRequest = Parameters<
-  RawClient["space-environment-template"]["space-environment-template.list"]
->[0]
-type SpaceEnvironmentTemplateListInput = {
-  readonly spaceId: SpaceEnvironmentTemplateListRequest["query"]["spaceId"]
-  readonly page: SpaceEnvironmentTemplateListRequest["query"]["page"]
-  readonly pageSize: SpaceEnvironmentTemplateListRequest["query"]["pageSize"]
-}
-const EndpointSpaceEnvironmentTemplateList =
-  (raw: RawClient["space-environment-template"]) => (input: SpaceEnvironmentTemplateListInput) =>
-    raw["space-environment-template.list"]({
-      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-    }).pipe(Effect.mapError(mapClientError))
-
-type SpaceEnvironmentTemplateCreateRequest = Parameters<
-  RawClient["space-environment-template"]["space-environment-template.create"]
->[0]
-type SpaceEnvironmentTemplateCreateInput = {
-  readonly spaceId: SpaceEnvironmentTemplateCreateRequest["payload"]["spaceId"]
-  readonly environmentTemplateId: SpaceEnvironmentTemplateCreateRequest["payload"]["environmentTemplateId"]
-}
-const EndpointSpaceEnvironmentTemplateCreate =
-  (raw: RawClient["space-environment-template"]) => (input: SpaceEnvironmentTemplateCreateInput) =>
-    raw["space-environment-template.create"]({
-      payload: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
-    }).pipe(Effect.mapError(mapClientError))
-
-type SpaceEnvironmentTemplateArchiveRequest = Parameters<
-  RawClient["space-environment-template"]["space-environment-template.archive"]
->[0]
-type SpaceEnvironmentTemplateArchiveInput = { readonly id: SpaceEnvironmentTemplateArchiveRequest["params"]["id"] }
-const EndpointSpaceEnvironmentTemplateArchive =
-  (raw: RawClient["space-environment-template"]) => (input: SpaceEnvironmentTemplateArchiveInput) =>
-    raw["space-environment-template.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
-
-const adaptGroupSpaceEnvironmentTemplate = (raw: RawClient["space-environment-template"]) => ({
-  list: EndpointSpaceEnvironmentTemplateList(raw),
-  create: EndpointSpaceEnvironmentTemplateCreate(raw),
-  archive: EndpointSpaceEnvironmentTemplateArchive(raw),
+  brains: EndpointEnvironmentProviderBrains(raw),
 })
 
 type SpaceSettingsGetRequest = Parameters<RawClient["space-settings"]["space-settings.get"]>[0]
@@ -308,11 +452,12 @@ type MemoryWriteInput = {
   readonly spaceId?: MemoryWriteRequest["payload"]["spaceId"]
   readonly path: MemoryWriteRequest["payload"]["path"]
   readonly content: MemoryWriteRequest["payload"]["content"]
+  readonly mode?: MemoryWriteRequest["payload"]["mode"]
 }
 const EndpointMemoryWrite = (raw: RawClient["memory"]) => (input: MemoryWriteInput) =>
-  raw["memory.write"]({ payload: { spaceId: input["spaceId"], path: input["path"], content: input["content"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["memory.write"]({
+    payload: { spaceId: input["spaceId"], path: input["path"], content: input["content"], mode: input["mode"] },
+  }).pipe(Effect.mapError(mapClientError))
 
 type MemoryEditRequest = Parameters<RawClient["memory"]["memory.edit"]>[0]
 type MemoryEditInput = {
@@ -351,17 +496,6 @@ const adaptGroupMemory = (raw: RawClient["memory"]) => ({
   delete: EndpointMemoryDelete(raw),
 })
 
-type DriveListRequest = Parameters<RawClient["drive"]["drive.list"]>[0]
-type DriveListInput = {
-  readonly spaceId?: DriveListRequest["query"]["spaceId"]
-  readonly folder?: DriveListRequest["query"]["folder"]
-  readonly cursor?: DriveListRequest["query"]["cursor"]
-}
-const EndpointDriveList = (raw: RawClient["drive"]) => (input?: DriveListInput) =>
-  raw["drive.list"]({
-    query: { spaceId: input?.["spaceId"], folder: input?.["folder"], cursor: input?.["cursor"] },
-  }).pipe(Effect.mapError(mapClientError))
-
 type DriveStartUploadRequest = Parameters<RawClient["drive"]["drive.startUpload"]>[0]
 type DriveStartUploadInput = {
   readonly spaceId?: DriveStartUploadRequest["payload"]["spaceId"]
@@ -384,21 +518,49 @@ const EndpointDriveDownload = (raw: RawClient["drive"]) => (input: DriveDownload
     query: { spaceId: input["spaceId"], path: input["path"], disposition: input["disposition"] },
   }).pipe(Effect.mapError(mapClientError))
 
-type DriveDeleteRequest = Parameters<RawClient["drive"]["drive.delete"]>[0]
-type DriveDeleteInput = {
-  readonly spaceId?: DriveDeleteRequest["query"]["spaceId"]
-  readonly path: DriveDeleteRequest["query"]["path"]
+const adaptGroupDrive = (raw: RawClient["drive"]) => ({
+  startUpload: EndpointDriveStartUpload(raw),
+  download: EndpointDriveDownload(raw),
+})
+
+type FilesListRequest = Parameters<RawClient["files"]["files.list"]>[0]
+type FilesListInput = {
+  readonly source: FilesListRequest["query"]["source"]
+  readonly spaceId?: FilesListRequest["query"]["spaceId"]
+  readonly folder?: FilesListRequest["query"]["folder"]
+  readonly cursor?: FilesListRequest["query"]["cursor"]
 }
-const EndpointDriveDelete = (raw: RawClient["drive"]) => (input: DriveDeleteInput) =>
-  raw["drive.delete"]({ query: { spaceId: input["spaceId"], path: input["path"] } }).pipe(
+const EndpointFilesList = (raw: RawClient["files"]) => (input: FilesListInput) =>
+  raw["files.list"]({
+    query: { source: input["source"], spaceId: input["spaceId"], folder: input["folder"], cursor: input["cursor"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type FilesReadRequest = Parameters<RawClient["files"]["files.read"]>[0]
+type FilesReadInput = {
+  readonly source: FilesReadRequest["query"]["source"]
+  readonly spaceId?: FilesReadRequest["query"]["spaceId"]
+  readonly path: FilesReadRequest["query"]["path"]
+}
+const EndpointFilesRead = (raw: RawClient["files"]) => (input: FilesReadInput) =>
+  raw["files.read"]({ query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] } }).pipe(
     Effect.mapError(mapClientError),
   )
 
-const adaptGroupDrive = (raw: RawClient["drive"]) => ({
-  list: EndpointDriveList(raw),
-  startUpload: EndpointDriveStartUpload(raw),
-  download: EndpointDriveDownload(raw),
-  delete: EndpointDriveDelete(raw),
+type FilesDeleteRequest = Parameters<RawClient["files"]["files.delete"]>[0]
+type FilesDeleteInput = {
+  readonly source: FilesDeleteRequest["query"]["source"]
+  readonly spaceId?: FilesDeleteRequest["query"]["spaceId"]
+  readonly path: FilesDeleteRequest["query"]["path"]
+}
+const EndpointFilesDelete = (raw: RawClient["files"]) => (input: FilesDeleteInput) =>
+  raw["files.delete"]({ query: { source: input["source"], spaceId: input["spaceId"], path: input["path"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupFiles = (raw: RawClient["files"]) => ({
+  list: EndpointFilesList(raw),
+  read: EndpointFilesRead(raw),
+  delete: EndpointFilesDelete(raw),
 })
 
 type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
@@ -669,9 +831,14 @@ const EndpointAppProfileLink = (raw: RawClient["app-profile"]) => (input: AppPro
   }).pipe(Effect.mapError(mapClientError))
 
 type AppProfilePromoteRequest = Parameters<RawClient["app-profile"]["app-profile.promote"]>[0]
-type AppProfilePromoteInput = { readonly id: AppProfilePromoteRequest["params"]["id"] }
+type AppProfilePromoteInput = {
+  readonly id: AppProfilePromoteRequest["params"]["id"]
+  readonly spaceId: AppProfilePromoteRequest["payload"]["spaceId"]
+}
 const EndpointAppProfilePromote = (raw: RawClient["app-profile"]) => (input: AppProfilePromoteInput) =>
-  raw["app-profile.promote"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+  raw["app-profile.promote"]({ params: { id: input["id"] }, payload: { spaceId: input["spaceId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 const adaptGroupAppProfile = (raw: RawClient["app-profile"]) => ({
   list: EndpointAppProfileList(raw),
@@ -718,12 +885,19 @@ type AppRegistryListRequest = Parameters<RawClient["app-registry"]["app-registry
 type AppRegistryListInput = {
   readonly query?: AppRegistryListRequest["query"]["query"]
   readonly category?: AppRegistryListRequest["query"]["category"]
+  readonly slugs?: AppRegistryListRequest["query"]["slugs"]
   readonly page: AppRegistryListRequest["query"]["page"]
   readonly pageSize: AppRegistryListRequest["query"]["pageSize"]
 }
 const EndpointAppRegistryList = (raw: RawClient["app-registry"]) => (input: AppRegistryListInput) =>
   raw["app-registry.list"]({
-    query: { query: input["query"], category: input["category"], page: input["page"], pageSize: input["pageSize"] },
+    query: {
+      query: input["query"],
+      category: input["category"],
+      slugs: input["slugs"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 type AppRegistryGetRequest = Parameters<RawClient["app-registry"]["app-registry.get"]>[0]
@@ -734,6 +908,22 @@ const EndpointAppRegistryGet = (raw: RawClient["app-registry"]) => (input: AppRe
 const adaptGroupAppRegistry = (raw: RawClient["app-registry"]) => ({
   list: EndpointAppRegistryList(raw),
   get: EndpointAppRegistryGet(raw),
+})
+
+type AppToolsGetRequest = Parameters<RawClient["app-tools"]["app-tools.get"]>[0]
+type AppToolsGetInput = { readonly idOrSlug: AppToolsGetRequest["params"]["idOrSlug"] }
+const EndpointAppToolsGet = (raw: RawClient["app-tools"]) => (input: AppToolsGetInput) =>
+  raw["app-tools.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAppTools = (raw: RawClient["app-tools"]) => ({ get: EndpointAppToolsGet(raw) })
+
+type McpInspectMcpInspectRequest = Parameters<RawClient["mcp-inspect"]["mcp.inspect"]>[0]
+type McpInspectMcpInspectInput = { readonly url: McpInspectMcpInspectRequest["payload"]["url"] }
+const EndpointMcpInspectMcpInspect = (raw: RawClient["mcp-inspect"]) => (input: McpInspectMcpInspectInput) =>
+  raw["mcp.inspect"]({ payload: { url: input["url"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupMcpInspect = (raw: RawClient["mcp-inspect"]) => ({
+  mcp: { inspect: EndpointMcpInspectMcpInspect(raw) },
 })
 
 type AgentMembershipListRequest = Parameters<RawClient["agent-membership"]["agent-membership.list"]>[0]
@@ -875,9 +1065,14 @@ const EndpointChatPrepare = (raw: RawClient["chat"]) => (input: ChatPrepareInput
   raw["chat.prepare"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
 type ChatModelsRequest = Parameters<RawClient["chat"]["chat.models"]>[0]
-type ChatModelsInput = { readonly id: ChatModelsRequest["params"]["id"] }
+type ChatModelsInput = {
+  readonly id: ChatModelsRequest["params"]["id"]
+  readonly spaceId?: ChatModelsRequest["query"]["spaceId"]
+}
 const EndpointChatModels = (raw: RawClient["chat"]) => (input: ChatModelsInput) =>
-  raw["chat.models"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+  raw["chat.models"]({ params: { id: input["id"] }, query: { spaceId: input["spaceId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 const adaptGroupChat = (raw: RawClient["chat"]) => ({
   access: EndpointChatAccess(raw),
@@ -895,6 +1090,7 @@ type TaskListInput = {
   readonly priority?: TaskListRequest["query"]["priority"]
   readonly agentId?: TaskListRequest["query"]["agentId"]
   readonly ownerId?: TaskListRequest["query"]["ownerId"]
+  readonly search?: TaskListRequest["query"]["search"]
   readonly label?: TaskListRequest["query"]["label"]
   readonly humanReview?: TaskListRequest["query"]["humanReview"]
   readonly linkedTo?: TaskListRequest["query"]["linkedTo"]
@@ -911,6 +1107,7 @@ const EndpointTaskList = (raw: RawClient["task"]) => (input: TaskListInput) =>
       priority: input["priority"],
       agentId: input["agentId"],
       ownerId: input["ownerId"],
+      search: input["search"],
       label: input["label"],
       humanReview: input["humanReview"],
       linkedTo: input["linkedTo"],
@@ -1102,6 +1299,11 @@ type LinkSessionLinksInput = { readonly id: LinkSessionLinksRequest["params"]["i
 const EndpointLinkSessionLinks = (raw: RawClient["link"]) => (input: LinkSessionLinksInput) =>
   raw["session.links"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type LinkSessionUsageRequest = Parameters<RawClient["link"]["session.usage"]>[0]
+type LinkSessionUsageInput = { readonly id: LinkSessionUsageRequest["params"]["id"] }
+const EndpointLinkSessionUsage = (raw: RawClient["link"]) => (input: LinkSessionUsageInput) =>
+  raw["session.usage"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
 type LinkSessionPullRequestsRequest = Parameters<RawClient["link"]["session.pullRequests"]>[0]
 type LinkSessionPullRequestsInput = { readonly id: LinkSessionPullRequestsRequest["params"]["id"] }
 const EndpointLinkSessionPullRequests = (raw: RawClient["link"]) => (input: LinkSessionPullRequestsInput) =>
@@ -1113,7 +1315,11 @@ const EndpointLinkTaskPullRequests = (raw: RawClient["link"]) => (input: LinkTas
   raw["task.pullRequests"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupLink = (raw: RawClient["link"]) => ({
-  session: { links: EndpointLinkSessionLinks(raw), pullRequests: EndpointLinkSessionPullRequests(raw) },
+  session: {
+    links: EndpointLinkSessionLinks(raw),
+    usage: EndpointLinkSessionUsage(raw),
+    pullRequests: EndpointLinkSessionPullRequests(raw),
+  },
   task: { pullRequests: EndpointLinkTaskPullRequests(raw) },
 })
 
@@ -1264,12 +1470,18 @@ const adaptGroupSchedule = (raw: RawClient["schedule"]) => ({
 type ScheduleRunListRequest = Parameters<RawClient["schedule-run"]["schedule-run.list"]>[0]
 type ScheduleRunListInput = {
   readonly scheduleId: ScheduleRunListRequest["query"]["scheduleId"]
+  readonly status?: ScheduleRunListRequest["query"]["status"]
   readonly page: ScheduleRunListRequest["query"]["page"]
   readonly pageSize: ScheduleRunListRequest["query"]["pageSize"]
 }
 const EndpointScheduleRunList = (raw: RawClient["schedule-run"]) => (input: ScheduleRunListInput) =>
   raw["schedule-run.list"]({
-    query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+    query: {
+      scheduleId: input["scheduleId"],
+      status: input["status"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupScheduleRun = (raw: RawClient["schedule-run"]) => ({ list: EndpointScheduleRunList(raw) })
@@ -1407,6 +1619,45 @@ const adaptGroupWebhookRequest = (raw: RawClient["webhook-request"]) => ({
   get: EndpointWebhookRequestGet(raw),
 })
 
+type ArtifactListRequest = Parameters<RawClient["artifact"]["artifact.list"]>[0]
+type ArtifactListInput = {
+  readonly spaceId?: ArtifactListRequest["query"]["spaceId"]
+  readonly page: ArtifactListRequest["query"]["page"]
+  readonly pageSize: ArtifactListRequest["query"]["pageSize"]
+}
+const EndpointArtifactList = (raw: RawClient["artifact"]) => (input: ArtifactListInput) =>
+  raw["artifact.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ArtifactGetRequest = Parameters<RawClient["artifact"]["artifact.get"]>[0]
+type ArtifactGetInput = { readonly idOrSlug: ArtifactGetRequest["params"]["idOrSlug"] }
+const EndpointArtifactGet = (raw: RawClient["artifact"]) => (input: ArtifactGetInput) =>
+  raw["artifact.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type ArtifactUpdateRequest = Parameters<RawClient["artifact"]["artifact.update"]>[0]
+type ArtifactUpdateInput = {
+  readonly id: ArtifactUpdateRequest["params"]["id"]
+  readonly title?: ArtifactUpdateRequest["payload"]["title"]
+  readonly name?: ArtifactUpdateRequest["payload"]["name"]
+}
+const EndpointArtifactUpdate = (raw: RawClient["artifact"]) => (input: ArtifactUpdateInput) =>
+  raw["artifact.update"]({ params: { id: input["id"] }, payload: { title: input["title"], name: input["name"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ArtifactArchiveRequest = Parameters<RawClient["artifact"]["artifact.archive"]>[0]
+type ArtifactArchiveInput = { readonly id: ArtifactArchiveRequest["params"]["id"] }
+const EndpointArtifactArchive = (raw: RawClient["artifact"]) => (input: ArtifactArchiveInput) =>
+  raw["artifact.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupArtifact = (raw: RawClient["artifact"]) => ({
+  list: EndpointArtifactList(raw),
+  get: EndpointArtifactGet(raw),
+  update: EndpointArtifactUpdate(raw),
+  archive: EndpointArtifactArchive(raw),
+})
+
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
 type CredentialListInput = {
   readonly owner?: CredentialListRequest["query"]["owner"]
@@ -1504,11 +1755,17 @@ type CredentialConnectCredentialConnectInput = {
   readonly profileId: CredentialConnectCredentialConnectRequest["payload"]["profileId"]
   readonly item: CredentialConnectCredentialConnectRequest["payload"]["item"]
   readonly reconnect?: CredentialConnectCredentialConnectRequest["payload"]["reconnect"]
+  readonly returnTo?: CredentialConnectCredentialConnectRequest["payload"]["returnTo"]
 }
 const EndpointCredentialConnectCredentialConnect =
   (raw: RawClient["credential-connect"]) => (input: CredentialConnectCredentialConnectInput) =>
     raw["credential.connect"]({
-      payload: { profileId: input["profileId"], item: input["item"], reconnect: input["reconnect"] },
+      payload: {
+        profileId: input["profileId"],
+        item: input["item"],
+        reconnect: input["reconnect"],
+        returnTo: input["returnTo"],
+      },
     }).pipe(Effect.mapError(mapClientError))
 
 const adaptGroupCredentialConnect = (raw: RawClient["credential-connect"]) => ({
@@ -1640,6 +1897,53 @@ const EndpointRenInferenceConnectionRemove =
   (raw: RawClient["ren-inference"]) => (input: RenInferenceConnectionRemoveInput) =>
     raw["ren-inference.connection.remove"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+const EndpointRenInferenceKeyList = (raw: RawClient["ren-inference"]) => () =>
+  raw["ren-inference.key.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceKeyUsageRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.usage"]>[0]
+type RenInferenceKeyUsageInput = { readonly period: RenInferenceKeyUsageRequest["query"]["period"] }
+const EndpointRenInferenceKeyUsage = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeyUsageInput) =>
+  raw["ren-inference.key.usage"]({ query: { period: input["period"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceKeyCreateRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.create"]>[0]
+type RenInferenceKeyCreateInput = {
+  readonly name: RenInferenceKeyCreateRequest["payload"]["name"]
+  readonly expiresIn: RenInferenceKeyCreateRequest["payload"]["expiresIn"]
+}
+const EndpointRenInferenceKeyCreate = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeyCreateInput) =>
+  raw["ren-inference.key.create"]({ payload: { name: input["name"], expiresIn: input["expiresIn"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type RenInferenceKeyRevokeRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.revoke"]>[0]
+type RenInferenceKeyRevokeInput = { readonly id: RenInferenceKeyRevokeRequest["params"]["id"] }
+const EndpointRenInferenceKeyRevoke = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeyRevokeInput) =>
+  raw["ren-inference.key.revoke"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceKeySecretRequest = Parameters<RawClient["ren-inference"]["ren-inference.key.secret"]>[0]
+type RenInferenceKeySecretInput = { readonly id: RenInferenceKeySecretRequest["params"]["id"] }
+const EndpointRenInferenceKeySecret = (raw: RawClient["ren-inference"]) => (input: RenInferenceKeySecretInput) =>
+  raw["ren-inference.key.secret"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceHarnessPlanRequest = Parameters<RawClient["ren-inference"]["ren-inference.harness-plan"]>[0]
+type RenInferenceHarnessPlanInput = {
+  readonly harnessId: RenInferenceHarnessPlanRequest["payload"]["harnessId"]
+  readonly keyEnvVar?: RenInferenceHarnessPlanRequest["payload"]["keyEnvVar"]
+  readonly withOptional?: RenInferenceHarnessPlanRequest["payload"]["withOptional"]
+  readonly schemaVersions: RenInferenceHarnessPlanRequest["payload"]["schemaVersions"]
+  readonly supportedMutationKinds: RenInferenceHarnessPlanRequest["payload"]["supportedMutationKinds"]
+}
+const EndpointRenInferenceHarnessPlan = (raw: RawClient["ren-inference"]) => (input: RenInferenceHarnessPlanInput) =>
+  raw["ren-inference.harness-plan"]({
+    payload: {
+      harnessId: input["harnessId"],
+      keyEnvVar: input["keyEnvVar"],
+      withOptional: input["withOptional"],
+      schemaVersions: input["schemaVersions"],
+      supportedMutationKinds: input["supportedMutationKinds"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   connect: EndpointRenInferenceConnect(raw),
   connection: {
@@ -1647,6 +1951,61 @@ const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
     rename: EndpointRenInferenceConnectionRename(raw),
     remove: EndpointRenInferenceConnectionRemove(raw),
   },
+  key: {
+    list: EndpointRenInferenceKeyList(raw),
+    usage: EndpointRenInferenceKeyUsage(raw),
+    create: EndpointRenInferenceKeyCreate(raw),
+    revoke: EndpointRenInferenceKeyRevoke(raw),
+    secret: EndpointRenInferenceKeySecret(raw),
+  },
+  "harness-plan": EndpointRenInferenceHarnessPlan(raw),
+})
+
+const EndpointBillingGet = (raw: RawClient["billing"]) => () =>
+  raw["billing.get"]({}).pipe(Effect.mapError(mapClientError))
+
+const EndpointBillingPlanList = (raw: RawClient["billing"]) => () =>
+  raw["billing.plan.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type BillingInvoiceListRequest = Parameters<RawClient["billing"]["billing.invoice.list"]>[0]
+type BillingInvoiceListInput = {
+  readonly page: BillingInvoiceListRequest["query"]["page"]
+  readonly perPage: BillingInvoiceListRequest["query"]["perPage"]
+}
+const EndpointBillingInvoiceList = (raw: RawClient["billing"]) => (input: BillingInvoiceListInput) =>
+  raw["billing.invoice.list"]({ query: { page: input["page"], perPage: input["perPage"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type BillingInvoiceUrlRequest = Parameters<RawClient["billing"]["billing.invoice.url"]>[0]
+type BillingInvoiceUrlInput = { readonly id: BillingInvoiceUrlRequest["params"]["id"] }
+const EndpointBillingInvoiceUrl = (raw: RawClient["billing"]) => (input: BillingInvoiceUrlInput) =>
+  raw["billing.invoice.url"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type BillingSubscribeRequest = Parameters<RawClient["billing"]["billing.subscribe"]>[0]
+type BillingSubscribeInput = { readonly plan: BillingSubscribeRequest["payload"]["plan"] }
+const EndpointBillingSubscribe = (raw: RawClient["billing"]) => (input: BillingSubscribeInput) =>
+  raw["billing.subscribe"]({ payload: { plan: input["plan"] } }).pipe(Effect.mapError(mapClientError))
+
+type BillingChangePlanRequest = Parameters<RawClient["billing"]["billing.change-plan"]>[0]
+type BillingChangePlanInput = { readonly plan: BillingChangePlanRequest["payload"]["plan"] }
+const EndpointBillingChangePlan = (raw: RawClient["billing"]) => (input: BillingChangePlanInput) =>
+  raw["billing.change-plan"]({ payload: { plan: input["plan"] } }).pipe(Effect.mapError(mapClientError))
+
+const EndpointBillingCancel = (raw: RawClient["billing"]) => () =>
+  raw["billing.cancel"]({}).pipe(Effect.mapError(mapClientError))
+
+const EndpointBillingPortal = (raw: RawClient["billing"]) => () =>
+  raw["billing.portal"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupBilling = (raw: RawClient["billing"]) => ({
+  get: EndpointBillingGet(raw),
+  plan: { list: EndpointBillingPlanList(raw) },
+  invoice: { list: EndpointBillingInvoiceList(raw), url: EndpointBillingInvoiceUrl(raw) },
+  subscribe: EndpointBillingSubscribe(raw),
+  "change-plan": EndpointBillingChangePlan(raw),
+  cancel: EndpointBillingCancel(raw),
+  portal: EndpointBillingPortal(raw),
 })
 
 type ChannelInstallListRequest = Parameters<RawClient["channel-install"]["channel-install.list"]>[0]
@@ -1822,7 +2181,7 @@ const adaptGroupInfra = (raw: RawClient["infra"]) => ({
 
 type InsightsQueryRequest = Parameters<RawClient["insights"]["insights.query"]>[0]
 type InsightsQueryInput = {
-  readonly spaceId: InsightsQueryRequest["query"]["spaceId"]
+  readonly spaceId?: InsightsQueryRequest["query"]["spaceId"]
   readonly from: InsightsQueryRequest["query"]["from"]
   readonly to: InsightsQueryRequest["query"]["to"]
   readonly timezone: InsightsQueryRequest["query"]["timezone"]
@@ -1832,6 +2191,7 @@ type InsightsQueryInput = {
   readonly model?: InsightsQueryRequest["query"]["model"]
   readonly payer?: InsightsQueryRequest["query"]["payer"]
   readonly kind?: InsightsQueryRequest["query"]["kind"]
+  readonly type?: InsightsQueryRequest["query"]["type"]
   readonly orderBy: InsightsQueryRequest["query"]["orderBy"]
   readonly limit: InsightsQueryRequest["query"]["limit"]
 }
@@ -1848,6 +2208,7 @@ const EndpointInsightsQuery = (raw: RawClient["insights"]) => (input: InsightsQu
       model: input["model"],
       payer: input["payer"],
       kind: input["kind"],
+      type: input["type"],
       orderBy: input["orderBy"],
       limit: input["limit"],
     },
@@ -1855,24 +2216,38 @@ const EndpointInsightsQuery = (raw: RawClient["insights"]) => (input: InsightsQu
 
 const adaptGroupInsights = (raw: RawClient["insights"]) => ({ query: EndpointInsightsQuery(raw) })
 
+type FeedbackReportRequest = Parameters<RawClient["feedback"]["feedback.report"]>[0]
+type FeedbackReportInput = { readonly message: FeedbackReportRequest["payload"]["message"] }
+const EndpointFeedbackReport = (raw: RawClient["feedback"]) => (input: FeedbackReportInput) =>
+  raw["feedback.report"]({ payload: { message: input["message"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupFeedback = (raw: RawClient["feedback"]) => ({ report: EndpointFeedbackReport(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
   invitation: adaptGroupInvitation(raw["invitation"]),
   space: adaptGroupSpace(raw["space"]),
   "space-member": adaptGroupSpaceMember(raw["space-member"]),
+  "space-join-request": adaptGroupSpaceJoinRequest(raw["space-join-request"]),
+  "space-invite-link": adaptGroupSpaceInviteLink(raw["space-invite-link"]),
+  "join-link": adaptGroupJoinLink(raw["join-link"]),
+  "organization-invite-link": adaptGroupOrganizationInviteLink(raw["organization-invite-link"]),
+  "organization-join-link": adaptGroupOrganizationJoinLink(raw["organization-join-link"]),
   "environment-template": adaptGroupEnvironmentTemplate(raw["environment-template"]),
   environmentProvider: adaptGroupEnvironmentProvider(raw["environmentProvider"]),
-  "space-environment-template": adaptGroupSpaceEnvironmentTemplate(raw["space-environment-template"]),
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
   memory: adaptGroupMemory(raw["memory"]),
   drive: adaptGroupDrive(raw["drive"]),
+  files: adaptGroupFiles(raw["files"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),
   "app-profile-reach": adaptGroupAppProfileReach(raw["app-profile-reach"]),
   "app-registry": adaptGroupAppRegistry(raw["app-registry"]),
+  "app-tools": adaptGroupAppTools(raw["app-tools"]),
+  "mcp-inspect": adaptGroupMcpInspect(raw["mcp-inspect"]),
   "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
   session: adaptGroupSession(raw["session"]),
   chat: adaptGroupChat(raw["chat"]),
@@ -1885,11 +2260,13 @@ const adaptClient = (raw: RawClient) => ({
   "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
   webhook: adaptGroupWebhook(raw["webhook"]),
   "webhook-request": adaptGroupWebhookRequest(raw["webhook-request"]),
+  artifact: adaptGroupArtifact(raw["artifact"]),
   credential: adaptGroupCredential(raw["credential"]),
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
+  billing: adaptGroupBilling(raw["billing"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
@@ -1897,6 +2274,7 @@ const adaptClient = (raw: RawClient) => ({
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
   infra: adaptGroupInfra(raw["infra"]),
   insights: adaptGroupInsights(raw["insights"]),
+  feedback: adaptGroupFeedback(raw["feedback"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

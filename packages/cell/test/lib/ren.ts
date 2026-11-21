@@ -2,7 +2,11 @@ export * as FakeRen from "./ren.js"
 
 import { BrainToken } from "@ren/host-api/brain-token"
 import {
+  ArtifactConflictError,
+  ArtifactInvalidError,
+  ArtifactNotFoundError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -17,9 +21,10 @@ import {
   type PullRequest,
   RenHostApi,
 } from "@ren/host-api/ren-host-api"
+import { Artifact } from "@ren/schema/artifact"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
@@ -28,7 +33,7 @@ import type { Signature } from "@ren/schema/signature"
 import { Space } from "@ren/schema/space"
 import type { Sync } from "@ren/schema/sync"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { Effect, Layer, Option, Redacted } from "effect"
+import { DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { TestSettings } from "./settings.js"
@@ -37,9 +42,10 @@ import { TestToken } from "./token.js"
 export type Refresh = { readonly type: "grant"; readonly access: Models.Access } | { readonly type: "unavailable" }
 
 export type Answer =
-  | { readonly type: "access"; readonly access: Environment.Access }
+  | { readonly type: "access"; readonly access: Hand.Access }
   | { readonly type: "not_found" }
   | { readonly type: "unavailable"; readonly message: string }
+  | { readonly type: "starting" }
   | { readonly type: "hold" }
 
 export interface Call {
@@ -71,12 +77,55 @@ export const hostToken = (
     }),
   )
 
+const Manifest = Schema.fromJsonString(Schema.Struct({ durableObjects: Artifact.DurableObjects }))
+
+const unpacked = async (archive: Uint8Array): Promise<Record<string, Uint8Array>> =>
+  Object.fromEntries(
+    await Promise.all(
+      [...(await new Bun.Archive(archive).files()).values()].map(
+        async (file) => [file.name.slice(file.name.indexOf("/") + 1), await file.bytes()] as const,
+      ),
+    ),
+  )
+
+const configOf = (files: Readonly<Record<string, Uint8Array>>, entry = "index.html"): Artifact.Config => {
+  const manifest = files[Artifact.manifestPath]
+  return { entry, ...(manifest && Schema.decodeUnknownSync(Manifest)(new TextDecoder().decode(manifest))) }
+}
+
+export interface Published {
+  readonly info: Artifact.Info
+  readonly config: Artifact.Config
+  readonly files: Artifact.Files
+  readonly archive: Uint8Array
+  readonly deployments: ReadonlyMap<Artifact.DeploymentID, Artifact.Deployment>
+  readonly deployed: boolean
+  readonly sessionId: Session.ID | undefined
+  readonly baseDeploymentId: Artifact.DeploymentID | undefined
+}
+
+// oxlint-disable-next-line ren/no-comments -- Ren's rule for a deploy: once a deployment is published, the deploy must start from it.
+const checkBase = (found: Published | undefined, base: Artifact.DeploymentID | undefined) => {
+  const published = found?.info.publishedDeploymentId
+  return published && base !== published
+    ? Effect.fail(
+        new ArtifactConflictError({
+          message: `Artifact ${found.info.id} changed: deployment ${published} is published now. Read the artifact and apply your change to it again.`,
+        }),
+      )
+    : Effect.void
+}
+
 export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
+  const artifacts = new Map<Artifact.ID, Published>()
+  const uploads = new Map<string, Uint8Array>()
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
   const pulls: Array<PullRequest> = []
   const held: Array<() => void> = []
   const state = {
+    origin: "",
+    loseDeployAnswer: false,
     refuseHosts: false,
     generation: 1,
     refreshGate: undefined as (() => Promise<void>) | undefined,
@@ -104,6 +153,98 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     for (const listener of listeners) listener()
   }
   const handlers = Layer.mergeAll(
+    HttpApiBuilder.group(RenHostApi, "artifacts", (group) =>
+      Effect.succeed(
+        group
+          .handle("artifacts.upload", () =>
+            Effect.gen(function* () {
+              const uploadId = Artifact.UploadID.make(crypto.randomUUID())
+              const expiresAt = DateTime.add(yield* DateTime.now, { minutes: 15 })
+              return { uploadId, url: `${state.origin}/fake-uploads/${uploadId}`, expiresAt }
+            }),
+          )
+          .handle("artifacts.deploy", (request) =>
+            Effect.gen(function* () {
+              const found = artifacts.get(request.params.id)
+              const payload = request.payload
+              const previous = found?.deployments.get(payload.deploymentId)
+              if (previous) return previous
+              yield* checkBase(found, payload.baseDeploymentId)
+              const archive = uploads.get(payload.uploadId)
+              if (!archive) return yield* new ArtifactInvalidError({ message: "The upload has no archive" })
+              const files = yield* Effect.promise(() => unpacked(archive))
+              const now = yield* DateTime.now
+              const config = configOf(files, payload.entry ?? found?.config.entry)
+              const info = {
+                id: request.params.id,
+                spaceId: Space.ID.create(),
+                title: payload.title ?? "",
+                name: null,
+                entry: config.entry,
+                pendingDeploymentId: null,
+                publishedDeploymentId: payload.deploymentId,
+                url: `https://${request.params.id}.fake.ren/`,
+                createdAt: now,
+                updatedAt: now,
+                archivedAt: null,
+                ...(found && Struct.pick(found.info, ["spaceId", "title", "createdAt"])),
+                ...(payload.title && { title: payload.title }),
+              }
+              const deployment = {
+                artifactId: request.params.id,
+                deploymentId: payload.deploymentId,
+                status: "ready" as const,
+                url: info.url,
+                error: null,
+              }
+              artifacts.set(request.params.id, {
+                info,
+                files,
+                archive,
+                config,
+                deployments: new Map([...(found?.deployments ?? []), [payload.deploymentId, deployment]]),
+                deployed: true,
+                sessionId: payload.sessionId,
+                baseDeploymentId: payload.baseDeploymentId,
+              })
+              return { ...deployment, status: "deploying" as const, url: null }
+            }),
+          )
+          .handle("artifacts.status", (request) => {
+            const found = artifacts.get(request.params.id)?.deployments.get(request.params.deploymentId)
+            return found
+              ? Effect.succeed(found)
+              : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
+          })
+          .handle("artifacts.read", (request) => {
+            const found = artifacts.get(request.params.id)
+            return found
+              ? Effect.succeed(found.info)
+              : Effect.fail(new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` }))
+          })
+          .handle("artifacts.download", (request) =>
+            Effect.gen(function* () {
+              if (!artifacts.has(request.params.id))
+                return yield* new ArtifactNotFoundError({ message: `Artifact ${request.params.id} does not exist` })
+              const expiresAt = DateTime.add(yield* DateTime.now, { minutes: 15 })
+              return { url: `${state.origin}/fake-archives/${request.params.id}`, expiresAt }
+            }),
+          )
+          .handle("artifacts.stop", (request) =>
+            Effect.sync(() => {
+              const found = artifacts.get(request.params.id)
+              if (found) artifacts.set(request.params.id, { ...found, deployed: false })
+              return {
+                artifactId: request.params.id,
+                deploymentId: Artifact.DeploymentID.make(crypto.randomUUID()),
+                status: "stopping" as const,
+                url: null,
+                error: null,
+              }
+            }),
+          ),
+      ),
+    ),
     HttpApiBuilder.group(RenHostApi, "environments", (group) =>
       Effect.succeed(
         group
@@ -127,6 +268,10 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               if (answer.type === "unavailable") {
                 record("environments.access", host.brainId, sessionId, 503)
                 return yield* new EnvironmentUnavailableError({ message: answer.message })
+              }
+              if (answer.type === "starting") {
+                record("environments.access", host.brainId, sessionId, 503)
+                return yield* new EnvironmentStartingError({ message: `The environment of ${sessionId} is creating` })
               }
               record("environments.access", host.brainId, sessionId, 200)
               return answer.access
@@ -305,10 +450,32 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
     hostname: options.hostname ?? "127.0.0.1",
     port: options.port ?? 0,
     idleTimeout: 0,
-    fetch: (request) => api.handler(request),
+    fetch: async (request) => {
+      const url = new URL(request.url)
+      state.origin = url.origin
+      const name = url.pathname.split("/").at(-1) ?? ""
+      if (url.pathname.startsWith("/fake-uploads/") && request.method === "PUT") {
+        uploads.set(name, new Uint8Array(await request.arrayBuffer()))
+        return new Response(null)
+      }
+      if (state.loseDeployAnswer && request.method === "PUT" && /^\/host\/artifacts\/[^/]+$/u.test(url.pathname)) {
+        state.loseDeployAnswer = false
+        await api.handler(request)
+        return new Response(null, { status: 503 })
+      }
+      if (url.pathname.startsWith("/fake-archives/")) {
+        const found = artifacts.get(Artifact.ID.make(name))
+        return found ? new Response(new Uint8Array(found.archive)) : new Response("missing", { status: 404 })
+      }
+      return api.handler(request)
+    },
   })
   return {
     url: `http://127.0.0.1:${server.port ?? 0}`,
+    artifacts,
+    loseDeployAnswer: () => {
+      state.loseDeployAnswer = true
+    },
     calls,
     pulls,
     synced: (sessionId: Session.ID) => synced.sessions.get(sessionId),

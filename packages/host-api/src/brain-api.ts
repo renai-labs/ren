@@ -1,5 +1,7 @@
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Bundle } from "@ren/schema/bundle"
+import { Hand } from "@ren/schema/hand"
+import { Packages } from "@ren/schema/packages"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
@@ -14,9 +16,9 @@ import {
 export const hostTokenHeader = "ren-host-token"
 
 export const StartBody = Session.StartInput.mapFields((fields) => ({
-  ...Struct.omit(fields, ["environmentTemplateId"]),
+  ...Struct.omit(fields, ["hand"]),
   directory: Schema.optionalKey(
-    Environment.Directory.annotate({
+    Hand.Directory.annotate({
       description: "The session’s directory on its environment. Only a session with an environment has one.",
     }),
   ),
@@ -43,6 +45,18 @@ export const State = Schema.Struct({
       "When the brain last reached Ren with a pull; null before the first one. Ren makes a booted brain ready only after it, so a brain that cannot reach Ren is not ready. An older brain leaves it out.",
   }),
 }).annotate({ identifier: "Brain.State" })
+
+export const UpdateBody = Schema.Struct({
+  bundles: Schema.Array(Bundle.Download).annotate({
+    description: "The current bundles, the dependencies first, each with a link that downloads it.",
+  }),
+  steps: Schema.optionalKey(
+    Schema.Array(Packages.Step).annotate({
+      description:
+        "Commands that bring the machine to its template’s new config in place, in order: package installs and build commands. They run before the bundles unpack.",
+    }),
+  ),
+}).annotate({ identifier: "Brain.UpdateBody" })
 
 export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })
 export type Synced = typeof Synced.Type
@@ -112,6 +126,19 @@ const BrainGroup = HttpApiGroup.make("brain")
     ),
   )
   .add(
+    HttpApiEndpoint.post("brain.update", "/ren/update", {
+      payload: UpdateBody,
+      error: BrainRejectedError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.update",
+        summary: "Update Ren's code on the machine",
+        description:
+          "Ren calls this after it resumes a machine whose bundles are older than the current ones. The machine downloads and unpacks the bundles it lacks, restarts the executor when its version changed, and the brain restarts after it answers when its own version changed.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.post("brain.pull", "/ren/pull", { success: HttpApiSchema.Accepted }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.pull",
@@ -128,6 +155,16 @@ const BrainGroup = HttpApiGroup.make("brain")
         summary: "Sync the host's sessions",
         description:
           "Upload each session that changed to Ren until none needs a pass or a deadline occurs. `drained` is false when a session still needs a pass, or when the host has no Ren URL.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("brain.stop", "/ren/stop", { success: Synced }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.stop",
+        summary: "Stop the brain for a shutdown",
+        description:
+          "Ren calls this when a person shuts down the brain’s space. The brain refuses new turns and Chat API changes, interrupts every turn, and syncs its sessions to Ren. `drained` is false when a session did not sync. Ren then destroys the machine. A brain that does not have this call answers 404.",
       }),
     ),
   )

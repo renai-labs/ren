@@ -78,7 +78,24 @@ const inScope = (host: Host) =>
     eq(Database.Schema.agent_session.organization_id, host.organizationId),
   )
 
+// oxlint-disable-next-line ren/no-comments -- Host authentication precedes this transaction. Hold the generation's row until the write commits, so retirement cannot race a late old-generation upload.
+const lockGeneration = Effect.fnUntraced(function* (transaction: Database.Transaction, host: Host) {
+  const current = yield* transaction
+    .select({ id: Database.Schema.brain.id })
+    .from(Database.Schema.brain)
+    .where(
+      and(
+        eq(Database.Schema.brain.id, host.brainId),
+        eq(Database.Schema.brain.organization_id, host.organizationId),
+        eq(Database.Schema.brain.generation, host.generation),
+      ),
+    )
+    .for("share")
+  if (current.length === 0) return yield* forbidden
+})
+
 const lock = Effect.fnUntraced(function* (transaction: Database.Transaction, host: Host, sessionId: Session.ID) {
+  yield* lockGeneration(transaction, host)
   const row = (yield* transaction
     .select()
     .from(Database.Schema.agent_session)
@@ -110,10 +127,10 @@ export const layer = Layer.effect(
             .select({
               id: Database.Schema.agent_session.id,
               syncSeq: Database.Schema.agent_session.sync_seq,
-              timeSuspended: OpenCodeStore.summary.timeSuspended,
+              timeSuspended: OpenCodeStore.state.timeSuspended,
             })
             .from(Database.Schema.agent_session)
-            .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+            .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
             .where(inScope(host))
             .orderBy(asc(Database.Schema.agent_session.created_at), asc(Database.Schema.agent_session.id)),
         )
@@ -125,6 +142,7 @@ export const layer = Layer.effect(
       ) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            yield* lockGeneration(transaction, host)
             const existing = yield* transaction
               .select({ id: Database.Schema.agent_session.id })
               .from(Database.Schema.agent_session)
@@ -267,14 +285,17 @@ export const layer = Layer.effect(
                     session,
                     inbox: queued.filter((row) => row.session_id === chat.id),
                   }
-                  if (session || !chat.startInput) return restored satisfies Sync.RestoredChat
+                  // oxlint-disable-next-line ren/no-comments -- A top chat gets its folder on the hand its brain applied, also when it had none before: it then gets a workspace there. A subagent's chat uses its parent's.
+                  const directory = chat.parentId ? Option.none<string>() : yield* directoryOf(chat.id)
+                  const located = Option.match(directory, {
+                    onNone: () => restored,
+                    onSome: (found) => ({ ...restored, directory: found }),
+                  })
+                  if (session || !chat.startInput) return located satisfies Sync.RestoredChat
                   const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(chat.startInput).pipe(
                     Effect.orDie,
                   )
-                  return Option.match(yield* directoryOf(chat.id), {
-                    onNone: () => ({ ...restored, start }) satisfies Sync.RestoredChat,
-                    onSome: (directory) => ({ ...restored, start, directory }) satisfies Sync.RestoredChat,
-                  })
+                  return { ...located, start } satisfies Sync.RestoredChat
                 }),
             )
           }),

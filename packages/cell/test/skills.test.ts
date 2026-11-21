@@ -1,14 +1,14 @@
 import { expect, setDefaultTimeout } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentAccess } from "@ren/brain/environment/access"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { HandAccess } from "@ren/brain/hand/access"
+import { HandConnections } from "@ren/brain/hand/connections"
 import { TestAccess, TestGitHub } from "@ren/brain/testing"
-import { TestEnvironment, testEffect } from "@ren/executor/testing"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { Skill } from "@ren/schema/skill"
@@ -27,11 +27,11 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(30_000)
 
-const environmentId = Environment.ID.create()
+const environmentId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-local-")))
 const stub = Shared.stub()
-const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
+const it = testEffect(TestHand.layer({ environmentId, workspace }))
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const catalog = (skills: Readonly<Record<string, Skill.Declaration>>): AppCatalog.Info => {
@@ -72,18 +72,18 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({
+    HandAccess.Service,
+    HandAccess.Service.of({
       release: () => Effect.void,
-      open: (sessionId) =>
+      open: (sessionId, options) =>
         Ref.update(opens, (count) => count + 1).pipe(
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, HandAccess.Service).open(sessionId, options)),
         ),
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(EnvironmentConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    EnvironmentConnections.Service,
+    yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    HandConnections.Service,
   )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
@@ -116,8 +116,8 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
     if (onEnvironment)
       yield* memory.set(
         sessionId,
-        yield* TestEnvironment.access({
-          url: yield* TestEnvironment.url,
+        yield* TestHand.access({
+          url: yield* TestHand.url,
           environmentId,
           brain: Brain.ofSession(sessionId),
           directory: folder(sessionId),
@@ -196,23 +196,29 @@ it.live("an installed text skill is listed and loads once by tool and by mention
   }),
 )
 
-it.live("a mentioned skill's files reach the environment at the first environment call after it loads", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* opened.begin()
-    const marker = crypto.randomUUID()
-    yield* opened.harness.configure({
-      apps: Option.some(catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) })),
-    })
-    const mentioned = sent(yield* session.mention("forms"))
-    const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(mentioned)?.[1] ?? ""
-    expect([base.startsWith(join(folder(session.sessionId), ".ren", "skills", "forms")), yield* opened.opens]).toEqual([
-      true,
-      0,
-    ])
-    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
-    expect(yield* opened.opens).toBe(1)
-  }),
+it.live(
+  "a mentioned skill's files reach the environment at the first environment call after it loads, and come back at the next call when deleted there",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* opened.begin()
+      const marker = crypto.randomUUID()
+      yield* opened.harness.configure({
+        apps: Option.some(
+          catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) }),
+        ),
+      })
+      const mentioned = sent(yield* session.mention("forms"))
+      const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(mentioned)?.[1] ?? ""
+      expect([
+        base.startsWith(join(folder(session.sessionId), ".ren", "skills", "forms")),
+        yield* opened.opens,
+      ]).toEqual([true, 0])
+      expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
+      expect(yield* opened.opens).toBe(1)
+      yield* Effect.promise(() => rm(base, { recursive: true, force: true }))
+      expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
+    }),
 )
 
 it.live(
@@ -279,21 +285,6 @@ it.live("parallel environment calls wait for a loaded skill's files", () =>
   }),
 )
 
-it.live("a loaded skill's files deleted on the environment come back at the next turn", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* opened.begin()
-    const marker = crypto.randomUUID()
-    yield* opened.harness.configure({
-      apps: Option.some(catalog({ forms: content("Run scripts/fill.sh", { "scripts/fill.sh": `echo ${marker}\n` }) })),
-    })
-    const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(sent(yield* session.mention("forms")))?.[1] ?? ""
-    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
-    yield* Effect.promise(() => rm(base, { recursive: true, force: true }))
-    expect(result(yield* session.shell(`sh ${base}/scripts/fill.sh`))).toContain(marker)
-  }),
-)
-
 it.live("a failed skill copy stays pending for the next environment call", () =>
   Effect.gen(function* () {
     const github = yield* TestGitHub.make()
@@ -310,6 +301,36 @@ it.live("a failed skill copy stays pending for the next environment call", () =>
     expect(result(yield* session.shell(`cat ${base}/reference.md`))).toContain("The archive answered 503")
     yield* github.fail(false)
     expect(result(yield* session.shell(`cat ${base}/reference.md`))).toContain("recovered")
+  }),
+)
+
+it.live("an app's setup runs on the environment before the chat's first environment tool", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* opened.begin()
+    const token = crypto.randomUUID()
+    const log = join(workspace, `${crypto.randomUUID()}.log`)
+    yield* opened.harness.configure({
+      apps: Option.some({
+        fingerprint: crypto.randomUUID(),
+        catalog: {
+          apps: [
+            {
+              appId: App.ID.create(),
+              appSlug: "tools",
+              name: "tools",
+              profiles: [],
+              environment: { packages: {}, buildCommands: [`echo ${token} >> ${log}`] },
+            },
+          ],
+          mcps: [],
+          skills: [],
+          unavailable: [],
+        },
+      }),
+    })
+    yield* Shared.appsSettled(opened.harness)
+    expect(result(yield* session.shell(`cat ${log}`))).toContain(token)
   }),
 )
 

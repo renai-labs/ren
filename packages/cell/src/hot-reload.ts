@@ -1,7 +1,8 @@
 export * as HotReload from "./hot-reload.js"
 
+import { HandConnections } from "@ren/brain/hand/connections"
 import { Session } from "@ren/schema/session"
-import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
+import { Clock, Context, DateTime, Duration, Effect, Equal, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AppStore } from "./app-store.js"
 import { ChannelStore } from "./channel-store.js"
@@ -49,12 +50,14 @@ export const layer = Layer.effect(
     const credentialEnv = yield* CredentialEnv.Service
     const catalog = yield* ModelCatalog.Service
     const keyFor = yield* ModelRefresh.Service
+    const connections = yield* Effect.serviceOption(HandConnections.Service)
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void, push: Effect.void, tick: Effect.void })
     const host = yield* HostToken.client(url).pipe(
       Effect.provide(RenAddress.http.pipe(Layer.provide(FetchHttpClient.layer))),
     )
     const pulls = yield* Semaphore.make(1)
+    const computeRevision = yield* Ref.make(Option.none<number>())
     const storage = yield* BrainStorage.Service
     const deletedSince = Effect.promise(() => storage.get(deletedKey)).pipe(
       Effect.map((text) =>
@@ -73,6 +76,11 @@ export const layer = Layer.effect(
           return yield* opened.value.sessions
         }),
       )
+      // oxlint-disable-next-line ren/no-comments -- A chat that the harness does not hold now is named at a later pull, when it does.
+      const touched = yield* Ref.modify(activity.touched, (all) => {
+        const named = new Set(sessions.flatMap((session) => (all.has(session.id) ? [session.id] : [])))
+        return [named, new Set([...all].filter((id) => !named.has(id)))]
+      })
       const reply = yield* host.pull
         .pull({
           payload: {
@@ -82,6 +90,8 @@ export const layer = Layer.effect(
               id: Session.ID.make(session.id),
               busy: session.active,
               progress: session.progress,
+              background: session.background,
+              ...(touched.has(session.id) && { touched: true }),
             })),
             roots: sessions.filter((session) => session.root).map((session) => Session.ID.make(session.id)),
           },
@@ -114,6 +124,11 @@ export const layer = Layer.effect(
               ),
             )
         : false
+      // oxlint-disable-next-line ren/no-comments -- Ren applied another hand at the brain's wake: each session asks for its hand again, so no call reaches the one it used before.
+      const revision = Option.fromNullishOr(reply.computeRevision)
+      const previous = yield* Ref.getAndSet(computeRevision, revision)
+      if (Option.isSome(previous) && Option.isSome(revision) && previous.value !== revision.value)
+        yield* Option.match(connections, { onNone: () => Effect.void, onSome: (found) => found.reset })
       yield* keys.save(reply.publicKeys)
       yield* credentialEnv.apply(reply.env)
       if (reply.providers) yield* catalog.register(reply.providers)
@@ -148,8 +163,7 @@ export const layer = Layer.effect(
           const next = Object.fromEntries(reply.deleted.map((id) => [id, since[id] ?? now]))
           const due = reply.deleted.filter((id) => now - (next[id] ?? now) >= Duration.toMillis(folderAfter))
           yield* Effect.forEach(due, (id) => opened.transcript.removeFolder(id), { discard: true })
-          if (JSON.stringify(next) !== JSON.stringify(since))
-            yield* Effect.promise(() => storage.put(deletedKey, JSON.stringify(next)))
+          if (!Equal.equals(next, since)) yield* Effect.promise(() => storage.put(deletedKey, JSON.stringify(next)))
         }),
       )
     }).pipe(

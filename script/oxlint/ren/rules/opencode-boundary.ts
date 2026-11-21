@@ -12,7 +12,7 @@ export const opencodeBoundary = defineRule({
     messages: {
       outside:
         "Only cell/src/harness/opencode, opencode-transcript and cell's tests use OpenCode. Core takes a harness's code through a registry such as TranscriptCodec; other packages use Ren's types and @ren/cell/testing.",
-      e2e: "End-to-end tests drive a cell from outside, with @opencode/client only.",
+      e2e: "End-to-end tests drive a brain from outside, with @opencode/client only.",
     },
   },
   create(context) {

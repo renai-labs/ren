@@ -31,6 +31,30 @@ describe("SessionRunner", () => {
     }),
   )
 
+  it.live(
+    "create keeps the hand that the space has then; a later change of the space leaves it (space settings rule 4)",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* SessionRunner.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const handOf = (placement: "colocated" | "none") =>
+          database.db
+            .update(Database.Schema.space)
+            .set({ hand_placement: placement })
+            .where(eq(Database.Schema.space.id, owner.spaceId))
+        yield* handOf("none")
+        const sessionId = Session.ID.create()
+        yield* sessions.create(owner, { sessionId, harness: "opencode", interactive: true })
+        yield* handOf("colocated")
+        const rows = yield* database.db
+          .select({ startInput: Database.Schema.agent_session.start_input })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, sessionId))
+        expect(rows.at(0)?.startInput).toMatchObject({ hand: { placement: "none" } })
+      }),
+  )
+
   it.live("create with a live primary agent of the space stores it on the session", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionRunner.Service

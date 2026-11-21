@@ -1,9 +1,9 @@
 export * as Probe from "./probe.js"
 
-import type { EnvironmentApi } from "@ren/environment-api/environment-api"
+import type { HandApi } from "@ren/hand-api/hand-api"
 import { Executor } from "@ren/executor/executor"
 import { Sandbox } from "@ren/executor/sandbox"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import { Clock, Duration, Effect, Layer, Ref, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -13,12 +13,10 @@ export interface Probe {
   readonly pings: Ref.Ref<number>
   readonly spawns: Ref.Ref<number>
   readonly outputsOpen: Ref.Ref<number>
-  readonly layer: NonNullable<Parameters<typeof TestEnvironment.layer>[0]["executor"]>
+  readonly layer: NonNullable<Parameters<typeof TestHand.layer>[0]["executor"]>
 }
 
-export const make = (
-  options: { readonly afterSpawn?: (result: EnvironmentApi.SpawnResult) => Effect.Effect<void> } = {},
-) =>
+export const make = (options: { readonly afterSpawn?: (result: HandApi.SpawnResult) => Effect.Effect<void> } = {}) =>
   Effect.gen(function* () {
     const heartbeats = yield* Ref.make(0)
     const pings = yield* Ref.make(0)
@@ -54,9 +52,9 @@ export const make = (
     return { heartbeats, pings, spawns, outputsOpen, layer } satisfies Probe
   })
 
-export const start = (options: Parameters<typeof TestEnvironment.layer>[0]) =>
-  Layer.build(Layer.fresh(TestEnvironment.layer(options))).pipe(
-    Effect.flatMap((context) => Effect.provide(TestEnvironment.url, context)),
+export const start = (options: Parameters<typeof TestHand.layer>[0]) =>
+  Layer.build(Layer.fresh(TestHand.layer(options))).pipe(
+    Effect.flatMap((context) => Effect.provide(TestHand.url, context)),
   )
 
 const letSocketsRun = Effect.promise(() => Bun.sleep(2))

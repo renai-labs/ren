@@ -1,0 +1,1 @@
+CREATE INDEX "usage_event_root_session_idx" ON "usage_event" ("root_session");

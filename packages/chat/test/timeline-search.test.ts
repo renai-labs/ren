@@ -60,3 +60,22 @@ describe("timeline search", () => {
     expect(TimelineSearch.step(0, 0, 1)).toBe(0)
   })
 })
+
+describe("timeline search of markdown", () => {
+  const found = (text: string, query: string) => TimelineSearch.matches([Fixture.user("msg_1", 1, text)], query).length
+
+  test("searches typeset math as its rendered text", () => {
+    expect(found("Inline $$x^2$$ and \\(y_{3}\\)", "x2")).toBe(1)
+    expect(found("Inline $$x^2$$ and \\(y_{3}\\)", "y3")).toBe(1)
+    expect(found("$$x^2$$", "^")).toBe(0)
+  })
+
+  test("skips a closed mermaid fence and keeps other code and an open fence", () => {
+    expect(found("```mermaid\nA[Gizmo] --> B\n```\nafter", "gizmo")).toBe(0)
+    expect(found("```mermaid\nA[Gizmo] --> B\n```\nafter", "after")).toBe(1)
+    expect(found("```ts\nconst gizmo = 1\n```", "gizmo")).toBe(1)
+    expect(found("```mermaid\nA[Gizmo] --> B", "gizmo")).toBe(1)
+    expect(found("costs $5 and $10", "$5")).toBe(1)
+    expect(found("`$$x^2$$`", "x^2")).toBe(1)
+  })
+})

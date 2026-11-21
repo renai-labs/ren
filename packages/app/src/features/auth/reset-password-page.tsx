@@ -1,10 +1,10 @@
+import { AuthError } from "@ren/client"
 import { useState } from "react"
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Button } from "@ren/ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { AuthLayout, BackButton, FormError, PasswordInput } from "../../components/auth-layout.js"
-import { describeAuthError } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const route = getRouteApi("/reset-password")
@@ -36,7 +36,7 @@ export function ResetPasswordPage() {
       return
     }
     if (result.error.code === "INVALID_TOKEN") setExpired(true)
-    else setError(describeAuthError(result.error).message)
+    else setError(AuthError.describe(result.error).message)
   }
   const requestNew = () => void navigate({ to: "/forgot-password" })
   const back = () => void navigate({ to: "/login" })

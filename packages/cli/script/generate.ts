@@ -21,7 +21,15 @@ interface Resource {
 }
 
 const resources: ReadonlyArray<Resource> = [
-  { group: "space", about: "Manage spaces", path: ["space"], name: "space", one: "a space", many: "spaces" },
+  {
+    group: "space",
+    about: "Manage spaces",
+    path: ["space"],
+    name: "space",
+    one: "a space",
+    many: "spaces",
+    descriptions: { shutdown: "Stop all work of a space and delete the files on its machines" },
+  },
   {
     group: "space-member",
     about: "Manage space members",
@@ -34,6 +42,21 @@ const resources: ReadonlyArray<Resource> = [
     descriptions: { create: "Add a member to a space", archive: "Remove a member from a space" },
   },
   {
+    group: "space-join-request",
+    about: "Manage requests to join a space",
+    path: ["space", "join-request"],
+    name: "request",
+    one: "a join request",
+    many: "requests to join a space",
+    descriptions: {
+      list: "List the requests to join a space, or your own requests without --space",
+      create: "Ask to join a shared space",
+      approve: "Add the person who asked to the space",
+      decline: "Decline a request to join a space",
+      cancel: "Cancel your request to join a space",
+    },
+  },
+  {
     group: "agent-membership",
     about: "Manage the agents in a space",
     path: ["space", "agent"],
@@ -44,21 +67,6 @@ const resources: ReadonlyArray<Resource> = [
     parent: "spaceId",
     verbs: { create: "add", archive: "remove" },
     descriptions: { create: "Add an agent to a space", archive: "Remove an agent from a space" },
-  },
-  {
-    group: "space-environment-template",
-    about: "Manage the environment templates of a space",
-    path: ["space", "environment"],
-    name: "environment",
-    one: "a space environment",
-    many: "a space’s environment templates",
-    alias: "environments",
-    parent: "spaceId",
-    verbs: { create: "add", archive: "remove" },
-    descriptions: {
-      create: "Add an environment template to a space",
-      archive: "Remove an environment template from a space",
-    },
   },
   {
     group: "space-settings",
@@ -192,6 +200,14 @@ const resources: ReadonlyArray<Resource> = [
     descriptions: { get: "Show one request with its headers and body" },
   },
   {
+    group: "artifact",
+    about: "Manage artifacts",
+    path: ["artifact"],
+    name: "artifact",
+    one: "an artifact",
+    many: "artifacts",
+  },
+  {
     group: "credential",
     about: "Manage credentials",
     path: ["credential"],
@@ -212,6 +228,10 @@ const resources: ReadonlyArray<Resource> = [
     name: "template",
     one: "an environment template",
     many: "environment templates",
+    descriptions: {
+      retryBuild: "Retry the saved configuration’s failed build",
+      affectedSpaces: "List the spaces that use a machine or still run on it",
+    },
   },
   {
     group: "oauth-app",
@@ -253,31 +273,51 @@ const groups: ReadonlyArray<EmitCli.Group> = [
   { path: ["org"], description: "Manage the organization" },
   { path: ["memory"], description: "Manage memory files" },
   { path: ["drive"], description: "Manage drive files" },
+  { path: ["files"], description: "List, read and delete drive and memory files" },
   { path: ["environment"], description: "Manage environments" },
   { path: ["oauth"], description: "Manage OAuth apps and sessions" },
+  { path: ["mcp"], description: "Inspect MCP servers" },
   { path: ["channel"], description: "Manage channels" },
   { path: ["channel", "provider"], description: "Manage channel providers" },
   { path: ["channel", "place"], description: "Manage channel places" },
   { path: ["environment", "provider"], description: "Manage environment providers" },
-  { path: ["inference"], description: "Manage inference providers" },
+  {
+    path: ["inference"],
+    description: "Manage inference providers and keys",
+    handwritten: { module: "../inference/commands.js", name: "subcommands" },
+  },
   { path: ["inference", "connection"], description: "Manage provider connections" },
+  { path: ["inference", "key"], description: "Manage inference keys" },
   { path: ["repository"], description: "Manage repositories", alias: "repositories" },
+  { path: ["space", "invite-link"], description: "Manage a space’s invite link" },
+  { path: ["organization"], description: "Manage the organization" },
+  { path: ["organization", "invite-link"], description: "Manage organization invite links" },
+  { path: ["billing"], description: "Manage the organization’s plan and billing" },
+  { path: ["billing", "plan"], description: "Manage plans" },
+  { path: ["billing", "invoice"], description: "Manage invoices" },
 ]
 
-const references: Readonly<
-  Record<string, { readonly operation: string; readonly title: string; readonly name?: string }>
-> = {
-  spaceId: { operation: "space.get", title: "Space" },
-  ownerSpaceId: { operation: "space.get", title: "Space", name: "space" },
-  defaultSpaceId: { operation: "space.get", title: "Default space", name: "default-space" },
-  agentId: { operation: "agent.get", title: "Agent" },
-  appId: { operation: "app.get", title: "App" },
-  taskId: { operation: "task.get", title: "Task" },
-  parentId: { operation: "task.get", title: "Parent task" },
-  scheduleId: { operation: "schedule.get", title: "Schedule" },
-  webhookId: { operation: "webhook.get", title: "Webhook" },
-  environmentTemplateId: { operation: "environment-template.get", title: "Environment template", name: "template" },
-  profileId: { operation: "app-profile.get", title: "App profile" },
+const gets: Readonly<Record<string, string>> = {
+  "Space.ID": "space.get",
+  "Agent.ID": "agent.get",
+  "App.ID": "app.get",
+  "Task.ID": "task.get",
+  "Schedule.ID": "schedule.get",
+  "Webhook.ID": "webhook.get",
+  "AppProfile.ID": "app-profile.get",
+}
+
+const references: Readonly<Record<string, { readonly title: string; readonly name?: string }>> = {
+  spaceId: { title: "Space" },
+  ownerSpaceId: { title: "Space", name: "space" },
+  defaultSpaceId: { title: "Default space", name: "default-space" },
+  agentId: { title: "Agent" },
+  appId: { title: "App" },
+  taskId: { title: "Task" },
+  parentId: { title: "Parent task" },
+  scheduleId: { title: "Schedule" },
+  webhookId: { title: "Webhook" },
+  profileId: { title: "App profile" },
 }
 
 const resolved = (name: string, operation: string) => ({
@@ -294,6 +334,18 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     ...resolved("space", "space.get"),
   },
   {
+    operation: "space-invite-link.get",
+    path: ["space", "invite-link", "get"],
+    description: "Show a space’s invite link, and make it the first time",
+    ...resolved("space", "space.get"),
+  },
+  {
+    operation: "space-invite-link.reset",
+    path: ["space", "invite-link", "reset"],
+    description: "Stop a space’s invite link and make a new one",
+    ...resolved("space", "space.get"),
+  },
+  {
     operation: "session.profiles",
     path: ["session", "profiles"],
     description: "List the profiles a chat reaches",
@@ -303,6 +355,12 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     operation: "session.links",
     path: ["session", "links"],
     description: "List a chat’s tasks, pull requests, issues and threads",
+    ...resolved("session", "session.get"),
+  },
+  {
+    operation: "session.usage",
+    path: ["session", "usage"],
+    description: "Show what a chat and its subagents cost",
     ...resolved("session", "session.get"),
   },
   {
@@ -316,6 +374,14 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     path: ["task", "pull-requests"],
     description: "List a task’s pull requests and their state",
     ...resolved("task", "task.get"),
+  },
+  {
+    operation: "app-tools.get",
+    path: ["app", "registry", "tools"],
+    description: "List the tools of a registry app’s MCPs",
+    arguments: ["idOrSlug"],
+    names: { idOrSlug: "app" },
+    descriptions: { idOrSlug: "Registry app slug or ID" },
   },
   {
     operation: "app-profile.delete",
@@ -334,11 +400,19 @@ const extra: ReadonlyArray<EmitCli.Command> = [
   { operation: "memory.write", path: ["memory", "write"], arguments: ["path"] },
   { operation: "memory.edit", path: ["memory", "edit"], arguments: ["path"] },
   { operation: "memory.delete", path: ["memory", "delete"], arguments: ["path"] },
-  { operation: "drive.list", path: ["drive", "list"] },
   { operation: "drive.download", path: ["drive", "download"], arguments: ["path"] },
-  { operation: "drive.delete", path: ["drive", "delete"], arguments: ["path"] },
+  { operation: "files.list", path: ["files", "list"] },
+  { operation: "files.read", path: ["files", "read"], arguments: ["path"] },
+  { operation: "files.delete", path: ["files", "delete"], arguments: ["path"] },
   { operation: "credential.connect", path: ["credential", "connect"], description: "Sign in to an MCP of a profile" },
+  {
+    operation: "mcp.inspect",
+    path: ["mcp", "inspect"],
+    description: "Read a remote MCP server’s auth and tools",
+    arguments: ["url"],
+  },
   { operation: "environmentProvider.list", path: ["environment", "provider", "list"] },
+  { operation: "environmentProvider.brains", path: ["environment", "provider", "brains"] },
   { operation: "channel-provider.list", path: ["channel", "provider", "list"] },
   { operation: "channel-place.list", path: ["channel", "place", "list"], names: { installId: "install" } },
   { operation: "channel-install.start", path: ["channel", "install", "start"] },
@@ -355,15 +429,56 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     names: { id: "connection" },
     descriptions: { id: "Connection ID" },
   },
+  { operation: "ren-inference.key.list", path: ["inference", "key", "list"] },
+  { operation: "ren-inference.key.usage", path: ["inference", "key", "usage"] },
+  { operation: "ren-inference.key.create", path: ["inference", "key", "create"] },
+  {
+    operation: "ren-inference.key.revoke",
+    path: ["inference", "key", "revoke"],
+    names: { id: "key" },
+    descriptions: { id: "Key ID" },
+  },
+  {
+    operation: "organization-invite-link.create",
+    path: ["organization", "invite-link", "create"],
+    description: "Make a link that brings people into the organization",
+  },
+  {
+    operation: "organization-invite-link.list",
+    path: ["organization", "invite-link", "list"],
+    description: "List the invite links that still work",
+  },
+  {
+    operation: "organization-invite-link.revoke",
+    path: ["organization", "invite-link", "revoke"],
+    description: "Stop an organization invite link",
+    names: { id: "link" },
+    descriptions: { id: "Invite link ID" },
+  },
   { operation: "repository.list", path: ["repository", "list"] },
+  { operation: "billing.get", path: ["billing", "get"] },
+  { operation: "billing.plan.list", path: ["billing", "plan", "list"] },
+  { operation: "billing.invoice.list", path: ["billing", "invoice", "list"] },
+  {
+    operation: "billing.invoice.url",
+    path: ["billing", "invoice", "url"],
+    names: { id: "invoice" },
+    descriptions: { id: "Invoice ID" },
+  },
+  { operation: "billing.subscribe", path: ["billing", "subscribe"] },
+  { operation: "billing.change-plan", path: ["billing", "change-plan"] },
+  { operation: "billing.cancel", path: ["billing", "cancel"] },
+  { operation: "billing.portal", path: ["billing", "portal"] },
+  { operation: "feedback.report", path: ["feedback"], arguments: ["message"] },
 ]
 
 const elsewhere = new Map([
-  ["health.get", "ren2 health"],
-  ["me.get", "ren2 whoami"],
-  ["infra.plan", "ren2 infra plan"],
-  ["infra.apply", "ren2 infra apply"],
-  ["infra.pull", "ren2 infra pull"],
+  ["health.get", "ren health"],
+  ["me.get", "ren whoami"],
+  ["me.requestDeletion", "A person deletes their account from Settings in the app, after a confirmation."],
+  ["infra.plan", "ren infra plan"],
+  ["infra.apply", "ren infra apply"],
+  ["infra.pull", "ren infra pull"],
   ["session.create", "A new session needs an ID the client makes; it comes with the chat commands."],
   ["chat.access", "Chat commands, which stream."],
   ["chat.messages", "Chat commands, which stream."],
@@ -371,7 +486,13 @@ const elsewhere = new Map([
   ["chat.prepare", "Chat commands, which stream."],
   ["chat.models", "Chat commands, which stream."],
   ["invitation.preview", "The sign-up page shows an invitation before its invitee signs in."],
+  ["organization-join-link.preview", "The join page shows an organization invite link to the person who opens it."],
+  ["organization-join-link.accept", "The join page adds the person to the organization, then opens its first space."],
+  ["join-link.preview", "The join page shows a space invite link to the person who opens it."],
+  ["join-link.accept", "The join page adds the person to the space, then opens it."],
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
+  ["ren-inference.key.secret", "ren inference setup"],
+  ["ren-inference.harness-plan", "ren inference setup"],
   ["drive.startUpload", "The upload posts its file to the bucket with the returned form; the app does it."],
   ["app.request-connect", "An agent asks the person to connect an app; the chat shows the card."],
 ])
@@ -408,12 +529,10 @@ const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; r
   const parent = own?.resource.parent
   const lookups = Object.fromEntries(
     fields.flatMap((field) => {
-      const reference = references[field.name]
-      if (reference !== undefined)
-        return [[field.name, { operation: reference.operation, input: "idOrSlug", output: "id" }]]
-      if (field.name === "id" && field.source === "params" && own?.self !== undefined)
-        return [[field.name, { operation: own.self, input: "idOrSlug", output: "id" }]]
-      return []
+      if (field.name === "id" && field.source === "params")
+        return own?.self === undefined ? [] : [[field.name, { operation: own.self, input: "idOrSlug", output: "id" }]]
+      const operation = field.identifier === undefined ? undefined : gets[field.identifier]
+      return operation === undefined ? [] : [[field.name, { operation, input: "idOrSlug", output: "id" }]]
     }),
   )
   const names = Object.fromEntries(

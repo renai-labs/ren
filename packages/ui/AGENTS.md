@@ -7,7 +7,7 @@ The design system: shadcn's components (style `base-nova` on Base UI, Tabler ico
 - `src/components/<name>.tsx` holds one component per file, exported as `@ren/ui/<name>`. There is no root barrel and there are no tiers.
 - `src/lib/` holds internal helpers (the code highlighter, the factory model). Only `src/lib/factory/model.ts` is exported, as `@ren/ui/factory-model`.
 - `src/hooks/` holds hooks the components share, imported as `#hooks/*`.
-- `src/styles/` holds `index.css` (the theme on shadcn's variables; it loads `fonts.css`, `tw-animate-css`, `shadcn/tailwind.css` and `factory.css`). The app imports it as `@ren/ui/styles`.
+- `src/styles/` holds `index.css` (the theme on shadcn's variables; it loads `fonts.css`, `font-choices.css` (the fonts a member can pick in Preferences), `tw-animate-css`, `shadcn/tailwind.css` and `factory.css`). The app imports it as `@ren/ui/styles`.
 - `components.json` configures the shadcn CLI. Its aliases point at the package's `#components/*` and `#hooks/*` imports.
 
 ## shadcn components
@@ -24,7 +24,7 @@ The design system: shadcn's components (style `base-nova` on Base UI, Tabler ico
 
 ## Software Factory
 
-- `factory-board` and `factory-analytics` render a space's factory from a `FactoryWorld` and `Analytics` the app builds from real tasks, agents and `/insights`.
+- `factory-analytics` renders a factory space's Overview from a `FactoryWorld` and `Analytics` the app builds from real tasks, agents and `/insights`.
 - `src/lib/factory/simulate.ts` builds a simulated factory. The app uses it only for the figures the API does not report yet (tickets, QA passes, runs and time per stage), as `VARIANTS.md` lists under "Factory overview". Replace each one when the API reports it.
 
 ## Testing

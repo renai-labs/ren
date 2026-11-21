@@ -5,6 +5,7 @@ import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
 import { Credential } from "./credential.js"
 import { Mcp } from "./mcp.js"
+import { Packages } from "./packages.js"
 import { Primitive } from "./primitive.js"
 import { Skill } from "./skill.js"
 
@@ -21,6 +22,11 @@ export const AppEntry = Schema.Struct({
   appId: App.ID,
   appSlug: Primitive.Slug,
   name: Primitive.Name,
+  includes: Schema.optionalKey(
+    Schema.Array(Primitive.Slug).annotate({
+      description: "For an app that includes other apps (a bundle): the slugs of the apps it depends on.",
+    }),
+  ),
   profiles: Schema.Array(
     Schema.Struct({
       slug: AppProfile.Slug,
@@ -31,7 +37,13 @@ export const AppEntry = Schema.Struct({
       }),
     }),
   ),
-}).annotate({ identifier: "AppCatalog.AppEntry" })
+  environment: Schema.optionalKey(
+    Packages.Setup.annotate({ description: "What the app installs on an environment, before its first tool there." }),
+  ),
+}).annotate({
+  identifier: "AppCatalog.AppEntry",
+  description: "In the order the environment sets them up: an app comes after the apps it depends on.",
+})
 
 export interface McpEntry extends Schema.Schema.Type<typeof McpEntry> {}
 export const McpEntry = Schema.Struct({
@@ -50,7 +62,7 @@ export const McpEntry = Schema.Struct({
   url: Schema.optionalKey(
     Schema.String.annotate({
       description:
-        "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`. For a managed MCP: `<integrations URL>/<server>/mcp`.",
+        "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`. For a managed MCP: `<integrations URL>/<server>`.",
     }),
   ),
 }).annotate({ identifier: "AppCatalog.McpEntry" })

@@ -17,7 +17,7 @@
     "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated src/react/generated src/chat/generated src/chat/effect/generated",
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --timeout 30000 --only-failures",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b",
+    "typecheck": "tsrs -b",
     "test:all": "bun ../../script/signoff/record.ts bun test --timeout 30000 --only-failures"
   },
   "dependencies": {
@@ -26,13 +26,17 @@
   },
   "peerDependencies": {
     "@tanstack/react-query": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "react": "catalog:"
   },
   "peerDependenciesMeta": {
     "effect": {
       "optional": true
     },
     "@tanstack/react-query": {
+      "optional": true
+    },
+    "react": {
       "optional": true
     }
   },
@@ -41,7 +45,9 @@
     "@ren/httpapi-codegen": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
-    "effect": "catalog:"
+    "@types/react": "catalog:",
+    "effect": "catalog:",
+    "react": "catalog:",
+    "tsrs": "catalog:"
   }
 }

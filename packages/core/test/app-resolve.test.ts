@@ -84,6 +84,36 @@ it.live("the catalog: server and label per profile, private first; a no-auth MCP
 )
 
 it.live(
+  "a bundle in a space lists every app it includes, each after the apps it depends on, with its environment",
+  () =>
+    Effect.gen(function* () {
+      const organizationId = yield* Seed.organization()
+      const ana = yield* ProfilesFixture.user(organizationId, "Ana", "admin")
+      const sales = yield* ProfilesFixture.space(ana, "Sales")
+      yield* ProfilesFixture.app(ana, ana.personal, "tools", {
+        environment: { packages: { apt: ["jq"] }, buildCommands: [] },
+      })
+      yield* ProfilesFixture.app(ana, ana.personal, "docs", {
+        mcps: { search: ProfilesFixture.remote("Search", { type: "none" }) },
+        dependsOn: ["tools"],
+        environment: { packages: {}, buildCommands: ["docs-index --init"] },
+      })
+      const suite = yield* ProfilesFixture.app(ana, ana.personal, "suite", {
+        skills: { guide: Seed.skill("Guide") },
+        dependsOn: ["docs"],
+        environment: { packages: { npm: ["typescript"] }, buildCommands: [] },
+      })
+      yield* ProfilesFixture.profile(ana, { appId: suite.id, slug: "all", kind: "shared", spaceIds: [sales] })
+      const found = yield* ProfilesFixture.catalog(organizationId, sales)
+      expect(found.catalog.apps.map((entry) => [entry.appSlug, entry.environment])).toEqual([
+        ["tools", { packages: { apt: ["jq"] }, buildCommands: [] }],
+        ["docs", { packages: {}, buildCommands: ["docs-index --init"] }],
+        ["suite", { packages: { npm: ["typescript"] }, buildCommands: [] }],
+      ])
+    }),
+)
+
+it.live(
   "each mutation of §11 changes the fingerprint of the spaces it reaches, and clears the egress cache where the table says so; members and other spaces never change a reach (private-spaces rule 17)",
   () =>
     Effect.gen(function* () {
@@ -161,7 +191,7 @@ it.live(
         ProfilesFixture.profile(root, { appId: app.id, slug: "globex", kind: "shared", spaceIds: [sales, extra] }),
       )
       const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
-      yield* measure("promote", profiles.promote(ana, mine.id, {}), personal)
+      yield* measure("promote", profiles.promote(ana, mine.id, { spaceId: sales }), personal)
       yield* measure(
         "connect",
         credentials.create(root, {
@@ -175,7 +205,7 @@ it.live(
       yield* measure("credential delete", credentials.remove(root, credentialId, {}))
       yield* ProfilesFixture.connect(organizationId, acme.id, "MCP_GMAIL__ACME", { holder: cy.userId })
       yield* measure("holder leaves the org", provisioning.archiveMemberships(organizationId, cy.userId))
-      yield* measure("delete", profiles.delete(root, mine.id), personal)
+      yield* measure("delete", profiles.delete(root, mine.id))
       const current = yield* apps.get(root, app.id)
       yield* measure(
         "app edit",
@@ -238,7 +268,7 @@ it.live("a registry publish that clashes leaves out the newer app's part and rep
     const profiles = yield* AppProfiles.Service
     const organizationId = yield* Seed.organization()
     const root = yield* ProfilesFixture.user(organizationId, "Root", "admin")
-    const kit = yield* ProfilesFixture.app(root, root.personal, "mail-kit", {
+    yield* ProfilesFixture.app(root, root.personal, "mail-kit", {
       mcps: { gmail: ProfilesFixture.remote("Gmail", { type: "none" }) },
     })
     const publication = (fields: Record<string, unknown>) =>
@@ -275,7 +305,6 @@ it.live("a registry publish that clashes leaves out the newer app's part and rep
       "mail-kit/gmail",
     ])
     expect((yield* profiles.get(root, profile.id)).skipped).toEqual([{ kind: "mcps", slug: "gmail", also: "mail-kit" }])
-    expect(kit.id).toBeDefined()
   }),
 )
 
@@ -358,9 +387,9 @@ it.live("a managed MCP is on until a credential connects its official MCP, and c
     yield* credentials.remove(root, credentialId, {})
     const removed = yield* servers
     expect([before.servers, connected.servers, removed.servers]).toEqual([
-      ["kernel-managed INTEGRATIONS https://mcp.ren.test/managed/kernel/mcp"],
+      ["kernel-managed INTEGRATIONS https://mcp.ren.test/kernel"],
       ["kernel__main MCP_KERNEL__MAIN"],
-      ["kernel-managed INTEGRATIONS https://mcp.ren.test/managed/kernel/mcp"],
+      ["kernel-managed INTEGRATIONS https://mcp.ren.test/kernel"],
     ])
     expect([connected.fingerprint === before.fingerprint, removed.fingerprint === connected.fingerprint]).toEqual([
       false,

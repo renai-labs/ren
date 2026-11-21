@@ -13,7 +13,7 @@
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "db": "bun --bun drizzle-kit",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b",
+    "typecheck": "tsrs -b",
     "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
   },
   "dependencies": {
@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
-    "drizzle-kit": "catalog:"
+    "drizzle-kit": "catalog:",
+    "tsrs": "catalog:"
   }
 }

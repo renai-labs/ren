@@ -62,6 +62,8 @@ export const make = async (vars: Readonly<Record<string, string>>, main = "src/w
     const run = await docker([
       "run",
       "--detach",
+      "--user",
+      `${process.getuid?.() ?? 0}:${process.getgid?.() ?? 0}`,
       "--label",
       "ren.test=cell",
       "--add-host",

@@ -2,7 +2,6 @@ export * as Output from "./output.js"
 
 import { Context, Effect, Layer, Schema, Terminal } from "effect"
 import { Flag, GlobalFlag } from "effect/cli"
-import { writeSync } from "node:fs"
 
 const formats = ["json", "pretty"] as const
 
@@ -54,26 +53,21 @@ export const layer = Layer.effect(
     const index = args.indexOf("--output")
     const chosen = index === -1 ? args.find((arg) => arg.startsWith("--output="))?.slice(9) : args.at(index + 1)
     const format = formats.find((each) => each === chosen) ?? (process.stdout.isTTY ? "pretty" : "json")
-    const write = (fd: number, text: string) =>
-      Effect.sync(() => {
-        writeSync(fd, `${text}\n`)
-      })
+    const write = (file: Bun.BunFile, text: string) => Effect.promise(() => Bun.write(file, `${text}\n`))
     return {
       format,
       interactive: process.stdin.isTTY,
       result: (schema, value, pretty) =>
         format === "pretty"
-          ? write(1, pretty)
+          ? write(Bun.stdout, pretty)
           : Schema.encodeEffect(Schema.toCodecJson(schema))(value).pipe(
-              Effect.flatMap((encoded) => write(1, JSON.stringify(encoded, null, 2))),
+              Effect.flatMap((encoded) => write(Bun.stdout, JSON.stringify(encoded, null, 2))),
             ),
-      print: (text) => write(1, text),
-      diagnostic: (text) => write(2, text),
-      progress: (text) => (format === "pretty" && process.stderr.isTTY ? write(2, text) : Effect.void),
+      print: (text) => write(Bun.stdout, text),
+      diagnostic: (text) => write(Bun.stderr, text),
+      progress: (text) => (format === "pretty" && process.stderr.isTTY ? write(Bun.stderr, text) : Effect.void),
       confirm: Effect.fn("Output.confirm")(function* (organization) {
-        yield* Effect.sync(() => {
-          writeSync(2, `\nType ${organization} to apply: `)
-        })
+        yield* Effect.promise(() => Bun.write(Bun.stderr, `\nType ${organization} to apply: `))
         return (yield* terminal.readLine) === organization
       }),
     }

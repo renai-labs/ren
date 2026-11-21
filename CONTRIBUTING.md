@@ -20,12 +20,12 @@ docker compose up -d
 | `bun run dev:app`                       | Start the web app (proxies the API to the server)  |
 | `bun run dev:site`                      | Start the docs site                                |
 | `bun run generate`                      | Regenerate `openapi.json` and the clients          |
-| `bun run format`                        | Format the repo with oxfmt                         |
+| `bun run format`                        | Format the repo with `bun fmt`                     |
 | `bun run check`                         | Typecheck and lint what changed since `main`       |
 | `bun run test`                          | Run the tests that cover what changed since `main` |
 | `bun run check:all`, `bun run test:all` | The same for everything                            |
 
-The web app and the API run on separate origins. The app is served under `/app/` (`http://localhost:5173/app/` in development, `https://useren.ai/app/` in production) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`, which includes `/app`.
+The web app and the API run on separate origins. The app is served at the root (`http://localhost:5173/` in development, `https://useren.ai/` in production, where it shares the domain with the site: see `infra/aws/README.md`) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`.
 
 ## Verification
 
@@ -46,6 +46,8 @@ Pull requests have no CI. `git push` signs off each commit it sends instead, fro
 
 - `bun run lint`, `bun run typecheck` and each package's `bun run test` and `bun run test:all` record their result for the exact files they ran on, in `.git/ren-signoff`. A run with extra arguments, such as one test file, is not recorded.
 - The pre-push hook reuses the runs that match the pushed commit's files, and runs lint and typecheck when they are missing. A lint or typecheck failure blocks the push. It never runs tests: the signoff shows the latest test run of each package affected since `main`, or that it did not run on these files. A `bun run test` run counts when it ran at least one test file; the status names the packages where only the changed files ran. When the working directory differs from the pushed commit, the hook runs `bun run check:all` as before and reuses only earlier matching runs. `bun run check` is the faster run for the inner loop and does not sign off.
+- Two mobile checks are part of those runs, so they are Turbo tasks that cache on the mobile package and the workspace packages it imports: `@ren/mobile#check:bundle` (`expo export` for iOS and Android, in `signoff/typecheck`) and `@ren/mobile#check:generated` (`src/theme.gen.css` matches `@ren/ui`, in `signoff/lint`). `bun run check` also runs them when the mobile package is affected, with `check:bundle:fast` in place of `check:bundle`: the same export without Hermes bytecode, which takes most of the export's time. It also runs `@ren/mobile#check:doctor` (`expo-doctor`) when the lockfile, the root or mobile `package.json` or the Expo config changed. `check:doctor` needs the network and Expo's servers, so it never blocks a push and is never cached.
+- `@ren/site#check:routes` is part of `signoff/lint` and `bun run check`: it fails when a top-level page of the site is missing from the CloudFront function's list in `infra/aws/app-function.js` (see `infra/aws/README.md`).
 - When GitHub accepts the push, the `reference-transaction` hook posts the `signoff/lint`, `signoff/typecheck` and `signoff/test` statuses on the commit with `gh`. Nothing blocks a merge, and a commit pushed without the hooks has no statuses.
 - `gh` must be logged in with access to commit statuses, and the push must go to a named remote such as `origin`.
 
@@ -57,4 +59,4 @@ Follow the [style guide](./AGENTS.md) and any `AGENTS.md` next to the code you c
 - Fill in the PR template: what changed, why, and how you verified it.
 - Keep PRs focused. Do not include unrelated changes.
 - Include screenshots or recordings for UI changes.
-- The `signoff/*` statuses show what `git push` checked. Generated-file checks and end-to-end tests are not part of them.
+- The `signoff/*` statuses show what `git push` checked. Generated-file checks (except the mobile theme) and end-to-end tests are not part of them.

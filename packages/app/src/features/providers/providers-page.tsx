@@ -3,21 +3,20 @@ import { EmptyState } from "../../components/empty-state.js"
 import { useState } from "react"
 import type { RenInferenceConnection } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconExternalLink, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react"
+import { Link } from "@tanstack/react-router"
+import { IconKey, IconPlus, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
-import { Button } from "@ren/ui/button"
-import { Link } from "@ren/ui/link"
+import { Button, buttonVariants } from "@ren/ui/button"
 import { cn } from "cn"
 import { Card } from "@ren/ui/card"
-import { Progress } from "@ren/ui/progress"
-import { formatCountdown, formatDateTime } from "@ren/ui/time"
 import { Tabs } from "@ren/ui/tabs"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
+import { ChatGptGuide } from "./chatgpt-guide.js"
 import { EditableText } from "../../components/editable-text.js"
 import { Page, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
-import { useNow } from "../../lib/use-now.js"
+import { SubscriptionMeters } from "../../components/subscription-meters.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -131,14 +130,20 @@ export function ProvidersPage() {
       title="Providers"
       description="Subscriptions your agents run on."
       aside={
-        isAdmin && !unavailable ? (
-          <Button onClick={() => connect(tab)}>
-            <IconPlus />
-            Connect {product}
-          </Button>
-        ) : undefined
+        <>
+          <Link to="/settings/providers/keys" className={buttonVariants({ variant: "outline" })}>
+            <IconKey />
+            Inference keys
+          </Link>
+          {isAdmin && !unavailable ? (
+            <Button onClick={() => connect(tab)}>
+              <IconPlus />
+              Connect {product}
+            </Button>
+          ) : null}
+        </>
       }
-      leading={
+      tabs={
         <Tabs value={tab} onValueChange={setTab}>
           <PageTabsList aria-label="Providers">
             {providers.map((provider) => (
@@ -200,27 +205,6 @@ export function ProvidersPage() {
   )
 }
 
-function ChatGptGuide() {
-  return (
-    <p className="flex items-start gap-2 text-sm text-muted-foreground">
-      <IconInfoCircle className="mt-0.5 size-4 shrink-0" />
-      <span>
-        Before you connect, turn on <span className="text-foreground">Enable device code authorization for Codex</span>{" "}
-        in your{" "}
-        <Link
-          href="https://chatgpt.com/#settings/Security"
-          external
-          className="inline-flex items-center gap-1 font-normal text-foreground underline underline-offset-2"
-        >
-          ChatGPT security settings
-          <IconExternalLink className="size-3" />
-        </Link>
-        .
-      </span>
-    </p>
-  )
-}
-
 const enterDelays = [
   "delay-0",
   "delay-30",
@@ -241,7 +225,6 @@ function SubscriptionCard(props: {
   onRemove: () => void
 }) {
   const connection = props.connection
-  const now = useNow()
   return (
     <Card
       className={cn(
@@ -287,28 +270,7 @@ function SubscriptionCard(props: {
           {connection.canReconnect ? "Sign in again to keep using it." : "Usage appears after the first request."}
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {connection.meters.map((meter) => (
-            <li key={meter.key} className="flex flex-col gap-2">
-              <div className="flex items-baseline justify-between gap-3 text-xs">
-                <span className="truncate">{meter.title}</span>
-                <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-                  <span className="font-medium">{meter.percent === null ? "—" : `${meter.percent}%`}</span>
-                  {meter.resetsAt && Date.parse(meter.resetsAt) > now ? (
-                    <span className="text-muted-foreground" title={`Resets ${formatDateTime(meter.resetsAt)}`}>
-                      {formatCountdown(meter.resetsAt, now)}
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-              <Progress
-                value={meter.percent ?? 0}
-                aria-label={meter.title}
-                className="**:data-[slot=progress-indicator]:bg-chart-1 **:data-[slot=progress-track]:bg-secondary"
-              />
-            </li>
-          ))}
-        </ul>
+        <SubscriptionMeters meters={connection.meters} />
       )}
     </Card>
   )

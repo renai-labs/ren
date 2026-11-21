@@ -3,7 +3,7 @@ export * as ProfileItems from "./profile-items.js"
 import type { App } from "@ren/schema/app"
 import type { AppProfile } from "@ren/schema/app-profile"
 import type { Credential } from "@ren/schema/credential"
-import type { Mcp } from "@ren/schema/mcp"
+import { Mcp } from "@ren/schema/mcp"
 import { ProfileLabel } from "./profile-label.js"
 
 export interface Declared {
@@ -30,7 +30,7 @@ export interface Row {
 const hash = (fields: ReadonlyArray<string | null>) =>
   new Bun.CryptoHasher("sha256").update(JSON.stringify(fields)).digest("hex")
 
-// oxlint-disable-next-line ren/no-comments -- §12 rule 3 (P34): the parts of a declaration that a token is bound to. A header rename or a new scope is not among them.
+// oxlint-disable-next-line ren/no-comments -- §12 rule 3 (P34): the parts of a declaration that a token is bound to. A header rename or a new scope is not among them; the auth type is, because a pasted key's row keeps where the egress puts it (header or query).
 export const madeFor = (declaration: Mcp.Declaration | undefined) => {
   if (!declaration) return hash(["env"])
   const auth = declaration.auth
@@ -54,13 +54,6 @@ const kindOf = (declaration: Mcp.Declaration): Credential.RequirementKind | unde
 
 const scopesOf = (declaration: Mcp.Declaration) =>
   declaration.auth.type === "oauth" ? (declaration.auth.scopes ?? []) : []
-
-export const fieldsOf = (declaration: Mcp.Declaration) => {
-  const auth = declaration.auth
-  if (auth.type === "header") return [auth.credential]
-  if (auth.type === "basic") return [auth.username, auth.password]
-  return []
-}
 
 // oxlint-disable-next-line ren/no-comments -- §9 rule 4: one item per MCP whose auth is not none, sorted by slug, then one per env key of the app, its skills and its local MCPs, merged by name. A key is optional only when every declaration of it is.
 export const declared = (definition: Pick<App.Definition, "mcps" | "skills" | "requiredCredentials">, slug: string) => {
@@ -116,7 +109,8 @@ export const statusOf = (
   if (!row) return "missing"
   const declaration = item.mcp
   if (!declaration) return row.status === "reconnect" ? "reconnect" : "ok"
-  if (row.type === "fields" && fieldsOf(declaration).some((field) => !row.field_names.includes(field))) return "missing"
+  if (row.type === "fields" && Mcp.credentialsOf(declaration.auth).some((field) => !row.field_names.includes(field)))
+    return "missing"
   const isStale =
     row.status === "reconnect" ||
     row.made_for !== item.madeFor ||

@@ -1,3 +1,4 @@
+import { RelativeTime } from "@ren/util/relative-time"
 import type { ScheduleInfo } from "@ren/client"
 import {
   IconActivity,
@@ -16,13 +17,14 @@ import { ConfirmDialog } from "./confirm-dialog.js"
 import { EmptyState } from "./empty-state.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { FilterMenu, spaceOptions, type FilterProperty } from "./filter-menu.js"
+import { LoadMore } from "./load-more.js"
 import { TableCard, TableSample, useShapeId } from "./page.js"
 import { Loading } from "@ren/ui/loading"
 import { RowMenu } from "./row-menu.js"
 import { ScheduleSheet } from "./schedule-sheet.js"
 import type { Schedules } from "../lib/use-schedules.js"
-import { formatRelative } from "@ren/ui/time"
-import { describe, statusOf } from "../lib/schedules.js"
+import { Link } from "@tanstack/react-router"
+import { describe, runStatuses, statusOf } from "../lib/schedules.js"
 import { cn } from "cn"
 
 export function ScheduleToolbar(props: { list: Schedules }) {
@@ -64,7 +66,12 @@ export function ScheduleToolbar(props: { list: Schedules }) {
 }
 
 const nextRun = (schedule: ScheduleInfo, now: number) =>
-  schedule.status === "active" && schedule.nextRunAt ? formatRelative(schedule.nextRunAt, now) : "—"
+  schedule.status === "active" && schedule.nextRunAt ? RelativeTime.format(schedule.nextRunAt, now) : "—"
+
+const lastRun = (schedule: ScheduleInfo, now: number) =>
+  schedule.lastRun
+    ? `${RelativeTime.format(schedule.lastRun.scheduledAt, now)} · ${runStatuses[schedule.lastRun.status].label.toLowerCase()}`
+    : "—"
 
 function stateLabel(schedule: ScheduleInfo, now: number) {
   if (schedule.status === "active") return "Running on schedule"
@@ -83,21 +90,22 @@ function ScheduleRow(props: { list: Schedules; schedule: ScheduleInfo }) {
         <span className="flex min-w-0 items-start gap-2.5">
           <IconClock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <span className="flex min-w-0 flex-col">
-            <Button
-              variant="ghost"
-              onClick={() => list.edit(schedule)}
+            <Link
+              to="/spaces/$spaceId/automations/schedules/$scheduleId"
+              params={{ spaceId: schedule.spaceId, scheduleId: schedule.id }}
               className={cn(
-                "block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none",
+                "truncate outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50",
                 !active && "text-muted-foreground",
               )}
             >
               {schedule.name || schedule.message}
-            </Button>
+            </Link>
             {space ? <span className="truncate text-xs text-muted-foreground">{space}</span> : null}
           </span>
         </span>
       </TableCell>
       <TableCell className="text-muted-foreground">{describe(schedule.when, list.zone)}</TableCell>
+      <TableCell className="text-muted-foreground tabular-nums">{lastRun(schedule, list.now)}</TableCell>
       <TableCell className="text-muted-foreground tabular-nums">{nextRun(schedule, list.now)}</TableCell>
       <TableCell>
         <span className="relative flex items-center gap-2">
@@ -134,7 +142,7 @@ export function ScheduleGrid(props: { list: Schedules }) {
   return (
     <>
       <Loading id={shapeId} loading={!schedules} label="Loading schedules">
-        {schedules ? null : <TableSample columns={["Name", "Frequency", "Next run", "Status", ""]} />}
+        {schedules ? null : <TableSample columns={["Name", "Frequency", "Last run", "Next run", "Status", ""]} />}
         {empty && list.filtered ? (
           <EmptyState title="No matching schedules">Try a different search or filter.</EmptyState>
         ) : null}
@@ -148,6 +156,7 @@ export function ScheduleGrid(props: { list: Schedules }) {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Name</TableHead>
                   <TableHead>Frequency</TableHead>
+                  <TableHead>Last run</TableHead>
                   <TableHead>Next run</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-10" />
@@ -162,6 +171,7 @@ export function ScheduleGrid(props: { list: Schedules }) {
           </TableCard>
         ) : null}
       </Loading>
+      <LoadMore more={list.more} loading={list.loadingMore} onMore={list.loadMore} />
       <ScheduleSheet
         open={list.sheet.open}
         version={list.sheet.key}

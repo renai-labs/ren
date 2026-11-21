@@ -1,3 +1,4 @@
+import { FileSystem } from "@ren/schema/file-system"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
@@ -47,6 +48,10 @@ export const PromptInput = Schema.Struct({
   files: Schema.optional(Session.DriveFiles).annotate({
     description:
       "Files that the message attaches, uploaded to the space’s drive with `drive.startUpload`. A file that is not in the drive is refused.",
+  }),
+  presentation: Schema.optional(SessionMessage.Presentation).annotate({
+    description:
+      "How clients show the message, with the quotes it adds. The brain keeps it with the message. `text` is what the model gets.",
   }),
   ...mentions,
 }).annotate({ identifier: "Chat.PromptInput" })
@@ -104,7 +109,7 @@ export const InterruptQuery = Schema.Struct({
 
 export const FileSearchQuery = Schema.Struct({
   query: Schema.String,
-  type: Schema.optional(SessionCatalog.FileType),
+  type: Schema.optional(FileSystem.EntryType),
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
 }).annotate({ identifier: "Chat.FileSearchQuery" })
 
@@ -122,7 +127,17 @@ export const FileListQuery = Schema.Struct({
 
 export const FileReadQuery = Schema.Struct({ path: FolderPath }).annotate({ identifier: "Chat.FileReadQuery" })
 
+const RepositoryPath = FolderPath.annotate({
+  description:
+    "A repository’s folder from `vcs.projects`, relative to the session’s folder. Defaults to the session’s folder.",
+})
+
+export const VcsQuery = Schema.Struct({ path: Schema.optional(RepositoryPath) }).annotate({
+  identifier: "Chat.VcsQuery",
+})
+
 export const VcsDiffQuery = Schema.Struct({
+  path: Schema.optional(RepositoryPath),
   mode: Schema.optional(SessionVcs.Mode).annotate({
     description:
       "`working` compares HEAD with the working copy, `branch` the branch’s base with the working copy, and `committed` the base with HEAD. Defaults to `working`.",
@@ -617,7 +632,7 @@ export const FileGroup = HttpApiGroup.make("file")
     HttpApiEndpoint.get("file.search", "/chat/session/:sessionID/file", {
       params,
       query: FileSearchQuery,
-      success: Schema.Array(SessionCatalog.File),
+      success: Schema.Array(FileSystem.Entry),
       error: NotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
@@ -632,14 +647,14 @@ export const FileGroup = HttpApiGroup.make("file")
     HttpApiEndpoint.get("file.list", "/chat/session/:sessionID/file/list", {
       params,
       query: FileListQuery,
-      success: Schema.Array(SessionCatalog.File),
+      success: FileSystem.Page,
       error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "file.list",
         summary: "List a folder",
         description:
-          "Return the files and folders directly in a folder of the session’s environment, folders first. Paths are relative to the session’s folder; a folder ends with `/`. A folder that is missing is not found, and a session without an environment refuses it.",
+          "Return the files and folders directly in a folder of the session’s environment, folders first, as one page with no actions. Paths are relative to the session’s folder; a folder ends with `/`. A folder that is missing is not found, and a session without an environment refuses it.",
       }),
     ),
   )
@@ -647,7 +662,7 @@ export const FileGroup = HttpApiGroup.make("file")
     HttpApiEndpoint.get("file.read", "/chat/session/:sessionID/file/read", {
       params,
       query: FileReadQuery,
-      success: SessionCatalog.FileContent,
+      success: FileSystem.Content,
       error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
       OpenApi.annotations({
@@ -665,6 +680,7 @@ export const VcsGroup = HttpApiGroup.make("vcs")
   .add(
     HttpApiEndpoint.get("vcs.get", "/chat/session/:sessionID/vcs", {
       params,
+      query: VcsQuery,
       success: SessionVcs.Info,
       error: [NotFoundError, InvalidRequestError],
     }).annotateMerge(
@@ -672,7 +688,21 @@ export const VcsGroup = HttpApiGroup.make("vcs")
         identifier: "vcs.get",
         summary: "Read version control",
         description:
-          "Return the version control of the session’s folder and its current and default branch. Without `provider`, the folder is not a repository and `vcs.diff` has nothing to show. A session without an environment refuses it.",
+          "Return the version control of the session’s folder, or of the repository at `path`, and its current and default branch. Without `provider`, the folder is not a repository and `vcs.diff` has nothing to show. A session without an environment refuses it.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("vcs.projects", "/chat/session/:sessionID/vcs/projects", {
+      params,
+      success: Schema.Array(SessionVcs.Project),
+      error: [NotFoundError, InvalidRequestError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "vcs.projects",
+        summary: "List repositories",
+        description:
+          "Return the git repositories in the session’s folder or up to two folders below it, such as one the session cloned, with their branch. Pass one’s `path` to `vcs.get` and `vcs.diff`. A session without an environment refuses it.",
       }),
     ),
   )
@@ -687,30 +717,12 @@ export const VcsGroup = HttpApiGroup.make("vcs")
         identifier: "vcs.diff",
         summary: "Diff the session’s folder",
         description:
-          "Return a patch for each file that changed in the session’s repository, including files nobody has added yet. A folder that is not a repository returns no files. A comparison the repository cannot make, such as `committed` without a base branch, is refused, as is a session without an environment.",
+          "Return a patch for each file that changed in the session’s repository, or in the repository at `path`, including files nobody has added yet. Paths are relative to that repository. A folder that is not a repository returns no files. A comparison the repository cannot make, such as `committed` without a base branch, is refused, as is a session without an environment.",
       }),
     ),
   )
   .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "vcs" }))
-
-export const WebSearchGroup = HttpApiGroup.make("websearch")
-  .add(
-    HttpApiEndpoint.get("websearch.providers", "/chat/session/:sessionID/websearch/provider", {
-      params,
-      success: Schema.Array(SessionCatalog.WebSearchProvider),
-      error: NotFoundError,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "websearch.providers",
-        summary: "List web search providers",
-        description:
-          "Return the web search providers where the session works, for a question of kind `websearch.provider` that lets the member pick one.",
-      }),
-    ),
-  )
-  .middleware(ChatAccess)
-  .annotateMerge(OpenApi.annotations({ title: "websearch" }))
 
 export const ChatApi = HttpApi.make("chat")
   .add(EventGroup)
@@ -722,7 +734,6 @@ export const ChatApi = HttpApi.make("chat")
   .add(CommandGroup)
   .add(FileGroup)
   .add(VcsGroup)
-  .add(WebSearchGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Chat API",

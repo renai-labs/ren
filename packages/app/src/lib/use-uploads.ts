@@ -10,8 +10,6 @@ import { errorMessage } from "./errors.js"
 import { formatBytes } from "./format.js"
 import { RouterContext } from "./router-context.js"
 
-export const maxFileBytes = 100_000_000
-
 export interface Upload {
   readonly id: string
   readonly file: File
@@ -68,16 +66,16 @@ export function useUploads(target: Target, draft: Composer.Draft) {
         toast.error("Too many files", { description: `A message can attach ${Session.maxDriveFiles} files.` })
         return
       }
-      const large = incoming.filter((file) => file.size > maxFileBytes)
+      const large = incoming.filter((file) => file.size > Drive.maxUploadBytes)
       if (large.length > 0)
         toast.error(large.length === 1 ? `${large.at(0)?.name ?? "A file"} is too large` : "Some files are too large", {
-          description: `A file can be at most ${formatBytes(maxFileBytes)}.`,
+          description: `A file can be at most ${formatBytes(Drive.maxUploadBytes)}.`,
         })
       const messageId = draft.messageId ?? SessionMessage.ID.create()
       if (!draft.messageId) target.update((current) => Composer.withMessageID(current, messageId))
       const taken = new Set([...Composer.files(draft), ...uploads].map((file) => file.name))
       const added = incoming
-        .filter((file) => file.size <= maxFileBytes)
+        .filter((file) => file.size <= Drive.maxUploadBytes)
         .map((file): Upload => {
           const name = FileName.free(file.name || "Pasted file", taken)
           taken.add(name)
@@ -105,7 +103,8 @@ export function useUploads(target: Target, draft: Composer.Draft) {
     },
     remove: (path: string) => {
       target.update((current) => Composer.withoutFile(current, path))
-      if (target.spaceId) void client.drive.delete({ spaceId: target.spaceId, path }).catch(() => undefined)
+      if (target.spaceId)
+        void client.files.delete({ source: "drive", spaceId: target.spaceId, path }).catch(() => undefined)
     },
   }
 }

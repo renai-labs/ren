@@ -6,7 +6,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import type { TaskLink } from "@ren/schema/task-link"
-import { and, asc, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { DateTime, Effect, Option } from "effect"
 import { Access } from "../access.js"
@@ -30,7 +30,7 @@ export const actions = {
 }
 
 export const isReady = (task: typeof Database.Schema.task) => sql<boolean>`(
-  ${task.status} in ('todo', 'in_progress')
+  ${task.status} in ('backlog', 'todo', 'in_progress')
   and ${task.agent_id} is null
   and ${task.human_review} = false
   and (
@@ -189,14 +189,17 @@ export const byParent = (parentId: Task.ListInput["parentId"]) => {
   return { where: undefined, order: desc }
 }
 
+export const search = (text: string | undefined) =>
+  text ? ilike(Database.Schema.task.title, Database.contains(text)) : undefined
+
 export const latestSessions = (transaction: Database.Transaction, taskIds: ReadonlyArray<Task.ID>) =>
   transaction
     .selectDistinctOn([Database.Schema.task_session.task_id], {
       taskId: Database.Schema.task_session.task_id,
       id: Database.Schema.task_session.session_id,
-      synced: Database.Schema.opencode_session.session_id,
-      suspended: Database.Schema.opencode_session.time_suspended,
-      outcome: Database.Schema.opencode_session.idle_outcome,
+      synced: OpenCodeStore.state.synced,
+      suspended: OpenCodeStore.state.timeSuspended,
+      outcome: OpenCodeStore.state.outcome,
     })
     .from(Database.Schema.task_session)
     .innerJoin(Database.Schema.task, eq(Database.Schema.task.id, Database.Schema.task_session.task_id))
@@ -204,7 +207,7 @@ export const latestSessions = (transaction: Database.Transaction, taskIds: Reado
       Database.Schema.agent_session,
       eq(Database.Schema.agent_session.id, Database.Schema.task_session.session_id),
     )
-    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .leftJoin(OpenCodeStore.chat, OpenCodeStore.join)
     .where(
       and(
         inArray(Database.Schema.task_session.task_id, taskIds),

@@ -12,6 +12,14 @@ import { Space } from "./space.js"
 export const ID = Identifier.make("sch", "Schedule.ID")
 export type ID = typeof ID.Type
 
+export const RunID = Identifier.make("srn", "ScheduleRun.ID")
+export type RunID = typeof RunID.Type
+
+export const RunStatus = Schema.Literals(["pending", "started", "skipped", "failed"]).annotate({
+  identifier: "ScheduleRun.Status",
+})
+export type RunStatus = typeof RunStatus.Type
+
 export const maximumMessageLength = 20_000
 
 export const Cron = Schema.String.check(
@@ -103,6 +111,13 @@ export const minimumInterval = Duration.minutes(5)
 export const failuresToPause = 5
 export type PauseReason = typeof PauseReason.Type
 
+export interface LastRun extends Schema.Schema.Type<typeof LastRun> {}
+export const LastRun = Schema.Struct({
+  id: RunID,
+  scheduledAt: Schema.DateTimeUtc,
+  status: RunStatus,
+}).annotate({ identifier: "Schedule.LastRun" })
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -121,6 +136,7 @@ export const Info = Schema.Struct({
   status: Status,
   pausedReason: Schema.NullOr(PauseReason),
   nextRunAt: Schema.NullOr(Schema.DateTimeUtc),
+  lastRun: Schema.NullOr(LastRun).annotate({ description: "The latest run in the last 30 days." }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),

@@ -1,6 +1,11 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
+import { BrainProvider } from "@ren/core/brain-provider"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
+import { MachineNetwork } from "@ren/core/machine-network"
+import { Bundles } from "@ren/core/bundles"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
+import { SpaceShutdown } from "@ren/core/space-shutdown"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { GitHubApp } from "@ren/core/github-app"
@@ -14,12 +19,14 @@ import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { Drives } from "@ren/core/drives"
 import { Intake } from "@ren/core/intake"
+import { AccountDeletion } from "@ren/core/account-deletion"
 import { Billing } from "@ren/core/billing"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
 import { DurableRunner } from "@ren/core/durable-runner"
-import { EnvironmentProvider } from "@ren/core/environment-provider"
-import { Docker } from "@ren/core/environment-provider/docker"
-import { Environments } from "@ren/core/environments"
+import { HandProvider } from "@ren/core/hand-provider"
+import { Docker } from "@ren/core/machine-provider/docker"
+import { Hands } from "@ren/core/hands"
+import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
@@ -34,6 +41,8 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
+import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
+import { Digest } from "effect/crypto"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { PersistedQueue } from "effect/persistence"
 import { Routes } from "../../src/routes.js"
@@ -107,9 +116,16 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
   )
 
 export const services = Layer.mergeAll(
-  Brains.layer.pipe(
+  Layer.merge(Brains.layer, SpaceShutdown.layer).pipe(
     Layer.provideMerge(BrainHost.layerCell),
-    Layer.provideMerge(DurableRunner.layerMemory),
+    Layer.provideMerge(
+      ClusterWorkflowEngine.layer.pipe(
+        Layer.provideMerge(
+          SingleRunner.layer({ shardingConfig: { shardsPerGroup: 1, entityTerminationTimeout: "100 millis" } }),
+        ),
+        Layer.provide(Digest.layerWebCrypto),
+      ),
+    ),
     Layer.provide(CredentialEnv.layerNone),
   ),
   ChannelRoute.layer.pipe(
@@ -122,18 +138,24 @@ export const services = Layer.mergeAll(
   ChannelNotice.layerLog,
   TaskCard.layerNone,
   SlackTaskCard.layerNone,
-  Mailer.layer,
+  AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
   RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
-  BillingEnrollment.layer.pipe(Layer.provide([Billing.layerNone, DurableRunner.layerMemory])),
+  BillingEnrollment.layer.pipe(Layer.provide(DurableRunner.layerMemory), Layer.provideMerge(Billing.layerNone)),
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
-  Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
-  Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
-  Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
+  Layer.provideMerge([BrainClient.layer, Settings.layer]),
+  Layer.provideMerge([
+    Models.layerNone,
+    Hands.layer.pipe(
+      Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
+    ),
+    BrainProvider.layer([]),
+  ]),
+  Layer.provideMerge(RenInference.layerConfig),
   Layer.provideMerge(SlackApp.layer),
   Layer.provideMerge(
     Layer.mergeAll(
@@ -147,7 +169,9 @@ export const services = Layer.mergeAll(
   Layer.provideMerge(Drives.layer),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
-  Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provideMerge(HandProvider.layer([Docker.provider])),
+  Layer.provideMerge(Signer.layerLocal),
+  Layer.provideMerge(ArtifactWorkerd.layer.pipe(Layer.provide(FetchHttpClient.layer))),
   Layer.provide(BunServices.layer),
 )
 

@@ -1,9 +1,10 @@
 import { AppCatalog } from "@ren/schema/app-catalog"
+import { Artifact } from "@ren/schema/artifact"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Channel } from "@ren/schema/channel"
 import { Drive } from "@ren/schema/drive"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Memory } from "@ren/schema/memory"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
@@ -14,7 +15,12 @@ import { Context, Effect, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
 import {
+  ArtifactConflictError,
+  ArtifactFailedError,
+  ArtifactInvalidError,
+  ArtifactNotFoundError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -50,6 +56,14 @@ export const PullSession = Schema.Struct({
   busy: Schema.Boolean,
   progress: Schema.String.annotate({
     description: "An opaque counter from the harness. It changes when a turn makes progress.",
+  }),
+  background: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A process that the chat started still runs, such as a background shell. Ren keeps the machine awake for it. An older brain leaves it out.",
+  }),
+  touched: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "A person asked for the chat’s files or diff since the last pull. Ren keeps the chat’s place on its hand, as for a turn. An older brain leaves it out.",
   }),
 }).annotate({ identifier: "Host.PullSession" })
 
@@ -101,6 +115,14 @@ export const PullChat = Schema.Struct({
   drives: Schema.optionalKey(Drive.Availability).annotate({
     description: "Omitted for a chat without an environment, and by a Ren without drives.",
   }),
+  hasHand: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "False when the brain’s applied hand gives the chat no file and shell tools. It changes only at the brain’s start or wake. Omitted by an older Ren: true.",
+  }),
+  directory: Schema.optionalKey(Hand.Directory).annotate({
+    description:
+      "The chat’s folder on its applied hand. A chat with tools and no workspace gets one there. Omitted when the chat has no tools, and by an older Ren.",
+  }),
 }).annotate({ identifier: "Host.PullChat" })
 
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
@@ -122,6 +144,10 @@ export const PullReply = Schema.Struct({
   layers: SessionSettings.Layers,
   memory: Schema.optionalKey(PullMemory).annotate({ description: "Omitted by a Ren that has no memory yet." }),
   chats: Schema.Array(PullChat),
+  computeRevision: Schema.optionalKey(Schema.Int).annotate({
+    description:
+      "The space setting that the brain applied at its last start or wake. When it changes, the brain drops its connections to its hands, so no call reaches the hand it used before. Omitted by an older Ren.",
+  }),
   deleted: Schema.Array(Session.ID).annotate({
     description: "Root chats of the request that Ren no longer has. The brain drops them (E109, HR22).",
   }),
@@ -160,18 +186,26 @@ const ModelsGroup = HttpApiGroup.make("models")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "models" }))
 
-const EnvironmentsGroup = HttpApiGroup.make("environments")
+const HandsGroup = HttpApiGroup.make("environments")
   .add(
     HttpApiEndpoint.post("environments.access", "/host/sessions/:id/environment/access", {
       params: SessionParams,
-      success: Environment.Access,
-      error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
+      query: Schema.Struct({
+        unreachable: Schema.optional(
+          Schema.Literals(["true", "false"]).annotate({
+            description:
+              "`true` when the brain could not reach the session’s environment at its last URL; Ren checks its machine first.",
+          }),
+        ),
+      }),
+      success: Hand.Access,
+      error: [EnvironmentNotFoundError, EnvironmentUnavailableError, EnvironmentStartingError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "environments.access",
         summary: "Get access to a session's environment",
         description:
-          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token.",
+          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token. `EnvironmentStartingError` means the session’s machine is still starting: ask again in 2 s.",
       }),
     ),
   )
@@ -190,6 +224,98 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "environments" }))
 
+const ArtifactParams = { id: Artifact.ID }
+
+const ArtifactsGroup = HttpApiGroup.make("artifacts")
+  .add(
+    HttpApiEndpoint.post("artifacts.upload", "/host/artifacts/:id/uploads", {
+      params: ArtifactParams,
+      success: Artifact.Upload,
+      error: [ArtifactNotFoundError, ArtifactConflictError, ArtifactFailedError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.upload",
+        summary: "Start an artifact upload",
+        description:
+          "Give a short-lived URL that takes one PUT of the artifact’s source archive. The bytes go straight to storage, not through Ren.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.put("artifacts.deploy", "/host/artifacts/:id", {
+      params: ArtifactParams,
+      payload: Artifact.DeployInput,
+      success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
+      error: [ArtifactNotFoundError, ArtifactConflictError, ArtifactInvalidError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.deploy",
+        summary: "Publish an artifact",
+        description:
+          "Queue a durable deployment of an upload and return it as deploying. The deployment checks the upload, keeps a copy and serves it; a bad upload ends it as failed with the reason. Read status before reporting the artifact as live.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("artifacts.status", "/host/artifacts/:id/deployments/:deploymentId", {
+      params: { ...ArtifactParams, deploymentId: Artifact.DeploymentID },
+      success: Artifact.Deployment,
+      error: ArtifactNotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.status",
+        summary: "Read artifact deployment status",
+        description:
+          "Read one deployment or stop: its deploying, stopping, ready, failed or stopped status, URL and error.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("artifacts.read", "/host/artifacts/:id", {
+      params: ArtifactParams,
+      success: Artifact.Info,
+      error: ArtifactNotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.read",
+        summary: "Read an artifact",
+        description:
+          "Read an artifact’s title, entry, URL, its deployment in progress and its published deployment. Its files are in the archive that artifacts.download links to.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("artifacts.download", "/host/artifacts/:id/download", {
+      params: ArtifactParams,
+      success: Artifact.Archive,
+      error: [ArtifactNotFoundError, ArtifactFailedError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.download",
+        summary: "Download an artifact’s source archive",
+        description:
+          "Give a short-lived URL of the last published source archive, which an environment unpacks into a folder.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("artifacts.stop", "/host/artifacts/:id", {
+      params: ArtifactParams,
+      query: Artifact.StopInput,
+      success: Artifact.Deployment.annotate({ httpApiStatus: 202 }),
+      error: [ArtifactNotFoundError, ArtifactConflictError, ArtifactInvalidError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "artifacts.stop",
+        summary: "Remove an artifact deployment",
+        description:
+          "Queue a durable stop of an artifact and return it as stopping, or the stop that runs. The stop ends the deployment in progress and stops serving the artifact. Ren keeps its record, source files and application data.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "artifacts" }))
+
 const HostGroup = HttpApiGroup.make("host")
   .add(
     HttpApiEndpoint.post("host.refresh", "/host/token/refresh", { success: Host.Refreshed }).annotateMerge(
@@ -206,13 +332,14 @@ const HostGroup = HttpApiGroup.make("host")
 export const RenHostApi = HttpApi.make("host")
   .add(PullGroup)
   .add(ModelsGroup)
-  .add(EnvironmentsGroup)
+  .add(HandsGroup)
+  .add(ArtifactsGroup)
   .add(HostGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Host API",
       version: "0.0.0",
       description:
-        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, and to get access to a session’s environment.",
+        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, to get access to a session’s environment, and to publish artifacts.",
     }),
   )

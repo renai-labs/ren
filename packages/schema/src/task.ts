@@ -14,17 +14,27 @@ import { TaskLink } from "./task-link.js"
 export const ID = Identifier.make("tsk", "Task.ID")
 export type ID = typeof ID.Type
 
-export const Status = Schema.Literals(["todo", "in_progress", "done", "dismissed"]).annotate({
+export const Status = Schema.Literals(["backlog", "todo", "in_progress", "done", "dismissed"]).annotate({
   identifier: "Task.Status",
   description:
-    "The state of the whole task, never of one agent. `todo`: no one started it. `in_progress`: the work started and is not finished; a handoff keeps it. `done`: finished. `dismissed`: no one will do it; it stays readable so that it is not suggested again. Only a person sets `done` or `dismissed`.",
+    "The state of the whole task, never of one agent. `backlog`: no one started it, and it is not a priority yet. `todo`: no one started it. `in_progress`: the work started and is not finished; a handoff keeps it. `done`: finished. `dismissed`: no one will do it; it stays readable so that it is not suggested again. Only a person sets `done` or `dismissed`.",
 })
 export type Status = typeof Status.Type
 
-export const actionable: ReadonlyArray<Status> = ["todo", "in_progress"]
+export const actionable: ReadonlyArray<Status> = ["backlog", "todo", "in_progress"]
 
 export const Priority = Schema.Literals(["low", "medium", "high"]).annotate({ identifier: "Task.Priority" })
 export type Priority = typeof Priority.Type
+
+export const statusLabels = {
+  backlog: "Backlog",
+  todo: "Todo",
+  in_progress: "In progress",
+  done: "Done",
+  dismissed: "Dismissed",
+} as const satisfies Record<Status, string>
+
+export const priorityLabels = { high: "High", medium: "Medium", low: "Low" } as const satisfies Record<Priority, string>
 
 export const StartMode = Schema.Literals(["new", "continue"]).annotate({
   identifier: "Task.StartMode",
@@ -145,11 +155,13 @@ export const ListInput = Schema.Struct({
   spaceId: Schema.optional(Space.ID),
   status: Schema.optional(Status).annotate({ description: "Only this status. Wins over `includeDone`." }),
   includeDone: Schema.optional(Schema.Boolean).annotate({
-    description: "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks.",
+    description:
+      "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks: `backlog`, `todo` and `in_progress`.",
   }),
   priority: Schema.optional(Priority),
   agentId: Schema.optional(Agent.ID),
   ownerId: Schema.optional(Auth.UserID),
+  search: Schema.optional(Schema.String).annotate({ description: "Part of the title." }),
   label: Schema.optional(Label.Name).annotate({ description: "A label name, in any case." }),
   humanReview: Schema.optional(Schema.Boolean),
   linkedTo: Schema.optional(TaskLink.Url).annotate({

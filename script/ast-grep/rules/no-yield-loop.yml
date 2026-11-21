@@ -1,0 +1,6 @@
+id: no-yield-loop
+language: Tsx
+message: "A loop over `yield*` with a flag is what `Effect.repeat({ until })` does. Use it."
+severity: error
+rule:
+  pattern: while (!(yield* $STEP)) $BODY

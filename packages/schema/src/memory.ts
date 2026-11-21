@@ -50,6 +50,12 @@ export const WriteInput = Schema.Struct({
   ...scope,
   path: SafePath,
   content: Schema.String.annotate({ description: "The whole new content of the file." }),
+  mode: Schema.optional(
+    Schema.Literals(["create", "replace"]).annotate({
+      description:
+        "`create` refuses a path that has a file, with a conflict. `replace`, the default, creates or replaces.",
+    }),
+  ),
 }).annotate({ identifier: "Memory.WriteInput" })
 
 export interface EditInput extends Schema.Schema.Type<typeof EditInput> {}

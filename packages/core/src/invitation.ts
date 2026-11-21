@@ -2,7 +2,7 @@ export * as Invitation from "./invitation.js"
 
 import { Database } from "@ren/db/database"
 import { Invitation } from "@ren/schema/invitation"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Clock, Context, Effect, Layer, Schema } from "effect"
 
 export interface Interface {
   readonly preview: (id: string) => Effect.Effect<Invitation.Preview>
@@ -33,7 +33,7 @@ export const layer = Layer.effect(
             state = "accepted"
             break
           case "pending":
-            state = row.expiresAt <= new Date() ? "expired" : "pending"
+            state = row.expiresAt.getTime() <= (yield* Clock.currentTimeMillis) ? "expired" : "pending"
             break
           default:
             state = "unavailable"

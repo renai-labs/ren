@@ -40,7 +40,7 @@ it.live("a ref that is not in the repository fails and never falls back to the d
   }),
 )
 
-it.live("a folder without SKILL.md and a repository outside GitHub fail with the reason", () =>
+it.live("a folder without SKILL.md fails with the reason", () =>
   Effect.gen(function* () {
     const github = yield* TestGitHub.make()
     const commit = yield* github.commit({ "other/README.md": "no skill" })
@@ -48,8 +48,5 @@ it.live("a folder without SKILL.md and a repository outside GitHub fail with the
     expect((yield* skills.resolve({ url: github.url, path: "other" }).pipe(Effect.flip)).message).toBe(
       `${github.url} has no other/SKILL.md at ${commit}`,
     )
-    expect(
-      (yield* skills.resolve({ url: "https://gitlab.com/acme/skills", path: "." }).pipe(Effect.flip)).message,
-    ).toBe("Ren reads only repositories on github.com, not https://gitlab.com/acme/skills")
   }),
 )

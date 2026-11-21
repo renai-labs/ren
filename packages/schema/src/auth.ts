@@ -38,7 +38,7 @@ export const OAuthClientAssertionID = Identifier.make("oca", "Auth.OAuthClientAs
 export const consentOrganizationHeader = "x-ren-consent-organization"
 
 export const cliClient = {
-  client_id: "https://v2.useren.ai/ren2/oauth-client.json",
+  client_id: "https://v2.useren.ai/ren/oauth-client.json",
   client_name: "Ren CLI",
   redirect_uris: ["http://127.0.0.1/callback"],
   token_endpoint_auth_method: "none",
@@ -46,6 +46,21 @@ export const cliClient = {
   response_types: ["code"],
   application_type: "native",
 } as const
+
+export const mobileSchemes = ["ren", "ren-dev", "ren-preview"] as const
+
+export const MobileReturnTo = Schema.String.pipe(
+  Schema.check(
+    Schema.makeFilter(
+      (value) =>
+        (URL.canParse(value) && mobileSchemes.some((scheme) => new URL(value).protocol === `${scheme}:`)) ||
+        `Use a link into the Ren app, which starts with ${mobileSchemes.map((scheme) => `${scheme}://`).join(", ")}.`,
+    ),
+  ),
+).annotate({
+  identifier: "Auth.MobileReturnTo",
+  description: "A link into the Ren mobile app, where the browser returns when a sign-in ends.",
+})
 
 export const SignInProvider = Schema.Literals(["google", "github", "slack"]).annotate({
   identifier: "Auth.SignInProvider",

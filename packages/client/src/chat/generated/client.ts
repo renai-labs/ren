@@ -70,10 +70,10 @@ import type {
   FileReadOutput,
   VcsGetInput,
   VcsGetOutput,
+  VcsProjectsInput,
+  VcsProjectsOutput,
   VcsDiffInput,
   VcsDiffOutput,
-  WebsearchProvidersInput,
-  WebsearchProvidersOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -386,6 +386,7 @@ export function make(options: ClientOptions) {
               delivery: input["delivery"],
               resume: input["resume"],
               files: input["files"],
+              presentation: input["presentation"],
               agents: input["agents"],
               skills: input["skills"],
             },
@@ -658,6 +659,18 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/chat/session/${encodeURIComponent(input.sessionID)}/vcs`,
+            query: { path: input["path"] },
+            successStatus: 200,
+            declaredStatuses: [400, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      projects: (input: VcsProjectsInput, requestOptions?: RequestOptions) =>
+        request<VcsProjectsOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/vcs/projects`,
             successStatus: 200,
             declaredStatuses: [400, 403, 404, 503],
             empty: false,
@@ -669,22 +682,9 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/chat/session/${encodeURIComponent(input.sessionID)}/vcs/diff`,
-            query: { mode: input["mode"], context: input["context"] },
+            query: { path: input["path"], mode: input["mode"], context: input["context"] },
             successStatus: 200,
             declaredStatuses: [400, 403, 404, 503],
-            empty: false,
-          },
-          requestOptions,
-        ),
-    },
-    websearch: {
-      providers: (input: WebsearchProvidersInput, requestOptions?: RequestOptions) =>
-        request<WebsearchProvidersOutput>(
-          {
-            method: "GET",
-            path: `/chat/session/${encodeURIComponent(input.sessionID)}/websearch/provider`,
-            successStatus: 200,
-            declaredStatuses: [403, 404, 503],
             empty: false,
           },
           requestOptions,

@@ -8,22 +8,44 @@ export interface Storage {
   readonly get: (key: string) => string | undefined
   readonly set: (key: string, value: string) => void
   readonly remove: (key: string) => void
+  readonly subscribe: (listener: (key: string | null) => void) => () => void
 }
 
-export interface Drafts extends Storage {
+export interface Drafts extends Omit<Storage, "subscribe"> {
   readonly subscribe?: (listener: (key: string) => void) => () => void
+}
+
+export interface ChatCache {
+  readonly read: (userId: string, sessionID: string) => Promise<string | void>
+  readonly write: (
+    userId: string,
+    sessionID: string,
+    entry: { readonly body: string; readonly tier: number },
+  ) => Promise<void>
+  readonly remove: (userId: string, sessionID: string) => Promise<void>
+  readonly forget: (keep?: string) => Promise<void>
+}
+
+export interface NotifyOptions {
+  readonly id: string
+  readonly silent: boolean
+  readonly active?: () => boolean
+  readonly onClick: () => void
 }
 
 interface Base {
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
+  readonly windowStorage?: Omit<Storage, "subscribe">
   readonly drafts?: Drafts
+  readonly chatCache?: ChatCache
   readonly openExternal: (url: string) => void
   readonly redirect?: (url: string) => void
   readonly blankTab?: () => Window | null
   readonly blankPopup?: () => Window | null
-  readonly notify: (title: string, body?: string) => Promise<void>
+  readonly notify: (title: string, body: string, options: NotifyOptions) => Promise<void>
+  readonly notificationPermission?: () => NotificationPermission | "unsupported"
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
   readonly upload?: (
@@ -32,8 +54,11 @@ interface Base {
     signal: AbortSignal,
   ) => Promise<void>
   readonly writeClipboardText?: (text: string) => Promise<void>
+  readonly copyImage?: (src: string) => Promise<void>
+  readonly saveFile?: (url: string, name: string) => void
   readonly authorizationQuery?: string | undefined
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
+  readonly markSignedIn?: (signedIn: boolean) => void
   readonly analytics?: Analytics.Interface
 }
 

@@ -24,6 +24,8 @@ export type SessionMessageTokenUsage = {
 
 export type SessionMessageID = string
 
+export type SessionMessageQuote = { type: "quote"; text: string; comment?: string; source?: string }
+
 export type SessionMessageFileSource = { type: "inline" } | { type: "uri"; uri: string }
 
 export type SessionMessageMention = { start: number; end: number; text: string }
@@ -34,7 +36,15 @@ export type SessionMessageSender = { userId: string }
 
 export type SessionInboxDelivery = "steer" | "queue"
 
-export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
+export type SessionMessageSyntheticMetadata = {
+  source?: string
+  childID?: string
+  shellID?: string
+  jobID?: string
+  state?: string
+  exit?: number
+  timeout?: boolean
+}
 
 export type SessionErrorInfo = { type: string; message: string; status?: number; response?: { body: string } }
 
@@ -105,7 +115,17 @@ export type WebhookOriginInfo = { webhookId: string; name: string; requestId: st
 
 export type TaskAssignmentInfo = { taskId: string; identifier: string; title: string; brief: string }
 
-export type SessionMessageText = { type: "text"; text: string }
+export type SessionMessageSyntheticMetadata1 = {
+  source?: string
+  childID?: string
+  shellID?: string
+  jobID?: string
+  state?: string
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  timeout?: boolean
+}
+
+export type SessionMessageText = { type: "text"; text: string; time?: { created: number; completed?: number } }
 
 export type SessionMessageReasoning = {
   type: "reasoning"
@@ -140,9 +160,11 @@ export type SessionCatalogSkill = { id: string; name: string; description?: stri
 
 export type SessionCatalogCommand = { name: string; description?: string }
 
-export type SessionCatalogFileType = "file" | "directory"
+export type FileSystemEntryType = "file" | "directory"
 
-export type SessionCatalogFileContent = {
+export type FileSystemAction = "upload" | "write" | "remove"
+
+export type FileSystemContent = {
   path: string
   mime: string
   size: number
@@ -153,7 +175,7 @@ export type SessionCatalogFileContent = {
 
 export type SessionVcsInfo = { provider?: string; branch: { current?: string; default?: string } }
 
-export type SessionCatalogWebSearchProvider = { id: string; name: string }
+export type SessionVcsProject = { path: string; branch?: string }
 
 export type SessionEventSessionAgentSelected = {
   id: string
@@ -459,6 +481,8 @@ export type SessionMessageCompactionCompleted = {
 
 export type ChatAccepted = { id: SessionMessageID }
 
+export type SessionMessagePresentation = { displayText: string; comments: Array<SessionMessageQuote> }
+
 export type SessionMessageFileAttachment = {
   data: string
   mime: string
@@ -499,15 +523,6 @@ export type SessionEventSessionSynthetic = {
   created: number
   type: "session.synthetic"
   data: { sessionID: SessionID; text: string; description?: string; metadata?: SessionMessageSyntheticMetadata }
-}
-
-export type SessionMessageSynthetic = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "synthetic"
-  text: string
-  description?: string
-  metadata?: SessionMessageSyntheticMetadata
 }
 
 export type SessionEventSessionExecutionFailed = {
@@ -760,26 +775,39 @@ export type ChannelOriginInfo = {
   trigger?: string
 }
 
+export type SessionMessageSynthetic = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "synthetic"
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata1
+}
+
+export type SessionInboxSyntheticPayload1 = {
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata1
+}
+
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy
 
-export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
+export type FileSystemEntry = {
+  path: string
+  type: FileSystemEntryType
+  size?: number
+  modifiedAt?: string
+  mime?: string
+}
 
 export type SessionInboxUserPayload = {
   text: string
+  presentation?: SessionMessagePresentation
   files?: Array<SessionMessageFileAttachment>
   uploads?: Array<SessionMessageDriveFile>
   agents?: Array<SessionMessageAgentAttachment>
   skills?: Array<SessionMessageSkillAttachment>
   sender?: SessionMessageSender
-}
-
-export type SessionInboxSynthetic = {
-  id: SessionMessageID
-  sessionID: SessionID
-  time: { created: number }
-  type: "synthetic"
-  payload: SessionInboxSyntheticPayload
-  delivery: SessionInboxDelivery
 }
 
 export type SessionMessageCompaction =
@@ -873,6 +901,7 @@ export type SessionMessageUser = {
   id: SessionMessageID
   time: { created: number }
   text: string
+  presentation?: SessionMessagePresentation
   files?: Array<SessionMessageFileAttachment>
   uploads?: Array<SessionMessageDriveFile>
   agents?: Array<SessionMessageAgentAttachment>
@@ -885,7 +914,22 @@ export type SessionMessageUser = {
   task?: TaskAssignmentInfo
 }
 
+export type SessionInboxSynthetic = {
+  id: SessionMessageID
+  sessionID: SessionID
+  time: { created: number }
+  type: "synthetic"
+  payload: SessionInboxSyntheticPayload1
+  delivery: SessionInboxDelivery
+}
+
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }
+
+export type FileSystemPage = {
+  entries: Array<FileSystemEntry>
+  cursor: string | null
+  actions: Array<FileSystemAction>
+}
 
 export type SessionInboxItem =
   | { type: "user"; payload: SessionInboxUserPayload; delivery: SessionInboxDelivery }
@@ -1108,6 +1152,15 @@ export type SessionPromptInput = {
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1123,6 +1176,15 @@ export type SessionPromptInput = {
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1138,6 +1200,15 @@ export type SessionPromptInput = {
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1153,6 +1224,15 @@ export type SessionPromptInput = {
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1168,6 +1248,15 @@ export type SessionPromptInput = {
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1177,12 +1266,45 @@ export type SessionPromptInput = {
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }> | null
   }["files"]
+  readonly presentation?: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | null
+    readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
+    readonly agents?: ReadonlyArray<{
+      readonly name: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+    readonly skills?: ReadonlyArray<{
+      readonly id: string
+      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+    }> | null
+  }["presentation"]
   readonly agents?: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1198,6 +1320,15 @@ export type SessionPromptInput = {
     readonly delivery: "steer" | "queue"
     readonly resume?: boolean | null
     readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }> | null
+    readonly presentation?: {
+      readonly displayText: string
+      readonly comments: ReadonlyArray<{
+        readonly type: "quote"
+        readonly text: string
+        readonly comment?: string
+        readonly source?: string
+      }>
+    } | null
     readonly agents?: ReadonlyArray<{
       readonly name: string
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
@@ -1460,40 +1591,50 @@ export type FileSearchInput = {
   }["limit"]
 }
 
-export type FileSearchOutput = Array<SessionCatalogFile>
+export type FileSearchOutput = Array<FileSystemEntry>
 
 export type FileListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly path?: { readonly path?: string | undefined }["path"]
 }
 
-export type FileListOutput = Array<SessionCatalogFile>
+export type FileListOutput = FileSystemPage
 
 export type FileReadInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly path: { readonly path: string }["path"]
 }
 
-export type FileReadOutput = SessionCatalogFileContent
+export type FileReadOutput = FileSystemContent
 
-export type VcsGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+export type VcsGetInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly path?: { readonly path?: string | undefined }["path"]
+}
 
 export type VcsGetOutput = SessionVcsInfo
 
+export type VcsProjectsInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type VcsProjectsOutput = Array<SessionVcsProject>
+
 export type VcsDiffInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly path?: {
+    readonly path?: string | undefined
+    readonly mode?: ("working" | "branch" | "committed") | undefined
+    readonly context?: number | undefined
+  }["path"]
   readonly mode?: {
+    readonly path?: string | undefined
     readonly mode?: ("working" | "branch" | "committed") | undefined
     readonly context?: number | undefined
   }["mode"]
   readonly context?: {
+    readonly path?: string | undefined
     readonly mode?: ("working" | "branch" | "committed") | undefined
     readonly context?: number | undefined
   }["context"]
 }
 
 export type VcsDiffOutput = Array<SessionInfoFileDiff>
-
-export type WebsearchProvidersInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type WebsearchProvidersOutput = Array<SessionCatalogWebSearchProvider>

@@ -35,16 +35,22 @@ export const Operation = {
 }
 `
 
+const handwritten = `import { Console } from "effect"
+import { Command } from "effect/cli"
+export const extra = [Command.make("hello").pipe(Command.withDescription("Say hello"), Command.withHandler(() => Console.log("hello")))]
+`
+
 async function emitted() {
   const directory = await mkdtemp(join(import.meta.dir, ".emitted-"))
   const output = EmitCli.emitCli(contract, {
     module: join(import.meta.dir, "lib/widget-api.ts"),
     api: "Api",
     runtime: join(directory, "runtime.ts"),
-    groups,
+    groups: groups.map((group) => ({ ...group, handwritten: { module: join(directory, "extra.ts"), name: "extra" } })),
     commands,
   })
   await Bun.write(join(directory, "runtime.ts"), runtime)
+  await Bun.write(join(directory, "extra.ts"), handwritten)
   // oxlint-disable-next-line ren/no-comments -- Finish each write before the emitted modules are imported.
   await Array.fromAsync(output.files, (item) => Bun.write(join(directory, item.path), item.content))
   // ast-grep-ignore: no-dynamic-import-path, -- The module is emitted into a temporary directory at runtime, so its path cannot be literal.
@@ -115,6 +121,28 @@ describe("EmitCli.emitCli", () => {
     expect(help).toContain("Widget name")
     expect(help).toContain("--input")
     expect(help).not.toContain("--settings")
+  })
+
+  test("names the identifier of an input or of its list's items", () => {
+    const endpoint = contract.groups
+      .flatMap((group) => group.endpoints)
+      .find((each) => each.endpoint.identifier === "widget.update")
+    expect(endpoint && EmitCli.inputs(endpoint)).toEqual([
+      { name: "id", source: "params", identifier: "Widget.ID" },
+      { name: "name", source: "payload", identifier: undefined },
+      { name: "tags", source: "payload", identifier: "Widget.Tag" },
+      { name: "settings", source: "payload", identifier: undefined },
+    ])
+  })
+
+  test("adds a group's handwritten commands next to its generated ones", async () => {
+    await using cli = await emitted()
+    await cli.run(["widget", "hello"])
+    await cli.run(["widget", "--help"])
+    const help = cli.printed.join("\n")
+    expect(cli.printed.at(0)).toBe("hello")
+    expect(help).toContain("Say hello")
+    expect(help).toContain("Update widget")
   })
 
   test("rejects a repeated path, a command that is also a group, a group without a description and colliding names", () => {

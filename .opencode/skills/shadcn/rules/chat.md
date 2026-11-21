@@ -12,7 +12,8 @@ The transcript and composer are built from shadcn's chat components, fed by `@re
 | Files and images                                                     | `Attachment` with `state` wired to the real upload status; several in `AttachmentGroup`                                        |
 | Notes and dividers between turns ("Today", "Sarah joined")           | `Marker`, `variant="separator"` for a labelled rule                                                                            |
 | What the agent did: reasoning, tool calls, steps, sources, subagents | `TraceLine` in a `Trace`                                                                                                       |
-| Code, tool input and output, logs, diffs                             | `CodeBlock`                                                                                                                    |
+| Code, tool input and output, logs                                    | `CodeBlock`                                                                                                                    |
+| A file's diff (transcript and Changes tab)                           | `FileDiffView` (`@ren/ui/file-diff`), never `CodeBlock`                                                                        |
 | A permission or approval waiting for an answer                       | an `Item` with the choices in `ItemActions`, outside the `Trace`                                                               |
 | The composer                                                         | `InputGroup`: a textarea, attachment chips and the submit button                                                               |
 | The model picker                                                     | `DropdownMenu` with a `DropdownMenuRadioGroup`                                                                                 |
@@ -31,7 +32,7 @@ The transcript and composer are built from shadcn's chat components, fed by `@re
 
 - `CodeBlockContent` takes a string. Add `wrap` for tool output and errors, `lineNumbers` for source, `startLine` for a snippet from the middle of a file, and a `max-h-*` class to cap the height.
 - Output inside a trace row is `size="sm"` with `wrap` and `max-h-64`. Markdown fences and answers use the default size.
-- Errors use `variant="destructive"`; don't recolour the block. Diff and highlighted lines map to `CodeBlockLine` with `variant="added"`, `"removed"` or `"highlighted"`.
+- Errors use `variant="destructive"`; don't recolour the block. Highlighted lines map to `CodeBlockLine` with `variant="highlighted"`. Diffs do not use `CodeBlock`: `FileDiffView` renders them with `@pierre/diffs`.
 - Highlight source with `useHighlightedCode(code, language)` and map its lines into `CodeBlockLine`. Pass tool output as a plain string.
 - Header buttons go in `CodeBlockActions`; `CodeBlockCopyButton` takes the text as `value`. Without a header, `CodeBlockActions` sits directly in `CodeBlock` and shows on hover.
 

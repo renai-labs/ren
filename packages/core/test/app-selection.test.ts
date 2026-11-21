@@ -29,7 +29,7 @@ const select = (input: Partial<Parameters<typeof AppSelection.select>[0]>) =>
   AppSelection.select({
     resolved: [],
     declared: [candidate("kernel-managed", "kernel")],
-    integrationsUrl: Option.some(new URL("https://mcp.useren.ai/managed")),
+    integrationsUrl: Option.some(new URL("https://mcp.useren.ai")),
     egress: true,
     ...input,
   })
@@ -43,7 +43,7 @@ describe("AppSelection.select", () => {
           server: "kernel-managed",
           profile: null,
           label: "INTEGRATIONS",
-          url: "https://mcp.useren.ai/managed/kernel/mcp",
+          url: "https://mcp.useren.ai/kernel",
         },
       ],
       unavailable: [],

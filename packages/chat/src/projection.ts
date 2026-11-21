@@ -116,10 +116,17 @@ interface View {
   readonly showReasoning: boolean
   readonly expanded: ToolState.Expanded
   readonly detail: TimelineDetail.Detail | undefined
+  readonly commentary: ReadonlySet<SessionMessage.Content>
 }
 
-export const renderable = (content: SessionMessage.Content, view: Pick<View, "showReasoning" | "detail">) => {
-  if (content.type === "text") return Boolean(content.text.trim())
+export const renderable = (
+  content: SessionMessage.Content,
+  view: Pick<View, "showReasoning" | "detail" | "commentary">,
+) => {
+  if (content.type === "text")
+    return (
+      Boolean(content.text.trim()) && !(view.detail?.commentary.placement === "hidden" && view.commentary.has(content))
+    )
   if (content.type === "reasoning")
     return (
       (view.detail ? view.detail.thinking.placement !== "hidden" : view.showReasoning) && Boolean(content.text.trim())
@@ -133,6 +140,7 @@ const isEditTool = (content: SessionMessage.Tool) =>
   content.name === "patch" || content.name === "edit" || content.name === "write"
 
 const detailToolGroupType = (content: SessionMessage.Tool, detail: TimelineDetail.Detail): GroupType | undefined => {
+  if (ToolState.backgrounded(content)) return
   if (ChannelReply.shown(content) || ShownFile.shown(content) || AppConnect.shown(content)) return
   if (content.name === "question" && !ToolState.failed(content)) return
   const category = TimelineDetail.category(content)
@@ -168,7 +176,7 @@ const contentGroupType = (
 ): GroupType | undefined => {
   if (content.type === "tool")
     return view.detail ? detailToolGroupType(content, view.detail) : defaultToolGroupType(content, view.expanded, group)
-  if (content.type !== "reasoning") return
+  if (content.type === "text") return view.commentary.has(content) ? "context" : undefined
   return view.detail && view.detail.thinking.placement !== "grouped" ? undefined : "context"
 }
 
@@ -268,6 +276,22 @@ const isWorking = (lastStep: Entry | undefined, session: { readonly active: bool
   !lastStep.message.time.completed &&
   !lastStep.message.error &&
   !lastStep.message.retry
+
+const turnCommentary = (turn: Turn, view: Omit<View, "commentary">, session: { readonly active: boolean }) => {
+  if (!view.detail || view.detail.commentary.placement === "separate") return []
+  const contents = turn.entries.flatMap((entry) => (entry.type === "assistant" ? entry.message.content : []))
+  const lastTool = contents.findLastIndex((content) => content.type === "tool")
+  const commentary = contents.filter((content, index) => content.type === "text" && index < lastTool)
+  const texts = contents.filter(
+    (content) => content.type === "text" && renderable(content, { ...view, commentary: new Set() }),
+  )
+  const settled = !isWorking(
+    turn.entries.findLast((entry) => entry.type === "assistant" || entry.type === "idle"),
+    session,
+  )
+  if (!settled || texts.some((content) => !commentary.includes(content))) return commentary
+  return commentary.filter((content) => content !== texts.at(-1))
+}
 
 const isThinking = (lastContent: SessionMessage.Content | undefined, view: View, turn: { readonly working: boolean }) =>
   turn.working &&
@@ -369,7 +393,7 @@ const messageRows = (
         )
       return []
     }
-    if (detail?.notices.placement === "hidden" && !TimelineDetail.noticeRequired(entry.message)) return current
+    if (detail && TimelineDetail.noticePlacement(entry.message, detail) === "hidden") return current
     appendSegment(current)
     rows.push(new TimelineRow.Notice({ userMessageID: turnID, messageID: entry.message.id }))
     return []
@@ -529,7 +553,7 @@ export const reuse = (
 }
 
 const visibleNotice = (message: Notice, detail: TimelineDetail.Detail | undefined) =>
-  detail?.notices.placement !== "hidden" || TimelineDetail.noticeRequired(message)
+  !detail || TimelineDetail.noticePlacement(message, detail) !== "hidden"
 
 const shellRows = (
   turn: Turn,
@@ -549,11 +573,6 @@ const shellRows = (
 ]
 
 export const project = (input: Input): Projection => {
-  const view: View = {
-    showReasoning: (input.reasoning ?? "compact") !== "hidden",
-    expanded: { shell: input.shellToolDefaultOpen ?? false, edit: input.editToolDefaultOpen ?? false },
-    detail: input.detail,
-  }
   const detail = input.detail
   const pendingInputIDs = input.pendingInputIDs
   const built = turnsOf(input.messages)
@@ -561,6 +580,17 @@ export const project = (input: Input): Projection => {
   const activeMessageID =
     turns.findLast((turn) => !pendingInputIDs?.has(turn.id) || turn.entries.some((entry) => entry.type === "idle"))
       ?.id ?? turns.at(-1)?.id
+  const base = {
+    showReasoning: (input.reasoning ?? "compact") !== "hidden",
+    expanded: { shell: input.shellToolDefaultOpen ?? false, edit: input.editToolDefaultOpen ?? false },
+    detail,
+  }
+  const view: View = {
+    ...base,
+    commentary: new Set(
+      turns.flatMap((turn) => turnCommentary(turn, base, { active: turn.id === activeMessageID && input.busy })),
+    ),
+  }
   const visibleTurns = detail
     ? turns.filter((turn) => {
         if (turn.user) return true
@@ -600,7 +630,11 @@ export const project = (input: Input): Projection => {
   )
   const separate = new Set(
     input.messages.flatMap((message) =>
-      message.type === "compaction" || message.type === "model-switched" ? [message.id] : [],
+      message.type === "compaction" ||
+      message.type === "model-switched" ||
+      (message.type === "synthetic" && detail && TimelineDetail.noticePlacement(message, detail) === "separate")
+        ? [message.id]
+        : [],
     ),
   )
   return {

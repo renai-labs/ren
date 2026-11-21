@@ -10,7 +10,7 @@ import type { Infra } from "@ren/schema/infra"
 import type { Space } from "@ren/schema/space"
 import { Slug } from "@ren/util/slug"
 import { and, asc, eq, isNull } from "drizzle-orm"
-import { Effect } from "effect"
+import { Effect, Equal } from "effect"
 import { ChannelMappings } from "../channel-mappings.js"
 import { Primitive } from "../primitive.js"
 import { InfraPlan } from "./plan.js"
@@ -70,7 +70,7 @@ const sorted = (triggers: ReadonlyArray<Channel.TriggerSetting>) =>
     .map((trigger) => [trigger.id, trigger.prompt ?? null])
 
 const sameTriggers = (left: ReadonlyArray<Channel.TriggerSetting>, right: ReadonlyArray<Channel.TriggerSetting>) =>
-  JSON.stringify(sorted(left)) === JSON.stringify(sorted(right))
+  Equal.equals(sorted(left), sorted(right))
 
 const named = (live: Live) =>
   [...Map.groupBy(live.mappings, (mapping) => mapping.spaceId).values()]

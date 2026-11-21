@@ -4,7 +4,7 @@ import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed, TestDrives } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
-import { TestEnvironment } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import { Signature } from "@ren/schema/signature"
 import { Models } from "@ren/schema/models"
 import { Effect, Layer, Redacted, Schema } from "effect"
@@ -12,6 +12,7 @@ import { realpathSync } from "fs"
 import os from "os"
 import path from "path"
 import { databaseURL, ports } from "../tests/lib/env.js"
+import { StandInInference } from "./inference.js"
 
 const root = path.resolve(import.meta.dir, "../..")
 const name = `ren_e2e_${crypto.randomUUID().replaceAll("-", "")}`
@@ -25,6 +26,28 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
+const ScriptedTool = Schema.Struct({ name: Schema.String, input: Schema.Unknown })
+
+const Script = Schema.Struct({
+  reply: Schema.optionalKey(Schema.String),
+  tools: Schema.optionalKey(Schema.Array(ScriptedTool)),
+})
+
+const held = new Map<string, ReturnType<ReturnType<typeof Shared.stub>["script"]>>()
+
+const stubRoute = (request: Request) => {
+  const url = new URL(request.url)
+  if (request.method !== "POST") return
+  if (url.pathname === "/hold") {
+    const script = Shared.stub().script({ hold: true, reply: "held reply" })
+    held.set(script.marker, script)
+    return Response.json({ marker: script.marker })
+  }
+  if (url.pathname !== "/release") return
+  held.get(url.searchParams.get("marker") ?? "")?.release()
+  return new Response(null, { status: 204 })
+}
+
 let log = ""
 const children: Bun.Subprocess[] = []
 const mailbox = Bun.serve({
@@ -35,6 +58,12 @@ const mailbox = Bun.serve({
       Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
       return new Response(null, { status: 204 })
     }
+    const stubbed = stubRoute(request)
+    if (stubbed) return stubbed
+    if (request.method === "POST" && new URL(request.url).pathname === "/script") {
+      const script = Shared.stub().script(Schema.decodeUnknownSync(Script)(await request.json()))
+      return Response.json({ marker: script.marker })
+    }
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })
@@ -43,10 +72,13 @@ const mailbox = Bun.serve({
   },
 })
 
+const inference = StandInInference.start(Shared.stub().root)
+
 let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
   (stopping ??= (async () => {
     void mailbox.stop(true)
+    void inference.stop()
     for (const child of children) child.kill()
     await Promise.all(children.map((child) => child.exited))
     await Shared.dispose()
@@ -90,11 +122,17 @@ await Effect.runPromise(
               docs: {
                 name: "Docs",
                 description: "Library documentation",
-                transport: { type: "remote", url: "https://docs.example.com/mcp" },
+                transport: {
+                  type: "remote",
+                  url: "https://docs.example.com/mcp",
+                },
                 auth: { type: "none" },
               },
             },
-            listing: { body: "Answers questions from library docs.", categories: { roles: ["engineer"] } },
+            listing: {
+              body: "Answers questions from library docs.",
+              categories: { roles: ["engineer"] },
+            },
           },
           ...Array.from({ length: 110 }, (_, index) => {
             const number = String(index + 1).padStart(3, "0")
@@ -105,7 +143,12 @@ await Effect.runPromise(
               listing: {},
             }
           }),
-          { slug: "zz-notes", name: "Zeta Notes", description: "Notes past the first page", listing: {} },
+          {
+            slug: "zz-notes",
+            name: "Zeta Notes",
+            description: "Notes past the first page",
+            listing: {},
+          },
         ],
       }),
     )
@@ -116,6 +159,7 @@ await Effect.runPromise(
 ).catch(failed)
 
 const brainKey = await Effect.runPromise(Signature.generate("e2e"))
+const inferenceKey = await Effect.runPromise(Signature.generate("e2e-inference"))
 const server = Bun.spawn(["bun", "run", "src/main.ts"], {
   cwd: path.join(root, "server"),
   env: {
@@ -127,7 +171,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     ...TestDrives.config,
     BETTER_AUTH_URL: serverURL,
     TRUSTED_ORIGINS: appOrigin,
-    APP_URL: `${appOrigin}/app`,
+    APP_URL: appOrigin,
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
@@ -139,14 +183,24 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     // oxlint-disable-next-line ren/no-comments -- A brain's start signs its environment's executor variables, also when it has no environment.
     ENVIRONMENT_KEYS: JSON.stringify([
       {
-        id: TestEnvironment.keys.privateKey.id,
-        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestEnvironment.keys.privateKey.key),
+        id: TestHand.keys.privateKey.id,
+        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestHand.keys.privateKey.key),
+      },
+    ]),
+    REN_INFERENCE_URL: inference.url,
+    REN_INFERENCE_KEYS: JSON.stringify([
+      {
+        id: inferenceKey.privateKey.id,
+        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(inferenceKey.privateKey.key),
       },
     ]),
     REN_INFERENCE_GATEWAY_URL: Shared.stub().root,
     REN_INFERENCE_GATEWAY_KEY: "stub-key",
     ENVELOPE_KEYS: JSON.stringify([
-      { id: "local:e2e", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+      {
+        id: "local:e2e",
+        key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url"),
+      },
     ]),
     BRAIN_KEYS: JSON.stringify([
       {
@@ -178,10 +232,11 @@ Bun.serve({
   hostname: "127.0.0.1",
   fetch: async (request) => {
     const pathname = new URL(request.url).pathname
-    if (!pathname.startsWith("/app/")) return new Response("Not found", { status: 404 })
     const file = Bun.file(path.join(dist, path.normalize(pathname.slice("/app/".length))))
-    if (await file.exists()) return new Response(file)
-    return new Response(Bun.file(path.join(dist, "index.html")), { headers: { "content-type": "text/html" } })
+    if (pathname.startsWith("/app/") && (await file.exists())) return new Response(file)
+    return new Response(Bun.file(path.join(dist, "index.html")), {
+      headers: { "content-type": "text/html" },
+    })
   },
 })
 

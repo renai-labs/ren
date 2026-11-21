@@ -1,22 +1,25 @@
-import { useState } from "react"
-import { useLocation } from "@tanstack/react-router"
-import { IconChecklist, IconClock, IconCube, IconEdit, IconLayoutGrid } from "@tabler/icons-react"
+import { Link, useLocation } from "@tanstack/react-router"
+import { IconCube, IconEdit, IconFolder, IconApps, IconSubtask, IconWebhook } from "@tabler/icons-react"
+import { buttonVariants } from "@ren/ui/button"
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarMenu, SidebarRail } from "@ren/ui/sidebar"
-import { ChatsList, Footer, Header, NavRow, Section, SpacesActions, useChatFilters } from "./sidebar-parts.js"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
+import { Preference } from "../lib/preference.js"
+import { ChatsList, Footer, Header, NavRow, Section, sidebarMenu, useChatFilters } from "./sidebar-parts.js"
+import { sidebarAction } from "./filter-menu.js"
 import { SpacesList } from "./sidebar-spaces.js"
-import { RouterContext } from "../lib/router-context.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 
-const newChat = { to: "/", label: "New chat", icon: IconEdit } as const
-const tasks = { to: "/tasks", label: "Tasks", icon: IconChecklist } as const
-const scheduled = { to: "/schedules", label: "Scheduled", icon: IconClock } as const
-const marketplace = { to: "/marketplace", label: "Marketplace", icon: IconLayoutGrid } as const
-type Page = typeof newChat | typeof tasks | typeof scheduled | typeof marketplace
+const newChat = { to: "/", label: "New Chat", icon: IconEdit } as const
+const tasks = { to: "/tasks", label: "Tasks", icon: IconSubtask } as const
+const automations = { to: "/automations", label: "Automations", icon: IconWebhook } as const
+const apps = { to: "/apps", label: "Apps", icon: IconApps } as const
+const drive = { to: "/drive", label: "Drive", icon: IconFolder } as const
+type Page = typeof newChat | typeof tasks | typeof automations | typeof drive | typeof apps
 
 function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
   return (
     <SidebarGroup className="shrink-0 px-0.5 py-0">
-      <SidebarMenu className="gap-1">
+      <SidebarMenu className={sidebarMenu}>
         {props.pages.map((page) => (
           <NavRow
             key={page.to}
@@ -39,21 +42,35 @@ function Nav(props: { path: string; pages: ReadonlyArray<Page> }) {
 }
 
 function CollapsibleLayout(props: { path: string }) {
-  const { platform } = RouterContext.useRouterContext()
   const chats = useChatFilters()
-  const [sections, setSections] = useState(() => SidebarPreferences.sections.read(platform.storage))
+  const sections = Preference.usePreference(SidebarPreferences.sections)
+  const setPreference = Preference.useSetPreference()
   const toggle = (section: "spaces" | "chats") => {
     const next = { ...sections, [section]: !sections[section] }
-    SidebarPreferences.sections.write(platform.storage, next)
-    setSections(next)
+    setPreference(SidebarPreferences.sections, next)
   }
   return (
     <>
       <SidebarContent className="scrollbar-thin overflow-y-auto overscroll-contain">
-        <Nav path={props.path} pages={[newChat, tasks, scheduled, marketplace]} />
+        <Nav path={props.path} pages={[newChat, tasks, automations, drive, apps]} />
         <Section
           label="Spaces"
-          actions={<SpacesActions />}
+          actions={
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    to="/spaces"
+                    aria-label="All spaces"
+                    className={buttonVariants({ variant: "ghost", size: "icon-sm", className: sidebarAction })}
+                  />
+                }
+              >
+                <IconCube />
+              </TooltipTrigger>
+              <TooltipContent>All spaces</TooltipContent>
+            </Tooltip>
+          }
           open={sections.spaces}
           onToggle={() => toggle("spaces")}
           className="shrink-0 group-data-[collapsible=icon]:hidden"
@@ -68,7 +85,7 @@ function CollapsibleLayout(props: { path: string }) {
           className="min-h-0 flex-1 group-data-[collapsible=icon]:hidden"
         >
           <div className="-mr-0.5 min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain mask-b-from-95% pr-0.5">
-            <ChatsList path={props.path} filters={chats.filters} />
+            <ChatsList path={props.path} filters={chats.filters} filtered={chats.filtered} />
           </div>
         </Section>
       </SidebarContent>

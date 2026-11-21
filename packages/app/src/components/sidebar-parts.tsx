@@ -1,30 +1,26 @@
 import type { SpaceInfo } from "@ren/client"
-import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { SessionTitle } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
+import { ChatFilters, SessionPages } from "@ren/client/react"
+import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { ChatReact } from "@ren/chat/react"
-import { Session } from "@ren/schema/session"
 import { toast } from "@ren/ui/sonner"
 import { cn } from "cn"
 import {
   IconActivity,
   IconArchive,
   IconBook,
-  IconBrandGithubFilled,
-  IconBrandSlack,
   IconCalendar,
   IconCalendarEvent,
   IconCalendarMonth,
   IconCalendarWeek,
   IconChevronRight,
   IconCircle,
-  IconClock,
   IconCube,
   IconHelpCircle,
-  IconLayoutGridFilled,
   IconLock,
   IconLogout,
-  IconMessageCircle,
   IconPencil,
   IconPin,
   IconPinnedOff,
@@ -34,9 +30,7 @@ import {
   IconSearch,
   IconSelector,
   IconSettings,
-  IconSubtask,
-  IconTicket,
-  IconWebhook,
+  IconWorld,
   type Icon,
 } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
@@ -65,12 +59,12 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
 } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { CreateOrganizationDialog } from "./create-organization-dialog.js"
-import { FilterMenu, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
-import { NewSpaceDialog } from "./new-space-dialog.js"
+import { FilterMenu, sameFilters, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
 import { RowMenu } from "./row-menu.js"
 import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
@@ -79,22 +73,51 @@ import { PersonAvatar } from "./person-avatar.js"
 import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
 import { initials } from "../lib/format.js"
-import { docsUrl, founderCallUrl } from "../lib/links.js"
-import { ownChats, sessionTitle, sidebarSessionsOptions, type SessionFilter } from "../lib/sessions.js"
+import { docsUrl, founderCallUrl, websiteUrl } from "../lib/links.js"
+import { origins } from "../lib/sessions.js"
+import { Preference } from "../lib/preference.js"
+import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
+import { useSignOut } from "../lib/use-sign-out.js"
+import { isPersonal } from "../lib/use-pinned-spaces.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
 export const sidebarRow =
-  "[&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground data-active:[&_svg]:text-sidebar-accent-foreground h-9 gap-1 rounded-md p-1.5 text-sm font-normal text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground/80 active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-normal data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:m-0.75 [&_svg]:size-4.5"
+  "h-8 gap-1 rounded-md p-1 text-sm font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:mx-1.25 [&>svg]:my-0.75 [&_svg]:size-4.5"
+
+export const sidebarMenu = "gap-px group-data-[collapsible=icon]:gap-1"
 
 const iconButton =
-  "size-8 text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
+  "size-8 text-sidebar-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent active:not-aria-[haspopup]:scale-100 group-data-[collapsible=icon]:size-9 group-data-[collapsible=icon]:[&_svg]:size-5 [&_svg]:size-4.5"
 
 const shortcut = /Mac|iPhone|iPad/u.test(navigator.userAgent) ? "⌘K" : "Ctrl+K"
 
-export function Header(props: { onSearch: () => void }) {
+function SearchButton(props: { onSearch: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-sidebar-foreground hover:text-sidebar-foreground"
+            aria-label="Search"
+            onClick={props.onSearch}
+          />
+        }
+      >
+        <IconSearch data-weight="heavy" />
+      </TooltipTrigger>
+      <TooltipContent>
+        Search <Kbd>{shortcut}</Kbd>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function Header(props: { onSearch?: (() => void) | undefined }) {
   return (
     <div className="mt-1 mb-3.5 flex items-center px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0.5">
       <span
@@ -103,23 +126,19 @@ export function Header(props: { onSearch: () => void }) {
       >
         <Logomark className="size-4.5" />
       </span>
-      <span className="flex-1 group-data-[collapsible=icon]:hidden" />
+      <span className="flex-1 text-base font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+        Ren
+      </span>
+      {props.onSearch ? (
+        <span className="group-data-[collapsible=icon]:hidden">
+          <SearchButton onSearch={props.onSearch} />
+        </span>
+      ) : null}
       <Tooltip>
         <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              className={cn(iconButton, "group-data-[collapsible=icon]:hidden")}
-              aria-label="Search"
-              onClick={props.onSearch}
-            />
-          }
-        >
-          <IconSearch data-weight="heavy" />
-        </TooltipTrigger>
-        <TooltipContent>
-          Search <Kbd>{shortcut}</Kbd>
-        </TooltipContent>
+          render={<SidebarTrigger className={cn(iconButton, "hidden group-data-[collapsible=icon]:flex")} />}
+        />
+        <TooltipContent>Toggle sidebar</TooltipContent>
       </Tooltip>
     </div>
   )
@@ -153,6 +172,7 @@ export function Section(props: {
   open?: boolean | undefined
   onToggle?: (() => void) | undefined
   className?: string | undefined
+  closed?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -164,7 +184,7 @@ export function Section(props: {
             size="sm"
             aria-expanded={props.open}
             onClick={props.onToggle}
-            className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-medium text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
+            className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-bold text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
           >
             {props.label}
             <IconChevronRight
@@ -175,13 +195,12 @@ export function Section(props: {
               )}
             />
           </Button>
-        ) : (
-          <span className="text-sm font-medium text-sidebar-foreground/80">{props.label}</span>
-        )}
+        ) : null}
+        {!props.onToggle ? <span className="text-sm font-bold text-sidebar-foreground/80">{props.label}</span> : null}
         <span className="flex-1" />
         <span className="flex items-center">{props.actions}</span>
       </div>
-      {props.open === false ? null : props.children}
+      {props.open === false ? props.closed : props.children}
     </SidebarGroup>
   )
 }
@@ -244,7 +263,7 @@ export function SpaceEntry(props: {
         <SidebarMenuButton
           className={cn(
             sidebarRow,
-            "min-w-0 flex-1 gap-2 py-1.5 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
+            "min-w-0 flex-1 gap-2 py-1 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
             props.space.membershipId === null
               ? "pr-8 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-8 pointer-fine:group-hover/space:pr-8 pointer-fine:group-has-data-popup-open/space:pr-8"
               : "pr-15 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-15 pointer-fine:group-hover/space:pr-15 pointer-fine:group-has-data-popup-open/space:pr-15",
@@ -267,7 +286,7 @@ export function SpaceEntry(props: {
                 variant: "ghost",
                 size: "icon-sm",
                 className:
-                  "text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent",
+                  "text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent",
               })}
             >
               <IconPlus data-weight="heavy" />
@@ -275,12 +294,16 @@ export function SpaceEntry(props: {
           ) : null}
           <RowMenu
             side="right"
-            className="text-sidebar-foreground/55 hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
+            className="text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground focus-visible:border-transparent focus-visible:ring-0 active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent"
             label={`${props.space.name} actions`}
             items={[
-              props.pinned
-                ? { label: "Unpin from sidebar", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
-                : { label: "Pin to sidebar", icon: IconPin, onSelect: () => props.onPin(true) },
+              ...(isPersonal(props.space)
+                ? []
+                : [
+                    props.pinned
+                      ? { label: "Unpin", icon: IconPinnedOff, onSelect: () => props.onPin(false) }
+                      : { label: "Pin", icon: IconPin, onSelect: () => props.onPin(true) },
+                  ]),
               ...(props.space.canUpdate
                 ? [{ label: "Rename", icon: IconPencil, onSelect: () => setRenaming(true) }]
                 : []),
@@ -320,87 +343,7 @@ export function SpaceEntry(props: {
   )
 }
 
-export function SpacesActions() {
-  const spaces = useSpaces().spaces
-  const [creating, setCreating] = useState(false)
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              to="/spaces"
-              aria-label="All spaces"
-              className={buttonVariants({
-                variant: "ghost",
-                size: "icon-sm",
-                className:
-                  "text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100",
-              })}
-            />
-          }
-        >
-          <IconLayoutGridFilled />
-        </TooltipTrigger>
-        <TooltipContent>All spaces</TooltipContent>
-      </Tooltip>
-      {spaces.length > 0 ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Add space"
-                className="text-sidebar-foreground/55 hover:text-sidebar-foreground active:not-aria-[haspopup]:scale-100"
-                onClick={() => setCreating(true)}
-              />
-            }
-          >
-            <IconPlus data-weight="heavy" />
-          </TooltipTrigger>
-          <TooltipContent>Add space</TooltipContent>
-        </Tooltip>
-      ) : null}
-      <NewSpaceDialog open={creating} onOpenChange={setCreating} />
-    </>
-  )
-}
-
-const days = { today: 0, week: 7, month: 30 } as const
-
-const origins = [
-  { value: "chat", label: "Chat", icon: IconMessageCircle },
-  { value: "task", label: "Task", icon: IconSubtask },
-  { value: "schedule", label: "Schedule", icon: IconClock },
-  { value: "slack", label: "Slack", icon: IconBrandSlack },
-  { value: "linear", label: "Linear", icon: IconTicket },
-  { value: "github", label: "GitHub", icon: IconBrandGithubFilled },
-  { value: "webhook", label: "Webhook", icon: IconWebhook },
-] as const
-
-type Origin = (typeof origins)[number]["value"]
-
-const isOrigin = (value: string): value is Origin => origins.some((origin) => origin.value === value)
-
-const startOfDayAgo = (daysAgo: number) => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return new Date(today.getTime() - daysAgo * 86_400_000).toISOString()
-}
-
-const chatFilter = (filters: Filters, userId: string): SessionFilter => {
-  const status = filters.status?.length === 1 ? filters.status.at(0) : undefined
-  const updated = (["today", "week", "month"] as const).find((key) => key === filters.updated?.at(0))
-  const origin = (filters.origin ?? []).filter(isOrigin)
-  return {
-    ...ownChats(userId),
-    ...(filters.space?.length && { spaceId: filters.space }),
-    ...((status === "idle" || status === "busy") && { status }),
-    ...(origin.length > 0 && { origin }),
-    ...(updated && { from: startOfDayAgo(days[updated]) }),
-  }
-}
+const rangeIcons = { today: IconCalendarEvent, week: IconCalendarWeek, month: IconCalendarMonth } as const
 
 const chatProperties = (
   spaces: ReadonlyArray<{ id: string; name: string; kind?: string | undefined }>,
@@ -417,10 +360,11 @@ const chatProperties = (
     label: "Status",
     any: "Any",
     icon: IconActivity,
-    options: [
-      { value: "busy", label: "Working", icon: IconProgress },
-      { value: "idle", label: "Idle", icon: IconCircle },
-    ],
+    options: ChatFilters.statuses.map((status) => ({
+      value: status.value,
+      label: status.label,
+      icon: status.value === "busy" ? IconProgress : IconCircle,
+    })),
   },
   { key: "origin", label: "Started from", any: "Anywhere", icon: IconRoute, options: [...origins] },
   {
@@ -429,24 +373,16 @@ const chatProperties = (
     any: "Any time",
     icon: IconCalendar,
     single: true,
-    options: [
-      { value: "today", label: "Today", icon: IconCalendarEvent },
-      { value: "week", label: "Past 7 days", icon: IconCalendarWeek },
-      { value: "month", label: "Past 30 days", icon: IconCalendarMonth },
-    ],
+    options: ChatFilters.updated.map((range) => ({
+      value: range.value,
+      label: range.label,
+      icon: rangeIcons[range.value],
+    })),
   },
 ]
 
-function useChatAttention(sessionId: string) {
-  const atoms = ChatReact.useAtoms()
-  return useSyncExternalStore(
-    (listener) => atoms.attention.subscribe(() => queueMicrotask(listener)),
-    () => atoms.attention.read(Session.ID.make(sessionId)),
-  )
-}
-
 function ChatStatus(props: { sessionId: string; busy: boolean }) {
-  const attention = useChatAttention(props.sessionId) ?? (props.busy ? "running" : "idle")
+  const attention = ChatReact.useAttention(props.sessionId, { busy: props.busy })
   if (attention === "idle") return null
   return (
     <SidebarMenuBadge className="right-2 peer-data-[size=default]/menu-button:top-2">
@@ -479,10 +415,13 @@ function LoadMore(props: { onVisible: () => void }) {
 }
 
 export function useChatFilters() {
-  const spaces = useSpaces().spaces
-  const [filters, setFilters] = useState<Filters>({})
+  const spaces = useSpaces().joined
+  const defaults = Preference.usePreference(SidebarPreferences.chatFilters)
+  const setPreference = Preference.useSetPreference()
+  const [filters, setFilters] = useState<Filters>(defaults)
   return {
     filters,
+    filtered: !sameFilters(filters, defaults),
     actions: (
       <FilterMenu
         label="Filter chats"
@@ -490,26 +429,27 @@ export function useChatFilters() {
         properties={chatProperties(spaces)}
         value={filters}
         onChange={setFilters}
+        defaults={defaults}
+        onSaveDefaults={() => setPreference(SidebarPreferences.chatFilters, filters)}
       />
     ),
   }
 }
 
-export function ChatsList(props: { path: string; filters: Filters }) {
+export function ChatsList(props: { path: string; filters: Filters; filtered: boolean }) {
   const { client } = RouterContext.useRouterContext()
   const me = useMe()
-  const filtered = Object.values(props.filters).some((values) => values.length > 0)
   const chatPages = useInfiniteQuery({
-    ...sidebarSessionsOptions(client, chatFilter(props.filters, me.user.id)),
+    ...SessionPages.options(client, ChatFilters.toFilter(props.filters, me.user.id)),
     placeholderData: keepPreviousData,
   })
   const chats = chatPages.data?.pages.flatMap((page) => page.items) ?? []
   return (
     <SidebarGroupContent className="pb-2">
-      <SidebarMenu className="gap-px">
+      <SidebarMenu className={sidebarMenu}>
         {chatPages.isSuccess && chats.length === 0 ? (
-          <li className="flex h-9 items-center pl-2.25 text-sm text-sidebar-foreground">
-            {filtered ? "No chats match these filters" : "No chats yet"}
+          <li className="flex h-8 items-center pl-2.25 text-sm text-sidebar-foreground">
+            {props.filtered ? "No chats match these filters" : "No chats yet"}
           </li>
         ) : null}
         {chats.map((chat) => (
@@ -519,7 +459,7 @@ export function ChatsList(props: { path: string; filters: Filters }) {
               isActive={props.path === `/sessions/${chat.id}`}
               render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
             >
-              <span>{sessionTitle(chat.title)}</span>
+              <span>{SessionTitle.display(chat.title)}</span>
             </SidebarMenuButton>
             <ChatStatus sessionId={chat.id} busy={chat.status === "busy"} />
           </SidebarMenuItem>
@@ -542,10 +482,10 @@ export function ChatsList(props: { path: string; filters: Filters }) {
 }
 
 function UserRow() {
-  const { auth, platform, queryClient } = RouterContext.useRouterContext()
+  const { auth, queryClient } = RouterContext.useRouterContext()
   const navigate = useNavigate()
+  const signOut = useSignOut()
   const me = useMe()
-  const [organizationQuery, setOrganizationQuery] = useState("")
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -554,9 +494,6 @@ function UserRow() {
   const allOrganizations = listed.some((organization) => organization.id === me.organization.id)
     ? listed
     : [me.organization, ...listed]
-  const matchingOrganizations = allOrganizations.filter((organization) =>
-    organization.name.toLowerCase().includes(organizationQuery.trim().toLowerCase()),
-  )
   const userName = me.user.name || me.user.email
   const switchTo = async (organizationId: string) => {
     if (organizationId === me.organization.id) return
@@ -575,7 +512,7 @@ function UserRow() {
           render={
             <SidebarMenuButton
               size="lg"
-              className="h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
+              className="group/user h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
               tooltip={`${userName} · ${me.organization.name}`}
               aria-label={`Switch organization (current: ${me.organization.name})`}
             />
@@ -589,26 +526,13 @@ function UserRow() {
             <span className="truncate text-sm font-medium tracking-tight text-sidebar-foreground">{userName}</span>
             <span className="truncate text-xs text-sidebar-foreground/80">{me.organization.name}</span>
           </span>
-          <IconSelector className="text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+          <IconSelector className="text-sidebar-foreground opacity-0 transition-opacity group-hover/user:opacity-100 group-focus-visible/user:opacity-100 group-data-popup-open/user:opacity-100 group-data-[collapsible=icon]:hidden" />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-60">
-          <div className="relative p-1">
-            <IconSearch className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={organizationQuery}
-              onChange={(event) => setOrganizationQuery(event.currentTarget.value)}
-              placeholder="Find organization"
-              aria-label="Find organization"
-              onKeyDown={(event) => {
-                if (event.key.length === 1) event.stopPropagation()
-              }}
-              className="h-7 pl-7 text-xs md:text-xs"
-            />
-          </div>
           <DropdownMenuGroup>
             <DropdownMenuLabel>Organizations</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={me.organization.id} onValueChange={(value: string) => void switchTo(value)}>
-              {matchingOrganizations.map((organization) => (
+              {allOrganizations.map((organization) => (
                 <DropdownMenuRadioItem key={organization.id} value={organization.id}>
                   <PersonAvatar name={organization.name} image={organization.logo ?? undefined} />
                   {organization.name}
@@ -638,12 +562,7 @@ function UserRow() {
           description: "You’ll need to sign in again to access Ren.",
           action: "Log out",
         }}
-        onConfirm={async () => {
-          await auth.signOut()
-          platform.analytics?.reset()
-          resetSession(queryClient)
-          await navigate({ to: "/login" })
-        }}
+        onConfirm={signOut}
       />
     </>
   )
@@ -667,6 +586,10 @@ function HelpAndSettings() {
               <IconBook />
               Documentation
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => platform.openExternal(websiteUrl)}>
+              <IconWorld />
+              Ren website
+            </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -684,7 +607,7 @@ function HelpAndSettings() {
 export function Footer() {
   return (
     <SidebarFooter className="gap-1 px-0.5 pt-2 pb-0">
-      <SidebarMenu className="group-data-[collapsible=icon]:gap-1">
+      <SidebarMenu className={sidebarMenu}>
         <NavRow
           to="/settings/preferences"
           label="Settings"

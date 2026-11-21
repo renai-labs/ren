@@ -7,22 +7,21 @@ import { SessionMessage } from "@opencode/schema/session-message"
 import type { Session as OpenCodeSession } from "@opencode/schema/session"
 import { RelativePath } from "@opencode/schema/schema"
 import { Skill } from "@opencode/schema/skill"
+import { FileSystem } from "@ren/schema/file-system"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
-import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Result, Schema, Stream } from "effect"
-import { Base64 } from "effect/encoding"
+import { posix } from "node:path"
+import { Clock, Effect, Exit, Fiber, Option, Predicate, Schedule, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
 import { Translate } from "@ren/opencode-transcript/translate"
 import { OpenCodeAttachments } from "./attachments.js"
+import { RenVcs } from "./vcs.js"
 
 const capabilities = SessionCapabilities.of("opencode")
-
-const readLimit = 1024 * 1024
 
 const Speaker = Schema.Struct({
   userID: Schema.String,
@@ -72,7 +71,7 @@ export const make = (
     | "commands"
     | "findFiles"
     | "environment"
-    | "webSearchProviders"
+    | "git"
     | "activate"
     | "chats"
   >,
@@ -170,7 +169,7 @@ export const make = (
           items: yield* readAll(found.data, Translate.message),
           cursor: {
             ...(found.cursor.previous && { previous: found.cursor.previous }),
-            ...(found.cursor.next && { next: found.cursor.next }),
+            ...(found.cursor.next && !(page.limit && found.data.length < page.limit) && { next: found.cursor.next }),
           },
         }
       }),
@@ -198,6 +197,10 @@ export const make = (
           Effect.flatMap((attachments) => {
             const metadata = {
               ...attachments.metadata,
+              ...(prompt.presentation && {
+                displayText: prompt.presentation.displayText,
+                comments: prompt.presentation.comments,
+              }),
               ...Option.match(prompt.sender, {
                 onNone: () => ({}),
                 onSome: (sender) => ({
@@ -330,54 +333,42 @@ export const make = (
             ),
           ),
         )
-        .pipe(Effect.flatMap((all) => readAll(all, Translate.file))),
+        .pipe(
+          Effect.flatMap((all) => readAll(all, Translate.file)),
+          Effect.map((entries) => ({ entries, cursor: null, actions: [] })),
+        ),
     readFile: (sessionId, path) =>
       host.environment(sessionId, (environment) =>
         environment.files.read({ path: RelativePath.make(path) }).pipe(
           Effect.catchTag("FileSystem.NotFoundError", () =>
             Effect.fail(new Harness.NotFound({ message: `${path} is not a file on the environment` })),
           ),
-          Effect.flatMap((file) => {
-            const truncated = file.size > readLimit
-            const bytes =
-              file.size === 0
-                ? Effect.succeed(new Uint8Array())
-                : file.stream({ bytesToRead: Math.min(file.size, readLimit) }).pipe(Stream.mkUint8Array, Effect.orDie)
-            return Effect.map(bytes, (read): SessionCatalog.FileContent => {
-              const text = read.includes(0)
-                ? Result.fail(undefined)
-                : Result.try(() =>
-                    new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(read, { stream: truncated }),
-                  )
-              return {
-                path,
-                mime: file.mime,
-                size: file.size,
-                truncated,
-                ...(Result.isSuccess(text)
-                  ? { encoding: "utf8", content: text.success }
-                  : { encoding: "base64", content: Base64.encode(read) }),
-              }
-            })
-          }),
+          Effect.flatMap((file) =>
+            (file.size === 0
+              ? Effect.succeed(new Uint8Array())
+              : file
+                  .stream({ bytesToRead: Math.min(file.size, FileSystem.readLimit) })
+                  .pipe(Stream.mkUint8Array, Effect.orDie)
+            ).pipe(Effect.map((bytes) => FileSystem.contentOf({ path, mime: file.mime, size: file.size, bytes }))),
+          ),
         ),
       ),
-    vcs: (sessionId) =>
-      host
-        .environment(sessionId, (environment) => environment.vcs.info())
-        .pipe(Effect.flatMap((info) => readOne(info, Translate.vcs))),
-    vcsDiff: (sessionId, options) =>
-      host.environment(sessionId, (environment) =>
-        environment.vcs
-          .diff(options.mode, { ...(Predicate.isNumber(options.context) && { context: options.context }) })
-          .pipe(
-            Effect.catchTag("Vcs.DiffError", (error) => Effect.fail(new Harness.Rejected({ message: error.message }))),
-          ),
-      ),
-    webSearchProviders: (sessionId) =>
-      host
-        .webSearchProviders(sessionId)
-        .pipe(Effect.map((all) => all.map((provider) => ({ id: provider.id, name: provider.name })))),
+    vcs: (sessionId, path) =>
+      (path
+        ? host.git(sessionId, (hand) => RenVcs.make(hand.spawner, posix.join(hand.directory, path)).info())
+        : host.environment(sessionId, (environment) => environment.vcs.info())
+      ).pipe(Effect.flatMap((info) => readOne(info, Translate.vcs))),
+    vcsProjects: (sessionId) => host.git(sessionId, (hand) => RenVcs.projects(hand.spawner, hand.directory)),
+    vcsDiff: (sessionId, options) => {
+      const context = { ...(Predicate.isNumber(options.context) && { context: options.context }) }
+      return (
+        options.path
+          ? host.git(sessionId, (hand) =>
+              RenVcs.make(hand.spawner, posix.join(hand.directory, options.path ?? "")).diff(options.mode, context),
+            )
+          : host.environment(sessionId, (environment) => environment.vcs.diff(options.mode, context))
+      ).pipe(Effect.catchTag("Vcs.DiffError", (error) => Effect.fail(new Harness.Rejected({ message: error.message }))))
+    },
     replyPermission: (sessionId, requestId, reply, message) =>
       api.permission
         .reply({
@@ -409,21 +400,45 @@ export const make = (
     shells: (sessionId) =>
       host.shells(sessionId, (shell) => shell.list()).pipe(Effect.flatMap((all) => readAll(all, Translate.shell))),
     createShell: (sessionId, input) =>
-      host
-        .environment(sessionId, (environment) =>
-          environment.shell
-            .create({
-              command: input.command,
-              ...(input.timeout && { timeout: input.timeout }),
-              metadata: { sessionID: sessionId },
-            })
-            .pipe(
-              Effect.catchTag("AppProcessError", (error) =>
-                Effect.fail(new Harness.Rejected({ message: error.message })),
-              ),
+      Effect.gen(function* () {
+        yield* host.environment(sessionId, () => Effect.void)
+        const sessionID = SessionID.make(sessionId)
+        const id = SessionMessage.ID.create()
+        const run = yield* api.session.shell({ sessionID, id, command: input.command }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("The shell command could not run", cause).pipe(
+              Effect.andThen(Effect.fail(new Harness.Rejected({ message: "The command did not start" }))),
             ),
+          ),
+          Effect.forkDetach,
         )
-        .pipe(Effect.flatMap((info) => readOne(info, Translate.shell))),
+        const poll = api.session.message.get({ sessionID, messageID: id }).pipe(
+          Effect.catchTags(
+            { SessionNotFoundError: missing, MessageNotFoundError: () => Effect.succeed(undefined) },
+            Effect.die,
+          ),
+          Effect.repeat({
+            until: Boolean,
+            schedule: Schedule.spaced("50 millis"),
+            times: 200,
+          }),
+        )
+        const started = yield* Effect.raceFirst(
+          poll,
+          Fiber.await(run).pipe(
+            Effect.flatMap((exit) => (Exit.isFailure(exit) ? Effect.failCause(exit.cause) : Effect.never)),
+          ),
+        )
+        if (started?.type !== "shell") return yield* new Harness.Rejected({ message: "The command did not start" })
+        return yield* host
+          .shells(sessionId, (shell) =>
+            Effect.gen(function* () {
+              if (input.timeout) yield* shell.timeout(started.shellID, input.timeout)
+              return yield* shell.get(started.shellID)
+            }).pipe(Effect.catchTag("Shell.NotFoundError", () => shellMissing(started.shellID))),
+          )
+          .pipe(Effect.flatMap((info) => readOne(info, Translate.shell)))
+      }),
     shell: (sessionId, shellId) =>
       host
         .shells(sessionId, (shell) =>

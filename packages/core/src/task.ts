@@ -1,5 +1,6 @@
 export * as Task from "./task.js"
 
+import { OpenCodeStore } from "./session/opencode-store.js"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
@@ -76,6 +77,8 @@ const actions = {
 }
 
 const closed: ReadonlySet<Task.Status> = new Set(["done", "dismissed"])
+
+const notStarted = (status: Task.Status) => status === "backlog" || status === "todo"
 
 const reminder = {
   description: "Reminder: hand off the task",
@@ -272,7 +275,7 @@ export const layer = Layer.effect(
           const row = options.once
             ? yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
             : yield* TaskQueries.find(transaction, access, actor, where, actions.start)
-          if (options.once && row.task.status !== "todo")
+          if (options.once && !notStarted(row.task.status))
             return yield* new Primitive.Conflict({ message: "This task already started." })
           const factory = yield* TaskFactory.read(transaction, row.task.space_id)
           const history = yield* TaskFactory.history(transaction, row.task.id)
@@ -293,7 +296,7 @@ export const layer = Layer.effect(
       const release = options.once
         ? database.db
             .update(Database.Schema.task)
-            .set({ status: "todo", updated_at: sql`now()` })
+            .set({ status: planned.task.status, updated_at: sql`now()` })
             .where(and(where, eq(Database.Schema.task.status, "in_progress")))
             .pipe(Effect.orDie)
         : Effect.void
@@ -330,18 +333,19 @@ export const layer = Layer.effect(
       return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
           const locked = yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
-          const row = options.once ? { ...locked, task: { ...locked.task, status: "todo" as const } } : locked
+          const row = options.once ? { ...locked, task: { ...locked.task, status: planned.task.status } } : locked
+          const from = row.task.status
           if (!planned.plan.sessionId)
             yield* transaction
               .insert(Database.Schema.task_session)
               .values({ task_id: id, session_id: sessionId, agent_id: planned.plan.agentId })
           yield* transaction
             .update(Database.Schema.task)
-            .set({ updated_at: sql`now()`, ...(row.task.status === "todo" && { status: "in_progress" as const }) })
+            .set({ updated_at: sql`now()`, ...(notStarted(from) && { status: "in_progress" as const }) })
             .where(eq(Database.Schema.task.id, id))
           yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
             { _tag: "started", agentId: planned.plan.agentId, sessionId, mode },
-            ...(row.task.status === "todo" ? [{ _tag: "status", from: "todo", to: "in_progress" } as const] : []),
+            ...(notStarted(from) ? [{ _tag: "status", from, to: "in_progress" } as const] : []),
           ])
           return yield* reread(transaction, actor, id)
         }),
@@ -607,6 +611,7 @@ export const layer = Layer.effect(
           input.priority ? eq(Database.Schema.task.priority, input.priority) : undefined,
           input.agentId ? eq(Database.Schema.task.agent_id, input.agentId) : undefined,
           input.ownerId ? eq(Database.Schema.task.owner_id, input.ownerId) : undefined,
+          TaskQueries.search(input.search),
           Predicate.isBoolean(input.humanReview) ? eq(Database.Schema.task.human_review, input.humanReview) : undefined,
           input.label
             ? sql`exists (
@@ -765,7 +770,6 @@ export const layer = Layer.effect(
       }),
       // oxlint-disable-next-line ren/no-comments -- A governed agent's run must end with a handoff or a review request. The first quiet end reminds the agent once; the next one, or an error, asks a person. Lock first, then read the trail, so the check sees what committed while it waited. OpenCode keeps a session's last idle, so only an idle after the run's start counts.
       runEnded: Effect.fn("Task.runEnded")(function* (sessionId: Session.ID) {
-        const opencode = Database.Schema.opencode_session
         const started = alias(Database.Schema.task_event, "started_event")
         const later = alias(Database.Schema.task_event, "later_event")
         yield* database
@@ -774,16 +778,16 @@ export const layer = Layer.effect(
               const ended = yield* transaction
                 .select({
                   task: Database.Schema.task,
-                  outcome: opencode.idle_outcome,
-                  idle: opencode.time_idle,
+                  outcome: OpenCodeStore.state.outcome,
+                  idle: OpenCodeStore.state.timeIdle,
                   agent: Database.Schema.agent.name,
                   createdBy: Database.Schema.agent_session.created_by,
                 })
-                .from(opencode)
-                .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, opencode.session_id))
+                .from(Database.Schema.agent_session)
+                .innerJoin(OpenCodeStore.chat, OpenCodeStore.join)
                 .innerJoin(
                   Database.Schema.task_session,
-                  eq(Database.Schema.task_session.session_id, opencode.session_id),
+                  eq(Database.Schema.task_session.session_id, Database.Schema.agent_session.id),
                 )
                 .innerJoin(
                   Database.Schema.task,
@@ -795,9 +799,9 @@ export const layer = Layer.effect(
                 .innerJoin(Database.Schema.agent, eq(Database.Schema.agent.id, Database.Schema.task.agent_id))
                 .where(
                   and(
-                    eq(opencode.session_id, sessionId),
-                    inArray(opencode.idle_outcome, ["succeeded", "failed"]),
-                    isNull(opencode.time_suspended),
+                    eq(Database.Schema.agent_session.id, sessionId),
+                    inArray(OpenCodeStore.state.outcome, ["succeeded", "failed"]),
+                    isNull(OpenCodeStore.state.timeSuspended),
                     isNull(Database.Schema.agent_session.parent_id),
                     inArray(Database.Schema.task.status, Task.actionable),
                     eq(Database.Schema.task.human_review, false),

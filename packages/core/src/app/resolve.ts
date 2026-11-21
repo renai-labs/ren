@@ -1,7 +1,7 @@
 export * as AppResolve from "./resolve.js"
 
 import { Database } from "@ren/db/database"
-import type { App } from "@ren/schema/app"
+import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
 import type { Mcp } from "@ren/schema/mcp"
@@ -113,9 +113,9 @@ export const layer = Layer.effect(
       const available = new Set(found.available)
       const reachedApps = new Set(found.reached.map((profile) => profile.appId))
       const implied = new Set<App.ID>()
-      const visit = (id: App.ID) => {
-        const member = found.claims.members.get(id)
-        for (const dependency of member?.dependsOn ?? []) {
+      const visit = (id: App.ID, level: number) => {
+        if (level >= App.maxDepth) return
+        for (const dependency of found.claims.members.get(id)?.dependsOn ?? []) {
           const row = apps.get(dependency)
           const hasItems =
             row &&
@@ -125,17 +125,24 @@ export const layer = Layer.effect(
             ).length > 0
           if (row && !hasItems && !reachedApps.has(dependency) && !implied.has(dependency)) {
             implied.add(dependency)
-            visit(dependency)
+            visit(dependency, level + 1)
           }
         }
       }
-      for (const id of reachedApps) visit(id)
+      for (const id of reachedApps) visit(id, 1)
       const ordered = [...reachedApps, ...implied]
         .flatMap((id) => {
           const row = apps.get(id)
           return row ? [row] : []
         })
         .toSorted((left, right) => left.slug.localeCompare(right.slug))
+      const placed = new Set<App.ID>()
+      const place = (row: AppRow): ReadonlyArray<AppRow> => {
+        if (placed.has(row.id)) return []
+        placed.add(row.id)
+        const dependsOn = found.claims.members.get(row.id)?.dependsOn ?? []
+        return [...ordered.filter((candidate) => dependsOn.includes(candidate.id)).flatMap(place), row]
+      }
       const sortedMcps = (row: AppRow) =>
         Object.entries(row.mcps)
           .filter(([slug]) => !skipped(row.id, "mcps", slug))
@@ -224,30 +231,40 @@ export const layer = Layer.effect(
         egress: found.egress,
       })
       return {
-        apps: ordered.map((row) => ({
-          appId: row.id,
-          appSlug: row.slug,
-          name: row.name,
-          profiles: found.reached
-            .filter((profile) => profile.appId === row.id)
-            .map((profile) => ({
-              slug: profile.slug,
-              name: profile.name,
-              kind: profile.kind,
-              env: Object.fromEntries(
-                ProfileItems.declared(
-                  { mcps: row.mcps, skills: row.skills, requiredCredentials: row.required_credentials },
-                  profile.slug,
-                ).flatMap((item) =>
-                  "env" in item.item &&
-                  !skipped(row.id, "env", item.item.env) &&
-                  labels.has(`${profile.id}/${item.label}`)
-                    ? [[item.item.env, item.label]]
-                    : [],
-                ),
-              ),
-            })),
-        })),
+        apps: ordered.flatMap(place).flatMap((row): ReadonlyArray<AppCatalog.AppEntry> => {
+          const includes = (found.claims.members.get(row.id)?.dependsOn ?? []).flatMap((id) => {
+            const dependency = apps.get(id)
+            return dependency ? [dependency.slug] : []
+          })
+          return [
+            {
+              appId: row.id,
+              appSlug: row.slug,
+              name: row.name,
+              ...(includes.length > 0 && { includes: includes.toSorted() }),
+              profiles: found.reached
+                .filter((profile) => profile.appId === row.id)
+                .map((profile) => ({
+                  slug: profile.slug,
+                  name: profile.name,
+                  kind: profile.kind,
+                  env: Object.fromEntries(
+                    ProfileItems.declared(
+                      { mcps: row.mcps, skills: row.skills, requiredCredentials: row.required_credentials },
+                      profile.slug,
+                    ).flatMap((item) =>
+                      "env" in item.item &&
+                      !skipped(row.id, "env", item.item.env) &&
+                      labels.has(`${profile.id}/${item.label}`)
+                        ? [[item.item.env, item.label]]
+                        : [],
+                    ),
+                  ),
+                })),
+              ...(row.environment && { environment: row.environment }),
+            },
+          ]
+        }),
         mcps: selected.mcps,
         skills: ordered.flatMap((row) =>
           Object.entries(row.skills)

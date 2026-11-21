@@ -9,7 +9,7 @@ const vendored = {
   message: "repos/ holds vendored reference source. Import from the package dependency instead.",
 }
 const serverOnly = {
-  regex: "^@ren/(core|db|server|host-api|environment-api)(/|$)",
+  regex: "^@ren/(core|db|server|host-api|hand-api)(/|$)",
   message:
     "Client-side packages never import core, db, server or the internal Host and Environment APIs. Go through @ren/client.",
 }
@@ -17,7 +17,10 @@ const platformImports = {
   regex: `^(node:|bun(:|$)|(${builtinModules.filter((name) => !name.startsWith("node:")).join("|")})(/|$))`,
   message: "This module is browser-safe. Node and Bun APIs belong in the host or platform layer.",
 }
-const only = (packages: ReadonlyArray<string>) => ["@ren/**", ...packages.map((name) => `!@ren/${name}/**`)]
+const only = (packages: ReadonlyArray<string>) => [
+  "@ren/**",
+  ...packages.flatMap((name) => [`!@ren/${name}`, `!@ren/${name}/**`]),
+]
 const chatImports = [
   vendored,
   platformImports,
@@ -52,14 +55,14 @@ const packageBoundaries: ReadonlyArray<{
     message: "The Host API depends only on schema. It holds BrainApi and RenHostApi.",
   },
   {
-    files: ["packages/environment-api/**"],
+    files: ["packages/hand-api/**"],
     group: only(["schema"]),
     message:
       "The Environment API depends only on schema. Ren signs its tokens, a brain calls it and an executor serves it.",
   },
   {
     files: ["packages/brain/**"],
-    group: only(["schema", "environment-api", "executor"]),
+    group: only(["schema", "hand-api", "executor"]),
     message:
       "Brain code runs on every host. It depends only on schema and the Environment API; tests may start an executor.",
   },
@@ -70,7 +73,7 @@ const packageBoundaries: ReadonlyArray<{
   },
   {
     files: ["packages/executor/**"],
-    group: only(["schema", "environment-api", "telemetry"]),
+    group: only(["schema", "hand-api", "telemetry"]),
     message:
       "The executor runs on an environment's machine. It depends only on schema, telemetry and the Environment API.",
   },
@@ -133,15 +136,18 @@ const packageBoundaries: ReadonlyArray<{
 ]
 
 const contains = (outer: string, inner: string) => outer.endsWith("/**") && inner.startsWith(outer.slice(0, -2))
-const inheritedPatterns = (boundary: (typeof packageBoundaries)[number]) =>
-  packageBoundaries.flatMap((each) =>
-    each === boundary || boundary.files.every((file) => each.files.some((outer) => contains(outer, file)))
-      ? [
-          ...(each.regex === undefined ? [] : [{ regex: each.regex, message: each.message }]),
-          ...(each.group === undefined ? [] : [{ group: [...each.group], message: each.message }]),
-        ]
-      : [],
+// oxlint-disable-next-line ren/no-comments -- In Oxlint 1.93.0 an import that matches a negation (`!@ren/x`) in a `group` pattern is allowed for every pattern after it, so the regex patterns go first.
+const inheritedPatterns = (boundary: (typeof packageBoundaries)[number]) => {
+  const inherited = packageBoundaries.filter(
+    (each) => each === boundary || boundary.files.every((file) => each.files.some((outer) => contains(outer, file))),
   )
+  return [
+    ...inherited.flatMap((each) => (each.regex === undefined ? [] : [{ regex: each.regex, message: each.message }])),
+    ...inherited.flatMap((each) =>
+      each.group === undefined ? [] : [{ group: [...each.group], message: each.message }],
+    ),
+  ]
+}
 
 const reactApis = [
   "useMemo",
@@ -313,7 +319,6 @@ const tailwindRules = {
   "better-tailwindcss/no-deprecated-classes": "error",
   "better-tailwindcss/no-unnecessary-whitespace": "error",
   "better-tailwindcss/no-concatenated-classes": "error",
-  "better-tailwindcss/enforce-shorthand-classes": "error",
   "better-tailwindcss/enforce-consistent-class-order": "error",
   "better-tailwindcss/enforce-consistent-variable-syntax": "error",
   "better-tailwindcss/enforce-consistent-important-position": "error",
@@ -328,11 +333,6 @@ const rawArbitraryValue = {
   message: "Raw values bypass the design tokens. Use a token class, or `var(--ren-*)` inside the arbitrary value.",
 }
 const anyVariant = "^(?:[^:]*:)*"
-const motionClass = {
-  pattern: `${anyVariant}(?:transition(?!-(?:standard|extended|none)$)(?:-.+)?|duration-.+|ease-.+|delay-.+)$`,
-  message:
-    "Motion goes through the tokens in motion.css: `transition-standard`, `transition-extended` or `transition-none`.",
-}
 const viewportUnitClass = {
   pattern: `${anyVariant}(?:min-|max-)?[hw]-screen$`,
   message: "`100vw` includes the scrollbar and `100vh` sits behind mobile browser toolbars. Use `w-full` or `h-dvh`.",
@@ -361,7 +361,36 @@ const pulseClass = {
   message: "Use `Skeleton` from @ren/ui for loading placeholders.",
 }
 
+const checkedByTypeScript = [
+  "eslint/constructor-super",
+  "eslint/getter-return",
+  "eslint/no-class-assign",
+  "eslint/no-const-assign",
+  "eslint/no-dupe-class-members",
+  "eslint/no-dupe-keys",
+  "eslint/no-func-assign",
+  "eslint/no-import-assign",
+  "eslint/no-new-native-nonconstructor",
+  "eslint/no-obj-calls",
+  "eslint/no-setter-return",
+  "eslint/no-this-before-super",
+  "eslint/no-unsafe-negation",
+  "eslint/no-unused-private-class-members",
+  "eslint/no-unused-vars",
+  "eslint/valid-typeof",
+  "react/jsx-no-duplicate-props",
+]
+
 const siteTailwind = { cwd: new URL("packages/site", import.meta.url).pathname, entryPoint: "src/styles/globals.css" }
+const mobileTailwind = {
+  cwd: new URL("packages/mobile", import.meta.url).pathname,
+  entryPoint: "src/global.css",
+  selectors: [
+    ...tailwind.selectors,
+    { kind: SelectorKind.Attribute, name: "^\\w+ClassName$" },
+    { kind: SelectorKind.Attribute, name: "^\\w+ClassName$", match: [{ type: MatcherType.String }] },
+  ],
+} satisfies Settings
 const docsTailwind = { ...siteTailwind, entryPoint: "src/styles/docs.css" }
 
 export default defineConfig({
@@ -612,28 +641,16 @@ export default defineConfig({
     "jsx-a11y/scope": "error",
     "jsx-a11y/tabindex-no-positive": "error",
 
-    ...tailwindRules,
-    "better-tailwindcss/no-restricted-classes": [
-      "error",
-      {
-        restrict: [
-          importantClass,
-          rawArbitraryValue,
-          motionClass,
-          viewportUnitClass,
-          readingOrderClass,
-          fontSmoothingClass,
-          colorRoleClass,
-          spaceClass,
-        ],
-      },
-    ],
-
     "no-restricted-globals": ["error", reflect],
     "no-restricted-properties": ["error", jsonParse],
     "no-restricted-imports": ["error", { patterns: [vendored] }],
   },
   overrides: [
+    {
+      files: ["**/*.ts", "**/*.tsx"],
+      excludeFiles: ["oxlint.config.ts"],
+      rules: Object.fromEntries(checkedByTypeScript.map((rule) => [rule, "off"])),
+    },
     {
       files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
       rules: {
@@ -664,7 +681,12 @@ export default defineConfig({
       rules: { "typescript/no-unsafe-assignment": "off" },
     },
     {
-      files: ["**/routes/**/*.tsx", "**/components/**/*.tsx", "**/platform/**/*.tsx"],
+      files: [
+        "**/routes/**/*.tsx",
+        "**/components/**/*.tsx",
+        "**/platform/**/*.tsx",
+        "packages/mobile/src/features/**/*.tsx",
+      ],
       rules: { "react/only-export-components": "off" },
     },
 
@@ -726,6 +748,26 @@ export default defineConfig({
     {
       files: ["packages/util/src/**"],
       rules: { "no-restricted-globals": ["error", reflect, ...serverGlobals] },
+    },
+    {
+      files: ["packages/{app,ui,site,mobile}/**"],
+      rules: {
+        ...tailwindRules,
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            restrict: [
+              importantClass,
+              rawArbitraryValue,
+              viewportUnitClass,
+              readingOrderClass,
+              fontSmoothingClass,
+              colorRoleClass,
+              spaceClass,
+            ],
+          },
+        ],
+      },
     },
     {
       files: ["packages/ui/src/**", "packages/app/src/**"],
@@ -838,6 +880,32 @@ export default defineConfig({
         ...Object.fromEntries(Object.keys(tailwindRules).map((rule) => [rule, ["error", docsTailwind]])),
         "better-tailwindcss/no-unknown-classes": ["error", { ...docsTailwind, ignore: ["^docs-"] }],
       },
+    },
+    {
+      files: ["packages/mobile/**"],
+      rules: {
+        ...Object.fromEntries(Object.keys(tailwindRules).map((rule) => [rule, ["error", mobileTailwind]])),
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            ...mobileTailwind,
+            restrict: [importantClass, rawArbitraryValue, readingOrderClass, colorRoleClass, spaceClass],
+          },
+        ],
+        "jsx-a11y/prefer-tag-over-role": "off",
+        "no-restricted-imports": restrictedImports(reactApis, reactMessage, [
+          ...browserPatterns,
+          {
+            group: only(["client", "chat", "schema", "util"]),
+            message:
+              "The mobile app depends on client, chat, schema and util only. Move shared logic out of @ren/app into the package that owns it.",
+          },
+        ]),
+      },
+    },
+    {
+      files: ["packages/mobile/src/app/**"],
+      rules: { "import/no-default-export": "off" },
     },
     {
       files: ["packages/app/src/main.tsx"],

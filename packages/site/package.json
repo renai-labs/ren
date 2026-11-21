@@ -8,8 +8,12 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "check:routes": "bun script/check-routes.ts",
     "preview": "astro preview",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
+    "sync": "astro sync",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun test --only-failures",
+    "test:all": "bun ../../script/signoff/record.ts bun test --only-failures",
     "typecheck": "astro check"
   },
   "dependencies": {
@@ -37,7 +41,6 @@
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "sharp": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"

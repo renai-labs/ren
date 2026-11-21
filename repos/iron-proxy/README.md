@@ -7,7 +7,8 @@ All outbound traffic of a workload (a brain or a hand) goes through the egress. 
 ```
  workload ──SOCKS5 or HTTP proxy, with a login──▶ egress ──HTTPS JSON, mTLS──▶ Ren (EGRESS_PORT)
                                                     │  POST /egress/v1/authenticate   once per connection
-                                                    │  POST /egress/v1/resolve        once per request (kept 30 s)
+                                                    │  POST /egress/v1/resolve        once per request with a ren: placeholder
+                                                    │                                 (kept 30 s; identical calls in flight share one)
  Ren ──HTTPS JSON, mTLS──▶ egress control_listen    │  POST /egress/v1/invalidate     after a delete, move, offboarding, replace
                                                     ▼
                                                upstream (real value, never ren:X)
@@ -21,7 +22,7 @@ All outbound traffic of a workload (a brain or a hand) goes through the egress. 
 | 2. The login goes with each request; the password does not | `transform.TunnelInfo.ProxyLogin`; resolve sends the `Login` proof |
 | 3. The tunnel target and the `Host` name one host | `internal/proxy/proxy.go` (`handleHTTP`) |
 | 4. No start without the hook address and certificates; fail closed | `ren.Config.Validate`; a hook that does not answer gives `ren_unavailable` |
-| 5. Answer cache, keyed by login, host and placeholders: fresh for Ren's `ttl` (default 30 s), the last allow answer 15 min when Ren does not answer, never a denial, never past the answer's `expiresAt`. An answer or login that was in flight during an invalidate is not kept. | `internal/ren/client.go` (`Resolve`, `Authenticate`, `sweep`) |
+| 5. Answer cache, keyed by login, host and placeholders: fresh for Ren's `ttl` (default 30 s), the last allow answer 15 min when Ren does not answer, never a denial, never past the answer's `expiresAt`. An answer or login that was in flight during an invalidate is not kept. Identical requests in flight share one call to Ren; a request after an invalidate starts its own. | `internal/ren/client.go` (`Resolve`, `Authenticate`, `sweep`, `flight`) |
 | 6. Invalidate by workload, label or login; a login also closes its connections | `internal/ren/client.go` (`Invalidate`), `internal/ren/handle.go` (`ServeControl`) |
 | 7. Placeholders in raw, percent-encoded and `Basic` form, in headers, query and path; a body is never searched or changed; every denial is `403` with `x-ren-egress`; supported ops sent on each resolve | `internal/ren/scan.go`, `internal/ren/handle.go` (`Deny`) |
 | 8. Mask: an injected value that comes back in a response header, or in a body of at most 1 MB that is not a stream, is replaced by its placeholder (`ren:MASKED` for a header Ren set). A request with injected values asks the upstream for no encoding. | `internal/ren/mask.go`, `internal/ren/handle.go` |
@@ -29,6 +30,7 @@ All outbound traffic of a workload (a brain or a hand) goes through the egress. 
 | 10. A `route` op with `placeholder` removes the first path segment when it is the placeholder, raw or percent-encoded, then appends the rest of the path to the upstream | `internal/ren/scan.go` (`removeFirstSegment`, `routeTarget`) |
 | 11. An `awsSign` op removes the request's SigV4 signature, which holds a placeholder, and signs it again with Ren's keys and session token, for the region and service of the removed signature. It signs only the `host`, `x-amz-*` and `Content-MD5` headers (S3 refuses an upload whose `Content-MD5` is not signed), so the headers the egress drops later (`Accept-Encoding`, hop-by-hop) are not signed, and it does not escape an S3 path twice. It signs uploads with an unsigned payload, plain or `aws-chunked` with an unsigned trailer, and refuses a body whose chunks are signed, since each chunk's signature chains from the removed one. The secret and the session token are masked. | `internal/ren/awssign.go`, `internal/ren/scan.go` (`apply`), `internal/ren/mask.go` |
 | 12. `tls.passthrough_hosts`: a tunnel whose TLS host name is on the list is passed through without decryption, as in `sni-only` mode, also when the proxy runs in `mitm` mode. Login, pipeline and upstream address checks still apply; nothing is injected. The upstream port is always 443. | `internal/config/config.go` (`TLS.PassthroughHosts`), `internal/proxy/tunnel.go` (`serveTunnelTLS`) |
+| 13. Only a request with a `ren:` placeholder asks Ren. Any other request goes on unchanged: a credential goes in only by its placeholder, the login was checked at connect (change 1), and which hosts a workload reaches is the machine provider's rule, not the egress's. | `internal/ren/handle.go` (`Handle`) |
 
 The hook is HTTP and JSON (`@ren/egress-api`), not the upstream gRPC `TransformService`, so that one contract serves Ren's own egress and other proxies.
 

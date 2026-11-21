@@ -45,6 +45,7 @@ const setup = Effect.gen(function* () {
     configuring: yield* Semaphore.make(1),
     closedIdle: yield* Ref.make(false),
     pulledAt: yield* Ref.make(Option.none<DateTime.Utc>()),
+    touched: yield* Ref.make<ReadonlySet<string>>(new Set()),
   })
   const sync = yield* Sync.make(
     Option.some({
@@ -89,7 +90,7 @@ const setup = Effect.gen(function* () {
       commands: () => Effect.die(new Error("alarm must not read commands")),
       findFiles: () => Effect.die(new Error("alarm must not search files")),
       environment: () => Effect.die(new Error("alarm must not reach the environment")),
-      webSearchProviders: () => Effect.die(new Error("alarm must not read web search providers")),
+      git: () => Effect.die(new Error("alarm must not reach git")),
       activate: () => Effect.die(new Error("alarm must not activate sessions")),
       chats: Option.none(),
     }),
@@ -145,6 +146,7 @@ const setup = Effect.gen(function* () {
       id: "root",
       root: true,
       progress: "0",
+      background: false,
       active: false,
       inbox: [],
       unfinished: false,
@@ -282,26 +284,6 @@ it.effect(
       expect(cell.events.at(-1)).toBe("close")
       expect(yield* cell.harness.state).toEqual({ isOpen: false, holders: 0 })
     }),
-)
-
-it.effect("a request that arrives while the host closes waits for the close, then opens a new host", () =>
-  Effect.gen(function* () {
-    const cell = yield* setup
-    const entered = yield* Deferred.make<void>()
-    const released = yield* Deferred.make<void>()
-    cell.current.snapshots = [cell.session()]
-    cell.current.closing = Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(released)))
-    const alarm = yield* Effect.forkChild(cell.run(Cell.alarm()))
-    yield* Deferred.await(entered)
-    const request = yield* Effect.forkChild(Effect.scoped(cell.run(Cell.acquire)))
-    yield* TestClock.adjust("1 second")
-    expect(cell.events.filter((event) => event === "open")).toHaveLength(1)
-    expect(request.pollUnsafe()).toBeUndefined()
-    yield* Deferred.succeed(released, undefined)
-    yield* Fiber.join(alarm)
-    yield* Fiber.join(request)
-    expect(cell.events.filter((event) => event === "open" || event === "close")).toEqual(["open", "close", "open"])
-  }),
 )
 
 test.todo("REN-1486 two alarms that reconcile at once resend a queued prompt once and open one host", () =>

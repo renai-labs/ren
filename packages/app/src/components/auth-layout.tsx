@@ -1,6 +1,6 @@
+import { AuthForm, type AuthError } from "@ren/client"
 import { useEffect, useId, useState, type ComponentProps, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Channel } from "@ren/schema/channel"
 import { IconAlertCircle, IconChevronLeft, IconEye, IconEyeOff } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
@@ -10,7 +10,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@ren/ui/input-otp"
 import { Spinner } from "@ren/ui/spinner"
 import { GitHubMark, GoogleMark, SlackMark } from "../icons/brands.js"
-import { destinationHref, type AuthFailure, type Destination } from "../lib/auth.js"
+import { destinationHref, type Destination } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 
@@ -26,10 +26,10 @@ export function AuthLayout(props: {
       <div className="flex w-full flex-1 flex-col items-center justify-center py-12">
         <div className="flex w-full max-w-80 flex-col gap-8">
           <div className="flex flex-col">
-            <h1 className="text-xl/7 font-medium tracking-tight">{props.title ?? "Welcome to Ren"}</h1>
+            <h1 className="text-xl/7 font-medium tracking-tight">{props.title ?? AuthForm.title}</h1>
             {props.description === null || props.description === "" ? null : (
               <p className="text-xl/7 tracking-tight text-muted-foreground">
-                {props.description ?? "Self-improving software"}
+                {props.description ?? AuthForm.description}
               </p>
             )}
           </div>
@@ -53,7 +53,7 @@ export function AuthLayout(props: {
 function LegalFooter(props: { purpose?: "browse" | "signup" | undefined }) {
   return (
     <FieldDescription className="text-center text-xs [&>a]:no-underline [&>a:hover]:text-foreground">
-      {props.purpose === "signup" ? "By creating an account, you agree to the " : null}
+      {props.purpose === "signup" ? AuthForm.signUpAgreement : null}
       <Link href="/terms/" external appearance="plain">
         Terms of Service
       </Link>{" "}
@@ -103,7 +103,7 @@ export function BackButton(props: { onClick: () => void; children?: ReactNode | 
   )
 }
 
-export function GoogleButton(props: { destination: Destination }) {
+export function GoogleButton(props: { destination: Destination; before?: () => Promise<unknown> }) {
   const { auth } = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
   const afterAuth = `${platform.appUrl}${destinationHref({ ...props.destination, join: true })}`
@@ -113,11 +113,13 @@ export function GoogleButton(props: { destination: Destination }) {
       variant="secondary"
       className="h-10 w-full"
       onClick={() =>
-        void auth.signIn.social({ provider: "google", callbackURL: afterAuth, newUserCallbackURL: afterAuth })
+        void Promise.resolve(props.before?.()).then(() =>
+          auth.signIn.social({ provider: "google", callbackURL: afterAuth, newUserCallbackURL: afterAuth }),
+        )
       }
     >
       <GoogleMark data-icon="inline-start" className="size-4" />
-      Continue with Google
+      Continue with {AuthForm.providerTitle("google")}
     </Button>
   )
 }
@@ -148,7 +150,7 @@ export function SocialButton(props: { provider: "github" | "slack"; destination:
       }
     >
       <Icon data-icon="inline-start" />
-      Continue with {Channel.titles[props.provider]}
+      Continue with {AuthForm.providerTitle(props.provider)}
     </Button>
   )
 }
@@ -170,21 +172,19 @@ function useCountdown(seconds: number) {
   }
 }
 
-const codeLength = 6
-
 export function CodeVerification(props: {
   email: string
-  verify: (code: string) => Promise<AuthFailure | undefined>
-  resend: () => Promise<AuthFailure | undefined>
+  verify: (code: string) => Promise<AuthError.Failure | undefined>
+  resend: () => Promise<AuthError.Failure | undefined>
 }) {
   const id = useId()
   const [code, setCode] = useState("")
   const [error, setError] = useState("")
   const [verifying, setVerifying] = useState(false)
   const [resending, setResending] = useState(false)
-  const countdown = useCountdown(30)
+  const countdown = useCountdown(AuthForm.resendSeconds)
   const submit = async (value: string) => {
-    if (verifying || value.length !== codeLength) return
+    if (verifying || value.length !== AuthForm.codeLength) return
     setVerifying(true)
     setError("")
     const failure = await props.verify(value)
@@ -213,7 +213,7 @@ export function CodeVerification(props: {
       </FieldLabel>
       <InputOTP
         id={id}
-        maxLength={codeLength}
+        maxLength={AuthForm.codeLength}
         value={code}
         // oxlint-disable-next-line jsx-a11y/no-autofocus -- the step exists to take this code
         autoFocus

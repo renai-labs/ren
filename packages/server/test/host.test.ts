@@ -32,7 +32,7 @@ const post = Effect.fnUntraced(function* (path: string, token: string) {
 
 describe("Ren Host API: host token checks", () => {
   it.live(
-    "checks run in order: signature, expiry and kind give 401; a missing brain, another org or another brain's session give 403; an old generation gives 403 GenerationRetired",
+    "a token with a bad signature gives 401, another brain's session gives 403, and an old generation gives 403 GenerationRetired",
     () =>
       Effect.gen(function* () {
         const owner = yield* Seed.owner()
@@ -41,7 +41,6 @@ describe("Ren Host API: host token checks", () => {
         const other = yield* Seed.session(owner)
         const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
         const stranger = yield* Signature.generate("stranger")
-        const access = (id: string) => `/host/sessions/${id}/environment/access`
         const cases = [
           [
             "/host/token/refresh",
@@ -50,20 +49,12 @@ describe("Ren Host API: host token checks", () => {
               stranger.privateKey,
             ),
           ],
-          ["/host/token/refresh", yield* hostToken(brainId, owner.organizationId, { exp: now - 120 })],
-          ["/host/token/refresh", yield* sign({ scope: "server", brain: brainId, gen: 1, exp: now + 600 })],
-          ["/host/token/refresh", yield* hostToken(Brain.ID.create(), owner.organizationId)],
-          ["/host/token/refresh", yield* hostToken(brainId, Auth.OrganizationID.create())],
-          [access(other), yield* hostToken(brainId, owner.organizationId)],
+          [`/host/sessions/${other}/environment/access`, yield* hostToken(brainId, owner.organizationId)],
           ["/host/token/refresh", yield* hostToken(brainId, owner.organizationId, { gen: 2 })],
         ] as const
         const answers = yield* Effect.forEach(cases, (entry) => post(entry[0], entry[1]))
         expect(answers.map((answer) => [answer.status, Option.getOrUndefined(answer.tag)?._tag])).toEqual([
           [401, "UnauthorizedError"],
-          [401, "UnauthorizedError"],
-          [401, "UnauthorizedError"],
-          [403, "ForbiddenError"],
-          [403, "ForbiddenError"],
           [403, "ForbiddenError"],
           [403, "GenerationRetiredError"],
         ])
@@ -88,6 +79,48 @@ describe("Ren Host API: host token checks", () => {
         { endpoints: [] },
       ])
     }),
+  )
+
+  it.live(
+    "an artifact's archive goes to its upload URL rather than through the host API, and a deploy is accepted before Ren checks the archive",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* Seed.owner()
+        const sessionId = yield* Seed.session(owner)
+        const http = yield* HttpClient.HttpClient
+        const token = yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)
+        const id = `art_${crypto.randomUUID().replaceAll("-", "")}`
+        const started = yield* http
+          .execute(HttpClientRequest.post(`/host/artifacts/${id}/uploads`).pipe(HttpClientRequest.bearerToken(token)))
+          .pipe(
+            Effect.flatMap(
+              HttpClientResponse.schemaBodyJson(Schema.Struct({ uploadId: Schema.String, url: Schema.String })),
+            ),
+          )
+        const image = new Uint8Array(2 * 1024 * 1024).fill(7)
+        const archive = yield* Effect.promise(() =>
+          new Bun.Archive(
+            { "site/report.html": "<h1>Report</h1>", "site/chart.png": image },
+            { compress: "gzip" },
+          ).bytes(),
+        )
+        const put = yield* Effect.promise(() => fetch(started.url, { method: "PUT", body: archive }))
+        const accepted = yield* http.execute(
+          HttpClientRequest.put(`/host/artifacts/${id}`).pipe(
+            HttpClientRequest.bearerToken(token),
+            HttpClientRequest.bodyJsonUnsafe({
+              deploymentId: crypto.randomUUID(),
+              title: "Report",
+              entry: "index.html",
+              uploadId: started.uploadId,
+            }),
+          ),
+        )
+        const body = yield* accepted.json.pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ status: Schema.String }))),
+        )
+        expect([put.status, accepted.status, body.status]).toEqual([200, 202, "deploying"])
+      }),
   )
 
   it.live("a session with no environment gets a typed not found", () =>

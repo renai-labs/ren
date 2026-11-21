@@ -27,17 +27,17 @@ const start = Schema.decodeUnknownExit(Session.StartInput)
 test.each<[string, (input: unknown) => Exit.Exit<unknown, unknown>, unknown]>([
   ["a file that is not a data URL", send, { sessionId, ...message([{ url: "https://example.com/a.png" }]) }],
   [
-    "a file over 10 MB",
+    "a text file over its inline limit",
     send,
-    { sessionId, ...message([{ url: `data:text/plain,${"a".repeat(Session.maxFileBytes + 1)}` }]) },
+    { sessionId, ...message([{ url: `data:text/plain,${"a".repeat(Session.inlineLimitOf("text/plain") + 1)}` }]) },
   ],
   [
-    "an initial message with a file over 10 MB",
+    "an initial message with a text file over its inline limit",
     start,
     {
       sessionId,
       harness: "opencode",
-      initialMessage: message([{ url: `data:text/plain,${"a".repeat(Session.maxFileBytes + 1)}` }]),
+      initialMessage: message([{ url: `data:text/plain,${"a".repeat(Session.inlineLimitOf("text/plain") + 1)}` }]),
     },
   ],
 ])("the Brain API refuses %s", (_name, decode, payload) => {

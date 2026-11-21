@@ -21,8 +21,8 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - **Brain**: the agent loop that serves a session, or every session in a space. It serves the Brain API and the Chat API.
 - **Harness**: the agent runtime inside a brain, such as OpenCode.
 - **Host**: where a brain runs (`BrainHost`): a cell, which is a Durable Object, or a sandbox.
-- **Environment**: one running sandbox where a brain's tools run, served by an **executor**. An **EnvironmentProvider** makes environments; an **EnvironmentTemplate** is the saved config for one.
-- **Runtime**: a brain's harness, host, environment and scope. A space has one, and each session keeps the one it started with.
+- **Hand**: one running machine where a brain's tools run, served by an **executor**. A **MachineProvider** makes machines; a **MachineTemplate** is the saved config for one.
+- **Runtime**: a brain's harness, host, hand and scope. A space has one, and each session keeps the one it started with.
 
 ## Git
 
@@ -35,14 +35,15 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
 - `host-api` holds the internal contracts between Ren and a session's host, one per direction: `BrainApi` (`cell` serves, `core` calls) and `RenHostApi` (`server` serves, `cell` calls). It depends only on `schema`. `cell` depends only on `schema`, `telemetry`, `host-api`, `environment-api`, `brain` and the Chat API (`@ren/protocol/chat`, which it serves to clients).
-- `environment-api` is the internal contract between a brain and an environment's executor, and the environment token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
-- `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema`, `telemetry` and `environment-api`.
-- `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.
+- `hand-api` is the internal contract between a brain and a hand's executor, and the hand token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
+- `executor` runs on a hand's machine and serves the Hand API. It depends only on `schema`, `telemetry` and `hand-api`.
+- `brain` holds brain code that is the same on every host and every harness: how a brain reaches its hand. It depends only on `schema` and `hand-api`.
 - `opencode-transcript` holds what Ren knows about OpenCode's storage: it syncs OpenCode's tables to Ren (`OpenCodeSync`), reads its rows and translates them into the Chat API types. It depends only on `schema`, `@opencode/schema` and `@opencode/core/session/info`. `cell` and `server` use it; `core` never imports it.
 - `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
+- `mobile` is the iOS and Android app (Expo). It builds on `client`, `chat`, `schema` and `util`, never on `app` or `ui`: logic both apps need moves into the package that owns it.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
 - `telemetry` is how a process sends telemetry: OTLP export from the standard `OTEL_*` variables, and PostHog's error reporter in `posthog.ts`, the only module that knows a telemetry vendor. It imports nothing from Ren. `core`, `server`, `cell` and `executor` use it; only a process's main file provides `PostHog.layer`.
-- `client`, `chat`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
+- `client`, `chat`, `sdk`, `cli`, `app`, `mobile` and `ui` never import `core`, `db`, `server`, `host-api` or `hand-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them. The one exception is `repos/iron-proxy`, Ren's egress: a subtree of iron-proxy (Go) that Ren builds on and edits, and a workspace (`@ren/egress`). See `repos/iron-proxy/AGENTS.md`.
 
@@ -78,6 +79,7 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 ## Checks
 
 - Run `bun run check` from the repo root. It covers what changed since the branch left `main`; `bun run check:all` covers everything, and the pre-push hook reuses or runs it and attaches it and the latest test runs to the commit (`CONTRIBUTING.md`, Signoff). Run `bun run format` to fix formatting.
+- The mobile checks are Turbo tasks of `@ren/mobile`: `check:bundle` (Metro export with Hermes bytecode, part of `typecheck:all`), `check:bundle:fast` (the same export without bytecode, in `bun run check`), `check:generated` (part of `lint:all`) and `check:doctor` (network, uncached, only in `bun run check` when the lockfile, the root or mobile `package.json` or the Expo config changed). Add new heavy checks the same way, so they run under the memory queue of `lint` and `typecheck`.
 - A package's `test:all` script and the root `lint` and `typecheck` scripts go through `script/signoff/record.ts`. Keep it there when you change one.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
-- Typecheck uses project references. A package's `tsconfig.src.json` emits declarations to `node_modules/.ts-dist`, and a dependent reads those instead of the package's source. `tsconfig.tests.json` covers `test` and `script`; `tsconfig.json` lists both. When you add a dependency between packages, add the reference to both files.
+- Typecheck runs `tsrs -b` (a Rust port of TypeScript 7.1, the compiler behind Oxlint's type-aware rules) and uses project references. A package's `tsconfig.src.json` emits declarations to `node_modules/.ts-dist`, and a dependent reads those instead of the package's source. `tsconfig.tests.json` covers `test` and `script`; `tsconfig.json` lists both. When you add a dependency between packages, add the reference to both files.

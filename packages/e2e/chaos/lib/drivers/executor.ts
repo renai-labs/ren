@@ -1,7 +1,7 @@
 export * as ExecutorDriver from "./executor.js"
 
-import type { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import type { HandApi } from "@ren/hand-api/hand-api"
+import { HandClient } from "@ren/hand-api/hand-client"
 import { Cause, Effect, Exit, ManagedRuntime, Predicate, Scope, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Wait } from "../wait.js"
@@ -17,7 +17,7 @@ export const connect = async (url: string, token: string) => {
   const runtime = ManagedRuntime.make(FetchHttpClient.layer)
   const scope = Effect.runSync(Scope.make())
   const client = await runtime.runPromise(
-    EnvironmentClient.make({ url: new URL(url), token: Effect.succeed(token) }).pipe(Scope.provide(scope)),
+    HandClient.make({ url: new URL(url), token: Effect.succeed(token) }).pipe(Scope.provide(scope)),
   )
   const run = <A, E>(effect: Effect.Effect<A, E>) => runtime.runPromiseExit(effect)
   const ok = async <A, E>(effect: Effect.Effect<A, E>) => {
@@ -25,8 +25,8 @@ export const connect = async (url: string, token: string) => {
     if (Exit.isSuccess(exit)) return exit.value
     throw new Error(`executor call failed with ${errorTag(exit)}: ${Cause.pretty(exit.cause)}`)
   }
-  const output = async (id: EnvironmentApi.ProcessID, ms = 30_000) => {
-    const events: Array<EnvironmentApi.ProcessEvent> = []
+  const output = async (id: HandApi.ProcessID, ms = 30_000) => {
+    const events: Array<HandApi.ProcessEvent> = []
     const exit = await Wait.deadline(
       `process.output ${id}`,
       ms,

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width" /><title>Operations dashboard</title
+  ><link rel="stylesheet" href="/style.css" />
+  <main>
+    <header>
+      <p class="eyebrow">NORTHSTAR / LIVE OPERATIONS</p>
+      <h1>Operations dashboard</h1>
+      <p>Small signals. A clear picture.</p>
+    </header>
+    <section aria-live="polite" id="metrics">Loading current metrics…</section>
+    <p id="status" role="status"></p>
+    <button id="refresh">Refresh metrics</button><a href="/report.html">Read quarterly report →</a>
+  </main>
+  <script type="module">
+    const metrics = document.querySelector("#metrics"),
+      status = document.querySelector("#status")
+    async function load() {
+      try {
+        const response = await fetch("/api/metrics")
+        if (!response.ok) throw Error("Metrics unavailable")
+        const data = await response.json()
+        metrics.replaceChildren(
+          ...[
+            ["Requests", data.requests.toLocaleString()],
+            ["Availability", data.availability + "%"],
+            ["P95 latency", data.latency + " ms"],
+          ].map(([label, value]) => {
+            const card = document.createElement("article")
+            const heading = document.createElement("h2")
+            heading.textContent = label
+            const number = document.createElement("strong")
+            number.textContent = value
+            card.append(heading, number)
+            return card
+          }),
+        )
+        status.textContent = "Connected · release " + data.version
+      } catch (error) {
+        status.textContent = error.message
+      }
+    }
+    document.querySelector("#refresh").onclick = load
+    load()
+  </script>
+</html>

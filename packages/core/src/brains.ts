@@ -6,6 +6,7 @@ import type { StartBody, Synced } from "@ren/host-api/brain-api"
 import {
   BrainRejectedError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   GenerationRetiredError,
@@ -25,26 +26,11 @@ import {
 } from "@ren/host-api/ren-host-api"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, inArray, isNull } from "drizzle-orm"
-import {
-  ByteSize,
-  Cause,
-  Clock,
-  Config,
-  Context,
-  DateTime,
-  Effect,
-  Layer,
-  Option,
-  Redacted,
-  Ref,
-  Schedule,
-  Schema,
-  Struct,
-} from "effect"
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
+import { Cause, Clock, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schedule, Schema, Struct } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
@@ -56,16 +42,18 @@ import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
 import { Drives } from "./drives.js"
-import { Environments } from "./environments.js"
+import { Hands } from "./hands.js"
 import { Memory } from "./memory.js"
 import { Models } from "./models.js"
 import { Settings } from "./settings.js"
 import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
+import { SpaceCompute } from "./space-compute.js"
 
 export {
   BrainRejectedError,
   EnvironmentNotFoundError,
+  EnvironmentStartingError,
   EnvironmentUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
@@ -102,7 +90,11 @@ export interface Interface {
   readonly accessEnvironment: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
-  ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError | ForbiddenError>
+    options?: { readonly unreachable?: boolean },
+  ) => Effect.Effect<
+    Hand.Access,
+    EnvironmentNotFoundError | EnvironmentUnavailableError | EnvironmentStartingError | ForbiddenError
+  >
   readonly releaseEnvironment: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
@@ -110,7 +102,7 @@ export interface Interface {
   readonly directoryOf: (
     host: CurrentHost["Service"],
     sessionId: Session.ID,
-  ) => Effect.Effect<Option.Option<Environment.Directory>, ForbiddenError>
+  ) => Effect.Effect<Option.Option<Hand.Directory>, ForbiddenError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Brains") {}
@@ -176,13 +168,13 @@ export const StartRun = DurableRunner.make("StartRun", {
     `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}:${payload.epoch}`,
 })
 
-const lostSandbox = {
-  description: "The sandbox stopped and Ren replaced it",
+// oxlint-disable-next-line ren/no-comments -- One note for every replace that stopped a chat, forced or planned (a template change at a wake): what the model lost, not why.
+const replacedSandbox = {
+  description: "Ren replaced the sandbox",
   source: "brain",
   text:
-    "Your sandbox stopped answering, most often because it ran out of memory, and Ren replaced it with a new one. " +
-    "The command that was running did not finish, and its output is lost. Files that were only on the old sandbox " +
-    "can be gone. Check what is there before you continue, and do not run the same heavy command again in one go.",
+    "Ren replaced your sandbox with a new one. The command that was running did not finish, and its output is lost. " +
+    "Files that were only on the old sandbox can be gone. Check what is there before you continue.",
 }
 
 const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))
@@ -190,9 +182,6 @@ const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new Br
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const config = yield* Config.all({
-      maxFileSize: Config.ByteSize("BRAIN_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.megabytes(10))),
-    })
     const database = yield* Database.Service
     const access = yield* Access.Service
     const appResolve = yield* AppResolve.Service
@@ -200,7 +189,8 @@ export const layer = Layer.effect(
     const models = yield* Models.Service
     const credentialEnv = yield* CredentialEnv.Service
     const settings = yield* Settings.Service
-    const environments = yield* Environments.Service
+    const environments = yield* Hands.Service
+    const compute = yield* SpaceCompute.Service
     const drives = yield* Drives.Service
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
@@ -232,6 +222,21 @@ export const layer = Layer.effect(
       return row
     })
 
+    // oxlint-disable-next-line ren/no-comments -- New work waits for no shutdown: it is refused while one runs, and it wakes a brain that a finished shutdown stopped. A reconnect or a file poll never comes here.
+    const admit = Effect.fnUntraced(function* (brainId: Brain.ID) {
+      const row = (yield* database.db
+        .select({ phase: Database.Schema.brain.phase, shutdown: Database.Schema.space.shutdown_state })
+        .from(Database.Schema.brain)
+        .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.brain.space_id))
+        .where(eq(Database.Schema.brain.id, brainId))
+        .pipe(Effect.orDie)).at(0)
+      if (row?.shutdown)
+        return yield* new BrainRejectedError({
+          message: "The space is shutting down. Send the message again when it has finished.",
+        })
+      if (row?.phase === "stopped") yield* brainHost.retry(brainId)
+    })
+
     const inBrain = Effect.fnUntraced(function* (host: CurrentHost["Service"], sessionId: Session.ID) {
       const found = yield* database.db
         .select({ id: Database.Schema.agent_session.id })
@@ -250,29 +255,23 @@ export const layer = Layer.effect(
 
     const validatePrompt = Effect.fn("Brains.validatePrompt")(function* (prompt: Session.Prompt) {
       const inline = [...(prompt.files ?? []).filter(Session.isInline), ...(prompt.fallback ?? [])]
-      const large = inline.find((file) =>
-        ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
-      )
+      const large = inline.find((file) => Session.fileBytes(file.url) > Session.inlineLimitOf(Session.mimeOf(file.url)))
       if (large)
         return yield* new BrainRejectedError({
-          message: `${large.name ?? "A file"} is larger than ${ByteSize.format(config.maxFileSize, { system: "decimal" })}`,
+          message: `${large.name ?? "A file"} is over the inline limit (${Session.inlineLimits})`,
         })
       if (
-        [prompt.files ?? [], prompt.fallback ?? []].some((files) => Session.inlineBytes(files) > Session.maxFileBytes)
+        [prompt.files ?? [], prompt.fallback ?? []].some((files) => Session.inlineBytes(files) > Session.maxInlineBytes)
       )
-        return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
+        return yield* new BrainRejectedError({ message: "A message’s inline files total more than 20 MiB" })
     })
 
-    const handOf = Effect.fnUntraced(function* (brainId: Brain.ID, generation: number) {
-      return Option.map(yield* brainHost.hand(brainId), (hand): Environments.Hand => ({
-        brainId,
-        generation,
-        url: hand.url,
-        workspace: hand.workspace,
-        egress: hand.egress,
-        canMount: hand.canMount,
-      }))
-    })
+    // oxlint-disable-next-line ren/no-comments -- Where the chats of a brain run their tools, from the hand it applied: its own machine, a remote hand or none.
+    const appliedOf = (brainId: Brain.ID, hand: Space.AppliedHand) => {
+      if (hand.placement === "colocated")
+        return Effect.map(brainHost.hand(brainId), (own): Hands.Applied => ({ _tag: "Own", hand: own }))
+      return Effect.succeed<Hands.Applied>(hand.placement === "remote" ? { _tag: "Remote" } : { _tag: "None" })
+    }
 
     const creatorSees = Effect.fnUntraced(function* (sessionId: Session.ID, placement: Placement) {
       return yield* database.transaction((transaction) =>
@@ -309,19 +308,23 @@ export const layer = Layer.effect(
           message: `The creator of ${input.sessionId} can no longer see its space`,
         })
       const target = yield* brainHost.target(placement.brainId)
-      const requested = input.environmentTemplateId
-      const binding = requested
-        ? Option.some(
-            yield* environments
-              .bind({ ...subject, spaceId: placement.spaceId }, requested)
-              .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
-          )
-        : Option.map(
-            yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation)),
-            (directory) => ({ directory, isNew: false }),
-          )
+      // oxlint-disable-next-line ren/no-comments -- A chat starts with its brain's applied hand, not the space's newer setting: a brain that is awake keeps one coherent setup until its next wake. A host with no wake of its own applies the space's setting at each start.
+      if (!brainHost.isManaged) yield* compute.applySettings(placement.brainId, { machine: "none" })
+      const hand = (yield* compute.appliedOrApply(placement.brainId)).hand
+      const colocated =
+        hand.placement === "colocated"
+          ? yield* environments.findDirectory(subject, yield* appliedOf(placement.brainId, hand))
+          : Option.none()
+      const binding =
+        hand.placement === "remote"
+          ? Option.some(
+              yield* environments
+                .bind({ ...subject, spaceId: placement.spaceId }, hand.version)
+                .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
+            )
+          : Option.map(colocated, (directory) => ({ directory, isNew: false }))
       const payload = {
-        ...Struct.omit(input, ["environmentTemplateId"]),
+        ...Struct.omit(input, ["hand"]),
         ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
       } satisfies StartBody
       const api = yield* client.brain(target)
@@ -329,7 +332,7 @@ export const layer = Layer.effect(
         Effect.andThen(
           database.db
             .update(Database.Schema.agent_session)
-            .set({ started_at: new Date() })
+            .set({ started_at: sql`now()` })
             .where(
               and(
                 eq(Database.Schema.agent_session.id, input.sessionId),
@@ -355,6 +358,74 @@ export const layer = Layer.effect(
           Effect.orDie,
           Effect.map((rows) => Option.fromNullishOr(rows.at(0)?.id)),
         )
+
+    const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
+      yield* validatePrompt(input.prompt)
+      const session = yield* brainOf(input.sessionId)
+      yield* admit(session.brainId)
+      const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
+      const api = yield* client.brain(target)
+      return yield* call(
+        api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
+      ).pipe(
+        Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
+        Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
+      )
+    })
+
+    const chats = Database.Schema.agent_session
+
+    const background = yield* Effect.scope
+    const continuing = new Set<Session.ID>()
+
+    // oxlint-disable-next-line ren/no-comments -- One message continues each chat that a replace marked. The brain sends a message id once, so a try after a crash sends nothing twice; a failed try stays marked for the next pull.
+    const continueMarked = Effect.fnUntraced(function* (brainId: Brain.ID) {
+      const marked = yield* database.db
+        .select({ sessionId: chats.id, messageId: chats.continue_message_id, createdBy: chats.created_by })
+        .from(chats)
+        .where(and(eq(chats.brain_id, brainId), isNotNull(chats.continue_message_id)))
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(
+        marked.flatMap((each) =>
+          each.messageId && !continuing.has(each.sessionId) ? [{ ...each, messageId: each.messageId }] : [],
+        ),
+        (each) =>
+          Effect.sync(() => continuing.add(each.sessionId)).pipe(
+            Effect.andThen(
+              send({
+                sessionId: each.sessionId,
+                messageId: each.messageId,
+                prompt: { text: replacedSandbox.text },
+                // oxlint-disable-next-line ren/no-comments -- A steer is delivered before queued messages, so the model reads that its files may be gone before it acts on a message that waited.
+                delivery: "steer",
+                sender: { userId: each.createdBy },
+                synthetic: { description: replacedSandbox.description, source: replacedSandbox.source },
+              }),
+            ),
+            Effect.catchTag(["SessionNotStartedError", "BrainRejectedError"], (error) =>
+              Effect.logWarning(`The chat ${each.sessionId} cannot continue after the replace`, error),
+            ),
+            Effect.andThen(
+              database.db
+                .update(chats)
+                .set({ continue_message_id: null })
+                .where(and(eq(chats.id, each.sessionId), eq(chats.continue_message_id, each.messageId)))
+                .pipe(Effect.orDie),
+            ),
+            Effect.catchCause((cause) =>
+              Effect.logWarning(`The chat ${each.sessionId} did not continue; the next pull tries again`, cause),
+            ),
+            Effect.ensuring(Effect.sync(() => continuing.delete(each.sessionId))),
+            Effect.forkIn(background),
+          ),
+        { discard: true },
+      )
+    })
+
+    // oxlint-disable-next-line ren/no-comments -- A chat that a lost sandbox stopped continues at once, with no person or call needed: the note starts the replace and tells the model what it lost. A repeated loss fails the chats instead, and marks none. A pull from the new machine sends what is still marked, also after a Ren restart.
+    yield* brainHost.onInterrupted((interrupted) =>
+      interrupted.repeated ? Effect.void : continueMarked(interrupted.brainId),
+    )
 
     yield* DurableRunner.register(StartRun, (payload) =>
       DurableRunner.supervise(
@@ -397,59 +468,10 @@ export const layer = Layer.effect(
       ),
     )
 
-    const send = Effect.fn("Brains.send")(function* (input: Session.SendInput) {
-      yield* validatePrompt(input.prompt)
-      const session = yield* brainOf(input.sessionId)
-      const target = yield* brainHost.target(session.brainId).pipe(Effect.catchTag("BrainFailed", failedAsUnavailable))
-      const api = yield* client.brain(target)
-      return yield* call(
-        api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
-      ).pipe(
-        Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
-        Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
-      )
-    })
-
-    // oxlint-disable-next-line ren/no-comments -- A chat that a lost sandbox stopped mid-turn continues on its brain's new sandbox, with no person or call needed: the note starts the replace and tells the model what it lost. A repeated loss fails the chats instead, and no note goes.
-    yield* brainHost.onInterrupted((interrupted) =>
-      interrupted.repeated
-        ? Effect.void
-        : database.db
-            .select({ id: Database.Schema.agent_session.id, createdBy: Database.Schema.agent_session.created_by })
-            .from(Database.Schema.agent_session)
-            .where(
-              and(
-                inArray(Database.Schema.agent_session.id, interrupted.sessionIds),
-                isNull(Database.Schema.agent_session.parent_id),
-              ),
-            )
-            .pipe(
-              Effect.orDie,
-              Effect.flatMap((roots) =>
-                Effect.forEach(
-                  roots,
-                  (root) =>
-                    send({
-                      sessionId: root.id,
-                      messageId: Session.MessageID.create(),
-                      prompt: { text: lostSandbox.text },
-                      delivery: "queue",
-                      sender: { userId: root.createdBy },
-                      synthetic: { description: lostSandbox.description, source: lostSandbox.source },
-                    }).pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning(`The note about a lost sandbox did not reach ${root.id}`, cause),
-                      ),
-                    ),
-                  { concurrency: "unbounded", discard: true },
-                ),
-              ),
-            ),
-    )
-
     return Service.of({
       start: Effect.fn("Brains.start")(function* (input: Session.StartInput, placement: Placement) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
+        yield* admit(placement.brainId)
         const row = yield* brainRow(placement.brainId)
         yield* DurableRunner.ensure(StartRun, { input, placement, epoch: row.runEpoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
@@ -474,6 +496,7 @@ export const layer = Layer.effect(
         const state = yield* brainHost.access(session.brainId)
         if (state._tag === "Starting") return { status: "starting", phase: state.phase } satisfies Session.ClientAccess
         if (state._tag === "Failed") return { status: "failed", reason: state.reason } satisfies Session.ClientAccess
+        if (state._tag === "Stopped") return { status: "stopped" } satisfies Session.ClientAccess
         if (!session.startedAt) return { status: "starting", phase: "starting the chat" } satisfies Session.ClientAccess
         const signed = yield* client.clientToken(state.target, {
           sid: sessionId,
@@ -498,6 +521,7 @@ export const layer = Layer.effect(
       }),
       retry: Effect.fn("Brains.retry")(function* (sessionId: Session.ID) {
         const session = yield* brainOf(sessionId)
+        yield* admit(session.brainId).pipe(Effect.ignore)
         yield* brainHost.retry(session.brainId)
       }),
       flush: Effect.fn("Brains.flush")(function* (sessionId: Session.ID) {
@@ -565,6 +589,10 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
+        // oxlint-disable-next-line ren/no-comments -- A chat in a turn, or whose files or diff a person asked for, keeps its place on its hand. A pull alone does not.
+        yield* environments.renew(
+          request.sessions.flatMap((session) => (session.busy || session.touched ? [session.id] : [])),
+        )
         const roots = request.roots ?? []
         const kept =
           roots.length === 0
@@ -580,14 +608,26 @@ export const layer = Layer.effect(
           ),
           Effect.option,
         )
+        // oxlint-disable-next-line ren/no-comments -- Every answer comes from the hand the brain applied at its start or wake, never from a newer space setting: tools, folders and drives change together at the next wake.
+        const applied = yield* compute.appliedOrApply(host.brainId)
+        const tools = yield* appliedOf(host.brainId, applied.hand)
         const capabilities = yield* environments.capabilities(
           host.organizationId,
           pulled.chats.map((chat) => chat.id),
-          yield* handOf(host.brainId, host.generation),
+          tools,
         )
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
           .pipe(Effect.orDie)
+        const hasHand = applied.hand.placement !== "none"
+        const directories = new Map(
+          yield* Effect.forEach(hasHand ? pulled.chats : [], (chat) =>
+            Effect.map(
+              environments.findDirectory({ sessionId: chat.id, organizationId: host.organizationId }, tools),
+              (directory) => [chat.id, directory] as const,
+            ),
+          ),
+        )
         return {
           publicKeys: client.publicKeys,
           ...Option.match(providers, { onNone: () => ({}), onSome: (found) => ({ providers: found }) }),
@@ -595,15 +635,16 @@ export const layer = Layer.effect(
           channels,
           layers: pulled.layers,
           memory: yield* Memory.roots(database.db, host).pipe(Effect.orDie),
+          computeRevision: applied.revision,
           chats: pulled.chats.map((chat) => {
             const capability = capabilities.get(chat.id)
-            if (!capability) return chat
-            return {
-              id: chat.id,
-              agent: chat.agent,
-              archived: chat.archived,
-              drives: drives.availability(host, capability),
-            }
+            const directory = Option.getOrUndefined(directories.get(chat.id) ?? Option.none())
+            const found = { id: chat.id, agent: chat.agent, archived: chat.archived, hasHand }
+            return Object.assign(
+              found,
+              directory && { directory },
+              capability && { drives: drives.availability(host, capability) },
+            )
           }),
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
           env: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
@@ -622,31 +663,35 @@ export const layer = Layer.effect(
       accessEnvironment: Effect.fn("Brains.accessEnvironment")(function* (
         host: CurrentHost["Service"],
         sessionId: Session.ID,
+        options: { readonly unreachable?: boolean } = {},
       ) {
         const subject = yield* inBrain(host, sessionId)
-        return yield* environments.access(subject, yield* handOf(host.brainId, host.generation)).pipe(
+        const tools = yield* appliedOf(host.brainId, (yield* compute.appliedOrApply(host.brainId)).hand)
+        return yield* environments.access(subject, tools, options).pipe(
           Effect.catchTags({
-            "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
-            "Environments.Unavailable": (error) =>
-              Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Hands.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
+            "Hands.Unavailable": (error) => Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Hands.Starting": (error) => Effect.fail(new EnvironmentStartingError({ message: error.message })),
           }),
         )
       }),
       directoryOf: Effect.fn("Brains.directoryOf")(function* (host: CurrentHost["Service"], sessionId: Session.ID) {
+        const subject = yield* inBrain(host, sessionId)
         return yield* environments.findDirectory(
-          yield* inBrain(host, sessionId),
-          yield* handOf(host.brainId, host.generation),
+          subject,
+          yield* appliedOf(host.brainId, (yield* compute.appliedOrApply(host.brainId)).hand),
         )
       }),
       releaseEnvironment: Effect.fn("Brains.releaseEnvironment")(function* (
         host: CurrentHost["Service"],
         sessionId: Session.ID,
       ) {
-        yield* environments.release(yield* inBrain(host, sessionId))
+        // oxlint-disable-next-line ren/no-comments -- A brain calls it at the end of each turn: the turn keeps the chat's place on its hand.
+        yield* environments.renew([(yield* inBrain(host, sessionId)).sessionId])
       }),
     })
   }),
-).pipe(Layer.provide([Access.layer, AppResolve.layer]))
+).pipe(Layer.provide([Access.layer, AppResolve.layer, SpaceCompute.layer]))
 
 export const hostAuthentication = Layer.effect(
   HostAuthentication,

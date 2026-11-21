@@ -1,13 +1,14 @@
 import { useId, type SVGProps } from "react"
-import { IconLineDashed } from "@tabler/icons-react"
+import { IconCube, IconLineDashed } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { cn } from "cn"
 import type { TaskInfo } from "@ren/client"
+import { Task } from "@ren/schema/task"
 import { ColorDot } from "@ren/ui/color-dot"
 
 type GlyphProps = { className?: string | undefined; "aria-label"?: string | undefined }
 
-type RingState = "empty" | "half" | "complete" | "dismissed"
+type RingState = "dashed" | "empty" | "half" | "complete" | "dismissed"
 
 function ProgressRing(props: GlyphProps & { state: RingState }) {
   const mask = useId()
@@ -38,7 +39,15 @@ function ProgressRing(props: GlyphProps & { state: RingState }) {
   const circumference = 2 * Math.PI * 2
   return (
     <svg {...svg}>
-      <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle
+        cx="7"
+        cy="7"
+        r="6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray={props.state === "dashed" ? "1.4 1.74" : undefined}
+      />
       {props.state === "half" ? (
         <circle
           cx="7"
@@ -122,14 +131,11 @@ export function UnassignedIcon(props: GlyphProps) {
 }
 
 export const statuses = {
-  todo: { label: "Todo", ring: "empty", color: "text-muted-foreground" },
-  in_progress: { label: "In progress", ring: "half", color: "text-chart-3" },
-  done: { label: "Done", ring: "complete", color: "text-[#5e6ad2]" },
-  dismissed: {
-    label: "Dismissed",
-    ring: "dismissed",
-    color: "text-muted-foreground",
-  },
+  backlog: { label: Task.statusLabels.backlog, ring: "dashed", color: "text-muted-foreground" },
+  todo: { label: Task.statusLabels.todo, ring: "empty", color: "text-muted-foreground" },
+  in_progress: { label: Task.statusLabels.in_progress, ring: "half", color: "text-chart-3" },
+  done: { label: Task.statusLabels.done, ring: "complete", color: "text-[#5e6ad2]" },
+  dismissed: { label: Task.statusLabels.dismissed, ring: "dismissed", color: "text-muted-foreground" },
 } as const
 
 export function StatusGlyph(props: { status: string; className?: string | undefined }) {
@@ -153,11 +159,7 @@ export const statusOf = (value: string) =>
 export const priorityLabelOf = (value: string | null) =>
   Object.entries(priorities).find((entry) => entry[0] === value)?.[1] ?? "No priority"
 
-export const priorities = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-} as const
+export const priorities = Task.priorityLabels
 
 const priorityLevels = { low: 1, medium: 2, high: 3 } as const
 
@@ -179,6 +181,15 @@ export function PriorityIcon(props: { priority: string | null; className?: strin
 }
 
 export const labelColor = (color: string | null | undefined) => color ?? "var(--muted-foreground)"
+
+export function SpaceBadge(props: { name: string }) {
+  return (
+    <Badge variant="outline" className="h-6 gap-1.5 rounded-full bg-muted">
+      <IconCube />
+      {props.name}
+    </Badge>
+  )
+}
 
 export function LabelBadge(props: { name: string; color?: string | null | undefined }) {
   return (

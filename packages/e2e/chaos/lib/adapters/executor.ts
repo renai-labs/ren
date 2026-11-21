@@ -1,11 +1,11 @@
 export * as ExecutorAdapter from "./executor.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import { EnvironmentToken } from "@ren/environment-api/environment-token"
+import { HandApi } from "@ren/hand-api/hand-api"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/schema/signature"
-import { Image, TestEnvironment } from "@ren/executor/testing"
+import { Image, TestHand } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Effect, Schema } from "effect"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import os from "node:os"
@@ -13,19 +13,18 @@ import path from "node:path"
 import { Process } from "../process.js"
 import { Wait } from "../wait.js"
 
-export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([TestEnvironment.keys.publicKey])
+export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([TestHand.keys.publicKey])
 
-export const token = (environment: Environment.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
+export const token = (environment: Hand.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
   Effect.runPromise(
-    EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
+    HandToken.sign(TestHand.keys.privateKey, {
       environment,
       brain,
       exp: Math.floor((Date.now() + lifetimeMs) / 1000),
     }),
   )
 
-export const access = (options: Parameters<typeof TestEnvironment.access>[0]) =>
-  Effect.runPromise(TestEnvironment.access(options))
+export const access = (options: Parameters<typeof TestHand.access>[0]) => Effect.runPromise(TestHand.access(options))
 
 export const mainPath = path.resolve(
   path.dirname(Bun.resolveSync("@ren/executor/testing", import.meta.dir)),
@@ -42,10 +41,10 @@ interface Observation {
 
 export interface Instance {
   readonly url: () => string
-  readonly environmentId: Environment.ID
+  readonly environmentId: Hand.ID
   readonly workspace: string
   readonly restart: () => Promise<void>
-  readonly replace: (environmentId?: Environment.ID) => Promise<void>
+  readonly replace: (environmentId?: Hand.ID) => Promise<void>
   readonly freeze: () => Promise<void>
   readonly thaw: () => Promise<void>
   readonly dispose: () => Promise<void>
@@ -81,9 +80,9 @@ const freePort = async () => {
 
 export const localProcess = async (options: {
   readonly label: string
-  readonly environmentId?: Environment.ID
+  readonly environmentId?: Hand.ID
 }): Promise<Instance> => {
-  const environmentId = options.environmentId ?? Environment.ID.create()
+  const environmentId = options.environmentId ?? Hand.ID.create()
   const workspace = await realpath(await mkdtemp(path.join(os.tmpdir(), "ren-chaos-workspace-")))
   await mkdir(logs, { recursive: true })
   const state: { port: number; starts: number; child: ReturnType<typeof Bun.spawn> | undefined } = {
@@ -158,13 +157,13 @@ const docker = async (args: ReadonlyArray<string>) => {
 
 export const dockerContainer = async (options: {
   readonly label: string
-  readonly environmentId?: Environment.ID
+  readonly environmentId?: Hand.ID
 }): Promise<Container> => {
   const tag = await Image.build()
-  const state = { container: "", url: "", environmentId: options.environmentId ?? Environment.ID.create() }
+  const state = { container: "", url: "", environmentId: options.environmentId ?? Hand.ID.create() }
   const published = async () => {
     const hostPort = await Wait.until(`docker to publish the executor port for ${options.label}`, 10_000, async () => {
-      const output = await run(["docker", "port", state.container, `${EnvironmentApi.port}/tcp`])
+      const output = await run(["docker", "port", state.container, `${HandApi.port}/tcp`])
       return /:(\d+)$/m.exec(output.stdout.trim())?.[1]
     })
     state.url = `http://127.0.0.1:${hostPort}`
@@ -185,7 +184,7 @@ export const dockerContainer = async (options: {
       "--label",
       `ren.chaos=${options.label}`,
       "--publish",
-      `127.0.0.1::${EnvironmentApi.port}`,
+      `127.0.0.1::${HandApi.port}`,
       "--memory",
       "512m",
       "--cpus",

@@ -1,5 +1,6 @@
 export * as ProfilesFixture from "./profiles.js"
 
+import { BrainProviders } from "./brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { AppProfile } from "@ren/schema/app-profile"
@@ -34,7 +35,7 @@ export const layer = Layer.mergeAll(
   CredentialRequirements.layer.pipe(Layer.provideMerge(AppProfiles.layer)),
   AppResolve.layer,
   AppRegistry.layer,
-  Space.layer,
+  Space.layer.pipe(Layer.provide(BrainProviders.none)),
   SpaceMember.layer,
   SpaceProvisioning.layer,
 ).pipe(
@@ -58,7 +59,7 @@ export const layer = Layer.mergeAll(
         ENVELOPE_KEYS: JSON.stringify([
           { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
         ]),
-        REN_INTEGRATIONS_URL: "https://mcp.ren.test/managed",
+        REN_INTEGRATIONS_URL: "https://mcp.ren.test",
       }),
     ),
   ),
@@ -102,12 +103,13 @@ export const space = Effect.fnUntraced(function* (
 export const remote = (
   name: string,
   auth: Mcp.Auth = { type: "oauth", tokenEndpointAuth: "none" },
+  requiredCredentials: Mcp.Declaration["requiredCredentials"] = [],
 ): Mcp.Declaration => ({
   name,
   description: `The ${name} server`,
   transport: { type: "remote", url: `https://${name.toLowerCase()}.example.com/mcp` },
   auth,
-  requiredCredentials: [],
+  requiredCredentials,
 })
 
 export const managed = (name: string, replaces?: string): Mcp.Declaration => ({

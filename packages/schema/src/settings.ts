@@ -8,16 +8,18 @@ import { ModelTypes } from "./model-types.js"
 
 export const defaultSteps = 100
 
+export const Steps = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: 1000 }, { message: "Use a whole number from 1 to 1000." }),
+).annotate({
+  description: `The most model iterations in one run of an agent. Then its tools stop and it must answer. Without it, ${defaultSteps}.`,
+})
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   instructions: Schema.optionalKey(Schema.String),
   model: Schema.optionalKey(Session.Model),
   defaultModels: Schema.optionalKey(ModelTypes.Defaults),
-  steps: Schema.optionalKey(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })).annotate({
-      description: `The most model iterations in one run of an agent. Then its tools stop and it must answer. Without it, ${defaultSteps}.`,
-    }),
-  ),
+  steps: Schema.optionalKey(Steps),
   permissions: Permission.RuleList.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
   references: Reference.List.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 }).annotate({ identifier: "Settings.Info" })

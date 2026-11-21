@@ -1,8 +1,13 @@
-FROM oven/bun:1.4.2
+# stage.ts puts FROM oven/bun:<the Bun version of package.json> before this file.
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip \
+  && apt-get install --yes --no-install-recommends ripgrep git procps ca-certificates curl fuse3 unzip sudo \
   && rm -rf /var/lib/apt/lists/*
+
+# A template's packages reach a running machine in place, as root through sudo.
+RUN (id -u user >/dev/null 2>&1 || useradd --create-home --shell /bin/bash user) \
+  && echo 'user ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/user \
+  && chmod 0440 /etc/sudoers.d/user
 
 RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && case "$arch" in \
@@ -15,18 +20,16 @@ RUN version=v1.75.2 arch="$(dpkg --print-architecture)" \
   && unzip -q -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
   && rm /tmp/rclone.zip
 
-COPY ren.tar.gz /tmp/ren.tar.gz
-RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar.gz \
-  && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts
-
+# Ren's code is not in the image: start.js downloads it as bundles.
 RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
   && echo 'MemoryMax=75%' >>/etc/systemd/system/ren-tools.slice
 
-COPY start.sh /opt/ren/start.sh
+COPY start.sh /opt/ren/
+COPY start.js /opt/ren/
 RUN chmod 0755 /opt/ren/start.sh \
   && git config --system url."https://github.com/".insteadOf "git@github.com:"
 
-# Every client trusts the system store, which start.sh extends with the egress CA (C44).
+# Every client trusts the system store, which start.js extends with the egress CA (C44).
 ENV BRAIN_PORT=4800 EXECUTOR_PORT=4100 \
   SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
   REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \

@@ -210,17 +210,22 @@ func removeFirstSegment(req *http.Request, placeholder string) {
 }
 
 // routeTarget is the upstream URL of a route op: the op's upstream, with the
-// request's path appended and its query kept.
+// request's path appended and its query kept. A request for the root alone
+// is the upstream itself, without a trailing slash: an upstream such as
+// Composio answers that slash with a redirect, and the redirected request
+// has no placeholder, so it gets no credential.
 func routeTarget(req *http.Request, upstream string) (*url.URL, error) {
 	base, err := url.Parse(upstream)
 	if err != nil {
 		return nil, fmt.Errorf("parse route upstream: %w", err)
 	}
 	target := *base
-	target.Path = strings.TrimSuffix(base.Path, "/") + req.URL.Path
-	target.RawPath = ""
-	if req.URL.RawPath != "" {
-		target.RawPath = strings.TrimSuffix(base.EscapedPath(), "/") + req.URL.RawPath
+	if req.URL.Path != "/" {
+		target.Path = strings.TrimSuffix(base.Path, "/") + req.URL.Path
+		target.RawPath = ""
+		if req.URL.RawPath != "" {
+			target.RawPath = strings.TrimSuffix(base.EscapedPath(), "/") + req.URL.RawPath
+		}
 	}
 	target.RawQuery = req.URL.RawQuery
 	return &target, nil

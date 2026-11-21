@@ -29,9 +29,9 @@ describe("streaming", () => {
       step("evt_reasoning", 12, "session.reasoning.started", { ordinal: 0 }),
       step("evt_reasoning_1", 12, "session.reasoning.delta", { ordinal: 0, delta: "Think" }),
       step("evt_reasoning_2", 12, "session.reasoning.delta", { ordinal: 0, delta: "ing" }),
-      step("evt_text", 14, "session.text.started", { ordinal: 1 }),
-      step("evt_text_1", 14, "session.text.delta", { ordinal: 1, delta: "Hel" }),
-      step("evt_text_2", 14, "session.text.delta", { ordinal: 1, delta: "lo" }),
+      step("evt_text", 14, "session.text.started", { ordinal: 0 }),
+      step("evt_text_1", 14, "session.text.delta", { ordinal: 0, delta: "Hel" }),
+      step("evt_text_2", 14, "session.text.delta", { ordinal: 0, delta: "lo" }),
       step("evt_tool", 16, "session.tool.input.started", { id: "call_1", name: "bash" }),
       step("evt_tool_1", 16, "session.tool.input.delta", { id: "call_1", delta: '{"command":' }),
       step("evt_tool_2", 16, "session.tool.input.delta", { id: "call_1", delta: '"ls"}' }),
@@ -44,7 +44,7 @@ describe("streaming", () => {
         model: Fixture.model,
         content: [
           { type: "reasoning", text: "Thinking", time: { created: 12 } },
-          { type: "text", text: "Hello" },
+          { type: "text", text: "Hello", time: { created: 14 } },
           {
             type: "tool",
             id: "call_1",
@@ -59,7 +59,7 @@ describe("streaming", () => {
 
     const finished = Reducer.applyAll(started.state, [
       step("evt_reasoning_end", 13, "session.reasoning.ended", { ordinal: 0, text: "Thinking." }),
-      step("evt_text_end", 15, "session.text.ended", { ordinal: 1, text: "Hello." }),
+      step("evt_text_end", 15, "session.text.ended", { ordinal: 0, text: "Hello." }),
       step("evt_tool_end", 16, "session.tool.input.ended", { id: "call_1", text: '{"command":"ls"}' }),
       step("evt_called", 17, "session.tool.called", { id: "call_1", input: { command: "ls" }, executed: false }),
       step("evt_progress", 18, "session.tool.progress", { id: "call_1", metadata: { lines: 1 } }),
@@ -80,7 +80,7 @@ describe("streaming", () => {
         model: Fixture.model,
         content: [
           { type: "reasoning", text: "Thinking.", time: { created: 12, completed: 13 } },
-          { type: "text", text: "Hello." },
+          { type: "text", text: "Hello.", time: { created: 14, completed: 15 } },
           {
             type: "tool",
             id: "call_1",
@@ -104,6 +104,36 @@ describe("streaming", () => {
     ])
     expect([...started.commands, ...finished.commands]).toEqual([
       { _tag: "Revalidate", read: { _tag: "Info", sessionID } },
+    ])
+  })
+
+  test("a text delta after its part ended changes nothing, and the next part's deltas go to it by ordinal", () => {
+    const ended = Reducer.applyAll(loaded, [
+      step("evt_step", 10, "session.step.started", { agent: "build", model: Fixture.model, started: 10 }),
+      step("evt_text", 11, "session.text.started", { ordinal: 0 }),
+      step("evt_text_1", 11, "session.text.delta", { ordinal: 0, delta: "One" }),
+      step("evt_text_end", 12, "session.text.ended", { ordinal: 0, text: "One." }),
+    ])
+    const late = Reducer.apply(ended.state, step("evt_late", 13, "session.text.delta", { ordinal: 0, delta: "late" }))
+    expect(late.state).toEqual(ended.state)
+
+    const next = Reducer.applyAll(late.state, [
+      step("evt_text_2", 14, "session.text.started", { ordinal: 1 }),
+      step("evt_text_2_1", 14, "session.text.delta", { ordinal: 1, delta: "Two" }),
+      step("evt_text_late", 15, "session.text.delta", { ordinal: 0, delta: "late" }),
+    ])
+    expect(ChatState.messages(next.state, sessionID)).toEqual([
+      Fixture.message({
+        id: "msg_assistant",
+        type: "assistant",
+        agent: "build",
+        model: Fixture.model,
+        content: [
+          { type: "text", text: "One.", time: { created: 11, completed: 12 } },
+          { type: "text", text: "Two", time: { created: 14 } },
+        ],
+        time: { created: 10 },
+      }),
     ])
   })
 

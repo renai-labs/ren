@@ -1,34 +1,68 @@
-import type { ScheduleInfo, ScheduleListInput, ScheduleWhen } from "@ren/client"
+import { RelativeTime } from "@ren/util/relative-time"
+import type {
+  ScheduleInfo,
+  ScheduleListInput,
+  ScheduleRunReason,
+  ScheduleRunStatus,
+  ScheduleRunTrigger,
+  ScheduleWhen,
+} from "@ren/client"
+import { IconAlertTriangle, IconCircleCheck, IconMinus, IconProgress, type Icon } from "@tabler/icons-react"
 import { Cron, DateTime, Option, Result, Schema } from "effect"
-import { civilDate, formatInZone, formatRelative, localTimeZone, timeZones } from "@ren/ui/time"
+import { civilDate, formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
 
 const ScheduleSearchSchema = Schema.Struct({
-  page: Schema.optional(Schema.Number),
   filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
-  schedule: Schema.optional(Schema.String),
 })
 
 export type ScheduleSearch = typeof ScheduleSearchSchema.Type
 
-export const ScheduleSearch = Schema.toStandardSchemaV1(ScheduleSearchSchema)
+export const scheduleSearchFields = ScheduleSearchSchema.fields
+
+const SchedulePageSearchSchema = Schema.Struct({
+  status: Schema.optional(Schema.String),
+})
+
+export const schedulePageSearch = Schema.toStandardSchemaV1(SchedulePageSearchSchema)
+
+export const runStatuses: Readonly<Record<ScheduleRunStatus, { readonly label: string; readonly icon: Icon }>> = {
+  pending: { label: "Pending", icon: IconProgress },
+  started: { label: "Started", icon: IconCircleCheck },
+  skipped: { label: "Skipped", icon: IconMinus },
+  failed: { label: "Failed", icon: IconAlertTriangle },
+}
+
+export const isRunStatus = (value: string | undefined): value is ScheduleRunStatus =>
+  value !== undefined && value in runStatuses
+
+export const runReasons: Readonly<Record<ScheduleRunReason, string>> = {
+  previous_run_busy: "The previous run was still working.",
+  paused: "The schedule was paused.",
+  archived: "The schedule was deleted.",
+  owner_left: "Its owner left the space.",
+  agent_removed: "Its agent left the space.",
+  chat_archived: "Its chat was archived.",
+}
+
+export const runTriggers: Readonly<Record<ScheduleRunTrigger, string>> = {
+  timed: "On schedule",
+  manual: "Run now",
+}
+
+export const refreshEvery = 5_000
+
+export const runColumns = ["Scheduled for", "Trigger", "Status", "Chat"]
 
 export function scheduleListInput(
   search: ScheduleSearch,
-  paging: {
-    readonly page: number
-    readonly pageSize: number
-    readonly text?: string | undefined
-    readonly spaceId?: string | undefined
-  },
-): ScheduleListInput {
+  scope: { readonly text?: string | undefined; readonly spaceId?: string | undefined },
+): Omit<ScheduleListInput, "page" | "pageSize"> {
   const status = search.filters?.state?.at(0)
-  const spaceId = paging.spaceId ?? search.filters?.space?.at(0)
+  const spaceId = scope.spaceId ?? search.filters?.space?.at(0)
   return {
-    page: paging.page,
-    pageSize: paging.pageSize,
     ...((status === "active" || status === "paused") && { status }),
     ...(spaceId && { spaceId }),
-    ...(paging.text && { search: paging.text }),
+    ...(scope.text && { search: scope.text }),
   }
 }
 
@@ -226,7 +260,7 @@ const pauseWords = {
 export const statusOf = (schedule: ScheduleInfo, now: number) => {
   if (schedule.status === "paused") return pauseWords[schedule.pausedReason ?? "user"]
   if (schedule.status === "ended" || !schedule.nextRunAt) return "Expired"
-  return `Next run ${formatRelative(schedule.nextRunAt, now)}`
+  return `Next run ${RelativeTime.format(schedule.nextRunAt, now)}`
 }
 
 export const nameOf = (message: string) =>

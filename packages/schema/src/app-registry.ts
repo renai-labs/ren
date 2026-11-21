@@ -5,11 +5,15 @@ import { App } from "./app.js"
 import { AppListing } from "./app-listing.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
-import { Skill } from "./skill.js"
+
+export const descriptionMaxLength = 50
 
 export interface Publication extends Schema.Schema.Type<typeof Publication> {}
 export const Publication = Schema.Struct({
   ...App.Declaration.fields,
+  description: Schema.NonEmptyString.check(Schema.isMaxLength(descriptionMaxLength)).annotate({
+    description: `One line in the catalog: at most ${descriptionMaxLength} characters. The listing body holds the rest.`,
+  }),
   slug: Primitive.Slug,
   expectedRevision: Schema.optionalKey(
     Schema.Int.annotate({ description: "Publish only while the app’s definition is still at this revision." }),
@@ -17,7 +21,18 @@ export const Publication = Schema.Struct({
   listing: Schema.optionalKey(
     AppListing.Input.annotate({ description: "Omit to leave the app’s listing, or its absence, unchanged." }),
   ),
-}).annotate({ identifier: "AppRegistry.Publication" })
+})
+  .check(
+    Schema.makeFilter((app) =>
+      Object.keys(app.listing?.tools ?? {})
+        .filter((slug) => !(slug in app.mcps))
+        .map((slug) => ({
+          path: ["listing", "tools", slug],
+          issue: `The listing names tools of MCP "${slug}", which the app does not declare.`,
+        })),
+    ),
+  )
+  .annotate({ identifier: "AppRegistry.Publication" })
 
 export interface Batch extends Schema.Schema.Type<typeof Batch> {}
 export const Batch = Schema.Struct({
@@ -48,14 +63,15 @@ export const Info = Schema.Struct({
   name: Primitive.Name,
   description: Schema.NonEmptyString,
   icon: Schema.NullOr(Schema.String),
-  listing: AppListing.Info,
-  requiredCredentials: App.Info.fields.requiredCredentials,
-  environment: App.Info.fields.environment,
-  mcps: App.Info.fields.mcps,
-  skills: Schema.Record(Primitive.Slug, Skill.Summary),
-  dependsOn: App.Info.fields.dependsOn,
+  listing: AppListing.Summary,
+  managed: Schema.Boolean.annotate({
+    description: "True when the app has an MCP that Ren runs and Ren credits pay for, so it works with no sign-in.",
+  }),
   revision: Schema.Int,
-}).annotate({ identifier: "AppRegistry.Info" })
+}).annotate({
+  identifier: "AppRegistry.Info",
+  description: "A registry app as the catalog shows it. app.get returns its MCPs, skills and keys.",
+})
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
@@ -63,6 +79,9 @@ export const ListInput = Schema.Struct({
     Schema.String.annotate({ description: "Match the slug, name or description, ignoring case." }),
   ),
   category: Schema.optional(Primitive.Slug.annotate({ description: "Match a category in any group." })),
+  slugs: Schema.optional(
+    Schema.Array(Primitive.Slug).annotate({ description: "Only the apps with these slugs, in slug order." }),
+  ),
   ...Pagination.fields(50),
 }).annotate({ identifier: "AppRegistry.ListInput" })
 

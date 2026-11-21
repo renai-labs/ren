@@ -4,6 +4,23 @@ import { Effect, Schema } from "effect"
 import { Credential } from "./credential.js"
 import { Primitive } from "./primitive.js"
 
+export const priceMetadata = "ai.useren/price"
+export const costHeaders = { usd: "ren-cost-usd", callId: "ren-call-id" } as const
+
+export interface ToolPrice extends Schema.Schema.Type<typeof ToolPrice> {}
+export const ToolPrice = Schema.Struct({
+  usd: Schema.Number.check(Schema.isFinite(), Schema.isGreaterThanOrEqualTo(0)).annotate({
+    description:
+      "Advertised USD per unit. Actual cost is reported in ren-cost-usd; rates may include fractional micro-dollars.",
+  }),
+  unit: Schema.NonEmptyString.annotate({
+    description: "The billed unit, such as call, row, page, target, keyword, domain, second or gib-second.",
+  }),
+  note: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "Price variations or charging conditions, when needed.",
+  }),
+}).annotate({ identifier: "Mcp.ToolPrice" })
+
 const Remote = Schema.Struct({ type: Schema.Literal("remote"), url: Primitive.HttpsUrl })
 const Local = Schema.Struct({
   type: Schema.Literal("local"),
@@ -58,18 +75,33 @@ const OAuth = Schema.Struct({
     }).annotate({ description: "A partner’s OAuth client that Ren borrows, instead of registering its own." }),
   ),
 })
+const Bearer = Schema.Struct({
+  type: Schema.Literal("bearer"),
+  credential: Credential.Name,
+}).annotate({ description: "Sends the credential as `Authorization: Bearer <value>`." })
 const Header = Schema.Struct({
   type: Schema.Literal("header"),
   name: Schema.NonEmptyString,
   credential: Credential.Name,
 })
+const Query = Schema.Struct({
+  type: Schema.Literal("query"),
+  name: Schema.NonEmptyString,
+  credential: Credential.Name,
+}).annotate({ description: "Adds the credential to the URL’s query string as `<name>=<value>`." })
 const Basic = Schema.Struct({
   type: Schema.Literal("basic"),
   username: Credential.Name,
   password: Credential.Name,
 })
-export const Auth = Schema.Union([NoAuth, OAuth, Header, Basic]).annotate({ identifier: "Mcp.Auth" })
+export const Auth = Schema.Union([NoAuth, OAuth, Bearer, Header, Query, Basic]).annotate({ identifier: "Mcp.Auth" })
 export type Auth = typeof Auth.Type
+
+export const credentialsOf = (auth: Auth): ReadonlyArray<string> => {
+  if (auth.type === "bearer" || auth.type === "header" || auth.type === "query") return [auth.credential]
+  if (auth.type === "basic") return [auth.username, auth.password]
+  return []
+}
 
 export interface Timeouts extends Schema.Schema.Type<typeof Timeouts> {}
 export const Timeouts = Schema.Struct({
@@ -88,18 +120,14 @@ export const Declaration = Schema.Struct({
   requiredCredentials: Schema.Array(Credential.Requirement).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 })
   .check(
-    Schema.makeFilter((mcp) => {
-      const auth = mcp.auth
-      return [
-        ...(auth.type === "header" ? [auth.credential] : []),
-        ...(auth.type === "basic" ? [auth.username, auth.password] : []),
-      ]
+    Schema.makeFilter((mcp) =>
+      credentialsOf(mcp.auth)
         .filter((name) => !mcp.requiredCredentials.some((requirement) => requirement.name === name))
         .map((name) => ({
           path: ["auth"],
           issue: `The auth uses credential "${name}", which the MCP does not require.`,
-        }))
-    }),
+        })),
+    ),
     Schema.makeFilter((mcp) =>
       mcp.transport.type === "managed" && mcp.auth.type !== "none"
         ? { path: ["auth"], issue: "A managed MCP has auth none." }
@@ -126,7 +154,9 @@ export const Info = Schema.Struct({
         }),
       ),
     }),
+    Bearer,
     Header,
+    Query,
     Basic,
   ]),
 }).annotate({ identifier: "Mcp.Info" })

@@ -104,6 +104,23 @@ data "aws_iam_policy_document" "deploy" {
     resources = ["${aws_s3_bucket.artifacts.arn}/egress/*"]
   }
 
+  statement {
+    sid       = "BundleUpload"
+    actions   = ["s3:PutObject", "s3:GetObject"]
+    resources = ["${aws_s3_bucket.artifacts.arn}/bundles/*"]
+  }
+
+  statement {
+    sid       = "BundleList"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.artifacts.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["bundles/*"]
+    }
+  }
+
   # The release command runs only this document, only on the egress instance.
   statement {
     sid     = "EgressRelease"

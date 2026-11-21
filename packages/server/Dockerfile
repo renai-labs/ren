@@ -13,16 +13,17 @@ FROM oven/bun:1.4.2-slim AS runtime
 WORKDIR /repo
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get install -y --no-install-recommends ca-certificates libstdc++6 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /repo ./
 COPY packages/server ./packages/server
+COPY packages/brain ./packages/brain
 COPY packages/core ./packages/core
 COPY packages/db ./packages/db
 COPY packages/host-api ./packages/host-api
 COPY packages/egress-api ./packages/egress-api
-COPY packages/environment-api ./packages/environment-api
+COPY packages/hand-api ./packages/hand-api
 COPY packages/opencode-transcript ./packages/opencode-transcript
 COPY packages/protocol ./packages/protocol
 COPY packages/schema ./packages/schema

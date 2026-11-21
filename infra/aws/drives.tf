@@ -10,6 +10,23 @@ resource "aws_s3_bucket_public_access_block" "drives" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_lifecycle_configuration" "drives" {
+  bucket = aws_s3_bucket.drives.id
+
+  rule {
+    id     = "expire-artifact-uploads"
+    status = "Enabled"
+
+    filter {
+      prefix = "artifact-uploads/"
+    }
+
+    expiration {
+      days = 7
+    }
+  }
+}
+
 resource "aws_s3_bucket_ownership_controls" "drives" {
   bucket = aws_s3_bucket.drives.id
 
@@ -22,7 +39,7 @@ resource "aws_s3_bucket_cors_configuration" "drives" {
   bucket = aws_s3_bucket.drives.id
 
   cors_rule {
-    allowed_origins = ["https://${var.domain}"]
+    allowed_origins = concat(["https://${var.domain}"], var.alias_domain == null ? [] : ["https://${var.alias_domain.name}"])
     allowed_methods = ["GET", "POST"]
     allowed_headers = ["*"]
     max_age_seconds = 3600

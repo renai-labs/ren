@@ -68,7 +68,6 @@ export interface Server {
   readonly cellRoot: string
   readonly modelInfo: {
     readonly set: (models: ReadonlyArray<ModelInfoEntry>) => void
-    readonly search: (providers: ReadonlyArray<{ readonly id: string; readonly name: string }>) => void
     readonly down: (isDown: boolean) => void
     readonly reads: ReadonlyArray<string | null>
   }
@@ -123,6 +122,16 @@ const text = (content: typeof Content.Type | undefined) => {
 }
 
 const markerPattern = /stub_[0-9a-f]{12}/
+
+export const emptyReply = "[stub:empty-reply]"
+
+const bashPattern = /\[stub:bash (.+?)\]/su
+
+const promptBehaviour = (prompt: string): Behaviour => {
+  if (prompt.includes(emptyReply)) return { reply: "" }
+  const command = bashPattern.exec(prompt)?.[1]
+  return command ? { tool: { name: "shell", input: { command } } } : {}
+}
 
 export const restarted =
   "The server restarted while you were working. Continue from where you left off without repeating completed work."
@@ -316,21 +325,17 @@ export const start = (): Server => {
 
   const info: {
     models: ReadonlyArray<ModelInfoEntry>
-    search: ReadonlyArray<{ readonly id: string; readonly name: string }>
     isDown: boolean
     reads: Array<string | null>
   } = {
     models: defaultModels,
-    search: [],
     isDown: false,
     reads: [],
   }
   const modelInfo = (request: Request) => {
     info.reads.push(request.headers.get("authorization"))
     if (info.isDown) return new Response("down", { status: 503 })
-    return new URL(request.url).pathname.endsWith("/v1/search/providers")
-      ? Response.json(info.search)
-      : Response.json({ baseUrl: `${new URL(request.url).origin}/v1`, models: info.models })
+    return Response.json({ baseUrl: `${new URL(request.url).origin}/v1`, models: info.models })
   }
   const chat = async (request: Request) => {
     const endpoint = Object.entries(endpoints).find((entry) => new URL(request.url).pathname.endsWith(entry[0]))?.[1]
@@ -343,7 +348,7 @@ export const start = (): Server => {
     const behaviour: Behaviour = {
       title: { reply: "Stub title" },
       compaction: summary === undefined ? {} : { reply: summary },
-      turn: entry?.behaviour ?? {},
+      turn: entry?.behaviour ?? promptBehaviour(call.text),
     }[call.kind]
     const status = statusOf(behaviour, call)
     if (status)
@@ -362,10 +367,7 @@ export const start = (): Server => {
     hostname: "0.0.0.0",
     port: 0,
     idleTimeout: 0,
-    fetch: (request) =>
-      ["/v1/catalog", "/v1/search/providers"].some((path) => new URL(request.url).pathname.endsWith(path))
-        ? modelInfo(request)
-        : chat(request),
+    fetch: (request) => (new URL(request.url).pathname.endsWith("/v1/catalog") ? modelInfo(request) : chat(request)),
   })
 
   return {
@@ -376,9 +378,6 @@ export const start = (): Server => {
     modelInfo: {
       set: (models) => {
         info.models = models
-      },
-      search: (providers) => {
-        info.search = providers
       },
       down: (isDown) => {
         info.isDown = isDown

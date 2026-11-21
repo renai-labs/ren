@@ -3,7 +3,7 @@ export * as ChannelTurns from "./channel-turns.js"
 import { Database } from "@ren/db/database"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
-import { and, desc, eq, isNull, sql } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { Brains } from "./brains.js"
@@ -48,26 +48,8 @@ export const layer = Layer.effect(
     const brains = yield* Brains.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const thread = Database.Schema.intake_thread
-    const opencode = Database.Schema.opencode_session
-    const message = Database.Schema.opencode_message
     const session = Database.Schema.agent_session
     const reminded = new Map<Session.ID, string>()
-
-    const latestOf = (sessionId: Session.ID, type: "user" | "assistant") =>
-      database.db
-        .select({
-          id: message.id,
-          fromChannel: OpenCodeStore.message.isFromChannel,
-          errorType: OpenCodeStore.message.errorType,
-        })
-        .from(message)
-        .where(and(eq(message.session_id, sessionId), eq(message.type, type), isNull(message.removed_at)))
-        .orderBy(desc(message.seq), desc(message.id))
-        .limit(1)
-        .pipe(
-          Effect.orDie,
-          Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
-        )
 
     const end = Effect.fnUntraced(function* (
       payload: typeof TurnRun.payloadSchema.Type,
@@ -85,7 +67,7 @@ export const layer = Layer.effect(
         .progress(target, failed ? "failed" : "done")
         .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause)))
       if (failed) {
-        const error = yield* latestOf(payload.sessionId, "assistant")
+        const error = yield* OpenCodeStore.latestMessage(database.db, payload.sessionId, "assistant")
         return yield* notices.notice({
           provider: found.provider.id,
           target,
@@ -117,12 +99,12 @@ export const layer = Layer.effect(
     const run = Effect.fnUntraced(function* (payload: typeof TurnRun.payloadSchema.Type) {
       const sessionId = payload.sessionId
       const row = (yield* database.db
-        .select({ outcome: opencode.idle_outcome, createdBy: session.created_by })
-        .from(opencode)
-        .innerJoin(session, eq(session.id, opencode.session_id))
-        .where(eq(opencode.session_id, sessionId))
+        .select({ outcome: OpenCodeStore.state.outcome, createdBy: session.created_by })
+        .from(session)
+        .innerJoin(OpenCodeStore.chat, OpenCodeStore.join)
+        .where(eq(session.id, sessionId))
         .pipe(Effect.orDie)).at(0)
-      const latest = yield* latestOf(sessionId, "user")
+      const latest = yield* OpenCodeStore.latestMessage(database.db, sessionId, "user")
       const current = yield* ChannelThreads.latest(database, sessionId)
       const provider = Option.flatMap(current, (found) => registry.get(found.origin))
       if (row && Option.isSome(current) && Option.isSome(provider) && Option.isSome(latest) && latest.value.fromChannel)
@@ -156,16 +138,16 @@ export const layer = Layer.effect(
       synced: Effect.fn("ChannelTurns.synced")(function* (sessionId: Session.ID) {
         const found = (yield* database.db
           .select({
-            idle: opencode.time_idle,
-            suspended: opencode.time_suspended,
+            idle: OpenCodeStore.state.timeIdle,
+            suspended: OpenCodeStore.state.timeSuspended,
             parentId: session.parent_id,
           })
-          .from(opencode)
-          .innerJoin(session, eq(session.id, opencode.session_id))
+          .from(session)
+          .innerJoin(OpenCodeStore.chat, OpenCodeStore.join)
           .where(
             and(
-              eq(opencode.session_id, sessionId),
-              sql`exists (select 1 from ${thread} where ${thread.current_session_id} = ${opencode.session_id})`,
+              eq(session.id, sessionId),
+              sql`exists (select 1 from ${thread} where ${thread.current_session_id} = ${session.id})`,
             ),
           )
           .pipe(Effect.orDie)).at(0)

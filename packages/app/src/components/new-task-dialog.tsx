@@ -1,19 +1,19 @@
-import type { TaskCreateInput } from "@ren/client"
+import { Tasks } from "@ren/client/react"
+import { Breadcrumb } from "./breadcrumb.js"
 import { useState, type ReactElement, type ReactNode } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import {
   IconCalendarDue,
   IconChevronDown,
-  IconChevronRight,
   IconCube,
-  IconGhostFilled,
   IconMaximize,
   IconMinimize,
   IconTag,
   IconUserCircle,
   IconX,
 } from "@tabler/icons-react"
+import { IconAgent } from "../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
@@ -32,7 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { formatDate } from "@ren/ui/time"
 import { PriorityIcon, StatusGlyph, priorityLabelOf, statusOf, labelColor, priorities, statuses } from "./task-meta.js"
 import { Spinner } from "@ren/ui/spinner"
-import { useAgents } from "../lib/use-agents.js"
+import { pickerPageSize } from "../lib/pagination.js"
 import { useLabels } from "../lib/use-labels.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
@@ -77,17 +77,6 @@ function Chip(props: {
   )
 }
 
-const draftFor = (spaceId: string) => ({
-  spaceId,
-  title: "",
-  description: "",
-  status: "todo",
-  priority: "none",
-  agentId: "none",
-  labels: [] as string[],
-  dueAt: "",
-})
-
 const isBareKey = (event: KeyboardEvent) =>
   !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat && !event.isComposing
 
@@ -102,26 +91,6 @@ export function useNewTaskShortcut(onOpen: () => void) {
     onOpen()
   })
 }
-
-function createStatus(status: string): TaskCreateInput["status"] {
-  if (status === "in_progress" || status === "done" || status === "dismissed") return status
-  return "todo"
-}
-
-const createPriority = (priority: string): Pick<TaskCreateInput, "priority"> =>
-  priority === "high" || priority === "medium" || priority === "low" ? { priority } : {}
-
-const taskInput = (draft: ReturnType<typeof draftFor>, spaceId: string, parentId?: string): TaskCreateInput => ({
-  spaceId,
-  ...(parentId && { parentId }),
-  ...(draft.dueAt && { dueAt: draft.dueAt }),
-  title: draft.title.trim(),
-  ...(draft.description.trim() && { description: draft.description.trim() }),
-  status: createStatus(draft.status),
-  ...createPriority(draft.priority),
-  ...(draft.agentId !== "none" && { agentId: draft.agentId }),
-  ...(draft.labels.length > 0 && { labels: draft.labels }),
-})
 
 function SpaceChip(props: { spaceId: string; onChange: (spaceId: string) => void }) {
   const spaces = useSpaces()
@@ -190,11 +159,18 @@ function LabelsChip(props: { value: ReadonlyArray<string>; onChange: (labels: st
   )
 }
 
-function TaskChips(props: {
-  draft: ReturnType<typeof draftFor>
-  onChange: (patch: Partial<ReturnType<typeof draftFor>>) => void
-}) {
-  const agents = useAgents().agents
+function TaskChips(props: { draft: Tasks.Draft; spaceId: string; onChange: (patch: Partial<Tasks.Draft>) => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const agents =
+    useQuery({
+      ...api.agent.list.queryOptions({
+        spaceId: props.spaceId,
+        isSubagent: false,
+        page: 1,
+        pageSize: pickerPageSize,
+      }),
+      enabled: props.spaceId !== "",
+    }).data?.items ?? []
   return (
     <div className="flex flex-wrap gap-2 px-4 pt-4 pb-2">
       <Chip
@@ -233,7 +209,7 @@ function TaskChips(props: {
             label: agent.name,
           })),
         ]}
-        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconGhostFilled />}
+        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconAgent />}
         text={agents.find((agent) => agent.id === props.draft.agentId)?.name ?? "Assignee"}
         muted={props.draft.agentId === "none"}
         onChange={(agentId) => props.onChange({ agentId })}
@@ -311,15 +287,15 @@ export function NewTaskDialog(props: {
   const defaultSpace = fallbackSpace(props.spaceId, spaces.joined)
   const [expanded, setExpanded] = useState(false)
   const [createMore, setCreateMore] = useState(false)
-  const [draft, setDraft] = useState(() => draftFor(defaultSpace))
+  const [draft, setDraft] = useState(() => Tasks.draft(defaultSpace))
   const spaceId = draft.spaceId || defaultSpace
   const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }))
   const mutation = useMutation(api.task.create.mutationOptions())
   const create = () => {
-    mutation.mutate(taskInput(draft, spaceId, props.parent?.id), {
+    mutation.mutate(Tasks.createInput(draft, spaceId, props.parent?.id), {
       onSuccess: (task) => {
         toast.success(`${task.identifier} created`)
-        setDraft(draftFor(spaceId))
+        setDraft(Tasks.draft(spaceId))
         if (!createMore) setOpen(false)
       },
       onError: (error) => toast.error("Could not create the task", { description: errorMessage(error) }),
@@ -333,13 +309,20 @@ export function NewTaskDialog(props: {
         className={cn("top-[12%] translate-y-0 gap-0 p-0", expanded ? "sm:max-w-5xl" : "sm:max-w-3xl")}
       >
         <div className="flex items-center gap-2 p-4 pb-2">
-          {props.parent ? (
-            <span className="font-mono text-xs text-muted-foreground">{props.parent.identifier}</span>
-          ) : (
-            <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next })} />
-          )}
-          <IconChevronRight className="size-4 text-muted-foreground" />
-          <DialogTitle>{props.parent ? "New sub-task" : "New task"}</DialogTitle>
+          <Breadcrumb.Root
+            ancestors={[
+              {
+                key: "parent",
+                content: props.parent ? (
+                  props.parent.identifier
+                ) : (
+                  <SpaceChip spaceId={spaceId} onChange={(next) => set({ spaceId: next, agentId: "none" })} />
+                ),
+              },
+            ]}
+          >
+            <DialogTitle>{props.parent ? "New sub-task" : "New task"}</DialogTitle>
+          </Breadcrumb.Root>
           <DialogDescription className="sr-only">Add a task to a space.</DialogDescription>
           <Button
             variant="ghost"
@@ -390,7 +373,7 @@ export function NewTaskDialog(props: {
               )}
             />
           </div>
-          <TaskChips draft={draft} onChange={set} />
+          <TaskChips draft={draft} spaceId={spaceId} onChange={set} />
           <div className="flex items-center justify-end gap-4 px-4 pt-2 pb-4">
             {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
             <label className="flex items-center gap-2 text-xs">

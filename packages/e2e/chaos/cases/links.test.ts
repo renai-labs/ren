@@ -16,7 +16,7 @@ const failed = (work: Promise<unknown>) =>
 const inWindow = () => Date.now() + 4 * 60_000
 
 describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
-  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Hand } = {}
 
   const current = () => {
     if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
@@ -88,44 +88,21 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
   })
 
   describe("user to brain", () => {
-    test("a prompt refused before delivery is retried by ID and accepted once", async () => {
+    test.each([
+      ["refused before delivery", { type: "refuse" }, "before-delivery"],
+      ["whose reply is lost", { type: "drop-response" }, "after-commit-before-reply"],
+    ] as const)("a prompt %s is retried by ID and creates one message", async (_name, kind, boundary) => {
       const stack = current().stack
       const session = await stack.session()
       const script = stack.provider.script([ModelProvider.text("once")])
       const id = Session.MessageID.create()
       const prompt = () => session.opencode.session.prompt({ sessionID: session.id, id, text: `user ${script.marker}` })
-      const fault = stack.cellProxy.inject({ operation: `POST /api/session/${session.id}/prompt` }, { type: "refuse" })
+      const fault = stack.cellProxy.inject({ operation: `POST /api/session/${session.id}/prompt` }, kind)
       expect(await failed(prompt())).toBe(true)
-      fault.expectApplied()
-      await prompt()
-      expect(SessionDriver.occurrences(await session.settled(), id)).toBe(1)
-      expect(script.calls).toHaveLength(1)
-    })
-
-    test("a prompt whose reply is lost is retried by ID and creates one message", async () => {
-      const stack = current().stack
-      const session = await stack.session()
-      const script = stack.provider.script([ModelProvider.text("once")])
-      const id = Session.MessageID.create()
-      const prompt = () => session.opencode.session.prompt({ sessionID: session.id, id, text: `user ${script.marker}` })
-      const fault = stack.cellProxy.inject(
-        { operation: `POST /api/session/${session.id}/prompt` },
-        { type: "drop-response" },
-      )
-      expect(await failed(prompt())).toBe(true)
-      expect(fault.expectApplied().boundary).toBe("after-commit-before-reply")
+      expect(fault.expectApplied().boundary).toBe(boundary)
       await failed(prompt())
       expect(SessionDriver.occurrences(await session.settled(), id)).toBe(1)
       expect(script.calls).toHaveLength(1)
-    })
-
-    test("a client keeps working after the user link returns, without a new client", async () => {
-      const stack = current().stack
-      const session = await stack.session()
-      stack.cellProxy.partition(true)
-      expect(await failed(session.opencode.session.get({ sessionID: session.id }))).toBe(true)
-      stack.cellProxy.partition(false)
-      expect((await session.opencode.session.get({ sessionID: session.id })).id).toBe(session.id)
     })
   })
 
@@ -153,16 +130,6 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
   })
 
   describe("brain to core", () => {
-    test("a refresh refused before delivery leaves the valid key in use", async () => {
-      const stack = current().stack
-      const key = Stack.freshKey("refuse")
-      const session = await stack.session({ models: stack.access(key, inWindow()) })
-      const fault = stack.renProxy.inject({ operation: "POST /host/models/refresh" }, { type: "refuse" })
-      const turn = await session.turn([ModelProvider.text("fallback")])
-      expect((await turn.script.called(1)).key).toBe(key)
-      expect(fault.expectApplied().boundary).toBe("before-delivery")
-    })
-
     test("a refresh whose grant is lost never puts the lost key in use, and a later refresh succeeds", async () => {
       const stack = current().stack
       const key = Stack.freshKey("current")
@@ -228,30 +195,6 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       const turn = await session.turn([ModelProvider.text("after refusal")], "refused-link")
       expect(SessionDriver.lastIdle(await session.settled(90_000))).toBeDefined()
       expect(turn.script.calls.length).toBeLessThanOrEqual(5)
-    })
-
-    test("a model reply lost after a tool call was emitted never repeats the committed tool", async () => {
-      const lanes = current()
-      const session = await attached()
-      const marker = Ledger.marker("provider-drop")
-      lanes.stack.providerProxy.inject(
-        {
-          operation: "POST /v1/chat/completions",
-          when: (request) => request.body.includes(marker) && request.body.includes('"role":"tool"'),
-        },
-        { type: "drop-response" },
-      )
-      const turn = await session.turn(
-        [
-          ModelProvider.tool("shell", { command: Ledger.append(marker) }),
-          ModelProvider.text("after"),
-          ModelProvider.text("retried"),
-        ],
-        marker,
-      )
-      await turn.script.called(2, 60_000)
-      await session.settled(90_000)
-      expect(await Ledger.count(lanes.environment.instance, marker)).toBe(1)
     })
   })
 

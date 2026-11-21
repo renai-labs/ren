@@ -15,6 +15,7 @@ export const app_listing = pgTable("app_listing", {
     .array()
     .default(sql`'{}'::text[]`)
     .notNull(),
+  tools: jsonb().$type<AppListing.Info["tools"]>().default({}).notNull(),
   created_at: timestamp().defaultNow().notNull(),
   updated_at: timestamp().defaultNow().notNull(),
   archived_at: timestamp(),

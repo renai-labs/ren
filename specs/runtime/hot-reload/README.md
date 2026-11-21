@@ -20,7 +20,7 @@ Write each test first; it must fail before its change. Use real components, latc
 | 40  | A permission or question waits while settings change            | Nothing is disposed; the question can still get an answer                                                                                       | `cell`         |
 | 44  | A busy chat is deleted; `TestClock` moves 7 days                | The turn is interrupted, the chat is dropped, the folder goes after 7 days                                                                      | `cell`         |
 | 45  | A chat is deleted while its brain is asleep                     | The wake drops the chat; no sync error repeats                                                                                                  | `cell`         |
-| —   | Key rotation, brain side (`cell/test/crash.test.ts`)            | After a rotation and a restart, a token signed with the new key is accepted before the first pull                                               | `cell`         |
+| —   | Key rotation, brain side (`cell/test/crash.slow.test.ts`)       | After a rotation and a restart, a token signed with the new key is accepted before the first pull                                               | `cell`         |
 | —   | Host token renewal point                                        | The brain renews at 1 h left (`cell/src/host-token.ts:11`). The test at `cell/test/host-access.test.ts:172` uses 120 s and says "five minutes"  | `cell`         |
 
 Chaos cases on the real stack:

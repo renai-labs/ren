@@ -1,6 +1,6 @@
 export * as SandboxDrives from "./drives.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { HandApi } from "@ren/hand-api/hand-api"
 import { Duration, Effect, Exit, Option, Schedule, Schema, Semaphore } from "effect"
 import { type ChildProcess, spawn } from "node:child_process"
 import { constants } from "node:fs"
@@ -146,13 +146,13 @@ const started = (child: ChildProcess) =>
 
 export const make = (workspace: string) => {
   const locks = new Map<string, Semaphore.Semaphore>()
-  const mount = Effect.fn("Executor.mount")(function* (path: string, input: EnvironmentApi.MountInput) {
+  const mount = Effect.fn("Executor.mount")(function* (path: string, input: HandApi.MountInput) {
     const remote = input.remote
     const source = `:s3:${remote.bucket}/${remote.prefix}`
     const name = nameOf(path)
     const log = join(state, `${name}.log`)
     const socket = join(state, `${name}.sock`)
-    const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
+    const failed = (message: string) => new HandApi.MountError({ path: input.path, message })
     const found = yield* mountAt(path)
     if (
       Option.exists(found, (mounted) => mounted.source === source && mounted.access === input.access) &&
@@ -244,9 +244,9 @@ export const make = (workspace: string) => {
         ),
       )
   })
-  const refresh = Effect.fn("Executor.refresh")(function* (input: EnvironmentApi.RefreshInput) {
+  const refresh = Effect.fn("Executor.refresh")(function* (input: HandApi.RefreshInput) {
     const path = resolve(workspace, input.path)
-    const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
+    const failed = (message: string) => new HandApi.MountError({ path: input.path, message })
     const drive = yield* driveOf(path)
     if (!drive) return yield* failed("it is not on a mounted drive")
     const parts = relative(drive.path, path).split("/").filter(Boolean)
@@ -258,9 +258,9 @@ export const make = (workspace: string) => {
     }
     return yield* failed("rclone does not know the root of the drive")
   })
-  const uploaded = Effect.fn("Executor.uploaded")(function* (input: EnvironmentApi.UploadedInput) {
+  const uploaded = Effect.fn("Executor.uploaded")(function* (input: HandApi.UploadedInput) {
     const path = resolve(workspace, input.path)
-    const failed = (message: string) => new EnvironmentApi.MountError({ path: input.path, message })
+    const failed = (message: string) => new HandApi.MountError({ path: input.path, message })
     const drive = yield* driveOf(path)
     if (!drive) return
     const name = nameOf(drive.path)
@@ -299,7 +299,7 @@ export const make = (workspace: string) => {
     )
   })
   return {
-    mount: (input: EnvironmentApi.MountInput) => {
+    mount: (input: HandApi.MountInput) => {
       const path = resolve(workspace, input.path)
       const lock = locks.get(path) ?? Semaphore.makeUnsafe(1)
       locks.set(path, lock)

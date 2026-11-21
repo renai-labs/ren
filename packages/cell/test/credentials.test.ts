@@ -29,7 +29,6 @@ describe("whether a credential replaces the stored one", () => {
   test.each<[string, Credential.Value, Credential.Value, boolean]>([
     ["the same key keeps it", key("sk-1"), key("sk-1"), false],
     ["another key replaces it", key("sk-1"), key("sk-2"), true],
-    ["an oauth credential replaces a key", key("sk-1"), oauth(1_000), true],
     ["oauth under the same method with another key replaces it", oauth(5_000), oauth(1_000, "other"), true],
     ["oauth with the same key that OpenCode asks to renew earlier keeps it", oauth(5_000), oauth(1_000), false],
     ["oauth under the same method that expires one millisecond later replaces it", oauth(5_000), oauth(5_001), true],

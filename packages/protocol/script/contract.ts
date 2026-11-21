@@ -7,7 +7,16 @@ const exceptions = new Map([
     "infra",
     "Plans, applies and pulls an org spec: a diff and a reconcile across many records, which no primitive operation is.",
   ],
+  [
+    "app-tools",
+    "Reads the tools of a registry app’s MCPs, a part of its listing that the catalog leaves out: no primitive operation addresses a part of a record.",
+  ],
+  [
+    "mcp-inspect",
+    "Reads a remote MCP server live, before any app declares it: not a stored record, which no primitive operation addresses.",
+  ],
   ["health", "Server status for clients and load balancers."],
+  ["feedback", "Sends a person’s or an agent’s feedback to the Ren team, and stores no record."],
   ["me", "The signed-in user and their active organization."],
   [
     "memory",
@@ -15,10 +24,30 @@ const exceptions = new Map([
   ],
   [
     "drive",
-    "Lists, uploads to, downloads from and deletes files of an organization's or a space's drive by path, in S3 and not in records: an upload and a download are links to S3, which no primitive operation is.",
+    "Uploads to and downloads from an organization's or a space's drive by path, in S3 and not in records: an upload and a download are links to S3, which no primitive operation is.",
+  ],
+  [
+    "files",
+    "Lists, reads and deletes the files of a drive or a memory by path, through one contract for every source: files are not records, and no primitive operation addresses a part of one.",
   ],
   ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],
+  [
+    "space-invite-link",
+    "Reads and resets the one invite link of a space, made on first read: a part of a space, which no primitive operation addresses.",
+  ],
+  [
+    "join-link",
+    "Previews and accepts a space invite link by its token, for a person who may not be in the organization yet: the token names the space, which no primitive operation does.",
+  ],
+  [
+    "organization-invite-link",
+    "Makes, lists and revokes the links that bring people into the organization: a part of the organization, which no primitive operation addresses.",
+  ],
+  [
+    "organization-join-link",
+    "Previews and accepts an organization invite link by its token, for a person who may not have an account yet: the token names the organization, which no primitive operation does.",
+  ],
   [
     "environmentProvider",
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
@@ -42,6 +71,10 @@ const exceptions = new Map([
   [
     "ren-inference",
     "Proxies the Ren Inference Service, which stores the provider connections: a sign-in redirect, and reads and writes of records Ren does not hold, which no primitive operation is.",
+  ],
+  [
+    "billing",
+    "Proxies the billing service, which holds the plan state and calls the payment provider: a checkout redirect, plan changes and reads of records Ren does not hold, which no primitive operation is.",
   ],
   [
     "insights",

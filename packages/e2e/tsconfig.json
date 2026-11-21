@@ -6,6 +6,7 @@
     "incremental": true,
     "tsBuildInfoFile": "node_modules/.ts-dist/tsbuildinfo"
   },
+  "exclude": ["chaos/infra/e2b/executor.js"],
   "references": [
     {
       "path": "../brain/tsconfig.src.json"
@@ -23,7 +24,7 @@
       "path": "../db/tsconfig.src.json"
     },
     {
-      "path": "../environment-api/tsconfig.src.json"
+      "path": "../hand-api/tsconfig.src.json"
     },
     {
       "path": "../executor/tsconfig.src.json"

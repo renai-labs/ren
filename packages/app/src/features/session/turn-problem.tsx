@@ -5,21 +5,29 @@ import { Button, buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
-import { useSecondsUntil } from "../../lib/use-seconds-until.js"
-import { problemOf, type ProblemAction, type ProblemHandlers } from "./turn-problems.js"
+import type { TurnProblems } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
 
-const labels: Record<ProblemAction, string> = {
+const labels: Record<TurnProblems.Action, string> = {
   try: "Try again",
   continue: "Continue",
   model: "Change model",
+  billing: "Add credits",
   providers: "Providers",
   new: "New chat",
   stop: "Stop",
 }
 
-function ActionButton(props: { action: ProblemAction; primary: boolean; handlers: ProblemHandlers }) {
+function ActionButton(props: { action: TurnProblems.Action; primary: boolean; handlers: TurnProblems.Handlers }) {
   const variant = props.primary ? "default" : "ghost"
   const className = props.primary ? undefined : "text-muted-foreground"
+  if (props.action === "billing")
+    return (
+      <Link to="/settings/billing" className={buttonVariants({ variant, size: "sm", className })}>
+        {labels.billing}
+        <IconArrowUpRight data-icon="inline-end" />
+      </Link>
+    )
   if (props.action === "providers")
     return (
       <Link to="/settings/providers" className={buttonVariants({ variant, size: "sm", className })}>
@@ -53,8 +61,8 @@ function Shell(props: {
   waiting?: boolean | undefined
   title: string
   fix: React.ReactNode
-  actions: ReadonlyArray<ProblemAction>
-  handlers: ProblemHandlers
+  actions: ReadonlyArray<TurnProblems.Action>
+  handlers: TurnProblems.Handlers
   details?: string | undefined
 }) {
   return (
@@ -96,52 +104,35 @@ function Shell(props: {
   )
 }
 
-export function TurnProblem(props: {
-  kind: string
-  text: string
-  provider: string
-  model: string
-  midTurn: boolean
-  admin: boolean
-  handlers: ProblemHandlers
-}) {
-  const problem = problemOf(props)
+export function TurnProblem(props: { problem: TurnProblems.Problem; text: string; handlers: TurnProblems.Handlers }) {
   return (
     <Shell
       icon={<IconAlertCircle />}
-      title={problem.title}
-      fix={problem.fix}
-      actions={problem.actions}
+      title={props.problem.title}
+      fix={props.problem.fix}
+      actions={props.problem.actions}
       handlers={props.handlers}
       details={props.text.trim() || undefined}
     />
   )
 }
 
-export function TurnRetrying(props: {
-  kind: string
-  text: string
-  provider: string
-  at: number
-  attempt: number
-  handlers: ProblemHandlers
-}) {
-  const seconds = useSecondsUntil(props.at)
-  const busy = props.kind === "provider.rate-limit" && !/usage limit|weekly/iu.test(props.text)
+export function TurnRetrying(props: { retrying: TurnProblems.Retrying; handlers: TurnProblems.Handlers }) {
+  const seconds = ChatReact.useSecondsUntil(props.retrying.at)
   return (
     <Shell
       icon={<Spinner />}
       waiting
-      title={busy ? `${props.provider} is busy right now.` : `${props.provider} isn’t responding.`}
+      title={props.retrying.title}
       fix={
         <span className="tabular-nums">
           {seconds > 0 ? `Trying again in ${seconds}s…` : "Trying again now…"}
-          {props.attempt > 1 ? ` (attempt ${props.attempt})` : null}
+          {props.retrying.attempt > 1 ? ` (attempt ${props.retrying.attempt})` : null}
         </span>
       }
       actions={["stop"]}
       handlers={props.handlers}
-      details={props.text.trim() || undefined}
+      details={props.retrying.text.trim() || undefined}
     />
   )
 }

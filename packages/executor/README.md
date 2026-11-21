@@ -1,6 +1,6 @@
 # @ren/executor
 
-The executor: a small server on an environment's machine. A brain calls it to run processes and change files, so a session's tools run on the environment and not where the brain runs. It serves the `EnvironmentApi` from `@ren/environment-api/environment-api`, an Effect RPC group, at `POST /v1/rpc` (NDJSON).
+The executor: a small server on an environment's machine. A brain calls it to run processes and change files, so a session's tools run on the environment and not where the brain runs. It serves the `EnvironmentApi` from `@ren/hand-api/hand-api`, an Effect RPC group, at `POST /v1/rpc` (NDJSON).
 
 ## What belongs here
 
@@ -9,7 +9,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 - `src/sandbox/files.ts`: `SandboxFiles`, the file operations of the `Sandbox`, with `node:fs`.
 - `src/sandbox/output-log.ts`: `OutputLog`, the output of one process: the kept chunks, the readers and their cursors, and the exit.
 - `src/server.ts`: the RPC server. A gate on the route checks the environment token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
-- `Dockerfile`: the image Ren's Docker environment provider runs: the bundled `main.ts` on port 4100 (`EnvironmentApi.port`), with `ripgrep`, as the `bun` user in a `/workspace` that user owns. `@ren/executor/testing` builds it (`Image.build`).
+- `Dockerfile`: the image Ren's Docker environment provider runs: the bundled `main.ts` on port 4100 (`HandApi.port`), with `ripgrep`, as the `bun` user in a `/workspace` that user owns. `@ren/executor/testing` builds it (`Image.build`).
 - `src/main.ts`: the program. It provides `Sandbox.layer` and the platform services (`BunServices.layer`), which include the `ChildProcessSpawner`.
 
 ## Notes
@@ -33,16 +33,16 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 
 ## Configuration
 
-| Variable                  | Meaning                                                      |
-| ------------------------- | ------------------------------------------------------------ |
-| `EXECUTOR_ENVIRONMENT_ID` | The environment this executor is. Tokens must name it.       |
-| `EXECUTOR_WORKSPACE`      | The directory relative paths resolve against. Default: cwd.  |
-| `ENVIRONMENT_PUBLIC_KEYS` | Ren's public keys, from `bun run keys` in `environment-api`. |
-| `PORT`                    | Default 4100.                                                |
+| Variable                  | Meaning                                                     |
+| ------------------------- | ----------------------------------------------------------- |
+| `EXECUTOR_ENVIRONMENT_ID` | The environment this executor is. Tokens must name it.      |
+| `EXECUTOR_WORKSPACE`      | The directory relative paths resolve against. Default: cwd. |
+| `ENVIRONMENT_PUBLIC_KEYS` | Ren's public keys, from `bun run keys` in `hand-api`.       |
+| `PORT`                    | Default 4100.                                               |
 
 ## Dependencies
 
-`@ren/schema`, `@ren/environment-api`, `effect`, `@effect/platform-bun`.
+`@ren/schema`, `@ren/hand-api`, `effect`, `@effect/platform-bun`.
 
 ## Commands
 

@@ -14,6 +14,9 @@ export const input = (tool: SessionMessage.Tool): Readonly<Record<string, unknow
 export const metadata = (tool: SessionMessage.Tool): Readonly<Record<string, unknown>> =>
   "metadata" in tool.state ? (tool.state.metadata ?? empty) : empty
 
+export const backgrounded = (tool: SessionMessage.Tool) =>
+  tool.state.status === "completed" && metadata(tool).status === "running"
+
 export const output = (tool: SessionMessage.Tool) => {
   if (tool.state.status === "running") {
     const running = tool.state.metadata.output

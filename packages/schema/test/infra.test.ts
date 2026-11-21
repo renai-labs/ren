@@ -92,7 +92,7 @@ describe("Infra.Spec", () => {
     )
   })
 
-  test("a factory names the agents of its space, ren included, and keeps the factory rules", () => {
+  test("a factory names the agents of its space, ren included", () => {
     const factory = (agents: ReadonlyArray<unknown>) =>
       decode({
         engineering: { name: "Engineering", agents: { build: agent, review: agent } },
@@ -101,9 +101,6 @@ describe("Infra.Spec", () => {
     expect(Exit.isSuccess(factory([{ agent: "ren", to: [{ agent: "triage" }] }, { agent: "triage" }]))).toBe(true)
     expect(String(factory([{ agent: "build" }]))).toContain(
       'The factory of space "support" names agent "build", which is not in the space.',
-    )
-    expect(String(factory([{ agent: "triage", to: [{ agent: "triage" }] }]))).toContain(
-      "triage cannot hand off to itself.",
     )
   })
 
@@ -141,6 +138,11 @@ describe("Infra.Spec", () => {
       },
     })
 
+  const tokenAuths = [
+    { type: "bearer", credential: "LANGFUSE_SECRET_KEY" },
+    { type: "query", name: "key", credential: "LANGFUSE_SECRET_KEY" },
+  ]
+
   test("an MCP authenticates with credentials it requires, by env name", () => {
     const exit = mcp({
       auth: { type: "basic", username: "LANGFUSE_PUBLIC_KEY", password: "LANGFUSE_SECRET_KEY" },
@@ -150,6 +152,10 @@ describe("Infra.Spec", () => {
       ],
     })
     expect(Exit.isSuccess(exit)).toBe(true)
+    for (const auth of tokenAuths)
+      expect(Exit.isSuccess(mcp({ auth, requiredCredentials: [{ kind: "env", name: "LANGFUSE_SECRET_KEY" }] }))).toBe(
+        true,
+      )
   })
 
   test("rejects MCP auth that names a credential the MCP does not require", () => {
@@ -158,6 +164,10 @@ describe("Infra.Spec", () => {
       requiredCredentials: [{ kind: "env", name: "LANGFUSE_PUBLIC_KEY" }],
     })
     expect(String(exit)).toContain('The auth uses credential "LANGFUSE_SECRET_KEY", which the MCP does not require.')
+    for (const auth of tokenAuths)
+      expect(String(mcp({ auth }))).toContain(
+        'The auth uses credential "LANGFUSE_SECRET_KEY", which the MCP does not require.',
+      )
   })
 
   test("custom dependency cycles report their path", () => {
@@ -172,27 +182,31 @@ describe("Infra.Spec", () => {
     })
     expect(String(exit)).toContain("first -> second -> first")
     expect(
-      App.dependencyCycles(
+      App.dependencyIssues(
         new Map([
           ["first", { dependsOn: ["second"] }],
           ["second", { dependsOn: ["first"] }],
         ]),
       ),
-    ).toEqual(["first -> second -> first"])
+    ).toEqual([{ kind: "cycle", path: ["first", "second", "first"] }])
+  })
+
+  test("an app's dependencies may have dependencies, but no deeper", () => {
+    const chain = (length: number) =>
+      Object.fromEntries(
+        Array.from({ length }, (_, index) => [
+          `level-${index + 1}`,
+          app({ dependsOn: index + 1 < length ? [`level-${index + 2}`] : [] }),
+        ]),
+      )
+    expect(Exit.isSuccess(decode({ engineering: { name: "Engineering", apps: chain(3) } }))).toBe(true)
+    expect(String(decode({ engineering: { name: "Engineering", apps: chain(4) } }))).toContain(
+      "level-1 -> level-2 -> level-3 -> level-4",
+    )
   })
 
   test("an upstream skill requires one safe explicit source directory", () => {
-    for (const path of [
-      undefined,
-      "",
-      "..",
-      "../tools",
-      "/tools",
-      "tools//notes",
-      "tools/../notes",
-      "tools\\notes",
-      "tools/./notes",
-    ]) {
+    for (const path of [undefined, "..", "../tools", "tools/../notes", "/tools", "tools\\notes", "tools/./notes"]) {
       const exit = decode({
         engineering: {
           name: "Engineering",

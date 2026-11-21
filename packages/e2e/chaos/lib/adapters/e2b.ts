@@ -1,7 +1,7 @@
 export * as E2BEnvironment from "./e2b.js"
 
-import { EnvironmentApi } from "@ren/environment-api/environment-api"
-import type { Environment } from "@ren/schema/environment"
+import { HandApi } from "@ren/hand-api/hand-api"
+import type { Hand } from "@ren/schema/hand"
 import { Schema } from "effect"
 import { ExecutorAdapter } from "./executor.js"
 import { Process } from "../process.js"
@@ -38,7 +38,7 @@ const call = async (operation: string, method: string, route: string, body?: unk
 
 export interface Sandbox {
   readonly id: string
-  readonly environmentId: Environment.ID
+  readonly environmentId: Hand.ID
   readonly url: string
   readonly pause: () => Promise<void>
   readonly resume: (timeoutSeconds?: number) => Promise<void>
@@ -47,7 +47,7 @@ export interface Sandbox {
   readonly state: () => Promise<string | undefined>
 }
 
-const endpoint = (sandboxId: string, target = EnvironmentApi.port) => `https://${target}-${sandboxId}.${domain()}`
+const endpoint = (sandboxId: string, target = HandApi.port) => `https://${target}-${sandboxId}.${domain()}`
 
 const configure = async (
   sandboxId: string,
@@ -71,7 +71,7 @@ const configure = async (
 }
 
 export const create = async (options: {
-  readonly environmentId: Environment.ID
+  readonly environmentId: Hand.ID
   readonly timeoutSeconds?: number
 }): Promise<Sandbox> => {
   const template = process.env.CHAOS_E2B_TEMPLATE ?? ""
@@ -88,7 +88,7 @@ export const create = async (options: {
   await configure(created.sandboxID, created.envdAccessToken, {
     EXECUTOR_ENVIRONMENT_ID: options.environmentId,
     ENVIRONMENT_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
-    PORT: String(EnvironmentApi.port),
+    PORT: String(HandApi.port),
   })
   return {
     id,

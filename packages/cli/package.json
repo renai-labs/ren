@@ -6,7 +6,7 @@
   "type": "module",
   "license": "UNLICENSED",
   "bin": {
-    "ren2": "./src/index.ts"
+    "ren": "./src/index.ts"
   },
   "exports": {
     "./*": "./src/*.ts"
@@ -17,19 +17,21 @@
     "generate": "bun run script/generate.ts",
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b",
+    "typecheck": "tsrs -b",
     "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
   },
   "dependencies": {
     "@effect/platform-bun": "catalog:",
     "@ren/schema": "workspace:*",
     "@renai-labs/sdk": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "jsonc-parser": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@ren/httpapi-codegen": "workspace:*",
     "@ren/protocol": "workspace:*",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "tsrs": "catalog:"
   }
 }

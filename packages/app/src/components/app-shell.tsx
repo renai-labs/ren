@@ -2,6 +2,7 @@ import { RegistryContext } from "@effect/atom-react"
 import { ChatReact } from "@ren/chat/react"
 import { Outlet } from "@tanstack/react-router"
 import { Suspense, useState } from "react"
+import { Preference } from "../lib/preference.js"
 import { RouteSkeleton } from "./route-skeleton.js"
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@ren/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -10,14 +11,19 @@ import { NewTaskDialog, useNewTaskShortcut } from "./new-task-dialog.js"
 import { SearchDialog } from "./search-dialog.js"
 import { SettingsSidebar } from "./settings-sidebar.js"
 import { SpaceSidebar } from "./space-sidebar.js"
+import { TabBar } from "./tab-strip.js"
 import { useMe } from "../lib/use-me.js"
-import { chatFor } from "../lib/chat.js"
+import { useCurrentChat } from "../lib/chat.js"
 import { Routing } from "../lib/routing.js"
 import { Keyboard } from "../platform/keyboard.js"
 import { Platform } from "../platform/platform.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
+import { AppearancePreferences } from "../lib/appearance-preferences.js"
+import { cn } from "cn"
 
 const insetClass = "h-svh overflow-hidden md:h-[calc(100svh-1rem)] md:shadow-none md:inset-ring md:inset-ring-border"
+
+const tabbedClass = "md:h-[calc(100svh-(--spacing(12)))] md:peer-data-[variant=inset]:mt-10"
 
 function useSearchShortcut(onToggle: () => void) {
   Keyboard.useKeyDown((event) => {
@@ -48,25 +54,22 @@ function ShellSidebar(props: { path: string; onSearch: () => void }) {
 export function AppShell() {
   const platform = Platform.usePlatform()
   const me = useMe()
-  const chat = chatFor(platform, me.user.id)
+  const chat = useCurrentChat(platform, me.user.id)
   const [searching, setSearching] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(() => SidebarPreferences.open.read(platform.storage))
+  const sidebarOpen = Preference.usePreference(SidebarPreferences.open)
+  const setPreference = Preference.useSetPreference()
   useSearchShortcut(() => setSearching((current) => !current))
   useNewTaskShortcut(() => setCreatingTask(true))
   const path = Routing.useRenderedPath()
+  const tabs = Preference.usePreference(AppearancePreferences.layout) === "tabs"
   return (
-    <RegistryContext value={chat.registry}>
+    <RegistryContext key={chat.generation} value={chat.registry}>
       <ChatReact.Provider atoms={chat.atoms}>
-        <SidebarProvider
-          open={sidebarOpen}
-          onOpenChange={(next) => {
-            SidebarPreferences.open.write(platform.storage, next)
-            setSidebarOpen(next)
-          }}
-        >
+        <SidebarProvider open={sidebarOpen} onOpenChange={(next) => setPreference(SidebarPreferences.open, next)}>
+          {tabs ? <TabBar /> : null}
           <ShellSidebar path={path} onSearch={() => setSearching(true)} />
-          <SidebarInset className={insetClass}>
+          <SidebarInset className={cn(insetClass, tabs && tabbedClass)}>
             <SidebarOpen />
             <div
               data-slot="page-scroll"

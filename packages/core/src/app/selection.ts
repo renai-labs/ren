@@ -45,7 +45,7 @@ export const select = (input: {
           server: ProfileLabel.serverOf(each.candidate.slug),
           profile: null,
           label: Integrations.label,
-          url: `${base}/${each.route}/mcp`,
+          url: `${base}/${each.route}`,
         }),
       ),
     ],

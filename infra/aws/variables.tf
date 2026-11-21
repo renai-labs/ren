@@ -33,6 +33,15 @@ variable "domain" {
   description = "The deployment's domain, for example ren.example.com. The app serves on it; api. and egress. are under it."
 }
 
+variable "alias_domain" {
+  type = object({
+    name    = string
+    publish = bool
+  })
+  default     = null
+  description = "A second domain in an existing public zone, for example example.com. The app also serves on it and the API on api.<name>; machines keep using `domain`. With publish false, the stack makes only the certificate and the load balancer rule. With publish true, it also takes the CloudFront alias and points the zone's records here: another distribution must not hold the alias."
+}
+
 variable "database_security_group_id" {
   type        = string
   description = "Security group of the Postgres instance. This stack adds one ingress rule to it, from the server only."
@@ -57,6 +66,22 @@ variable "server_environment" {
   type        = map(string)
   default     = {}
   description = "Plain environment values of the server, which are not secret."
+}
+
+variable "artifact_cloudflare" {
+  type = object({
+    account_id = string
+    namespace  = string
+    domain     = string
+    names      = optional(string)
+  })
+  default     = null
+  description = "Serve artifacts on Cloudflare Workers for Platforms at https://<label>.<domain>/. infra/cloudflare makes the namespace and the domain. Store CLOUDFLARE_API_TOKEN in the existing server secret before deploying."
+
+  validation {
+    condition     = var.artifact_cloudflare == null ? true : can(regex("^[a-f0-9]{32}$", var.artifact_cloudflare.account_id))
+    error_message = "The Cloudflare account ID must be 32 lowercase hexadecimal characters."
+  }
 }
 
 variable "rate_limit" {

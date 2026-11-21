@@ -1,7 +1,7 @@
 export * as ModelCatalog from "./model-catalog.js"
 
 import { Models } from "@ren/schema/models"
-import { Array, Context, Effect, Layer, Option, Schema, Struct, SynchronizedRef } from "effect"
+import { Array, Context, Effect, Equal, Layer, Option, Schema, Struct, SynchronizedRef } from "effect"
 import { BrainStorage } from "./brain-storage.js"
 import type { Harness } from "./harness/harness.js"
 
@@ -25,7 +25,7 @@ export interface Interface {
   readonly update: (
     generation: number,
     id: string,
-    fields: Partial<Pick<Models.CatalogEndpoint, "models" | "search">>,
+    fields: Pick<Models.CatalogEndpoint, "models">,
   ) => Effect.Effect<void>
 }
 
@@ -57,11 +57,11 @@ export const layer = Layer.effect(
       register: Effect.fn("ModelCatalog.register")((providers) =>
         SynchronizedRef.modifyEffect(state, (current) =>
           Effect.gen(function* () {
-            if (JSON.stringify(providers) === JSON.stringify(current.providers)) return [false, current] as const
+            if (Equal.equals(providers, current.providers)) return [false, current] as const
             const endpoints = providers.flatMap((provider): ReadonlyArray<Models.CatalogEndpoint> => {
               if (provider.catalog !== "inference")
                 return [{ ...Struct.omit(provider, ["catalog"]), ...provider.catalog }]
-              if (!current.providers.some((prior) => JSON.stringify(prior) === JSON.stringify(provider))) return []
+              if (!current.providers.some((prior) => Equal.equals(prior, provider))) return []
               return (
                 Option.getOrUndefined(current.catalog)?.endpoints.filter((endpoint) => endpoint.id === provider.id) ??
                 []
@@ -85,8 +85,7 @@ export const layer = Layer.effect(
               ...current,
               catalog: Option.some({
                 endpoints: current.providers.flatMap((provider) => {
-                  if (provider.id === id)
-                    return [{ ...Struct.omit(provider, ["catalog"]), models: [], ...endpoint, ...fields }]
+                  if (provider.id === id) return [{ ...Struct.omit(provider, ["catalog"]), ...endpoint, ...fields }]
                   return previous.filter((endpoint) => endpoint.id === provider.id)
                 }),
               }),

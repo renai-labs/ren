@@ -1,0 +1,75 @@
+import { useState } from "react"
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query"
+import { Loading } from "@ren/ui/loading"
+import { Link } from "@tanstack/react-router"
+import { Breadcrumb } from "../../components/breadcrumb.js"
+import { Page, useShapeId } from "../../components/page.js"
+import { ToolbarSearch } from "../../components/toolbar-search.js"
+import { fromRegistry } from "../../lib/apps.js"
+import { RouterContext } from "../../lib/router-context.js"
+import { Search } from "@ren/util/search"
+import { AppRegistryPages, Debounce } from "@ren/client/react"
+import { AppCategories } from "./app-categories.js"
+import { AppGridSample, CatalogList } from "./catalog.js"
+import { useAddSheet, useRegistryApps } from "./use-catalog.js"
+
+export function CategoryPage(props: { slug: string }) {
+  const { client } = RouterContext.useRouterContext()
+  const category = AppCategories.find(props.slug)
+  const shapeId = useShapeId(`category-${category.slug}`)
+  const [query, setQuery] = useState("")
+  const needle = Debounce.useValue(query.trim(), 250)
+  const featured = useRegistryApps(category.apps)
+  const registry = useInfiniteQuery({
+    ...AppRegistryPages.options(client, needle, category.slug),
+    placeholderData: keepPreviousData,
+  })
+  const picked = category.apps.flatMap((slug) => featured.of(slug) ?? [])
+  const pickedIds = new Set(picked.map((app) => app.id))
+  const apps = [
+    ...picked.filter((app) => Search.matches(query, app.name, app.description)),
+    ...(registry.data?.pages ?? [])
+      .flatMap((page) => page.items)
+      .map(fromRegistry)
+      .filter((app) => !pickedIds.has(app.id)),
+  ]
+  const pending = featured.pending || registry.isPending
+  const sheet = useAddSheet()
+  return (
+    <div className="relative flex flex-1 flex-col">
+      <div className="absolute top-0 left-0 z-30">
+        <Breadcrumb.Header>
+          <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>
+            {category.title}
+          </Breadcrumb.Root>
+        </Breadcrumb.Header>
+      </div>
+      <Page
+        title={category.title}
+        description={category.description}
+        width="wide"
+        actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
+      >
+        <Loading id={shapeId} loading={pending} label="Loading apps">
+          {pending ? (
+            <AppGridSample count={Math.max(category.apps.length, 6)} />
+          ) : (
+            <CatalogList
+              label={category.title}
+              apps={apps}
+              query={query}
+              empty={`No apps in ${category.title} yet`}
+              more={registry.hasNextPage}
+              onMore={() => {
+                if (!registry.isFetchingNextPage) void registry.fetchNextPage()
+              }}
+              fetching={registry.isFetchingNextPage}
+              onAdd={sheet.add}
+            />
+          )}
+        </Loading>
+        {sheet.dialog}
+      </Page>
+    </div>
+  )
+}

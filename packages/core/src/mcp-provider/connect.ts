@@ -28,6 +28,7 @@ export interface Start {
   readonly integration: string
   readonly state: string
   readonly callbackUrl: string
+  readonly returnTo: string | null
 }
 
 export interface Interface {
@@ -99,6 +100,7 @@ export const layer = Layer.effect(
             made_for: input.madeFor,
             initiator_user_id: input.initiator,
             state: input.state,
+            return_to: input.returnTo,
             discovery_state: {
               kind: "provider",
               provider: input.provider,

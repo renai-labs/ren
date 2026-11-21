@@ -16,11 +16,6 @@ export const DriveHandler = HttpApiBuilder.group(Api, "drive", (handlers) =>
   Effect.gen(function* () {
     const drives = yield* Drives.Service
     return handlers
-      .handle("drive.list", (request) =>
-        Effect.flatMap(Primitive.currentActor, (actor) => drives.list(actor, request.query)).pipe(
-          Effect.catchTags({ ...errors, "Primitive.Invalid": Primitive.invalid }),
-        ),
-      )
       .handle("drive.startUpload", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => drives.startUpload(actor, request.payload)).pipe(
           Effect.catchTags({ ...errors, "Primitive.Invalid": Primitive.invalid }),
@@ -28,11 +23,6 @@ export const DriveHandler = HttpApiBuilder.group(Api, "drive", (handlers) =>
       )
       .handle("drive.download", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => drives.download(actor, request.query)).pipe(
-          Effect.catchTags(errors),
-        ),
-      )
-      .handle("drive.delete", (request) =>
-        Effect.flatMap(Primitive.currentActor, (actor) => drives.delete(actor, request.query)).pipe(
           Effect.catchTags(errors),
         ),
       )

@@ -13,9 +13,11 @@ import { SqlClient, Statement } from "effect/sql"
 import type { Actor } from "../src/actor.js"
 import { Session } from "../src/session.js"
 import { Models } from "../src/models.js"
+import { SettingsRows } from "../src/settings/rows.js"
 import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
+import { SavedHistory } from "./lib/saved-history.js"
 import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(60_000)
@@ -54,22 +56,6 @@ const picker = testEffect(
 )
 
 type ListInput = Parameters<Session.Interface["list"]>[1]
-
-const saved = Effect.fnUntraced(function* (texts: ReadonlyArray<string>) {
-  const database = yield* Database.Service
-  const owner = yield* Seed.owner()
-  const id = yield* Seed.session(owner)
-  yield* database.db.insert(Database.Schema.opencode_message).values(
-    texts.map((text, seq) => ({
-      id: SessionMessage.ID.create(),
-      session_id: id,
-      type: "user",
-      seq,
-      data: JSON.stringify({ text, time: { created: 1_760_000_000_000 } }),
-    })),
-  )
-  return { id, actor: { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] } }
-})
 
 const chat = Effect.fnUntraced(function* (
   owner: Parameters<typeof Seed.session>[0],
@@ -119,10 +105,40 @@ describe("Session", () => {
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
       const sessions = yield* Session.Service
-      const listed = yield* sessions.models(actorOf(owner), yield* Seed.session(owner))
+      const listed = (yield* sessions.models(actorOf(owner), yield* Seed.session(owner))).models
       expect(listed.length).toBeGreaterThan(0)
       expect(listed.some((model) => model.id === "image")).toBe(false)
     }),
+  )
+  it.live(
+    "a new chat's default model is its space's, then its organization's, then Ren's, skipping one the list lacks",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const sessions = yield* Session.Service
+        const owner = yield* Seed.owner()
+        const hidden = yield* Seed.space(owner.organizationId)
+        const choose = (row: SettingsRows.Owner, modelId: string) =>
+          database.transaction((transaction) =>
+            SettingsRows.write(transaction, row, {
+              permissions: [],
+              references: [],
+              model: { endpointId: "stub", modelId },
+            }),
+          )
+        const defaultOf = (spaceId?: SpaceSchema.ID) =>
+          sessions
+            .models(actorOf(owner), Session.ID.create(), spaceId && { spaceId })
+            .pipe(Effect.map((choices) => choices.default))
+        expect(yield* defaultOf(owner.spaceId)).toEqual({ providerID: "stub", id: "stub-model" })
+        yield* choose({ organization_id: owner.organizationId }, "stub-other")
+        yield* choose({ space_id: owner.spaceId }, "gone")
+        expect(yield* defaultOf(owner.spaceId)).toEqual({ providerID: "stub", id: "stub-other" })
+        yield* choose({ space_id: owner.spaceId }, "stub-model")
+        expect(yield* defaultOf(owner.spaceId)).toEqual({ providerID: "stub", id: "stub-model" })
+        expect(yield* defaultOf()).toEqual({ providerID: "stub", id: "stub-other" })
+        expect((yield* Effect.flip(defaultOf(hidden)))._tag).toBe("Primitive.NotFound")
+      }),
   )
   it.live(
     "links lists the chat's tasks the caller can read, their pull requests and issues once each, and its threads",
@@ -295,6 +311,10 @@ describe("Session", () => {
       expect(yield* listed(actor)).toEqual({ ids: [idle, scheduled, slack], total: 3 })
       expect((yield* listed(actor, { origin: ["slack", "schedule"] })).ids).toEqual([scheduled, slack])
       expect((yield* listed(actor, { agentId: [agentId] })).ids).toEqual([slack])
+      const agents = (yield* Effect.flatMap(Session.Service, (sessions) =>
+        sessions.list(actor, { ...Configured.page, origin: ["slack", "schedule"] }),
+      )).items.map((item) => item.agentId)
+      expect(agents).toEqual([null, agentId])
       expect(yield* listed(actor, { status: "busy" })).toEqual({ ids: [slack], total: 1 })
       expect((yield* listed(actor, { status: "idle" })).ids).toEqual([idle, scheduled])
       expect(yield* listed(actor, { archived: true })).toEqual({ ids: [archived], total: 1 })
@@ -381,24 +401,13 @@ describe("Session", () => {
     }),
   )
 
-  it.live("Ren refuses a page of saved history over 16 MiB; a smaller page of the same chat reads", () =>
-    Effect.gen(function* () {
-      const sessions = yield* Session.Service
-      const chat = yield* saved(["a".repeat(9 * 1024 * 1024), "b".repeat(9 * 1024 * 1024)])
-      expect((yield* Effect.flip(sessions.messages(chat.actor, chat.id, { limit: 2 })))._tag).toBe(
-        "Session.PageTooLarge",
-      )
-      expect((yield* sessions.messages(chat.actor, chat.id, { limit: 1 })).items).toHaveLength(1)
-    }),
-  )
-
   it.live(
     "Ren reads saved history 4 at a time with 16 more waiting; one more read at that moment is told to ask again",
     () =>
       Effect.gen(function* () {
         const sessions = yield* Session.Service
         const sql = yield* SqlClient.SqlClient
-        const chat = yield* saved(["hello"])
+        const chat = yield* SavedHistory.saved(["hello"])
         const locked = yield* Deferred.make<void>()
         const unlock = yield* Deferred.make<void>()
         yield* sql

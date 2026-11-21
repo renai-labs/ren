@@ -13,7 +13,7 @@ test("an app past the first 100 registry apps opens from Add apps, and its menti
   page,
 }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
-  await page.goto("/app/")
+  await page.goto("/")
   const start = page.getByRole("main")
 
   await start.getByRole("button", { name: "Add apps" }).click()
@@ -40,7 +40,7 @@ test("an app past the first 100 registry apps opens from Add apps, and its menti
   await expect.poll(async () => JSON.stringify(await ren.chat.messages({ id: sessionId }))).toContain("Ask @zz-notes")
 })
 
-test("Installed in the Marketplace lists connected apps past the first 100 after See all", async ({ page }) => {
+test("Installed in Apps loads connected apps past the first 100 on scroll", async ({ page }) => {
   await createOrganization(page.request, { name: "Ada Lovelace" })
   const ren = await client(page.request)
   const pages = await Promise.all(
@@ -49,10 +49,11 @@ test("Installed in the Marketplace lists connected apps past the first 100 after
   for (const app of pages.flatMap((page) => page.items).slice(0, 101))
     await ren["app-profile"].create({ appId: app.id, name: "Mine", slug: "mine", kind: "private" })
 
-  await page.goto("/app/marketplace")
+  await page.goto("/apps")
+  await page.getByRole("tab", { name: "Installed" }).click()
   const installed = page.getByRole("list", { name: "Installed" })
   await expect(page.getByRole("heading", { name: /^Installed\s*101$/ })).toBeVisible()
-  await installed.getByRole("button", { name: "See all" }).click()
+  await installed.getByRole("listitem").last().scrollIntoViewIfNeeded()
   await expect(installed.getByRole("button", { name: "Filler 101", exact: true })).toBeVisible()
 })
 
@@ -78,8 +79,10 @@ test("Add to space offers an existing account even when the accounts load after 
       await route.continue()
     },
   )
-  await page.goto("/app/marketplace")
+  await page.goto("/apps")
   await page.getByLabel("Search apps").fill("Zeta")
+  await page.getByRole("button", { name: "Zeta Notes", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "Zeta Notes" })).toBeVisible()
   await page.getByRole("button", { name: "Add Zeta Notes to a space" }).click()
   await page.getByRole("menuitem", { name: "Design" }).click()
   held.resolve()

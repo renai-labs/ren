@@ -115,6 +115,15 @@ type entry struct {
 	storedAt time.Time
 }
 
+// flight is one resolve call to Ren. Identical requests that arrive while
+// it runs wait for its answer instead of asking Ren again.
+type flight struct {
+	done   chan struct{}
+	reply  Reply
+	err    error
+	joined int
+}
+
 type authEntry struct {
 	workload string
 	login    string
@@ -130,6 +139,7 @@ type Client struct {
 
 	mu      sync.Mutex
 	answers map[string]entry
+	flights map[string]*flight
 	logins  map[string]authEntry
 	conns   map[string]map[net.Conn]struct{}
 	open    sync.WaitGroup
@@ -211,6 +221,7 @@ func New(cfg Config, logger *slog.Logger) (*Client, error) {
 		logger:   logger,
 		now:      time.Now,
 		answers:  map[string]entry{},
+		flights:  map[string]*flight{},
 		logins:   map[string]authEntry{},
 		conns:    map[string]map[net.Conn]struct{}{},
 		reported: map[string]time.Time{},
@@ -326,16 +337,43 @@ type Request struct {
 // Ren does not answer, the last allow answer is used until it is stale. No
 // answer is used past its expiry. A denial is never kept, so a credential
 // connected after a denial works on the next request (README §6.3 rules 1
-// and 9).
+// and 9). Identical requests in flight share one call to Ren.
 func (c *Client) Resolve(ctx context.Context, r Request) (Reply, error) {
 	key := answerKey(r)
 	c.mu.Lock()
 	kept, ok := c.answers[key]
-	epoch := c.epoch
-	c.mu.Unlock()
 	if ok && c.usable(kept, c.fresh(kept.reply)) {
+		c.mu.Unlock()
 		return kept.reply, nil
 	}
+	if running, ok := c.flights[key]; ok {
+		running.joined++
+		c.mu.Unlock()
+		select {
+		case <-running.done:
+			return running.reply, running.err
+		case <-ctx.Done():
+			return Reply{}, fmt.Errorf("%w: %v", ErrUnavailable, ctx.Err())
+		}
+	}
+	own := &flight{done: make(chan struct{})}
+	c.flights[key] = own
+	epoch := c.epoch
+	c.mu.Unlock()
+	// The call outlives this request's context, so a request that gives up
+	// does not fail the ones that wait for the same answer. The client's
+	// timeout bounds it.
+	own.reply, own.err = c.resolve(context.WithoutCancel(ctx), r, key, epoch)
+	c.mu.Lock()
+	if c.flights[key] == own {
+		delete(c.flights, key)
+	}
+	c.mu.Unlock()
+	close(own.done)
+	return own.reply, own.err
+}
+
+func (c *Client) resolve(ctx context.Context, r Request, key string, epoch uint64) (Reply, error) {
 	var reply Reply
 	err := c.post(ctx, "/egress/v1/resolve", map[string]any{
 		"proof":        map[string]string{"kind": "Login", "username": r.Login},
@@ -350,7 +388,7 @@ func (c *Client) Resolve(ctx context.Context, r Request) (Reply, error) {
 	defer c.mu.Unlock()
 	if err != nil {
 		// Read again: an invalidate during the call drops the kept answer.
-		kept, ok = c.answers[key]
+		kept, ok := c.answers[key]
 		if ok && c.usable(kept, c.cfg.stale()) {
 			c.logger.Warn("ren did not answer; using the last allow answer", slog.String("host", r.Host))
 			return kept.reply, nil
@@ -387,6 +425,9 @@ type Selector struct {
 func (c *Client) Invalidate(s Selector) int {
 	c.mu.Lock()
 	c.epoch++
+	// A request after an invalidate asks Ren again; the calls in flight
+	// still answer the requests that wait for them.
+	clear(c.flights)
 	dropped := 0
 	for key, kept := range c.answers {
 		if (s.Workload != "" && strings.HasPrefix(kept.reply.Workload, s.Workload)) ||

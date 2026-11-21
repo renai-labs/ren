@@ -17,7 +17,7 @@
   },
   "scripts": {
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsgo -b"
+    "typecheck": "tsrs -b"
   },
   "peerDependencies": {
     "react": "catalog:",
@@ -27,25 +27,28 @@
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@typescript/native-preview": "catalog:",
+    "tsrs": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
+    "@fontsource-variable/jetbrains-mono": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
-    "@pierre/diffs": "1.6.1",
-    "@pierre/trees": "1.0.0-beta.6",
+    "@pierre/diffs": "catalog:",
+    "@pierre/highlights": "catalog:",
+    "@pierre/trees": "catalog:",
     "@shadcn/react": "catalog:",
     "@tabler/icons-react": "catalog:",
     "class-variance-authority": "catalog:",
     "cmdk": "catalog:",
     "cn": "catalog:",
     "input-otp": "catalog:",
-    "motion": "catalog:",
     "react-day-picker": "catalog:",
     "shadcn": "catalog:",
-    "shiki": "catalog:",
     "sonner": "catalog:",
     "skullet": "catalog:",
     "tailwindcss": "catalog:",

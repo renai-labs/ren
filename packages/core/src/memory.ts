@@ -2,11 +2,13 @@ export * as Memory from "./memory.js"
 
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
+import { Drive } from "@ren/schema/drive"
 import { Memory } from "@ren/schema/memory"
 import type { Space } from "@ren/schema/space"
 import { and, eq, isNull, or, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
+import { FileSystemProvider } from "./file-system/provider.js"
 import type { Actor } from "./actor.js"
 import { MemoryPolicy } from "./memory/policy.js"
 import { Primitive } from "./primitive.js"
@@ -21,7 +23,7 @@ export interface Interface {
   readonly write: (
     actor: Actor.Info,
     input: Memory.WriteInput,
-  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid>
+  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Primitive.Conflict>
   readonly edit: (
     actor: Actor.Info,
     input: Memory.EditInput,
@@ -30,6 +32,7 @@ export interface Interface {
     actor: Actor.Info,
     input: Memory.PathInput,
   ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden>
+  readonly fileSystem: FileSystemProvider.Interface
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Memory") {}
@@ -37,6 +40,15 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Me
 export const root = Memory.root
 
 const missing = (path: string) => new Primitive.NotFound({ message: `The memory has no file ${path}.` })
+
+const encoder = new TextEncoder()
+
+const sizeOf = (content: string) => encoder.encode(content).length
+
+const mimeOf = (path: string) => {
+  const type = Drive.typeOf(path)
+  return type === "application/octet-stream" ? "text/markdown" : type
+}
 
 // oxlint-disable-next-line ren/no-comments -- memory M8: the root files that a brain’s chats get, from the organization’s memory and its space’s.
 export const roots = Effect.fnUntraced(function* (
@@ -153,6 +165,14 @@ export const layer = Layer.effect(
         }),
       )
 
+    const remove = Effect.fn("Memory.delete")(function* (actor: Actor.Info, input: Memory.PathInput) {
+      yield* change(actor, input.spaceId, (files) =>
+        Object.hasOwn(files, input.path)
+          ? Effect.succeed(Object.fromEntries(Object.entries(files).filter(([path]) => path !== input.path)))
+          : Effect.fail(missing(input.path)),
+      )
+    })
+
     return Service.of({
       list: Effect.fn("Memory.list")(function* (actor: Actor.Info, input: Memory.ListInput) {
         return Object.keys((yield* read(actor, input.spaceId)).files)
@@ -165,16 +185,20 @@ export const layer = Layer.effect(
         return { path: input.path, content: files[input.path] ?? "" }
       }),
       write: Effect.fn("Memory.write")(function* (actor: Actor.Info, input: Memory.WriteInput) {
-        yield* change(actor, input.spaceId, (files) => {
-          const clash = Object.keys(files).find(
-            (path) => path.startsWith(`${input.path}/`) || input.path.startsWith(`${path}/`),
-          )
-          return clash
-            ? Effect.fail(
-                new Primitive.Invalid({ message: `${clash} is in the way: a path is a file or a folder, not both.` }),
-              )
-            : Effect.succeed({ ...files, [input.path]: input.content })
-        })
+        yield* change(actor, input.spaceId, (files) =>
+          Effect.gen(function* () {
+            const clash = Object.keys(files).find(
+              (path) => path.startsWith(`${input.path}/`) || input.path.startsWith(`${path}/`),
+            )
+            if (clash)
+              return yield* new Primitive.Invalid({
+                message: `${clash} is in the way: a path is a file or a folder, not both.`,
+              })
+            if (input.mode === "create" && Object.hasOwn(files, input.path))
+              return yield* new Primitive.Conflict({ message: `${input.path} already exists.` })
+            return { ...files, [input.path]: input.content }
+          }),
+        )
       }),
       edit: Effect.fn("Memory.edit")(function* (actor: Actor.Info, input: Memory.EditInput) {
         const files = yield* change(actor, input.spaceId, (files) =>
@@ -197,13 +221,45 @@ export const layer = Layer.effect(
         )
         return { path: input.path, content: files[input.path] ?? "" }
       }),
-      delete: Effect.fn("Memory.delete")(function* (actor: Actor.Info, input: Memory.PathInput) {
-        yield* change(actor, input.spaceId, (files) =>
-          Object.hasOwn(files, input.path)
-            ? Effect.succeed(Object.fromEntries(Object.entries(files).filter(([path]) => path !== input.path)))
-            : Effect.fail(missing(input.path)),
-        )
-      }),
+      delete: remove,
+      fileSystem: {
+        list: Effect.fn("Memory.fileSystem.list")(function* (actor: Actor.Info, input: FileSystemProvider.ListInput) {
+          const found = yield* read(actor, input.spaceId)
+          const folder = FileSystemProvider.folderOf(input.folder)
+          const under = folder ? `${folder}/` : ""
+          const names = Object.keys(found.files).flatMap((path) =>
+            path.startsWith(under) ? [path.slice(under.length)] : [],
+          )
+          const folders = [
+            ...new Set(names.flatMap((name) => (name.includes("/") ? [name.slice(0, name.indexOf("/") + 1)] : []))),
+          ].map((name) => ({ path: `${under}${name}`, type: "directory" as const }))
+          const files = names
+            .filter((name) => !name.includes("/"))
+            .map((name) => {
+              const path = `${under}${name}`
+              return { path, type: "file" as const, size: sizeOf(found.files[path] ?? ""), mime: mimeOf(path) }
+            })
+          return {
+            entries: FileSystemProvider.sorted([...folders, ...files]),
+            cursor: null,
+            actions: found.canWrite ? (["write", "remove"] as const) : [],
+          }
+        }),
+        read: Effect.fn("Memory.fileSystem.read")(function* (actor: Actor.Info, input: FileSystemProvider.PathInput) {
+          const files = (yield* read(actor, input.spaceId)).files
+          if (!Object.hasOwn(files, input.path)) return yield* missing(input.path)
+          const content = files[input.path] ?? ""
+          return {
+            path: input.path,
+            mime: mimeOf(input.path),
+            size: sizeOf(content),
+            encoding: "utf8" as const,
+            content,
+            truncated: false,
+          }
+        }),
+        remove,
+      },
     })
   }),
 )
