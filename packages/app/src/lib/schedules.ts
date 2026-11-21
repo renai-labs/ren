@@ -162,7 +162,7 @@ export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string):
 const clock = (time: string) => {
   const parts = partsOf(time)
   if (!parts) return time
-  return `${pad(parts.hours % 12 || 12)}:${pad(parts.minutes)} ${parts.hours < 12 ? "AM" : "PM"}`
+  return `${parts.hours % 12 || 12}:${pad(parts.minutes)} ${parts.hours < 12 ? "AM" : "PM"}`
 }
 
 const zoneName = (timeZone: string) => timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone
