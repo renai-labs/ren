@@ -415,7 +415,7 @@ export function TasksPage(props: {
       spaceId: group.spaceId ?? spaceId,
       tasks: visible.filter(group.has),
     }))
-    .filter((group) => display.showEmpty || display.layout === "board" || group.tasks.length > 0)
+    .filter((group) => display.showEmpty || group.tasks.length > 0)
   return (
     <Page
       title="Tasks"

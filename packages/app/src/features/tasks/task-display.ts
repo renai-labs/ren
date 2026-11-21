@@ -19,7 +19,7 @@ export const preference = Preference.make("tasks.display.v1", Display, {
   groupBy: "status",
   orderBy: "created",
   direction: "desc",
-  showEmpty: false,
+  showEmpty: true,
   properties: ["status", "priority", "assignee", "space", "labels"],
 })
 
