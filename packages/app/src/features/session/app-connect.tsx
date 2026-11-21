@@ -7,14 +7,17 @@ import { AppIcon } from "../../components/app-icon.js"
 import { StatusDot } from "../../components/app-list.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
 import { statusAction, statusLabel, type CatalogApp, type Status } from "../../lib/apps.js"
+import { useAppProfiles } from "../../lib/use-app-profiles.js"
+import { useMe } from "../../lib/use-me.js"
 import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 
 function ConnectCard(props: {
   app: Pick<CatalogApp, "name" | "icon" | "source">
   status: Status
+  elsewhere?: boolean | undefined
   onAction: () => void
 }) {
-  const action = statusAction[props.status]
+  const action = props.elsewhere ? Apps.elsewhereAction : statusAction[props.status]
   return (
     <div className="flex w-full max-w-lg items-center gap-3 rounded-xl border bg-card p-3">
       <AppIcon name={props.app.name} icon={props.app.icon} size="lg" />
@@ -27,7 +30,7 @@ function ConnectCard(props: {
         </span>
         <span className="flex items-center gap-2 truncate text-sm text-muted-foreground">
           <StatusDot status={props.status} />
-          {statusLabel[props.status]}
+          {props.elsewhere ? Apps.elsewhereLabel : statusLabel[props.status]}
         </span>
       </div>
       {action ? (
@@ -45,6 +48,8 @@ export function AppConnectCard(props: {
   onConnected?: ((app: string) => void) | undefined
 }) {
   const space = useSpaceApps(props.spaceId, [props.appId])
+  const accounts = useAppProfiles([props.appId])
+  const me = useMe().user.id
   const [target, setTarget] = useState<ProfileTarget & { before: Status }>()
   const app = space.app(props.appId)
   if (space.pending)
@@ -56,13 +61,25 @@ export function AppConnectCard(props: {
   const from = space.from
   if (!app || !from) return null
   const status = space.status(app.id)
+  const elsewhere = Apps.connectedElsewhere({
+    status,
+    accounts: accounts.of(app.id),
+    target: { spaceId: from.spaceId, private: from.private === true },
+    userId: me,
+  })
   return (
     <>
       <ConnectCard
         app={app}
         status={status}
+        elsewhere={elsewhere !== undefined}
         onAction={() =>
-          setTarget({ ...connectTarget({ appId: app.id, status, here: space.here(app.id) }, from), before: status })
+          setTarget({
+            ...(elsewhere
+              ? { appId: app.id, from }
+              : connectTarget({ appId: app.id, status, here: space.here(app.id) }, from)),
+            before: status,
+          })
         }
       />
       {target ? (

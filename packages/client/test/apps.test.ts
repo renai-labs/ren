@@ -77,6 +77,18 @@ describe("Apps connect plan", () => {
     expect(Apps.usable(mine, space, "other")).toBe(false)
   })
 
+  test("a chat's card names an account connected in another space, the person's private one included", () => {
+    const mine = profile({ id: "p", name: "Paper · Ana", kind: "private", userId: "u", canAdd: [] })
+    const elsewhere = { status: "missing" as const, accounts: [mine], target: space, userId: "u" }
+    expect(Apps.connectedElsewhere(elsewhere)?.id).toBe("p")
+    expect(Apps.connectedElsewhere({ ...elsewhere, status: "credits" })?.id).toBe("p")
+    expect(Apps.connectedElsewhere({ ...elsewhere, status: "connected" })).toBeUndefined()
+    expect(Apps.connectedElsewhere({ ...elsewhere, status: "expired" })).toBeUndefined()
+    expect(Apps.connectedElsewhere({ ...elsewhere, target: { spaceId: "spc_me", private: true } })).toBeUndefined()
+    expect(Apps.connectedElsewhere({ ...elsewhere, userId: "other" })).toBeUndefined()
+    expect(Apps.connectedElsewhere({ ...elsewhere, accounts: [{ ...mine, items: [item("missing")] }] })).toBeUndefined()
+  })
+
   test("Ren credits are offered while no account reaches the space", () => {
     expect(Apps.connectPlan({ app: managed, accounts: [], target: space, userId: "u" }).managed).toBe(true)
     expect(Apps.connectPlan({ app: plain, accounts: [], target: space, userId: "u" }).managed).toBe(false)
