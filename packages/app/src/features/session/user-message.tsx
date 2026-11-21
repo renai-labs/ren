@@ -193,7 +193,9 @@ function ScheduleOrigin(props: {
             {props.schedule.name}
           </Link>
         ) : (
-          <Link to="/automations">{props.schedule.name}</Link>
+          <Link to="/automations" search={{ schedule: props.schedule.scheduleId }}>
+            {props.schedule.name}
+          </Link>
         )}{" "}
         · {formatRun(props.schedule.scheduledAt, localTimeZone())}
       </MarkerContent>

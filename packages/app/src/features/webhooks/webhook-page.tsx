@@ -34,7 +34,7 @@ import { WebhookRequests } from "./webhook-requests.js"
 import { parserOf, useWebhookForm, type Draft } from "./use-webhook-form.js"
 import { WebhookFormProvider } from "./webhook-form.js"
 import { useWebhookActions } from "./use-webhook-actions.js"
-import { AgentSelect } from "./webhooks-tab.js"
+import { AgentSelect } from "../../components/agent-select.js"
 import { Equal } from "effect"
 
 const route = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/")
