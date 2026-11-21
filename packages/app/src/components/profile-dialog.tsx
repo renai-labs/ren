@@ -13,20 +13,11 @@ import {
   IconChevronRight,
   IconCopy,
   IconCube,
-  IconDots,
   IconLock,
-  IconTrash,
 } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia } from "@ren/ui/empty"
 import {
   Field,
@@ -44,8 +35,9 @@ import { Spinner } from "@ren/ui/spinner"
 import { AccountAccess } from "./account-actions.js"
 import { toastRemoved } from "./space-removal.js"
 import { AppIcon } from "./app-icon.js"
-import { AccountList, SpacePills, StatusDot } from "./app-list.js"
-import { ConfirmDialog } from "./confirm-dialog.js"
+import { DeleteAccount } from "./account-menu.js"
+import { AccountList, SpacePills } from "./app-list.js"
+import { StatusDot } from "./status-dot.js"
 import { Row, Rows } from "./page.js"
 import { SpacesField } from "./spaces-field.js"
 import { Platform } from "../platform/platform.js"
@@ -62,7 +54,6 @@ import {
   gaps,
   hasManaged,
   isBundle,
-  lastSpaceWarning,
   listNames,
   listsSpace,
   reachedSpaces,
@@ -185,7 +176,7 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
     >
       <DialogContent // ast-grep-ignore: require-overlay-title -- each step renders its DialogTitle through Screen
         showCloseButton={false}
-        className="flex h-[calc(100dvh-(--spacing(8)))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        className="flex max-h-[calc(100dvh-(--spacing(8)))] min-h-[min(--spacing(120),calc(100dvh-(--spacing(8))))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
         {back ? (
           <Button variant="ghost" size="sm" className="absolute top-3 left-3 z-10 text-muted-foreground" onClick={back}>
@@ -439,6 +430,7 @@ function SpaceAccounts(props: StateProps) {
         title="Accounts"
         app={props.app}
         profiles={props.here}
+        from={props.from}
         onOpen={(profile) => props.onOpen(profile.id)}
       />
     </div>
@@ -978,7 +970,6 @@ function Screen(props: {
   description?: ReactNode
   children?: ReactNode
   action: ReactNode
-  menu?: ReactNode
   note?: ReactNode
   onSubmit?: () => void
 }) {
@@ -990,8 +981,7 @@ function Screen(props: {
         props.onSubmit?.()
       }}
     >
-      {props.menu}
-      <Empty className="min-h-0 justify-start gap-8 overflow-y-auto overscroll-contain px-10 pt-14 pb-6">
+      <Empty className="min-h-0 justify-start gap-8 overflow-y-auto overscroll-contain px-10 pt-12 pb-6">
         <EmptyHeader className="max-w-xs gap-3">
           <EmptyMedia className="mb-3">
             <AppIcon
@@ -1111,14 +1101,8 @@ function EditStep(props: {
             {edit.pending ? <Spinner data-icon="inline-start" /> : null}
             Save
           </Button>
+          <DeleteAccount profile={profile} app={props.app} onDeleted={props.onDone} />
         </>
-      }
-      menu={
-        props.from ? (
-          <RemoveFromSpace profile={profile} from={props.from} onRemoved={props.onDone} />
-        ) : (
-          <AccountMenu profile={profile} onDeleted={props.onDone} />
-        )
       }
     >
       <FieldGroup className="w-full gap-6">
@@ -1140,126 +1124,6 @@ function EditStep(props: {
         ) : null}
       </FieldGroup>
     </Screen>
-  )
-}
-
-function MenuTrigger(props: { profile: AppProfile }) {
-  return (
-    <DropdownMenuTrigger
-      render={
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`More for ${props.profile.name}`}
-          className="absolute top-3 right-3 z-10 text-muted-foreground"
-        />
-      }
-    >
-      <IconDots />
-    </DropdownMenuTrigger>
-  )
-}
-
-function RemoveFromSpace(props: { profile: AppProfile; from: From; onRemoved: () => void }) {
-  const { api } = RouterContext.useRouterContext()
-  const access = useMutation(api["app-profile"].access.mutationOptions())
-  const [confirming, setConfirming] = useState(false)
-  const profile = props.profile
-  const from = props.from
-  const others = reachedSpaces(profile).filter((name) => name !== from.name)
-  if (
-    profile.kind === "private" ||
-    profile.allSpaces ||
-    !profile.spaces.some((space) => space.id === from.spaceId) ||
-    !profile.canRemove.some((shape) => shape === "joined" || shape === "shared")
-  )
-    return null
-  return (
-    <>
-      <DropdownMenu>
-        <MenuTrigger profile={profile} />
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuGroup>
-            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
-              <IconTrash />
-              Remove from {from.name}
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        confirmation={{
-          title: `Remove ${profile.name} from ${from.name}?`,
-          description: `${from.name} stops using it. ${others.length > 0 ? `It stays in ${others.join(", ")}.` : lastSpaceWarning(profile)}`,
-          action: "Remove",
-        }}
-        onConfirm={() =>
-          access.mutateAsync(
-            { id: profile.id, remove: [from.spaceId] },
-            {
-              onSuccess: (info) => {
-                toastRemoved(info, from.name, {
-                  onUndo: () => access.mutateAsync({ id: profile.id, add: [from.spaceId] }),
-                })
-                props.onRemoved()
-              },
-              onError: (error) =>
-                toast.error(`Couldn’t remove ${profile.name} from ${from.name}`, { description: errorMessage(error) }),
-            },
-          )
-        }
-      />
-    </>
-  )
-}
-
-function AccountMenu(props: { profile: AppProfile; onDeleted: () => void }) {
-  const { api } = RouterContext.useRouterContext()
-  const remove = useMutation(api["app-profile-reach"]["app-profile"].delete.mutationOptions())
-  const [confirming, setConfirming] = useState(false)
-  const profile = props.profile
-  const used = profile.kind === "private" ? [] : reachedSpaces(profile)
-  return (
-    <>
-      <DropdownMenu>
-        <MenuTrigger profile={profile} />
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuGroup>
-            <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
-              <IconTrash />
-              Delete account
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        confirmation={{
-          title: `Delete ${profile.name}?`,
-          description:
-            used.length > 0
-              ? `${used.join(", ")} ${used.length === 1 ? "uses" : "use"} it. Ren deletes the account and its sign-ins. Those spaces use Ren credits or show Not connected.`
-              : "Ren deletes the account and its sign-ins.",
-          action: "Delete account",
-        }}
-        onConfirm={() =>
-          remove.mutateAsync(
-            { id: profile.id },
-            {
-              onSuccess: () => {
-                toast.success(`${profile.name} deleted`)
-                props.onDeleted()
-              },
-              onError: (error) => toast.error("Couldn’t delete the account", { description: errorMessage(error) }),
-            },
-          )
-        }
-      />
-    </>
   )
 }
 
