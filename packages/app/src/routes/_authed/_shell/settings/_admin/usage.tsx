@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authed/_shell/settings/_admin/usage")({
   loaderDeps: (options) => ({ search: options.search }),
   loader: (options) => {
     Loader.start(
-      ...Object.values(UsageQuery.inputs({}, options.deps.search, Date.now())).map((input) =>
+      ...UsageQuery.all({}, options.deps.search, Date.now()).map((input) =>
         options.context.queryClient.query(options.context.api.insights.query.queryOptions(input)),
       ),
       options.context.queryClient.query(options.context.api.billing.get.queryOptions()),

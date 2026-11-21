@@ -58,6 +58,10 @@
   --chart-5: #5d5d5d;
   --chart-6: #8250df;
 
+  --spend-models: #4779a3;
+  --spend-compute: #8e6c96;
+  --spend-tools: #ac844a;
+
   --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
   --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
 
@@ -109,6 +113,10 @@
   --chart-4: #f47780;
   --chart-5: #a3a3a3;
   --chart-6: #a371f7;
+
+  --spend-models: #77a4ca;
+  --spend-compute: #be9ec5;
+  --spend-tools: #debf8d;
 
   --find-hit: color-mix(in srgb, var(--chart-3) 22%, transparent);
   --find-active: color-mix(in srgb, var(--chart-3) 80%, transparent);
@@ -186,6 +194,9 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --color-chart-6: var(--chart-6);
+  --color-spend-models: var(--spend-models);
+  --color-spend-compute: var(--spend-compute);
+  --color-spend-tools: var(--spend-tools);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

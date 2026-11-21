@@ -1,16 +1,16 @@
 import type { BillingSummary, RenInferenceConnection } from "@ren/client"
+import { IconChevronRight } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { Card } from "@ren/ui/card"
+import type { ReactNode } from "react"
+import { formatUsd } from "@ren/ui/format"
 import { Loading } from "@ren/ui/loading"
-import { CreditsCard } from "../../components/credits-card.js"
+import { cn } from "cn"
 import { useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
-import { SubscriptionMeters } from "../../components/subscription-meters.js"
+import { Insights } from "../../lib/insights.js"
 import { RouterContext } from "../../lib/router-context.js"
-
-const link = "block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50 *:h-full"
 
 const sampleBilling: BillingSummary = {
   plan: "free",
@@ -32,27 +32,50 @@ const sampleConnection: RenInferenceConnection = {
   meters: [{ key: "sample", title: "Current session", percent: 0 }],
 }
 
-function SubscriptionSummary(props: { connection: RenInferenceConnection }) {
-  const connection = props.connection
+const item =
+  "inline-flex h-8 items-center gap-2 rounded-md px-2.5 text-sm whitespace-nowrap outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+
+const money = (micro: number) => formatUsd(Insights.dollars(Math.max(micro, 0)))
+
+function Chevron() {
+  return <IconChevronRight aria-hidden className="size-3.5 text-muted-foreground" />
+}
+
+function Credits(props: { billing: BillingSummary }) {
+  const granted = props.billing.grantedMicroUsd > 0
+  const depleted = granted && props.billing.availableMicroUsd <= 0
   return (
-    <Link to="/settings/providers" className={link}>
-      <Card className="gap-3 border px-4 ring-0">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-            <ProviderMark provider={connection.providerName} />
-            <span className="truncate">{connection.label}</span>
-          </span>
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            <StatusBadge tone={connection.status.tone}>{connection.status.label}</StatusBadge>
-            {connection.plan ? <span>· {connection.plan}</span> : null}
-          </span>
-        </div>
-        {connection.meters.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Usage appears after the first request.</p>
-        ) : (
-          <SubscriptionMeters meters={connection.meters} />
-        )}
-      </Card>
+    <Link to="/settings/billing" className={item}>
+      <span className="text-muted-foreground">Credits</span>
+      <span className={cn("font-medium tabular-nums", depleted && "text-destructive")}>
+        {money(props.billing.availableMicroUsd)}
+      </span>
+      {depleted ? <span className="text-destructive">Used up</span> : null}
+      {granted && !depleted ? (
+        <span className="text-muted-foreground tabular-nums">of {money(props.billing.grantedMicroUsd)}</span>
+      ) : null}
+      <Chevron />
+    </Link>
+  )
+}
+
+function Subscription(props: { connection: RenInferenceConnection }) {
+  const connection = props.connection
+  const meter = connection.meters.find((each) => each.percent !== null)
+  const detail: ReactNode =
+    connection.status.tone !== "ok" ? (
+      <StatusBadge tone={connection.status.tone}>{connection.status.label}</StatusBadge>
+    ) : meter ? (
+      <span className="text-muted-foreground tabular-nums">
+        {meter.title} {meter.percent}%
+      </span>
+    ) : null
+  return (
+    <Link to="/settings/providers" className={item}>
+      <ProviderMark provider={connection.providerName} />
+      <span>{connection.label}</span>
+      {detail}
+      <Chevron />
     </Link>
   )
 }
@@ -68,16 +91,18 @@ export function UsageBalances() {
   if (!summary && subscriptions.length === 0) return null
   return (
     <Loading id={shapeId} loading={pending} label="Loading credits and subscriptions">
-      <section aria-label="Credits and subscriptions" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {summary ? (
-          <Link to="/settings/billing" className={link}>
-            <CreditsCard billing={summary} />
-          </Link>
-        ) : null}
-        {subscriptions.map((connection) => (
-          <SubscriptionSummary key={connection.id} connection={connection} />
-        ))}
-      </section>
+        <ul aria-label="Credits and subscriptions" className="flex items-center gap-1">
+          {summary ? (
+            <li>
+              <Credits billing={summary} />
+            </li>
+          ) : null}
+          {subscriptions.map((connection) => (
+            <li key={connection.id}>
+              <Subscription connection={connection} />
+            </li>
+          ))}
+        </ul>
     </Loading>
   )
 }

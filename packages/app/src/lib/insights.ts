@@ -60,5 +60,5 @@ export const bucket = (period: Period) => (period === "90d" ? "week" : "day")
 
 export function duration(ms: number) {
   const minutes = Math.round(ms / 60_000)
-  return minutes < 60 ? `${minutes} min` : `${Math.round(minutes / 6) / 10} h`
+  return minutes < 60 ? `${minutes}\u00a0min` : `${Math.round(minutes / 6) / 10}\u00a0h`
 }
