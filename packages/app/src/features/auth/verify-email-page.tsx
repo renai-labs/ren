@@ -25,7 +25,7 @@ export function VerifyEmailPage() {
   }
   const back = () => void navigate({ to: "/login", search: destination })
   return (
-    <AuthLayout>
+    <AuthLayout title="Verify your email" description="">
       <CodeVerification email={email} verify={verify} resend={resend} />
       <BackButton onClick={back}>Back to sign in</BackButton>
     </AuthLayout>
