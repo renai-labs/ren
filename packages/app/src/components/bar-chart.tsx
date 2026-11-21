@@ -1,4 +1,5 @@
 import { cn } from "cn"
+import { useState, type KeyboardEvent } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 
 export type BarSeries = { readonly label: string; readonly fill: string; readonly swatch: string }
@@ -47,6 +48,21 @@ function Column(props: { bar: Bar; series: ReadonlyArray<BarSeries>; top: number
   )
 }
 
+const describe = (bar: Bar, series: ReadonlyArray<BarSeries>, format: (value: number) => string) =>
+  [
+    `${bar.label}${bar.partial ? " (so far)" : ""}`,
+    ...(series.length > 1
+      ? series.map((each, index) => `${each.label} ${format(bar.values[index] ?? 0)}`)
+      : [format(sum(bar.values))]),
+  ].join(", ")
+
+const stepKeys: Readonly<Record<string, (index: number, last: number) => number>> = {
+  ArrowLeft: (index) => Math.max(index - 1, 0),
+  ArrowRight: (index, last) => Math.min(index + 1, last),
+  Home: () => 0,
+  End: (_, last) => last,
+}
+
 function BarDetail(props: { bar: Bar; series: ReadonlyArray<BarSeries>; format: (value: number) => string }) {
   return (
     <div className="flex flex-col gap-0.5 tabular-nums">
@@ -75,6 +91,17 @@ export function BarChart(props: {
   className?: string | undefined
 }) {
   const top = niceMax(Math.max(0, ...props.bars.map((bar) => sum(bar.values))))
+  const last = props.bars.length - 1
+  const [chosen, setChosen] = useState<number | null>(null)
+  const current = Math.min(chosen ?? last, last)
+  const step = (event: KeyboardEvent<HTMLDivElement>) => {
+    const move = stepKeys[event.key]
+    if (!move) return
+    event.preventDefault()
+    const next = move(current, last)
+    setChosen(next)
+    event.currentTarget.querySelectorAll("button")[next]?.focus()
+  }
   return (
     <figure className={cn("flex flex-col gap-2", props.className)}>
       <figcaption className="sr-only">{props.label}</figcaption>
@@ -91,10 +118,20 @@ export function BarChart(props: {
           <div aria-hidden className="absolute inset-x-0 top-0 border-t border-dashed" />
           <div aria-hidden className="absolute inset-x-0 top-1/2 border-t border-dashed" />
           <div aria-hidden className="absolute inset-x-0 bottom-0 border-t" />
-          <div className="absolute inset-0 flex gap-1">
-            {props.bars.map((bar) => (
+          <div className="absolute inset-0 flex gap-1" onKeyDown={step}>
+            {props.bars.map((bar, index) => (
               <Tooltip key={bar.key}>
-                <TooltipTrigger render={<div className="min-w-0 flex-1 rounded-sm px-px hover:bg-muted/60" />}>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      tabIndex={index === current ? 0 : -1}
+                      aria-label={describe(bar, props.series, props.format)}
+                      onFocus={() => setChosen(index)}
+                      className="min-w-0 flex-1 rounded-sm px-px outline-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    />
+                  }
+                >
                   <Column bar={bar} series={props.series} top={top} />
                 </TooltipTrigger>
                 <TooltipContent>
