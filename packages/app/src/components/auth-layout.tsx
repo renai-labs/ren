@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
 import { Link } from "@ren/ui/link"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@ren/ui/field"
+import { Input } from "@ren/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@ren/ui/input-otp"
 import { Spinner } from "@ren/ui/spinner"
@@ -94,6 +95,64 @@ export function FormError(props: { children: ReactNode }) {
   )
 }
 
+export interface AuthControl {
+  readonly id: string
+  readonly "aria-invalid": true | undefined
+  readonly "aria-describedby": string | undefined
+}
+
+export function AuthField(props: {
+  id: string
+  label: ReactNode
+  labelAction?: ReactNode | undefined
+  error: string
+  hint?: string | undefined
+  children: (control: AuthControl) => ReactNode
+}) {
+  const errorId = `${props.id}-error`
+  const hintId = `${props.id}-hint`
+  const hint = props.error ? undefined : props.hint
+  const describedBy = props.error ? errorId : hint && hintId
+  const label = <FieldLabel htmlFor={props.id}>{props.label}</FieldLabel>
+  return (
+    <Field data-invalid={props.error !== "" || undefined}>
+      {props.labelAction ? (
+        <div className="flex items-center justify-between gap-3">
+          {label}
+          {props.labelAction}
+        </div>
+      ) : (
+        label
+      )}
+      {props.children({
+        id: props.id,
+        "aria-invalid": props.error ? true : undefined,
+        "aria-describedby": describedBy,
+      })}
+      {props.error ? <FieldError id={errorId}>{props.error}</FieldError> : null}
+      {hint ? <FieldDescription id={hintId}>{hint}</FieldDescription> : null}
+    </Field>
+  )
+}
+
+export function EmailSummary(props: { email: string; onChange: () => void }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <p className="min-w-0 font-medium break-all">{props.email}</p>
+      <Button
+        type="button"
+        variant="link"
+        aria-label="Change email"
+        className="h-auto shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        onClick={props.onChange}
+      >
+        Change
+      </Button>
+      <Input type="email" name="email" autoComplete="username" value={props.email} readOnly hidden />
+    </div>
+  )
+}
+
 export function BackButton(props: { onClick: () => void; children?: ReactNode | undefined }) {
   return (
     <Button type="button" variant="ghost" className="self-center text-muted-foreground" onClick={props.onClick}>
@@ -133,7 +192,7 @@ export function SocialButton(props: { provider: "github" | "slack"; destination:
     ...api["sign-in"]["sign-in-provider"].list.queryOptions(),
     select: (providers) => providers.items.includes(props.provider),
   })
-  if (!offered.data) return null
+  if (offered.data === false) return null
   const destination =
     props.provider === "slack"
       ? { ...props.destination, redirect: props.destination.redirect ?? "/settings/channels/slack?connect=true" }
@@ -225,20 +284,20 @@ export function CodeVerification(props: {
         }}
         onComplete={(value: string) => void submit(value)}
       >
-        <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-11 *:data-[slot=input-otp-slot]:text-xl">
+        <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-10 *:data-[slot=input-otp-slot]:text-xl sm:*:data-[slot=input-otp-slot]:w-11">
           {[0, 1, 2].map((index) => (
             <InputOTPSlot key={index} index={index} aria-label={`Code digit ${index + 1}`} />
           ))}
         </InputOTPGroup>
-        <InputOTPSeparator className="mx-2" />
-        <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-11 *:data-[slot=input-otp-slot]:text-xl">
+        <InputOTPSeparator className="mx-1 sm:mx-2" />
+        <InputOTPGroup className="*:data-[slot=input-otp-slot]:h-12 *:data-[slot=input-otp-slot]:w-10 *:data-[slot=input-otp-slot]:text-xl sm:*:data-[slot=input-otp-slot]:w-11">
           {[3, 4, 5].map((index) => (
             <InputOTPSlot key={index} index={index} aria-label={`Code digit ${index + 1}`} />
           ))}
         </InputOTPGroup>
       </InputOTP>
       {error ? <FieldError>{error}</FieldError> : null}
-      <FieldDescription className="flex items-center gap-1">
+      <FieldDescription className="flex flex-wrap items-center gap-x-1">
         {verifying ? <Spinner /> : "Didn’t receive a code?"}
         {!verifying && countdown.remaining > 0 ? (
           <span className="tabular-nums">Resend in 0:{String(countdown.remaining).padStart(2, "0")}</span>
