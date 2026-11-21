@@ -10,6 +10,7 @@ import { Identifier } from "./identifier.js"
 import { Machine } from "./machine.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { ResourceIcon } from "./resource-icon.js"
 
 export const ID = Identifier.make("spc", "Space.ID")
 export type ID = typeof ID.Type
@@ -107,6 +108,7 @@ export const Info = Schema.Struct({
   }),
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
+  icon: ResourceIcon.Stored,
   brainScope: Brain.Scope,
   brain: BrainMachine,
   hand: Hand,
@@ -153,6 +155,7 @@ export const UpdateInput = Schema.Struct({
   factory: Schema.optional(Factory.Info),
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
+  icon: Schema.optional(Schema.NullOr(ResourceIcon.Descriptor)),
   brainScope: Schema.optional(Brain.Scope),
   brain: Schema.optional(BrainMachine),
   hand: Schema.optional(Hand),

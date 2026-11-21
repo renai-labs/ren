@@ -13,7 +13,7 @@ import {
   IconChecklist,
   IconWebhook,
 } from "@tabler/icons-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
+import { PersonAvatar } from "../../components/person-avatar.js"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
@@ -501,10 +501,7 @@ export function UserMessage(props: {
       className={cn("scroll-mt-16", props.editing ? "w-full @transcript:-mr-13.5" : "w-auto @transcript:-mr-13.5")}
     >
       <MessageAvatar className="ml-3.5">
-        <Avatar size="sm">
-          {props.person.image ? <AvatarImage src={props.person.image} alt="" /> : null}
-          <AvatarFallback>{props.person.name.charAt(0)}</AvatarFallback>
-        </Avatar>
+        <PersonAvatar name={props.person.name} image={props.person.image} size={6} />
       </MessageAvatar>
       <MessageContent className={props.editing ? "w-full" : undefined}>
         <MessageHeader className="gap-1.5 px-0">

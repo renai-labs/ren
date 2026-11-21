@@ -22,6 +22,8 @@ import { Equal, Result, Schema, Struct } from "effect"
 import { ModelPicker, modelRef, modelSetting } from "../../components/model-picker.js"
 import { Page, Row, Rows, ToolbarSection } from "../../components/page.js"
 import { PermissionRules } from "../../components/permission-rules.js"
+import { AgentAvatar } from "../../components/resource-avatar.js"
+import { ResourceIconPicker } from "../../components/resource-icon-picker.js"
 import { RowMenu } from "../../components/row-menu.js"
 import { Agents } from "../../lib/agents.js"
 import { errorMessage, errorStatus } from "../../lib/errors.js"
@@ -446,6 +448,22 @@ function ArchiveMenu(props: { agent: AgentInfo; spaceId: string }) {
   )
 }
 
+function AgentIcon(props: { agent: AgentInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const update = useMutation(api.agent.update.mutationOptions())
+  return (
+    <ResourceIconPicker
+      label="Agent icon"
+      className="rounded-lg"
+      value={props.agent.icon}
+      disabled={!props.agent.canUpdate}
+      onChange={(icon) => update.mutateAsync({ id: props.agent.id, icon })}
+    >
+      <AgentAvatar icon={props.agent.icon} className="size-9 rounded-lg" />
+    </ResourceIconPicker>
+  )
+}
+
 function AgentView(props: { agent: AgentInfo; spaceId: string }) {
   const { api } = RouterContext.useRouterContext()
   const form = useAgentForm()
@@ -473,7 +491,8 @@ function AgentView(props: { agent: AgentInfo; spaceId: string }) {
     <Page
       title={agent.name}
       back={<BackLink spaceId={props.spaceId} />}
-      aside={agent.canUpdate ? <ArchiveMenu agent={agent} spaceId={props.spaceId} /> : undefined}
+      media={<AgentIcon agent={agent} />}
+      menu={agent.canUpdate ? <ArchiveMenu agent={agent} spaceId={props.spaceId} /> : undefined}
       footer={
         <p className="text-xs text-muted-foreground">
           {Agents.source(agent, props.spaceId, (id) => spaces.space(id)?.name)} · Created {formatDate(agent.createdAt)}{" "}
