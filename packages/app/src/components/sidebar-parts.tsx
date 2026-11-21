@@ -75,6 +75,7 @@ import { initials } from "../lib/format.js"
 import { docsUrl, founderCallUrl, websiteUrl } from "../lib/links.js"
 import { origins } from "../lib/sessions.js"
 import { Preference } from "../lib/preference.js"
+import { Automations } from "../lib/automations.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
 import { useSignOut } from "../lib/use-sign-out.js"
@@ -365,7 +366,13 @@ const chatProperties = (
       icon: status.value === "busy" ? IconProgress : IconCircle,
     })),
   },
-  { key: "origin", label: "Started from", any: "Anywhere", icon: IconRoute, options: [...origins] },
+  {
+    key: "origin",
+    label: "Started from",
+    any: "Anywhere",
+    icon: IconRoute,
+    options: origins.filter((origin) => Automations.chatOrigins.some((each) => each === origin.value)),
+  },
   {
     key: "updated",
     label: "Updated",
