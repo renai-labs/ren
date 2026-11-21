@@ -16,7 +16,7 @@ export function ChannelsSettingsPage() {
       rows: section.providers
         .map((id) => ({
           provider: Channels.byId[id],
-          installed: installs.some((install) => install.provider === id),
+          installed: installs.find((install) => install.provider === id),
           offered: offered.some((provider) => provider.id === id),
         }))
         .filter((row) => row.installed || row.offered),
@@ -37,7 +37,15 @@ export function ChannelsSettingsPage() {
                 key={row.provider.id}
                 title={row.provider.title}
                 media={<ChannelMark provider={row.provider.id} className="size-6" />}
-                description={row.installed ? <span className="text-chart-2">Connected</span> : "Not connected"}
+                description={
+                  row.installed ? (
+                    <span>
+                      <span className="text-chart-2">Connected</span> · {row.installed.name}
+                    </span>
+                  ) : (
+                    "Not connected"
+                  )
+                }
                 render={<Link to="/settings/channels/$provider" params={{ provider: row.provider.id }} />}
               >
                 <span className="flex items-center gap-1 text-muted-foreground">

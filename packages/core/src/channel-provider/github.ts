@@ -105,7 +105,7 @@ const mentionActions: ReadonlySet<string> = new Set(["opened", "edited", "reopen
 export const pullRequestReady: Channel.Trigger = {
   id: "pull_request_ready",
   title: "Review pull requests when ready",
-  description: "When a pull request is opened, or marked ready for review. Not for a draft, and not on each push.",
+  description: "Skips drafts and later pushes.",
   defaultPrompt: "Review this pull request.",
 }
 
