@@ -1,6 +1,6 @@
 # ren CLI: pending
 
-`ren` is the terminal client for Ren. Built: the command runtime on `effect/cli`, commands generated from the SDK operations, `--input`, the JSON and pretty output with its error envelope and exit codes, browser login with OAuth and PKCE, `ren infra`, binary releases with the curl installer, `ren upgrade`, the update notice and shell completions (`packages/cli`). The CLI calls Ren only through the SDK; authorization and domain rules stay on the server.
+`ren` is the terminal client for Ren. Built: the command runtime on `effect/cli`, commands generated from the SDK operations, `--input`, the JSON and pretty output with its error envelope and exit codes, browser login with OAuth and PKCE, `ren infra`, binary releases with the curl installer, its only distribution, `ren upgrade`, the update notice and shell completions (`packages/cli`). The CLI calls Ren only through the SDK; authorization and domain rules stay on the server.
 
 ## 1. `ren api`
 
@@ -57,5 +57,4 @@ File and binary uploads use their own handlers where a JSON body is not enough.
 
 ## 6. Open decisions
 
-1. An npm route. If one is published, it is `@renai-labs/cli` 1.x, which replaces ren-v1's 0.x package: a launcher with one platform package per binary, and `ren upgrade` through npm for an npm install.
-2. More platforms: Windows and musl Linux are not in the release matrix.
+1. More platforms: Windows and musl Linux are not in the release matrix.
