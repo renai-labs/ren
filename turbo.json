@@ -82,6 +82,10 @@
       "outputs": [],
       "cache": false
     },
+    "@ren/site#check:routes": {
+      "inputs": ["src/pages/**", "script/check-routes.ts", "$TURBO_ROOT$/infra/aws/app.tf"],
+      "outputs": []
+    },
     "@ren/app#build": {
       "dependsOn": ["transit"],
       "env": ["VITE_*"],

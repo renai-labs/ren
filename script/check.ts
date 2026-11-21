@@ -29,6 +29,7 @@ const run = await Bun.$`bun turbo run --continue=dependencies-successful --outpu
   ...(await tasks(`...[${base}]`, "typecheck")),
   ...(mobile ? ["@ren/mobile#check:bundle:fast", "@ren/mobile#check:generated"] : []),
   ...(dependencies ? ["@ren/mobile#check:doctor"] : []),
+  "@ren/site#check:routes",
   "//#typecheck:root",
   "//#lint:rules",
   "//#format:check",
