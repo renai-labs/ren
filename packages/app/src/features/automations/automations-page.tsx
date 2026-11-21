@@ -1,57 +1,88 @@
-import type { ReactNode } from "react"
-import { Tabs } from "@ren/ui/tabs"
-import { PageActions, PageTabs, PageTabsList, PageTabsTrigger } from "../../components/page.js"
-import { ScheduleGrid, ScheduleToolbar } from "../../components/schedule-grid.js"
-import type { Automations } from "../../lib/automations.js"
-import { useSchedules } from "../../lib/use-schedules.js"
+import { getRouteApi } from "@tanstack/react-router"
+import { Page } from "../../components/page.js"
+import { AutomationEditor, type EditorTab } from "./automation-editor.js"
+import { AutomationsList, NewAutomationButton, type Tab } from "./automations-list.js"
 
-type SetSearch = (update: Partial<Automations.Search>, navigation?: { readonly replace?: boolean }) => void
+const globalList = getRouteApi("/_authed/_shell/automations/")
+const spaceList = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/")
+const globalNew = getRouteApi("/_authed/_shell/automations/new")
+const globalEditor = getRouteApi("/_authed/_shell/automations/$spaceId/$slug")
+const spaceEditor = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/$slug")
 
-function Schedules(props: { search: Automations.Search; spaceId?: string | undefined; setSearch: SetSearch }) {
-  const schedules = useSchedules({
-    search: props.search,
-    ...(props.spaceId && { spaceId: props.spaceId }),
-    setSearch: props.setSearch,
-  })
+export function AutomationsPage() {
+  const search = globalList.useSearch()
+  const navigate = globalList.useNavigate()
   return (
-    <>
-      <PageActions>
-        <ScheduleToolbar list={schedules} />
-      </PageActions>
-      <ScheduleGrid list={schedules} />
-    </>
+    <Page title="Automations" description="Agents that run on a schedule, or when another app sends a request.">
+      <AutomationsList
+        spaceId={undefined}
+        tab={search.tab ?? "automations"}
+        onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined } })}
+        actions={<NewAutomationButton spaceId={undefined} />}
+      />
+    </Page>
   )
 }
 
-export function AutomationsView(props: {
-  search: Automations.Search
-  spaceId?: string | undefined
-  setSearch: SetSearch
-  webhooks: ReactNode
-}) {
+export function SpaceAutomationsTab() {
+  const search = spaceList.useSearch()
+  const navigate = spaceList.useNavigate()
+  const spaceId = spaceList.useParams().spaceId
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <PageTabs>
-        <Tabs
-          value={props.search.kind ?? "schedules"}
-          onValueChange={(value: string) =>
-            props.setSearch(
-              { kind: value === "webhooks" ? "webhooks" : undefined, filters: undefined },
-              { replace: true },
-            )
-          }
-        >
-          <PageTabsList>
-            <PageTabsTrigger value="schedules">Schedules</PageTabsTrigger>
-            <PageTabsTrigger value="webhooks">Webhooks</PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
-      </PageTabs>
-      {props.search.kind === "webhooks" ? (
-        props.webhooks
-      ) : (
-        <Schedules search={props.search} spaceId={props.spaceId} setSearch={props.setSearch} />
-      )}
-    </div>
+    <AutomationsList
+      spaceId={spaceId}
+      tab={search.tab ?? "automations"}
+      onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined } })}
+      actions={<NewAutomationButton spaceId={spaceId} />}
+    />
+  )
+}
+
+const editorTab = (tab: EditorTab) => (tab === "runs" ? "runs" : undefined)
+
+export function NewAutomationPage() {
+  const search = globalNew.useSearch()
+  const navigate = globalNew.useNavigate()
+  return (
+    <AutomationEditor
+      spaceId={undefined}
+      slug="new"
+      scoped={false}
+      defaultSpace={search.space}
+      tab={search.tab ?? "settings"}
+      onTab={(tab) => void navigate({ search: (previous) => ({ ...previous, tab: editorTab(tab) }) })}
+    />
+  )
+}
+
+export function AutomationEditorPage() {
+  const params = globalEditor.useParams()
+  const search = globalEditor.useSearch()
+  const navigate = globalEditor.useNavigate()
+  return (
+    <AutomationEditor
+      key={`${params.spaceId}/${params.slug}`}
+      spaceId={params.spaceId}
+      slug={params.slug}
+      scoped={false}
+      tab={search.tab ?? "settings"}
+      onTab={(tab) => void navigate({ search: (previous) => ({ ...previous, tab: editorTab(tab) }) })}
+    />
+  )
+}
+
+export function SpaceAutomationEditorPage() {
+  const params = spaceEditor.useParams()
+  const search = spaceEditor.useSearch()
+  const navigate = spaceEditor.useNavigate()
+  return (
+    <AutomationEditor
+      key={`${params.spaceId}/${params.slug}`}
+      spaceId={params.spaceId}
+      slug={params.slug}
+      scoped
+      tab={search.tab ?? "settings"}
+      onTab={(tab) => void navigate({ search: (previous) => ({ ...previous, tab: editorTab(tab) }) })}
+    />
   )
 }

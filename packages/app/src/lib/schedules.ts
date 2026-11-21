@@ -1,70 +1,11 @@
 import { RelativeTime } from "@ren/util/relative-time"
-import type {
-  ScheduleInfo,
-  ScheduleListInput,
-  ScheduleRunReason,
-  ScheduleRunStatus,
-  ScheduleRunTrigger,
-  ScheduleWhen,
-} from "@ren/client"
-import { IconAlertTriangle, IconCircleCheck, IconMinus, IconProgress, type Icon } from "@tabler/icons-react"
-import { Cron, DateTime, Option, Result, Schema } from "effect"
+import type { ScheduleInfo, ScheduleWhen } from "@ren/client"
+import { Cron, DateTime, Option, Result } from "effect"
 import { civilDate, formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
-
-const ScheduleSearchSchema = Schema.Struct({
-  filters: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))),
-})
-
-export type ScheduleSearch = typeof ScheduleSearchSchema.Type
-
-export const scheduleSearchFields = ScheduleSearchSchema.fields
-
-const SchedulePageSearchSchema = Schema.Struct({
-  status: Schema.optional(Schema.String),
-})
-
-export const schedulePageSearch = Schema.toStandardSchemaV1(SchedulePageSearchSchema)
-
-export const runStatuses: Readonly<Record<ScheduleRunStatus, { readonly label: string; readonly icon: Icon }>> = {
-  pending: { label: "Pending", icon: IconProgress },
-  started: { label: "Started", icon: IconCircleCheck },
-  skipped: { label: "Skipped", icon: IconMinus },
-  failed: { label: "Failed", icon: IconAlertTriangle },
-}
-
-export const isRunStatus = (value: string | undefined): value is ScheduleRunStatus =>
-  value !== undefined && value in runStatuses
-
-export const runReasons: Readonly<Record<ScheduleRunReason, string>> = {
-  previous_run_busy: "The previous run was still working.",
-  paused: "The schedule was paused.",
-  archived: "The schedule was deleted.",
-  owner_left: "Its owner left the space.",
-  agent_removed: "Its agent left the space.",
-  chat_archived: "Its chat was archived.",
-}
-
-export const runTriggers: Readonly<Record<ScheduleRunTrigger, string>> = {
-  timed: "On schedule",
-  manual: "Run now",
-}
 
 export const refreshEvery = 5_000
 
 export const runColumns = ["Scheduled for", "Trigger", "Status", "Chat"]
-
-export function scheduleListInput(
-  search: ScheduleSearch,
-  scope: { readonly text?: string | undefined; readonly spaceId?: string | undefined },
-): Omit<ScheduleListInput, "page" | "pageSize"> {
-  const status = search.filters?.state?.at(0)
-  const spaceId = scope.spaceId ?? search.filters?.space?.at(0)
-  return {
-    ...((status === "active" || status === "paused") && { status }),
-    ...(spaceId && { spaceId }),
-    ...(scope.text && { search: scope.text }),
-  }
-}
 
 const frequencies = ["hourly", "daily", "weekdays", "weekly", "monthly", "custom", "once"] as const
 export type Frequency = (typeof frequencies)[number]
@@ -221,7 +162,7 @@ export const cadenceOf = (when: ScheduleWhen | undefined, fallbackZone: string):
 const clock = (time: string) => {
   const parts = partsOf(time)
   if (!parts) return time
-  return `${pad(parts.hours % 12 || 12)}:${pad(parts.minutes)} ${parts.hours < 12 ? "AM" : "PM"}`
+  return `${parts.hours % 12 || 12}:${pad(parts.minutes)} ${parts.hours < 12 ? "AM" : "PM"}`
 }
 
 const zoneName = (timeZone: string) => timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone

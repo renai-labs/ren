@@ -1,6 +1,7 @@
 import { Loading } from "@ren/ui/loading"
 import { SessionTitle } from "@ren/chat"
 import { Debounce, SessionPages } from "@ren/client/react"
+import { Automations } from "../lib/automations.js"
 import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
@@ -43,9 +44,11 @@ function ChatResults(props: {
   const { api, client } = RouterContext.useRouterContext()
   const me = useMe()
   const needle = Debounce.useValue(props.query.trim(), 250)
-  const recent = useInfiniteQuery(SessionPages.options(client, SessionPages.own(me.user.id)))
+  const recent = useInfiniteQuery(
+    SessionPages.options(client, { ...SessionPages.own(me.user.id), origin: [...Automations.chatOrigins] }),
+  )
   const found = useQuery({
-    ...api.session.list.queryOptions({ search: needle, page: 1, pageSize: 20 }),
+    ...api.session.list.queryOptions({ search: needle, origin: [...Automations.chatOrigins], page: 1, pageSize: 20 }),
     enabled: needle !== "",
     placeholderData: keepPreviousData,
   })

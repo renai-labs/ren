@@ -2,7 +2,8 @@ import { useRef, useState, type KeyboardEvent } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { IconChevronDown, IconCube, IconLock } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { PaletteDialog, PaletteEmpty, PaletteHeading, PaletteRow } from "../../components/palette.js"
+import { cn } from "cn"
+import { PaletteDialog, PaletteEmpty, PaletteHeading, PaletteRow } from "./palette.js"
 
 const isPersonal = (space: SpaceInfo) => space.kind === "private"
 
@@ -14,6 +15,8 @@ export function WorkingIn(props: {
   spaces: ReadonlyArray<SpaceInfo>
   spaceId: string | undefined
   disabled?: boolean | undefined
+  label?: string | null | undefined
+  className?: string | undefined
   onChange: (spaceId: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -53,8 +56,8 @@ export function WorkingIn(props: {
     }
   }
   return (
-    <span className="ml-2 flex items-center gap-0.5 self-start text-sm text-muted-foreground">
-      Working in
+    <span className={cn("ml-2 flex items-center gap-0.5 self-start text-sm text-muted-foreground", props.className)}>
+      {props.label === null ? null : (props.label ?? "Working in")}
       <Button
         variant="ghost"
         disabled={props.disabled}

@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/usage")({
   loaderDeps: (options) => ({ search: options.search }),
   loader: (options) => {
     Loader.start(
-      ...Object.values(UsageQuery.inputs({ spaceId: options.params.spaceId }, options.deps.search, Date.now())).map(
+      ...UsageQuery.all({ spaceId: options.params.spaceId }, options.deps.search, Date.now()).map(
         (input) => options.context.queryClient.query(options.context.api.insights.query.queryOptions(input)),
       ),
     )

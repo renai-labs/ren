@@ -15,7 +15,7 @@ function remainingPercent(availableMicroUsd: number, grantedMicroUsd: number) {
 export function CreditsCard(props: { billing: BillingSummary }) {
   const available = Math.max(props.billing.availableMicroUsd, 0)
   const granted = props.billing.grantedMicroUsd > 0
-  const depleted = props.billing.availableMicroUsd <= 0
+  const depleted = granted && props.billing.availableMicroUsd <= 0
   return (
     <Card>
       <CardHeader>

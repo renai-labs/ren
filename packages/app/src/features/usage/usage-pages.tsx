@@ -21,8 +21,8 @@ export function OrganizationUsagePage() {
   const navigate = organizationRoute.useNavigate()
   return (
     <Page title="Usage" width="wide">
-      <UsageBalances />
       <UsageView
+        actions={<UsageBalances />}
         scope={{}}
         search={organizationRoute.useSearch()}
         onSearchChange={(next) => void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true })}
