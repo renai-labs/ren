@@ -216,6 +216,32 @@ describe("HttpApiCodegen.generate", () => {
     ])
   })
 
+  test("sends a binary payload as octet-stream bytes, typed as a Blob or bytes", async () => {
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
+        api(
+          HttpApiEndpoint.post("upload", "/uploads", {
+            payload: Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array()),
+            success: Schema.Struct({ url: Schema.String }),
+          }),
+        ),
+      ),
+    )
+    expect(file(output, "types.ts")).toContain(
+      'export type SessionUploadInput = { readonly "payload": Blob | Uint8Array }',
+    )
+    await using emitted = await emittedModule(output)
+    const server = recorder(() => Response.json({ url: "https://example.com/a" }))
+    const client = emitted.module.Ren.make({ baseUrl: "https://example.com", fetch: server.fetch })
+
+    expect(await client.session.upload({ payload: new Uint8Array([1, 2, 3]) })).toEqual({
+      url: "https://example.com/a",
+    })
+    const request = server.requests[0]
+    expect(request?.headers.get("content-type")).toBe("application/octet-stream")
+    expect([...new Uint8Array((await request?.arrayBuffer()) ?? new ArrayBuffer(0))]).toEqual([1, 2, 3])
+  })
+
   test("maps a no-content response to undefined", async () => {
     await using emitted = await emittedModule(
       EmitPromise.emitPromise(
