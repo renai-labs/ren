@@ -12,19 +12,21 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle }
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppIcon, appTile } from "./app-icon.js"
+import { AccountMenu } from "./account-menu.js"
 import { DefaultIcon } from "./default-icon.js"
 import { GitHubMark } from "../icons/brands.js"
+import { StatusDot } from "./status-dot.js"
 import { Markdown } from "./markdown.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { McpInspect } from "../lib/mcp-inspect.js"
 import { cn } from "cn"
-import type { AppListingTool, AppProfileInfo } from "@ren/client"
+import type { AppListingTool, AppProfileInfo, Apps } from "@ren/client"
 import { RouterContext } from "../lib/router-context.js"
 import { useApps } from "../lib/use-app.js"
 import { useSpaces } from "../lib/use-spaces.js"
-import type { CatalogApp, Status } from "../lib/apps.js"
+import type { CatalogApp } from "../lib/apps.js"
 
 type App = CatalogApp
 type AppProfile = AppProfileInfo
@@ -655,20 +657,6 @@ export function SpacePills(props: { profile: AppProfile }) {
   ))
 }
 
-export function StatusDot(props: { status: Status }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "size-2 shrink-0 rounded-full",
-        props.status === "connected" && "bg-chart-2",
-        props.status === "credits" && "bg-muted-foreground",
-        (props.status === "expired" || props.status === "missing") && "bg-chart-3",
-      )}
-    />
-  )
-}
-
 export function AccountList(props: {
   title: string
   app: Pick<CatalogApp, "mcps">
@@ -676,6 +664,7 @@ export function AccountList(props: {
   profiles: ReadonlyArray<AppProfile>
   empty?: string
   note?: (profile: AppProfile) => string | null
+  from?: Apps.From | undefined
   onOpen: (profile: AppProfile) => void
 }) {
   return (
@@ -718,7 +707,7 @@ export function AccountList(props: {
                 <div className="flex max-w-1/2 flex-wrap justify-end gap-1">
                   <SpacePills profile={profile} />
                 </div>
-                <IconChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
+                <AccountMenu profile={profile} app={props.app} from={props.from} />
               </div>
             )
           })}
