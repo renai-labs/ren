@@ -358,7 +358,7 @@ function OwnerMenu(props: { app: CatalogApp }) {
 }
 
 function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => void) | undefined }) {
-  const isReduced = ReducedMotion.use()
+  const isReduced = ReducedMotion.useReduced()
   const prompts = props.app.listing?.examplePrompts ?? []
   if (prompts.length === 0) return null
   const start = props.onStart

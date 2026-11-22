@@ -59,14 +59,12 @@ const placeInputs = ["wheel", "touchstart", "keydown", "pointerdown"] as const
 
 const givingUpMs = 3000
 
-const settleMs = 200
-
+// oxlint-disable-next-line ren/no-comments -- Restoring: a reopened chat goes back to where it was read, holding that place while the rows above it load, even when MessageScroller first puts the view at the end, until the person scrolls or three seconds pass. Then it hands over to reading and writes the scroll no more; CSS scroll anchoring keeps the place after that.
 export function useKeptPlace(
   viewport: RefObject<HTMLDivElement | null>,
   place: ReadonlyArray<Spot> | undefined,
   options: {
     readonly session: string
-    readonly following: boolean
     readonly more: boolean
     readonly loading: boolean
     readonly onLoadMore: () => void
@@ -75,32 +73,15 @@ export function useKeptPlace(
   const older = useEffectEvent(() => {
     if (options.more && !options.loading) options.onLoadMore()
   })
-  const free = useEffectEvent(() => !options.following)
   const session = options.session
   useLayoutEffect(() => {
     const element = viewport.current
     const content = element?.querySelector("[data-slot=message-scroller-content]")
-    if (!element || !content) return
-    const opening = { place }
-    const motion = { moving: false, timer: 0, top: element.scrollTop }
-    const still = () => {
-      motion.moving = false
-    }
-    const moved = () => {
-      motion.top = element.scrollTop
-      motion.moving = true
-      window.clearTimeout(motion.timer)
-      motion.timer = window.setTimeout(still, settleMs)
-    }
-    element.addEventListener("scroll", moved, { passive: true })
-    element.addEventListener("scrollend", still)
+    if (!element || !content || !place) return
     const reveal = () => element.removeAttribute("data-placing")
     const hold = () => {
-      if (!opening.place && Math.abs(element.scrollTop - motion.top) > 1) return moved()
-      const spots = opening.place ?? (free() && !motion.moving ? places.get(session) : undefined)
-      if (!spots) return
       const rows = [...element.querySelectorAll<HTMLElement>("[data-message-id]")]
-      const spot = spots.find((each) => rows.some((row) => row.dataset.messageId === each.row))
+      const spot = place.find((each) => rows.some((row) => row.dataset.messageId === each.row))
       const row = spot && rows.find((each) => each.dataset.messageId === spot.row)
       if (!spot || !row) {
         if (element.hasAttribute("data-placing")) older()
@@ -108,32 +89,32 @@ export function useKeptPlace(
       }
       const delta = row.getBoundingClientRect().top - element.getBoundingClientRect().top - spot.offset
       // ast-grep-ignore: no-manual-scroll -- puts a reopened chat back where it was read, which MessageScroller has no API for
-      if (Math.abs(delta) > 0.5) element.scrollBy({ top: delta })
-      motion.top = element.scrollTop
+      if (Math.abs(delta) > 0.5) element.scrollBy({ top: delta, behavior: "instant" })
       reveal()
     }
-    if (place) element.setAttribute("data-placing", "")
+    element.setAttribute("data-placing", "")
     hold()
     // ast-grep-ignore: no-manual-scroll -- keeps that place while the rows above it load and grow
     const observer = new ResizeObserver(hold)
     observer.observe(content)
     observer.observe(element)
-    const timer = window.setTimeout(reveal, givingUpMs)
+    element.addEventListener("scroll", hold, { passive: true })
     const settle = () => {
-      opening.place = undefined
+      observer.disconnect()
+      element.removeEventListener("scroll", hold)
       window.clearTimeout(timer)
       reveal()
       for (const type of placeInputs) window.removeEventListener(type, settle, { capture: true })
     }
+    const timer = window.setTimeout(settle, givingUpMs)
     for (const type of placeInputs) window.addEventListener(type, settle, { capture: true, passive: true })
-    return () => {
-      settle()
-      observer.disconnect()
-      window.clearTimeout(motion.timer)
-      element.removeEventListener("scroll", moved)
-      element.removeEventListener("scrollend", still)
-    }
+    return settle
   }, [viewport, place, session])
+}
+
+// oxlint-disable-next-line ren/no-comments -- Hands MessageScroller over to reading after a scroll it did not see coming, such as a Page Up from the composer or a link to a heading, so it stops holding a sent message at the top. MessageScroller takes that from a wheel event and has no other API for it.
+export const read = (viewport: HTMLElement) => {
+  viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 0 }))
 }
 
 const glideMs = 600
@@ -151,11 +132,4 @@ export function useSendGlide(sent: string | undefined) {
     return () => window.clearTimeout(timer)
   }, [gliding])
   return gliding ? "" : undefined
-}
-
-export function useOnSent(sent: string | undefined, onSent: () => void) {
-  const run = useEffectEvent(onSent)
-  useEffect(() => {
-    if (sent) run()
-  }, [sent])
 }

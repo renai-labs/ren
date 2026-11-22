@@ -10,7 +10,7 @@ const subscribe = (onChange: () => void) => {
   return () => media.removeEventListener("change", onChange)
 }
 
-export const use = () =>
+export const useReduced = () =>
   useSyncExternalStore(
     subscribe,
     () => matchMedia(query).matches,

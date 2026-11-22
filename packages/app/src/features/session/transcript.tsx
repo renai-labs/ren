@@ -1,17 +1,13 @@
 import { DateTime } from "effect"
-import { flushSync } from "react-dom"
 import {
   useImperativeHandle,
   useRef,
   useState,
   type FocusEvent,
-  type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
   type Ref,
-  type TouchEvent,
   type UIEvent,
-  type WheelEvent,
 } from "react"
 import {
   Activity,
@@ -26,6 +22,7 @@ import {
   type ChatAtoms,
 } from "@ren/chat"
 import { cn } from "cn"
+import { IconArrowDown } from "@tabler/icons-react"
 import { AppConnectCard } from "./app-connect.js"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
@@ -53,6 +50,7 @@ import { MarkdownScroll } from "../../components/markdown-link.js"
 import { ImageSet } from "../../components/image-set.js"
 import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { MessagesSpinner } from "../../components/chat-skeleton.js"
+import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { TranscriptScroll } from "../../lib/transcript-scroll.js"
 import { useNow } from "../../lib/use-now.js"
 import { LiveActivity, Narration, UpdateLine, type LiveLine } from "./live-activity.js"
@@ -644,7 +642,7 @@ function useSentAnchor(
   const [fresh, setFresh] = useState<ReadonlyMap<string, boolean>>(
     () => new Map(users.map((block) => [block.key, false])),
   )
-  const waiting = [...statuses.keys()].filter((id) => !queued.has(id))
+  const waiting = [...statuses].flatMap(([id, status]) => (status === "queued" && !queued.has(id) ? [id] : []))
   if (waiting.length > 0) setQueued(new Set([...queued, ...waiting]))
   const last = users.at(-1)
   if (last && !fresh.has(last.key))
@@ -661,19 +659,6 @@ function useWatchedTurns(running: string | undefined) {
   const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set())
   if (running && !watched.has(running)) setWatched(new Set([...watched, running]))
   return { live: (turn: string | undefined) => turn !== undefined && (turn === running || watched.has(turn)) }
-}
-
-const scrollUpKeys = new Set(["ArrowUp", "PageUp", "Home"])
-
-function useFollow(options: { readonly paused: boolean }) {
-  const [paused, setPaused] = useState(options.paused)
-  return {
-    following: !paused,
-    pause: () => {
-      if (!paused) flushSync(() => setPaused(true))
-    },
-    resume: () => setPaused(false),
-  }
 }
 
 function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMessage.Info>): Context {
@@ -702,7 +687,6 @@ export function Transcript(props: TranscriptProps) {
   const [opening, setOpening] = useState(() => ({ session, place: TranscriptScroll.placeOf(session) }))
   if (opening.session !== session) setOpening({ session, place: TranscriptScroll.placeOf(session) })
   const place = opening.place
-  const follow = useFollow({ paused: place !== undefined })
   const [shown, setShown] = useState(false)
   if (!props.loading && !shown) setShown(true)
   if (props.loading && !shown)
@@ -720,8 +704,8 @@ export function Transcript(props: TranscriptProps) {
         files={props.files === true}
         onOpenChild={props.onOpenChild}
       >
-        <MessageScrollerProvider autoScroll={follow.following && props.find === undefined}>
-          <TranscriptScroller transcript={props} follow={follow} place={place} />
+        <MessageScrollerProvider autoScroll={false}>
+          <TranscriptScroller transcript={props} place={place} />
         </MessageScrollerProvider>
       </StepsProvider>
     </ImageSet>
@@ -741,36 +725,39 @@ function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Transcri
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- Scrolled up during a run, the jump button says Ren is still working.
+function JumpToLatest(props: { working: boolean }) {
+  const behavior = ReducedMotion.useReduced() ? "auto" : "smooth"
+  if (!props.working) return <MessageScrollerButton behavior={behavior} />
+  return (
+    <MessageScrollerButton size="sm" behavior={behavior} aria-label="Ren is working. Scroll to the end">
+      <Spinner data-icon="inline-start" />
+      Working…
+      <IconArrowDown data-icon="inline-end" />
+    </MessageScrollerButton>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- One scroll owner, MessageScroller with autoScroll off: anchored (a sent message holds at the top while its reply grows into the spacer below), reading (the person scrolled, nothing writes the scroll) and, through TranscriptScroll.useKeptPlace, restoring (a reopened chat is placed once). Nothing follows the stream.
 function TranscriptScroller(input: {
   transcript: TranscriptProps
-  follow: ReturnType<typeof useFollow>
   place: ReadonlyArray<TranscriptScroll.Spot> | undefined
 }) {
   const props = input.transcript
-  const follow = input.follow
   const place = input.place
   const scroller = useMessageScroller()
   const terminal = useTerminalShells(props.view.root)
-  const touchY = useRef(0)
-  const lastTop = useRef(0)
-  const lastHeight = useRef(0)
-  const pause = (viewport: HTMLElement) => {
-    if ((viewport.querySelector<HTMLElement>("[data-message-scroller-spacer]")?.offsetHeight ?? 0) > 0) return
-    follow.pause()
-  }
-  const toEnd = () => {
-    flushSync(follow.resume)
-    scroller.scrollToEnd()
-  }
+  const reduced = ReducedMotion.useReduced()
   const viewport = useRef<HTMLDivElement>(null)
   useImperativeHandle(props.handle, () => ({
     page: (direction) => {
       const element = viewport.current
       if (!element) return
-      if (direction < 0) pause(element)
-      element.scrollBy({ top: direction * element.clientHeight * 0.9 })
+      TranscriptScroll.read(element)
+      // ast-grep-ignore: no-manual-scroll -- Page Up and Page Down from the composer page the transcript, which MessageScroller has no API for
+      element.scrollBy({ top: direction * element.clientHeight * 0.9, behavior: reduced ? "instant" : "smooth" })
     },
-    toEnd,
+    toEnd: () => scroller.scrollToEnd({ behavior: reduced ? "auto" : "smooth" }),
   }))
   const hidden = new Set<string>(props.messages.filter(terminal.message).map((message) => message.id))
   const byId: ReadonlyMap<string, SessionMessage.Info> = new Map(
@@ -798,12 +785,9 @@ function TranscriptScroller(input: {
   const live = props.busy || watched.live(props.activeMessageID)
   const sent = useSentAnchor(shown, props.statuses)
   const easing = TranscriptScroll.useSendGlide(sent)
-  TranscriptScroll.useOnSent(sent, follow.resume)
-  const pinned = follow.following && props.find === undefined
   const from = TranscriptScroll.useOpening(shown, { all: props.find !== undefined, place })
   TranscriptScroll.useKeptPlace(viewport, place, {
     session: props.view.sessionID,
-    following: pinned,
     more: props.more,
     loading: props.loadingHistory,
     onLoadMore: props.onLoadMore,
@@ -824,52 +808,32 @@ function TranscriptScroller(input: {
   const pending = [props.busy, props.more, props.loadingHistory, props.loading].some(Boolean)
   const empty = props.empty && blocks.length === 0 && !pending
   return (
-    <MarkdownScroll value={pause}>
+    <MarkdownScroll value={TranscriptScroll.read}>
       <MessageScroller className="@container flex-1">
         <QuoteSelection quote={props.quote} root={viewport} />
         <MessageScrollerViewport
           ref={viewport}
           data-scroll-restoration-id="transcript"
           preserveScrollOnPrepend
-          pinEnd={pinned}
+          pinEnd={false}
           data-easing={easing}
           className="relative scrollbar-gutter-both outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth data-placing:invisible motion-reduce:scroll-auto"
-          onWheel={(event: WheelEvent<HTMLDivElement>) => {
-            if (event.deltaY < 0) pause(event.currentTarget)
-            else if (TranscriptScroll.atBottom(event.currentTarget)) toEnd()
-          }}
-          onTouchStart={(event: TouchEvent<HTMLDivElement>) => {
-            touchY.current = event.touches[0]?.clientY ?? 0
-          }}
-          onTouchMove={(event: TouchEvent<HTMLDivElement>) => {
-            if ((event.touches[0]?.clientY ?? 0) > touchY.current) pause(event.currentTarget)
-          }}
-          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-            if (scrollUpKeys.has(event.key)) pause(event.currentTarget)
-          }}
           onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
             const viewport = event.currentTarget
             viewport.dataset.pointer = ""
             if (event.clientX > viewport.getBoundingClientRect().left + viewport.clientLeft + viewport.clientWidth)
-              pause(event.currentTarget)
+              TranscriptScroll.read(viewport)
           }}
           onBlur={(event: FocusEvent<HTMLDivElement>) => {
             if (!event.currentTarget.contains(event.relatedTarget)) delete event.currentTarget.dataset.pointer
           }}
           onScroll={(event: UIEvent<HTMLDivElement>) => {
-            const viewport = event.currentTarget
-            const down = viewport.scrollTop > lastTop.current
-            const up = viewport.scrollTop < lastTop.current - 1 && viewport.scrollHeight >= lastHeight.current
-            lastTop.current = viewport.scrollTop
-            lastHeight.current = viewport.scrollHeight
-            if (viewport.hasAttribute("data-placing")) return
-            TranscriptScroll.keepPlace(props.view.sessionID, viewport)
-            if (up) pause(viewport)
-            if (!follow.following && down && TranscriptScroll.atBottom(viewport)) toEnd()
+            if (event.currentTarget.hasAttribute("data-placing")) return
+            TranscriptScroll.keepPlace(props.view.sessionID, event.currentTarget)
           }}
         >
           {props.more && from === 0 ? <History loading={props.loadingHistory} onLoadMore={props.onLoadMore} /> : null}
-          <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6">
+          <MessageScrollerContent className="relative mx-auto w-full max-w-(--container-chat) p-6 [&_[data-message-scroller-spacer]]:[overflow-anchor:none]">
             {shown.slice(from).map((block, index) => (
               <MessageScrollerItem
                 key={block.key}
@@ -901,7 +865,7 @@ function TranscriptScroller(input: {
           </MessageScrollerContent>
         </MessageScrollerViewport>
         {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
-        <MessageScrollerButton />
+        <JumpToLatest working={props.busy} />
       </MessageScroller>
     </MarkdownScroll>
   )
