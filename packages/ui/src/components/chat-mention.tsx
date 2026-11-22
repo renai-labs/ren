@@ -27,16 +27,16 @@ export function ChatMention(props: {
             }}
             data-slot="chat-mention"
             className={cn(
-              "inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-px align-bottom text-sm/5 font-medium no-underline transition-colors hover:bg-accent",
-              props.archived ? "bg-muted/50 text-muted-foreground" : "bg-muted text-foreground",
+              "rounded-xs font-semibold no-underline underline-offset-2 outline-none hover:underline hover:decoration-dotted focus-visible:ring-3 focus-visible:ring-ring/50",
+              props.archived ? "text-muted-foreground" : "text-link",
             )}
           >
-            <IconMessage aria-hidden className={cn("size-3.5 shrink-0", props.archived && "text-muted-foreground")} />
-            <span className="truncate">{props.title}</span>
+            <IconMessage aria-hidden className="mr-1 inline size-3.5 align-text-bottom" />
+            {props.title}
             {props.childTitle ? (
               <>
-                <IconChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">{props.childTitle}</span>
+                <IconChevronRight aria-hidden className="mx-0.5 inline size-3 align-baseline text-muted-foreground" />
+                {props.childTitle}
               </>
             ) : null}
           </a>
