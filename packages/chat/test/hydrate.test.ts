@@ -116,6 +116,35 @@ describe("pending", () => {
     expect(hydrated.pendingOverlay[remote]).toBeUndefined()
   })
 
+  test("a read that started after a prompt was sent now cannot put it back in the queue until the brain agrees", () => {
+    const queued = { ...item, delivery: "queue" as const }
+    const moving = Reducer.redirect(Hydrate.pending(ChatState.empty, remote, [queued]), remote, "msg_remote", "steer")
+    const stale = Hydrate.pending(Hydrate.startPending(moving, remote), remote, [queued])
+    expect(ChatState.pending(stale, remote)).toEqual([item])
+    expect(ChatState.pending(Hydrate.pending(stale, remote, [queued]), remote)).toEqual([item])
+    const delivered = Reducer.apply(stale, event("evt_delivered", 2, "session.inbox.delivered")).state
+    expect(delivered.redirects.size).toBe(0)
+  })
+
+  test("a delivery event that lags behind a prompt sent now does not put it back in the queue", () => {
+    const queued = { ...item, delivery: "queue" as const }
+    const moving = Reducer.redirect(Hydrate.pending(ChatState.empty, remote, [queued]), remote, "msg_remote", "steer")
+    const stale = Reducer.apply(
+      moving,
+      event("evt_old", 2, "session.inbox.delivery.changed", { delivery: "queue" }),
+    ).state
+    expect(ChatState.pending(stale, remote)).toEqual([item])
+    const late = Reducer.apply(
+      stale,
+      event("evt_late", 2, "session.inbox.enqueued", {
+        item: { type: "user", delivery: "queue", payload: { text: "Check the remote preview" } },
+      }),
+    ).state
+    expect(ChatState.pending(late, remote).map((entry) => entry.delivery)).toEqual(["steer"])
+    const cancelled = Reducer.apply(stale, event("evt_cancelled", 3, "session.inbox.cancelled")).state
+    expect(cancelled.redirects.size).toBe(0)
+  })
+
   test("hydration preserves submission order across optimistic admissions", () => {
     const prompt = (id: string, text: string) => ({
       sessionID: remote,

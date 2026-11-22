@@ -183,7 +183,7 @@ const observe = (state: ChatState.State, sessionID: string, inboxID: string): Ch
 }
 
 export const removePending = (state: ChatState.State, sessionID: string, inboxID: string): ChatState.State => {
-  const recorded = recordPending(state, sessionID, inboxID, undefined)
+  const recorded = recordPending(redirected(state, inboxID), sessionID, inboxID, undefined)
   const pending = ChatState.pending(recorded, sessionID)
   if (!pending.some((item) => item.id === inboxID)) return recorded
   return {
@@ -195,6 +195,27 @@ export const removePending = (state: ChatState.State, sessionID: string, inboxID
     ),
   }
 }
+
+export const redirect = (
+  state: ChatState.State,
+  sessionID: string,
+  inboxID: string,
+  delivery: SessionInbox.Delivery,
+): ChatState.State => ({
+  ...updateDelivery(state, sessionID, inboxID, delivery),
+  redirects: new Map([...state.redirects, [inboxID, delivery]]),
+})
+
+export const redirected = (state: ChatState.State, inboxID: string): ChatState.State =>
+  state.redirects.has(inboxID)
+    ? { ...state, redirects: new Map([...state.redirects].filter(([id]) => id !== inboxID)) }
+    : state
+
+// oxlint-disable-next-line ren/no-comments -- While the person's choice stands (Send now, back to the queue), it wins over the brain's delivery changes: the brain's reads lag behind its events, so an agreeing event does not prove the next read agrees.
+const deliveryChanged = (
+  state: ChatState.State,
+  data: { readonly sessionID: string; readonly inboxID: string; readonly delivery: SessionInbox.Delivery },
+) => (state.redirects.has(data.inboxID) ? state : updateDelivery(state, data.sessionID, data.inboxID, data.delivery))
 
 export const updateDelivery = (
   state: ChatState.State,
@@ -229,7 +250,9 @@ const materialize = (state: ChatState.State, item: SessionInbox.Info) => {
   return message ? upsert(state, item.sessionID, message) : state
 }
 
-export const admit = (state: ChatState.State, item: SessionInbox.Info): ChatState.State => {
+export const admit = (state: ChatState.State, admitted: SessionInbox.Info): ChatState.State => {
+  const chosen = state.redirects.get(admitted.id)
+  const item = chosen && chosen !== admitted.delivery ? { ...admitted, delivery: chosen } : admitted
   const pending = ChatState.pending(state, item.sessionID)
   const next = {
     ...state,
@@ -543,8 +566,7 @@ const handlers: Handlers = {
       }),
     )
   },
-  "session.inbox.delivery.changed": (state, event) =>
-    done(updateDelivery(state, event.data.sessionID, event.data.inboxID, event.data.delivery)),
+  "session.inbox.delivery.changed": (state, event) => done(deliveryChanged(state, event.data)),
   "session.inbox.cancelled": (state, event) =>
     done(observe(retract(state, event.data.sessionID, event.data.inboxID), event.data.sessionID, event.data.inboxID)),
   "session.inbox.enqueued": (state, event) =>
