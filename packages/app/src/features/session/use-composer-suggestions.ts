@@ -4,7 +4,7 @@ import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { AsyncResult } from "effect/reactivity"
-import { MentionSources } from "@ren/client/react"
+import { Debounce, MentionSources } from "@ren/client/react"
 import { isBundle, mentionColor, type Status } from "../../lib/apps.js"
 import type { MentionMark } from "@ren/ui/mention-overlay"
 import { RouterContext } from "../../lib/router-context.js"
@@ -12,6 +12,7 @@ import { useSpaceApps } from "./use-space-apps.js"
 import {
   categories,
   key,
+  searchDelay,
   useMentionSources,
   useRecent,
   type Category,
@@ -67,6 +68,22 @@ export interface Suggest {
   ) => { text: string; cursor: number } | undefined
 }
 
+const itemOf = (entry: Entry) => entry.item
+
+// oxlint-disable-next-line ren/no-comments -- Files on the chat's computer arrive late, so they rank among themselves after the rest and only ever add to the end of the list.
+const ranked = (entries: ReadonlyArray<Entry>, query: string) => [
+  ...Mentions.rank(
+    entries.filter((entry) => entry.root === undefined),
+    itemOf,
+    query,
+  ),
+  ...Mentions.rank(
+    entries.filter((entry) => entry.root !== undefined),
+    itemOf,
+    query,
+  ),
+]
+
 const listed = <A>(result: AsyncResult.AsyncResult<ReadonlyArray<A>, unknown>) =>
   AsyncResult.isSuccess(result) ? result.value : []
 
@@ -111,11 +128,11 @@ export const useMentionSuggestions = (spaceId: string | undefined, draft: Compos
 
 const scoped = /^(?<prefix>[a-z]+):(?<query>.*)$/u
 
-const scopeOf = (trigger: Composer.Trigger | undefined): Scope | undefined => {
-  if (trigger?.kind !== "mention") return undefined
-  const parts = scoped.exec(trigger.query)?.groups
+const scopeOf = (query: string | undefined): Scope | undefined => {
+  if (query === undefined) return undefined
+  const parts = scoped.exec(query)?.groups
   const category = categories.find((each) => each.prefix === parts?.prefix)
-  return category ? { category, query: parts?.query ?? "" } : { category: undefined, query: trigger.query }
+  return category ? { category, query: parts?.query ?? "" } : { category: undefined, query }
 }
 
 const appQuery = (scope: Scope | undefined) =>
@@ -128,9 +145,12 @@ const pick = (
   offered: ReadonlyArray<Category>,
 ) => {
   if (!scope) return []
-  if (scope.category) return lists[scope.category.prefix]
+  if (scope.category) return ranked(lists[scope.category.prefix], scope.query)
   if (scope.query === "") return recent.slice(0, recentShown)
-  return offered.flatMap((each) => lists[each.prefix].slice(0, groupSize))
+  return ranked(
+    offered.flatMap((each) => lists[each.prefix].slice(0, groupSize)),
+    scope.query,
+  )
 }
 
 const headingOf = (scope: Scope | undefined) => {
@@ -177,6 +197,18 @@ const commandItems = (runnable: ReadonlyArray<ClientCommand.Suggestion>) =>
     group: "Commands",
   }))
 
+const held = (press: Composer.SuggestionPress) => ["Enter", "Tab", "ArrowUp", "ArrowDown"].includes(press.key)
+
+// oxlint-disable-next-line ren/no-comments -- Every source searches one settled query, so the menu shows each query's results all at once rather than as each source answers. The menu right after @ or a category needs no search.
+function useSettledQuery(trigger: Composer.Trigger | undefined) {
+  const typed = trigger?.kind === "mention" ? trigger.query : undefined
+  const scope = scopeOf(typed)
+  const now = scope?.query === ""
+  const later = Debounce.useValue(typed, now ? 0 : searchDelay)
+  const settled = now ? typed : later
+  return { scope, searched: scopeOf(settled), pending: typed !== undefined && typed !== settled }
+}
+
 function useSuggestions(input: {
   root: Session.ID | undefined
   spaceId: string | undefined
@@ -187,9 +219,11 @@ function useSuggestions(input: {
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
   const [active, setActive] = useState<string>()
-  const scope = scopeOf(trigger)
+  const query = useSettledQuery(trigger)
+  const scope = query.scope
+  const searched = query.searched
   const { api } = RouterContext.useRouterContext()
-  const apps = MentionSources.useApps(api, { query: appQuery(scope), mentions: input.mentions })
+  const apps = MentionSources.useApps(api, { query: appQuery(searched), mentions: input.mentions })
   const space = useSpaceApps(input.spaceId)
   const appById = apps.byId
   const appEntries = apps.apps.map((app): Entry => ({ item: Mentions.fromApp(app), app: apps.mentionOf(app.id) }))
@@ -197,15 +231,21 @@ function useSuggestions(input: {
     item: Mentions.fromRepository(reference),
   }))
   const recent = useRecent(input.spaceId, input.root)
-  const sources = useMentionSources({ root: input.root, spaceId: input.spaceId, scope, apps: appEntries, repositories })
+  const sources = useMentionSources({
+    root: input.root,
+    spaceId: input.spaceId,
+    scope: searched,
+    apps: appEntries,
+    repositories,
+  })
   const offered = categories.filter(
     (each) => each.prefix !== "files" || input.spaceId !== undefined || input.root !== undefined,
   )
-  const pickable = pick(scope, sources.lists, recent.entries, offered)
-  const opened = opening(scope, offered, sources.folders)
+  const searching = query.pending || apps.searching || sources.searching
+  const pickable = pick(searched, sources.lists, recent.entries, offered)
+  const opened = opening(searched, offered, sources.folders)
   const runnable = trigger?.kind === "command" ? input.commands(trigger.query) : []
-  const searching = apps.searching || sources.searching
-  const heading = headingOf(scope)
+  const heading = headingOf(searched)
   const mentionItem = (entry: Entry): SuggestionItem => ({
     value: key(entry),
     kind: entry.item.kind,
@@ -258,12 +298,13 @@ function useSuggestions(input: {
     label: trigger?.kind === "command" ? "Commands" : "Mentions",
     searching,
     items,
-    active: current,
+    active: searching ? undefined : current,
     onCursor: (text, cursor) => {
       setTrigger(Composer.trigger(text, cursor))
       setActive(undefined)
     },
     onKey: (press) => {
+      if (searching && trigger?.kind === "mention" && held(press)) return true
       if (trigger === undefined || ids.length === 0) return false
       const pressed = Composer.suggestionKey(press, ids, current)
       if (pressed?.type === "close") close()
