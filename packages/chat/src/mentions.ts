@@ -95,6 +95,24 @@ export const suggest = (input: {
   return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
 }
 
+const closeness = (item: Item, query: string) => {
+  const names = [item.label, item.handle].map((value) => value.toLowerCase())
+  const wanted = query.toLowerCase()
+  if (names.includes(wanted)) return 0
+  if (names.some((name) => name.startsWith(wanted))) return 1
+  if (names.some((name) => name.split(/[\s/_.-]+/u).some((word) => word.startsWith(wanted)))) return 2
+  return names.some((name) => name.includes(wanted)) ? 3 : 4
+}
+
+// oxlint-disable-next-line ren/no-comments -- A search can match a chat or a task by its content, so a name that matches the query goes above it.
+export const rank = <A>(entries: ReadonlyArray<A>, itemOf: (entry: A) => Item, query: string): ReadonlyArray<A> =>
+  query === ""
+    ? entries
+    : entries
+        .map((entry) => ({ entry, score: closeness(itemOf(entry), query) }))
+        .toSorted((left, right) => left.score - right.score)
+        .map((ranked) => ranked.entry)
+
 const groupSize = 5
 
 export type Group = "Apps" | "Repositories" | "Files"

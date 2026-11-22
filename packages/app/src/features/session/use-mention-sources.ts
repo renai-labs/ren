@@ -2,7 +2,6 @@ import { Composer, Mentions, SessionTitle } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Debounce } from "@ren/client/react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Schema } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -30,7 +29,7 @@ export interface Scope {
   readonly query: string
 }
 
-const searchDelay = 250
+export const searchDelay = 200
 const searchSize = 20
 const recentSize = 20
 
@@ -93,7 +92,7 @@ function useTasks(input: { readonly enabled: boolean; readonly search: string })
     placeholderData: keepPreviousData,
   })
   return {
-    searching: tasks.isFetching,
+    searching: tasks.isFetching && (tasks.isPlaceholderData || tasks.isPending),
     entries: (tasks.data?.items ?? []).map((task): Entry => ({
       item: {
         kind: "task",
@@ -130,7 +129,7 @@ function useChats(input: {
     placeholderData: keepPreviousData,
   })
   return {
-    searching: chats.isFetching,
+    searching: chats.isFetching && (chats.isPlaceholderData || chats.isPending),
     entries: (chats.data?.items ?? [])
       .filter((chat) => chat.id !== input.root)
       .map((chat): Entry => ({
@@ -169,7 +168,7 @@ function useDrive(input: { readonly enabled: boolean; readonly spaceId: string |
   })
   const entries = drive.data?.entries ?? []
   return {
-    searching: drive.isFetching,
+    searching: drive.isFetching && (drive.isPlaceholderData || drive.isPending),
     folders: entries.flatMap((entry): ReadonlyArray<Entry> =>
       entry.type === "directory"
         ? [{ item: { kind: "file", id: entry.path, label: `${nameOf(entry.path)}/`, handle: entry.path } }]
@@ -232,24 +231,24 @@ export function useMentionSources(input: {
   readonly repositories: ReadonlyArray<Entry>
 }) {
   const query = input.scope?.query ?? ""
-  const search = Debounce.useValue(query, searchDelay)
   const folder = input.scope?.category?.prefix === "files" ? query.slice(0, query.lastIndexOf("/") + 1) : ""
   const filter = query.slice(folder.length)
-  const tasks = useTasks({ enabled: wants(input.scope, "tasks"), search })
-  const chats = useChats({ enabled: wants(input.scope, "chats"), search, root: input.root })
+  const tasks = useTasks({ enabled: wants(input.scope, "tasks"), search: query })
+  const chats = useChats({ enabled: wants(input.scope, "chats"), search: query, root: input.root })
   const agents = useAgents(input.spaceId)
   const drive = useDrive({ enabled: wants(input.scope, "files"), spaceId: input.spaceId, folder })
-  const computer = useComputerFiles({ enabled: wants(input.scope, "files"), root: input.root, search })
+  const computer = useComputerFiles({ enabled: wants(input.scope, "files"), root: input.root, search: query })
   const lists: Record<Prefix, ReadonlyArray<Entry>> = {
     tasks: tasks.entries,
     chats: chats.entries,
     apps: named(input.apps, filter),
     agents: named(agents, filter),
-    files: [...computer.files, ...named(drive.files, filter)],
+    files: [...named(drive.files, filter), ...computer.files],
     repos: named(input.repositories, filter),
   }
   return {
-    searching: tasks.searching || chats.searching || drive.searching || computer.searching,
+    // oxlint-disable-next-line ren/no-comments -- The chat's computer can take seconds to search, so the menu does not wait for it: its files join the end of the list when they come.
+    searching: tasks.searching || chats.searching || drive.searching,
     lists,
     agents,
     folders: named(drive.folders, filter),
