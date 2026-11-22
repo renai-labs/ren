@@ -133,7 +133,17 @@ export function blocksOf(rows: ReadonlyArray<TimelineRow.Row>, byId: ReadonlyMap
   }, [])
 }
 
-export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn: string) => boolean; fold: boolean }) {
+const narrationLength = 160
+
+// oxlint-disable-next-line ren/no-comments -- While the turn runs, a short single-line text still streaming stays in the narration line, so a sentence before a tool call never flashes in as an answer and back out. It becomes the answer once it grows past one line.
+const narrating = (block: Extract<Block, { kind: "answer" }>, options: { live: (turn: string) => boolean }) =>
+  options.live(block.turn) && block.streaming && !block.text.includes("\n") && block.text.length <= narrationLength
+
+// oxlint-disable-next-line ren/no-comments -- With narration, a text that a tool call follows folds into its turn's steps even while the turn runs; only the text after the last tool call stays an answer, so a run shows one answer, not every update it wrote.
+export function groupTurns(
+  blocks: ReadonlyArray<Block>,
+  options: { live: (turn: string) => boolean; fold: boolean; narration?: boolean },
+) {
   if (!options.fold) return blocks
   const groups = new Map<string, Extract<Block, { kind: "steps" }>>()
   const lastSteps = new Map(
@@ -146,7 +156,9 @@ export function groupTurns(blocks: ReadonlyArray<Block>, options: { live: (turn:
   return blocks.reduce<Block[]>((grouped, block, index) => {
     if (
       (block.kind !== "steps" && block.kind !== "answer") ||
-      (block.kind === "answer" && (options.live(block.turn) || (lastSteps.get(block.turn) ?? -1) < index))
+      (block.kind === "answer" &&
+        ((options.narration !== true && options.live(block.turn)) ||
+          ((lastSteps.get(block.turn) ?? -1) < index && !(options.narration === true && narrating(block, options)))))
     ) {
       grouped.push(block)
       return grouped
@@ -191,6 +203,9 @@ export function withEmptyReplies(
     return span
   })
 }
+
+export const narration = (steps: ReadonlyArray<Step>) =>
+  leaves(steps).flatMap((step) => (step.kind === "text" && step.text.trim() ? [step] : []))
 
 export const leaves = (steps: ReadonlyArray<Step>): ReadonlyArray<Step> =>
   steps.flatMap((step) => (step.kind === "group" ? leaves(step.steps) : [step]))

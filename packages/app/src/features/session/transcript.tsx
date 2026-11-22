@@ -55,7 +55,7 @@ import { TurnProblem, TurnRetrying } from "./turn-problem.js"
 import { MessagesSpinner } from "../../components/chat-skeleton.js"
 import { TranscriptScroll } from "../../lib/transcript-scroll.js"
 import { useNow } from "../../lib/use-now.js"
-import { LiveActivity, type LiveLine } from "./live-activity.js"
+import { LiveActivity, Narration, UpdateLine, type LiveLine } from "./live-activity.js"
 import { useOpenActivity } from "./open-panel.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
@@ -341,15 +341,19 @@ function TurnSteps(props: {
 }) {
   const openPanel = useOpenActivity()
   const turn = props.block.turn
+  const latest = TranscriptBlocks.narration(props.block.steps).at(-1)
   return (
     <Message>
       <MessageContent>
         {props.folded ? (
-          <Steps
-            steps={props.block.steps}
-            workedFor={props.workedFor}
-            onOpen={props.simple && openPanel ? () => openPanel({ kind: "activity", turn }) : undefined}
-          />
+          <div className="flex flex-col gap-1">
+            <Steps
+              steps={props.block.steps}
+              workedFor={props.workedFor}
+              onOpen={props.simple && openPanel ? () => openPanel({ kind: "activity", turn }) : undefined}
+            />
+            {props.simple && latest ? <UpdateLine text={latest.text} /> : null}
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
             <StepRuns steps={props.block.steps} />
@@ -381,8 +385,9 @@ function BlockView(props: {
   if (block.kind === "live")
     return (
       <Message>
-        <MessageContent>
+        <MessageContent className="gap-1">
           <TurnLine transcript={props.transcript} turns={props.context.turns} />
+          <Narration text={block.narration} />
         </MessageContent>
       </Message>
     )
@@ -474,7 +479,12 @@ const markerOf = (props: TranscriptProps, live: { readonly busy: boolean }) => {
   return { label: "Working on the next step", labelled: props.working || props.background?.blocking === true }
 }
 
-type LiveSlot = { readonly kind: "live"; readonly key: string; readonly turn: string }
+type LiveSlot = {
+  readonly kind: "live"
+  readonly key: string
+  readonly turn: string
+  readonly narration: string | undefined
+}
 
 type FilesGroup = {
   readonly kind: "files"
@@ -500,7 +510,9 @@ const shownBlocks = (
   const step = blocks.findIndex((block) => block.kind === "steps" && block.turn === turn)
   const at = step === -1 ? blocks.findIndex((block) => block.kind === "user" && block.message.id === turn) + 1 : step
   if (at === 0) return blocks
-  const slot: LiveSlot = { kind: "live", key: `live:${turn}`, turn }
+  const steps = blocks.find((block) => block.kind === "steps" && block.turn === turn)
+  const narration = steps?.kind === "steps" ? TranscriptBlocks.narration(steps.steps).at(-1)?.text : undefined
+  const slot: LiveSlot = { kind: "live", key: `live:${turn}`, turn, narration }
   return [...blocks.slice(0, at), slot, ...blocks.slice(at)].filter(
     (block) => !(block.kind === "steps" && block.turn === turn),
   )
@@ -776,6 +788,7 @@ function TranscriptScroller(input: {
     TranscriptBlocks.groupTurns(TranscriptBlocks.blocksOf(rows, byId), {
       live: (turn) => turn === activeTurn,
       fold: props.fold,
+      narration: props.simple === true,
     }),
     turns,
     activeTurn,
