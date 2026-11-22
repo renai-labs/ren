@@ -79,14 +79,6 @@ const firstLine = (text: string) =>
     .map((line) => line.replace(/^[#>*\-\s]+/u, "").trim())
     .find(Boolean) ?? ""
 
-export function UpdateLine(props: { text: string; className?: string | undefined }) {
-  return (
-    <p className={cn("min-w-0 truncate pl-6 text-sm/5 text-muted-foreground", props.className)}>
-      {firstLine(props.text)}
-    </p>
-  )
-}
-
 // oxlint-disable-next-line ren/no-comments -- The newest thing Ren wrote between tool calls, one grey line under the live line. Each line stays at least 400ms, and a new one crossfades over the old. The row keeps its height while the run is on, even before Ren writes anything, so nothing jumps.
 export function Narration(props: { text: string | undefined }) {
   const text = useSteady(firstLine(props.text ?? ""), { key: (value) => value, minMs: narrationMs })
