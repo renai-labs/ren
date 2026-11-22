@@ -17,6 +17,7 @@ import { DefaultIcon } from "./default-icon.js"
 import { GitHubMark } from "../icons/brands.js"
 import { StatusDot } from "./status-dot.js"
 import { Markdown } from "./markdown.js"
+import { ReadMore } from "./read-more.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
@@ -167,7 +168,9 @@ function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode 
                 <IconRosetteDiscountCheckFilled aria-label="From Ren’s registry" className="size-4 text-link" />
               ) : null}
             </SheetTitle>
-            <SheetDescription className="leading-5">{app.listing?.body ?? app.description}</SheetDescription>
+            <ReadMore>
+              <SheetDescription className="leading-5">{app.listing?.body ?? app.description}</SheetDescription>
+            </ReadMore>
           </div>
           {props.action ? <div className="flex shrink-0">{props.action}</div> : null}
         </div>
@@ -548,7 +551,9 @@ export function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListin
                 ) : null}
               </div>
               {tool.description ? (
-                <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+                <ReadMore>
+                  <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+                </ReadMore>
               ) : null}
               {tool.price?.note ? <p className="text-xs/5 text-muted-foreground">{tool.price.note}</p> : null}
             </li>
