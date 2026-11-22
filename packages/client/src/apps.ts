@@ -26,14 +26,14 @@ export type CatalogApp = {
 export const statusLabel: Record<Status, string> = {
   expired: "Needs sign-in",
   connected: "Connected",
-  credits: "Ren credits",
+  credits: "Connected · Managed by Ren",
   missing: "Not connected",
 }
 
 export const statusAction: Record<Status, string | undefined> = {
   expired: "Reconnect",
   connected: undefined,
-  credits: "Connect my own",
+  credits: "Use my own account",
   missing: "Connect",
 }
 
