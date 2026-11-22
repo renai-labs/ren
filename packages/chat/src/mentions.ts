@@ -163,23 +163,26 @@ export const shift = (picked: ReadonlyArray<Token>, before: string, after: strin
   })
 }
 
-export const tokens = (
+const sent = (item: Item) => item.sent ?? `@${item.handle}`
+
+const located = (
   input: string,
   items: ReadonlyArray<Item>,
-  picked: ReadonlyArray<Token> = [],
+  picked: ReadonlyArray<Token>,
+  form: (item: Item) => string,
 ): ReadonlyArray<Token> => {
   if (!input.includes("@")) return []
   const ordered = [...new Map(items.map((item) => [key(item), item])).values()].toSorted(
-    (left, right) => right.label.length - left.label.length,
+    (left, right) => form(right).length - form(left).length,
   )
   const candidates = [
-    ...picked.filter((token) => input.slice(token.start, token.end) === text(token.item)),
+    ...picked.filter((token) => input.slice(token.start, token.end) === form(token.item)),
     ...ordered.flatMap((item) =>
-      positions(input, text(item), 0).map((start) => ({ start, end: start + text(item).length, item })),
+      positions(input, form(item), 0).map((start) => ({ start, end: start + form(item).length, item })),
     ),
   ].filter(
     (token) =>
-      text(token.item).length >= 4 &&
+      form(token.item).length >= 4 &&
       (token.start === 0 || space.test(input.charAt(token.start - 1))) &&
       (token.end >= input.length || !word.test(input.charAt(token.end))),
   )
@@ -189,6 +192,15 @@ export const tokens = (
     )
     .toSorted((left, right) => left.start - right.start)
 }
+
+export const tokens = (
+  input: string,
+  items: ReadonlyArray<Item>,
+  picked: ReadonlyArray<Token> = [],
+): ReadonlyArray<Token> => located(input, items, picked, text)
+
+// oxlint-disable-next-line ren/no-comments -- The mentions in a message as it was sent: each item by the text the composer sent for it.
+export const sentTokens = (input: string, items: ReadonlyArray<Item>) => located(input, items, [], sent)
 
 const filePill = /(?<=^|\s)@ {2}([^\s@]*[./][^\s@]*)/g
 
@@ -260,7 +272,7 @@ export const resolve = (input: string, found: ReadonlyArray<Token>): Resolved =>
   }>(
     (result, token) => {
       const before = result.text + input.slice(result.from, token.start)
-      const value = token.item.sent ?? `@${token.item.handle}`
+      const value = sent(token.item)
       return {
         from: token.end,
         text: before + value,
