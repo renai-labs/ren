@@ -217,6 +217,19 @@ describe("file tool groups", () => {
     expect(groups.map((group) => [group.path, group.additions, group.deletions])).toEqual([["a.ts", 1, 1]])
   })
 
+  test("shows a file rewritten in full as one diff of its last contents, and a file Ren wrote as added", () => {
+    const groups = PatchFiles.groups([
+      tool("write", { path: "a.md", content: "draft\n" }),
+      tool("write", { path: "a.md", content: "final\nversion\n" }),
+    ])
+    expect(groups.map((group) => [group.path, group.type, group.additions, group.deletions])).toEqual([
+      ["a.md", "add", 2, 0],
+    ])
+    expect(groups[0]?.views).toHaveLength(1)
+    expect(FileDiff.text(view(groups), "additions")).toBe("final\nversion\n")
+    expect(view(groups).status).toBe("added")
+  })
+
   test("counts written lines without the trailing newline", () => {
     const groups = PatchFiles.groups([tool("write", { path: "a.ts", content: "one\ntwo\n" })])
     expect(groups.map((group) => [group.path, group.additions, group.deletions])).toEqual([["a.ts", 2, 0]])
