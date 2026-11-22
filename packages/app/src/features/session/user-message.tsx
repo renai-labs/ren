@@ -433,6 +433,7 @@ function UserText(props: {
 }
 
 const statusLabels: Partial<Record<ChatState.PendingStatus, string>> = {
+  steering: "Sent. Ren reads it after the current step",
   unreachable: "Can’t reach Ren. Trying again…",
   unsent: "Not sent",
 }
@@ -502,9 +503,9 @@ function QueuedMark() {
         }
       >
         <IconClock aria-hidden className="size-3.5" />
-        <span className="sr-only">Queued</span>
+        <span className="sr-only">Waiting for the current step</span>
       </TooltipTrigger>
-      <TooltipContent>Queued. Ren reads it after the current step.</TooltipContent>
+      <TooltipContent>Sent. Ren reads it after the current step.</TooltipContent>
     </Tooltip>
   )
 }

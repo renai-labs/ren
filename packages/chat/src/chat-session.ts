@@ -840,12 +840,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       Effect.ensuring(execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })),
     )
 
+  // oxlint-disable-next-line ren/no-comments -- The message moves at once, before the connection wakes and the brain answers, and keeps that place until the prompt leaves the inbox. If the brain refuses, the revalidation puts it back where the brain has it.
   const redirect = (inboxID: SessionMessage.ID, delivery: SessionInbox.Delivery) =>
-    connection.wake.pipe(
+    update((current) => Reducer.redirect(current, root, inboxID, delivery)).pipe(
+      Effect.andThen(connection.wake),
       Effect.andThen(
         send(Effect.flatMap(client, (api) => api.session.inbox.update({ sessionID: root, inboxID, delivery }))),
       ),
-      Effect.andThen(update((current) => Reducer.updateDelivery(current, root, inboxID, delivery))),
+      Effect.tapError(() => update((current) => Reducer.redirected(current, inboxID))),
       Effect.ensuring(execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })),
     )
 

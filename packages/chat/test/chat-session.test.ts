@@ -7,7 +7,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import { DateTime, Deferred, Effect, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
+import { DateTime, Deferred, Effect, Fiber, Layer, Option, Predicate, Schedule, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
@@ -1094,7 +1094,7 @@ test("a queued prompt is withdrawn at once, and one the session took meanwhile s
     }),
   ))
 
-test("a queued prompt steers into the running turn and goes back to the queue", () =>
+test("a queued prompt sent now leaves the queue at once, steers into the running turn and goes back to the queue", () =>
   ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
@@ -1108,7 +1108,10 @@ test("a queued prompt steers into the running turn and goes back to the queue", 
       const queued = yield* chat.prompt({ text: stub.script({ reply: "queued" }).marker, delivery: "queue" })
       const delivery = (state: ChatState.State) =>
         ChatState.pending(state, brain.id).find((item) => item.id === queued)?.delivery
-      yield* chat.steerInput(queued)
+      const steering = yield* chat.steerInput(queued).pipe(Effect.forkChild)
+      yield* Effect.yieldNow
+      expect(delivery(yield* SubscriptionRef.get(chat.state))).toBe("steer")
+      yield* Fiber.join(steering)
       expect(delivery(yield* SubscriptionRef.get(chat.state))).toBe("steer")
       yield* chat.queueInput(queued)
       expect(delivery(yield* SubscriptionRef.get(chat.state))).toBe("queue")
