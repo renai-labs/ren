@@ -35,6 +35,7 @@ Generated clients follow the protocol `HttpApi`.
 | [runtime/e2b-brain/README.md](runtime/e2b-brain/README.md)           | Harness-neutral sync, restore leftovers, live E2B tests, retries                                                                |
 | [runtime/opencode-upgrade.md](runtime/opencode-upgrade.md)           | The OpenCode boundary and bump command, then the 2.2.6 upgrade                                                                  |
 | [runtime/hot-reload/README.md](runtime/hot-reload/README.md)         | Tests not written, a model key per brain                                                                                        |
+| [runtime/providers/README.md](runtime/providers/README.md)           | Providers page, own keys, subscriptions on official clients, models.dev catalog with push, free models, warnings                |
 | [runtime/media-models.md](runtime/media-models.md)                   | Native gateway provider and typed catalogs, OpenCode's image tool, then speech, voice, video and bring your own key             |
 | [runtime/channels/README.md](runtime/channels/README.md)             | Linear, Slack task card and onboarding, GitHub live checks                                                                      |
 | [runtime/credentials/README.md](runtime/credentials/README.md)       | `oauth-session.complete`, KMS, traffic the egress cannot inject                                                                 |
