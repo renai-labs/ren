@@ -41,6 +41,7 @@ type Item =
     }
   | { readonly kind: "tool"; readonly key: string; readonly tool: SessionMessage.Tool }
   | { readonly kind: "shell"; readonly key: string; readonly message: SessionMessage.Shell }
+  | { readonly kind: "update"; readonly key: string; readonly text: string }
 
 interface Turn {
   readonly id: string
@@ -74,23 +75,32 @@ const itemsOf = (message: SessionMessage.Info, detail: TimelineDetail.Detail): R
     const category = TimelineDetail.category(content)
     if (category && detail[category].placement === "hidden") return []
     if (content.type === "reasoning") return [thinkingOf(message, content, key)]
+    if (content.type === "text") return content.text.trim() ? [{ kind: "update", key, text: content.text.trim() }] : []
     return Activity.listed(content) ? [{ kind: "tool", key, tool: content }] : []
   })
 }
 
+// oxlint-disable-next-line ren/no-comments -- What Ren wrote before a tool call is an update and stays in the turn; text after the last tool call is the answer, which the chat shows, so it leaves.
+const withUpdates = (items: ReadonlyArray<Item>) => {
+  const lastWork = items.findLastIndex((item) => item.kind === "tool" || item.kind === "shell")
+  return items.filter((item, index) => item.kind !== "update" || index < lastWork)
+}
+
 const turnsOf = (messages: ReadonlyArray<SessionMessage.Info>, detail: TimelineDetail.Detail): ReadonlyArray<Turn> =>
-  messages.reduce<Array<{ id: string; prompt: string; at: number; items: Array<Item> }>>((turns, message) => {
-    if (message.type === "user") {
-      turns.push({ id: message.id, prompt: message.text, at: millis(message.time.created), items: [] })
+  messages
+    .reduce<Array<{ id: string; prompt: string; at: number; items: Array<Item> }>>((turns, message) => {
+      if (message.type === "user") {
+        turns.push({ id: message.id, prompt: message.text, at: millis(message.time.created), items: [] })
+        return turns
+      }
+      const items = itemsOf(message, detail)
+      if (items.length === 0) return turns
+      const last = turns.at(-1)
+      if (last) last.items.push(...items)
+      else turns.push({ id: message.id, prompt: "", at: millis(message.time.created), items: [...items] })
       return turns
-    }
-    const items = itemsOf(message, detail)
-    if (items.length === 0) return turns
-    const last = turns.at(-1)
-    if (last) last.items.push(...items)
-    else turns.push({ id: message.id, prompt: "", at: millis(message.time.created), items: [...items] })
-    return turns
-  }, [])
+    }, [])
+    .map((turn) => Object.assign(turn, { items: withUpdates(turn.items) }))
 
 const titleOf = (item: Step) => (item.kind === "shell" ? `Ran ${item.message.command}` : Activity.of(item.tool).text)
 
@@ -223,6 +233,16 @@ function Changed(props: { tool: SessionMessage.Tool }) {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- What Ren wrote between tool calls, grey and in line with the step titles.
+function UpdateStep(props: { text: string; last: boolean }) {
+  return (
+    <div className="relative pb-2">
+      <Connector last={props.last} />
+      <Markdown className="pl-7.5 text-sm/relaxed text-muted-foreground">{props.text}</Markdown>
+    </div>
+  )
+}
+
 function ToolStep(props: {
   item: Step
   last: boolean
@@ -283,6 +303,7 @@ function Steps(props: {
   return props.items.map((item, index) => {
     const last = props.closed && index === props.items.length - 1
     if (item.kind === "thinking") return <ThinkingStep key={item.key} item={item} last={last} />
+    if (item.kind === "update") return <UpdateStep key={item.key} text={item.text} last={last} />
     return (
       <ToolStep
         key={item.key}
@@ -434,7 +455,7 @@ const located = (turns: ReadonlyArray<Turn>, view: View) => {
   const step = owner?.items.find((item) => item.key === view.step)
   return {
     turn: view.turn ? turns.find((each) => each.id === view.turn) : owner,
-    step: step?.kind === "thinking" ? undefined : step,
+    step: step?.kind === "thinking" || step?.kind === "update" ? undefined : step,
   }
 }
 
