@@ -16,29 +16,52 @@ import { IconWorld } from "../icons/heroicons.js"
 import { Logomark } from "../icons/logomark.js"
 import { Platform } from "../platform/platform.js"
 import { ChatChip } from "./chat-chip.js"
-import { AgentIcon, TaskIcon } from "./mention-icon.js"
+import { AgentIcon, RepositoryIcon, SkillIcon, TaskIcon } from "./mention-icon.js"
 
 export const appLink = "#ren-app:"
 
-export const agentLink = "#ren-agent:"
+export const mentionLink = "#ren-mention:"
+
+const mentionKinds = { "ren-agent": AgentIcon, agent: AgentIcon, skill: SkillIcon, repository: RepositoryIcon }
+
+export interface Mentioned {
+  readonly text: string
+  readonly kind: keyof typeof mentionKinds
+  readonly label: string
+}
+
+const isKind = (kind: string): kind is Mentioned["kind"] => Object.hasOwn(mentionKinds, kind)
 
 const agentMention = /@([^\s@()[\]][^@()[\]\n]*?) \(agent\)/gu
 
-// oxlint-disable-next-line ren/no-comments -- The composer sends a mentioned agent as `@Name (agent)`; this turns it back into a mention outside inline code, so the message shows it like the composer did.
-export const agentLinks = (markdown: string) =>
-  markdown.includes(" (agent)")
-    ? markdown
-        .split(/(`[^`\n]*`)/u)
-        .map((part, index) =>
-          index % 2 === 1
-            ? part
-            : part.replaceAll(
-                agentMention,
-                (_whole, name: string) => `[@${name}](${agentLink}${encodeURIComponent(name)})`,
-              ),
-        )
-        .join("")
-    : markdown
+const escaped = (text: string) => text.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+
+const linkOf = (mention: Mentioned) =>
+  `[${mention.label.replaceAll(/[[\]\\]/gu, "\\$&")}](${mentionLink}${mention.kind}:${encodeURIComponent(mention.text).replaceAll("(", "%28").replaceAll(")", "%29")})`
+
+// oxlint-disable-next-line ren/no-comments -- Turns what the composer sent for a mention back into a mention outside inline code, so the message shows it like the composer did: a Ren agent is sent as `@Name (agent)`, and the others are the `mentioned` texts.
+export const kindLinks = (markdown: string, mentioned: ReadonlyArray<Mentioned>) => {
+  if (!markdown.includes("@")) return markdown
+  const listed =
+    mentioned.length > 0
+      ? new RegExp(`(?<=^|\\s)(?:${mentioned.map((each) => escaped(each.text)).join("|")})(?![\\w-])`, "gu")
+      : undefined
+  return markdown
+    .split(/(`[^`\n]*`)/u)
+    .map((part, index) => {
+      if (index % 2 === 1) return part
+      const agents = part.replaceAll(agentMention, (whole, name: string) =>
+        linkOf({ text: whole, kind: "ren-agent", label: name }),
+      )
+      return listed
+        ? agents.replaceAll(listed, (text) => {
+            const mention = mentioned.find((each) => each.text === text)
+            return mention ? linkOf(mention) : text
+          })
+        : agents
+    })
+    .join("")
+}
 
 export const MarkdownScroll = createContext<((viewport: HTMLElement) => void) | undefined>(undefined)
 
@@ -118,16 +141,21 @@ export function LinkIcon(props: { href: string; streaming: boolean; className?: 
 }
 
 const mentionOf = (href: string, apps: ReadonlyArray<CatalogApp>, label: ReactNode) => {
-  if (!href.startsWith(appLink) && !href.startsWith(agentLink)) return null
-  if (href.startsWith(agentLink)) {
-    const name = decodeURIComponent(href.slice(agentLink.length))
+  if (href.startsWith(mentionLink)) {
+    const rest = href.slice(mentionLink.length)
+    const kind = rest.slice(0, rest.indexOf(":"))
+    const Icon = isKind(kind) ? mentionKinds[kind] : AgentIcon
     return (
-      <span data-agent-mention={name} className="font-semibold whitespace-nowrap text-link">
-        <AgentIcon aria-hidden className={inlineIcon} />
-        {name}
+      <span
+        data-mention-text={decodeURIComponent(rest.slice(kind.length + 1))}
+        className="font-semibold whitespace-nowrap text-link"
+      >
+        <Icon aria-hidden className={inlineIcon} />
+        {label}
       </span>
     )
   }
+  if (!href.startsWith(appLink)) return null
   const app = apps.find((each) => each.slug === href.slice(appLink.length))
   return app ? <AppMention app={app} /> : <span>{label}</span>
 }

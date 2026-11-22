@@ -74,7 +74,7 @@ import type { CatalogApp } from "../lib/apps.js"
 import { useCopy } from "../lib/use-copy.js"
 import { ImageThumbnail } from "./image-set.js"
 import { markdownClipboard } from "./markdown-clipboard.js"
-import { agentLinks, MarkdownContext, MarkdownLink } from "./markdown-link.js"
+import { kindLinks, MarkdownContext, MarkdownLink, type Mentioned } from "./markdown-link.js"
 
 export const blockImage = "max-h-96 max-w-full rounded-md border object-contain"
 export const inlineImage = "inline-block h-auto max-h-96 max-w-full object-contain align-middle"
@@ -423,7 +423,7 @@ const chipPunctuation = () => (tree: MarkdownNode) =>
     if (node.properties?.["data-chip"] !== undefined) return
     const children = node.children ?? []
     for (const [index, child] of children.entries())
-      if (child.tagName === "a" && /^#ren-(?:app|agent):/u.test(String(child.properties?.href)))
+      if (child.tagName === "a" && /^#ren-(?:app|mention):/u.test(String(child.properties?.href)))
         wrapChip(children, index)
   })
 
@@ -503,6 +503,7 @@ export function Markdown(props: {
   source?: "user" | undefined
   className?: string | undefined
   apps?: ReadonlyArray<CatalogApp> | undefined
+  mentioned?: ReadonlyArray<Mentioned> | undefined
   workspaceImage?: ((path: string, alt: string, options: { inline: boolean }) => ReactNode) | undefined
   fileReference?: ((text: string, code: ReactNode) => ReactNode) | undefined
 }) {
@@ -559,7 +560,9 @@ export function Markdown(props: {
           linkSafety={{ enabled: false }}
           icons={streamdownIcons}
         >
-          {Fences.mapProse(mentionLinks(text, apps), (prose) => agentLinks(prose).replaceAll(imageLine, "$1\n"))}
+          {Fences.mapProse(mentionLinks(text, apps), (prose) =>
+            kindLinks(prose, props.mentioned ?? []).replaceAll(imageLine, "$1\n"),
+          )}
         </Streamdown>
       </div>
     </MarkdownContext>
