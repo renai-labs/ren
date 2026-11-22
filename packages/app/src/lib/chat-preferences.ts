@@ -20,6 +20,8 @@ export const fileWrap = Preference.make("chat.file-wrap.v1", Schema.Boolean, fal
 
 export const diffStyle = Preference.make("chat.diff-style.v1", Schema.Literals(["unified", "split"]), "unified")
 
+export const diffWrap = Preference.make("chat.diff-wrap.v1", Schema.Boolean, true)
+
 export const backgroundActivity = Preference.make(
   "chat.background-activity.v1",
   Schema.Literals(["off", "left", "center", "right"]),

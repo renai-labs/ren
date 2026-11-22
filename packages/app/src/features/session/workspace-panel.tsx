@@ -200,7 +200,15 @@ function TabBody(props: {
   const request = props.tab.request
   switch (props.tab.kind) {
     case "changes":
-      return <ChangesTab root={props.root} messages={props.messages} request={request} projects={props.projects} />
+      return (
+        <ChangesTab
+          root={props.root}
+          messages={props.messages}
+          request={request}
+          projects={props.projects}
+          onOpenFile={(path) => props.onOpenFile(path, { pin: true })}
+        />
+      )
     case "activity":
       return (
         <ActivityTab
