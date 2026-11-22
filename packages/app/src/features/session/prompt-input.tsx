@@ -82,6 +82,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
+import { useHeld } from "../../lib/use-held.js"
 import { useRoom } from "../../lib/use-room.js"
 import { IconAgent } from "../../icons/heroicons.js"
 import { Drafts } from "../../lib/drafts.js"
@@ -553,10 +554,15 @@ function SuggestionMenu(props: {
   const suggest = props.suggest
   const choose = props.onChoose
   const room = useRoom(props.anchor, { open: suggest.open, prefer: props.below ? "below" : "above", want: 304 })
+  // oxlint-disable-next-line ren/no-comments -- While a search runs, the menu keeps the last results it showed, hidden under Searching…, so it holds its height instead of following each half-finished query.
+  const items = useHeld(suggest.items, {
+    holding: suggest.searching,
+    key: (list) => list.map((item) => item.value).join("\n"),
+  })
   if (!suggest.open) return null
-  const listed = [...new Set(suggest.items.map((item) => item.group))].map((heading) => ({
+  const listed = [...new Set(items.map((item) => item.group))].map((heading) => ({
     heading,
-    items: suggest.items.filter((item) => item.group === heading),
+    items: items.filter((item) => item.group === heading),
   }))
   return (
     <Command
@@ -565,34 +571,27 @@ function SuggestionMenu(props: {
       className={cn(
         "absolute inset-x-0 z-20 flex h-auto w-full flex-col rounded-xl bg-popover shadow-overlay",
         (room?.below ?? props.below) ? "top-full mt-2" : "bottom-full mb-2",
+        suggest.searching && "min-h-11",
       )}
       // oxlint-disable-next-line react/forbid-component-props -- the menu is only as tall as the room its pane leaves it
       style={room ? { maxHeight: room.height } : undefined}
     >
-      <CommandList className="max-h-72 min-h-0 flex-1" label={suggest.label}>
-        {suggest.searching && listed.length === 0 ? (
-          <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
-            <Spinner aria-hidden className="size-3" />
-            Searching
-          </div>
-        ) : null}
-        {listed.map((group, index) => (
-          <CommandGroup
-            key={group.heading ?? ""}
-            heading={
-              group.heading ? (
-                <span className="flex items-center justify-between gap-2">
-                  {group.heading}
-                  {suggest.searching && index === 0 ? (
-                    <span className="flex items-center gap-1">
-                      <Spinner aria-hidden className="size-3" />
-                      Searching
-                    </span>
-                  ) : null}
-                </span>
-              ) : undefined
-            }
-          >
+      {suggest.searching ? (
+        <output className="absolute inset-x-0 top-0 z-10 flex animate-in items-center gap-2 px-3.5 py-3 text-sm text-muted-foreground delay-100 duration-150 fade-in-0 fill-mode-backwards motion-reduce:animate-none">
+          <Spinner aria-hidden className="size-3.5" />
+          Searching…
+        </output>
+      ) : null}
+      <CommandList
+        className={cn(
+          "max-h-72 min-h-0 flex-1 transition-opacity duration-150 ease-out motion-reduce:transition-none",
+          suggest.searching && "opacity-0",
+        )}
+        label={suggest.label}
+        inert={suggest.searching}
+      >
+        {listed.map((group) => (
+          <CommandGroup key={group.heading ?? ""} heading={group.heading}>
             {group.items.map((item) => (
               <CommandItem
                 key={item.value}

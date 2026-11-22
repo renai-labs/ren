@@ -134,6 +134,24 @@ describe("Mentions groups", () => {
     expect(listed.filter((entry) => entry.group === "Files")).toHaveLength(5)
   })
 
+  test("ranks an exact name first, then names that start with the query, then other matches, keeping order within each", () => {
+    const chat = (id: string, label: string): Mentions.Item => ({ kind: "chat", id, label, handle: id })
+    const items = [
+      chat("ses_1", "Single-line activity preview"),
+      chat("ses_2", "Mobbin screens for onboarding"),
+      app("Mobbin"),
+      chat("ses_3", "Compare mobbin and refero"),
+      app("Mobbin Flows"),
+    ]
+    expect(Mentions.rank(items, (item) => item, "mobbin").map((item) => item.id)).toEqual([
+      "app_Mobbin",
+      "ses_2",
+      "app_Mobbin Flows",
+      "ses_3",
+      "ses_1",
+    ])
+  })
+
   test("finds a file mention that is already in the text by its pill", () => {
     const found = Mentions.scan("Read @  src/app.ts and @  General", [general])
     expect(found.map((token) => Mentions.key(token.item))).toEqual(["file:src/app.ts", "agent:general"])

@@ -43,7 +43,7 @@ export function useApps(
   return {
     byId,
     apps: [...byId.values()],
-    searching: searchable && found.isFetching,
+    searching: searchable && found.isFetching && (found.isPlaceholderData || found.isPending),
     managed: (appId: string) => managed.has(appId),
     mentionOf: (appId: string): App | undefined => {
       const app = byId.get(appId)
