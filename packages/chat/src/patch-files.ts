@@ -14,6 +14,7 @@ export interface Changed {
   readonly additions: number
   readonly deletions: number
   readonly status: FileDiff.Status
+  readonly snapshot?: boolean
 }
 
 export interface File {
@@ -23,6 +24,7 @@ export interface File {
   readonly deletions: number
   readonly view: FileDiff.View
   readonly contents: { readonly before: string; readonly after: string } | undefined
+  readonly snapshot: boolean
 }
 
 export interface Group {
@@ -65,6 +67,7 @@ export const patchFile = (value: unknown): File | undefined => {
       return cached.view
     },
     contents: FileDiff.completePatchContents(value.patch),
+    snapshot: value.snapshot === true,
   }
   parsed.set(value, file)
   return file
@@ -78,12 +81,22 @@ const groupType = (first: File, last: File): Kind => {
   return first.type === "add" ? "add" : "update"
 }
 
+// oxlint-disable-next-line ren/no-comments -- A write replaces the whole file, so the diff starts at the last one: earlier changes to the file are inside its contents.
 const group = (path: string, files: ReadonlyArray<File>): Group | undefined => {
   const first = files.at(0)
   const last = files.at(-1)
   if (!first || !last) return
   const type = groupType(first, last)
-  const views = FileDiff.merge(files.map((file) => file.view))
+  const views = FileDiff.merge(
+    files
+      .slice(
+        Math.max(
+          0,
+          files.findLastIndex((file) => file.snapshot),
+        ),
+      )
+      .map((file) => file.view),
+  )
   return {
     path,
     type,
@@ -150,7 +163,8 @@ export const toolFiles = (tool: SessionMessage.Tool): ReadonlyArray<unknown> => 
         patch: createTwoFilesPatch(path, path, "", input.content),
         additions: input.content.split("\n").length - Number(input.content.endsWith("\n")),
         deletions: 0,
-        status: "modified",
+        status: "added",
+        snapshot: true,
       },
     ]
   if (tool.state.status === "completed") generated.set(tool, result)
