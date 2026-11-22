@@ -384,7 +384,7 @@ function BlockView(props: {
     return (
       <Message>
         <MessageContent className="gap-1">
-          <TurnLine transcript={props.transcript} turns={props.context.turns} />
+          <TurnLine transcript={props.transcript} turns={props.context.turns} turn={block.turn} />
           <Narration text={block.narration} />
         </MessageContent>
       </Message>
@@ -524,26 +524,30 @@ const liveOf = (
   const waiting = props.starting === true || props.waiting === true
   const newest = blocks.findLast((block) => block.kind === "user")
   const pending = waiting && newest?.kind === "user" ? newest.message.id : undefined
-  return { turn: props.busy ? props.activeMessageID : pending, line: liveLine(props, turns) !== undefined }
+  const turn = props.busy ? props.activeMessageID : pending
+  return { turn, line: liveLine(props, turns, turn) !== undefined }
 }
 
+// oxlint-disable-next-line ren/no-comments -- The line reads the turn it stands in, so a message just sent shows Thinking rather than the last step of the turn before it.
 const liveLine = (
   props: TranscriptProps,
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
+  turn: string | undefined,
 ): LiveLine | undefined => {
   if (props.starting) return { text: "Starting your computer", kind: "starting" }
   if (props.asking) return { text: "Waiting for your answer", kind: "waiting" }
-  return Activity.current(turns.get(props.activeMessageID ?? "") ?? [])
+  return Activity.current(turns.get(turn ?? "") ?? [])
 }
 
 function TurnLine(props: {
   transcript: TranscriptProps
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+  turn: string | undefined
 }) {
   const openPanel = useOpenActivity()
   const transcript = props.transcript
-  const turn = transcript.activeMessageID
-  const line = liveLine(transcript, props.turns)
+  const turn = props.turn
+  const line = liveLine(transcript, props.turns, turn)
   if (!line) return null
   return (
     <LiveActivity line={line} onOpen={openPanel && turn ? () => openPanel({ kind: "activity", turn }) : undefined} />
@@ -562,7 +566,7 @@ function LiveMarker(props: {
     <MessageScrollerItem messageId="working" aria-hidden className="invisible">
       <Message>
         <MessageContent>
-          <TurnLine transcript={transcript} turns={props.turns} />
+          <TurnLine transcript={transcript} turns={props.turns} turn={transcript.activeMessageID} />
         </MessageContent>
       </Message>
     </MessageScrollerItem>
