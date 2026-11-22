@@ -43,6 +43,19 @@ export const source = (profile: AppProfile, spaceId: string) => {
   return profile.hiddenSpaces ? "From another space" : "Not in any space"
 }
 
+// oxlint-disable-next-line ren/no-comments -- Managed by Ren is off where a connected own account signs in to the MCP it replaces; a managed MCP that replaces none stays on beside it.
+export const replacesManaged = (app: Pick<CatalogApp, "mcps">, profiles: ReadonlyArray<AppProfile>) => {
+  const signedIn = new Set(
+    profiles.flatMap((profile) =>
+      profile.items.flatMap((item) => ("mcp" in item.item && item.status === "ok" ? [item.item.mcp] : [])),
+    ),
+  )
+  const managed = Object.values(app.mcps ?? {}).flatMap((mcp) =>
+    mcp.transport.type === "managed" ? [mcp.transport] : [],
+  )
+  return managed.length > 0 && managed.every((transport) => transport.replaces && signedIn.has(transport.replaces))
+}
+
 export const categoryLabel = (slug: string) => slug.charAt(0).toUpperCase() + slug.slice(1).replaceAll("-", " ")
 
 export const listsSpace = Apps.listsSpace

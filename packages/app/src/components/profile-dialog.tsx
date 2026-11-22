@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/d
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia } from "@ren/ui/empty"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldGroup,
@@ -28,6 +29,7 @@ import {
   FieldLegend,
   FieldSeparator,
   FieldSet,
+  FieldTitle,
 } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { RadioGroup, RadioGroupItem } from "@ren/ui/radio-group"
@@ -57,6 +59,7 @@ import {
   listNames,
   listsSpace,
   reachedSpaces,
+  replacesManaged,
   signsIn,
   slugOf,
   statusLabel,
@@ -409,15 +412,48 @@ function AddStep(props: {
       />
     )
   if (props.mode === "reuse") return <NewStep {...state} others={profiles} reuse={spare} start="connect" />
-  if (here.some((profile) => gaps(profile).length === 0)) return <WorkingState {...state} />
-  if (options.length > 0) return <ExistingState {...state} options={options} />
-  if (credits) return <CreditsState {...state} credits={credits} />
-  if (locked) return <LockedState {...state} locked={locked} />
+  return (
+    <ResolveState
+      {...state}
+      profiles={profiles}
+      options={options}
+      locked={locked}
+      credits={credits !== undefined}
+      spare={spare}
+    />
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- Whether the space picks between Managed by Ren and its own accounts: the app has Managed by Ren, and either it is in use, the app is not in the space yet, or an own account replaces it.
+const managedChoiceOf = (input: { app: App; here: ReadonlyArray<AppProfile>; credits: boolean }) => {
+  if (!hasManaged(input.app) || isBundle(input.app)) return false
+  const connected = input.here.filter((profile) => gaps(profile).length === 0)
+  if (connected.length > 0) return replacesManaged(input.app, connected)
+  return input.credits || input.here.length === 0
+}
+
+// oxlint-disable-next-line ren/no-comments -- The state of the app in the space: own accounts connected, Managed by Ren (in use, or not added yet), accounts elsewhere, a locked account, or nothing yet.
+function ResolveState(
+  props: StateProps & {
+    profiles: ReadonlyArray<AppProfile>
+    options: ReadonlyArray<AppProfile>
+    locked: AppProfile | undefined
+    credits: boolean
+    spare: AppProfile | undefined
+  },
+) {
+  const here = props.here
+  const app = props.app
+  const managed = managedChoiceOf({ app, here, credits: props.credits })
+  if (managed) return <ManagedState {...props} active={props.credits} />
+  if (here.some((profile) => gaps(profile).length === 0)) return <WorkingState {...props} />
+  if (props.options.length > 0) return <ExistingState {...props} />
+  if (props.locked) return <LockedState {...props} locked={props.locked} />
   return (
     <NewStep
-      {...state}
-      others={profiles}
-      reuse={spare}
+      {...props}
+      others={props.profiles}
+      reuse={props.spare}
       start={here.length === 0 && hasManaged(app) ? "add" : "connect"}
     />
   )
@@ -439,7 +475,7 @@ function SpaceAccounts(props: StateProps) {
 
 const previewCaption = (part: BundlePart, from: Target) => {
   if (part.status !== "absent") return `Already in ${from.name}`
-  if (hasManaged(part.app)) return "Ren credits"
+  if (hasManaged(part.app)) return "Managed by Ren"
   return signsInFirst(part.app, undefined) ? "Needs sign-in" : "Ready"
 }
 
@@ -447,7 +483,7 @@ const addedCaption = (part: BundlePart, from: Target) => {
   if (part.status === "absent") return `Not in ${from.name}`
   if (part.status === "expired") return "Sign-in expired"
   if (part.status === "missing") return "Needs sign-in"
-  if (part.status === "credits") return "Ren credits"
+  if (part.status === "credits") return "Managed by Ren"
   const holder = part.here.flatMap((profile) => profile.items).find((item) => item.holder)?.holder
   return holder ? `Connected as ${holder.name}` : "Connected"
 }
@@ -591,8 +627,10 @@ function WorkingAccounts(props: StateProps) {
 const addsLine = (props: { app: App }) =>
   isBundle(props.app) ? `Adds ${plural(props.app.dependsOn.length, "app")}` : undefined
 
+// oxlint-disable-next-line ren/no-comments -- An own-account app with usable accounts elsewhere: the same connection list as Managed by Ren, with one of them or a new account.
 function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> }) {
-  const [picked, setPicked] = useState<string>()
+  const first = props.options.at(0)
+  const [choice, setChoice] = useState(first?.id ?? newChoice)
   const [confirming, setConfirming] = useState(false)
   const { api } = RouterContext.useRouterContext()
   const access = useMutation(api["app-profile"].access.mutationOptions())
@@ -609,21 +647,20 @@ function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> 
       (error: unknown) =>
         toast.error(`Couldn’t use ${profile.name} in ${from.name}`, { description: errorMessage(error) }),
     )
-  const choice = props.options.find((profile) => profile.id === picked) ?? props.options.at(0)
-  if (!choice) return null
+  const picked = props.options.find((profile) => profile.id === choice)
   const button = (
     <Button type="submit" className={primary} disabled={pending}>
       {pending ? <Spinner data-icon="inline-start" /> : null}
-      Use in {from.name}
+      {picked ? `Use in ${from.name}` : "Connect account"}
     </Button>
   )
-  if (confirming)
+  if (confirming && picked)
     return (
       <Screen
         app={props.app}
-        title={`Use ${choice.name} in ${from.name}?`}
-        description={`Everyone in ${from.name} (${plural(from.members, "person", "people")}) can then use it. ${staysIn(choice)}`}
-        onSubmit={() => addHere(choice)}
+        title={`Use ${picked.name} in ${from.name}?`}
+        description={`Everyone in ${from.name} (${plural(from.members, "person", "people")}) can then use it. ${staysIn(picked)}`}
+        onSubmit={() => addHere(picked)}
         action={
           <>
             {button}
@@ -640,42 +677,42 @@ function ExistingState(props: StateProps & { options: ReadonlyArray<AppProfile> 
       title={props.title}
       description={addsLine(props) ?? <StatusLine status={props.status}>{statusLabel[props.status]}</StatusLine>}
       onSubmit={() => {
-        if (!from.private && from.members > 1) setConfirming(true)
-        else addHere(choice)
+        if (!picked) return props.onMode("reuse")
+        if (!from.private && from.members > 1) return setConfirming(true)
+        addHere(picked)
       }}
       action={
         <>
           {button}
-          <Button type="button" variant="ghost" className={secondary} onClick={() => props.onMode("reuse")}>
-            {isBundle(props.app) ? "New account" : "Connect new"}
+          <Button type="button" variant="ghost" className={secondary} onClick={props.onClose}>
+            Cancel
           </Button>
         </>
       }
     >
       <FieldSet className="w-full text-left">
-        <FieldLegend variant="label">You can use an existing {props.app.name} account</FieldLegend>
+        <FieldLegend variant="label">Connection</FieldLegend>
         <RadioGroup
-          value={choice.id}
+          value={choice}
           onValueChange={(value) => {
-            if (typeof value === "string") setPicked(value)
+            if (typeof value === "string") setChoice(value)
           }}
-          className="gap-0 divide-y overflow-hidden rounded-lg border bg-card"
         >
           {props.options.map((profile) => (
-            <FieldLabel
+            <ConnectionOption
               key={profile.id}
-              htmlFor={`use-${profile.id}`}
-              className="flex min-h-14 w-full items-center gap-3 px-3 py-2 font-normal"
-            >
-              <RadioGroupItem id={`use-${profile.id}`} value={profile.id} />
-              <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="truncate text-sm">{profile.name}</span>
-                <span className="flex flex-wrap gap-1">
-                  <SpacePills profile={profile} />
-                </span>
-              </span>
-            </FieldLabel>
+              value={profile.id}
+              title={profile.name}
+              caption={accountCaption(profile)}
+              inUse={false}
+            />
           ))}
+          <ConnectionOption
+            value={newChoice}
+            title={isBundle(props.app) ? "New account" : "Connect a new account"}
+            caption={`Sign in with another ${props.app.name} account.`}
+            inUse={false}
+          />
         </RadioGroup>
       </FieldSet>
     </Screen>
@@ -688,30 +725,265 @@ function staysIn(profile: AppProfile) {
   return spaces.length > 0 ? `It stays in ${spaces.join(", ")}.` : ""
 }
 
-function CreditsState(props: StateProps & { credits: AppProfile }) {
+const managedChoice = "managed"
+
+const newChoice = "new"
+
+function ConnectionOption(props: {
+  value: string
+  title: ReactNode
+  caption: ReactNode
+  inUse: boolean
+  disabled?: boolean | undefined
+}) {
+  const id = `connection-${props.value}`
+  return (
+    <FieldLabel htmlFor={id}>
+      <Field orientation="horizontal" data-disabled={props.disabled}>
+        <FieldContent>
+          <FieldTitle>
+            {props.title}
+            {props.inUse ? (
+              <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                <StatusDot status="connected" />
+                In use
+              </span>
+            ) : null}
+          </FieldTitle>
+          <FieldDescription>{props.caption}</FieldDescription>
+        </FieldContent>
+        <RadioGroupItem id={id} value={props.value} disabled={props.disabled} />
+      </Field>
+    </FieldLabel>
+  )
+}
+
+const accountCaption = (profile: AppProfile) => {
+  const holder = profile.items.find((item) => item.holder)?.holder
+  const where = reachedSpaces(profile)
+  return [
+    holder ? `Connected as ${holder.name}` : "Your account",
+    where.length > 0 ? `in ${listNames(where)}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ")
+}
+
+const leavesSpace = (profile: AppProfile, from: Target) =>
+  profile.kind === "shared" &&
+  !profile.allSpaces &&
+  profile.spaces.some((space) => space.id === from.spaceId) &&
+  profile.canRemove.some((shape) => shape === "joined" || shape === "shared")
+
+type Switch = { readonly to: "managed" } | { readonly to: "account"; readonly profile: AppProfile }
+
+function useConnectionSwitch(props: StateProps & { inUse: ReadonlyArray<AppProfile> }) {
+  const { api } = RouterContext.useRouterContext()
+  const addManaged = useAddManaged()
+  const access = useMutation(api["app-profile"].access.mutationOptions())
+  const promote = useMutation(api["app-profile"].promote.mutationOptions())
+  const adding = useMutation({ mutationFn: () => addManaged(props.app, props.from) })
+  const from = props.from
+  const app = props.app
+  const done = (message: string) => () => {
+    toast.success(message)
+    props.onClose()
+  }
+  const failed = (message: string) => (error: unknown) => toast.error(message, { description: errorMessage(error) })
+  return {
+    pending: access.isPending || promote.isPending || adding.isPending,
+    addManaged: () =>
+      adding.mutate(undefined, {
+        onSuccess: done(`${app.name} added to ${from.name}`),
+        onError: failed(`Couldn’t add ${app.name} to ${from.name}`),
+      }),
+    toManaged: () =>
+      void Promise.all(
+        props.inUse.map((profile) => access.mutateAsync({ id: profile.id, remove: [from.spaceId] })),
+      ).then(done(`${from.name} uses Managed by Ren for ${app.name}`), failed("Couldn’t switch to Managed by Ren")),
+    toAccount: (profile: AppProfile) =>
+      void (
+        profile.kind === "private"
+          ? promote.mutateAsync({ id: profile.id, spaceId: from.spaceId })
+          : access.mutateAsync({ id: profile.id, add: [from.spaceId] })
+      ).then(
+        done(`${from.name} uses ${profile.name} for ${app.name}`),
+        failed(`Couldn’t use ${profile.name} in ${from.name}`),
+      ),
+  }
+}
+
+const switchCopy = (input: { change: Switch; from: Target; app: App; inUse: ReadonlyArray<AppProfile> }) => {
+  const from = input.from
+  if (input.change.to === "managed") {
+    const names = listNames(input.inUse.map((profile) => profile.name))
+    const others = [...new Set(input.inUse.flatMap(reachedSpaces))].filter((name) => name !== from.name)
+    return {
+      title: `Switch ${from.name} to Managed by Ren?`,
+      description: [
+        `${names} ${input.inUse.length === 1 ? "leaves" : "leave"} ${from.name}. Chats there use Ren’s ${input.app.name} account, paid with Ren credits.`,
+        others.length > 0 ? `${input.inUse.length === 1 ? "It stays" : "They stay"} in ${listNames(others)}.` : "",
+      ].join(" "),
+      action: "Switch to Managed by Ren",
+    }
+  }
+  const profile = input.change.profile
+  return {
+    title: `Switch ${from.name} to ${profile.name}?`,
+    description: [
+      input.inUse.length === 0
+        ? `Chats in ${from.name} stop using Ren credits for ${input.app.name}.`
+        : `Chats in ${from.name} use it beside ${listNames(input.inUse.map((each) => each.name))}.`,
+      from.private ? "" : `Everyone in ${from.name} (${plural(from.members, "person", "people")}) can use it.`,
+      staysIn(profile),
+    ].join(" "),
+    action: "Switch account",
+  }
+}
+
+const currentLabel = (current: string, inUse: ReadonlyArray<AppProfile>) =>
+  current === managedChoice ? statusLabel.credits : "Connected · your own account"
+
+function submitChoice(input: {
+  choice: string
+  current: string | undefined
+  picked: AppProfile | undefined
+  asks: boolean
+  onClose: () => void
+  onNew: () => void
+  onConfirm: (change: Switch) => void
+  onAddManaged: () => void
+  onAccount: (profile: AppProfile) => void
+}) {
+  if (input.choice === input.current) return input.onClose()
+  if (input.choice === newChoice) return input.onNew()
+  if (input.choice === managedChoice) return input.current ? input.onConfirm({ to: "managed" }) : input.onAddManaged()
+  if (!input.picked) return input.onClose()
+  if (input.asks) return input.onConfirm({ to: "account", profile: input.picked })
+  input.onAccount(input.picked)
+}
+
+// oxlint-disable-next-line ren/no-comments -- An app with Managed by Ren: one list of every way the space can connect, with the one in use marked. Nothing changes until the person picks another way and confirms it.
+function ManagedState(
+  props: StateProps & {
+    options: ReadonlyArray<AppProfile>
+    active: boolean
+  },
+) {
+  const from = props.from
+  const app = props.app
+  const inUse = props.here.filter((profile) => gaps(profile).length === 0)
+  const current = inUse.at(0)?.id ?? (props.active ? managedChoice : undefined)
+  const [choice, setChoice] = useState(current ?? managedChoice)
+  const [confirming, setConfirming] = useState<Switch>()
+  const change = useConnectionSwitch({ ...props, inUse })
+  const picked = props.options.find((profile) => profile.id === choice)
+  const locked =
+    current !== undefined && current !== managedChoice && !inUse.every((profile) => leavesSpace(profile, from))
+  const submit = () =>
+    submitChoice({
+      choice,
+      current,
+      picked,
+      asks: current !== undefined || (!from.private && from.members > 1),
+      onClose: props.onClose,
+      onNew: () => props.onMode(props.active ? "reuse" : "fresh"),
+      onConfirm: setConfirming,
+      onAddManaged: change.addManaged,
+      onAccount: change.toAccount,
+    })
+  const spinner = change.pending ? <Spinner data-icon="inline-start" /> : null
+  if (confirming) {
+    const copy = switchCopy({ change: confirming, from, app, inUse })
+    return (
+      <Screen
+        app={app}
+        title={copy.title}
+        description={copy.description}
+        onSubmit={() => (confirming.to === "managed" ? change.toManaged() : change.toAccount(confirming.profile))}
+        action={
+          <>
+            <Button type="submit" className={primary} disabled={change.pending}>
+              {spinner}
+              {copy.action}
+            </Button>
+            <Button type="button" variant="ghost" className={secondary} onClick={() => setConfirming(undefined)}>
+              Cancel
+            </Button>
+          </>
+        }
+      />
+    )
+  }
   return (
     <Screen
-      app={props.app}
+      app={app}
       title={props.title}
-      description={<StatusLine status="credits">Works on Ren credits</StatusLine>}
-      onSubmit={props.onClose}
+      description={
+        current ? (
+          <StatusLine status="connected">{currentLabel(current, inUse)}</StatusLine>
+        ) : (
+          `Choose how ${from.name} connects to ${app.name}.`
+        )
+      }
+      onSubmit={submit}
       action={
         <>
-          <Button type="submit" className={primary}>
-            Done
+          <Button type="submit" className={primary} disabled={change.pending}>
+            {spinner}
+            {choiceButton({ choice, current, from })}
           </Button>
-          <Button type="button" variant="ghost" className={secondary} onClick={() => props.onBegin(props.credits)}>
-            Connect my own
+          <Button type="button" variant="ghost" className={secondary} onClick={props.onClose}>
+            Cancel
           </Button>
         </>
       }
     >
-      <p className="text-sm text-balance text-muted-foreground">
-        Connect your own {props.app.name} account to use your plan in place of Ren credits.
-      </p>
-      <SpaceAccounts {...props} />
+      <FieldSet className="w-full text-left">
+        <FieldLegend variant="label">Connection</FieldLegend>
+        <RadioGroup
+          value={choice}
+          onValueChange={(value) => {
+            if (typeof value === "string") setChoice(value)
+          }}
+        >
+          <ConnectionOption
+            value={managedChoice}
+            title="Managed by Ren"
+            caption={
+              locked
+                ? `Remove your account from ${from.name} in its settings to switch back.`
+                : "Paid with Ren credits. Nothing to connect."
+            }
+            inUse={current === managedChoice}
+            disabled={locked}
+          />
+          {[...inUse, ...props.options].map((profile) => (
+            <ConnectionOption
+              key={profile.id}
+              value={profile.id}
+              title={profile.name}
+              caption={accountCaption(profile)}
+              inUse={profile.id === current}
+            />
+          ))}
+          <ConnectionOption
+            value={newChoice}
+            title="Connect a new account"
+            caption={`Use your own ${app.name} plan instead of Ren credits.`}
+            inUse={false}
+          />
+        </RadioGroup>
+      </FieldSet>
     </Screen>
   )
+}
+
+const choiceButton = (input: { choice: string; current: string | undefined; from: Target }) => {
+  if (input.choice === input.current) return "Done"
+  if (input.choice === newChoice) return "Connect account"
+  if (input.choice === managedChoice) return input.current ? "Switch to Managed by Ren" : `Add to ${input.from.name}`
+  return input.current ? "Switch account" : `Use in ${input.from.name}`
 }
 
 function askWho(profile: AppProfile, owner: string | undefined) {
@@ -1106,7 +1378,9 @@ function EditStep(props: {
       }
     >
       <FieldGroup className="w-full gap-6">
-        {profile.items.length > 0 ? <ConnectionField profile={profile} onConnection={props.onConnection} /> : null}
+        {profile.items.length > 0 ? (
+          <ConnectionField app={props.app} profile={profile} onConnection={props.onConnection} />
+        ) : null}
         <Field className="text-left">
           <FieldLabel htmlFor="profile-name">Name</FieldLabel>
           <Input id="profile-name" required value={edit.name} onChange={(event) => edit.setName(event.target.value)} />
@@ -1127,8 +1401,15 @@ function EditStep(props: {
   )
 }
 
-function ConnectionField(props: { profile: AppProfile; onConnection: () => void }) {
-  const missing = gaps(props.profile).length > 0
+const connectionRow = (status: Status, profile: AppProfile) => {
+  if (status === "credits") return { label: "Managed by Ren", action: "Use own account" }
+  if (gaps(profile).length > 0) return { label: "Not connected", action: "Connect" }
+  return { label: connectionLabel(profile), action: "Manage" }
+}
+
+function ConnectionField(props: { app: App; profile: AppProfile; onConnection: () => void }) {
+  const status = statusOf(props.app, [props.profile])
+  const row = connectionRow(status, props.profile)
   return (
     <Field className="text-left">
       <FieldLabel>Connection</FieldLabel>
@@ -1137,9 +1418,9 @@ function ConnectionField(props: { profile: AppProfile; onConnection: () => void 
         onClick={props.onConnection}
         className="group/row flex h-11 justify-start gap-3 border-border bg-card px-3 text-left font-normal hover:bg-muted/60 hover:text-inherit focus-visible:border-border active:not-aria-[haspopup]:scale-100"
       >
-        <span aria-hidden className={cn("size-2 shrink-0 rounded-full", missing ? "bg-chart-3" : "bg-chart-2")} />
-        <span className="flex-1 truncate">{connectionLabel(props.profile)}</span>
-        <span className="text-xs text-muted-foreground">{missing ? "Connect" : "Manage"}</span>
+        <StatusDot status={status} />
+        <span className="flex-1 truncate">{row.label}</span>
+        <span className="text-xs text-muted-foreground">{row.action}</span>
         <IconChevronRight className="text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
       </Button>
     </Field>
@@ -1318,7 +1599,12 @@ function ConnectStep(props: {
     <Screen
       {...screen}
       onSubmit={submit}
-      note={oauthItem ? `You’ll sign in to ${props.app.name} in a small window, then come back here.` : undefined}
+      note={[
+        status === "credits" ? "Once it’s connected, your account replaces Managed by Ren." : undefined,
+        oauthItem ? `You’ll sign in to ${props.app.name} in a small window, then come back here.` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       action={
         <>
           {saveKey.error ? <FieldError className="text-center">{errorMessage(saveKey.error)}</FieldError> : null}
