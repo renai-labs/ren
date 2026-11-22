@@ -90,7 +90,22 @@ function FileTree({
   useEffect(() => {
     tree.model.resetPaths(key ? key.split("\n") : [])
   }, [tree.model, key])
-  return <FileTreePrimitive data-slot="file-tree" model={tree.model} className={cn(treeClass, className)} />
+  return (
+    <div
+      className="contents"
+      // oxlint-disable-next-line ren/no-comments -- Selection reports only a change, so a click on the file already selected is heard here to choose it again.
+      ref={(node) => {
+        if (!node) return
+        const click = (event: Event) => {
+          if (selected && rowPath(event) === selected) onSelect(selected)
+        }
+        node.addEventListener("click", click)
+        return () => node.removeEventListener("click", click)
+      }}
+    >
+      <FileTreePrimitive data-slot="file-tree" model={tree.model} className={cn(treeClass, className)} />
+    </div>
+  )
 }
 
 function TreeAction(props: { label: string; icon: ReactNode; onClick: () => void }) {
