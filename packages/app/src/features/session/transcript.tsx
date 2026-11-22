@@ -53,7 +53,7 @@ import { MessagesSpinner } from "../../components/chat-skeleton.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { TranscriptScroll } from "../../lib/transcript-scroll.js"
 import { useNow } from "../../lib/use-now.js"
-import { LiveActivity, Narration, UpdateLine, type LiveLine } from "./live-activity.js"
+import { LiveActivity, Narration, type LiveLine } from "./live-activity.js"
 import { useOpenActivity } from "./open-panel.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { ChannelMark } from "../../components/channel-mark.js"
@@ -339,19 +339,15 @@ function TurnSteps(props: {
 }) {
   const openPanel = useOpenActivity()
   const turn = props.block.turn
-  const latest = TranscriptBlocks.narration(props.block.steps).at(-1)
   return (
     <Message>
       <MessageContent>
         {props.folded ? (
-          <div className="flex flex-col gap-1">
-            <Steps
-              steps={props.block.steps}
-              workedFor={props.workedFor}
-              onOpen={props.simple && openPanel ? () => openPanel({ kind: "activity", turn }) : undefined}
-            />
-            {props.simple && latest ? <UpdateLine text={latest.text} /> : null}
-          </div>
+          <Steps
+            steps={props.block.steps}
+            workedFor={props.workedFor}
+            onOpen={props.simple && openPanel ? () => openPanel({ kind: "activity", turn }) : undefined}
+          />
         ) : (
           <div className="flex flex-col gap-3">
             <StepRuns steps={props.block.steps} />
