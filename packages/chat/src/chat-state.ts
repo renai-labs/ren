@@ -40,6 +40,8 @@ export interface State {
   readonly connection: number
   readonly activeOverlay: ReadonlyMap<string, Activity | undefined> | undefined
   readonly pendingOverlay: Readonly<Record<string, ReadonlyMap<string, PendingUpdate>>>
+  // oxlint-disable-next-line ren/no-comments -- Queued prompts the person moved (Send now, back to the queue) by inbox ID, until the prompt leaves the inbox or the move fails: the brain's reads and events can lag behind the move, and none of them takes the prompt back to its old place.
+  readonly redirects: ReadonlyMap<string, SessionInbox.Delivery>
 }
 
 export const empty: State = {
@@ -61,6 +63,7 @@ export const empty: State = {
   connection: 0,
   activeOverlay: undefined,
   pendingOverlay: {},
+  redirects: new Map(),
 }
 
 const none: ReadonlyArray<never> = []
