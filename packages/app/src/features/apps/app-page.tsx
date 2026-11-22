@@ -35,6 +35,7 @@ import { Spinner } from "@ren/ui/spinner"
 import { AppDetailFrame, AppDetailSample, AppDetailsSample, AppHeader } from "../../components/app-detail.js"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
+import { ReadMore } from "../../components/read-more.js"
 import { errorMessage } from "../../lib/errors.js"
 import { AccountList, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
@@ -449,7 +450,7 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
           <div className="flex flex-col gap-10">
             <ExamplePrompts app={app} onStart={first ? (prompt) => start(first.id, prompt) : undefined} />
             {body && body !== app.description ? (
-              <p className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</p>
+              <ReadMore className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</ReadMore>
             ) : null}
             <AppAccounts app={app} onProfile={setEditing} />
             <AppSections app={app} />
