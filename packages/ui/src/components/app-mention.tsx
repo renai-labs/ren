@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { cn } from "cn"
 
 export type MentionApp = {
@@ -10,11 +11,13 @@ export type MentionApp = {
 const mention = /(^|\s)@([a-z0-9][a-z0-9-]*)/giu
 
 export function MentionLogo(props: { name: string; icon: string | null; className?: string | undefined }) {
-  return props.icon ? (
+  const [failed, setFailed] = useState<string>()
+  return props.icon && failed !== props.icon ? (
     <img
       src={props.icon}
       alt=""
       draggable={false}
+      onError={() => setFailed(props.icon ?? undefined)}
       className={cn("inline-block size-[1.25em] rounded-sm bg-white object-contain p-[0.12em]", props.className)}
     />
   ) : (

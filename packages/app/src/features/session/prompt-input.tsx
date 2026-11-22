@@ -23,10 +23,7 @@ import {
   IconChevronRight,
   IconFolder,
   IconGitBranch,
-  IconMessage,
   IconQuote,
-  IconSubtask,
-  IconSparkles,
   IconLoader2,
   IconPaperclip,
   IconPlayerPlay,
@@ -82,8 +79,8 @@ import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
 import { useHeld } from "../../lib/use-held.js"
+import { AgentIcon, ChatIcon, mentionIcons, RepositoryIcon, TaskIcon } from "../../components/mention-icon.js"
 import { useRoom } from "../../lib/use-room.js"
-import { IconAgent } from "../../icons/heroicons.js"
 import { Drafts } from "../../lib/drafts.js"
 import type { ShellHistory } from "../../lib/use-shell-history.js"
 import { Keyboard } from "../../platform/keyboard.js"
@@ -516,21 +513,12 @@ function QuoteChips(props: {
 }
 
 const categoryIcons = {
-  tasks: <IconSubtask />,
-  chats: <IconMessage />,
+  tasks: <TaskIcon />,
+  chats: <ChatIcon />,
   apps: <IconApps />,
-  agents: <IconAgent />,
+  agents: <AgentIcon />,
   files: <IconFolder />,
-  repos: <IconGitBranch />,
-}
-
-const mentionIcons: Partial<Record<Mentions.Kind, ReactNode>> = {
-  task: <IconSubtask />,
-  chat: <IconMessage />,
-  repository: <IconGitBranch />,
-  agent: <IconAgent />,
-  "ren-agent": <IconAgent />,
-  skill: <IconSparkles />,
+  repos: <RepositoryIcon />,
 }
 
 function SuggestionIcon(props: { item: Suggest["items"][number] }) {
@@ -538,10 +526,10 @@ function SuggestionIcon(props: { item: Suggest["items"][number] }) {
   if (item.kind === "app") return <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
   if (item.kind === "category") return item.category ? categoryIcons[item.category] : null
   if (item.kind === "command") return <IconTerminal2 />
-  if (item.kind === "repository") return <IconGitBranch />
+  if (item.kind === "repository") return <RepositoryIcon />
   if (item.kind === "folder") return <IconFolder />
   if (item.kind === "file") return <FileIcon name={item.label} />
-  return mentionIcons[item.kind] ?? <IconAgent />
+  return mentionIcons[item.kind] ?? <AgentIcon />
 }
 
 function SuggestionMenu(props: {
@@ -1091,7 +1079,7 @@ export function PromptInput(props: {
           </InputGroupAddon>
         ) : null}
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
-        <MentionOverlay textarea={textarea} text={text} marks={marks} />
+        <MentionOverlay textarea={textarea} text={text} marks={marks} labelClassName="bg-card" />
         <InputGroupTextarea
           dir="auto"
           value={text}

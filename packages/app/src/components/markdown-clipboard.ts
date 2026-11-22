@@ -105,6 +105,9 @@ const normalize = (container: Element) => {
   for (const mention of container.querySelectorAll<HTMLElement>("[data-app-mention]")) {
     mention.replaceWith(`@${mention.dataset.appMention ?? ""}`)
   }
+  for (const mention of container.querySelectorAll<HTMLElement>("[data-agent-mention]")) {
+    mention.replaceWith(`@${mention.dataset.agentMention ?? ""} (agent)`)
+  }
   for (const block of container.querySelectorAll<HTMLElement>('[data-slot="code-block"]')) {
     const pre = document.createElement("pre")
     const element = document.createElement("code")
