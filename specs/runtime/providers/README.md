@@ -142,16 +142,16 @@ Providers                                                                       
 └────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Element                     | Behaviour                                                                                                                                                                                                                                                              |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add provider                | The Console grid: search, 35 providers, model count from models.dev, Connect. A provider already on the page is marked                                                                                                                                                 |
-| Connect (own key)           | A dialog with the provider's fields (most: API key; Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks have more, O2), **Test connection**, Cancel, Save. Save runs the test first. A failed test shows the vendor's message and saves nothing |
-| Card switch                 | On or off. Off removes the card's models from pickers at the next push                                                                                                                                                                                                 |
-| Method (Anthropic, OpenAI)  | `API key` or `Subscription`. A change applies at the next push                                                                                                                                                                                                         |
-| Seats (subscription method) | One line per seat: who connected it, plan, meters (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. A seat that needs a new sign-in shows "Sign in again"                                                               |
-| Key line                    | The last 4 characters, who saved it, the test result. Replace, remove                                                                                                                                                                                                  |
-| Ren card                    | Credit and today's free count. **Models ›** opens §5.2                                                                                                                                                                                                                 |
-| Members                     | See the page. Only "Connect your …" and their own seats are active (P7)                                                                                                                                                                                                |
+| Element                     | Behaviour                                                                                                                                                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add provider                | The Console grid: search, 35 providers, model count from models.dev, Connect. A provider already on the page is marked                                                                                                                                                  |
+| Connect (own key)           | A dialog with the provider's fields (most: API key; Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks have more, §16), **Test connection**, Cancel, Save. Save runs the test first. A failed test shows the vendor's message and saves nothing |
+| Card switch                 | On or off. Off removes the card's models from pickers at the next push                                                                                                                                                                                                  |
+| Method (Anthropic, OpenAI)  | `API key` or `Subscription`. A change applies at the next push                                                                                                                                                                                                          |
+| Seats (subscription method) | One line per seat: who connected it, plan, meters (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. A seat that needs a new sign-in shows "Sign in again"                                                                |
+| Key line                    | The last 4 characters, who saved it, the test result. Replace, remove                                                                                                                                                                                                   |
+| Ren card                    | Credit and today's free count. **Models ›** opens §5.2                                                                                                                                                                                                                  |
+| Members                     | See the page. Only "Connect your …" and their own seats are active (P7)                                                                                                                                                                                                 |
 
 ### 5.2 Ren models
 
@@ -432,10 +432,10 @@ Only rules that the code does not show:
 | 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress  | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2          |
 | 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases | §13.3 passes                                                     |
 
-## 16. Open items
+## 16. Settled details
 
-| ID  | Item                                                                                                           |
-| --- | -------------------------------------------------------------------------------------------------------------- |
-| O1  | A "Use this model on Ren" button on errors (selects only). Proposed, not decided                               |
-| O2  | The fields of Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks in the Connect dialog |
-| O3  | The values of `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK`                                |
+| Item                                                                                                           | Decision                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A "Use this model on Ren" button on errors                                                                     | No. The error card offers "Change model" only (P4)                                                         |
+| The fields of Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks in the Connect dialog | The builder takes them from each provider's documentation and from the credential values the gateway needs |
+| The values of `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK`                                | Deployment settings. The owner sets and changes them; no code change                                       |
