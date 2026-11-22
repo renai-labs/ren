@@ -15,7 +15,7 @@ import type { CatalogApp, Status } from "../lib/apps.js"
 type App = CatalogApp
 type AppProfile = AppProfileInfo
 
-const tones: Record<Status, StatusTone> = { expired: "warn", connected: "ok", credits: "neutral", missing: "warn" }
+const tones: Record<Status, StatusTone> = { expired: "warn", connected: "ok", credits: "ok", missing: "warn" }
 
 type Bundle = { total: number; signIn: ReadonlyArray<App> }
 
