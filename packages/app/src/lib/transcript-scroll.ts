@@ -88,7 +88,6 @@ export function useKeptPlace(
         return
       }
       const delta = row.getBoundingClientRect().top - element.getBoundingClientRect().top - spot.offset
-      // ast-grep-ignore: no-manual-scroll -- puts a reopened chat back where it was read, which MessageScroller has no API for
       if (Math.abs(delta) > 0.5) element.scrollBy({ top: delta, behavior: "instant" })
       reveal()
     }
@@ -115,6 +114,16 @@ export function useKeptPlace(
 // oxlint-disable-next-line ren/no-comments -- Hands MessageScroller over to reading after a scroll it did not see coming, such as a Page Up from the composer or a link to a heading, so it stops holding a sent message at the top. MessageScroller takes that from a wheel event and has no other API for it.
 export const read = (viewport: HTMLElement) => {
   viewport.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 0 }))
+}
+
+// oxlint-disable-next-line ren/no-comments -- A sent message holds at the top of the view. MessageScroller anchors a new row only when it lands at the end of the list, and the working row can sit after it, so the transcript asks for the scroll once per sent message, a frame after MessageScroller has handled the new row.
+export function useAnchorSent(sent: string | undefined, scrollTo: (messageId: string) => void) {
+  const anchor = useEffectEvent(scrollTo)
+  useEffect(() => {
+    if (!sent) return
+    const frame = requestAnimationFrame(() => anchor(sent))
+    return () => cancelAnimationFrame(frame)
+  }, [sent])
 }
 
 const glideMs = 600

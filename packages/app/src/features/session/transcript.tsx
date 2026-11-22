@@ -729,6 +729,9 @@ function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Transcri
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- MessageScroller's default peek of the row above an anchored message, so a sent message lands where MessageScroller itself would put it.
+const previousPeek = 64
+
 // oxlint-disable-next-line ren/no-comments -- Scrolled up during a run, the jump button says Ren is still working.
 function JumpToLatest(props: { working: boolean }) {
   const behavior = ReducedMotion.useReduced() ? "auto" : "smooth"
@@ -758,7 +761,6 @@ function TranscriptScroller(input: {
       const element = viewport.current
       if (!element) return
       TranscriptScroll.read(element)
-      // ast-grep-ignore: no-manual-scroll -- Page Up and Page Down from the composer page the transcript, which MessageScroller has no API for
       element.scrollBy({ top: direction * element.clientHeight * 0.9, behavior: reduced ? "instant" : "smooth" })
     },
     toEnd: () => scroller.scrollToEnd({ behavior: reduced ? "auto" : "smooth" }),
@@ -789,6 +791,9 @@ function TranscriptScroller(input: {
   const live = props.busy || watched.live(props.activeMessageID)
   const sent = useSentAnchor(shown, props.statuses)
   const easing = TranscriptScroll.useSendGlide(sent)
+  TranscriptScroll.useAnchorSent(sent, (messageId) =>
+    scroller.scrollToMessage(messageId, { align: "start", scrollMargin: previousPeek }),
+  )
   const from = TranscriptScroll.useOpening(shown, { all: props.find !== undefined, place })
   TranscriptScroll.useKeptPlace(viewport, place, {
     session: props.view.sessionID,
