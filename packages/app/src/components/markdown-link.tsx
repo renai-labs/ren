@@ -4,6 +4,7 @@ import { Option } from "effect"
 import type { ExtraProps } from "streamdown"
 import { cn } from "cn"
 import { ChatLink } from "@ren/chat/chat-link"
+import { Mentions } from "@ren/chat/mentions"
 import { AppMention } from "@ren/ui/app-mention"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@ren/ui/context-menu"
 import { Link } from "@ren/ui/link"
@@ -16,29 +17,37 @@ import { IconWorld } from "../icons/heroicons.js"
 import { Logomark } from "../icons/logomark.js"
 import { Platform } from "../platform/platform.js"
 import { ChatChip } from "./chat-chip.js"
-import { AgentIcon, TaskIcon } from "./mention-icon.js"
+import { AgentIcon, RepositoryIcon, SkillIcon, TaskIcon } from "./mention-icon.js"
 
 export const appLink = "#ren-app:"
 
-export const agentLink = "#ren-agent:"
+export const mentionLink = "#ren-mention:"
 
-const agentMention = /@([^\s@()[\]][^@()[\]\n]*?) \(agent\)/gu
+const mentionKinds = { "ren-agent": AgentIcon, agent: AgentIcon, skill: SkillIcon, repository: RepositoryIcon }
 
-// oxlint-disable-next-line ren/no-comments -- The composer sends a mentioned agent as `@Name (agent)`; this turns it back into a mention outside inline code, so the message shows it like the composer did.
-export const agentLinks = (markdown: string) =>
-  markdown.includes(" (agent)")
+const isKind = (kind: string): kind is keyof typeof mentionKinds => Object.hasOwn(mentionKinds, kind)
+
+const linkOf = (item: Mentions.Item, text: string) =>
+  `[${item.label.replaceAll(/[[\]\\]/gu, "\\$&")}](${mentionLink}${item.kind}:${encodeURIComponent(text).replaceAll("(", "%28").replaceAll(")", "%29")})`
+
+// oxlint-disable-next-line ren/no-comments -- Shows what the composer sent for each mention as that mention again, outside inline code.
+export const sentMentionLinks = (markdown: string, items: ReadonlyArray<Mentions.Item>) =>
+  items.length === 0
     ? markdown
+    : markdown
         .split(/(`[^`\n]*`)/u)
         .map((part, index) =>
           index % 2 === 1
             ? part
-            : part.replaceAll(
-                agentMention,
-                (_whole, name: string) => `[@${name}](${agentLink}${encodeURIComponent(name)})`,
+            : Mentions.sentTokens(part, items).reduceRight(
+                (text, token) =>
+                  text.slice(0, token.start) +
+                  linkOf(token.item, part.slice(token.start, token.end)) +
+                  text.slice(token.end),
+                part,
               ),
         )
         .join("")
-    : markdown
 
 export const MarkdownScroll = createContext<((viewport: HTMLElement) => void) | undefined>(undefined)
 
@@ -119,16 +128,23 @@ export function LinkIcon(props: { href: string; streaming: boolean; className?: 
 }
 
 const mentionOf = (href: string, apps: ReadonlyArray<CatalogApp>, label: ReactNode) => {
-  if (!href.startsWith(appLink) && !href.startsWith(agentLink)) return null
-  if (href.startsWith(agentLink)) {
-    const name = decodeURIComponent(href.slice(agentLink.length))
+  if (href.startsWith(mentionLink)) {
+    const rest = href.slice(mentionLink.length)
+    const kind = rest.slice(0, rest.indexOf(":"))
+    const Icon = isKind(kind) ? mentionKinds[kind] : AgentIcon
     return (
-      <span data-agent-mention={name} className="font-semibold whitespace-nowrap text-link">
-        <AgentIcon aria-hidden className={inlineIcon} />
-        {name}
+      <span
+        data-mention-text={Option.getOrElse(Option.liftThrowable(decodeURIComponent)(rest.slice(kind.length + 1)), () =>
+          rest.slice(kind.length + 1),
+        )}
+        className="font-semibold whitespace-nowrap text-link"
+      >
+        <Icon aria-hidden className={inlineIcon} />
+        {label}
       </span>
     )
   }
+  if (!href.startsWith(appLink)) return null
   const app = apps.find((each) => each.slug === href.slice(appLink.length))
   return app ? <AppMention app={app} /> : <span>{label}</span>
 }

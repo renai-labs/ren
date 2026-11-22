@@ -1,7 +1,8 @@
 import { createContext, use, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { cn } from "cn"
-import { ChatState, Composer } from "@ren/chat"
+import { ChatState, Composer, Mentions } from "@ren/chat"
+import { MentionSources } from "@ren/client/react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import {
   IconChevronDown,
@@ -34,6 +35,7 @@ import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } 
 import { DriveFileCards } from "./attachments.js"
 import { ImageTrigger } from "../../components/image-set.js"
 import { Markdown } from "../../components/markdown.js"
+import { RouterContext } from "../../lib/router-context.js"
 import { PastedChip } from "./pasted-chip.js"
 import { TimeZone } from "../../lib/time-zone.js"
 import { Platform } from "../../platform/platform.js"
@@ -41,6 +43,7 @@ import { formatInZone, formatTimeInZone } from "@ren/ui/time"
 import { DateTime } from "effect"
 import { ChannelOrigin } from "./channel-origin.js"
 import { revealOnHover } from "./message-actions.js"
+import { useRenAgents } from "./use-mention-sources.js"
 import { useMentionedApps } from "../../lib/use-app.js"
 import { formatRun, localTimeZone } from "../../lib/schedules.js"
 
@@ -317,7 +320,12 @@ function UserBody(props: { message: SessionMessage.User; spaceId: string | undef
   )
 }
 
-function TypedBubble(props: { text: string; foldable: boolean; subject: string }) {
+function TypedBubble(props: {
+  text: string
+  foldable: boolean
+  subject: string
+  mentioned: ReadonlyArray<Mentions.Item>
+}) {
   const reveal = use(Fold).reveal
   const [open, setOpen] = useState(false)
   const [revealed, setRevealed] = useState(false)
@@ -348,7 +356,7 @@ function TypedBubble(props: { text: string; foldable: boolean; subject: string }
               return () => observer.disconnect()
             }}
           >
-            <Markdown source="user" apps={apps} className="text-base leading-[1.6]">
+            <Markdown source="user" apps={apps} mentioned={props.mentioned} className="text-base leading-[1.6]">
               {props.text}
             </Markdown>
           </div>
@@ -373,6 +381,30 @@ function TypedBubble(props: { text: string; foldable: boolean; subject: string }
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- What the composer could have sent for a mention, so the message shows each as the mention it was.
+function useMentioned(message: SessionMessage.User, spaceId: string | undefined): ReadonlyArray<Mentions.Item> {
+  const repositories = MentionSources.useRepositories(RouterContext.useRouterContext().api, spaceId)
+  const agents = useRenAgents(spaceId)
+  return [
+    ...(message.agents ?? []).map((agent): Mentions.Item => ({
+      kind: "agent",
+      id: agent.name,
+      label: agent.name,
+      handle: agent.name,
+      ...(agent.mention && { sent: agent.mention.text }),
+    })),
+    ...(message.skills ?? []).map((skill): Mentions.Item => ({
+      kind: "skill",
+      id: skill.id,
+      label: skill.name,
+      handle: skill.id,
+      ...(skill.mention && { sent: skill.mention.text }),
+    })),
+    ...repositories.map(Mentions.fromRepository),
+    ...agents.map((entry) => entry.item),
+  ]
+}
+
 function UserText(props: {
   message: SessionMessage.User
   text?: string | undefined
@@ -384,6 +416,7 @@ function UserText(props: {
   const message = props.message
   const files = props.message.files ?? []
   const uploads = props.message.uploads ?? []
+  const mentioned = useMentioned(props.message, props.spaceId)
   return (
     <>
       {uploads.length > 0 ? (
@@ -396,6 +429,7 @@ function UserText(props: {
         <TypedBubble
           text={parts.typed}
           subject={props.subject}
+          mentioned={mentioned}
           foldable={fold && !message.schedule && !message.webhook && !message.channel}
         />
       ) : null}

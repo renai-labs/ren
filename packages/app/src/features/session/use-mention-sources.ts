@@ -136,7 +136,7 @@ function useChats(input: {
   }
 }
 
-function useAgents(spaceId: string | undefined) {
+export function useRenAgents(spaceId: string | undefined) {
   const { api } = RouterContext.useRouterContext()
   const agents = useQuery(
     api.agent.list.queryOptions({ page: 1, pageSize: pickerPageSize, isSubagent: false, ...(spaceId && { spaceId }) }),
@@ -233,7 +233,7 @@ export function useMentionSources(input: {
   const filter = query.slice(folder.length)
   const tasks = useTasks({ enabled: wants(input.scope, "tasks"), search: query })
   const chats = useChats({ enabled: wants(input.scope, "chats"), search: query, root: input.root })
-  const agents = useAgents(input.spaceId)
+  const agents = useRenAgents(input.spaceId)
   const drive = useDrive({ enabled: wants(input.scope, "files"), spaceId: input.spaceId, folder })
   const computer = useComputerFiles({ enabled: wants(input.scope, "files"), root: input.root, search: query })
   const lists: Record<Prefix, ReadonlyArray<Entry>> = {

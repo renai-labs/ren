@@ -65,6 +65,28 @@ describe("Mentions tokens", () => {
     expect(Mentions.resolve(text, Mentions.tokens(text, [chat]))).toEqual({ text: "Read ses_1 first" })
   })
 
+  test("finds the mentions in a sent message by the text the composer sent for each", () => {
+    const reviewer = {
+      kind: "ren-agent" as const,
+      id: "agt_1",
+      label: "Reviewer",
+      handle: "Reviewer",
+      sent: "@Reviewer (agent)",
+    }
+    const web = Mentions.fromRepository({ alias: "web", repository: "https://github.com/acme/web", description: "" })
+    const text = "@general and @Reviewer (agent) check @web, not @website or `@web`"
+    expect(
+      Mentions.sentTokens(text, [general, reviewer, web]).map((token) => [
+        text.slice(token.start, token.end),
+        token.item.kind,
+      ]),
+    ).toEqual([
+      ["@general", "agent"],
+      ["@Reviewer (agent)", "ren-agent"],
+      ["@web", "repository"],
+    ])
+  })
+
   test("keeps each picked mention's item through edits, so two chats with one title stay apart", () => {
     const chat = (id: string) => ({ kind: "chat" as const, id, label: "New chat", handle: id, sent: id })
     const text = "Compare @  New chat with @  New chat"
