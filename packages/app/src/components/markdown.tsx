@@ -210,8 +210,8 @@ function MarkdownTable({ node: _node, className, children, ...props }: Component
           {children}
         </table>
       </section>
-      {streaming || !copy ? null : (
-        <div className="mt-1 flex justify-end">
+      {copy ? (
+        <div className={cn("mt-1 flex justify-end", streaming && "invisible")} inert={streaming}>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -228,7 +228,7 @@ function MarkdownTable({ node: _node, className, children, ...props }: Component
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
