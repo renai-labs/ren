@@ -75,7 +75,7 @@ import type { CatalogApp } from "../lib/apps.js"
 import { useCopy } from "../lib/use-copy.js"
 import { ImageThumbnail } from "./image-set.js"
 import { markdownClipboard } from "./markdown-clipboard.js"
-import { appLink, MarkdownContext, MarkdownLink } from "./markdown-link.js"
+import { agentLinks, MarkdownContext, MarkdownLink } from "./markdown-link.js"
 
 export const blockImage = "max-h-96 max-w-full rounded-md border object-contain"
 export const inlineImage = "inline-block h-auto max-h-96 max-w-full object-contain align-middle"
@@ -443,7 +443,8 @@ const chipPunctuation = () => (tree: MarkdownNode) =>
     if (node.properties?.["data-chip"] !== undefined) return
     const children = node.children ?? []
     for (const [index, child] of children.entries())
-      if (child.tagName === "a" && String(child.properties?.href).startsWith(appLink)) wrapChip(children, index)
+      if (child.tagName === "a" && /^#ren-(?:app|agent):/u.test(String(child.properties?.href)))
+        wrapChip(children, index)
   })
 
 const withRenUrls = (schema: unknown) => {
@@ -581,7 +582,7 @@ export function Markdown(props: {
           linkSafety={{ enabled: false }}
           icons={streamdownIcons}
         >
-          {Fences.mapProse(mentionLinks(text, apps), (prose) => prose.replaceAll(imageLine, "$1\n"))}
+          {Fences.mapProse(mentionLinks(text, apps), (prose) => agentLinks(prose).replaceAll(imageLine, "$1\n"))}
         </Streamdown>
       </div>
     </MarkdownContext>

@@ -51,6 +51,7 @@ export function MentionOverlay(props: {
   textarea: RefObject<HTMLTextAreaElement | null>
   text: string
   marks: ReadonlyArray<MentionMark>
+  labelClassName?: string | undefined
 }) {
   const [box, setBox] = useState<Box>()
   const textarea = props.textarea
@@ -110,10 +111,12 @@ export function MentionOverlay(props: {
               </span>
             )
           return node.mark ? (
-            <span key={node.key} className="relative" style={{ color: node.mark.color }}>
-              <span className="invisible">{node.text.slice(0, node.text.length - node.mark.label.length)}</span>
-              <MarkIcon mark={node.mark} />
-              {node.mark.label}
+            <span key={node.key} style={{ color: node.mark.color }}>
+              <span className="relative">
+                <span className="invisible">{node.text.slice(0, node.text.length - node.mark.label.length)}</span>
+                <MarkIcon mark={node.mark} />
+              </span>
+              <span className={props.labelClassName}>{node.mark.label}</span>
             </span>
           ) : (
             <span key={node.key}>{node.text}</span>

@@ -16,8 +16,29 @@ import { IconWorld } from "../icons/heroicons.js"
 import { Logomark } from "../icons/logomark.js"
 import { Platform } from "../platform/platform.js"
 import { ChatChip } from "./chat-chip.js"
+import { AgentIcon, TaskIcon } from "./mention-icon.js"
 
 export const appLink = "#ren-app:"
+
+export const agentLink = "#ren-agent:"
+
+const agentMention = /@([^\s@()[\]][^@()[\]\n]*?) \(agent\)/gu
+
+// oxlint-disable-next-line ren/no-comments -- The composer sends a mentioned agent as `@Name (agent)`; this turns it back into a mention outside inline code, so the message shows it like the composer did.
+export const agentLinks = (markdown: string) =>
+  markdown.includes(" (agent)")
+    ? markdown
+        .split(/(`[^`\n]*`)/u)
+        .map((part, index) =>
+          index % 2 === 1
+            ? part
+            : part.replaceAll(
+                agentMention,
+                (_whole, name: string) => `[@${name}](${agentLink}${encodeURIComponent(name)})`,
+              ),
+        )
+        .join("")
+    : markdown
 
 export const MarkdownScroll = createContext<((viewport: HTMLElement) => void) | undefined>(undefined)
 
@@ -82,6 +103,8 @@ export function LinkIcon(props: { href: string; streaming: boolean; className?: 
   const host = url.hostname.toLowerCase()
   if (url.protocol !== "http:" && url.protocol !== "https:")
     return <IconWorld className={iconClass} data-link-icon="globe" aria-hidden />
+  if (url.origin === new URL(platform.appUrl).origin && /^\/tasks\/[^/]+$/u.test(url.pathname))
+    return <TaskIcon className={iconClass} data-link-icon="task" aria-hidden />
   if (url.origin === new URL(platform.appUrl).origin)
     return (
       <span data-link-icon="ren" className="contents">
@@ -93,6 +116,21 @@ export function LinkIcon(props: { href: string; streaming: boolean; className?: 
   if (props.streaming || !PublicHost.isPublic(host))
     return <IconWorld className={iconClass} data-link-icon="globe" aria-hidden />
   return <Favicon key={host} host={host} className={iconClass} />
+}
+
+const mentionOf = (href: string, apps: ReadonlyArray<CatalogApp>, label: ReactNode) => {
+  if (!href.startsWith(appLink) && !href.startsWith(agentLink)) return null
+  if (href.startsWith(agentLink)) {
+    const name = decodeURIComponent(href.slice(agentLink.length))
+    return (
+      <span data-agent-mention={name} className="font-semibold whitespace-nowrap text-link">
+        <AgentIcon aria-hidden className={inlineIcon} />
+        {name}
+      </span>
+    )
+  }
+  const app = apps.find((each) => each.slug === href.slice(appLink.length))
+  return app ? <AppMention app={app} /> : <span>{label}</span>
 }
 
 export function MarkdownLink({ node, href, className, children, onClick, ...rest }: ComponentProps<"a"> & ExtraProps) {
@@ -113,10 +151,8 @@ export function MarkdownLink({ node, href, className, children, onClick, ...rest
         label={children}
       />
     )
-  if (href.startsWith(appLink)) {
-    const app = markdown.apps.find((each) => each.slug === href.slice(appLink.length))
-    return app ? <AppMention app={app} /> : <span>{children}</span>
-  }
+  const mention = mentionOf(href, markdown.apps, children)
+  if (mention) return mention
   if (href.startsWith("#"))
     return (
       <Link
