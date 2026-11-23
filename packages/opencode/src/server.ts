@@ -8,12 +8,14 @@ import { Link } from "./link.js"
 import { Mirror } from "./mirror.js"
 import { RenProvider } from "./provider.js"
 import { RenApi } from "./ren.js"
+import { Title } from "./title.js"
 
 export default Plugin.define({
   id: "ren",
   effect: (ctx) =>
     Layer.build(
       Mirror.layer(ctx).pipe(
+        Layer.provideMerge(Title.layer(ctx)),
         Layer.provideMerge(Layer.mergeAll(Link.layer, Binding.layer(ctx))),
         Layer.provideMerge(RenApi.layer),
         Layer.provide(RenAuth.layer(ctx.options)),

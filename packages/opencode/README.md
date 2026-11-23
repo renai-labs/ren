@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `provider`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), and a rename on either side reaches the other (Rename). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -50,6 +50,7 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.       |
 | `tui`      | The TUI part: the commands, and the selected space in the footers.                              |
 | `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns. |
+| `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                          |
 
 ## Connection
 
@@ -106,6 +107,16 @@ Other members, and the signed-in user's other clients (the web app, Slack, sched
 
 Limits: a remote turn already running when the session is opened, and messages delivered while it was not watched, are not shown. Two messages delivered back to back can leave one local step empty. Synthetic continuations (a subagent's result, a scheduled wake) stream inside the step that is running, or not at all when no step runs.
 
+## Rename
+
+A Ren session has one title, locally and on Ren (`Title`).
+
+- **Local to Ren.** The plugin reads the location's `session.renamed` events. A local rename of a Ren session (its binding has `sessionId`, and it is that session, not a copy) calls Chat API `session.rename` through the session's link. Both the built-in `/rename` and `session.update({ title })` cause one. The plugin reads `session.get` first and skips the call when the brain already has the title or the session's capability `rename` is false. It skips empty titles and sends renames one at a time, in order.
+- **Ren to local.** While the session is watched (Multiplayer), the brain's `session.renamed` for the session itself (not a subagent's) sets the local title with `ctx.session.update`. At each connect of the watched link the plugin reads the brain's title (`session.get`), so a rename made while the session was not watched shows at its next turn.
+- **No echo.** The plugin never sends back a title that it set locally, whether from a Ren rename or from the `title` hook (OpenCode shortens that one to 100 characters). It does not apply the brain's echo of a rename this OpenCode sent. It drops a Ren title that arrives while a local rename is on its way, because the local one lands after it.
+- **Before the Ren session exists.** A session from `/ren:new` that is renamed before its first prompt has no Ren session yet. At the first connect, if the brain has no title and the local session has one, the plugin sends the local title, so the brain does not replace it with a generated one. A local session that is not a Ren session sends nothing.
+- **Brain not reachable.** The rename stays local and the plugin logs a warning. It waits at most a minute (for a starting brain). The plugin sends the title at the session's next connect in this OpenCode process. A restart forgets the title, and the brain's title then wins.
+
 ## Commands
 
 Every command the plugin adds is `/ren:<command>`, in the slash completion and in the command palette under Ren.
@@ -136,12 +147,11 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
-Built-in commands keep their names and act on Ren sessions through hooks: `/rename`, `/compact`, stop and the model picker.
+Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact`, stop and the model picker.
 
 Planned commands: `/ren:sessions`, `/ren:move`, `/ren:retry`, `/ren:login`, `/ren:logout`. Planned features:
 
 - Move a local session to a Ren space. This needs a new Ren import endpoint.
-- Rename.
 - The web app chat's features, where the stock TUI allows them.
 
 ## Install
@@ -194,7 +204,7 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, and teammates on a real brain
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates on a real brain, and renames on a real brain
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 

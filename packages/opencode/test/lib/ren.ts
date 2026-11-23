@@ -4,6 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionEvent } from "@ren/schema/session/event"
+import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Factory } from "@ren/schema/factory"
@@ -26,6 +27,7 @@ export interface Options {
 
 const Created = Schema.Struct({ id: Session.ID, spaceId: Space.ID, model: Schema.optional(SessionModel.Ref) })
 const Prompted = Schema.Struct({ id: Schema.String, text: Schema.String, delivery: Schema.String })
+const Renamed = Schema.Struct({ title: Schema.String })
 
 const choices: SessionModel.Choices = {
   models: [{ id: "stub-model", providerID: "stub", name: "Stub", variants: [{ id: "high" }] }],
@@ -64,6 +66,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const checked = yield* Queue.unbounded<string>()
   const prepared = yield* Queue.unbounded<Space.ID>()
   const closed = yield* Queue.unbounded<string>()
+  const renamed = yield* Queue.unbounded<string>()
+  const refused = yield* Queue.unbounded<string>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
@@ -85,6 +89,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     delivered: new Set<string>(),
     busy: new Set<string>(),
     titles: new Map<string, string>(),
+    renames: Array.of<{ readonly sessionID: string; readonly title: string }>(),
+    refusing: false,
     answer: (_prompt: Prompt): void => undefined,
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
@@ -148,10 +154,36 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     })
     return new Response(body, { headers: { "content-type": "text/event-stream" } })
   }
+  const session = async (sessionID: string, request: Request) => {
+    if (request.method === "PATCH") {
+      const title = Schema.decodeUnknownSync(Renamed)(await request.json()).title
+      state.renames.push({ sessionID, title })
+      state.titles.set(sessionID, title)
+      Queue.offerUnsafe(renamed, title)
+      send(frame("session.renamed", { sessionID, title }))
+      return new Response(null, { status: 204 })
+    }
+    const title = state.titles.get(sessionID)
+    return Response.json(
+      Schema.encodeSync(SessionInfo.Info)({
+        id: Session.ID.make(sessionID),
+        ...(title && { title }),
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: DateTime.nowUnsafe(), updated: DateTime.nowUnsafe() },
+        capabilities: SessionCapabilities.of("opencode"),
+      }),
+    )
+  }
   const chat = async (path: string, request: Request) => {
     const parts = path.split("/")
     const sessionID = String(parts[3])
     if (path === "/chat/event") return subscribe(request)
+    if (state.refusing) {
+      Queue.offerUnsafe(refused, path)
+      return new Response(null, { status: 502 })
+    }
+    if (parts[2] === "session" && parts.length === 4) return session(sessionID, request)
     if (path === "/chat/status") {
       Queue.offerUnsafe(checked, path)
       return Response.json(Object.fromEntries([...state.busy].map((id) => [id, { type: "busy" }])))
@@ -271,6 +303,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     checked,
     prepared,
     closed,
+    renamed,
+    refused,
     send,
     drop: () => {
       for (const controller of streams) controller.close()

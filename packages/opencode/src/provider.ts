@@ -7,6 +7,7 @@ import { Array, Effect, Option, Schedule, Schema } from "effect"
 import { Binding } from "./binding.js"
 import { RenModel } from "./model.js"
 import { RenApi } from "./ren.js"
+import { Title } from "./title.js"
 
 const id = Provider.ID.make("ren")
 const packageName = "@renai-labs/opencode"
@@ -22,6 +23,7 @@ const toModel = (choice: SessionModel.Choice): Model.Info => ({
 export const register = Effect.fn("RenProvider.register")(function* (ctx: Plugin.Context) {
   const ren = yield* RenApi.Service
   const bindings = yield* Binding.Service
+  const titles = yield* Title.Service
   const same = Array.makeEquivalence(Schema.toEquivalence(SessionModel.Choice))
   const current: { models: ReadonlyArray<SessionModel.Choice> } = { models: [] }
   const refresh = Effect.gen(function* () {
@@ -82,7 +84,9 @@ export const register = Effect.fn("RenProvider.register")(function* (ctx: Plugin
         const created = Option.flatMapNullishOr(yield* bindings.get(sessionID), (info) => info.sessionId)
         if (Option.isNone(created)) return ""
         const client = yield* ren.client
-        return (yield* client.session.get({ idOrSlug: created.value })).title ?? ""
+        const title = (yield* client.session.get({ idOrSlug: created.value })).title ?? ""
+        yield* titles.seen(sessionID, title)
+        return title
       }).pipe(
         Effect.orElseSucceed(() => ""),
         Effect.map((title) => {

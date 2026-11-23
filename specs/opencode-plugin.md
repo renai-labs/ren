@@ -50,6 +50,8 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F30. `session.viewed` is published only when a client acknowledges an unread idle session (`Session.view`, which the TUI calls for the focused unread session); it is not a signal that a session is open.
 - F31. A Chat API client sees a user message's sender as `sender.userId` only: the `userName` the brain stamps in the OpenCode metadata is not translated (`opencode-transcript` `withMetadata`). The origins (`channel`, `schedule`, `webhook`, `task`) are on the message (`session.message`, `session.messages`), not on `session.inbox.enqueued`, whose payload has only the prompt fields and `sender`. `me.get` returns the signed-in user's ID, which is the `sender.userId` of their messages; `space-member.list` with `spaceId` lists the space's members with their names and ignores `userId`.
 - F32. An open Chat API event stream holds the brain's harness (`Cell.acquire`), so the alarm does not close it. The brain ends the stream with `stream.ended` `idle` after `CHAT_IDLE_MS` (2 minutes) without events while no session of the brain is active, and `Connection` parks on it until something wakes it; the web app wakes on focus, network and typing.
+- F34r. In 2.2.6, `session.update({ title })` (the TUI's `/rename`, which trims and ignores an empty title) publishes `session.renamed` with `{ sessionID, title }`, and `ctx.event.subscribe({ types: ["session.renamed"] })` delivers it to the plugin of the session's location _(run)_. OpenCode's title generation publishes the same event: it shortens the `title` hook's result to 100 characters (97 and `...`), and it publishes nothing when the title changed during the generation. An HTTP `session.update` with `title: ""` generates the title again through the `title` hook _(run)_. An untitled 2.2.6 session has no `title` (the timestamped placeholder is only for display), so it publishes no placeholder.
+- F35r. `session.rename` is on the Chat API only and needs a live brain. The brain publishes `session.renamed` on its Chat API stream for a rename from any client and from the brain itself _(run)_. Chat API `session.get` returns the brain's current title, with no `title` while untitled. Ren's `session.get` has the title only after the next sync. `session.create` takes no title.
 - F33. On a real brain, a teammate's steer sent through the Chat API during a step of another member's execution is delivered after that step's `session.step.ended` and answered by the next step of the same execution _(run)_.
 
 ## 3. Modules
@@ -68,12 +70,12 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 | `commands` | Built. The `/ren:*` command logic over a small part of the TUI context (`RenCommands`).              |
 | TUI        | Built: `/ren:space`, `/ren:new` and the space in the footers. Later: the other commands and dialogs. |
 | `mirror`   | Built. Messages from other clients of a Ren session into the local session (`Mirror`).               |
+| `title`    | Built. The title of a Ren session, the same locally and on Ren (`Title`).                            |
 
 ## 4. Features, in build order
 
 Each is one commit. Built features leave the list; the others keep their numbers.
 
-6. **Rename.** Local `session.renamed` calls Chat API `session.rename`; a remote `session.renamed` calls local `session.update`. No loop.
 7. **Session controls.** Model switch (`session.model.selected` to `session.model.switch`), compact (`compaction` hook to `session.compact`), archive (`session.archived` to `session.archive`), a blocked switch from a `ren` model to a local model, and a fork that is disconnected from Ren.
 8. **Permissions and questions.** Remote `permission.asked` and `form.created` reach the user (the native prompt if a plugin can raise it, else a dialog through RPC), and the reply goes to `session.permission.reply`, `session.form.reply` or `session.form.cancel`.
 9. **Open and catch up.** `/ren:sessions` lists Ren sessions with search and filters and opens one: import the Ren transcript into a local session with the same ID. On open, a local copy that is behind is removed and imported again. Opening a Ren session calls `Mirror.Service.watch`, and the catch-up also covers what the mirror did not see (L12).
@@ -100,3 +102,4 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - L13. A step of the local session ends at the delivery of another user message, so two messages delivered back to back can leave one local step empty. A synthetic continuation (a subagent's result, a scheduled wake) streams inside the running step, or not at all when no step runs.
 - L14. A local prompt during a mirrored turn waits until that step ends (F4), so the local user cannot steer a teammate's running turn from OpenCode.
 - L15. Names come from the space's member list, because the Chat API does not expose the `userName` the brain stamps (F31); a channel, schedule, webhook or task message shows its origin.
+- L16r. A rename on Ren shows locally only while the session is watched, or at its next connect, which reads the brain's title (L12). A local rename that does not reach the brain within a minute (stopped, failed, unreachable, signed out) stays local and is sent at the session's next connect in this OpenCode process; a restart forgets it, and the brain's title then wins. A Ren rename that arrives while a local rename is on its way is dropped. With the capability `rename` false, a local rename stays local.
