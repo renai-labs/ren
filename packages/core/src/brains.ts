@@ -619,6 +619,10 @@ export const layer = Layer.effect(
         const channels = yield* database
           .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
           .pipe(Effect.orDie)
+        const coAuthors = yield* credentialEnv.coAuthors(
+          host.organizationId,
+          pulled.chats.map((chat) => chat.id),
+        )
         const hasHand = applied.hand.placement !== "none"
         const directories = new Map(
           yield* Effect.forEach(hasHand ? pulled.chats : [], (chat) =>
@@ -640,10 +644,12 @@ export const layer = Layer.effect(
             const capability = capabilities.get(chat.id)
             const directory = Option.getOrUndefined(directories.get(chat.id) ?? Option.none())
             const found = { id: chat.id, agent: chat.agent, archived: chat.archived, hasHand }
+            const credited = coAuthors.get(chat.id)
             return Object.assign(
               found,
               directory && { directory },
               capability && { drives: drives.availability(host, capability) },
+              credited && { coAuthors: credited },
             )
           }),
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),

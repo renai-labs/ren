@@ -123,6 +123,10 @@ export const PullChat = Schema.Struct({
     description:
       "The chat’s folder on its applied hand. A chat with tools and no workspace gets one there. Omitted when the chat has no tools, and by an older Ren.",
   }),
+  coAuthors: Schema.optionalKey(Schema.Array(Schema.String)).annotate({
+    description:
+      "`Name <email>` of each person a commit of the chat credits with `Co-authored-by`: the person who runs the chat, else a task’s creator, then the GitHub App’s bot. Omitted without the GitHub App.",
+  }),
 }).annotate({ identifier: "Host.PullChat" })
 
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}

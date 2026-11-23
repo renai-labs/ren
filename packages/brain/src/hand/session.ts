@@ -59,7 +59,7 @@ export const make = (
     ChildProcessSpawner.make((command) =>
       Effect.all({
         connection: connections.connect(sessionId),
-        env: connections.env ?? Effect.succeed({ variables: {}, placeholders: {} }),
+        env: connections.env?.(sessionId) ?? Effect.succeed({ variables: {}, placeholders: {} }),
       }).pipe(
         Effect.mapError(HandSpawner.childProcessError("spawn")),
         Effect.flatMap((found) =>

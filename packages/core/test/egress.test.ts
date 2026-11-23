@@ -10,6 +10,7 @@ import { Credential } from "@ren/schema/credential"
 import { Hand } from "@ren/schema/hand"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
+import { Task } from "@ren/schema/task"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, DateTime, Effect, Layer, Logger, Option, Redacted, Ref, References, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -1150,5 +1151,51 @@ describe("GitHub through the egress", () => {
           },
         })
       }),
+  )
+
+  it.live("a chat's commits credit the person who runs it, else the creator of its task, then the App's bot", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const env = yield* CredentialEnv.Service
+      const people = yield* PersonCredentials.Service
+      const app = yield* GitHubApp.Service
+      const found = yield* setup()
+      yield* installGitHub(found.organizationId)
+      if (Option.isNone(app.client)) return yield* Effect.die(new Error("GitHub is off"))
+      yield* people.save(
+        found.organizationId,
+        found.ada.userId,
+        GitHubApp.personCredential(
+          app.client.value.settings,
+          { id: 42, login: "ada-gh" },
+          { accessToken: Redacted.make("ghu_ada") },
+          Date.now(),
+        ),
+      )
+      const grace = yield* Seed.user({ name: "Grace" })
+      const owner = { organizationId: found.organizationId, spaceId: found.space.id }
+      const adas = yield* Seed.session({ ...owner, createdBy: found.ada.userId })
+      const graces = yield* Seed.session({ ...owner, createdBy: grace.id })
+      const tasked = yield* Seed.session({ ...owner, createdBy: grace.id })
+      const taskId = Task.ID.create()
+      yield* database.db.insert(Database.Schema.task).values({
+        id: taskId,
+        organization_id: found.organizationId,
+        space_id: found.space.id,
+        number: 1,
+        title: "Co-author",
+        created_by_user_id: found.ada.userId,
+      })
+      yield* database.db.insert(Database.Schema.task_session).values({ task_id: taskId, session_id: tasked })
+      const bot = "ren-test[bot] <9001+ren-test[bot]@users.noreply.github.com>"
+      const ada = "ada-gh <42+ada-gh@users.noreply.github.com>"
+      expect(yield* env.coAuthors(found.organizationId, [adas, graces, tasked])).toEqual(
+        new Map([
+          [adas, [ada, bot]],
+          [graces, [bot]],
+          [tasked, [ada, bot]],
+        ]),
+      )
+    }),
   )
 })

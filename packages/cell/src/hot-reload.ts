@@ -130,7 +130,7 @@ export const layer = Layer.effect(
       if (Option.isSome(previous) && Option.isSome(revision) && previous.value !== revision.value)
         yield* Option.match(connections, { onNone: () => Effect.void, onSome: (found) => found.reset })
       yield* keys.save(reply.publicKeys)
-      yield* credentialEnv.apply(reply.env)
+      yield* credentialEnv.apply(reply.env, reply.chats)
       if (reply.providers) yield* catalog.register(reply.providers)
       yield* ModelDiscovery.refresh(catalog, keyFor).pipe(Effect.provide(FetchHttpClient.layer))
       const settingsChanged = yield* settings.save(reply.layers, reply.chats)

@@ -763,7 +763,7 @@ it.live("the host's env vars reach every process a session starts; a change appl
       variables: {},
       placeholders: { STRIPE_API_KEY: "ren:STRIPE_API_KEY" },
     })
-    const environment = HandSession.make({ ...environments, env: Ref.get(env) }, sessionId, killed)
+    const environment = HandSession.make({ ...environments, env: () => Ref.get(env) }, sessionId, killed)
     const first = yield* environment.spawner.spawn(ChildProcess.make("sh", ["-c", "echo $STRIPE_API_KEY $LINEAR"]))
     expect(yield* text(first.stdout)).toBe("ren:STRIPE_API_KEY\n")
     yield* Ref.set(env, { variables: {}, placeholders: { STRIPE_API_KEY: "ren:STRIPE_API_KEY", LINEAR: "ren:LINEAR" } })
@@ -786,7 +786,7 @@ it.live("a process on an environment without an egress gets the real variables a
         GIT_CONFIG_VALUE_0: `Authorization: Basic ${btoa("x-access-token:ren:GITHUB")}`,
       },
     })
-    const environment = HandSession.make({ ...environments, env }, sessionId, killed)
+    const environment = HandSession.make({ ...environments, env: () => env }, sessionId, killed)
     const run = yield* environment.spawner.spawn(
       ChildProcess.make("sh", ["-c", "echo $NOTION_KEY $GIT_AUTHOR_NAME; env | grep -c -e GH_TOKEN -e GIT_CONFIG"]),
     )

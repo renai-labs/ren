@@ -26,8 +26,18 @@ RUN echo '[Slice]' >/etc/systemd/system/ren-tools.slice \
 
 COPY start.sh /opt/ren/
 COPY start.js /opt/ren/
-RUN chmod 0755 /opt/ren/start.sh \
-  && git config --system url."https://github.com/".insteadOf "git@github.com:"
+COPY git-hook.sh /opt/ren/git-hooks/hook
+RUN chmod 0755 /opt/ren/start.sh /opt/ren/git-hooks/hook \
+  && git config --system url."https://github.com/".insteadOf "git@github.com:" \
+  && for name in applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-commit prepare-commit-msg \
+       commit-msg post-commit pre-rebase post-checkout post-merge pre-push post-rewrite pre-auto-gc \
+       reference-transaction post-index-change sendemail-validate fsmonitor-watchman; do \
+       ln -s hook "/opt/ren/git-hooks/$name"; \
+     done
+
+# Ren's git hooks add the chat's co-authors to each commit, then run the repository's own (git-hook.sh).
+# GIT_CONFIG_PARAMETERS wins over a repository's core.hooksPath, such as husky's.
+ENV GIT_CONFIG_PARAMETERS="'core.hooksPath'='/opt/ren/git-hooks'"
 
 # Every client trusts the system store, which start.js extends with the egress CA (C44).
 ENV BRAIN_PORT=4800 EXECUTOR_PORT=4100 \

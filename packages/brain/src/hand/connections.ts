@@ -65,7 +65,7 @@ export interface Env {
 export interface Interface {
   readonly connect: (sessionId: Session.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
   // oxlint-disable-next-line ren/no-comments -- Env vars the host adds to every process a session starts, read at each start.
-  readonly env?: Effect.Effect<Env>
+  readonly env?: (sessionId: Session.ID) => Effect.Effect<Env>
   readonly release: (sessionId: Session.ID) => Effect.Effect<void>
   // oxlint-disable-next-line ren/no-comments -- Closes every connection after Ren applied another hand at the brain's start or wake; the next call of each session asks Ren for its access again.
   readonly reset: Effect.Effect<void>

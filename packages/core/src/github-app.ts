@@ -319,21 +319,22 @@ export const personCredential = (
   ...(token.expiresIn && { expiresAt: new Date(now + token.expiresIn * 1000) }),
 })
 
+export const identity = (app: Settings, person: Option.Option<PersonCredentials.Account>) => {
+  const account = Option.getOrElse(person, () => ({ id: app.botUserId, name: `${app.slug}[bot]` }))
+  return { name: account.name, email: `${account.id}+${account.name}@users.noreply.github.com` }
+}
+
 export const variables = (app: Settings, person: Option.Option<PersonCredentials.Account>): PullEnv => {
   const placeholder = Credential.placeholder(label)
-  const name = Option.match(person, { onNone: () => `${app.slug}[bot]`, onSome: (account) => account.name })
-  const email = Option.match(person, {
-    onNone: () => `${app.botUserId}+${name}@users.noreply.github.com`,
-    onSome: (account) => `${account.id}+${account.name}@users.noreply.github.com`,
-  })
+  const author = identity(app, person)
   return {
     variables: {
       GITHUB_URL: app.web,
       GITHUB_API_URL: app.api,
-      GIT_AUTHOR_NAME: name,
-      GIT_AUTHOR_EMAIL: email,
-      GIT_COMMITTER_NAME: name,
-      GIT_COMMITTER_EMAIL: email,
+      GIT_AUTHOR_NAME: author.name,
+      GIT_AUTHOR_EMAIL: author.email,
+      GIT_COMMITTER_NAME: author.name,
+      GIT_COMMITTER_EMAIL: author.email,
     },
     placeholders: {
       GITHUB_TOKEN: placeholder,

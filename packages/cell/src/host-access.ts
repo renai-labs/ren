@@ -91,7 +91,7 @@ export const connections = Layer.unwrap(
       Effect.gen(function* () {
         const connections = yield* HandConnections.Service
         const env = yield* CredentialEnv.Service
-        return HandConnections.Service.of({ ...connections, env: env.current })
+        return HandConnections.Service.of({ ...connections, env: env.of })
       }),
     ).pipe(Layer.provide(HandConnections.layer.pipe(Layer.provide(layer), Layer.provide(FetchHttpClient.layer))))
   }),

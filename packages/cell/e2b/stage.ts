@@ -66,9 +66,11 @@ if (import.meta.main) {
   const start = await startProgram()
   const entries = [
     ...(await Promise.all(
-      [...dockerfiles.map((file) => join(import.meta.dir, file)), join(import.meta.dir, "../machine/start.sh")].map(
-        async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() }),
-      ),
+      [
+        ...dockerfiles.map((file) => join(import.meta.dir, file)),
+        join(import.meta.dir, "../machine/start.sh"),
+        join(import.meta.dir, "../machine/git-hook.sh"),
+      ].map(async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() })),
     )),
     { path: "start.js", content: start },
   ]
@@ -103,6 +105,7 @@ if (import.meta.main) {
   }
   await Bun.write(join(context, "start.sh"), Bun.file(join(import.meta.dir, "../machine/start.sh")))
   await Bun.write(join(context, "start.js"), start)
+  await Bun.write(join(context, "git-hook.sh"), Bun.file(join(import.meta.dir, "../machine/git-hook.sh")))
   const parts = await Promise.all(dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))
   const seeded = Option.match(dependencies, {
     onNone: () => [],
