@@ -43,8 +43,17 @@ export class Service extends Context.Service<
       sessionId: Session.ID,
       ids: ReadonlyArray<SessionMessage.ID>,
     ) => Effect.Effect<Option.Option<Replay>, never, Scope.Scope>
+    readonly speaker: (spaceId: Space.ID, message: SessionMessage.User) => Effect.Effect<Speaker>
+    readonly name: (spaceId: Space.ID, userId: string) => Effect.Effect<string>
+    readonly me: Effect.Effect<Option.Option<string>>
   }
 >()("@ren/opencode/Mirror") {}
+
+export interface Speaker {
+  readonly userId: string | undefined
+  readonly userName: string | undefined
+  readonly prefix: string | undefined
+}
 
 const origin = (message: SessionMessage.User) =>
   (message.channel && `${message.channel.sender} via ${providers[message.channel.provider]}`) ??
@@ -101,11 +110,10 @@ export const layer = (ctx: Pick<Plugin.Context, "session">) =>
         Effect.orElseSucceed(() => "Member"),
       )
 
-      const speaker = Effect.fnUntraced(function* (sessionId: Session.ID, message: SessionMessage.User) {
+      const speaker = Effect.fnUntraced(function* (spaceId: Option.Option<Space.ID>, message: SessionMessage.User) {
         const userId = message.sender?.userId
         const own = Boolean(userId) && userId === (yield* me.pipe(Effect.option, Effect.map(Option.getOrUndefined)))
-        const bound = yield* bindings.get(sessionId).pipe(Effect.orElseSucceed(() => Option.none<Binding.Info>()))
-        const userName = userId && !own && Option.isSome(bound) ? yield* nameOf(bound.value.spaceId, userId) : undefined
+        const userName = userId && !own && Option.isSome(spaceId) ? yield* nameOf(spaceId.value, userId) : undefined
         return { userId, userName, prefix: origin(message) ?? (own ? undefined : (userName ?? "Member")) }
       })
 
@@ -120,7 +128,11 @@ export const layer = (ctx: Pick<Plugin.Context, "session">) =>
         const chat = yield* watcher.link.client
         const message = yield* chat.session.message({ sessionID: sessionId, messageID: id })
         if (message.type !== "user") return false
-        const who = yield* speaker(sessionId, message)
+        const bound = yield* bindings.get(sessionId).pipe(Effect.orElseSucceed(() => Option.none<Binding.Info>()))
+        const who = yield* speaker(
+          Option.map(bound, (info) => info.spaceId),
+          message,
+        )
         const text = message.presentation?.displayText ?? message.text
         yield* ctx.session.prompt({
           sessionID,
@@ -189,6 +201,9 @@ export const layer = (ctx: Pick<Plugin.Context, "session">) =>
       })
 
       return Service.of({
+        speaker: (spaceId, message) => speaker(Option.some(spaceId), message),
+        name: nameOf,
+        me: Effect.option(me),
         watch: Effect.fn("Mirror.watch")(function* (sessionId) {
           yield* lock.withPermit(
             Effect.gen(function* () {

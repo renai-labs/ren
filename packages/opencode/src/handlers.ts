@@ -11,6 +11,7 @@ import { Mirror } from "./mirror.js"
 import { RenApi } from "./ren.js"
 import { Requests } from "./requests.js"
 import { RenRpc } from "./rpc.js"
+import { Sessions } from "./sessions.js"
 
 class Unavailable extends Schema.TaggedError<Unavailable>()("RenHandlers.Unavailable", { message: Schema.String }) {}
 
@@ -37,6 +38,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
   const auth = yield* RenAuth.Login
   const requests = yield* Requests.Service
   const changes = yield* requests.changes
+  const sessions = yield* Sessions.Service
   const announcer =
     yield* Deferred.make<(...args: Rpc.EventInput<typeof RenRpc.Definition>) => Effect.Effect<void, unknown>>()
   const announce = (...args: Rpc.EventInput<typeof RenRpc.Definition>) =>
@@ -236,6 +238,19 @@ export const register = Effect.fn("RenHandlers.register")(function* (
         return { sessionID, spaceId }
       }).pipe(Effect.mapError(answer(context))),
     requests: () => requests.pending,
+    listSessions: (input, context) =>
+      Effect.gen(function* () {
+        const listed = yield* sessions.list(input)
+        return { ...Struct.omit(listed, ["spaceId"]), space: info(yield* find(listed.spaceId)) }
+      }).pipe(Effect.mapError(answer(context))),
+    openSession: (input, context) =>
+      sessions
+        .open(input.sessionId, {
+          existing: input.existing ?? false,
+          imported: input.imported ?? false,
+          queued: input.queued ?? false,
+        })
+        .pipe(Effect.mapError(answer(context))),
   })
   yield* Deferred.succeed(emitter, (space) => registration.events.emit("spaceSelected", space))
   yield* Deferred.succeed(announcer, registration.events.emit)

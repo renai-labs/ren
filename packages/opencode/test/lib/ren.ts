@@ -27,6 +27,7 @@ export interface Options {
   readonly chat?: (path: string, request: Request) => Promise<Response>
   readonly created?: (sessionId: Session.ID) => Promise<void>
   readonly imported?: (sessionId: Session.ID, transcript: unknown) => Promise<void>
+  readonly saved?: (sessionId: string, url: URL) => Promise<Response>
 }
 
 const Created = Schema.Struct({ id: Session.ID, spaceId: Space.ID, model: Schema.optional(SessionModel.Ref) })
@@ -138,26 +139,32 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     forms: Array.of<Form.Info>(),
     children: Array.of<Session.ID>(),
     answers: Array.of<Answer>(),
+    sessions: Array.of<Session.Info>(),
+    saved: new Map<string, ReadonlyArray<SessionMessage.Info>>(),
+    listed: Array.of<URLSearchParams>(),
+    reads: Array.of<string>(),
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
   }
   const info = (id: Session.ID, spaceId: Space.ID, origin: Session.Origin = "chat") =>
-    Schema.encodeSync(Session.Info)({
-      id,
-      spaceId,
-      createdBy: Auth.UserID.make("usr_test"),
-      agentId: null,
-      origin,
-      harness: "opencode",
-      title: state.titles.get(id) ?? null,
-      status: "idle",
-      capabilities: SessionCapabilities.of("opencode"),
-      createdAt: DateTime.nowUnsafe(),
-      updatedAt: DateTime.nowUnsafe(),
-      archivedAt: null,
-      filesResetAt: null,
-    })
+    Schema.encodeSync(Session.Info)(
+      state.sessions.find((each) => each.id === id) ?? {
+        id,
+        spaceId,
+        createdBy: Auth.UserID.make("usr_test"),
+        agentId: null,
+        origin,
+        harness: "opencode",
+        title: state.titles.get(id) ?? null,
+        status: "idle",
+        capabilities: SessionCapabilities.of("opencode"),
+        createdAt: DateTime.nowUnsafe(),
+        updatedAt: DateTime.nowUnsafe(),
+        archivedAt: null,
+        filesResetAt: null,
+      },
+    )
   const space = (each: Joined) =>
     Schema.encodeSync(Space.Info)({
       ...each,
@@ -398,7 +405,51 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     await options.imported?.(id, input.transcript)
     return Response.json(info(id, input.spaceId, "opencode"))
   }
-  const api = async (url: URL, request: Request) => {
+  const list = (url: URL) => {
+    state.listed.push(url.searchParams)
+    const query = url.searchParams
+    const search = query.get("search")?.toLowerCase()
+    const found = state.sessions.filter(
+      (each) =>
+        query.getAll("spaceId").includes(each.spaceId) &&
+        (!query.has("createdBy") || query.getAll("createdBy").includes(each.createdBy)) &&
+        (!query.has("status") || query.get("status") === each.status) &&
+        (!query.has("origin") || query.getAll("origin").includes(each.origin)) &&
+        (!search || Boolean(each.title?.toLowerCase().includes(search))),
+    )
+    return Response.json(
+      Schema.encodeSync(Pagination.Page(Session.Info))({
+        items: found,
+        page: Number(query.get("page") ?? 1),
+        pageSize: Number(query.get("pageSize") ?? 50),
+        total: found.length,
+      }),
+    )
+  }
+  const saved = (sessionId: string, url: URL) => {
+    state.reads.push(sessionId)
+    const newest = (state.saved.get(sessionId) ?? []).toReversed()
+    const from = Number(url.searchParams.get("cursor") ?? 0)
+    const to = from + Number(url.searchParams.get("limit") ?? 50)
+    return Response.json(
+      Schema.encodeSync(SessionMessage.Page)({
+        items: newest.slice(from, to),
+        cursor: to < newest.length ? { next: String(to) } : {},
+      }),
+    )
+  }
+  const reads: Record<string, ((url: URL) => Response | Promise<Response>) | undefined> = {
+    "/sessions": list,
+    messages: (url) => {
+      const sessionId = String(url.pathname.split("/")[2])
+      return options.saved ? options.saved(sessionId, url) : saved(sessionId, url)
+    },
+  }
+  const api = (url: URL, request: Request) => {
+    const read = request.method === "GET" ? reads[url.pathname.split("/")[3] ?? url.pathname] : undefined
+    return read ? read(url) : rest(url, request)
+  }
+  const rest = async (url: URL, request: Request) => {
     const parts = url.pathname.split("/")
     if (url.pathname === "/sessions") {
       const input = Schema.decodeUnknownSync(Created)(await request.json())

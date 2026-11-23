@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin/tui"
-import { createSignal, Show } from "solid-js"
+import { createEffect, createSignal, on, Show } from "solid-js"
 import { RenCommands } from "./commands.js"
 import { RenRpc } from "./rpc.js"
 import { Support } from "./support.js"
@@ -16,6 +16,21 @@ export default Plugin.define({
       client: context.client,
       location: () => context.location ?? context.data.location.default(),
       ui: context.ui,
+      reload: async (sessionID: string, load: () => Promise<unknown>) => {
+        const created = Promise.withResolvers<void>()
+        const stop = context.data.on("session.created", (event) => {
+          if (event.data.sessionID === sessionID) created.resolve()
+        })
+        const timer = setTimeout(created.resolve, 3000)
+        void created.promise.then(() => {
+          stop()
+          clearTimeout(timer)
+        })
+        await load()
+        await created.promise
+        context.data.session.message.invalidate(sessionID)
+        await context.data.session.message.sync(sessionID)
+      },
       open: (url: string) => {
         const opener = process.platform === "darwin" ? "open" : "xdg-open"
         if (Bun.which(opener)) Bun.spawn([opener, url], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref()
@@ -71,8 +86,32 @@ export default Plugin.define({
           slash: { name: "ren:move" },
           run: () => RenCommands.move(surface),
         },
+        {
+          id: "ren.sessions",
+          title: "Open a Ren session",
+          description: "Sessions in the selected Ren space, also those started elsewhere",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:sessions" },
+          run: () => RenCommands.sessions(surface),
+        },
       ],
     }))
+    const catching = new Set<string>()
+    createEffect(
+      on(
+        () => {
+          const route = context.ui.router.current()
+          if (route.type !== "session" || !context.data.session.get(route.sessionID)?.metadata?.["ren"]) return
+          return context.data.session.status(route.sessionID) === "idle" ? route.sessionID : undefined
+        },
+        (sessionID) => {
+          if (!sessionID || catching.has(sessionID)) return
+          catching.add(sessionID)
+          void RenCommands.catchUp(surface, sessionID).finally(() => catching.delete(sessionID))
+        },
+      ),
+    )
     const status = () => (
       <Show when={space()}>
         <box flexShrink={0}>

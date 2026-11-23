@@ -2,7 +2,7 @@ export * as RenCommands from "./commands.js"
 
 import type { Plugin } from "@opencode/plugin/tui"
 import { Form } from "@ren/schema/form"
-import { Option, Schema } from "effect"
+import { Option, Schema, Struct } from "effect"
 import { RenRpc } from "./rpc.js"
 
 type Context = Plugin.Context
@@ -22,6 +22,14 @@ export interface SignInSurface extends Surface {
   readonly open: (url: string) => void
   readonly ui: Surface["ui"] & {
     readonly dialog: Pick<Context["ui"]["dialog"], "prompt" | "clear">
+  }
+}
+
+export interface OpenSurface extends Surface {
+  readonly client: Pick<Context["client"], "rpc" | "experimental" | "session">
+  readonly reload: (sessionID: string, load: () => Promise<unknown>) => Promise<void>
+  readonly ui: Surface["ui"] & {
+    readonly dialog: Pick<Context["ui"]["dialog"], "select" | "prompt">
   }
 }
 
@@ -272,3 +280,130 @@ export const requests = async (surface: RequestSurface) => {
     for (const stop of stops) stop()
   }
 }
+
+const origins: Record<RenRpc.SessionSummary["origin"], string> = {
+  chat: "",
+  task: "task",
+  schedule: "schedule",
+  webhook: "webhook",
+  slack: "Slack",
+  linear: "Linear",
+  github: "GitHub",
+  opencode: "OpenCode",
+}
+
+const refresh = async (surface: OpenSurface, sessionId: string, options: { readonly existing: boolean }) => {
+  const rpc = surface.client.rpc(RenRpc.Definition)
+  const queued = await surface.client.session.inbox.list({ sessionID: sessionId }).then(
+    (items) => items.length > 0,
+    () => false,
+  )
+  const first = await rpc.openSession({ sessionId, existing: options.existing, queued }, at(surface))
+  if (!first.import) return { ...first, imported: false }
+  const location = surface.location()
+  const data = first.import
+  await surface.reload(first.sessionID, () =>
+    surface.client.experimental.session.import({ ...data, ...(location && { location }) }),
+  )
+  return { ...(await rpc.openSession({ sessionId, imported: true }, at(surface))), imported: true }
+}
+
+const behind = (surface: OpenSurface, outcome: RenRpc.Outcome) => {
+  if (outcome === "busy")
+    surface.ui.toast.show({
+      title: "Ren",
+      message: "This session is behind Ren. It catches up when its turn ends.",
+      variant: "info",
+    })
+  if (outcome === "unsent")
+    surface.ui.toast.show({
+      title: "Ren",
+      message:
+        "This session is behind Ren, but it has messages Ren does not have yet, so it keeps them. Send a message to deliver them.",
+      variant: "warning",
+    })
+}
+
+export const open = (surface: OpenSurface, sessionId: string) =>
+  refresh(surface, sessionId, { existing: false })
+    .then((opened) => {
+      surface.ui.router.navigate({ type: "session", sessionID: opened.sessionID })
+      behind(surface, opened.outcome)
+    })
+    .catch(fail(surface))
+
+export const catchUp = (surface: OpenSurface, sessionId: string) =>
+  refresh(surface, sessionId, { existing: true }).then(
+    (opened) => {
+      if (opened.imported) surface.ui.router.navigate({ type: "session", sessionID: opened.sessionID })
+      behind(surface, opened.outcome)
+    },
+    () => undefined,
+  )
+
+export const sessions = (surface: OpenSurface, filter: RenRpc.Filter = {}): Promise<void> =>
+  surface.client
+    .rpc(RenRpc.Definition)
+    .listSessions(filter, at(surface))
+    .then(async (listed) => {
+      const now = Date.now()
+      const chosen = await surface.ui.dialog.select({
+        title: `${filter.scope === "space" ? "Ren sessions" : "Your Ren sessions"} in ${listed.space.name}${filter.search ? `: “${filter.search}”` : ""}`,
+        placeholder: "Filter",
+        options: listed.sessions.map((each) => {
+          const minutes = Math.max(0, Math.round((now - each.updated) / 60_000))
+          const unit = [
+            { size: 1440, label: "d" },
+            { size: 60, label: "h" },
+          ].find((step) => minutes >= step.size) ?? { size: 1, label: "m" }
+          return {
+            title: each.title ?? "Untitled",
+            value: each.id,
+            description: [
+              each.startedBy,
+              `${Math.round(minutes / unit.size)}${unit.label} ago`,
+              each.status === "busy" ? "working" : "idle",
+              origins[each.origin],
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            ...(each.local && { footer: "local" }),
+          }
+        }),
+        search: (query, options) =>
+          options.filter((option) =>
+            `${option.title} ${option.description ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()),
+          ),
+        actions: [
+          {
+            bind: "ctrl+s",
+            title: filter.scope === "space" ? "Only mine" : "Everyone’s",
+            selection: "none",
+            onTrigger: () =>
+              void sessions(surface, {
+                ...Struct.omit(filter, ["scope"]),
+                scope: filter.scope === "space" ? "mine" : "space",
+              }),
+          },
+          {
+            bind: "ctrl+f",
+            title: "Search Ren",
+            selection: "none",
+            onTrigger: () =>
+              void surface.ui.dialog
+                .prompt({ title: "Search Ren sessions", placeholder: "Words in a title or a message" })
+                .then((text) =>
+                  // ast-grep-ignore: no-nullish-comparison, -- an empty search clears the search; only escape cancels
+                  text === undefined
+                    ? undefined
+                    : sessions(surface, {
+                        ...Struct.omit(filter, ["search"]),
+                        ...(text.trim() && { search: text.trim() }),
+                      }),
+                ),
+          },
+        ],
+      })
+      if (chosen) await open(surface, chosen)
+    })
+    .catch(fail(surface))

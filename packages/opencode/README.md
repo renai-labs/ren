@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, and `/ren:move` moves a local session there with its history. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -54,6 +54,8 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.      |
 | `requests` | `Requests`: the brain's permission requests and questions as local ones, and the answers.          |
 | `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range. |
+| `history`  | `History`: Chat API messages as OpenCode export messages, and the catch-up rules.                  |
+| `sessions` | `Sessions`: the session list, and the transcript to import on open and catch-up.                   |
 
 ## Connection
 
@@ -119,14 +121,14 @@ Stopping the local turn cancels the stream, which calls `session.interrupt`. Ope
 
 Other members, and the signed-in user's other clients (the web app, Slack, schedules, a teammate's OpenCode), write in the same Ren session. While a Ren session is in use here, a user message that the brain delivers and that the local session does not have becomes a local user message, and its turn streams into the local session like a local turn. Nothing is sent to the brain for it.
 
-- **In use.** A Ren session is watched from its first local turn in this OpenCode process (`Mirror.Service.watch`, which `doStream` calls; a later feature that opens a Ren session calls it too). The mirror holds the session's link and reads its events until the brain ends the event stream as idle (`stream.ended` with `idle`: no execution and no events for the brain's `CHAT_IDLE_MS`, 2 minutes), then lets it go, so an idle OpenCode keeps no brain awake. An open Chat API event stream holds the brain's harness open. At most 4 sessions are watched; a fifth lets go of the one used longest ago. A message delivered while the session is not watched, or while the event stream reconnects, is not shown (catch-up is planned).
+- **In use.** A Ren session is watched from its first local turn in this OpenCode process (`Mirror.Service.watch`, which `doStream` calls; a later feature that opens a Ren session calls it too). The mirror holds the session's link and reads its events until the brain ends the event stream as idle (`stream.ended` with `idle`: no execution and no events for the brain's `CHAT_IDLE_MS`, 2 minutes), then lets it go, so an idle OpenCode keeps no brain awake. An open Chat API event stream holds the brain's harness open. At most 4 sessions are watched; a fifth lets go of the one used longest ago. A message delivered while the session is not watched, or while the event stream reconnects, is not shown live; catch-up brings it in (Open and catch up).
 - **What appears.** At the brain's `session.inbox.delivered` of a message that the local session does not have, the mirror reads the message (`session.message`). A user message is admitted with `ctx.session.prompt`, with the Ren message ID as its `id`, `delivery: "steer"`, `resume: true` and the metadata `{ userID, userName, remote: true }`. Synthetic and compaction deliveries are not shown. The local session starts a step, and `doStream` streams the remote turn.
 - **The name.** The stock TUI shows only a user message's text, so the text starts with `<name>: `. The name is the sender's in the space's member list (`space-member.list`, read once per space and again for an unknown member), else `Member`. A message from the signed-in user (`me.get`) has no prefix. A message from a channel, schedule, webhook or task shows `<sender> via Slack`, `Schedule <name>`, `Webhook <name>` or `Task <identifier>` instead. The brain never reads the local text: it has the original.
 - **No echo.** A message this OpenCode sent is already in the local session, so it is not admitted again. A mirrored message is never sent: `doStream` reads `remote: true` from its metadata. Admitting an ID the local session has is a no-op, so a delivery seen twice adds nothing.
 - **The turn of a mirrored message.** From the delivery the mirror records the session's events until that message's step claims them (`Mirror.Service.replay`), so the step streams the turn from its delivery even when it starts after the brain began, and no event goes to two steps. Without a record (a restart, a dropped record) the step uses the rule of a message the brain already has: follow a busy session, finish an idle one.
 - **Two messages at once.** One remote execution can answer several messages: a steer is delivered after the running step and answered by the next step of the same execution. A local step ends at the delivery of a user message that is not one of its own, once its own were delivered; that message's own step streams the rest. So a teammate's steer during a local turn shows after the local answer, with its own answer. A local prompt during a mirrored turn waits until that step ends, as a steer during any Ren turn does, and is then sent.
 
-Limits: a remote turn already running when the session is opened, and messages delivered while it was not watched, are not shown. Two messages delivered back to back can leave one local step empty. Synthetic continuations (a subagent's result, a scheduled wake) stream inside the step that is running, or not at all when no step runs.
+Limits: a remote turn already running when the session is opened, and messages delivered while it was not watched, are not shown live (catch-up brings them in later). Two messages delivered back to back can leave one local step empty. Synthetic continuations (a subagent's result, a scheduled wake) stream inside the step that is running, or not at all when no step runs.
 
 ## Rename
 
@@ -164,6 +166,19 @@ When the brain stops a turn to ask (a permission request or a question), the loc
 
 Stopping the local turn while a request is pending interrupts the remote turn as before; the brain then closes the request. Limits: spec L20p to L22p.
 
+## Open and catch up
+
+A Ren session started elsewhere (the web app, a teammate, Slack, a schedule, another machine) opens as a local copy, and a local copy that fell behind Ren is brought up to date (`Sessions`, `History`, `RenCommands.sessions`, `open`, `catchUp`).
+
+- **List.** `/ren:sessions` lists the selected space's sessions, newest activity first (Ren's `session.list`, 50 per page): your own, or with `ctrl+s` everyone's in the space. Each row shows the title, who started it ("You" or the member's name), when it was last active, working or idle, its origin unless it is a chat, and `local` when a local copy exists. Typing filters the listed rows; `ctrl+f` asks Ren to search titles and message text. The RPC `listSessions` also takes `status`, `origin`, `page` and `pageSize`.
+- **Open.** Choosing a session calls `openSession`. Without a local copy the server part reads Ren's saved transcript (Ren API `chat.messages`, which works while the brain starts or is stopped), turns it into OpenCode's export shape and returns it; the TUI part imports it with OpenCode's `experimental.session.import` (a server plugin cannot import) under the Ren session's ID, then calls `openSession` again, which watches the session (`Mirror.Service.watch`), and opens it. The copy has the Ren title, the binding `ren: { spaceId, sessionId }`, the model `ren/<provider>/<model>` of the newest assistant or model switch (else the space's default), and every message under its Ren message ID.
+- **What the copy holds.** Chat API messages are OpenCode's messages with Ren's fields lifted out of `metadata`, so the conversion puts them back: a user message from someone else gets the mirror's name prefix and origin label and `{ userID, userName, remote: true }`, the signed-in user's own messages have no prefix, model refs become `ren` models, and text parts lose `time`. Tool parts keep their `metadata`, so an imported tool row renders as the TUI's own row (a read shows "Explored: 1 read"), unlike a live-streamed one (L1). Running messages are left out, as OpenCode's import does.
+- **Nothing reaches Ren.** Opening sends no prompt, rename, model switch or archive: the import publishes only `session.created`, which `Title` and `Controls` ignore.
+- **Catch-up.** When the TUI shows a Ren session, and each time that session goes idle, and when `/ren:sessions` opens one that has a copy, the plugin compares the copy with Ren's newest 20 saved messages: it is behind when Ren has, after the newest message both have, a user, synthetic or compaction message the copy lacks, or an answer while the copy has none. A behind copy is removed and imported again under the same ID (the mirror stops watching it before the removal and watches it again after the import), and the TUI reloads its messages and shows it again. The comparison uses message IDs, so a copy that streamed its own turns (whose assistant messages have local IDs) is not behind.
+- **Never lose local work.** The copy is not replaced while its local turn runs, while its inbox holds queued items, or while it has user messages after its last answer that Ren does not have (unsent because the brain was unreachable); a notice says why, and the next prompt sends the unsent ones. After a refresh, `doStream`'s candidates are the messages after the last imported answer, so the next prompt sends only itself.
+
+Limits: subagent child sessions are not imported, so a subagent row's link leads nowhere. Catch-up runs from a TUI only, for the session it shows. A refresh of the shown session goes home with OpenCode's "The current session was deleted" toast for a moment. Local notices, failed local turns and local model switches are dropped by a refresh. A transcript larger than an RPC response (32 MiB) cannot be opened.
+
 ## Commands
 
 Every command the plugin adds is `/ren:<command>`, in the slash completion and in the command palette under Ren.
@@ -172,6 +187,7 @@ Every command the plugin adds is `/ren:<command>`, in the slash completion and i
 - `/ren:login` signs in through the browser and `/ren:logout` signs out (Sign-in).
 - `/ren:new` creates a local session bound to the selected space, with the prompt's `ren/<model>` model when the space offers it, else the space's default, and opens it.
 - `/ren:move` moves the open local session to the selected space (Moving a session).
+- `/ren:sessions` lists the Ren sessions of the selected space and opens the chosen one (Open and catch up).
 
 Signed out, they say to run `/ren:login`. The home and prompt footers show `ren · <space>`.
 
@@ -198,14 +214,16 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 | `logout`        | `{}`                                | `{ server, signedOut }`             |
 | `moveSession`   | `{ sessionID, transcript, model? }` | `{ sessionID, spaceId }`            |
 | `requests`      | `{}`                                | `{ forms: LocalForm[], closed }`    |
+| `listSessions`  | `Filter`                            | `{ sessions, space, page, total }`  |
+| `openSession`   | `{ sessionId, existing?, … }`       | `{ sessionID, outcome, import? }`   |
 
-`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
 Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact` and the model picker (Session controls), and stop.
 
-Planned commands: `/ren:sessions`, `/ren:retry`. Planned features:
+Planned commands: `/ren:retry`. Planned features:
 
 - The web app chat's features, where the stock TUI allows them.
 
@@ -303,7 +321,7 @@ Release (manual; no workflow publishes it yet): run the package checks and `REN_
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, a permission request and a question on a real brain, and the built package
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, and the built package
 bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```

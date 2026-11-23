@@ -144,8 +144,10 @@ export const register = Effect.fn("Controls.register")(function* (ctx: Plugin.Co
           const sessionID = event.data.sessionID
           if (event.type === "session.model.selected" && event.data.model.providerID !== providerID)
             return yield* keepRen(sessionID)
-          if (event.type === "session.deleted")
+          if (event.type === "session.deleted") {
+            if (Option.isSome(yield* ctx.session.get({ sessionID }).pipe(Effect.option))) return
             return yield* Effect.flatMap(Schema.decodeUnknownEffect(Session.ID)(sessionID), mirror.unwatch)
+          }
           if (event.type === "session.forked") {
             const local = yield* ctx.session.get({ sessionID })
             const copied = Schema.decodeUnknownOption(Schema.Struct({ ren: Binding.Info }))(local.metadata)

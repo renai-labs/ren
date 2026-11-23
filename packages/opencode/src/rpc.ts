@@ -2,6 +2,7 @@ export * as RenRpc from "./rpc.js"
 
 import { Rpc } from "@opencode/plugin/rpc"
 import { Form } from "@ren/schema/form"
+import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { Schema, Struct } from "effect"
 
@@ -45,6 +46,52 @@ export const Closed = Schema.Struct({
   kind: Schema.Literals(["permission", "form"]),
   message: Schema.String,
 }).annotate({ identifier: "RenRpc.Closed" })
+
+export interface SessionSummary extends Schema.Schema.Type<typeof SessionSummary> {}
+export const SessionSummary = Schema.Struct({
+  id: Schema.String,
+  title: Schema.NullOr(Schema.String),
+  startedBy: Schema.String,
+  mine: Schema.Boolean,
+  origin: Session.Origin,
+  status: Session.Status,
+  updated: Schema.Number,
+  local: Schema.Boolean,
+}).annotate({ identifier: "RenRpc.SessionSummary" })
+
+export interface Filter extends Schema.Schema.Type<typeof Filter> {}
+export const Filter = Schema.Struct({
+  scope: Schema.optionalKey(Schema.Literals(["mine", "space"])),
+  status: Schema.optionalKey(Session.Status),
+  origin: Schema.optionalKey(Schema.Array(Session.Origin)),
+  search: Schema.optionalKey(Schema.String),
+  page: Schema.optionalKey(Schema.Int),
+  pageSize: Schema.optionalKey(Schema.Int),
+}).annotate({ identifier: "RenRpc.Filter" })
+
+export interface Imported extends Schema.Schema.Type<typeof Imported> {}
+export const Imported = Schema.Struct({
+  info: Schema.Struct({
+    id: Schema.String,
+    projectID: Schema.String,
+    model: Schema.Struct({ providerID: Schema.String, id: Schema.String, variant: Schema.optionalKey(Schema.String) }),
+    title: Schema.optionalKey(Schema.String),
+    cost: Schema.Number,
+    tokens: Schema.Struct({
+      input: Schema.Number,
+      output: Schema.Number,
+      reasoning: Schema.Number,
+      cache: Schema.Struct({ read: Schema.Number, write: Schema.Number }),
+    }),
+    time: Schema.Struct({ created: Schema.Number, updated: Schema.Number }),
+    metadata: Schema.Record(Schema.String, Schema.MutableJson),
+    location: Schema.Struct({ directory: Schema.String }),
+  }),
+  messages: Schema.Array(Schema.MutableJson),
+}).annotate({ identifier: "RenRpc.Imported" })
+
+export const Outcome = Schema.Literals(["current", "import", "busy", "unsent", "local"])
+export type Outcome = typeof Outcome.Type
 
 export const Definition = Rpc.define({
   id: "ren",
@@ -109,6 +156,33 @@ export const Definition = Rpc.define({
       input: none,
       output: Schema.toStandardSchemaV1(
         Schema.Struct({ forms: Schema.Array(LocalForm), closed: Schema.Array(FormRef) }),
+      ),
+      errors,
+    },
+    listSessions: {
+      input: Schema.toStandardSchemaV1(Filter),
+      output: Schema.toStandardSchemaV1(
+        Schema.Struct({
+          sessions: Schema.Array(SessionSummary),
+          space: SpaceInfo,
+          page: Schema.Int,
+          pageSize: Schema.Int,
+          total: Schema.Int,
+        }),
+      ),
+      errors,
+    },
+    openSession: {
+      input: Schema.toStandardSchemaV1(
+        Schema.Struct({
+          sessionId: Schema.String,
+          existing: Schema.optionalKey(Schema.Boolean),
+          imported: Schema.optionalKey(Schema.Boolean),
+          queued: Schema.optionalKey(Schema.Boolean),
+        }),
+      ),
+      output: Schema.toStandardSchemaV1(
+        Schema.Struct({ sessionID: Schema.String, outcome: Outcome, import: Schema.optionalKey(Imported) }),
       ),
       errors,
     },
