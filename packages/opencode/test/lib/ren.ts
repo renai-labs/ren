@@ -6,6 +6,7 @@ import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
+import { Factory } from "@ren/schema/factory"
 import { Space } from "@ren/schema/space"
 import { DateTime, Effect, Queue, Schema } from "effect"
 
@@ -28,6 +29,20 @@ const choices: SessionModel.Choices = {
   models: [{ id: "stub-model", providerID: "stub", name: "Stub", variants: [{ id: "high" }] }],
 }
 
+export const otherChoices: SessionModel.Choices = {
+  models: [
+    { id: "first-model", providerID: "stub", name: "First", variants: [] },
+    { id: "other-model", providerID: "stub", name: "Other", variants: [{ id: "low" }] },
+  ],
+  default: { providerID: "stub", id: "other-model" },
+}
+
+interface Joined {
+  readonly id: Space.ID
+  readonly slug: string
+  readonly name: string
+}
+
 export const frame = (type: string, data: object) => ({
   id: `evt_${crypto.randomUUID()}`,
   created: Date.now(),
@@ -40,10 +55,17 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const interrupted = yield* Queue.unbounded<string>()
   const opened = yield* Queue.unbounded<number>()
   const checked = yield* Queue.unbounded<string>()
+  const prepared = yield* Queue.unbounded<Space.ID>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
+  const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
+  const beta: Joined = { id: Space.ID.create(), slug: "beta", name: "Beta" }
   const state = {
-    spaceId: Space.ID.create(),
+    spaceId: alpha.id,
+    alpha,
+    beta,
+    spaces: [alpha, beta],
+    models: new Map<string, SessionModel.Choices>(),
     created: Array.of<typeof Created.Type>(),
     prompts: Array.of<Prompt>(),
     delivered: new Set<string>(),
@@ -69,6 +91,31 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       updatedAt: DateTime.nowUnsafe(),
       archivedAt: null,
       filesResetAt: null,
+    })
+  const space = (each: Joined) =>
+    Schema.encodeSync(Space.Info)({
+      ...each,
+      organizationId: Auth.OrganizationID.make("org_test"),
+      kind: "shared",
+      ownerUserId: null,
+      description: null,
+      brainScope: "space",
+      brain: { provider: null, environmentTemplateId: null },
+      hand: Space.defaultHand,
+      compute: { isPending: false, shutdown: null, lastShutdown: null },
+      memberCount: 1,
+      membershipId: Space.MembershipID.make("spm_test"),
+      factory: Factory.empty,
+      canUpdate: true,
+      canJoin: false,
+      canRequestJoin: false,
+      joinRequestId: null,
+      canAddMember: true,
+      canRemoveMember: true,
+      canArchive: true,
+      createdAt: DateTime.nowUnsafe(),
+      updatedAt: DateTime.nowUnsafe(),
+      archivedAt: null,
     })
   const chat = async (path: string, request: Request) => {
     const parts = path.split("/")
@@ -125,6 +172,23 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       await options.created?.(input.id)
       return Response.json(info(input.id, input.spaceId))
     }
+    if (url.pathname === "/spaces")
+      return Response.json({
+        items: state.spaces.map(space),
+        page: 1,
+        pageSize: state.spaces.length,
+        total: state.spaces.length,
+      })
+    if (parts[1] === "spaces" && parts[3] === "chat") {
+      Queue.offerUnsafe(prepared, Space.ID.make(String(parts[2])))
+      return new Response(null, { status: 204 })
+    }
+    if (parts[1] === "spaces") {
+      const found = state.spaces.find((each) => each.id === parts[2] || each.slug === parts[2])
+      return found
+        ? Response.json(space(found))
+        : Response.json({ _tag: "NotFoundError", message: "No such space" }, { status: 404 })
+    }
     if (parts[3] === "chat")
       return Response.json({
         status: "ready",
@@ -132,7 +196,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
         token: "a-client-token",
         expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       })
-    if (parts[3] === "models") return Response.json(choices)
+    if (parts[3] === "models") return Response.json(state.models.get(url.searchParams.get("spaceId") ?? "") ?? choices)
     return Response.json(info(Session.ID.make(String(parts[2])), state.spaceId))
   }
   const server = yield* Effect.acquireRelease(
@@ -158,6 +222,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     interrupted,
     opened,
     checked,
+    prepared,
     send,
     drop: () => {
       for (const controller of streams) controller.close()

@@ -1,5 +1,48 @@
 export * as RenRpc from "./rpc.js"
 
 import { Rpc } from "@opencode/plugin/rpc"
+import { Space } from "@ren/schema/space"
+import { Schema, Struct } from "effect"
 
-export const Ren = Rpc.define({ id: "ren", methods: {}, events: {} })
+export interface SpaceInfo extends Schema.Schema.Type<typeof SpaceInfo> {}
+export const SpaceInfo = Space.Info.mapFields(Struct.pick(["id", "slug", "name", "kind", "description"])).annotate({
+  identifier: "RenRpc.SpaceInfo",
+})
+
+const errors = {
+  signed_out: Schema.toStandardSchemaV1(Schema.Struct({ server: Schema.String })),
+  unavailable: Schema.toStandardSchemaV1(Schema.Struct({})),
+}
+
+const none = Schema.toStandardSchemaV1(Schema.Struct({}))
+
+export const Definition = Rpc.define({
+  id: "ren",
+  methods: {
+    listSpaces: {
+      input: none,
+      output: Schema.toStandardSchemaV1(
+        Schema.Struct({ spaces: Schema.Array(SpaceInfo), selected: Schema.NullOr(Space.ID) }),
+      ),
+      errors,
+    },
+    getSpace: { input: none, output: Schema.toStandardSchemaV1(SpaceInfo), errors },
+    selectSpace: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ spaceId: Space.ID })),
+      output: Schema.toStandardSchemaV1(SpaceInfo),
+      errors,
+    },
+    createSession: {
+      input: Schema.toStandardSchemaV1(
+        Schema.Struct({
+          model: Schema.optionalKey(Schema.Struct({ id: Schema.String, variant: Schema.optionalKey(Schema.String) })),
+        }),
+      ),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String, spaceId: Space.ID })),
+      errors,
+    },
+  },
+  events: {
+    spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },
+  },
+})

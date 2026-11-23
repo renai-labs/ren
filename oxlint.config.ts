@@ -928,6 +928,10 @@ export default defineConfig({
       rules: { "import/no-default-export": "off" },
     },
     {
+      files: ["packages/opencode/src/**/*.tsx"],
+      rules: { "react/only-export-components": "off", "react/no-unknown-property": "off" },
+    },
+    {
       files: ["packages/app/src/main.tsx"],
       rules: {
         "no-restricted-properties": ["error", jsonParse, ...platformProperties, ...formatProperties, ...dateProperties],

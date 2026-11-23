@@ -90,7 +90,8 @@ const turn = (input: {
         Effect.mapError(() => new TurnError({ message: `OpenCode session ${input.sessionID} has no ID Ren accepts.` })),
       )
       const bound = yield* bindings.get(sessionID)
-      if (Option.isSome(bound) && bound.value.sessionId !== sessionID)
+      const created = Option.flatMapNullishOr(bound, (info) => info.sessionId)
+      if (Option.isSome(created) && created.value !== sessionID)
         return yield* new TurnError({
           message: "This session is a copy of a Ren session. Start a new session to talk to Ren.",
         })
@@ -107,8 +108,8 @@ const turn = (input: {
           onSome: (id) => [{ id, text: message.text }],
         })
       })
-      if (Option.isNone(bound)) {
-        const spaceId = yield* bindings.space
+      if (Option.isNone(created)) {
+        const spaceId = Option.isSome(bound) ? bound.value.spaceId : yield* bindings.space
         const client = yield* ren.client
         const separator = input.modelId.indexOf("/")
         yield* client.session

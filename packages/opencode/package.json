@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "exports": {
     ".": "./src/server.ts",
-    "./tui": "./src/tui.ts",
+    "./tui": "./src/tui.tsx",
     "./rpc": "./src/rpc.ts"
   },
   "files": [
@@ -28,14 +28,21 @@
   },
   "peerDependencies": {
     "@opencode/plugin": "catalog:",
-    "effect": "catalog:"
+    "@opentui/core": ">=0.8.1",
+    "@opentui/solid": ">=0.8.1",
+    "effect": "catalog:",
+    "solid-js": ">=1.9.0"
   },
   "devDependencies": {
     "@ai-sdk/provider": "3.0.8",
     "@opencode/plugin": "catalog:",
+    "@opencode/theme": "2.2.6",
+    "@opentui/core": "0.8.1",
+    "@opentui/solid": "0.8.1",
     "@ren/cell": "workspace:*",
     "@types/bun": "catalog:",
     "effect": "catalog:",
+    "solid-js": "1.9.17",
     "tsrs": "catalog:"
   }
 }

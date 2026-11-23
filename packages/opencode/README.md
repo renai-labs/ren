@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model` and `provider` (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `provider`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -20,7 +20,7 @@ The three parts load. Signed in, the server part registers the provider `ren`, a
 
 The server part registers a provider, `ren`. Its language model, an AI SDK `LanguageModelV3` like OpenCode's built-in `claude-agent` provider, sends the prompt to the Ren session's brain over the Chat API and streams the remote turn back into the local session: text, reasoning and the tool calls the brain ran.
 
-A local session is a Ren session when its model is `ren/<model>` and its session metadata holds `ren: { spaceId, sessionId }`.
+A local session is a Ren session when its model is `ren/<model>` and its session metadata holds `ren: { spaceId, sessionId }`. A session from `/ren:new` starts with `ren: { spaceId }`: its first prompt creates the Ren session in that space and adds `sessionId`.
 
 The plugin never picks a brain. For each Ren session it calls `chat.access(sessionId)` and gets a URL and a short-lived token, so every brain and hand layout works the same way.
 
@@ -29,10 +29,10 @@ The plugin never picks a brain. For each Ren session it calls `chat.access(sessi
 | Part   | Export  | File            | API                                                         |
 | ------ | ------- | --------------- | ----------------------------------------------------------- |
 | Server | `.`     | `src/server.ts` | `@opencode/plugin/effect`, in the OpenCode server           |
-| TUI    | `./tui` | `src/tui.ts`    | `@opencode/plugin/tui`, in the terminal UI                  |
+| TUI    | `./tui` | `src/tui.tsx`   | `@opencode/plugin/tui`, in the terminal UI                  |
 | RPC    | `./rpc` | `src/rpc.ts`    | `@opencode/plugin/rpc`, the contract between server and TUI |
 
-OpenCode loads each part's default export; the RPC part exports its contract by name. `src/tui.ts` becomes `src/tui.tsx`, with OpenTUI and Solid as peer dependencies, when the first slot or panel lands.
+OpenCode loads each part's default export; the RPC part exports its contract by name (`RenRpc.Definition`).
 
 ## Modules
 
@@ -42,11 +42,14 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `auth`     | `RenAuth`: the server URL and a currently valid token.                                         |
 | `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.              |
 | `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh. |
-| `binding`  | `Binding`: the `ren` session metadata and the selected space.                                  |
+| `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.          |
 | `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.           |
 | `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.         |
+| `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                               |
+| `handlers` | `RenHandlers`: the server part's RPC handlers.                                                 |
+| `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.      |
+| `tui`      | The TUI part: the commands, and the selected space in the footers.                             |
 | `mirror`   | _Not built._ Remote activity into the local session.                                           |
-| TUI        | _Not built._ The `/ren:*` commands.                                                            |
 
 ## Connection
 
@@ -75,14 +78,14 @@ A link is `ChatAccess` and `Connection` from `@ren/chat`, wired as `ChatSession`
 
 Signed in, the plugin lists the models of the selected space (`chat.models`) as `ren/<endpoint>/<model>`, with their variants. Their context limit is 0, so OpenCode never compacts a Ren session locally: the brain owns its context. Cost is zero, because Ren lists no prices. Signed out, or when Ren does not answer at load (it waits at most 5 seconds), it registers nothing, and it asks again every 5 minutes, so a later `ren login` adds the models without a restart.
 
-The selected space is the plugin option `space` (a space ID or slug), else the first space you joined. `/ren:space` will replace this.
+The selected space is the one `/ren:space` stored, else the plugin option `space` (a space ID or slug), else the first space you joined. The models are the selected space's.
 
 For a primary request `doStream`:
 
 1. Reads the OpenCode session ID from `x-opencode-session-id` and the request kind from `x-ren-request-kind`, which the plugin's `model.request` hook sets.
 2. Reads the binding. A session whose binding names another session is a copy (a fork) and is refused.
 3. Reads the local messages (`session.context`). The candidates are the user messages after the last assistant message that completed without an error.
-4. Without a binding, creates the Ren session with the local session's ID, the selected space and the model (`session.create`), then writes the binding.
+4. Without a Ren session in the binding, creates it with the local session's ID, the binding's space (else the selected space) and the model (`session.create`), then writes the binding.
 5. Opens the link for this turn, subscribes, and waits until it is connected.
 6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`.
 7. The turn starts at `session.inbox.delivered` of a sent message; earlier events are ignored. `turn` converts the events until the execution ends.
@@ -90,16 +93,40 @@ For a primary request `doStream`:
 
 Stopping the local turn cancels the stream, which calls `session.interrupt`. OpenCode does not retry a Ren turn (the `retry` hook): the brain retries model calls itself. The `title` hook answers with the Ren session's title, or none yet, so OpenCode never asks the model for a title. Compaction and one-off generations fail with a message and never reach the brain.
 
-## Commands the plugin adds (not built)
+## Commands
 
-Every command is `/ren:<command>`: `/ren:space`, `/ren:sessions`, `/ren:new`, `/ren:move`, `/ren:retry`, `/ren:login`, `/ren:logout`.
+Every command the plugin adds is `/ren:<command>`, in the slash completion and in the command palette under Ren.
+
+- `/ren:space` lists the spaces you joined, with the selected one marked, and searches them by name. Choosing one selects it.
+- `/ren:new` creates a local session bound to the selected space, with the prompt's `ren/<model>` model when the space offers it, else the space's default, and opens it.
+
+Signed out, both say to run `ren login`. The home and prompt footers show `ren · <space>`.
+
+### Selecting a space
+
+The server part keeps the selection in plugin storage, which is OpenCode's database: one selection for every directory and OpenCode process, kept across restarts. Selecting a space stores it, wakes its brain (`chat.prepare`, without waiting; a failure does not fail the selection), lists its models, and sends the RPC event `spaceSelected`, which updates the footers of every TUI. `/ren:new` also wakes the brain. A server part in another directory is expected to list the new space's models at its next refresh, within 5 minutes (not run).
+
+`/ren:new` creates the Ren session at the first prompt, as the web app does, so a session nobody writes in never reaches Ren.
+
+### RPC
+
+`RenRpc.Definition` (id `ren`). Every method takes an object and can fail with `signed_out` (`data: { server }`, the message says to run `ren login`) or `unavailable` (`data: {}`, the message says what failed).
+
+| Method          | Input                          | Output                              |
+| --------------- | ------------------------------ | ----------------------------------- |
+| `listSpaces`    | `{}`                           | `{ spaces: SpaceInfo[], selected }` |
+| `getSpace`      | `{}`                           | `SpaceInfo`, the selected space     |
+| `selectSpace`   | `{ spaceId }`                  | `SpaceInfo`                         |
+| `createSession` | `{ model?: { id, variant? } }` | `{ sessionID, spaceId }`            |
+
+`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+
+To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
 Built-in commands keep their names and act on Ren sessions through hooks: `/rename`, `/compact`, stop and the model picker.
 
-Planned features:
+Planned commands: `/ren:sessions`, `/ren:move`, `/ren:retry`, `/ren:login`, `/ren:logout`. Planned features:
 
-- Select a space.
-- Create sessions on Ren first.
 - Move a local session to a Ren space. This needs a new Ren import endpoint.
 - Multiplayer: messages from other users appear as user messages with the sender's name.
 - Rename.
@@ -135,13 +162,13 @@ To try a Ren model against a local server, pass the plugin's options with an ent
 }
 ```
 
-`url` is the Ren server (default `REN_URL`, then `https://api.useren.ai`); sign in to it with `ren login`, or set `REN_TOKEN`. `space` is a space ID or slug (default: your first joined space).
+`url` is the Ren server (default `REN_URL`, then `https://api.useren.ai`); sign in to it with `ren login`, or set `REN_TOKEN`. `space` is a space ID or slug, used until `/ren:space` selects one (default: your first joined space).
 
 OpenCode resolves a local directory through its `package.json` `exports`, as it does a published package, so all three parts load from `src`. The TUI loads the TUI part of each plugin its server loads. OpenCode provides `effect` and `@opencode/plugin` to the plugin at runtime.
 
 ## Dependencies
 
-`@opencode/plugin` and `effect` are peer dependencies: OpenCode provides its own copies at runtime. They are dev dependencies too, for typecheck and tests.
+`@opencode/plugin` and `effect` are peer dependencies: OpenCode provides its own copies at runtime, to the server part and to the TUI part. `@opentui/core`, `@opentui/solid` and `solid-js` are peer dependencies of the TUI part: the TUI provides them and compiles `tui.tsx` with Solid. All are dev dependencies too, for typecheck and tests, with `@opencode/theme` for the theme's types; `tsconfig.src.json` adds the `DOM` lib because Solid's `JSX.Element` names DOM's `Node`.
 
 `@ren/client`, `@ren/chat`, `@ren/schema` and `@ren/protocol` are private workspace packages. They become dependencies when code uses them, and the build bundles them.
 
@@ -155,7 +182,7 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, and a turn from a local OpenCode on a real brain
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, and a /ren:new session's turn on a real brain
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 

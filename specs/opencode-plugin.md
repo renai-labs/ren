@@ -15,7 +15,7 @@ The plugin makes a user's own OpenCode a Ren client. Local OpenCode sessions kee
 
 ## 2. Facts the design depends on
 
-Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(run)_ were run on 2.2.6 by the plugin's tests, which host OpenCode in-process with the plugin loaded from its directory; none was run in a live TUI.
+Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(run)_ were run on 2.2.6 by the plugin's tests, which host OpenCode in-process with the plugin loaded from its directory. Facts marked _(TUI)_ were run by hand in the stock OpenCode 2.2.6 TUI (`opencode --standalone` with isolated `XDG_*` directories and the fake Ren of `test/lib/ren.ts`); no test runs the TUI, because OpenCode does not publish it.
 
 - F1. A plugin cannot write assistant messages or tool parts into a session. The model stream is the only path. `session.prompt` (with `id`, `metadata`, `resume`) admits a real user message.
 - F2. The runner gives each model request the header `x-opencode-session-id`, and it reaches `doStream`. The `model.request` hook gets `sessionID`, `kind` (`primary`, `compaction`, `title`, `generate`), `model` and mutable `headers`; a header it sets reaches `doStream` _(run)_. In 2.2.6 the `context` hook's messages carry the message `id` but not its stored `metadata` (2.3.0 adds that), and no type: `ctx.session.context` returns the stored messages with `type`, `id`, `text`, `metadata` and the assistant's `error` and `time.completed` _(run)_.
@@ -28,7 +28,7 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F9. `experimental.session.import` creates a session with a chosen ID, metadata and model. It cannot append. `session.remove` then import with the same ID is expected to work (not run).
 - F10. The TUI user message shows text, files and skills only. It reads no metadata and has no slot.
 - F11. The TUI composer's `@` file search and `!` shell act on the local machine. A plugin cannot add autocomplete sources.
-- F12. A slash command name is split on white space, so `ren:space` is a valid name.
+- F12. A slash command name is split on white space (`parseSlashHead` in the 2.2.6 TUI), and a keymap command checks only that its ID is set, so `ren:space` is a valid name. A slash command without `arguments` runs from the completion list _(TUI)_.
 - F13. Chat API events are not replayed on reconnect. After `server.connected` the client reads the resources again. A client token reaches only `/chat/*`, lasts 60 minutes, and carries the session ID; the brain sets the sender from the token.
 - F14. Ren has no session import endpoint, no presence, no fork and no unarchive. `session.rename` is on the Chat API only.
 - F15. _(run)_ An external plugin's `effect` runs with only `Scope` and the loggers in its context (`Plugin.load` in OpenCode's `packages/core/src/plugin.ts`). The plugin provides its own platform services: `FetchHttpClient` from `effect/http`, and Bun or `node:` APIs for files, because `effect`'s `FileSystem` needs a platform package that OpenCode does not provide to plugins.
@@ -40,6 +40,12 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F20. Brain event order, run on a real brain: a prompt to an idle session gives `session.inbox.enqueued`, `session.execution.started`, then `session.inbox.delivered` with `inboxID` equal to the prompt `id`, then the steps. A steer into a running execution is enqueued during the step, delivered after that step's `session.step.ended`, and answered by a new step of the same execution, which ends with `session.execution.succeeded`. So the local turn starts at the `delivered` of a message it sent and ends at the execution's end.
 - F21. `session.create` with `message` gives the first message to the brain when it starts, before a client can open the event stream, so its delivery cannot be seen. The plugin creates the session without a message and sends the first message with Chat API `session.prompt` after it subscribed.
 - F22. Effect's default `ConfigProvider` copies the environment at its first use, so the plugin reads `REN_URL` and `REN_TOKEN` once per OpenCode process. The credentials file is read on each request.
+- F23. Plugin RPC: a method needs both `input` and `output` schemas; an RPC that a plugin did not register answers `rpc.unavailable`. The server decodes the input and encodes the output with the schema, and the Effect client decodes the output. The Promise client (`context.client` in the TUI) types only `Rpc.PortableDefinition` (Standard Schema or JSON Schema), returns the server's JSON without decoding it, and rejects with a plain `{ type, message, data? }` object. `Schema.toStandardSchemaV1` returns a value that is both an Effect schema and a Standard Schema, so one definition serves both clients when its schemas encode to themselves _(run)_. A declared error is `context.error(type, message, data)` returned as the handler's failure _(run)_.
+- F24. RPC events reach every subscriber of the server as `rpc.<id>.<name>`; the event stream starts with `server.connected` once the subscription is live, so a test can wait for it before it acts _(run)_.
+- F25. Plugin storage (`ctx.storage`) is OpenCode's global key-value table in its database, namespaced by plugin ID: one value for every location and process _(run)_.
+- F26. `ctx.session.create` accepts `id`, `title`, `model`, `metadata`, `location` and `permissions`; a session created with a `ren/<model>` model and `metadata` keeps both _(run)_.
+- F27. The TUI process installs the host's `effect` and `@opencode/plugin` for plugins (`ensurePluginRuntime`) and OpenTUI's Solid runtime plugin support, which compiles a plugin's `.tsx` and provides `solid-js` and `@opentui/*`. Importing the RPC contract with Effect schemas in the TUI part is safe _(TUI)_. `home.footer.status` and `prompt.footer.status` slots take JSX; `ui.dialog.select` marks `current`, takes `search`, and returns `undefined` on escape _(TUI)_.
+- F28. Ren's web app creates a session at its first message and calls `chat.prepare` (which wakes a space's shared brain at most once per 5 minutes) when the user starts writing. `chat.models` returns the space's models and its `default`.
 
 ## 3. Modules
 
@@ -52,15 +58,16 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 | `binding`  | Built. The `ren` session metadata and the selected space (`Binding`).                                |
 | `model`    | Built. The `LanguageModelV3` (`RenModel`).                                                           |
 | `provider` | Built. The provider, its models and the session hooks (`RenProvider`).                               |
+| `rpc`      | Built. Methods and events between the server part and the TUI part (`RenRpc`).                       |
+| `handlers` | Built. The server part's RPC handlers (`RenHandlers`).                                               |
+| `commands` | Built. The `/ren:*` command logic over a small part of the TUI context (`RenCommands`).              |
+| TUI        | Built: `/ren:space`, `/ren:new` and the space in the footers. Later: the other commands and dialogs. |
 | `mirror`   | Remote activity into the local session.                                                              |
-| `rpc`      | Methods and events between the server part and the TUI part.                                         |
-| TUI        | The `/ren:*` commands, dialogs and slots.                                                            |
 
 ## 4. Features, in build order
 
 Each is one commit. Built features leave the list; the others keep their numbers.
 
-4. **Spaces and new sessions.** `/ren:space` selects a space (RPC `space.list`, `space.select`; the selection is in plugin storage; `chat.prepare` wakes the brain). `/ren:new` creates a session bound to the selected space. A status slot shows the space.
 5. **Multiplayer (`mirror`).** A user message from another client becomes a local user message through `session.prompt` with the Ren message ID and metadata `{ userID, userName, remote: true }`, and the local turn streams the remote turn without sending. The local text has the sender's name as a prefix (F10). Names come from the organization member list.
 6. **Rename.** Local `session.renamed` calls Chat API `session.rename`; a remote `session.renamed` calls local `session.update`. No loop.
 7. **Session controls.** Model switch (`session.model.selected` to `session.model.switch`), compact (`compaction` hook to `session.compact`), archive (`session.archived` to `session.archive`), a blocked switch from a `ren` model to a local model, and a fork that is disconnected from Ren.
@@ -81,7 +88,8 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - L4. Undo and redo: only user message IDs match between local and Ren.
 - L5. A queue is local until sent. Other users do not see it.
 - L6. Cost is the catalog price (F8).
-- L7. Models and server commands are one list for all spaces; the plugin checks the selection at send time.
+- L7. Models and server commands are one list for all spaces; the plugin checks the selection at send time. Each location loads its own server part (`ctx.location`), so a server part in another directory is expected to list a newly selected space's models only at its next refresh, within 5 minutes (not run).
+- L11. `/ren:space` lists the first 100 joined spaces.
 - L8. Presence and fork do not exist in Ren (F14).
 - L9. Events lost while the event stream reconnects mid-turn are not replayed into the local message; the turn goes on with the next events, or finishes when the brain is idle. Feature 9 catches a local copy up.
 - L10. Until feature 5, a turn shows only what follows the delivery of a message sent from this OpenCode; a turn another client started is not mirrored.

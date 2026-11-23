@@ -80,10 +80,10 @@ export const register = Effect.fn("RenProvider.register")(function* (ctx: Plugin
     (event) =>
       Effect.gen(function* () {
         const sessionID = yield* Schema.decodeUnknownEffect(Session.ID)(event.sessionID)
-        const bound = yield* bindings.get(sessionID)
-        if (Option.isNone(bound)) return ""
+        const created = Option.flatMapNullishOr(yield* bindings.get(sessionID), (info) => info.sessionId)
+        if (Option.isNone(created)) return ""
         const client = yield* ren.client
-        return (yield* client.session.get({ idOrSlug: bound.value.sessionId })).title ?? ""
+        return (yield* client.session.get({ idOrSlug: created.value })).title ?? ""
       }).pipe(
         Effect.orElseSucceed(() => ""),
         Effect.map((title) => {
@@ -92,4 +92,5 @@ export const register = Effect.fn("RenProvider.register")(function* (ctx: Plugin
       ),
     { providerID: id },
   )
+  return refresh
 })
