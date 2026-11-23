@@ -56,8 +56,27 @@ const upstream = "stub-upstream"
 
 let listed: ReadonlyArray<Models.Info> = StubModel.defaultModels
 
+// oxlint-disable-next-line ren/no-comments -- Two providers an organization can add its own key for, with one model each.
+const ownKeyProvider = (id: string, name: string, model: { readonly id: string; readonly name: string }) => ({
+  id,
+  name,
+  models: {
+    [model.id]: {
+      id: model.id,
+      name: model.name,
+      type: "chat",
+      capabilities: { tools: { supported: true } },
+      modalities: { input: ["text"] },
+      limit: { context: 100_000, output: 4000 },
+      cost: { text: { input: { price: 1 }, output: { price: 2 } } },
+    },
+  },
+})
+
 const modelsDev = () => {
   const body = JSON.stringify({
+    groq: ownKeyProvider("groq", "Groq", { id: "llama-5", name: "Llama 5" }),
+    anthropic: ownKeyProvider("anthropic", "Anthropic", { id: "stub-model", name: "Stub on Anthropic" }),
     [upstream]: {
       id: upstream,
       name: "Stub upstream",
@@ -119,7 +138,9 @@ const mailbox = Bun.serve({
   },
 })
 
-const inference = StandInInference.start(Shared.stub().root)
+const usageKey = `usage-${crypto.randomUUID()}`
+
+const inference = StandInInference.start(Shared.stub().root, { url: serverURL, usageKey })
 
 let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
@@ -243,6 +264,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     ]),
     REN_INFERENCE_GATEWAY_URL: Shared.stub().root,
     REN_INFERENCE_GATEWAY_KEY: "stub-key",
+    USAGE_INGEST_KEY: usageKey,
     MODELS_DEV_URL: `http://127.0.0.1:${ports.mailbox}/models-dev`,
     MODELS_DEV_REFRESH: "2 seconds",
     REN_MODELS_UPSTREAM: upstream,

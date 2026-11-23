@@ -306,6 +306,58 @@ test.todo("a command another member runs names its speaker to the model, and the
     }),
   ))
 
+test("each model in the list names its card, method, price and whether it is free, from Ren's list (Providers §5.3)", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      yield* brain.install({
+        endpoints: [
+          {
+            id: "ren",
+            name: "Ren",
+            protocol: "openai-chat",
+            baseUrl: Shared.stub().url,
+            apiKey: Shared.apiKey("ren-key"),
+            models: [
+              {
+                id: "vendor/paid",
+                type: "chat",
+                protocol: "openai-chat",
+                name: "Paid",
+                price: { input: 3, output: 15 },
+              },
+              {
+                id: "vendor/free",
+                type: "chat",
+                protocol: "openai-chat",
+                name: "Free",
+                price: { input: 0, output: 0 },
+                free: true,
+              },
+            ],
+          },
+          {
+            id: "openai",
+            name: "OpenAI",
+            method: "key",
+            protocol: "openai-chat",
+            baseUrl: Shared.stub().url,
+            apiKey: Shared.apiKey("ren-key"),
+            models: [{ id: "gpt-6", type: "chat", protocol: "openai-chat", name: "GPT-6" }],
+          },
+        ],
+      })
+      const models = yield* brain.chat.model["model.list"]()
+      const row = (key: string) => models.find((model) => `${model.providerID}/${model.id}` === key)
+      expect(row("ren/vendor/paid")).toMatchObject({ providerName: "Ren", price: { input: 3, output: 15 } })
+      expect(row("ren/vendor/paid")?.free).toBeUndefined()
+      expect(row("ren/vendor/free")).toMatchObject({ providerName: "Ren", free: true })
+      expect(row("openai/gpt-6")).toMatchObject({ providerName: "OpenAI", method: "key" })
+      expect(row("openai/gpt-6")?.price).toBeUndefined()
+    }),
+  ))
+
 test("a member switches the model from the list as the session's setting, an unknown model or a subagent's switch is refused, and Ren's unchanged model does not undo the switch", () =>
   live(
     Effect.gen(function* () {
