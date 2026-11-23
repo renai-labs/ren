@@ -75,7 +75,12 @@ const renClaude = (bus: Bus.Interface) =>
     id: "ren.provider.claude-agent",
     effect: Effect.fn("RenClaude.Plugin")(function* (ctx) {
       const status = yield* ClaudeStatus.make(ClaudeIO.real, () => ClaudeProvider.connection(ctx))
-      const sessions = yield* registry.attach({ io: ClaudeIO.real, status, storage: ctx.storage, directory: local })
+      const sessions = yield* registry.attach({
+        io: ClaudeIO.real,
+        status,
+        storage: ctx.storage,
+        directory: local,
+      })
       yield* ctx.event
         .subscribe({
           types: ["session.execution.succeeded", "session.execution.failed", "session.execution.interrupted"],
@@ -100,8 +105,15 @@ const renClaude = (bus: Bus.Interface) =>
               ...Model.Info.default(ClaudeProvider.ID, Model.ID.make("claude-opus-5-5")),
               name: "Claude Opus 5.5",
               limit: { context: 200000, output: 0 },
-              capabilities: { tools: true, input: ["text", "image", "pdf"], output: ["text"] },
-              variants: ["low", "high"].map((effort) => ({ id: Model.VariantID.make(effort), settings: { effort } })),
+              capabilities: {
+                tools: true,
+                input: ["text", "image", "pdf"],
+                output: ["text"],
+              },
+              variants: ["low", "high"].map((effort) => ({
+                id: Model.VariantID.make(effort),
+                settings: { effort },
+              })),
               cost: [],
             },
           ],
@@ -145,6 +157,29 @@ Imports: `@opencode/core/plugin/provider/claude-agent/{claude/io,claude/sessions
 | Without a Ren placeholder | `401` from Anthropic: other programs pass |
 
 A turn on the Claude runtime still works (GR1).
+
+## GR3. A change for every organization, under load
+
+**Setup.** `core/test/model-lists.slow.test.ts`: 2,000 organizations. The test gateway says 1,000 of them have Groq on (`organizations("groq")`). The gateway reports a change of Groq's models for every organization.
+
+**Result.** Ren core notified exactly the 1,000 organizations the gateway named (`org:<id>`, once each), no other and never `all`. The test took 0.31 s, setup included.
+
+## End to end on E2B
+
+**Setup.** One local Ren on E2B (own template, the egress in Docker, the model gateway and inference of this build). Upstream and own-key vendors are a stand-in on the Mac; the ChatGPT seat is Ren's test account (token sharing); the Claude seat is a real local seat that the gateway asks for each call. Chats were started through Ren's API and checked in the app with a headless browser.
+
+| Path                                        | Result                                                                                                                                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ren credit, Claude model (`claude` runtime) | turn succeeded; usage row payer `ren`, `access: ren`                                                                                                                                              |
+| Ren credit, HTTP model                      | turn succeeded; cost at the models.dev price                                                                                                                                                      |
+| Ren free model; the 101st request           | turn succeeded; the 101st was refused at once (`x-should-retry: false`) with the free-cap text; `limits.get` showed 100%; the app showed the 90% banner and the error                             |
+| Own key (Groq)                              | the key test refused a wrong key with the vendor's message; the vendor received the organization's key; the key was in no Ren or gateway log or table; usage row payer `customer`, `access: key`  |
+| ChatGPT seat                                | sign-in imported, 10 models listed, OpenAI provider on the subscription method; turn succeeded through the seat hook (seat taken, outcome reported, seat given back)                              |
+| Claude seat                                 | Anthropic provider on the subscription method; turn on `claude` succeeded through the seat hook on the real seat                                                                                  |
+| No credit, Claude model                     | the `claude` program passes on only the error's message; with the code at its end (`(insufficient_credits)`) the app showed the out-of-credits error with Add credits, Change model and Providers |
+| Provider off during a chat                  | the picker lost the provider's models within 0.2 s; the brain pulled within 0.8 s; the next turn showed "model switched" and ran on the settings model                                            |
+
+**Found.** The dependency bundle's version changed between two builds of the same code, so a template seeded with one build did not match the next, and a brain downloaded the dependency bundle (517 MB) through the bundle tunnel. Pin the published bundle set to the template's dependencies when testing with tunnels.
 
 ## G6. `switchModel` in the `retry` hook
 

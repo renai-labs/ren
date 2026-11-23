@@ -1,36 +1,14 @@
 import { describe, expect } from "bun:test"
-import { PgClient } from "@effect/sql-pg"
 import { Testing } from "@ren/db/testing"
-import { Effect, Exit, Layer, Queue } from "effect"
-import type { SqlError } from "effect/sql/SqlError"
-import { BrainPush } from "../src/brain-push.js"
+import { Effect, Exit, Layer } from "effect"
 import { ModelGateway } from "../src/model-gateway.js"
 import { ModelLists } from "../src/model-lists.js"
 import { testEffect } from "./lib/effect.js"
 import { TestModelGateway } from "./lib/model-gateway.js"
+import { ModelListsTest } from "./lib/model-lists.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(Testing.layer)
-
-const listening = Effect.gen(function* () {
-  const pg = yield* PgClient.PgClient
-  const notifications = yield* pg.listen(BrainPush.channel)
-  const until = (seen: ReadonlyArray<string>): Effect.Effect<ReadonlyArray<string>, SqlError> =>
-    Queue.take(notifications).pipe(
-      Effect.flatMap((next) => (next.payload === "barrier" ? Effect.succeed(seen) : until([...seen, next.payload]))),
-    )
-  const awaitPayload = (payload: string): Effect.Effect<void, SqlError> =>
-    Queue.take(notifications).pipe(
-      Effect.flatMap((next) => (next.payload === payload ? Effect.void : awaitPayload(payload))),
-    )
-  return {
-    collect: pg.notify(BrainPush.channel, "barrier").pipe(Effect.andThen(until([])), Effect.orDie),
-    awaitPayload: (payload: string) => awaitPayload(payload).pipe(Effect.orDie),
-  }
-})
-
-const listsOf = (gateway: ModelGateway.Gateway) =>
-  ModelLists.layer.pipe(Layer.provideMerge(ModelGateway.layer([Effect.succeed(gateway)])))
 
 const modelIds = (entries: ReadonlyArray<ModelLists.Entry>) =>
   entries.flatMap((entry) => entry.models.map((each) => each.id))
@@ -57,13 +35,13 @@ describe("ModelLists (Providers §6.4, P26)", () => {
         expect(modelIds(yield* lists.list(organizationId))).toEqual(["vendor/old"])
         yield* test.setModels("ren", { revision: "2", models: [TestModelGateway.model("vendor/new")] })
         expect(modelIds(yield* lists.list(organizationId))).toEqual(["vendor/new"])
-      }).pipe(Effect.provide(listsOf(test.gateway)))
+      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
     }),
   )
 
   it.live("a change for one organization notifies only that organization", () =>
     Effect.gen(function* () {
-      const listener = yield* listening
+      const listener = yield* ModelListsTest.listening
       const test = yield* TestModelGateway.make({
         providers: [TestModelGateway.provider("seats", { models: "organization" })],
       })
@@ -74,13 +52,13 @@ describe("ModelLists (Providers §6.4, P26)", () => {
         yield* listener.collect
         yield* lists.changed({ provider: "seats", organizationId: first })
         expect(yield* listener.collect).toEqual([`org:${first}`])
-      }).pipe(Effect.provide(listsOf(test.gateway)))
+      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
     }),
   )
 
   it.live("a change for every organization notifies only those the gateway names, never 'all'", () =>
     Effect.gen(function* () {
-      const listener = yield* listening
+      const listener = yield* ModelListsTest.listening
       const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
       const on = yield* Seed.organization()
       yield* Seed.organization()
@@ -89,13 +67,13 @@ describe("ModelLists (Providers §6.4, P26)", () => {
         yield* listener.collect
         yield* ModelLists.Service.use((lists) => lists.changed({ provider: "ren" }))
         expect(yield* listener.collect).toEqual([`org:${on}`])
-      }).pipe(Effect.provide(listsOf(test.gateway)))
+      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
     }),
   )
 
   it.live("a gateway's `changed` reaches the organization's brains", () =>
     Effect.gen(function* () {
-      const listener = yield* listening
+      const listener = yield* ModelListsTest.listening
       const test = yield* TestModelGateway.make({
         providers: [TestModelGateway.provider("seats", { models: "organization" })],
       })
@@ -108,7 +86,7 @@ describe("ModelLists (Providers §6.4, P26)", () => {
           organizationId,
         )
         yield* listener.awaitPayload(`org:${organizationId}`)
-      }).pipe(Effect.provide(ModelLists.layerJob.pipe(Layer.provideMerge(listsOf(test.gateway)))))
+      }).pipe(Effect.provide(ModelLists.layerJob.pipe(Layer.provideMerge(ModelListsTest.layer(test.gateway)))))
     }),
   )
 })
