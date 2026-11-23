@@ -13,6 +13,13 @@ export type Kind = typeof Kind.Type
 export const Payer = Schema.Literals(["ren", "customer"]).annotate({ identifier: "Usage.Payer" })
 export type Payer = typeof Payer.Type
 
+export const Access = Schema.Literals(["ren", "free", "key", "seat"]).annotate({
+  identifier: "Usage.Access",
+  description:
+    "How the organization reached the model: a Ren model on credit, a free Ren model, its own key, or a member’s subscription (a seat).",
+})
+export type Access = typeof Access.Type
+
 export const headers = {
   rootSession: "ren-root-session",
   session: "ren-session",
@@ -41,6 +48,10 @@ export const ModelCall = Schema.Struct({
   }),
   kind: Claim,
   variant: Claim,
+  access: Schema.optionalKey(Access),
+  seat: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The seat that served the call. Only when `access` is `seat`.",
+  }),
   input_tokens: Schema.optionalKey(Count),
   output_tokens: Schema.optionalKey(Count),
   reasoning_tokens: Schema.optionalKey(Count),

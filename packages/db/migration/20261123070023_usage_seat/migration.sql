@@ -1,0 +1,1 @@
+CREATE INDEX "usage_event_root_session_seat_idx" ON "usage_event" ("root_session","time") WHERE "data" ->> 'seat' is not null;

@@ -2022,6 +2022,13 @@ const adaptGroupProvider = (raw: RawClient["provider"]) => ({
   "ren-models": { list: EndpointProviderRenModelsList(raw), update: EndpointProviderRenModelsUpdate(raw) },
 })
 
+type LimitsGetRequest = Parameters<RawClient["limits"]["limits.get"]>[0]
+type LimitsGetInput = { readonly id: LimitsGetRequest["params"]["id"] }
+const EndpointLimitsGet = (raw: RawClient["limits"]) => (input: LimitsGetInput) =>
+  raw["limits.get"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupLimits = (raw: RawClient["limits"]) => ({ get: EndpointLimitsGet(raw) })
+
 const EndpointBillingGet = (raw: RawClient["billing"]) => () =>
   raw["billing.get"]({}).pipe(Effect.mapError(mapClientError))
 
@@ -2328,6 +2335,7 @@ const adaptClient = (raw: RawClient) => ({
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
   provider: adaptGroupProvider(raw["provider"]),
+  limits: adaptGroupLimits(raw["limits"]),
   billing: adaptGroupBilling(raw["billing"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),

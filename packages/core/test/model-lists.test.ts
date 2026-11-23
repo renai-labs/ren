@@ -1,39 +1,22 @@
 import { describe, expect } from "bun:test"
-import { PgClient } from "@effect/sql-pg"
 import { Testing } from "@ren/db/testing"
-import { ConfigProvider, Effect, Layer, Option, Queue, Ref, Struct } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Ref, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
-import type { SqlError } from "effect/sql/SqlError"
-import { BrainPush } from "../src/brain-push.js"
 import { ModelCatalog } from "../src/model-catalog.js"
 import { ModelLists } from "../src/model-lists.js"
 import { Primitive } from "../src/primitive.js"
 import { RenInference } from "../src/ren-inference.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { ModelListsTest } from "./lib/model-lists.js"
+
+const model = ModelListsTest.model
+const data = ModelListsTest.data
+const upstream = ModelListsTest.upstream
+const listening = ModelListsTest.listening
+const listsLayer = ModelListsTest.layer
 
 const it = testEffect(Testing.layer)
-
-const model = (id: string, fields: Partial<ModelCatalog.Model> = {}): ModelCatalog.Model => ({
-  id,
-  name: id,
-  type: "chat",
-  tools: true,
-  deprecated: false,
-  input: ["text"],
-  limit: { context: 200_000, output: 32_000 },
-  price: { input: 1, output: 4 },
-  ...fields,
-})
-
-const upstream = "upstream-test"
-
-const data = (models: ReadonlyArray<ModelCatalog.Model>, other: ReadonlyArray<ModelCatalog.Model> = []) => ({
-  providers: [
-    { id: upstream, name: "Upstream", models },
-    { id: "groq", name: "Groq", models: other },
-  ],
-})
 
 const settings: ModelLists.Settings = { upstream: Option.some(upstream), block: ["vendor/blocked"] }
 
@@ -268,22 +251,6 @@ describe("ModelCatalog.layerModelsDev (Providers §6.1)", () => {
     }),
   )
 })
-
-const listening = Effect.gen(function* () {
-  const pg = yield* PgClient.PgClient
-  const notifications = yield* pg.listen(BrainPush.channel)
-  const until = (seen: ReadonlyArray<string>): Effect.Effect<ReadonlyArray<string>, SqlError> =>
-    Queue.take(notifications).pipe(
-      Effect.flatMap((next) => (next.payload === "barrier" ? Effect.succeed(seen) : until([...seen, next.payload]))),
-    )
-  return { collect: pg.notify(BrainPush.channel, "barrier").pipe(Effect.andThen(until([])), Effect.orDie) }
-})
-
-const listsLayer = (initial: ModelCatalog.Data) =>
-  ModelLists.layer.pipe(
-    Layer.provideMerge(ModelCatalog.layerFixture(initial)),
-    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ REN_MODELS_UPSTREAM: upstream }))),
-  )
 
 describe("ModelLists.sync (Providers P26)", () => {
   it.live("notifies only the organizations whose list changed", () =>

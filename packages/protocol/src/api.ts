@@ -25,6 +25,7 @@ import { InfraGroup } from "./groups/infra.js"
 import { InsightsGroup } from "./groups/insights.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { LabelGroup } from "./groups/label.js"
+import { LimitsGroup } from "./groups/limits.js"
 import { LinkGroup } from "./groups/link.js"
 import { MeGroup } from "./groups/me.js"
 import { MemoryGroup } from "./groups/memory.js"
@@ -88,6 +89,7 @@ export const Api = HttpApi.make("server")
   .add(OAuthAppGroup)
   .add(RenInferenceGroup)
   .add(ProviderGroup)
+  .add(LimitsGroup)
   .add(BillingGroup)
   .add(ChannelInstallGroup)
   .add(ChannelMappingGroup)

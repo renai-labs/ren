@@ -1,6 +1,6 @@
 # Providers: models, own keys and subscriptions through one gateway
 
-Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes); the Providers and Ren models pages, picker rows and the model chip (§5.1–§5.3); the brain's HTTP and Claude runtimes (§7.2, §7.3). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
+Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes); the Providers and Ren models pages, picker rows and the model chip (§5.1–§5.3); the brain's HTTP and Claude runtimes (§7.2, §7.3); usage fields, `limits.get`, the warning banner and the error cards (§5.4, §9.1–§9.4). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
 
 This file is the core of the spec. The references hold the detail:
 
@@ -94,7 +94,7 @@ Done when:
                                        │  seat choice             │
                                        │  credit and free cap     │
                                        └──────────────────────────┘
-                                                    │ usage rows (payer, kind, seat, tokens, cost)
+                                                    │ usage rows (payer, access, seat, tokens, cost)
                                                     v
                                        Ren usage_event ──> billing (markup, credit)
 ```
@@ -161,16 +161,16 @@ A table like the Console's Models page: name, id, price per 1M tokens (input, ou
 
 1. The picker lists exactly the models of the chat's brain (the same pull), grouped by card. The picker already reads the brain's list (`chat/src/react.ts:213`).
 2. Each row shows the card and, for Anthropic and OpenAI, the method. Free models carry "Free". Ren models show the price.
-3. Card names come from the pull data. The hand-written names go (`app/src/components/model-picker.tsx:65` `vendorNames`, `chat/src/turn-problems.ts:28` `providerLabels`). Built for the picker: each row (`SessionModel.Choice`) carries `providerName`, `method`, `price` and `free`, from Ren's list on the start page and from the list the brain applied in a chat. `providerLabels` goes with the error cards (§9.4). The mobile picker keeps its names until the mobile app takes the same fields.
+3. Card names come from the pull data. The hand-written names go (`app/src/components/model-picker.tsx:65` `vendorNames`, `providerLabels` in `chat/src/turn-problems.ts`). Built for the picker: each row (`SessionModel.Choice`) carries `providerName`, `method`, `price` and `free`, from Ren's list on the start page and from the list the brain applied in a chat. Built for the error cards: `providerLabels` is gone; a card's name comes from the chat's model list (`providerNames`), and an id the list does not name is shown capitalized. The mobile picker keeps its names until the mobile app takes the same fields.
 
 ### 5.4 Chat
 
-| Element            | Behaviour                                                                                                                                                                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model chip         | `Claude Opus 5.5 · Anthropic (subscription)`, `GPT-6.1 Sol · OpenAI (key)`, `Gemma 4 31B · Ren · Free`                                                                                                                      |
-| Warning banner     | Above the composer, not saved (P21). Examples: "Claude seat (Asha's Max): 80% of 7-day limit used · resets Mon 14:00", "Ren credit: 90% used · $0.50 left [Add credits]", "Free models: 75 of 100 today · resets 00:00 UTC" |
-| Error              | The turn-problem card (`chat/src/turn-problems.ts`) with the codes of §9.4. Action "Change model". The person can pick another model and press Continue; nothing switches by itself (P4)                                    |
-| Model switched row | As today (`app/src/features/session/transcript.tsx:173`), and it names the card as well as the model                                                                                                                        |
+| Element            | Behaviour                                                                                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Model chip         | `Claude Opus 5.5 · Anthropic (subscription)`, `GPT-6.1 Sol · OpenAI (key)`, `Gemma 4 31B · Ren · Free`                                                                                                                         |
+| Warning banner     | Above the composer, not saved (P21). Examples: "Anthropic seat (Asha’s Max): 80% of 7-day limit used · resets Mon 14:00", "Ren credit: 90% used · $0.50 left [Add credits]", "Free models: 75 of 100 today · resets 00:00 UTC" |
+| Error              | The turn-problem card (`chat/src/turn-problems.ts`) with the codes of §9.4. Action "Change model". The person can pick another model and press Continue; nothing switches by itself (P4)                                       |
+| Model switched row | As today (`app/src/features/session/transcript.tsx:173`), and it names the card as well as the model                                                                                                                           |
 
 ### 5.5 A new organization
 
@@ -249,7 +249,7 @@ Built. `RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) is the
 Built. `cell/src/harness/opencode/model-providers.ts` keeps mapping each card to an OpenCode provider with the card id and the protocol's package. Changes:
 
 1. A model with runtime `claude` gets the Claude Agent package (§7.3); the others keep their protocol's package.
-2. The models of OpenAI's card on the subscription method get the settings of OpenCode's ChatGPT plugin, which Ren does not activate: summary compaction, `supportsEffortUpdates: false`, cost `[]` (`chatgpt.ts:306-339`). The card already has `transport: "http"`. Ren's list has no model with `reasoning.mode: "pro"`, so none is switched off. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`model-providers.ts` `finalChatGptCodes`, from `chatgpt.ts:58-67`). The ChatGPT plugin's `session-id` headers are not sent: the gateway drops them (gate H1) and reads `prompt_cache_key`.
+2. The models of OpenAI's card on the subscription method get the settings of OpenCode's ChatGPT plugin, which Ren does not activate: summary compaction, `supportsEffortUpdates: false`, cost `[]` (`chatgpt.ts:306-339`). The card already has `transport: "http"`. Ren's list has no model with `reasoning.mode: "pro"`, so none is switched off. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`Models.chatGptRefusals` in `schema/src/models.ts`, from `chatgpt.ts:58-67`; the error cards use the same list). The ChatGPT plugin's `session-id` headers are not sent: the gateway drops them (gate H1) and reads `prompt_cache_key`.
 
 ### 7.3 Claude runtime
 
@@ -314,7 +314,9 @@ What a running chat sees:
 
 ### 9.1 Usage rows
 
-The gateway sends one `usage_event` per call (`specs/usage.md`). New fields in `data`: `seat` (seat id, for seat calls) and `kind` (`ren`, `free`, `key`, `seat`). `payer` is `ren` for Ren calls and `customer` for own keys and seats (`schema/src/usage.ts:13`). Cost is the models.dev price; billing charges only rows with payer `ren`.
+The gateway sends one `usage_event` per call (`specs/usage.md`). New fields in `data`: `seat` (seat id, for seat calls) and `access` (`ren`, `free`, `key`, `seat`). The field is `access` because `data.kind` is already the request kind (primary, compaction, title). `payer` is `ren` for Ren calls and `customer` for own keys and seats (`schema/src/usage.ts:13`). Cost is the models.dev price; billing charges only rows with payer `ren`.
+
+Built: `Usage.Access` and the two fields in `schema/src/usage.ts` (`Usage.ModelCall`), both optional for an older gateway; the ingest contract `protocol/usage-ingest.openapi.json`. Rows keep them in `usage_event.data`; the partial index `usage_event_root_session_seat_idx` (`root_session`, `time`, where `data ->> 'seat'` is set) finds a chat's last seat call.
 
 ### 9.2 Credit
 
@@ -331,17 +333,37 @@ Billing holds the credit and the markup. The gateway checks credit before each R
 
 Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the chat's current model: the seat of the session's last `usage_event` with a `seat` (P23), or credit, or the free cap. The app reads it when a chat opens, after each turn and every 60 s while the chat is open. The `chat` package decides which step to show and remembers shown steps per chat, meter and reset time.
 
+Built: `core/src/limits.ts` (`Limits.get`), `GET /sessions/:id/limits` (`limits.get`, group `limits`, internal), `Limits.Info` in `schema/src/limits.ts`, `chat/src/limit-banners.ts` and `app/src/features/session/limit-banner.tsx`. What the build decided:
+
+1. The chat's current model is the root session's model as OpenCode stored it (`opencode_session.model`, synced). Its card in the organization's list decides the meters: `ren` with a free model → free cap; `ren` → credit; a card on the subscription method → seat; anything else → none.
+2. The seat is the seat of the card's vendor that served the chat's last seat call. A ChatGPT seat has no meters, so it shows none.
+3. A source that does not answer (gateway, billing) gives no meter; `limits.get` still answers. With no credit granted (`grantedMicroUsd` 0, as with `Billing.layerNone`) there is no credit meter.
+4. A step shows until the person dismisses it. A dismissed step does not come back in the same chat, meter and reset period while the app runs; the next step shows. A step passed before it showed is skipped. When several meters reach a step, the fullest shows.
+5. Seat banners name the card from data: "Anthropic seat (Asha’s Max)", not "Claude seat". "Asha’s Max" is the connector's name and the plan; without them, the seat's label.
+6. The app refetches when a turn ends by keying the banner on the chat's last finished turn.
+
 ### 9.4 Errors
 
-| Code                                       | When                                 | Text                                                                                       | Actions                            |
-| ------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `insufficient_credits`                     | Ren call, no credit                  | today's out-of-credits text (`chat/src/turn-problems.ts`)                                  | Add credits (admins), Change model |
-| `free_limit_reached`                       | free cap reached                     | "Free models: today's 100 requests are used. They reset at 00:00 UTC."                     | Change model                       |
-| `free_unavailable`                         | free models unavailable for everyone | "Free models are limited and not guaranteed. Try later, add credit or connect a provider." | Change model                       |
-| `provider_not_connected`                   | own-key model without a key          | "<Card> is not connected."                                                                 | Providers (admins), Change model   |
-| `subscription_limit_reached`               | every seat of the vendor is full     | "All <vendor> subscriptions are at their limit. The next resets at <time>."                | Change model                       |
-| ChatGPT refusal codes (`chatgpt.ts:58-67`) | a ChatGPT seat refuses               | "ChatGPT usage limit reached."                                                             | Change model                       |
-| `gateway_unavailable`                      | the gateway cannot decide            | "Model access is not available now. Try again."                                            | Try again                          |
+| Code                                       | When                                 | Text                                                                                       | Actions                                       |
+| ------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `insufficient_credits` (402)               | Ren call, no credit                  | today's out-of-credits text (`chat/src/turn-problems.ts`)                                  | Add credits (admins), Change model, Providers |
+| `free_limit_reached` (429)                 | free cap reached                     | "Free models: today's 100 requests are used. They reset at 00:00 UTC."                     | Change model                                  |
+| `free_unavailable`                         | free models unavailable for everyone | "Free models are limited and not guaranteed. Try later, add credit or connect a provider." | Change model                                  |
+| `provider_not_connected`                   | own-key model without a key          | "<Card> is not connected."                                                                 | Providers (admins), Change model              |
+| `model_off` (403)                          | a Ren model the organization is off  | "<model> is switched off for this organization."                                           | Providers (admins), Change model              |
+| `subscription_limit_reached` (429)         | every seat of the vendor is full     | "All <vendor> subscriptions are at their limit. The next resets at <time>."                | Change model                                  |
+| ChatGPT refusal codes (`chatgpt.ts:58-67`) | a ChatGPT seat refuses               | "ChatGPT usage limit reached."                                                             | Change model                                  |
+| `inference_unavailable` (503)              | the gateway cannot decide            | "Model access is not available now. Try again."                                            | Try again                                     |
+
+Built: `TurnProblems.of` in `chat/src/turn-problems.ts`, shown by the app's turn-problem card. What the build found and decided:
+
+1. The gateway sends `inference_unavailable`, not `gateway_unavailable`, and also `model_off` (403). It does not send `free_unavailable` yet; the card maps it already.
+2. A final refusal carries `x-should-retry: false`, which OpenCode honors, so the card shows at once. `inference_unavailable` is not final: the brain's same-model retry runs first.
+3. The code is read from the error's response body (`SessionError.response.body`, carried on `TimelineRow.Error.body`), then from its text; a code wins over the older text and kind rules.
+4. Only the two usage-limit codes of ChatGPT say "ChatGPT usage limit reached." The other refusal codes say "ChatGPT refused this request." with OpenCode's message for the code.
+5. `subscription_limit_reached` takes the reset time from the first ISO time in the gateway's answer; without one it says "The next resets soon."
+6. Out of credits keeps today's text; a member's text asks an admin or offers another model.
+7. Open: a model on the Claude runtime loses the code. `claude` reports only the gateway's message (`API Error: 402 <message>`, type `provider.unknown`), without the response body, so the card falls back to "Ren couldn’t finish that reply." The fix belongs in the gateway's message (name the code in it) or in the Claude runtime (keep the body); the e2e journeys use an HTTP-runtime model.
 
 ## 10. Contract: Ren core → gateway
 
@@ -366,16 +388,16 @@ Built in Ren core: every route above except `GET /v1/catalog`, which Ren no long
 
 ## 11. Lifecycle states
 
-| State                    | What happens                                                                                                                           |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Brain asleep             | Nothing. The pull at wake brings the newest list                                                                                       |
-| Brain waking             | The start pull brings the newest list. The Claude runtime starts `claude` with the new env                                             |
-| Mid-turn                 | §8 table. A seat that fills mid-turn: the gateway tries another seat                                                                   |
-| Brain down or restarting | The boot pull applies the list. No secret is lost: the brain holds none                                                                |
-| Gateway down             | Calls fail (`gateway_unavailable` or a transport error). The brain's same-model retry runs (about 84 s); then the turn shows the error |
-| Ren core down            | Calls keep working. Settings and lists do not change until it is back                                                                  |
-| models.dev down          | The last good copy stays                                                                                                               |
-| A login's refresh fails  | The seat shows "Sign in again"                                                                                                         |
+| State                    | What happens                                                                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Brain asleep             | Nothing. The pull at wake brings the newest list                                                                                         |
+| Brain waking             | The start pull brings the newest list. The Claude runtime starts `claude` with the new env                                               |
+| Mid-turn                 | §8 table. A seat that fills mid-turn: the gateway tries another seat                                                                     |
+| Brain down or restarting | The boot pull applies the list. No secret is lost: the brain holds none                                                                  |
+| Gateway down             | Calls fail (`inference_unavailable` or a transport error). The brain's same-model retry runs (about 84 s); then the turn shows the error |
+| Ren core down            | Calls keep working. Settings and lists do not change until it is back                                                                    |
+| models.dev down          | The last good copy stays                                                                                                                 |
+| A login's refresh fails  | The seat shows "Sign in again"                                                                                                           |
 
 ## 12. Work in Ren, by package
 
@@ -392,13 +414,7 @@ Built in Ren core: every route above except `GET /v1/catalog`, which Ren no long
 
 ### 13.1 Gates
 
-Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6, GR1, GR2.
-
-Pending (Ren side):
-
-| Gate | Question                                                                                                | When              |
-| ---- | ------------------------------------------------------------------------------------------------------- | ----------------- |
-| GR3  | A models.dev change notifies only the organizations whose list changed, under load (many organizations) | with the list job |
+Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6, GR1, GR2, GR3. The paths of §13.3 that need the real gateway and real seats ran once on E2B ([`references/gates.md`](references/gates.md) "End to end on E2B").
 
 ### 13.2 Package tests
 
@@ -422,10 +438,12 @@ Only rules that the code does not show:
 | Ren free                      | 100 requests, then `free_limit_reached`; reset at 00:00 UTC under `TestClock`                                                            | —                                         |
 | Hot reload                    | card off mid-turn; method change → switch row; Ren model switched off leaves the picker                                                  | mid-turn, asleep, restart                 |
 
+Built in the Playwright stack, where the stand-in gateway (`e2e/script/inference.ts`) and the scripted stub model play the gateway's answers (`e2e/tests/app/chat-limits.spec.ts`): Ren credit at 0 → `insufficient_credits`; Ren free at the cap → `free_limit_reached`; a Ren model switched off → `model_off`; each with `x-should-retry: false`, so the card shows without the retry wait. The free cap's banner steps run on the stand-in's per-organization free count (`POST /free` on the mailbox). Pending: the cases that need the real gateway or live seats (own key with payer `customer`, Claude and ChatGPT seats, two seats, cost at the models.dev price, the 00:00 UTC reset).
+
 ### 13.4 App (Playwright)
 
 1. Providers: add a key (bad, then good), turn a card off and on, change the method, connect a seat (stubbed page), Ren model switches and "New models on".
-2. Chat: the chip for each kind; each banner step; the error card actions.
+2. Chat: the chip for each kind; each banner step; the error card actions. Built: `e2e/tests/app/chat-limits.spec.ts` (chip for a subscription, a Ren and a free Ren model; the free banner's steps; the error cards and Change model).
 
 ## 14. Removed and superseded
 
@@ -442,7 +460,7 @@ Only rules that the code does not show:
 | 2    | Providers API (schema, db, core, protocol, server)                                           | cards, keys and switches round-trip; members cannot change cards |
 | 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                  | the Playwright journeys of §13.4 pass                            |
 | 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress  | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2          |
-| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases | §13.3 passes                                                     |
+| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases | §13.3 passes. Built except the §13.3 cases that need the gateway |
 
 ## 16. Settled details
 

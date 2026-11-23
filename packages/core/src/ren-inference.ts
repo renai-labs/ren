@@ -36,12 +36,16 @@ export interface RenModels {
   }>
 }
 
-// oxlint-disable-next-line ren/no-comments -- Providers §10: a seat as the gateway reports it, with the vendor, the plan and the models its login lists.
+// oxlint-disable-next-line ren/no-comments -- Providers §10: a seat as the gateway reports it, with the vendor, the plan, the models its login lists and its usage meters.
 export interface Seat {
   readonly id: string
   readonly providerId: string
+  readonly providerName: string
+  readonly label: string
+  readonly connectedBy: string | null
   readonly plan: string | null
   readonly models: ReadonlyArray<string>
+  readonly meters: ReadonlyArray<RenInference.Meter>
 }
 
 export interface KeyFields {
@@ -140,8 +144,12 @@ const notFound = new Primitive.NotFound({ message: "Connection not found." })
 const UpstreamSeat = Schema.Struct({
   id: Schema.String,
   providerId: Schema.optional(Schema.String),
+  providerName: Schema.optional(Schema.String),
+  label: Schema.optional(Schema.String),
+  connectedBy: Schema.optional(Schema.NullOr(Schema.String)),
   plan: Schema.optional(Schema.NullOr(Schema.String)),
   models: Schema.optional(Schema.Array(Schema.String)),
+  meters: Schema.optional(Schema.Array(RenInference.Meter)),
 })
 
 const TestAnswer = Schema.Struct({ ok: Schema.Boolean, message: Schema.optional(Schema.String) })
@@ -500,7 +508,18 @@ export const layer = Layer.effect(
         const found = yield* call({ org: organizationId }, "GET", "/v1/connections", Schema.Array(UpstreamSeat))
         return found.flatMap((seat): ReadonlyArray<Seat> =>
           seat.providerId
-            ? [{ id: seat.id, providerId: seat.providerId, plan: seat.plan ?? null, models: seat.models ?? [] }]
+            ? [
+                {
+                  id: seat.id,
+                  providerId: seat.providerId,
+                  providerName: seat.providerName ?? seat.providerId,
+                  label: seat.label ?? seat.id,
+                  connectedBy: seat.connectedBy ?? null,
+                  plan: seat.plan ?? null,
+                  models: seat.models ?? [],
+                  meters: seat.meters ?? [],
+                },
+              ]
             : [],
         )
       }),

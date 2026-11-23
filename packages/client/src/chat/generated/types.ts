@@ -92,6 +92,10 @@ export type ShellTime = { started: number; completed?: number }
 
 export type SessionModelVariant = { id: string }
 
+export type ModelsMethod = "key" | "subscription"
+
+export type ModelsPrice = { input: number; output: number; cacheRead?: number; cacheWrite?: number }
+
 export type SessionCapabilitiesInfo = {
   steer: boolean
   queue: boolean
@@ -761,6 +765,10 @@ export type SessionModelInfo = {
   providerID: string
   name: string
   variants: Array<SessionModelVariant>
+  providerName?: string
+  method?: ModelsMethod
+  price?: ModelsPrice
+  free?: boolean
   input: Array<string>
   limit: { context: number; output: number }
 }

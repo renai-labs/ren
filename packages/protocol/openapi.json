@@ -13849,6 +13849,74 @@
         }
       }
     },
+    "/sessions/{id}/limits": {
+      "get": {
+        "tags": ["limits"],
+        "operationId": "limits.get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The meters of the chat’s current model: the windows of the seat that served the chat’s last seat call, Ren credit, or the free cap. Empty for a model on the organization’s own key, a ChatGPT seat, or when a source does not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Limits.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the meters of the chat’s current model: for a subscription, the windows of the seat that served the chat’s last seat call; for a Ren model, the organization’s credit; for a free Ren model, today’s free requests. Ren reads the model gateway and billing on each call. A member of the chat’s space reads it.",
+        "summary": "Read the limits of a chat’s model"
+      }
+    },
     "/billing": {
       "get": {
         "tags": ["billing"],
@@ -21856,6 +21924,155 @@
       "Label.UserNameEncoded": {
         "type": "string"
       },
+      "Limits.Credit": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["credit"]
+          },
+          "key": {
+            "type": "string",
+            "description": "The meter. A banner step shows once per chat, key and `resetsAt`."
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How much of the limit is used, in whole percent. Above 100 when the meter went over."
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The next billing date."
+          },
+          "availableMicroUsd": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The credit left, in millionths of a US dollar."
+          }
+        },
+        "required": ["_tag", "key", "percent", "resetsAt", "availableMicroUsd"],
+        "additionalProperties": false,
+        "description": "The organization’s Ren credit: used ÷ granted."
+      },
+      "Limits.Free": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["free"]
+          },
+          "key": {
+            "type": "string",
+            "description": "The meter. A banner step shows once per chat, key and `resetsAt`."
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How much of the limit is used, in whole percent. Above 100 when the meter went over."
+          },
+          "resetsAt": {
+            "type": "string"
+          },
+          "used": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["_tag", "key", "percent", "resetsAt", "used", "limit"],
+        "additionalProperties": false,
+        "description": "Today’s free-model requests of the organization."
+      },
+      "Limits.Info": {
+        "type": "object",
+        "properties": {
+          "meters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Limits.Meter"
+            }
+          }
+        },
+        "required": ["meters"],
+        "additionalProperties": false,
+        "description": "The meters of the chat’s current model: the windows of the seat that served the chat’s last seat call, Ren credit, or the free cap. Empty for a model on the organization’s own key, a ChatGPT seat, or when a source does not answer."
+      },
+      "Limits.Meter": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Limits.Seat"
+          },
+          {
+            "$ref": "#/components/schemas/Limits.Credit"
+          },
+          {
+            "$ref": "#/components/schemas/Limits.Free"
+          }
+        ]
+      },
+      "Limits.Seat": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["seat"]
+          },
+          "key": {
+            "type": "string",
+            "description": "The meter. A banner step shows once per chat, key and `resetsAt`."
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How much of the limit is used, in whole percent. Above 100 when the meter went over."
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seat": {
+            "type": "string",
+            "description": "Who connected the seat and its plan, such as “Asha’s Max”."
+          },
+          "providerName": {
+            "type": "string",
+            "description": "The card of the seat, such as Anthropic."
+          },
+          "window": {
+            "type": "string",
+            "description": "The vendor’s window, such as `5h` or `7d`."
+          },
+          "title": {
+            "type": "string",
+            "description": "The gateway’s name of the window."
+          }
+        },
+        "required": ["_tag", "key", "percent", "resetsAt", "seat", "providerName", "window", "title"],
+        "additionalProperties": false,
+        "description": "One window of the subscription that served the chat’s last seat call."
+      },
       "Mcp.Auth": {
         "anyOf": [
           {
@@ -22713,6 +22930,58 @@
         "description": "How a provider connects: the organization’s own key, or its members’ subscriptions."
       },
       "Models.Price": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheRead": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheWrite": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["input", "output"],
+        "additionalProperties": false,
+        "description": "Only for Ren’s models, which Ren charges for."
+      },
+      "Models.Price_1": {
         "type": "object",
         "properties": {
           "input": {
@@ -23875,7 +24144,7 @@
             "minLength": 1
           },
           "price": {
-            "$ref": "#/components/schemas/Models.Price"
+            "$ref": "#/components/schemas/Models.Price_1"
           },
           "free": {
             "type": "boolean"
@@ -23910,24 +24179,38 @@
         "type": "object",
         "properties": {
           "newModelsOn": {
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "models": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "enabled": {
-                  "type": "boolean"
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["id", "enabled"],
+                  "additionalProperties": false
                 }
               },
-              "required": ["id", "enabled"],
-              "additionalProperties": false
-            }
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -23950,10 +24233,24 @@
         "type": "object",
         "properties": {
           "enabled": {
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "method": {
-            "$ref": "#/components/schemas/Models.Method"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Models.Method"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -27250,6 +27547,19 @@
             "items": {
               "$ref": "#/components/schemas/SessionModel.Variant"
             }
+          },
+          "providerName": {
+            "type": "string",
+            "description": "The card of the Providers page the model comes from. Omitted by an older Ren."
+          },
+          "method": {
+            "$ref": "#/components/schemas/Models.Method"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Models.Price"
+          },
+          "free": {
+            "type": "boolean"
           }
         },
         "required": ["id", "providerID", "name", "variants"],
@@ -31162,6 +31472,9 @@
     },
     {
       "name": "provider"
+    },
+    {
+      "name": "limits"
     },
     {
       "name": "billing"
