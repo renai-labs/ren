@@ -503,15 +503,13 @@ Gateway → Ren core: `POST /internal/inference/changed {provider, organizationI
 
 ### 13.1 Gates
 
-Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6.
+Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6, GR1, GR2.
 
 Pending (Ren side):
 
-| Gate | Question                                                                                                  | When                    |
-| ---- | --------------------------------------------------------------------------------------------------------- | ----------------------- |
-| GR1  | The SDK's Linux `claude` binary runs in a real brain (own E2B template) and a turn reaches the gateway    | with the Claude runtime |
-| GR2  | The egress blocks `api.anthropic.com` from the brain, and a turn still works                              | with the Claude runtime |
-| GR3  | A provider change for all organizations pushes only to the organizations with the provider on, under load | with the list job       |
+| Gate | Question                                                                                                  | When              |
+| ---- | --------------------------------------------------------------------------------------------------------- | ----------------- |
+| GR3  | A provider change for all organizations pushes only to the organizations with the provider on, under load | with the list job |
 
 ### 13.2 Package tests
 
