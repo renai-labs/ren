@@ -31,29 +31,29 @@ Verified by reading OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Not
 - F12. A slash command name is split on white space, so `ren:space` is a valid name.
 - F13. Chat API events are not replayed on reconnect. After `server.connected` the client reads the resources again. A client token reaches only `/chat/*`, lasts 60 minutes, and carries the session ID; the brain sets the sender from the token.
 - F14. Ren has no session import endpoint, no presence, no fork and no unarchive. `session.rename` is on the Chat API only.
+- F15. An external plugin's `effect` runs with only `Scope` and the loggers in its context (`Plugin.load` in OpenCode's `packages/core/src/plugin.ts`). The plugin provides its own platform services: `FetchHttpClient` from `effect/http`, and Bun or `node:` APIs for files, because `effect`'s `FileSystem` needs a platform package that OpenCode does not provide to plugins.
 
 ## 3. Modules
 
-| Module     | Holds                                                                                         |
-| ---------- | --------------------------------------------------------------------------------------------- |
-| `turn`     | Built. Pure conversion of Ren session events into stream parts.                               |
-| `auth`     | The server URL and the token: plugin options, `REN_URL`, `REN_TOKEN`, the credentials file.   |
-| `ren`      | The Ren API client and the Chat API client (`@ren/client/effect`, `@ren/client/chat/effect`). |
-| `link`     | One Chat API client and one event stream for one Ren root session, with `chat.access` renew.  |
-| `binding`  | The `ren` session metadata and the selected space.                                            |
-| `model`    | The `LanguageModelV3`.                                                                        |
-| `provider` | The provider and its models.                                                                  |
-| `mirror`   | Remote activity into the local session.                                                       |
-| `rpc`      | Methods and events between the server part and the TUI part.                                  |
-| TUI        | The `/ren:*` commands, dialogs and slots.                                                     |
+| Module     | Holds                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                                          |
+| `auth`     | Built. The server URL and a currently valid token (`RenAuth`).                                                           |
+| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                                       |
+| `link`     | One Chat API client (`@ren/client/chat/effect`) and one event stream for one Ren root session, with `chat.access` renew. |
+| `binding`  | The `ren` session metadata and the selected space.                                                                       |
+| `model`    | The `LanguageModelV3`.                                                                                                   |
+| `provider` | The provider and its models.                                                                                             |
+| `mirror`   | Remote activity into the local session.                                                                                  |
+| `rpc`      | Methods and events between the server part and the TUI part.                                                             |
+| TUI        | The `/ren:*` commands, dialogs and slots.                                                                                |
 
 ## 4. Features, in build order
 
-Each is one commit.
+Each is one commit. Built features leave the list; the others keep their numbers.
 
-1. **Connection (`auth`, `ren`).** Server URL: plugin option `url`, then `REN_URL`, then production. Token: `REN_TOKEN`, then `${XDG_CONFIG_HOME:-~/.config}/ren/credentials.json` (the `ren` CLI's file: a map from server origin to `{ accessToken, refreshToken, expiresAt }`), renewed before `expiresAt` with the OAuth token endpoint the CLI uses. Without a token the plugin registers nothing and OpenCode works as before.
 2. **Link.** `chat.access` with the `starting` poll (2 seconds), `failed` and `stopped` states; Basic auth `ren:<token>`; renew before `expiresAt`; a new `chat.access` after 401, 502, 504 or `stream.ended`; `unreachable` after two connect timeouts. Use `@ren/chat`'s connection code where it fits.
-3. **First turn (`binding`, `model`, `provider`).** Models from `chat.models` as `ren/<id>`. `doStream`: read the binding; create the Ren session if it does not exist (`session.create` with the same ID, the selected space and the first message); send each local user message that Ren does not have, with the local message ID; convert the events with `turn`; stop calls `session.interrupt`. The `title` hook returns the Ren title. `compaction` and `generate` requests do not reach the brain as prompts.
+3. **First turn (`binding`, `model`, `provider`).** Without a token (`RenAuth.SignedOut`) the server part registers nothing and OpenCode works as before. Models from `chat.models` as `ren/<id>`. `doStream`: read the binding; create the Ren session if it does not exist (`session.create` with the same ID, the selected space and the first message); send each local user message that Ren does not have, with the local message ID; convert the events with `turn`; stop calls `session.interrupt`. The `title` hook returns the Ren title. `compaction` and `generate` requests do not reach the brain as prompts.
 4. **Spaces and new sessions.** `/ren:space` selects a space (RPC `space.list`, `space.select`; the selection is in plugin storage; `chat.prepare` wakes the brain). `/ren:new` creates a session bound to the selected space. A status slot shows the space.
 5. **Multiplayer (`mirror`).** A user message from another client becomes a local user message through `session.prompt` with the Ren message ID and metadata `{ userID, userName, remote: true }`, and the local turn streams the remote turn without sending. The local text has the sender's name as a prefix (F10). Names come from the organization member list.
 6. **Rename.** Local `session.renamed` calls Chat API `session.rename`; a remote `session.renamed` calls local `session.update`. No loop.

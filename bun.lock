@@ -418,6 +418,7 @@
       "name": "@renai-labs/opencode",
       "version": "0.0.0",
       "dependencies": {
+        "@ren/client": "workspace:*",
         "@ren/schema": "workspace:*",
       },
       "devDependencies": {

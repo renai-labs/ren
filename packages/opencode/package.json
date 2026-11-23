@@ -22,6 +22,7 @@
     "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
   },
   "dependencies": {
+    "@ren/client": "workspace:*",
     "@ren/schema": "workspace:*"
   },
   "peerDependencies": {

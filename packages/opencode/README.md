@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-Only the scaffold exists: the three parts load and do nothing. Everything below marked _not built_ is the plan.
+The three parts load. The server part registers nothing yet. Built: `turn`, `auth` and `ren` (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -34,19 +34,31 @@ The plugin never picks a brain. For each Ren session it calls `chat.access(sessi
 
 OpenCode loads each part's default export; the RPC part exports its contract by name. `src/tui.ts` becomes `src/tui.tsx`, with OpenTUI and Solid as peer dependencies, when the first slot or panel lands.
 
-## Planned layout (not built)
+## Modules
 
-| Module     | Holds                                                                                  |
-| ---------- | -------------------------------------------------------------------------------------- |
-| `auth`     | Sign-in and credentials.                                                               |
-| `ren`      | The Ren API and Chat API clients.                                                      |
-| `link`     | One Chat API client and event stream per Ren root session, with `chat.access` refresh. |
-| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.             |
-| `model`    | The `LanguageModelV3`.                                                                 |
-| `provider` | Provider and model registration.                                                       |
-| `binding`  | The `ren` session metadata.                                                            |
-| `mirror`   | Remote activity into the local session.                                                |
-| TUI        | The `/ren:*` commands.                                                                 |
+| Module     | Holds                                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                          |
+| `auth`     | `RenAuth`: the server URL and a currently valid token.                                              |
+| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.                   |
+| `link`     | _Not built._ One Chat API client and event stream per Ren root session, with `chat.access` refresh. |
+| `model`    | _Not built._ The `LanguageModelV3`.                                                                 |
+| `provider` | _Not built._ Provider and model registration.                                                       |
+| `binding`  | _Not built._ The `ren` session metadata.                                                            |
+| `mirror`   | _Not built._ Remote activity into the local session.                                                |
+| TUI        | _Not built._ The `/ren:*` commands.                                                                 |
+
+## Connection
+
+The server URL is the plugin option `url`, then `REN_URL`, then `https://api.useren.ai`. Only `http` and `https` URLs are accepted.
+
+The token is `REN_TOKEN`, else the `ren` CLI's login in `${XDG_CONFIG_HOME:-~/.config}/ren/credentials.json` for the server's origin, so `ren login` signs in both. The plugin reads the file on each request for a token, so a later `ren login` or `ren logout` applies without a restart. Within 60 seconds of `expiresAt` it renews the login with the stored refresh token, as the CLI does (the same discovery, `client_id` and `resource`), and writes it back in the CLI's format, atomically, with mode `0600`. Concurrent requests share one renewal. When the server refuses the renewal because the CLI already rotated the login, the plugin uses the CLI's new login.
+
+Without a token, or when the server refuses the renewal, `RenAuth.token` and `RenApi.client` fail with `RenAuth.SignedOut`. Other failures (an unreadable file, an unreachable server) are `RenAuth.AuthError`.
+
+The file format, the discovery and the renewal are a port of `packages/cli/src/services/{credentials,oauth,connection}.ts`: the plugin cannot depend on the private CLI package. Change both together.
+
+The plugin runs in OpenCode's process with only `Scope` in its context, so it provides its own platform services: `FetchHttpClient` from `effect/http` for HTTP, and Bun and `node:fs` for the credentials file, because `effect`'s `FileSystem` needs a platform package that OpenCode does not provide to plugins.
 
 ## Commands the plugin adds (not built)
 
@@ -98,4 +110,7 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
+bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
+
+The end-to-end test `packages/e2e/tests/opencode.spec.ts` signs in with the `ren` CLI against a real server and checks that the plugin uses and renews that login.
