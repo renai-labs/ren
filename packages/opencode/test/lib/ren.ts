@@ -3,11 +3,13 @@ export * as RenServer from "./ren.js"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
+import { Drive } from "@ren/schema/drive"
 import { Factory } from "@ren/schema/factory"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
@@ -21,6 +23,9 @@ export interface Prompt {
   readonly id: string
   readonly text: string
   readonly delivery: string
+  readonly files?: ReadonlyArray<{ readonly path: string; readonly name: string }>
+  readonly agents?: ReadonlyArray<{ readonly name: string; readonly mention?: typeof Mention.Type }>
+  readonly skills?: ReadonlyArray<{ readonly id: string; readonly mention?: typeof Mention.Type }>
 }
 
 export interface Options {
@@ -38,10 +43,25 @@ const Imported = Schema.Struct({
   transcript: Schema.Json,
 })
 const Exported = Schema.Struct({ info: Schema.Struct({ title: Schema.String }) })
-const Prompted = Schema.Struct({ id: Schema.String, text: Schema.String, delivery: Schema.String })
+const Mention = Schema.Struct({ start: Schema.Number, end: Schema.Number, text: Schema.String })
+const Prompted = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  delivery: Schema.String,
+  files: Schema.optionalKey(Schema.Array(Schema.Struct({ path: Schema.String, name: Schema.String }))),
+  agents: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ name: Schema.String, mention: Schema.optionalKey(Mention) })),
+  ),
+  skills: Schema.optionalKey(Schema.Array(Schema.Struct({ id: Schema.String, mention: Schema.optionalKey(Mention) }))),
+})
 const Renamed = Schema.Struct({ title: Schema.String })
 const Switched = Schema.Struct({ model: SessionModel.Ref })
 const Compacted = Schema.Struct({ id: SessionMessage.ID })
+const Uploading = Schema.Struct({
+  spaceId: Schema.optionalKey(Schema.String),
+  path: Schema.String,
+  size: Schema.Number,
+})
 const PermissionReplied = Schema.Struct({
   reply: Permission.Reply,
   message: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -51,6 +71,12 @@ export type Answer =
   | { readonly type: "permission"; readonly requestID: string; readonly reply: string; readonly message?: string }
   | { readonly type: "form"; readonly formID: string; readonly answer: Form.Answer }
   | { readonly type: "cancel"; readonly formID: string }
+
+export interface Upload {
+  readonly spaceId: string | undefined
+  readonly path: string
+  readonly bytes: Uint8Array
+}
 
 export interface Switch {
   readonly sessionID: string
@@ -99,6 +125,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const archived = yield* Queue.unbounded<string>()
   const compacted = yield* Queue.unbounded<SessionMessage.ID>()
   const answered = yield* Queue.unbounded<Answer>()
+  const uploaded = yield* Queue.unbounded<Upload>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
@@ -143,6 +170,10 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     saved: new Map<string, ReadonlyArray<SessionMessage.Info>>(),
     listed: Array.of<URLSearchParams>(),
     reads: Array.of<string>(),
+    uploads: Array.of<Upload>(),
+    maxUploadBytes: Drive.maxUploadBytes,
+    agents: Array.of<SessionCatalog.Agent>(),
+    skills: Array.of<SessionCatalog.Skill>(),
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
@@ -305,6 +336,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       state.remoteModels.set(sessionID, model)
       return new Response(null, { status: 204 })
     },
+    agent: () => Promise.resolve(Response.json(state.agents)),
+    skill: () => Promise.resolve(Response.json(state.skills)),
     compact: async (sessionID, request) => {
       const id = Schema.decodeUnknownSync(Compacted)(await request.json()).id
       Queue.offerUnsafe(compacted, id)
@@ -353,7 +386,10 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
         : Response.json({ _tag: "NotFoundError", message: "No such message" }, { status: 404 })
     }
     if (parts[4] === "prompt") {
-      const body = Schema.decodeUnknownSync(Prompted)(await request.json())
+      const raw = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(await request.json())
+      const body = Schema.decodeUnknownSync(Prompted)(
+        Object.fromEntries(Object.entries(raw).filter((entry) => entry[1] !== null)),
+      )
       const prompt = { sessionID, ...body }
       state.prompts.push(prompt)
       Queue.offerUnsafe(prompted, prompt)
@@ -484,6 +520,36 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     if (parts[3] === "models") return Response.json(state.models.get(url.searchParams.get("spaceId") ?? "") ?? choices)
     return Response.json(info(Session.ID.make(String(parts[2])), state.spaceId))
   }
+  const drive = async (url: URL, request: Request) => {
+    if (url.pathname === "/drive/uploads") {
+      const input = Schema.decodeUnknownSync(Uploading)(await request.json())
+      if (input.size > state.maxUploadBytes)
+        return Response.json(
+          { _tag: "InvalidRequestError", message: `A file in the drive is at most ${state.maxUploadBytes} bytes.` },
+          { status: 400 },
+        )
+      return Response.json({
+        uploadId: crypto.randomUUID(),
+        uploadUrl: `${url.origin}/upload`,
+        fields: { key: input.path, ...(input.spaceId && { spaceId: input.spaceId }) },
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      })
+    }
+    // oxlint-disable-next-line typescript/no-deprecated -- The fake Ren reads the upload its own test client sent.
+    const form = await request.formData()
+    const file = form.get("file")
+    if (!(file instanceof Blob)) return new Response("no file", { status: 400 })
+    const spaceId = form.get("spaceId")
+    const key = form.get("key")
+    const upload = {
+      spaceId: typeof spaceId === "string" ? spaceId : undefined,
+      path: typeof key === "string" ? key : "",
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    }
+    state.uploads.push(upload)
+    Queue.offerUnsafe(uploaded, upload)
+    return new Response(null, { status: 204 })
+  }
   const oauth = async (url: URL, request: Request) => {
     if (url.pathname === "/.well-known/oauth-protected-resource")
       return Response.json({ resource: url.origin, authorization_servers: [`${url.origin}/auth`] })
@@ -509,6 +575,12 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     }
     return Response.json({ access_token: "signed-in", refresh_token: "refresh-signed-in", expires_in: 3600 })
   }
+  const paths: Record<string, ((url: URL, request: Request) => Response | Promise<Response>) | undefined> = {
+    "/me": people,
+    "/space-members": people,
+    "/drive/uploads": drive,
+    "/upload": drive,
+  }
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
@@ -527,9 +599,10 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
           }
           if (url.pathname.startsWith("/chat/")) return (options.chat ?? chat)(`${url.pathname}${url.search}`, request)
           if (url.pathname.startsWith("/.well-known/") || url.pathname.startsWith("/auth/")) return oauth(url, request)
+          const path = paths[url.pathname]
+          if (path) return path(url, request)
           const imported = url.pathname.match(/^\/sessions\/([^/]+)\/import$/u)?.[1]
-          if (imported) return importing(Session.ID.make(imported), request)
-          return url.pathname === "/me" || url.pathname === "/space-members" ? people(url) : api(url, request)
+          return imported ? importing(Session.ID.make(imported), request) : api(url, request)
         },
       }),
     ),
@@ -549,6 +622,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     archived,
     compacted,
     answered,
+    uploaded,
     send,
     drop: () => {
       for (const controller of streams) controller.close()

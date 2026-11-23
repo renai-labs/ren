@@ -10,6 +10,7 @@ import { type Context, Effect, Exit, Option, Schema, Stream, SubscriptionRef } f
 import { Binding } from "./binding.js"
 import { Link } from "./link.js"
 import { Mirror } from "./mirror.js"
+import { Outgoing } from "./outgoing.js"
 import { RenApi } from "./ren.js"
 import { Turn } from "./turn.js"
 
@@ -24,7 +25,7 @@ class TurnError extends Schema.TaggedError<TurnError>()("RenModel.TurnError", { 
 
 interface Candidate {
   readonly id: SessionMessage.ID
-  readonly text: string
+  readonly local: Outgoing.Local
   readonly remote: boolean
 }
 
@@ -118,9 +119,10 @@ const turn = (input: {
         if (message.type !== "user" || message.text.trim() === "") return []
         return Option.match(Schema.decodeUnknownOption(SessionMessage.ID)(message.id), {
           onNone: () => [],
-          onSome: (id) => [{ id, text: message.text, remote: isRemote(message.metadata) }],
+          onSome: (id) => [{ id, local: message, remote: isRemote(message.metadata) }],
         })
       })
+      const spaceId = Option.isSome(bound) ? bound.value.spaceId : yield* bindings.space
       if (Option.isNone(created)) {
         const local = yield* input.session
           .get({ sessionID: Binding.LocalID.make(sessionID) })
@@ -134,7 +136,6 @@ const turn = (input: {
             message:
               "This session has history that Ren does not have. Run /ren:move to move it to Ren with its history, or start a new session with /ren:new.",
           })
-        const spaceId = Option.isSome(bound) ? bound.value.spaceId : yield* bindings.space
         const client = yield* ren.client
         yield* client.session
           .create({ id: sessionID, spaceId, model })
@@ -207,13 +208,24 @@ const turn = (input: {
           candidates.filter((candidate) => !covered.has(candidate.id)),
           (candidate) => Effect.map(has(candidate.id), (found) => !found),
         )
-        if (Option.isSome(created) && missing.some((candidate) => !candidate.remote)) yield* switchModel
-        yield* Effect.forEach(
+        const sending = yield* Outgoing.prepare(
+          Effect.all({ agents: chat.agent.list({ sessionID }), skills: chat.skill.list({ sessionID }) }).pipe(
+            Effect.mapError(failed),
+          ),
+          sessionID,
           missing.filter((candidate) => !candidate.remote),
-          (candidate) =>
-            chat.session
-              .prompt({ sessionID, id: candidate.id, text: candidate.text, delivery: "steer" })
-              .pipe(Effect.mapError(failed)),
+        ).pipe(Effect.mapError((error) => new TurnError({ message: error.message })))
+        if (Option.isSome(created) && sending.length > 0) yield* switchModel
+        yield* Effect.forEach(
+          sending,
+          (prompt) =>
+            Outgoing.upload(spaceId, prompt).pipe(
+              Effect.provideService(RenApi.Service, ren),
+              Effect.mapError((error) => new TurnError({ message: error.message })),
+              Effect.flatMap((payload) =>
+                chat.session.prompt({ sessionID, ...payload, delivery: "steer" }).pipe(Effect.mapError(failed)),
+              ),
+            ),
           { discard: true },
         )
         const waiting: State = {

@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `outgoing`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). A prompt's files, agent mentions and skills reach the brain with it (Attachments). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -53,6 +53,7 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                             |
 | `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.      |
 | `requests` | `Requests`: the brain's permission requests and questions as local ones, and the answers.          |
+| `outgoing` | `Outgoing`: a local user message as a Chat API prompt; its files go to the space's drive.          |
 | `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range. |
 | `history`  | `History`: Chat API messages as OpenCode export messages, and the catch-up rules.                  |
 | `sessions` | `Sessions`: the session list, and the transcript to import on open and catch-up.                   |
@@ -111,11 +112,23 @@ For a primary request `doStream`:
 3. Reads the local messages (`session.context`). The candidates are the user messages after the last assistant message that completed without an error.
 4. Without a binding, a session with a finished local answer is refused with a message to run `/ren:move`, so its history is never left behind. Without a Ren session in the binding, creates it with the local session's ID, the binding's space (else the selected space) and the model (`session.create`), then writes the binding.
 5. Opens the link for this turn, subscribes, and waits until it is connected.
-6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`. Before it sends to an existing Ren session, it switches the brain to the local model (Session controls).
+6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`, with their files, agents and skills (Attachments). Before it sends to an existing Ren session, it switches the brain to the local model (Session controls).
 7. The turn starts at `session.inbox.delivered` of a sent message; earlier events are ignored. `turn` converts the events until the execution ends, or until the brain delivers a user message that is not one of the candidates (Multiplayer).
 8. When nothing was sent (the brain has every candidate), and after every later `server.connected` (a reconnect, events may be lost), it reads the state again: once the brain has every candidate, a busy session means the turn runs (follow it), an idle one that it ended (finish).
 
 Stopping the local turn cancels the stream, which calls `session.interrupt`. OpenCode does not retry a Ren turn (the `retry` hook): the brain retries model calls itself. The `title` hook answers with the Ren session's title, or none yet, so OpenCode never asks the model for a title. One-off generations fail with a message and never reach the brain; `/compact` compacts on the brain (Session controls).
+
+## Attachments
+
+A local prompt reaches the brain as the local model would have received it (`Outgoing`):
+
+- **Text.** The stored user message's `text`, unchanged. OpenCode keeps no separate display form, so no `presentation` is sent.
+- **Files.** OpenCode reads a prompt's files when it admits the message (`@` mentions the TUI turned into attachments, drag and drop, pasted images and PDFs) and stores their bytes with it: a line range (`?start=&end=`) as those lines, a folder as its listing. `doStream` reads them from `session.context`, uploads each to the space's drive at `chats/<sessionId>/uploads/<messageId>/<name>` (`drive.startUpload`, then the form POST), and sends `files: [{ path, name }]`, as the web app does. The brain types a drive file by its name, so a name gets the extension of its type when it lacks one (`Pasted image.png`), a text file without a text extension gets `.txt`, a folder becomes `<name>.listing.txt`, and a second file with the same name becomes `<name> (2).<ext>`.
+- **Agents and skills.** Before it sends a message with agent or skill mentions, `doStream` reads the brain's `agent.list` and `skill.list`. A mention passes, with its position in the text, when the brain has that agent or skill (by ID, else by name). Another agent mention is left out; its `@name` stays in the text, which is all a local model gets of it. A local skill the brain lacks goes as a file, `<name>.skill.md`, with the skill's text, which the local model would have read.
+- **Retries.** Only messages the brain does not have are uploaded and sent; a retried turn uploads a message's files again to the same paths, which replaces them.
+- **Refusals.** More than 10 files in a message (skill files count) fail the turn before anything is uploaded or sent. A file Ren's drive does not take fails the turn with Ren's reason, and the message is not sent. A brain whose chat cannot read the space's drive refuses the message, and the turn fails with its reason.
+
+A typed `@path` that the TUI did not turn into an attachment stays text: the brain reads it as a path on its hand. The agent picked in the TUI does not change the remote turn's agent: the Ren session keeps its own.
 
 ## Multiplayer
 
@@ -321,7 +334,7 @@ Release (manual; no workflow publishes it yet): run the package checks and `REN_
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, and the built package
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, agent mentions and a drive file sent to a real brain, and the built package
 bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
