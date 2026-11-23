@@ -10,6 +10,10 @@ const Claims = Schema.Struct({
 const decodeClaims = Schema.decodeUnknownOption(Schema.fromJsonString(Claims))
 const decodeCreate = Schema.decodeUnknownSync(RenInference.CreateKeyInput)
 const decodeRevision = Schema.decodeUnknownOption(Schema.Struct({ revision: Schema.String }))
+const decodeKey = Schema.decodeUnknownOption(Schema.Struct({ fields: Schema.Record(Schema.String, Schema.String) }))
+
+// oxlint-disable-next-line ren/no-comments -- The stand-in vendor refuses any key that does not start with "sk-good".
+const keyOk = (body: unknown) => Option.getOrUndefined(decodeKey(body))?.fields.apiKey?.startsWith("sk-good") ?? false
 
 const expiryDays: Readonly<Record<RenInference.Expiry, number | null>> = {
   "7d": 7,
@@ -47,12 +51,57 @@ interface Request {
 }
 
 // oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, and the model catalog and brain keys of the stub model at `stub`.
-export const start = (stub: string) => {
+export const start = (stub: string, ren: { readonly url: string; readonly usageKey: string }) => {
   const keys: Key[] = []
+  const seats: Array<{ readonly id: string; readonly org: string; readonly label: string }> = []
+  const tellRen = (org: string) =>
+    fetch(`${ren.url}/internal/inference/changed`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${ren.usageKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ organizationId: org }),
+    })
   const baseUrl = stub
   const notFound = () => Response.json({ error: "not found" }, { status: 404 })
   const routes: Readonly<Record<string, (input: Request) => Response | Promise<Response>>> = {
-    "GET /v1/connections": () => Response.json([]),
+    "GET /v1/connections": (input) =>
+      Response.json(
+        seats
+          .filter((seat) => seat.org === input.claims?.org)
+          .map((seat) => ({
+            id: seat.id,
+            label: seat.label,
+            providerName: "Anthropic",
+            providerId: "anthropic",
+            iconUrl: "",
+            status: { label: "Active", tone: "ok" },
+            plan: "Max",
+            models: ["stub-model"],
+            canReconnect: false,
+            meters: [],
+            connectedBy: null,
+          })),
+      ),
+    // oxlint-disable-next-line ren/no-comments -- The sign-in page is this stand-in's: opening it connects a seat for the organization and tells Ren, as the gateway does.
+    "POST /v1/connect": (input) =>
+      Response.json({ url: `${server.url.origin}/signin?org=${encodeURIComponent(input.claims?.org ?? "")}` }),
+    "GET /signin": async (input) => {
+      const org = new URL(input.request.url).searchParams.get("org") ?? ""
+      seats.push({ id: `seat_stub_${seats.length}`, org, label: "Claude subscription" })
+      await tellRen(org)
+      return new Response("Signed in. You can close this tab.")
+    },
+    "PUT /v1/providers/:id": () => new Response(null, { status: 204 }),
+    "POST /v1/providers/:id/test": async (input) =>
+      Response.json(keyOk(await input.request.json()) ? { ok: true } : { ok: false, message: "Invalid API key." }),
+    "PUT /v1/providers/:id/key": async (input) => {
+      const body: unknown = await input.request.json()
+      if (!keyOk(body)) return Response.json({ error: "Invalid API key." }, { status: 400 })
+      const key = Option.getOrUndefined(decodeKey(body))?.fields.apiKey ?? ""
+      return Response.json({ last4: key.slice(-4), testedAt: new Date().toISOString() })
+    },
+    "DELETE /v1/providers/:id/key": () => new Response(null, { status: 204 }),
+    "GET /v1/usage/free": () =>
+      Response.json({ used: 41, limit: 100, resetsAt: new Date(Date.now() + 3_600_000).toISOString() }),
     "POST /v1/keys": () => Response.json({ key: "stub-key" }),
     "PUT /v1/ren-models": async (input) => {
       const body: unknown = await input.request.json()
@@ -107,7 +156,8 @@ export const start = (stub: string) => {
       const token = request.headers.get("authorization")?.split(".")[1] ?? ""
       const claims = Option.getOrUndefined(decodeClaims(Buffer.from(token, "base64url").toString()))
       const found = keys.find((key) => url.pathname.includes(key.id) && key.org === claims?.org)
-      const route = routes[`${request.method} ${url.pathname.replace(/ifk_\w+/u, ":id")}`]
+      const path = url.pathname.replace(/ifk_\w+/u, ":id").replace(/^\/v1\/providers\/[^/]+/u, "/v1/providers/:id")
+      const route = routes[`${request.method} ${path}`]
       if (route) return route({ request, claims, found })
       if (request.method === "DELETE") return new Response(null, { status: 204 })
       return fetch(new URL(`${url.pathname}${url.search}`, stub), {

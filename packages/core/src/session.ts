@@ -9,7 +9,7 @@ import type { PullRequest as PullRequestSchema } from "@ren/schema/pull-request"
 import type { SessionLinks } from "@ren/schema/session/links"
 import type { SessionUsage } from "@ren/schema/session/usage"
 import { SessionMessage } from "@ren/schema/session/message"
-import type { SessionModel } from "@ren/schema/session/model"
+import { SessionModel } from "@ren/schema/session/model"
 import { Settings } from "@ren/schema/settings"
 import { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
@@ -206,12 +206,15 @@ export const layer = Layer.effect(
           found.endpoints.flatMap((endpoint) =>
             endpoint.models
               .filter((model) => model.type === "chat")
-              .map((model): SessionModel.Choice => ({
-                id: model.id,
-                providerID: endpoint.id,
-                name: model.name ?? model.id,
-                variants: (model.efforts ?? []).map((effort) => ({ id: effort })),
-              })),
+              .map((model): SessionModel.Choice => {
+                const row = {
+                  id: model.id,
+                  providerID: endpoint.id,
+                  name: model.name ?? model.id,
+                  variants: (model.efforts ?? []).map((effort) => ({ id: effort })),
+                }
+                return Object.assign(row, SessionModel.listed(endpoint, model))
+              }),
           ),
         ),
       )

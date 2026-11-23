@@ -64,30 +64,22 @@ export function pickModel(
   return { id: choice.id, providerID: choice.providerID, ...(variant && { variant }) }
 }
 
-const vendorNames: Readonly<Record<string, string>> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  google: "Google",
-  "x-ai": "xAI",
-  "z-ai": "Z.ai",
-  deepseek: "DeepSeek",
-  moonshotai: "Moonshot AI",
-  qwen: "Qwen",
-  "meta-llama": "Meta",
-  mistralai: "Mistral",
-  minimax: "MiniMax",
-  nvidia: "NVIDIA",
-  amazon: "Amazon",
-  "bytedance-seed": "ByteDance",
-  xiaomi: "Xiaomi",
+// oxlint-disable-next-line ren/no-comments -- Providers P24: only Anthropic and OpenAI have two methods, so only their rows say which one serves.
+const twoMethods = new Set(["anthropic", "openai", "claude-agent"])
+
+const cardOf = (model: Choice) => model.providerName ?? capitalize(model.providerID)
+
+const cardLabel = (model: Choice) =>
+  model.method && twoMethods.has(model.providerID)
+    ? `${cardOf(model)} (${model.method === "subscription" ? "subscription" : "key"})`
+    : cardOf(model)
+
+const perMillion = (value: number) => `$${value < 10 ? value.toFixed(2).replace(/\.?0+$/u, "") : Math.round(value)}`
+
+const priceLabel = (model: Choice) => {
+  if (model.free) return "Free"
+  return model.price && `${perMillion(model.price.input)} / ${perMillion(model.price.output)}`
 }
-
-const popular = ["anthropic", "openai", "google"]
-
-const vendorOf = (model: Pick<Choice, "id" | "providerID">) =>
-  model.id.includes("/") ? (model.id.split("/").at(0) ?? model.providerID) : model.providerID
-
-const vendorName = (vendor: string) => vendorNames[vendor] ?? capitalize(vendor)
 
 const normalize = (value: string) =>
   value
@@ -100,15 +92,12 @@ const matches = (query: string, model: Choice) => {
   const search = normalize(query)
   if (!search) return true
   const compact = search.replaceAll(" ", "")
-  return [model.name, model.id, vendorName(vendorOf(model))].some(
+  return [model.name, model.id, cardLabel(model)].some(
     (value) => normalize(value).includes(search) || normalize(value).replaceAll(" ", "").includes(compact),
   )
 }
 
-const vendorRank = (vendor: string) => {
-  const index = popular.indexOf(vendor)
-  return index === -1 ? popular.length : index
-}
+const cardRank = (card: string) => (card === "Ren" ? 0 : 1)
 
 interface Group {
   readonly key: string
@@ -126,14 +115,16 @@ const groupsOf = (
   const searching = input.query.trim() !== ""
   const recent = searching ? [] : input.recent.flatMap((key) => byKey.get(key) ?? [])
   const listed = new Set(recent.map(modelKey))
-  const vendors = [...new Set(shown.map(vendorOf))].toSorted(
-    (a, b) => vendorRank(a) - vendorRank(b) || vendorName(a).localeCompare(vendorName(b)),
+  const byCard = Map.groupBy(
+    shown.filter((model) => !listed.has(modelKey(model))),
+    cardLabel,
   )
+  const cards = [...byCard.keys()].toSorted((a, b) => cardRank(a) - cardRank(b) || a.localeCompare(b))
   return [
     ...(recent.length ? [{ key: "recent", title: "Recent", section: true, models: recent }] : []),
-    ...vendors.flatMap((vendor) => {
-      const own = shown.filter((model) => vendorOf(model) === vendor && !listed.has(modelKey(model)))
-      return own.length ? [{ key: vendor, title: vendorName(vendor), section: false, models: own }] : []
+    ...cards.flatMap((card) => {
+      const own = byCard.get(card) ?? []
+      return own.length ? [{ key: card, title: card, section: false, models: own }] : []
     }),
   ]
 }
@@ -189,7 +180,7 @@ const usePicker = (
 const chipClass = "min-w-0 justify-start font-normal text-muted-foreground"
 
 function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOpen: () => void }) {
-  const vendor = vendorName(vendorOf(props.picker.current))
+  const current = props.picker.current
   return (
     <InputGroupButton
       size="sm"
@@ -201,11 +192,14 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
       onClick={props.onOpen}
     >
       <span className="flex min-w-0 whitespace-nowrap">
-        <bdi className="min-w-0 shrink-2 truncate text-muted-foreground/60">{vendor}</bdi>
+        <bdi className="min-w-0 truncate">{current.name}</bdi>
         <span aria-hidden className="mx-1 text-muted-foreground/40">
-          /
+          ·
         </span>
-        <bdi className="min-w-0 truncate">{props.picker.current.name}</bdi>
+        <bdi className="min-w-0 shrink-2 truncate text-muted-foreground/60">
+          {cardLabel(current)}
+          {current.free ? " · Free" : ""}
+        </bdi>
       </span>
       <IconChevronDown className="-mr-1 -ml-0.5" />
     </InputGroupButton>
@@ -274,7 +268,8 @@ function Details(props: { model: Choice | SessionModel.Info }) {
   return (
     <div className="flex flex-col px-2 py-1.5 text-xs/4 text-muted-foreground select-none">
       <span className="truncate">
-        {vendorName(vendorOf(model))}
+        {cardLabel(model)}
+        {priceLabel(model) ? ` · ${priceLabel(model)}` : ""}
         {context > 0 ? ` · ${tokens(context)} context` : ""}
       </span>
       {input ? <span className="truncate">{input}</span> : null}
@@ -352,7 +347,10 @@ function ModelRow(props: {
           <Highlight text={row.model.name} query={props.query} />
         </span>
         {row.group.section ? (
-          <span className="min-w-0 shrink-999 truncate text-muted-foreground">{vendorName(vendorOf(row.model))}</span>
+          <span className="min-w-0 shrink-999 truncate text-muted-foreground">{cardLabel(row.model)}</span>
+        ) : null}
+        {priceLabel(row.model) ? (
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{priceLabel(row.model)}</span>
         ) : null}
       </span>
       {props.active && props.effort ? (

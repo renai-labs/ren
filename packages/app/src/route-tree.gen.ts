@@ -48,6 +48,7 @@ import { Route as AuthedShellSettingsChannelsIndexRouteImport } from "./routes/_
 import { Route as AuthedShellSettingsChannelsProviderRouteImport } from "./routes/_authed/_shell/settings/channels/$provider"
 import { Route as AuthedShellSettingsProvidersIndexRouteImport } from "./routes/_authed/_shell/settings/providers/index"
 import { Route as AuthedShellSettingsProvidersKeysRouteImport } from "./routes/_authed/_shell/settings/providers/keys"
+import { Route as AuthedShellSettingsProvidersRenModelsRouteImport } from "./routes/_authed/_shell/settings/providers/ren-models"
 import { Route as AuthedShellSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/index"
 import { Route as AuthedShellSpacesSpaceIdAppsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/apps"
 import { Route as AuthedShellSpacesSpaceIdChannelsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/channels"
@@ -288,6 +289,12 @@ const AuthedShellSettingsProvidersKeysRoute =
     path: "/settings/providers/keys",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSettingsProvidersRenModelsRoute =
+  AuthedShellSettingsProvidersRenModelsRouteImport.update({
+    id: "/settings/providers/ren-models",
+    path: "/settings/providers/ren-models",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSpacesSpaceIdIndexRoute =
   AuthedShellSpacesSpaceIdIndexRouteImport.update({
     id: "/",
@@ -482,6 +489,7 @@ export interface FileRoutesByFullPath {
   "/settings/usage": typeof AuthedShellSettingsAdminUsageRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
+  "/settings/providers/ren-models": typeof AuthedShellSettingsProvidersRenModelsRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
@@ -544,6 +552,7 @@ export interface FileRoutesByTo {
   "/settings/usage": typeof AuthedShellSettingsAdminUsageRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
+  "/settings/providers/ren-models": typeof AuthedShellSettingsProvidersRenModelsRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
@@ -611,6 +620,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/_admin/usage": typeof AuthedShellSettingsAdminUsageRoute
   "/_authed/_shell/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/_authed/_shell/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
+  "/_authed/_shell/settings/providers/ren-models": typeof AuthedShellSettingsProvidersRenModelsRoute
   "/_authed/_shell/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
   "/_authed/_shell/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/_authed/_shell/spaces/$spaceId/compute": typeof AuthedShellSpacesSpaceIdComputeRoute
@@ -677,6 +687,7 @@ export interface FileRouteTypes {
     | "/settings/usage"
     | "/settings/channels/$provider"
     | "/settings/providers/keys"
+    | "/settings/providers/ren-models"
     | "/spaces/$spaceId/apps"
     | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/compute"
@@ -739,6 +750,7 @@ export interface FileRouteTypes {
     | "/settings/usage"
     | "/settings/channels/$provider"
     | "/settings/providers/keys"
+    | "/settings/providers/ren-models"
     | "/spaces/$spaceId/apps"
     | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/compute"
@@ -805,6 +817,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/_admin/usage"
     | "/_authed/_shell/settings/channels/$provider"
     | "/_authed/_shell/settings/providers/keys"
+    | "/_authed/_shell/settings/providers/ren-models"
     | "/_authed/_shell/spaces/$spaceId/apps"
     | "/_authed/_shell/spaces/$spaceId/channels"
     | "/_authed/_shell/spaces/$spaceId/compute"
@@ -1124,6 +1137,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSettingsProvidersKeysRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/settings/providers/ren-models": {
+      id: "/_authed/_shell/settings/providers/ren-models"
+      path: "/settings/providers/ren-models"
+      fullPath: "/settings/providers/ren-models"
+      preLoaderRoute: typeof AuthedShellSettingsProvidersRenModelsRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
     "/_authed/_shell/spaces/$spaceId/": {
       id: "/_authed/_shell/spaces/$spaceId/"
       path: "/"
@@ -1423,6 +1443,7 @@ interface AuthedShellRouteChildren {
   AuthedShellTasksIndexRoute: typeof AuthedShellTasksIndexRoute
   AuthedShellSettingsChannelsProviderRoute: typeof AuthedShellSettingsChannelsProviderRoute
   AuthedShellSettingsProvidersKeysRoute: typeof AuthedShellSettingsProvidersKeysRoute
+  AuthedShellSettingsProvidersRenModelsRoute: typeof AuthedShellSettingsProvidersRenModelsRoute
   AuthedShellAppsAppIdIndexRoute: typeof AuthedShellAppsAppIdIndexRoute
   AuthedShellMarketplaceAppIdIndexRoute: typeof AuthedShellMarketplaceAppIdIndexRoute
   AuthedShellSessionsSessionIdIndexRoute: typeof AuthedShellSessionsSessionIdIndexRoute
@@ -1451,6 +1472,8 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsChannelsProviderRoute:
     AuthedShellSettingsChannelsProviderRoute,
   AuthedShellSettingsProvidersKeysRoute: AuthedShellSettingsProvidersKeysRoute,
+  AuthedShellSettingsProvidersRenModelsRoute:
+    AuthedShellSettingsProvidersRenModelsRoute,
   AuthedShellAppsAppIdIndexRoute: AuthedShellAppsAppIdIndexRoute,
   AuthedShellMarketplaceAppIdIndexRoute: AuthedShellMarketplaceAppIdIndexRoute,
   AuthedShellSessionsSessionIdIndexRoute:

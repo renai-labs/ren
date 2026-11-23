@@ -14,6 +14,8 @@ const groups: Readonly<Record<string, ReadonlyArray<string>>> = {
   webhook: ["webhook", "webhook-request"],
   "channel-mapping": ["channel-mapping", "channel-connect"],
   "channel-install": ["channel-install", "channel-mapping", "channel-connect"],
+  "ren-inference": ["ren-inference", "provider"],
+  provider: ["provider", "ren-inference"],
   chat: [],
   me: [],
   memory: ["memory", "files"],

@@ -8,8 +8,10 @@ import type { Session as OpenCodeSession } from "@opencode/schema/session"
 import { RelativePath } from "@opencode/schema/schema"
 import { Skill } from "@opencode/schema/skill"
 import { FileSystem } from "@ren/schema/file-system"
+import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
 import { posix } from "node:path"
@@ -75,6 +77,8 @@ export const make = (
     | "activate"
     | "chats"
   >,
+  // oxlint-disable-next-line ren/no-comments -- Ren's list as the harness applied it: each picker row names its card, method and price from it (Providers §5.3).
+  catalog: Effect.Effect<Option.Option<Models.Catalog>> = Effect.succeed(Option.none()),
 ): Harness.Chat => {
   const api = host.client
 
@@ -124,21 +128,29 @@ export const make = (
     status: Effect.map(active, (ids) =>
       Object.fromEntries(ids.map((id): [string, SessionStatus.Info] => [id, { type: "busy" }])),
     ),
-    models: api.model.list().pipe(
-      Effect.orDie,
-      Effect.map((page) =>
-        page.data
-          .filter((model) => model.enabled)
-          .map((model) => ({
+    models: Effect.gen(function* () {
+      const page = yield* api.model.list().pipe(Effect.orDie)
+      const listed = Option.getOrUndefined(yield* catalog)?.endpoints ?? []
+      const cards = new Map(listed.map((endpoint) => [endpoint.id, endpoint]))
+      const entries = new Map(
+        listed.flatMap((endpoint) => endpoint.models.map((model) => [`${endpoint.id}/${model.id}`, model] as const)),
+      )
+      return page.data
+        .filter((model) => model.enabled)
+        .map((model) => {
+          const card = cards.get(model.providerID)
+          const entry = entries.get(`${model.providerID}/${model.id}`)
+          const row = {
             id: model.id,
             providerID: model.providerID,
             name: model.name,
             variants: model.variants.map((variant) => ({ id: variant.id })),
             input: model.capabilities.input,
             limit: { context: model.limit.context, output: model.limit.output },
-          })),
-      ),
-    ),
+          }
+          return card && entry ? Object.assign(row, SessionModel.listed(card, entry)) : row
+        })
+    }),
     get,
     children: (sessionId) =>
       Effect.gen(function* () {

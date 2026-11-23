@@ -710,7 +710,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
 
   return {
     fetch: server.fetch,
-    chat: OpenCodeChat.make(server),
+    chat: OpenCodeChat.make(
+      server,
+      Effect.sync(() => Option.some(Models.catalog({ endpoints: state.models }))),
+    ),
     configure: (update: HarnessConfig.Update) => mutations.withPermit(configure(update)),
     configuration: server.configuration,
     refreshModels,

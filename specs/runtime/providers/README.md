@@ -1,6 +1,6 @@
 # Providers: models, own keys and subscriptions through one gateway
 
-Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
+Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes); the Providers and Ren models pages, picker rows and the model chip (§5.1–§5.3). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
 
 This file is the core of the spec. The references hold the detail:
 
@@ -113,7 +113,7 @@ For a self-hosted Ren without the gateway, `Models.layerNone` stays: no models.
 
 ### 5.1 Providers page
 
-Settings → Providers. It replaces "Subscriptions your agents run on" (`app/src/features/providers/providers-page.tsx:130`). The OpenCode Console's Providers pages are the model ([`references/console.md`](references/console.md)).
+Built: `app/src/features/providers/` (`providers-page.tsx`, `add-provider-dialog.tsx`, `connect-dialog.tsx`, `ren-models-page.tsx`). Settings → Providers. It replaces "Subscriptions your agents run on" (`app/src/features/providers/providers-page.tsx:130`). The OpenCode Console's Providers pages are the model ([`references/console.md`](references/console.md)).
 
 ```
 Providers                                                                        [ Add provider ]
@@ -161,7 +161,7 @@ A table like the Console's Models page: name, id, price per 1M tokens (input, ou
 
 1. The picker lists exactly the models of the chat's brain (the same pull), grouped by card. The picker already reads the brain's list (`chat/src/react.ts:213`).
 2. Each row shows the card and, for Anthropic and OpenAI, the method. Free models carry "Free". Ren models show the price.
-3. Card names come from the pull data. The hand-written names go (`app/src/components/model-picker.tsx:65` `vendorNames`, `chat/src/turn-problems.ts:28` `providerLabels`).
+3. Card names come from the pull data. The hand-written names go (`app/src/components/model-picker.tsx:65` `vendorNames`, `chat/src/turn-problems.ts:28` `providerLabels`). Built for the picker: each row (`SessionModel.Choice`) carries `providerName`, `method`, `price` and `free`, from Ren's list on the start page and from the list the brain applied in a chat. `providerLabels` goes with the error cards (§9.4). The mobile picker keeps its names until the mobile app takes the same fields.
 
 ### 5.4 Chat
 
@@ -450,8 +450,8 @@ Only rules that the code does not show:
 
 ## 16. Settled details
 
-| Item                                                                                                           | Decision                                                                                                   |
-| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| A "Use this model on Ren" button on errors                                                                     | No. The error card offers "Change model" only (P4)                                                         |
+| Item                                                                                                           | Decision                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A "Use this model on Ren" button on errors                                                                     | No. The error card offers "Change model" only (P4)                                                                                                                                                                                                                                    |
 | The fields of Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks in the Connect dialog | Built (`schema/src/provider-card.ts`): Azure key, endpoint, API version; Bedrock access key ID, secret, region; Vertex project, location, service account JSON; Cloudflare account ID and API token (models.dev's address names the account only); Databricks workspace URL and token |
-| The values of `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK`                                | Deployment settings. The owner sets and changes them; no code change                                       |
+| The values of `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK`                                | Deployment settings. The owner sets and changes them; no code change                                                                                                                                                                                                                  |
