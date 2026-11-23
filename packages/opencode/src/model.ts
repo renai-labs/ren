@@ -5,6 +5,7 @@ import type { Plugin } from "@opencode/plugin/effect"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
+import { SessionModel } from "@ren/schema/session/model"
 import { type Context, Effect, Exit, Option, Schema, Stream, SubscriptionRef } from "effect"
 import { Binding } from "./binding.js"
 import { Link } from "./link.js"
@@ -14,6 +15,7 @@ import { Turn } from "./turn.js"
 
 export const kindHeader = "x-ren-request-kind"
 export const variantHeader = "x-ren-variant"
+export const refusalHeader = "x-ren-refusal"
 const sessionHeader = "x-opencode-session-id"
 
 export type Services = Binding.Service | RenApi.Service | Link.Service | Mirror.Service
@@ -32,11 +34,13 @@ interface State {
   readonly turn: Turn.State
 }
 
+const copied =
+  "This session is a local copy of a Ren session, and Ren has no fork. Pick a local model to continue it here, or go back to the Ren session."
+
 const isRemote = Schema.is(Schema.Struct({ remote: Schema.Literal(true) }))
 
 const refused = {
-  compaction:
-    "Ren compacts the context of a Ren session on its brain. Compacting it from OpenCode is not supported yet.",
+  compaction: "Only a Ren session that has started can be compacted.",
   generate: "Ren models answer only in a Ren session, not in one-off generations.",
   title: "Ren names a Ren session itself.",
 }
@@ -67,9 +71,10 @@ export const make = (
           : Stream.fail(
               new TurnError({
                 message:
-                  kind === "compaction" || kind === "generate" || kind === "title"
+                  headers[refusalHeader] ??
+                  (kind === "compaction" || kind === "generate" || kind === "title"
                     ? refused[kind]
-                    : "Ren models answer only the requests of a Ren session.",
+                    : "Ren models answer only the requests of a Ren session."),
               }),
             )
         ).pipe(Stream.mapError((error) => new Error(explain(error)))),
@@ -96,10 +101,13 @@ const turn = (input: {
       )
       const bound = yield* bindings.get(sessionID)
       const created = Option.flatMapNullishOr(bound, (info) => info.sessionId)
-      if (Option.isSome(created) && created.value !== sessionID)
-        return yield* new TurnError({
-          message: "This session is a copy of a Ren session. Start a new session to talk to Ren.",
-        })
+      if (Option.isSome(created) && created.value !== sessionID) return yield* new TurnError({ message: copied })
+      const separator = input.modelId.indexOf("/")
+      const model: SessionModel.Ref = {
+        providerID: input.modelId.slice(0, separator),
+        id: input.modelId.slice(separator + 1),
+        ...(input.variant && { variant: input.variant }),
+      }
       const messages = yield* input.session
         .context({ sessionID: Binding.LocalID.make(sessionID) })
         .pipe(Effect.mapError(() => new TurnError({ message: "Could not read the local session’s messages." })))
@@ -114,19 +122,14 @@ const turn = (input: {
         })
       })
       if (Option.isNone(created)) {
+        const local = yield* input.session
+          .get({ sessionID: Binding.LocalID.make(sessionID) })
+          .pipe(Effect.mapError(() => new TurnError({ message: "Could not read the local session." })))
+        if (local.fork) return yield* new TurnError({ message: copied })
         const spaceId = Option.isSome(bound) ? bound.value.spaceId : yield* bindings.space
         const client = yield* ren.client
-        const separator = input.modelId.indexOf("/")
         yield* client.session
-          .create({
-            id: sessionID,
-            spaceId,
-            model: {
-              providerID: input.modelId.slice(0, separator),
-              id: input.modelId.slice(separator + 1),
-              ...(input.variant && { variant: input.variant }),
-            },
-          })
+          .create({ id: sessionID, spaceId, model })
           .pipe(
             Effect.mapError((error) => new TurnError({ message: `Ren did not create the session: ${error.message}` })),
           )
@@ -169,11 +172,34 @@ const turn = (input: {
         const next = Turn.finish(state.turn, "caught-up")
         return [{ ...state, phase: "ended", turn: next.state }, next.parts] as const
       })
+      const switchModel = Effect.gen(function* () {
+        const info = yield* chat.session.get({ sessionID }).pipe(Effect.mapError(failed))
+        if (
+          info.model &&
+          SessionModel.key(info.model) === SessionModel.key(model) &&
+          (info.model.variant ?? "default") === (model.variant ?? "default")
+        )
+          return
+        const label = `${SessionModel.key(model)}${model.variant ? ` (${model.variant})` : ""}`
+        if (!info.capabilities.model)
+          return yield* new TurnError({
+            message: `This Ren session cannot switch its model to ${label}. Pick the model it runs on.`,
+          })
+        yield* chat.session.model.switch({ sessionID, model }).pipe(
+          Effect.mapError(
+            (error) =>
+              new TurnError({
+                message: `Ren could not switch this session to ${label}: ${error.message}. Pick another ren model.`,
+              }),
+          ),
+        )
+      })
       const connect = Effect.fnUntraced(function* (state: State) {
         const missing = yield* Effect.filter(
           candidates.filter((candidate) => !covered.has(candidate.id)),
           (candidate) => Effect.map(has(candidate.id), (found) => !found),
         )
+        if (Option.isSome(created) && missing.some((candidate) => !candidate.remote)) yield* switchModel
         yield* Effect.forEach(
           missing.filter((candidate) => !candidate.remote),
           (candidate) =>

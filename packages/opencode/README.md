@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), and a rename on either side reaches the other (Rename). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -51,6 +51,7 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `tui`      | The TUI part: the commands, and the selected space in the footers.                              |
 | `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns. |
 | `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                          |
+| `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.   |
 
 ## Connection
 
@@ -84,15 +85,15 @@ The selected space is the one `/ren:space` stored, else the plugin option `space
 For a primary request `doStream`:
 
 1. Reads the OpenCode session ID from `x-opencode-session-id` and the request kind from `x-ren-request-kind`, which the plugin's `model.request` hook sets.
-2. Reads the binding. A session whose binding names another session is a copy (a fork) and is refused.
+2. Reads the binding. A session whose binding names another session is a copy (a fork) and is refused, and so is a fork without a Ren session (Session controls).
 3. Reads the local messages (`session.context`). The candidates are the user messages after the last assistant message that completed without an error.
 4. Without a Ren session in the binding, creates it with the local session's ID, the binding's space (else the selected space) and the model (`session.create`), then writes the binding.
 5. Opens the link for this turn, subscribes, and waits until it is connected.
-6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`.
+6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`. Before it sends to an existing Ren session, it switches the brain to the local model (Session controls).
 7. The turn starts at `session.inbox.delivered` of a sent message; earlier events are ignored. `turn` converts the events until the execution ends, or until the brain delivers a user message that is not one of the candidates (Multiplayer).
 8. When nothing was sent (the brain has every candidate), and after every later `server.connected` (a reconnect, events may be lost), it reads the state again: once the brain has every candidate, a busy session means the turn runs (follow it), an idle one that it ended (finish).
 
-Stopping the local turn cancels the stream, which calls `session.interrupt`. OpenCode does not retry a Ren turn (the `retry` hook): the brain retries model calls itself. The `title` hook answers with the Ren session's title, or none yet, so OpenCode never asks the model for a title. Compaction and one-off generations fail with a message and never reach the brain.
+Stopping the local turn cancels the stream, which calls `session.interrupt`. OpenCode does not retry a Ren turn (the `retry` hook): the brain retries model calls itself. The `title` hook answers with the Ren session's title, or none yet, so OpenCode never asks the model for a title. One-off generations fail with a message and never reach the brain; `/compact` compacts on the brain (Session controls).
 
 ## Multiplayer
 
@@ -116,6 +117,19 @@ A Ren session has one title, locally and on Ren (`Title`).
 - **No echo.** The plugin never sends back a title that it set locally, whether from a Ren rename or from the `title` hook (OpenCode shortens that one to 100 characters). It does not apply the brain's echo of a rename this OpenCode sent. It drops a Ren title that arrives while a local rename is on its way, because the local one lands after it.
 - **Before the Ren session exists.** A session from `/ren:new` that is renamed before its first prompt has no Ren session yet. At the first connect, if the brain has no title and the local session has one, the plugin sends the local title, so the brain does not replace it with a generated one. A local session that is not a Ren session sends nothing.
 - **Brain not reachable.** The rename stays local and the plugin logs a warning. It waits at most a minute (for a starting brain). The plugin sends the title at the session's next connect in this OpenCode process. A restart forgets the title, and the brain's title then wins.
+
+## Session controls
+
+The built-in controls act on a Ren session (`Controls`, registered from the server part):
+
+- **Model picker.** Picking another `ren/<model>` or variant changes nothing on Ren until the next local prompt: before `doStream` sends a message to an existing Ren session, it reads the brain's model (`session.get`) and, when it differs from the local model and variant, calls `session.model.switch`. This is the web app's rule (the switch goes with the next sent message), it holds after a restart because it compares states instead of reacting to an event, and a mirrored turn, which sends nothing, never switches. A model the session's space does not offer fails the turn with Ren's reason and sends nothing; a session whose `model` capability is off fails it too.
+- **A local model on a Ren session.** OpenCode has no veto, so the plugin switches back. Before each prompt is admitted (the `prompt` hook) and on `session.model.selected`, a session bound to its Ren session whose model is not a `ren` model gets its last `ren` model back, with a notice in the session. Because the hook runs before the prompt's step starts, a prompt never runs on the local model. To continue a Ren session on a local model, fork it.
+- **`/compact`.** The `compaction` hook calls `session.compact` on the brain, waits for the brain's `session.compaction.ended` (or `failed`, or, after a reconnect, reads the compaction message), and returns the brain's summary, so OpenCode stores a local compaction with that summary and calls no model. The local history then starts at the compaction, and `doStream` sends only messages written after it. When Ren refuses (the `compact` capability is off, the brain fails or is unreachable), the local compaction fails with Ren's reason.
+- **Archive.** Archiving a local Ren session archives the Ren session (`session.archive`). Ren has no unarchive: unarchiving the local session leaves the Ren session archived and says so in a notice.
+- **Delete.** A local copy is a view: deleting it never archives or deletes the Ren session. It stops the mirror's watch and its link.
+- **Fork.** Ren has no fork. A fork of a Ren session copies its metadata, so on `session.forked` the plugin removes the fork's `ren` binding and adds a notice. The fork keeps its `ren/*` model but no Ren session, and its prompts are refused with what to do, because a new Ren session would lose the history: pick a local model to continue it locally.
+
+Notices are synthetic messages with a description (`resume: false`), which the TUI shows as a notice row; the brain never receives them. A compaction that someone else starts on Ren is not shown locally.
 
 ## Commands
 
@@ -204,7 +218,7 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates on a real brain, and renames on a real brain
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 

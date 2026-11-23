@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
+import { Controls } from "./controls.js"
 import { RenHandlers } from "./handlers.js"
 import { Link } from "./link.js"
 import { Mirror } from "./mirror.js"
@@ -25,6 +26,7 @@ export default Plugin.define({
       Effect.flatMap((services) =>
         RenProvider.register(ctx).pipe(
           Effect.flatMap((refresh) => RenHandlers.register(ctx, refresh)),
+          Effect.andThen(Controls.register(ctx)),
           Effect.provideContext(services),
         ),
       ),

@@ -37,6 +37,7 @@ export class Service extends Context.Service<
   Service,
   {
     readonly watch: (sessionId: Session.ID) => Effect.Effect<void>
+    readonly unwatch: (sessionId: Session.ID) => Effect.Effect<void>
     readonly replay: (
       sessionId: Session.ID,
       ids: ReadonlyArray<SessionMessage.ID>,
@@ -200,6 +201,14 @@ export const layer = (ctx: Pick<Plugin.Context, "session">) =>
                 .slice(0, Math.max(0, watchers.size - limit + 1))
               yield* Effect.forEach(evicted, (entry) => Fiber.interrupt(entry.fiber), { discard: true })
               yield* start(sessionId, now)
+            }),
+          )
+        }),
+        unwatch: Effect.fn("Mirror.unwatch")(function* (sessionId) {
+          yield* lock.withPermit(
+            Effect.suspend(() => {
+              const found = watchers.get(sessionId)
+              return found ? Fiber.interrupt(found.fiber) : Effect.void
             }),
           )
         }),

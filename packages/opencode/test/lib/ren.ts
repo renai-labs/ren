@@ -4,6 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionEvent } from "@ren/schema/session/event"
+import { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
@@ -11,7 +12,7 @@ import { Factory } from "@ren/schema/factory"
 import { Pagination } from "@ren/schema/pagination"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
-import { DateTime, Effect, Queue, Schema } from "effect"
+import { DateTime, Effect, Queue, Schema, Struct } from "effect"
 
 export interface Prompt {
   readonly sessionID: string
@@ -28,6 +29,13 @@ export interface Options {
 const Created = Schema.Struct({ id: Session.ID, spaceId: Space.ID, model: Schema.optional(SessionModel.Ref) })
 const Prompted = Schema.Struct({ id: Schema.String, text: Schema.String, delivery: Schema.String })
 const Renamed = Schema.Struct({ title: Schema.String })
+const Switched = Schema.Struct({ model: SessionModel.Ref })
+const Compacted = Schema.Struct({ id: SessionMessage.ID })
+
+export interface Switch {
+  readonly sessionID: string
+  readonly model: SessionModel.Ref
+}
 
 const choices: SessionModel.Choices = {
   models: [{ id: "stub-model", providerID: "stub", name: "Stub", variants: [{ id: "high" }] }],
@@ -68,6 +76,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const closed = yield* Queue.unbounded<string>()
   const renamed = yield* Queue.unbounded<string>()
   const refused = yield* Queue.unbounded<string>()
+  const archived = yield* Queue.unbounded<string>()
+  const compacted = yield* Queue.unbounded<SessionMessage.ID>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
@@ -92,6 +102,15 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     renames: Array.of<{ readonly sessionID: string; readonly title: string }>(),
     refusing: false,
     answer: (_prompt: Prompt): void => undefined,
+    remoteModels: new Map<string, SessionModel.Ref>(),
+    compactable: true,
+    switches: Array.of<Switch>(),
+    local: Array.of<string>(),
+    compactions: new Map<string, SessionMessage.CompactionCompleted>(),
+    compact: (sessionID: string, id: SessionMessage.ID): void => {
+      send(frame("session.compaction.started", { sessionID, reason: "manual", recent: "", inputID: id }))
+      send(frame("session.compaction.ended", { sessionID, reason: "manual", text: "the summary", recent: "" }))
+    },
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
@@ -164,16 +183,52 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       return new Response(null, { status: 204 })
     }
     const title = state.titles.get(sessionID)
+    const model = state.remoteModels.get(sessionID) ?? state.created.find((each) => each.id === sessionID)?.model
     return Response.json(
       Schema.encodeSync(SessionInfo.Info)({
         id: Session.ID.make(sessionID),
         ...(title && { title }),
+        ...(model && { model: { providerID: model.providerID, id: model.id, variant: model.variant ?? "default" } }),
         cost: 0,
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         time: { created: DateTime.nowUnsafe(), updated: DateTime.nowUnsafe() },
-        capabilities: SessionCapabilities.of("opencode"),
+        capabilities: Struct.assign(SessionCapabilities.of("opencode"), { compact: state.compactable }),
       }),
     )
+  }
+  const routes: Record<string, ((sessionID: string, request: Request) => Promise<Response>) | undefined> = {
+    session,
+    model: async (sessionID, request) => {
+      const model = Schema.decodeUnknownSync(Switched)(await request.json()).model
+      const spaceId = state.created.find((each) => each.id === sessionID)?.spaceId ?? state.spaceId
+      if (
+        !(state.models.get(spaceId) ?? choices).models.some(
+          (choice) => SessionModel.key(choice) === SessionModel.key(model),
+        )
+      )
+        return Response.json(
+          { _tag: "InvalidRequestError", message: `This space has no model ${SessionModel.key(model)}` },
+          { status: 400 },
+        )
+      state.switches.push({ sessionID, model })
+      state.remoteModels.set(sessionID, model)
+      return new Response(null, { status: 204 })
+    },
+    compact: async (sessionID, request) => {
+      const id = Schema.decodeUnknownSync(Compacted)(await request.json()).id
+      Queue.offerUnsafe(compacted, id)
+      state.compact(sessionID, id)
+      return Response.json(
+        Schema.encodeSync(SessionInbox.Compaction)({
+          id,
+          sessionID: Session.ID.make(sessionID),
+          time: { created: DateTime.nowUnsafe() },
+          type: "compaction",
+          payload: {},
+          delivery: "steer",
+        }),
+      )
+    },
   }
   const chat = async (path: string, request: Request) => {
     const parts = path.split("/")
@@ -183,13 +238,16 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       Queue.offerUnsafe(refused, path)
       return new Response(null, { status: 502 })
     }
-    if (parts[2] === "session" && parts.length === 4) return session(sessionID, request)
     if (path === "/chat/status") {
       Queue.offerUnsafe(checked, path)
       return Response.json(Object.fromEntries([...state.busy].map((id) => [id, { type: "busy" }])))
     }
+    const route = routes[parts.length === 4 ? "session" : String(parts[4])]
+    if (route) return route(sessionID, request)
     if (parts[4] === "message") {
       const id = String(parts[5])
+      const compaction = state.compactions.get(id)
+      if (compaction) return Response.json(Schema.encodeSync(SessionMessage.CompactionCompleted)(compaction))
       const stored = state.messages.get(id)
       if (stored) return Response.json(Schema.encodeSync(SessionMessage.User)(stored))
       return state.delivered.has(id)
@@ -287,6 +345,14 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
         idleTimeout: 0,
         fetch: (request) => {
           const url = new URL(request.url)
+          if (url.pathname.startsWith("/local/")) {
+            state.local.push(url.pathname)
+            return Response.json({ error: { message: "The local model was called" } }, { status: 500 })
+          }
+          if (request.method === "DELETE" && url.pathname.startsWith("/sessions/")) {
+            Queue.offerUnsafe(archived, String(url.pathname.split("/")[2]))
+            return api(url, request)
+          }
           if (url.pathname.startsWith("/chat/")) return (options.chat ?? chat)(`${url.pathname}${url.search}`, request)
           return url.pathname === "/me" || url.pathname === "/space-members" ? people(url) : api(url, request)
         },
@@ -305,6 +371,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     closed,
     renamed,
     refused,
+    archived,
+    compacted,
     send,
     drop: () => {
       for (const controller of streams) controller.close()
