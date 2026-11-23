@@ -2008,6 +2008,19 @@ const adaptGroupBilling = (raw: RawClient["billing"]) => ({
   portal: EndpointBillingPortal(raw),
 })
 
+const EndpointOnboardingGet = (raw: RawClient["onboarding"]) => () =>
+  raw["onboarding.get"]({}).pipe(Effect.mapError(mapClientError))
+
+type OnboardingDismissRequest = Parameters<RawClient["onboarding"]["onboarding.dismiss"]>[0]
+type OnboardingDismissInput = { readonly checklist: OnboardingDismissRequest["payload"]["checklist"] }
+const EndpointOnboardingDismiss = (raw: RawClient["onboarding"]) => (input: OnboardingDismissInput) =>
+  raw["onboarding.dismiss"]({ payload: { checklist: input["checklist"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOnboarding = (raw: RawClient["onboarding"]) => ({
+  get: EndpointOnboardingGet(raw),
+  dismiss: EndpointOnboardingDismiss(raw),
+})
+
 type ChannelInstallListRequest = Parameters<RawClient["channel-install"]["channel-install.list"]>[0]
 type ChannelInstallListInput = {
   readonly page: ChannelInstallListRequest["query"]["page"]
@@ -2267,6 +2280,7 @@ const adaptClient = (raw: RawClient) => ({
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
   billing: adaptGroupBilling(raw["billing"]),
+  onboarding: adaptGroupOnboarding(raw["onboarding"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),

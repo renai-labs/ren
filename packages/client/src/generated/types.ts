@@ -405,6 +405,10 @@ export type BillingLink = { url: string }
 
 export type BillingCheckout = { checkoutUrl: string }
 
+export type OnboardingOrganizationStep = "slack.connected" | "member.joined"
+
+export type OnboardingPersonalStep = "gmail.connected"
+
 export type ChannelInstallID = string
 
 export type ChannelMappingID = string
@@ -1081,6 +1085,8 @@ export type BillingInvoice = {
   issuedAt: string
 }
 
+export type OnboardingStep = OnboardingOrganizationStep | OnboardingPersonalStep
+
 export type ChannelInstallInfo = {
   id: ChannelInstallID
   provider: ChannelProvider
@@ -1476,6 +1482,8 @@ export type RenInferenceHarnessPlan = {
 
 export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
+export type OnboardingStepState = { step: OnboardingStep; completedAt: string | null }
+
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelMappingInfo = {
@@ -1645,6 +1653,8 @@ export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize:
 
 export type RenInferenceKeyList = { baseUrl: string; keys: Array<RenInferenceKey> }
 
+export type OnboardingChecklist = { steps: Array<OnboardingStepState>; dismissedAt: string | null }
+
 export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelPlaceInfo = {
@@ -1773,6 +1783,8 @@ export type SessionMessageTool = {
 export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
+
+export type OnboardingInfo = { organization: OnboardingChecklist; personal: OnboardingChecklist }
 
 export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
@@ -9493,6 +9505,14 @@ export type BillingChangePlanOutput = void
 export type BillingCancelOutput = void
 
 export type BillingPortalOutput = BillingLink
+
+export type OnboardingGetOutput = OnboardingInfo
+
+export type OnboardingDismissInput = {
+  readonly checklist: { readonly checklist: "organization" | "personal" }["checklist"]
+}
+
+export type OnboardingDismissOutput = OnboardingInfo
 
 export type ChannelInstallListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]

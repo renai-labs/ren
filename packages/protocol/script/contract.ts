@@ -77,6 +77,10 @@ const exceptions = new Map([
     "Proxies the billing service, which holds the plan state and calls the payment provider: a checkout redirect, plan changes and reads of records Ren does not hold, which no primitive operation is.",
   ],
   [
+    "onboarding",
+    "Reads and hides the organization’s onboarding checklist, one per organization: a part of the organization, which no primitive operation addresses.",
+  ],
+  [
     "insights",
     "Totals over usage events and task events for a range, grouped on request: a computed read, which no primitive operation is.",
   ],

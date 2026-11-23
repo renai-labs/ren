@@ -13969,6 +13969,114 @@
         "summary": "Open the billing portal"
       }
     },
+    "/onboarding": {
+      "get": {
+        "tags": ["onboarding"],
+        "operationId": "onboarding.get",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s onboarding checklists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the organization’s checklist and the caller’s own one. Each lists every step in order, with the time it was first completed, and when the checklist was hidden.",
+        "summary": "Get the onboarding checklists"
+      }
+    },
+    "/onboarding/dismiss": {
+      "post": {
+        "tags": ["onboarding"],
+        "operationId": "onboarding.dismiss",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s onboarding checklists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Hide the organization’s checklist for every member, or the caller’s own one for the caller. Steps still complete after it. Hiding it again keeps the first time.",
+        "summary": "Hide an onboarding checklist",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Onboarding.DismissInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/channel-installs": {
       "get": {
         "tags": ["channel-install"],
@@ -22540,6 +22648,131 @@
         "type": "string",
         "enum": ["pending", "complete", "failed", "expired"]
       },
+      "Onboarding.Checklist": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Onboarding.StepState"
+            },
+            "description": "Every step of the checklist, in order."
+          },
+          "dismissedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the checklist was hidden."
+          }
+        },
+        "required": ["steps", "dismissedAt"],
+        "additionalProperties": false,
+        "description": "The organization’s checklist. Hiding it hides it for every member."
+      },
+      "Onboarding.ChecklistKind": {
+        "type": "string",
+        "enum": ["organization", "personal"]
+      },
+      "Onboarding.Checklist_1": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Onboarding.StepState"
+            },
+            "description": "Every step of the checklist, in order."
+          },
+          "dismissedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the checklist was hidden."
+          }
+        },
+        "required": ["steps", "dismissedAt"],
+        "additionalProperties": false,
+        "description": "The caller’s own checklist in the organization."
+      },
+      "Onboarding.DismissInput": {
+        "type": "object",
+        "properties": {
+          "checklist": {
+            "$ref": "#/components/schemas/Onboarding.ChecklistKind"
+          }
+        },
+        "required": ["checklist"],
+        "additionalProperties": false
+      },
+      "Onboarding.Info": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "$ref": "#/components/schemas/Onboarding.Checklist"
+          },
+          "personal": {
+            "$ref": "#/components/schemas/Onboarding.Checklist_1"
+          }
+        },
+        "required": ["organization", "personal"],
+        "additionalProperties": false,
+        "description": "The caller’s onboarding checklists."
+      },
+      "Onboarding.OrganizationStep": {
+        "type": "string",
+        "enum": ["slack.connected", "member.joined"],
+        "description": "An action that counts toward the organization’s onboarding, in the order the checklist shows it."
+      },
+      "Onboarding.PersonalStep": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["gmail.connected"]
+          }
+        ],
+        "description": "An action that counts toward a person’s own onboarding in the organization, in checklist order."
+      },
+      "Onboarding.Step": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Onboarding.OrganizationStep"
+          },
+          {
+            "$ref": "#/components/schemas/Onboarding.PersonalStep"
+          }
+        ]
+      },
+      "Onboarding.StepState": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/Onboarding.Step"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while the step is not done."
+          }
+        },
+        "required": ["step", "completedAt"],
+        "additionalProperties": false
+      },
       "OrganizationInviteLink.CreateInput": {
         "type": "object",
         "properties": {
@@ -30147,6 +30380,9 @@
     },
     {
       "name": "billing"
+    },
+    {
+      "name": "onboarding"
     },
     {
       "name": "channel-install"

@@ -57,6 +57,7 @@ import { Task } from "../../src/task.js"
 import { TestDrives } from "./drives.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
+import { Onboarding } from "../../src/onboarding.js"
 
 const secret = "channel-test-secret"
 
@@ -362,7 +363,7 @@ const models = Models.layerNone
 const core = (held: boolean) =>
   Layer.mergeAll(
     Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)),
-    ChannelInstalls.layer,
+    ChannelInstalls.layer.pipe(Layer.provideMerge(Onboarding.layer)),
     ChannelRoute.layer.pipe(Layer.provideMerge(ChannelIdentity.layer)),
     ChannelMappings.layer,
     SessionSync.layer,

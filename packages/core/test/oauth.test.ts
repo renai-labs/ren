@@ -21,6 +21,7 @@ import { OAuthFetch } from "../src/oauth-fetch.js"
 import { testEffect } from "./lib/effect.js"
 import { OAuthServer } from "./lib/oauth-server.js"
 import { Seed } from "./lib/seed.js"
+import { Onboarding } from "../src/onboarding.js"
 
 const server = OAuthServer.start()
 afterAll(() => server.stop())
@@ -28,7 +29,13 @@ afterAll(() => server.stop())
 const invalidated: Array<string> = []
 
 const it = testEffect(
-  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppProfiles.layer, OAuthApps.layer).pipe(
+  Layer.mergeAll(
+    OAuth.layer.pipe(Layer.provideMerge(Onboarding.layer)),
+    CredentialRefresh.layer,
+    App.layer,
+    AppProfiles.layer,
+    OAuthApps.layer,
+  ).pipe(
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(ProviderConnect.layer),
     Layer.provideMerge(Credentials.layer),
