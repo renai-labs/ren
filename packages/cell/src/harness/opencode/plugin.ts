@@ -757,7 +757,7 @@ export const make = (
         yield* context.session.hook("retry", (event) =>
           Effect.gen(function* () {
             const body = event.error.response?.body ?? ""
-            if (ModelProviders.finalChatGptCodes.some((code) => body.includes(code))) {
+            if (Models.chatGptRefusals.some((code) => body.includes(code))) {
               event.decision = { retry: false }
               return
             }

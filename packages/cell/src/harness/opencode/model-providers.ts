@@ -21,18 +21,6 @@ const protocols = {
 
 const supportedTypes = new Set<Models.Type>(["chat", "image", "transcription", "decision"])
 
-// oxlint-disable-next-line ren/no-comments -- The codes of a ChatGPT seat's refusal that another try cannot fix (OpenCode `chatgpt.ts:58-67`).
-export const finalChatGptCodes = [
-  "subscription_sharing_usage_limit_exceeded",
-  "subscription_sharing_workplace_individual_usage_limit_exceeded",
-  "subscription_sharing_user_not_eligible",
-  "subscription_sharing_unsupported_capability",
-  "subscription_sharing_route_not_supported",
-  "subscription_sharing_invalid_user",
-  "chatpass_v2_scope_not_authorized",
-  "chatpass_v2_invalid_authorization_context",
-]
-
 // oxlint-disable-next-line ren/no-comments -- Client settings the gateway puts on a model, such as those of OpenCode's ChatGPT plugin, which Ren does not activate (providers §7.2).
 const applyClient = (
   info: Parameters<Parameters<ProviderEditor["models"]["update"]>[2]>[0],

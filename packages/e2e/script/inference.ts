@@ -69,15 +69,28 @@ interface Request {
 const asRenModel = (model: Models.Info): Models.Info =>
   Struct.assign({ gateway: `ren/${model.id}`, price: { input: 1, output: 2 } }, model)
 
+// oxlint-disable-next-line ren/no-comments -- A free Ren model: price 0, and the gateway counts its requests against the free cap.
+const freeModel: Models.Info = {
+  id: "stub/stub-free",
+  type: "chat",
+  protocol: "openai-chat",
+  name: "Stub Free",
+  limit: { context: 100_000, output: 4000 },
+  gateway: "ren/stub/stub-free",
+  price: { input: 0, output: 0 },
+  free: true,
+}
+
 // oxlint-disable-next-line ren/no-comments -- An own-key provider: Groq, with one model.
 const groq = [{ id: "llama-5", type: "chat", name: "Llama 5", protocol: "openai-chat", gateway: "groq/llama-5" }]
 
-// oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, Ren with the given models and Groq for an own key, and one key for every brain, for the model gateway at `stub`.
+// oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, Ren with the given models and a free one, the free cap, Groq for an own key, and one key for every brain, for the model gateway at `stub`.
 export const start = (
   stub: string,
   options: { readonly models: () => ReadonlyArray<Models.Info>; readonly key?: string },
 ) => {
   const keys: Key[] = []
+  const freeUsed = new Map<string, number>()
   // oxlint-disable-next-line ren/no-comments -- Every organization that asked for a brain key has Ren on, as in the gateway's LiteLLM teams.
   const organizations = new Set<string>()
   // oxlint-disable-next-line ren/no-comments -- Each organization's provider settings, as the gateway keeps them in LiteLLM (Providers P29).
@@ -123,9 +136,22 @@ export const start = (
       ]),
     "GET /v1/providers/:id/models": (input) => {
       if (input.provider !== "ren" && input.provider !== "groq") return notFound()
-      const listed = input.provider === "ren" ? options.models().map(asRenModel) : groq
+      const listed = input.provider === "ren" ? [...options.models().map(asRenModel), freeModel] : groq
       return Response.json({ revision: Bun.hash(JSON.stringify(listed)).toString(16), models: listed })
     },
+    "GET /v1/providers/:id/limits": (input) =>
+      Response.json(
+        input.provider === "ren" && new URL(input.request.url).searchParams.get("model") === freeModel.gateway
+          ? [
+              {
+                _tag: "free",
+                used: freeUsed.get(input.claims?.org ?? "") ?? 0,
+                limit: 100,
+                resetsAt: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString(),
+              },
+            ]
+          : [],
+      ),
     "GET /v1/providers/settings": (input) => Response.json(settings.get(input.claims?.org ?? "") ?? {}),
     "PUT /v1/providers/:id": async (input) => {
       const next = decodeCard(await input.request.json())
@@ -212,6 +238,8 @@ export const start = (
   })
   return {
     url: `http://127.0.0.1:${server.port}`,
+    // oxlint-disable-next-line ren/no-comments -- A test sets an organization's free requests of today, as the gateway counts them.
+    setFreeUsed: (org: string, used: number) => void freeUsed.set(org, used),
     stop: () => server.stop(true),
   }
 }

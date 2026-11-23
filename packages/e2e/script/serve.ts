@@ -34,7 +34,12 @@ const ScriptedTool = Schema.Struct({
 const Script = Schema.Struct({
   reply: Schema.optionalKey(Schema.String),
   tools: Schema.optionalKey(Schema.Array(ScriptedTool)),
+  status: Schema.optionalKey(Schema.Int),
+  code: Schema.optionalKey(Schema.String),
+  headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 })
+
+const FreeUsed = Schema.Struct({ organizationId: Schema.String, used: Schema.Int })
 
 const held = new Map<string, ReturnType<ReturnType<typeof Shared.stub>["script"]>>()
 
@@ -77,6 +82,12 @@ const mailbox = Bun.serve({
     if (request.method === "POST" && new URL(request.url).pathname === "/script") {
       const script = Shared.stub().script(Schema.decodeUnknownSync(Script)(await request.json()))
       return Response.json({ marker: script.marker })
+    }
+    // oxlint-disable-next-line ren/no-comments -- A test sets how many free-model requests the stand-in gateway counted today for an organization.
+    if (request.method === "POST" && new URL(request.url).pathname === "/free") {
+      const free = Schema.decodeUnknownSync(FreeUsed)(await request.json())
+      inference.setFreeUsed(free.organizationId, free.used)
+      return new Response(null, { status: 204 })
     }
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)

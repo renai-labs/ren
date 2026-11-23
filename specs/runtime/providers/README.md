@@ -359,7 +359,7 @@ Ren core keeps one thing in memory: a brain's key, the gateway's `grant`, per wo
 Built. `cell/src/harness/opencode/model-providers.ts` keeps mapping each provider to an OpenCode provider with the provider id and the protocol's package. Changes:
 
 1. A model with runtime `claude` gets the Claude Agent package (§7.3); the others keep their protocol's package.
-2. A model carries the client settings it needs as fields (`client` in `Models.Info`), and the adapter applies them without a vendor check: `effortUpdates: false` (`supportsEffortUpdates: false`), `compaction: "summary"`, `cost: false` (cost `[]`). The gateway sets them on ChatGPT seat models (§6.2), as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`model-providers.ts` `finalChatGptCodes`, from `chatgpt.ts:58-67`). The ChatGPT plugin's `session-id` headers are not sent: the gateway drops them (gate H1) and reads `prompt_cache_key`.
+2. A model carries the client settings it needs as fields (`client` in `Models.Info`), and the adapter applies them without a vendor check: `effortUpdates: false` (`supportsEffortUpdates: false`), `compaction: "summary"`, `cost: false` (cost `[]`). The gateway sets them on ChatGPT seat models (§6.2), as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`Models.chatGptRefusals` in `schema/src/models.ts`, from `chatgpt.ts:58-67`; the error cards use the same list). The ChatGPT plugin's `session-id` headers are not sent: the gateway drops them (gate H1) and reads `prompt_cache_key`.
 
 ### 7.3 Claude runtime
 
@@ -420,7 +420,7 @@ What a running chat sees:
 
 ### 9.1 Usage rows
 
-The gateway sends one `usage_event` per call (`specs/usage.md`). New fields in `data`: `seat` (seat id, for seat calls) and `kind` (`ren`, `free`, `key`, `seat`). `payer` is `ren` for Ren calls and `customer` for own keys and seats (`schema/src/usage.ts:13`). Cost is the models.dev price; billing charges only rows with payer `ren`.
+The gateway sends one `usage_event` per call (`specs/usage.md`). New fields in `data`: `seat` (seat id, for seat calls) and `access` (`ren`, `free`, `key`, `seat`; `kind` is already the request kind). `payer` is `ren` for Ren calls and `customer` for own keys and seats (`schema/src/usage.ts:13`). Cost is the models.dev price; billing charges only rows with payer `ren`.
 
 ### 9.2 Credit
 
@@ -439,17 +439,28 @@ A warning shows how much of a limit or of the credit is used. A limit is a cap t
 
 Delivery: an endpoint `limits.get({ sessionId })` returns the warnings for the chat's current model: the `limits` of its provider's model gateway, for the model and the seat of the session's last `usage_event` with a `seat` (P23), and the credit from billing. The app reads it when a chat opens, after each turn and every 60 s while the chat is open. The `chat` package decides which step to show and remembers shown steps per chat, limit and reset time.
 
+Built: `core/src/limits.ts` (`Limits.get`), `GET /sessions/:id/limits` (`limits.get`, internal), `Limits.Info` in `schema/src/limits.ts` (`limits`: `Limits.Limit`, tag `free` or `seat`; `credit`: `Limits.Credit` or null), `chat/src/limit-banners.ts` and `app/src/features/session/limit-banner.tsx`. Rules the code follows:
+
+1. The chat's current model is the root session's model as OpenCode stored it (`opencode_session.model`). Ren core finds its provider and model through the gateways, and asks that provider's gateway for `limits` with the model's gateway name and the seat of the chat's last usage row with a seat. The gateway answers a seat's windows only when the seat is the provider's and the organization's.
+2. Ren core adds the credit only for a model whose provider has `payer: ren` and that is not free. Ren core names no provider.
+3. A source that does not answer (gateway, billing) gives nothing; `limits.get` still answers. With no credit granted there is no credit.
+4. Seat banners name the provider and the seat: "Anthropic seat (Asha’s Max)". "Asha’s Max" is the name of the Ren user who connected the seat and its plan; without them, the seat's label.
+5. A step shows until the person dismisses it, and does not come back in the same chat, limit and reset period while the app runs. A step passed before it showed is skipped. When several reach a step, the fullest shows. The app refetches when a turn ends by keying the banner on the chat's last finished turn.
+
 ### 9.4 Errors
 
-| Code                                       | When                                 | Text                                                                                       | Actions                            |
-| ------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `insufficient_credits`                     | Ren call, no credit                  | today's out-of-credits text (`chat/src/turn-problems.ts`)                                  | Add credits (admins), Change model |
-| `free_limit_reached`                       | free cap reached                     | "Free models: today's 100 requests are used. They reset at 00:00 UTC."                     | Change model                       |
-| `free_unavailable`                         | free models unavailable for everyone | "Free models are limited and not guaranteed. Try later, add credit or connect a provider." | Change model                       |
-| `provider_not_connected`                   | own-key model without a key          | "<Provider> is not connected."                                                             | Providers (admins), Change model   |
-| `subscription_limit_reached`               | every seat of the vendor is full     | "All <vendor> subscriptions are at their limit. The next resets at <time>."                | Change model                       |
-| ChatGPT refusal codes (`chatgpt.ts:58-67`) | a ChatGPT seat refuses               | "ChatGPT usage limit reached."                                                             | Change model                       |
-| `gateway_unavailable`                      | the gateway cannot decide            | "Model access is not available now. Try again."                                            | Try again                          |
+The gateway sends each refusal with `x-should-retry: false`, so the brain shows it at once. The chat finds the code in the error's body or text (`chat/src/turn-problems.ts`).
+
+| Code                                       | When                                  | Text                                                                                       | Actions                                       |
+| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `insufficient_credits` (402)               | Ren call, no credit                   | today's out-of-credits text                                                                | Add credits (admins), Change model, Providers |
+| `free_limit_reached` (429)                 | free cap reached                      | "Free models: today's 100 requests are used. They reset at 00:00 UTC."                     | Change model                                  |
+| `free_unavailable`                         | free models unavailable for everyone  | "Free models are limited and not guaranteed. Try later, add credit or connect a provider." | Change model                                  |
+| `provider_not_connected`                   | own-key model without a key           | "<Provider> is not connected."                                                             | Providers (admins), Change model              |
+| `model_off` (403)                          | a model the organization switched off | "<model> is switched off for this organization."                                           | Providers (admins), Change model              |
+| `subscription_limit_reached` (429)         | every seat of the vendor is full      | "All <vendor> subscriptions are at their limit. The next resets at <time>."                | Change model                                  |
+| ChatGPT refusal codes (`chatgpt.ts:58-67`) | a ChatGPT seat refuses                | "ChatGPT usage limit reached."                                                             | Change model                                  |
+| `inference_unavailable` (503)              | the gateway cannot decide             | "Model access is not available now. Try again."                                            | Try again                                     |
 
 ## 10. Contract: Ren core → gateway
 

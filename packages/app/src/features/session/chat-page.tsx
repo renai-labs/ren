@@ -15,6 +15,7 @@ import { useTerminalShells } from "./terminal-shells.js"
 import { WorkspacePanel, type PanelRequest, type PanelTarget } from "./workspace-panel.js"
 import { TurnRail } from "./turn-rail.js"
 import { ContextUsage } from "./context-usage.js"
+import { LimitBanner } from "./limit-banner.js"
 import { ChatActions } from "./chat-actions.js"
 import { ChatRequests } from "./requests.js"
 import { Transcript } from "./transcript.js"
@@ -84,6 +85,9 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         detail={chat.detail}
         foldMessages={chat.foldMessages}
         modelNames={chat.modelNames}
+        providerNames={
+          new Map(chat.models.flatMap((each) => (each.providerName ? [[each.providerID, each.providerName]] : [])))
+        }
         admin={admin}
         onTryAgain={chat.child ? undefined : chat.resend}
         onContinue={chat.child ? undefined : () => chat.resend("Continue.")}
@@ -126,6 +130,7 @@ function ChatComposer(props: {
   const chat = props.chat
   const column = useRef<HTMLDivElement>(null)
   const terminal = useTerminalShells(chat.root)
+  const admin = useCanAdminister()
   return (
     <div
       ref={column}
@@ -160,6 +165,7 @@ function ChatComposer(props: {
           onOpen={(id) => chat.openChild(id)}
         />
       </div>
+      {chat.child ? null : <LimitBanner sessionId={chat.root} messages={chat.messages} admin={admin} />}
       {chat.blocked || chat.child ? null : (
         <PromptInput
           textareaRef={props.onComposer}

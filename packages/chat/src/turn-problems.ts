@@ -1,5 +1,6 @@
 export * as TurnProblems from "./turn-problems.js"
 
+import { Models } from "@ren/schema/models"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { DateTime } from "effect"
 
@@ -25,15 +26,17 @@ export interface Retrying {
   readonly attempt: number
 }
 
-const providerLabels: Readonly<Record<string, string>> = { anthropic: "Anthropic", openai: "OpenAI" }
-
-export const providerLabel = (id: string) => providerLabels[id] ?? id.charAt(0).toUpperCase() + id.slice(1)
+// oxlint-disable-next-line ren/no-comments -- Providers §5.3: a card's name comes from the chat's model list; an id the list does not name is shown capitalized.
+const providerLabel = (id: string, names: ReadonlyMap<string, string> | undefined) =>
+  names?.get(id) ?? id.charAt(0).toUpperCase() + id.slice(1)
 
 const resetPhrase = (text: string) => /\b(?:resets?|try again)\s+((?:in|at|on)\s+[^.,;]+)/iu.exec(text)?.at(1)?.trim()
 
 interface Context {
   readonly kind: string
   readonly text: string
+  readonly body: string
+  readonly timeZone: string | undefined
   readonly provider: string
   readonly model: string
   readonly midTurn: boolean
@@ -48,16 +51,85 @@ const outOfCredits = (input: Context): Problem => {
       fix: input.admin
         ? "Add credits, then hit Continue to pick up where Ren left off."
         : "Ask an admin to add credits, then hit Continue to pick up where Ren left off.",
-      actions: input.admin ? ["continue", "billing", "providers"] : ["continue"],
+      actions: input.admin ? ["continue", "billing", "model"] : ["continue", "model"],
     }
   return {
     title: "You’re out of Ren credits.",
     fix: input.admin
       ? "Add credits, or connect your own Claude or ChatGPT account in Providers. Then try again."
-      : "Ask an admin to add credits, then try again.",
-    actions: input.admin ? ["try", "billing", "providers"] : ["try"],
+      : "Ask an admin to add credits, or pick another model.",
+    actions: input.admin ? ["billing", "model", "providers"] : ["model"],
   }
 }
+
+const resetFormat = (timeZone: string | undefined) =>
+  new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone })
+
+const nextReset = (input: Context) => {
+  const found = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})/u.exec(
+    `${input.body} ${input.text}`,
+  )
+  const at = found?.at(0)
+  return at ? resetFormat(input.timeZone).format(new Date(at)).replace(",", "") : undefined
+}
+
+const askAdmin = (
+  input: Context,
+  title: string,
+  fix: { readonly admin: string; readonly member: string },
+): Problem => ({
+  title,
+  fix: input.admin ? fix.admin : fix.member,
+  actions: input.admin ? ["providers", "model"] : ["model"],
+})
+
+// oxlint-disable-next-line ren/no-comments -- Providers §9.4: the model gateway's refusals, by the code in its answer. Each one is final: the gateway sends `x-should-retry: false`, so the brain does not try again.
+const byCode: Readonly<Record<string, (input: Context) => Problem>> = {
+  insufficient_credits: outOfCredits,
+  free_limit_reached: () => ({
+    title: "Free models: today’s 100 requests are used.",
+    fix: "They reset at 00:00 UTC.",
+    actions: ["model"],
+  }),
+  free_unavailable: () => ({
+    title: "Free models are limited and not guaranteed.",
+    fix: "Try later, add credit or connect a provider.",
+    actions: ["model"],
+  }),
+  provider_not_connected: (input) =>
+    askAdmin(input, `${input.provider} is not connected.`, {
+      admin: "Connect it in Providers, or pick another model.",
+      member: "Ask an admin to connect it, or pick another model.",
+    }),
+  model_off: (input) =>
+    askAdmin(input, `${input.model} is switched off for this organization.`, {
+      admin: "Switch it on in Providers, or pick another model.",
+      member: "Ask an admin to switch it on, or pick another model.",
+    }),
+  subscription_limit_reached: (input) => {
+    const reset = nextReset(input)
+    return {
+      title: `All ${input.provider} subscriptions are at their limit.`,
+      fix: `The next resets ${reset ?? "soon"}. Pick another model to keep going.`,
+      actions: ["model"],
+    }
+  },
+  inference_unavailable: () => ({ title: "Model access is not available now.", fix: "Try again.", actions: ["try"] }),
+  ...Object.fromEntries(
+    Models.chatGptRefusals.map((code, index) => [
+      code,
+      (input: Context): Problem =>
+        index < 2
+          ? { title: "ChatGPT usage limit reached.", fix: "Pick another model to keep going.", actions: ["model"] }
+          : { title: "ChatGPT refused this request.", fix: input.text, actions: ["model"] },
+    ]),
+  ),
+}
+
+const codes = Object.keys(byCode)
+
+const codeOf = (body: string, text: string) =>
+  codes.find((code) => body.includes(code)) ?? codes.find((code) => text.includes(code))
 
 const usageLimit = (input: Context): Problem => {
   const reset = resetPhrase(input.text)
@@ -179,30 +251,40 @@ const byKind: Readonly<Record<string, (input: Context) => Problem>> = {
 export function of(input: {
   readonly kind: string
   readonly text: string
+  readonly body?: string | undefined
   readonly assistants: ReadonlyArray<SessionMessage.Assistant>
   readonly modelNames: ReadonlyMap<string, string>
+  readonly providerNames?: ReadonlyMap<string, string> | undefined
   readonly admin: boolean
+  readonly timeZone?: string | undefined
 }): Problem {
   const last = input.assistants.at(-1)
-  const provider = providerLabel(last?.model.providerID ?? "the model provider")
+  const provider = providerLabel(last?.model.providerID ?? "the model provider", input.providerNames)
+  const body = input.body ?? ""
   const context: Context = {
     kind: input.kind,
     text: input.text,
+    body,
+    timeZone: input.timeZone,
     provider,
     model: last ? (input.modelNames.get(last.model.id) ?? last.model.id) : "This model",
     midTurn: input.assistants.some((message) => message.content.some((content) => content.type === "tool")),
     admin: input.admin,
     elsewhere: `pick a model from ${provider === "The model provider" ? "another provider" : `a provider other than ${provider}`}`,
   }
-  const found = byText.find((rule) => rule.matches(input.text))?.problem ?? byKind[input.kind]
+  const code = codeOf(body, input.text)
+  const found = (code && byCode[code]) ?? byText.find((rule) => rule.matches(input.text))?.problem ?? byKind[input.kind]
   return found ? found(context) : { title: "Ren couldn’t finish that reply.", fix: "Try again.", actions: ["try"] }
 }
 
-export function retrying(assistants: ReadonlyArray<SessionMessage.Assistant>): Retrying | undefined {
+export function retrying(
+  assistants: ReadonlyArray<SessionMessage.Assistant>,
+  providerNames?: ReadonlyMap<string, string>,
+): Retrying | undefined {
   const last = assistants.at(-1)
   const retry = last?.retry
   if (!last || !retry) return
-  const provider = providerLabel(last.model.providerID)
+  const provider = providerLabel(last.model.providerID, providerNames)
   const busy = retry.error.type === "provider.rate-limit" && !/usage limit|weekly/iu.test(retry.error.message)
   return {
     title: busy ? `${provider} is busy right now.` : `${provider} isn’t responding.`,
