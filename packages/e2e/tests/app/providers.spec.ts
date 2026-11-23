@@ -1,0 +1,71 @@
+import { expect, test } from "@playwright/test"
+import { addMember, appOrigin, createOrganization, uniqueEmail } from "../lib/servers.js"
+
+test("an admin connects a key (bad, then good) and turns the provider off and on", async ({ page }) => {
+  await createOrganization(page.request, { name: "Katherine Johnson" })
+  await page.goto("/settings/providers")
+  await expect(page.getByLabel("Ren", { exact: true })).toBeVisible()
+
+  await page.getByRole("link", { name: "Add provider" }).click()
+  await expect(page.getByRole("heading", { name: "Connect provider" })).toBeVisible()
+  const grid = page.getByRole("list", { name: "Providers you can connect" })
+  await page.getByRole("textbox", { name: "Search providers" }).fill("groq")
+  await expect(grid.getByRole("listitem")).toHaveCount(1)
+  await expect(grid.getByText("1 model")).toBeVisible()
+  await grid.getByRole("button", { name: "Connect Groq" }).click()
+
+  const connect = page.getByRole("dialog", { name: "Connect Groq" })
+  await connect.getByRole("button", { name: "Save" }).click()
+  await expect(connect.getByText("Enter api key.")).toBeVisible()
+  await connect.getByLabel("API key").fill("sk-bad-0000")
+  await connect.getByRole("button", { name: "Save" }).click()
+  await expect(connect.getByText("Invalid API key.")).toBeVisible()
+  await connect.getByLabel("API key").fill("sk-good-1234")
+  await connect.getByRole("button", { name: "Test connection" }).click()
+  await expect(connect.getByText("Connection works")).toBeVisible()
+  await connect.getByRole("button", { name: "Save" }).click()
+  await expect(page.getByText("Groq connected")).toBeVisible()
+
+  await expect(page).toHaveURL(/\/settings\/providers$/u)
+  const groq = page.getByLabel("Groq", { exact: true })
+  await expect(groq.getByText("…1234")).toBeVisible()
+  await expect(groq.getByRole("link", { name: "Groq models" })).toHaveText("1 model")
+  const on = groq.getByRole("switch", { name: "Groq on" })
+  await expect(on).toBeChecked()
+  await on.click()
+  await expect(on).not.toBeChecked()
+  await page.reload()
+  await expect(page.getByLabel("Groq", { exact: true }).getByRole("switch", { name: "Groq on" })).not.toBeChecked()
+  await page.getByLabel("Groq", { exact: true }).getByRole("switch", { name: "Groq on" }).click()
+  await expect(page.getByLabel("Groq", { exact: true }).getByRole("switch", { name: "Groq on" })).toBeChecked()
+
+  await page.getByRole("link", { name: "Add provider" }).click()
+  await expect(page.getByRole("list", { name: "Providers you can connect" }).getByText("Added")).toBeVisible()
+})
+
+test("an admin switches a Ren model off; a member reads but changes nothing", async ({ page, browser }) => {
+  await createOrganization(page.request, { name: "Dorothy Vaughan" })
+  await page.goto("/settings/providers")
+  await page.getByLabel("Ren", { exact: true }).getByRole("link", { name: "Ren models" }).click()
+  await expect(page.getByRole("heading", { name: "Ren models" })).toBeVisible()
+  const table = page.getByRole("table", { name: "Models" })
+  await expect(table.getByRole("row", { name: /Stub Other/u })).toBeVisible()
+  const other = table.getByRole("switch", { name: "Stub Other on" })
+  await other.click()
+  await expect(other).not.toBeChecked()
+  await page.getByRole("tab", { name: "On" }).click()
+  await expect(table.getByRole("row", { name: /Stub Other/u })).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole("table", { name: "Models" }).getByRole("switch", { name: "Stub on" })).toBeChecked()
+  await expect(
+    page.getByRole("table", { name: "Models" }).getByRole("switch", { name: "Stub Other on" }),
+  ).not.toBeChecked()
+
+  const context = await browser.newContext({ baseURL: appOrigin })
+  await addMember(page.request, context.request, { name: "Mary Jackson", email: uniqueEmail("mary") })
+  const member = await context.newPage()
+  await member.goto("/settings/providers")
+  await expect(member.getByLabel("Ren", { exact: true }).getByRole("switch", { name: "Ren on" })).toBeDisabled()
+  await expect(member.getByRole("link", { name: "Add provider" })).toHaveCount(0)
+  await context.close()
+})

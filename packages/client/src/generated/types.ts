@@ -239,6 +239,10 @@ export type SessionMessageTokenUsage = {
 
 export type SessionModelVariant = { id: string }
 
+export type ModelsMethod = "key" | "subscription"
+
+export type ModelsPrice = { input: number; output: number; cacheRead?: number; cacheWrite?: number }
+
 export type TaskID = string
 
 export type TaskSubtasks = { total: number; done: number }
@@ -381,8 +385,6 @@ export type RenInferenceHarnessTarget =
 
 export type ModelGatewayPayer = "ren" | "customer"
 
-export type ModelsMethod = "key" | "subscription"
-
 export type ModelGatewayField = {
   name: string
   label: string
@@ -392,8 +394,6 @@ export type ModelGatewayField = {
 }
 
 export type ProviderTestResult = { ok: boolean; message?: string }
-
-export type ModelsPrice = { input: number; output: number; cacheRead?: number; cacheWrite?: number }
 
 export type BillingSummary = {
   plan: string
@@ -823,7 +823,16 @@ export type SessionMessageCompactionFailed = {
   tokens?: SessionMessageTokenUsage
 }
 
-export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
+export type SessionModelChoice = {
+  id: string
+  providerID: string
+  name: string
+  variants: Array<SessionModelVariant>
+  providerName?: string
+  method?: ModelsMethod
+  price?: ModelsPrice
+  free?: boolean
+}
 
 export type TaskParent = { id: TaskID; identifier: string; title: string }
 

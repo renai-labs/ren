@@ -47,6 +47,7 @@ import { Route as AuthedShellSettingsAdminUsageRouteImport } from "./routes/_aut
 import { Route as AuthedShellSettingsChannelsIndexRouteImport } from "./routes/_authed/_shell/settings/channels/index"
 import { Route as AuthedShellSettingsChannelsProviderRouteImport } from "./routes/_authed/_shell/settings/channels/$provider"
 import { Route as AuthedShellSettingsProvidersIndexRouteImport } from "./routes/_authed/_shell/settings/providers/index"
+import { Route as AuthedShellSettingsProvidersConnectRouteImport } from "./routes/_authed/_shell/settings/providers/connect"
 import { Route as AuthedShellSettingsProvidersKeysRouteImport } from "./routes/_authed/_shell/settings/providers/keys"
 import { Route as AuthedShellSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/index"
 import { Route as AuthedShellSpacesSpaceIdAppsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/apps"
@@ -63,6 +64,7 @@ import { Route as AuthedShellSpacesSpaceIdRepositoriesRouteImport } from "./rout
 import { Route as AuthedShellSpacesSpaceIdSettingsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/settings"
 import { Route as AuthedShellSpacesSpaceIdUsageRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/usage"
 import { Route as AuthedShellTasksTaskIdIndexRouteImport } from "./routes/_authed/_shell/tasks/$taskId/index"
+import { Route as AuthedShellSettingsProvidersIdModelsRouteImport } from "./routes/_authed/_shell/settings/providers/$id/models"
 import { Route as AuthedShellSpacesSpaceIdAgentsIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/agents/index"
 import { Route as AuthedShellSpacesSpaceIdAgentsNewRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/agents/new"
 import { Route as AuthedShellSpacesSpaceIdAutomationsIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/automations/index"
@@ -282,6 +284,12 @@ const AuthedShellSettingsProvidersIndexRoute =
     path: "/settings/providers/",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSettingsProvidersConnectRoute =
+  AuthedShellSettingsProvidersConnectRouteImport.update({
+    id: "/settings/providers/connect",
+    path: "/settings/providers/connect",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSettingsProvidersKeysRoute =
   AuthedShellSettingsProvidersKeysRouteImport.update({
     id: "/settings/providers/keys",
@@ -382,6 +390,12 @@ const AuthedShellTasksTaskIdIndexRoute =
       (d) => d.Route,
     ),
   )
+const AuthedShellSettingsProvidersIdModelsRoute =
+  AuthedShellSettingsProvidersIdModelsRouteImport.update({
+    id: "/settings/providers/$id/models",
+    path: "/settings/providers/$id/models",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSpacesSpaceIdAgentsIndexRoute =
   AuthedShellSpacesSpaceIdAgentsIndexRouteImport.update({
     id: "/agents/",
@@ -481,6 +495,7 @@ export interface FileRoutesByFullPath {
   "/settings/permissions": typeof AuthedShellSettingsAdminPermissionsRoute
   "/settings/usage": typeof AuthedShellSettingsAdminUsageRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
+  "/settings/providers/connect": typeof AuthedShellSettingsProvidersConnectRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
@@ -502,6 +517,7 @@ export interface FileRoutesByFullPath {
   "/settings/providers/": typeof AuthedShellSettingsProvidersIndexRoute
   "/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/tasks/$taskId/": typeof AuthedShellTasksTaskIdIndexRoute
+  "/settings/providers/$id/models": typeof AuthedShellSettingsProvidersIdModelsRoute
   "/spaces/$spaceId/agents/new": typeof AuthedShellSpacesSpaceIdAgentsNewRoute
   "/spaces/$spaceId/drive/artifacts": typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   "/spaces/$spaceId/agents/": typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
@@ -543,6 +559,7 @@ export interface FileRoutesByTo {
   "/settings/permissions": typeof AuthedShellSettingsAdminPermissionsRoute
   "/settings/usage": typeof AuthedShellSettingsAdminUsageRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
+  "/settings/providers/connect": typeof AuthedShellSettingsProvidersConnectRoute
   "/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
   "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
@@ -564,6 +581,7 @@ export interface FileRoutesByTo {
   "/settings/providers": typeof AuthedShellSettingsProvidersIndexRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/tasks/$taskId": typeof AuthedShellTasksTaskIdIndexRoute
+  "/settings/providers/$id/models": typeof AuthedShellSettingsProvidersIdModelsRoute
   "/spaces/$spaceId/agents/new": typeof AuthedShellSpacesSpaceIdAgentsNewRoute
   "/spaces/$spaceId/drive/artifacts": typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   "/spaces/$spaceId/agents": typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
@@ -610,6 +628,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/_admin/permissions": typeof AuthedShellSettingsAdminPermissionsRoute
   "/_authed/_shell/settings/_admin/usage": typeof AuthedShellSettingsAdminUsageRoute
   "/_authed/_shell/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
+  "/_authed/_shell/settings/providers/connect": typeof AuthedShellSettingsProvidersConnectRoute
   "/_authed/_shell/settings/providers/keys": typeof AuthedShellSettingsProvidersKeysRoute
   "/_authed/_shell/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
   "/_authed/_shell/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
@@ -631,6 +650,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/providers/": typeof AuthedShellSettingsProvidersIndexRoute
   "/_authed/_shell/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/_authed/_shell/tasks/$taskId/": typeof AuthedShellTasksTaskIdIndexRoute
+  "/_authed/_shell/settings/providers/$id/models": typeof AuthedShellSettingsProvidersIdModelsRoute
   "/_authed/_shell/spaces/$spaceId/agents/new": typeof AuthedShellSpacesSpaceIdAgentsNewRoute
   "/_authed/_shell/spaces/$spaceId/drive/artifacts": typeof AuthedShellSpacesSpaceIdDriveArtifactsRoute
   "/_authed/_shell/spaces/$spaceId/agents/": typeof AuthedShellSpacesSpaceIdAgentsIndexRoute
@@ -676,6 +696,7 @@ export interface FileRouteTypes {
     | "/settings/permissions"
     | "/settings/usage"
     | "/settings/channels/$provider"
+    | "/settings/providers/connect"
     | "/settings/providers/keys"
     | "/spaces/$spaceId/apps"
     | "/spaces/$spaceId/channels"
@@ -697,6 +718,7 @@ export interface FileRouteTypes {
     | "/settings/providers/"
     | "/spaces/$spaceId/"
     | "/tasks/$taskId/"
+    | "/settings/providers/$id/models"
     | "/spaces/$spaceId/agents/new"
     | "/spaces/$spaceId/drive/artifacts"
     | "/spaces/$spaceId/agents/"
@@ -738,6 +760,7 @@ export interface FileRouteTypes {
     | "/settings/permissions"
     | "/settings/usage"
     | "/settings/channels/$provider"
+    | "/settings/providers/connect"
     | "/settings/providers/keys"
     | "/spaces/$spaceId/apps"
     | "/spaces/$spaceId/channels"
@@ -759,6 +782,7 @@ export interface FileRouteTypes {
     | "/settings/providers"
     | "/spaces/$spaceId"
     | "/tasks/$taskId"
+    | "/settings/providers/$id/models"
     | "/spaces/$spaceId/agents/new"
     | "/spaces/$spaceId/drive/artifacts"
     | "/spaces/$spaceId/agents"
@@ -804,6 +828,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/_admin/permissions"
     | "/_authed/_shell/settings/_admin/usage"
     | "/_authed/_shell/settings/channels/$provider"
+    | "/_authed/_shell/settings/providers/connect"
     | "/_authed/_shell/settings/providers/keys"
     | "/_authed/_shell/spaces/$spaceId/apps"
     | "/_authed/_shell/spaces/$spaceId/channels"
@@ -825,6 +850,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/providers/"
     | "/_authed/_shell/spaces/$spaceId/"
     | "/_authed/_shell/tasks/$taskId/"
+    | "/_authed/_shell/settings/providers/$id/models"
     | "/_authed/_shell/spaces/$spaceId/agents/new"
     | "/_authed/_shell/spaces/$spaceId/drive/artifacts"
     | "/_authed/_shell/spaces/$spaceId/agents/"
@@ -1117,6 +1143,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSettingsProvidersIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/settings/providers/connect": {
+      id: "/_authed/_shell/settings/providers/connect"
+      path: "/settings/providers/connect"
+      fullPath: "/settings/providers/connect"
+      preLoaderRoute: typeof AuthedShellSettingsProvidersConnectRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
     "/_authed/_shell/settings/providers/keys": {
       id: "/_authed/_shell/settings/providers/keys"
       path: "/settings/providers/keys"
@@ -1227,6 +1260,13 @@ declare module "@tanstack/react-router" {
       path: "/tasks/$taskId"
       fullPath: "/tasks/$taskId/"
       preLoaderRoute: typeof AuthedShellTasksTaskIdIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/settings/providers/$id/models": {
+      id: "/_authed/_shell/settings/providers/$id/models"
+      path: "/settings/providers/$id/models"
+      fullPath: "/settings/providers/$id/models"
+      preLoaderRoute: typeof AuthedShellSettingsProvidersIdModelsRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/spaces/$spaceId/agents/": {
@@ -1422,6 +1462,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
   AuthedShellTasksIndexRoute: typeof AuthedShellTasksIndexRoute
   AuthedShellSettingsChannelsProviderRoute: typeof AuthedShellSettingsChannelsProviderRoute
+  AuthedShellSettingsProvidersConnectRoute: typeof AuthedShellSettingsProvidersConnectRoute
   AuthedShellSettingsProvidersKeysRoute: typeof AuthedShellSettingsProvidersKeysRoute
   AuthedShellAppsAppIdIndexRoute: typeof AuthedShellAppsAppIdIndexRoute
   AuthedShellMarketplaceAppIdIndexRoute: typeof AuthedShellMarketplaceAppIdIndexRoute
@@ -1429,6 +1470,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsChannelsIndexRoute: typeof AuthedShellSettingsChannelsIndexRoute
   AuthedShellSettingsProvidersIndexRoute: typeof AuthedShellSettingsProvidersIndexRoute
   AuthedShellTasksTaskIdIndexRoute: typeof AuthedShellTasksTaskIdIndexRoute
+  AuthedShellSettingsProvidersIdModelsRoute: typeof AuthedShellSettingsProvidersIdModelsRoute
 }
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
@@ -1450,6 +1492,8 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellTasksIndexRoute: AuthedShellTasksIndexRoute,
   AuthedShellSettingsChannelsProviderRoute:
     AuthedShellSettingsChannelsProviderRoute,
+  AuthedShellSettingsProvidersConnectRoute:
+    AuthedShellSettingsProvidersConnectRoute,
   AuthedShellSettingsProvidersKeysRoute: AuthedShellSettingsProvidersKeysRoute,
   AuthedShellAppsAppIdIndexRoute: AuthedShellAppsAppIdIndexRoute,
   AuthedShellMarketplaceAppIdIndexRoute: AuthedShellMarketplaceAppIdIndexRoute,
@@ -1459,6 +1503,8 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsProvidersIndexRoute:
     AuthedShellSettingsProvidersIndexRoute,
   AuthedShellTasksTaskIdIndexRoute: AuthedShellTasksTaskIdIndexRoute,
+  AuthedShellSettingsProvidersIdModelsRoute:
+    AuthedShellSettingsProvidersIdModelsRoute,
 }
 
 const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(

@@ -22759,14 +22759,66 @@
       "Models.Method": {
         "type": "string",
         "enum": ["key", "subscription"],
-        "description": "Absent on a built-in provider."
+        "description": "How a provider connects: the organization’s own key, or its members’ subscriptions."
       },
       "Models.Method_1": {
         "type": "string",
         "enum": ["key", "subscription"],
-        "description": "How a provider connects: the organization’s own key, or its members’ subscriptions."
+        "description": "Absent on a built-in provider."
       },
       "Models.Price": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheRead": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheWrite": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["input", "output"],
+        "additionalProperties": false,
+        "description": "Only for Ren’s models, which Ren charges for."
+      },
+      "Models.Price_1": {
         "type": "object",
         "properties": {
           "input": {
@@ -23747,12 +23799,12 @@
             "type": "boolean"
           },
           "method": {
-            "$ref": "#/components/schemas/Models.Method"
+            "$ref": "#/components/schemas/Models.Method_1"
           },
           "methods": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Models.Method_1"
+              "$ref": "#/components/schemas/Models.Method"
             }
           },
           "fields": {
@@ -23859,7 +23911,7 @@
           "price": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Models.Price"
+                "$ref": "#/components/schemas/Models.Price_1"
               },
               {
                 "type": "null"
@@ -23968,7 +24020,7 @@
           "method": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Models.Method_1"
+                "$ref": "#/components/schemas/Models.Method"
               },
               {
                 "type": "null"
@@ -27270,6 +27322,19 @@
             "items": {
               "$ref": "#/components/schemas/SessionModel.Variant"
             }
+          },
+          "providerName": {
+            "type": "string",
+            "description": "The provider the model comes from, as the Providers page names it. Omitted by an older Ren."
+          },
+          "method": {
+            "$ref": "#/components/schemas/Models.Method"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Models.Price"
+          },
+          "free": {
+            "type": "boolean"
           }
         },
         "required": ["id", "providerID", "name", "variants"],
