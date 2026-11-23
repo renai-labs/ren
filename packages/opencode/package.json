@@ -16,14 +16,20 @@
     "access": "public"
   },
   "scripts": {
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
-    "typecheck": "tsrs -b"
+    "typecheck": "tsrs -b",
+    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
+  },
+  "dependencies": {
+    "@ren/schema": "workspace:*"
   },
   "peerDependencies": {
     "@opencode/plugin": "catalog:",
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "3.0.8",
     "@opencode/plugin": "catalog:",
     "@types/bun": "catalog:",
     "effect": "catalog:",

@@ -97,6 +97,5 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 ```sh
 bun typecheck
 bun run lint
+bun run test
 ```
-
-The package has no tests yet, so it has no `test` scripts and no `tsconfig.tests.json`. Add them with the first test.
