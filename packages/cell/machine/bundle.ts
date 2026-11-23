@@ -108,6 +108,8 @@ export const build = async (repository: string, out: string) => {
   await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64`
     .cwd(dependencies)
     .quiet()
+  // oxlint-disable-next-line ren/no-comments -- Bun links a different set of a package's peers' bins on each install, so they would change the version of the same dependencies. A machine runs no package scripts, so it uses none of them.
+  await Bun.$`find . -type d -path "*/node_modules/.bin" -prune -exec rm -rf {} +`.cwd(dependencies).quiet()
   const files = {
     brain: await sources(repository, [Entrypoints.brain]),
     executor: await sources(repository, [Entrypoints.executor]),
