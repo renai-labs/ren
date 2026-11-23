@@ -28,6 +28,7 @@ import { LabelGroup } from "./groups/label.js"
 import { LinkGroup } from "./groups/link.js"
 import { MeGroup } from "./groups/me.js"
 import { MemoryGroup } from "./groups/memory.js"
+import { OnboardingGroup } from "./groups/onboarding.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
@@ -87,6 +88,7 @@ export const Api = HttpApi.make("server")
   .add(OAuthAppGroup)
   .add(RenInferenceGroup)
   .add(BillingGroup)
+  .add(OnboardingGroup)
   .add(ChannelInstallGroup)
   .add(ChannelMappingGroup)
   .add(ChannelConnectGroup)

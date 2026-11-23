@@ -13,6 +13,7 @@ import type { Actor } from "./actor.js"
 import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { ChannelSecrets } from "./channel-secrets.js"
+import { Onboarding } from "./onboarding.js"
 import { PersonCredentials } from "./person-credentials.js"
 import { Primitive } from "./primitive.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -58,6 +59,7 @@ export const layer = Layer.effect(
     const registry = yield* ChannelProvider.Registry
     const people = yield* PersonCredentials.Service
     const secrets = yield* ChannelSecrets.Service
+    const onboarding = yield* Onboarding.Service
 
     const accountsOf = (userId: Auth.UserID, provider: Channel.Provider) =>
       database.db
@@ -337,6 +339,8 @@ export const layer = Layer.effect(
               Effect.fnUntraced(function* (outcome) {
                 if (outcome.ok && installer?.credential)
                   yield* people.save(row.organization_id, row.initiator_user_id, installer.credential)
+                if (outcome.ok && outcome.provider === "slack")
+                  yield* onboarding.record(row.organization_id, Onboarding.steps.organization.slackConnected)
               }),
             ),
             Effect.catchTag("ChannelProvider.InstallFailed", (error) => Effect.succeed(failed(error.message))),

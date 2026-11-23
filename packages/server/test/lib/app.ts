@@ -29,6 +29,7 @@ import { Hands } from "@ren/core/hands"
 import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { Onboarding } from "@ren/core/onboarding"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Settings } from "@ren/core/settings"
@@ -146,6 +147,7 @@ export const services = Layer.mergeAll(
   BillingEnrollment.layer.pipe(Layer.provide(DurableRunner.layerMemory), Layer.provideMerge(Billing.layerNone)),
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
+  Layer.provideMerge(Onboarding.layer),
   Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([

@@ -46,6 +46,7 @@ import { Docker } from "@ren/core/machine-provider/docker"
 import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { Onboarding } from "@ren/core/onboarding"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -228,6 +229,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provideMerge(credentials),
+  Layer.provideMerge(Onboarding.layer),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provideMerge(queue),
   Layer.provide([BrainClient.layer, Settings.layer]),

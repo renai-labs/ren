@@ -45,6 +45,7 @@ import { ProviderConnect } from "./mcp-provider/connect.js"
 import { McpInspect } from "./mcp-inspect.js"
 import { OAuthFetch } from "./oauth-fetch.js"
 import { OAuthToken } from "./oauth-token.js"
+import { Onboarding } from "./onboarding.js"
 import { Primitive } from "./primitive.js"
 
 export interface Callback {
@@ -102,6 +103,8 @@ const metadataKept = Duration.hours(1)
 
 const sessions = Database.Schema.oauth_session
 const credentials = Database.Schema.credential
+
+const gmailAppSlug = "gmail"
 
 type OAuthDeclaration = Extract<Mcp.Auth, { readonly type: "oauth" }>
 type OrgApp = typeof Database.Schema.oauth_app.$inferSelect
@@ -238,6 +241,7 @@ export const layer = Layer.effect(
     const control = yield* EgressControl.Service
     const http = yield* OAuthFetch.Service
     const providerConnect = yield* ProviderConnect.Service
+    const onboarding = yield* Onboarding.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
     const callbackUrl = `${base}/oauth/callback`
     const renames = yield* Deployment.previousHosts.pipe(Effect.orDie)
@@ -572,7 +576,7 @@ export const layer = Layer.effect(
         found.value.profile.slug,
       ).find((entry) => entry.label === taken.label)
       if (!item?.mcp || !("mcp" in item.item)) return Result.fail("The app no longer declares this MCP.")
-      return Result.succeed({ app: found.value.app, mcp: item.item.mcp })
+      return Result.succeed({ app: found.value.app, profile: found.value.profile, mcp: item.item.mcp })
     })
 
     const save = Effect.fnUntraced(function* (
@@ -644,6 +648,22 @@ export const layer = Layer.effect(
       return Option.none<Settled>()
     })
 
+    const connected = (
+      taken: Session,
+      found: {
+        readonly app: { readonly slug: string }
+        readonly profile: { readonly kind: AppProfile.Kind; readonly user_id: Auth.UserID | null }
+      },
+    ) =>
+      found.app.slug === gmailAppSlug &&
+      found.profile.kind === "private" &&
+      found.profile.user_id === taken.initiator_user_id
+        ? onboarding.recordPersonal(
+            { organizationId: taken.organization_id, userId: taken.initiator_user_id },
+            Onboarding.steps.personal.gmailConnected,
+          )
+        : Effect.void
+
     const complete = (taken: Session, sameAccountAs: Option.Option<string>) =>
       database.db
         .update(sessions)
@@ -704,9 +724,9 @@ export const layer = Layer.effect(
           return yield* fail(taken.id, valid.failure)
         }
         const finished = yield* providerConnect.finish(taken)
-        return Result.isFailure(finished)
-          ? yield* fail(taken.id, finished.failure)
-          : yield* complete(taken, Option.none())
+        if (Result.isFailure(finished)) return yield* fail(taken.id, finished.failure)
+        yield* connected(taken, valid.success)
+        return yield* complete(taken, Option.none())
       }
       if (Result.isFailure(valid)) return yield* fail(taken.id, valid.failure)
       return yield* finishOAuth(taken, input, valid.success, now)
@@ -739,6 +759,7 @@ export const layer = Layer.effect(
       const token = answered.value.success
       const saved = yield* save(taken, valueOf(taken, client, discovered.value, token), token, now)
       if (Result.isFailure(saved)) return yield* fail(taken.id, saved.failure)
+      yield* connected(taken, found)
       return yield* complete(taken, yield* sameAccount(taken, found, saved.success))
     })
 

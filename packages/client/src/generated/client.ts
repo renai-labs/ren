@@ -323,6 +323,9 @@ import type {
   BillingChangePlanOutput,
   BillingCancelOutput,
   BillingPortalOutput,
+  OnboardingGetOutput,
+  OnboardingDismissInput,
+  OnboardingDismissOutput,
   ChannelInstallListInput,
   ChannelInstallListOutput,
   ChannelInstallUpdateInput,
@@ -2722,6 +2725,25 @@ export function make(options: ClientOptions) {
             path: `/billing/portal`,
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    onboarding: {
+      get: (requestOptions?: RequestOptions) =>
+        request<OnboardingGetOutput>(
+          { method: "GET", path: `/onboarding`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          requestOptions,
+        ),
+      dismiss: (input: OnboardingDismissInput, requestOptions?: RequestOptions) =>
+        request<OnboardingDismissOutput>(
+          {
+            method: "POST",
+            path: `/onboarding/dismiss`,
+            body: { checklist: input["checklist"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
             empty: false,
           },
           requestOptions,

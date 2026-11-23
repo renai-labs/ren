@@ -20,9 +20,15 @@ import { OAuth } from "../../src/oauth.js"
 import { OAuthFetch } from "../../src/oauth-fetch.js"
 import type { ComposioServer } from "./composio-server.js"
 import { Seed } from "./seed.js"
+import { Onboarding } from "../../src/onboarding.js"
 
 export const layer = (server: ComposioServer.Instance, invalidated: Array<string>) =>
-  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppProfiles.layer).pipe(
+  Layer.mergeAll(
+    OAuth.layer.pipe(Layer.provideMerge(Onboarding.layer)),
+    CredentialRefresh.layer,
+    App.layer,
+    AppProfiles.layer,
+  ).pipe(
     Layer.provideMerge(ProviderConnect.layerRefresher),
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(ProviderConnect.layer),
@@ -69,17 +75,15 @@ const gmail: Mcp.Declaration = {
 
 export const label = "MCP_GMAIL__TEAM"
 
-export const setup = Effect.fnUntraced(function* () {
+export const setup = Effect.fnUntraced(function* (options: { readonly slug?: string } = {}) {
+  const slug = options.slug ?? `google-${crypto.randomUUID().slice(0, 8)}`
   const apps = yield* App.Service
   const profiles = yield* AppProfiles.Service
   const organizationId = yield* Seed.organization()
   const actor = yield* Seed.actor(organizationId, "admin")
   const space = yield* Seed.space(organizationId)
   yield* Seed.join(space, actor.userId)
-  const app = yield* apps.create(
-    actor,
-    Seed.appInput(space, `google-${crypto.randomUUID().slice(0, 8)}`, { mcps: { gmail } }),
-  )
+  const app = yield* apps.create(actor, Seed.appInput(space, slug, { mcps: { gmail } }))
   const profile = (yield* profiles.list(actor, { appId: app.id, page: 1, pageSize: 50 })).items.at(0)
   if (!profile) return yield* Effect.die(new Error("expected the owner-space profile"))
   return { actor, app, profile }

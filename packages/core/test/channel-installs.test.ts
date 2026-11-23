@@ -22,6 +22,7 @@ import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
 import { SlackServer } from "./lib/slack-server.js"
+import { Onboarding } from "../src/onboarding.js"
 
 const github = GitHubServer.start()
 const slack = SlackServer.start()
@@ -43,6 +44,7 @@ const settings = (overrides: Record<string, string> = {}) =>
 
 const it = testEffect(
   ChannelInstalls.layer.pipe(
+    Layer.provideMerge(Onboarding.layer),
     Layer.provideMerge(
       Layer.mergeAll(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])), Access.layer),
     ),
@@ -372,6 +374,26 @@ const slackAccounts = (userId: Auth.UserID) =>
   )
 
 describe("ChannelInstalls with Slack", () => {
+  it.live("a Slack install completes the slack.connected onboarding step; a refused one does not", () =>
+    Effect.gen(function* () {
+      const onboarding = yield* Onboarding.Service
+      const connected = (actor: Actor.Info) =>
+        Effect.map(
+          onboarding.get(actor),
+          (info) =>
+            info.organization.steps.find((state) => state.step === Onboarding.steps.organization.slackConnected)
+              ?.completedAt ?? null,
+        )
+      const grant = { team: team(), teamName: "Acme", user: "U01", token: `xoxb-${crypto.randomUUID()}` }
+      const installer = yield* member()
+      expect(yield* slackFinish(installer, grant)).toMatchObject({ ok: true })
+      expect(yield* connected(installer)).not.toBeNull()
+      const other = yield* member()
+      expect(yield* slackFinish(other, { ...grant, user: "U02" })).toMatchObject({ ok: false })
+      expect(yield* connected(other)).toBeNull()
+    }),
+  )
+
   it.live("an installer account owned by another person leaves no Slack install or token", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

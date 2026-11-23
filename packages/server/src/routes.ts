@@ -90,6 +90,7 @@ import { MemoryHandler } from "./handlers/api/memory.js"
 import { DriveHandler } from "./handlers/api/drive.js"
 import { FilesHandler } from "./handlers/api/files.js"
 import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
+import { OnboardingHandler } from "./handlers/api/onboarding.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
@@ -226,6 +227,7 @@ export const layer = Layer.mergeAll(
         OAuthAppHandler,
         RenInferenceHandler,
         BillingHandler,
+        OnboardingHandler,
         ChannelInstallHandler,
         ChannelMappingHandler,
         ChannelConnectHandler,

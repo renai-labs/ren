@@ -10,6 +10,7 @@ import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
 import { EgressControl } from "./egress-control.js"
+import { Onboarding } from "./onboarding.js"
 import { OrganizationInviteLinkPolicy } from "./organization-invite-link/policy.js"
 import { Primitive } from "./primitive.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -72,6 +73,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const control = yield* EgressControl.Service
+    const onboarding = yield* Onboarding.Service
 
     const infos = Effect.fnUntraced(function* (transaction: Database.Transaction, where: SQL | undefined) {
       const links = yield* transaction
@@ -300,6 +302,7 @@ export const layer = Layer.effect(
                 .where(eq(Database.Schema.organization_invite_link.id, link.id))
             return {
               joined: { organizationId, spaceId: landing.id, slug: landing.slug },
+              isNewMember: !isMember,
               workloads: yield* CredentialOffboarding.spaceBrains(transaction, added),
             }
           }),
@@ -307,6 +310,8 @@ export const layer = Layer.effect(
         yield* CredentialOffboarding.invalidate({ labels: [], workloads: accepted.workloads, providers: [] }).pipe(
           Effect.provideService(EgressControl.Service, control),
         )
+        if (accepted.isNewMember)
+          yield* onboarding.record(accepted.joined.organizationId, Onboarding.steps.organization.memberJoined)
         return accepted.joined
       }),
     })

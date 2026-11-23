@@ -15,13 +15,14 @@ import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { Onboarding } from "../src/onboarding.js"
 
 const it = testEffect(
   Layer.mergeAll(
     Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceJoinRequest.layer,
-    OrganizationInviteLink.layer,
+    OrganizationInviteLink.layer.pipe(Layer.provideMerge(Onboarding.layer)),
     SpaceProvisioning.layer,
     Invitation.layer,
   ).pipe(Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)), Layer.provideMerge(Testing.layer)),
@@ -133,6 +134,31 @@ describe("OrganizationInviteLink", () => {
         yield* links.accept(grace.userId, link.token, yield* addAsMember(grace.userId, added))
         expect(yield* Ref.get(added)).toBe(1)
         expect((yield* links.list(ada)).at(0)?.uses).toBe(2)
+      }),
+  )
+
+  it.live(
+    "someone joining through a link completes the member.joined onboarding step; a member gaining spaces does not",
+    () =>
+      Effect.gen(function* () {
+        const links = yield* OrganizationInviteLink.Service
+        const onboarding = yield* Onboarding.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* person(organizationId, "owner")
+        const grace = yield* person(organizationId, "member")
+        const joined = Effect.map(
+          onboarding.get(ada),
+          (info) =>
+            info.organization.steps.find((state) => state.step === Onboarding.steps.organization.memberJoined)
+              ?.completedAt ?? null,
+        )
+        const link = yield* links.create(ada, { spaceIds: [], expiresIn: "7d" })
+        const added = yield* Ref.make(0)
+        yield* links.accept(grace.userId, link.token, yield* addAsMember(grace.userId, added))
+        expect(yield* joined).toBeNull()
+        const newcomer = yield* stranger()
+        yield* links.accept(newcomer, link.token, yield* addAsMember(newcomer, added))
+        expect(yield* joined).not.toBeNull()
       }),
   )
 

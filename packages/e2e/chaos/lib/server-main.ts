@@ -59,6 +59,7 @@ import { AppProfiles } from "@ren/core/app/profiles"
 import { ProviderConnect } from "@ren/core/mcp-provider/connect"
 import { OAuth } from "@ren/core/oauth"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
+import { Onboarding } from "@ren/core/onboarding"
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),
@@ -99,6 +100,7 @@ const server = HttpRouter.serve(Routes.layer).pipe(
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provideMerge(credentials),
+  Layer.provideMerge(Onboarding.layer),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provideMerge(PersistedQueue.layer.pipe(Layer.provide(PersistedQueue.layerStoreSql()))),
   Layer.provide([BrainClient.layer, Settings.layer]),

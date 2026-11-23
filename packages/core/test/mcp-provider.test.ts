@@ -6,6 +6,8 @@ import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
 import { Credential } from "@ren/schema/credential"
 import { McpProvider } from "../src/mcp-provider.js"
+import { Onboarding } from "../src/onboarding.js"
+import { AppProfiles } from "../src/app/profiles.js"
 import { ComposioTest } from "./lib/composio.js"
 import { ComposioServer } from "./lib/composio-server.js"
 import { testEffect } from "./lib/effect.js"
@@ -34,6 +36,40 @@ describe("Composio connect (§10, test 20 and 21)", () => {
         ok: true,
         returnTo: Option.some("ren:///connected"),
       })
+    }),
+  )
+
+  it.live("connecting Gmail on one's own private profile completes the personal gmail.connected step", () =>
+    Effect.gen(function* () {
+      const onboarding = yield* Onboarding.Service
+      const profiles = yield* AppProfiles.Service
+      const connected = (found: Effect.Success<ReturnType<typeof ComposioTest.setup>>) =>
+        Effect.map(
+          onboarding.get(found.actor),
+          (info) =>
+            info.personal.steps.find((state) => state.step === Onboarding.steps.personal.gmailConnected)?.completedAt ??
+            null,
+        )
+      const privately = Effect.fnUntraced(function* (found: Effect.Success<ReturnType<typeof ComposioTest.setup>>) {
+        server.activeAfterReads = 1
+        const profile = yield* profiles.create(found.actor, {
+          appId: found.app.id,
+          name: "Mine",
+          slug: "mine",
+          kind: "private",
+        })
+        const settled = yield* ComposioTest.callback((yield* ComposioTest.connect({ ...found, profile })).state)
+        expect(settled).toMatchObject({ ok: true })
+      })
+      const other = yield* ComposioTest.setup()
+      yield* privately(other)
+      expect(yield* connected(other)).toBeNull()
+      const gmail = yield* ComposioTest.setup({ slug: "gmail" })
+      server.activeAfterReads = 1
+      yield* ComposioTest.callback((yield* ComposioTest.connect(gmail)).state)
+      expect(yield* connected(gmail)).toBeNull()
+      yield* privately(gmail)
+      expect(yield* connected(gmail)).not.toBeNull()
     }),
   )
 
