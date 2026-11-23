@@ -11,6 +11,7 @@ import { AppRegistry } from "@ren/core/app/registry"
 import { McpInspect } from "@ren/core/mcp-inspect"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { Billing } from "@ren/core/billing"
+import { Limits } from "@ren/core/limits"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
@@ -92,6 +93,7 @@ import { FilesHandler } from "./handlers/api/files.js"
 import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { ProviderHandler } from "./handlers/api/provider.js"
+import { LimitsHandler } from "./handlers/api/limits.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
@@ -227,6 +229,7 @@ export const layer = Layer.mergeAll(
         OAuthAppHandler,
         RenInferenceHandler,
         ProviderHandler,
+        LimitsHandler,
         BillingHandler,
         ChannelInstallHandler,
         ChannelMappingHandler,
@@ -250,6 +253,7 @@ export const layer = Layer.mergeAll(
         Memory.layer,
         FileSystem.layer.pipe(Layer.provide(Memory.layer)),
         Insights.layer,
+        Limits.layer,
         Feedback.layer,
         settingsAndAgents,
         InfraSpecs.layer.pipe(

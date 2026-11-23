@@ -158,6 +158,7 @@ import type {
   ProviderKeySaveInput,
   ProviderKeyRemoveInput,
   ProviderRenModelsUpdateInput,
+  LimitsGetInput,
   BillingInvoiceListInput,
   BillingInvoiceUrlInput,
   BillingSubscribeInput,
@@ -1722,6 +1723,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationFn: (input?: ProviderRenModelsUpdateInput) => client["provider"]["ren-models"]["update"](input),
             }),
         },
+      },
+    },
+    limits: {
+      get: {
+        queryKey: (input?: LimitsGetInput) =>
+          input === undefined ? (["limits", "get"] as const) : (["limits", "get", input] as const),
+        queryOptions: (input: LimitsGetInput) =>
+          queryOptions({
+            queryKey: ["limits", "get", input] as const,
+            queryFn: (context) => client["limits"]["get"](input, { signal: context.signal }),
+          }),
       },
     },
     billing: {

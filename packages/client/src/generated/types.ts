@@ -239,6 +239,10 @@ export type SessionMessageTokenUsage = {
 
 export type SessionModelVariant = { id: string }
 
+export type ModelsMethod = "key" | "subscription"
+
+export type ModelsPrice = { input: number; output: number; cacheRead?: number; cacheWrite?: number }
+
 export type TaskID = string
 
 export type TaskSubtasks = { total: number; done: number }
@@ -381,8 +385,6 @@ export type RenInferenceHarnessTarget =
 
 export type ProviderCardFreeUsage = { used: number; limit: number; resetsAt: string }
 
-export type ModelsMethod = "key" | "subscription"
-
 export type ProviderCardField = {
   name: string
   label: string
@@ -393,7 +395,26 @@ export type ProviderCardField = {
 
 export type ProviderCardTestResult = { ok: boolean; message?: string }
 
-export type ModelsPrice = { input: number; output: number; cacheRead?: number; cacheWrite?: number }
+export type LimitsSeat = {
+  _tag: "seat"
+  key: string
+  percent: number
+  resetsAt: string | null
+  seat: string
+  providerName: string
+  window: string
+  title: string
+}
+
+export type LimitsCredit = {
+  _tag: "credit"
+  key: string
+  percent: number
+  resetsAt: string | null
+  availableMicroUsd: number
+}
+
+export type LimitsFree = { _tag: "free"; key: string; percent: number; resetsAt: string; used: number; limit: number }
 
 export type BillingSummary = {
   plan: string
@@ -823,7 +844,16 @@ export type SessionMessageCompactionFailed = {
   tokens?: SessionMessageTokenUsage
 }
 
-export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
+export type SessionModelChoice = {
+  id: string
+  providerID: string
+  name: string
+  variants: Array<SessionModelVariant>
+  providerName?: string
+  method?: ModelsMethod
+  price?: ModelsPrice
+  free?: boolean
+}
 
 export type TaskParent = { id: TaskID; identifier: string; title: string }
 
@@ -1106,6 +1136,8 @@ export type ProviderCardAvailable = {
 }
 
 export type ProviderCardRenModel = { id: string; name: string; price: ModelsPrice; free: boolean; enabled: boolean }
+
+export type LimitsMeter = LimitsSeat | LimitsCredit | LimitsFree
 
 export type BillingInvoice = {
   id: string
@@ -1512,6 +1544,8 @@ export type RenInferenceHarnessPlan = {
 }
 
 export type ProviderCardRenModels = { newModelsOn: boolean; canManage: boolean; models: Array<ProviderCardRenModel> }
+
+export type LimitsInfo = { meters: Array<LimitsMeter> }
 
 export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
@@ -9529,8 +9563,14 @@ export type ProviderListOutput = ProviderCardPage
 
 export type ProviderUpdateInput = {
   readonly id: { readonly id: string }["id"]
-  readonly enabled?: { readonly enabled?: boolean; readonly method?: "key" | "subscription" }["enabled"]
-  readonly method?: { readonly enabled?: boolean; readonly method?: "key" | "subscription" }["method"]
+  readonly enabled?: {
+    readonly enabled?: boolean | undefined
+    readonly method?: ("key" | "subscription") | undefined
+  }["enabled"]
+  readonly method?: {
+    readonly enabled?: boolean | undefined
+    readonly method?: ("key" | "subscription") | undefined
+  }["method"]
 }
 
 export type ProviderUpdateOutput = ProviderCardPage
@@ -9557,16 +9597,20 @@ export type ProviderRenModelsListOutput = ProviderCardRenModels
 
 export type ProviderRenModelsUpdateInput = {
   readonly newModelsOn?: {
-    readonly newModelsOn?: boolean
-    readonly models?: ReadonlyArray<{ readonly id: string; readonly enabled: boolean }>
+    readonly newModelsOn?: boolean | undefined
+    readonly models?: ReadonlyArray<{ readonly id: string; readonly enabled: boolean }> | undefined
   }["newModelsOn"]
   readonly models?: {
-    readonly newModelsOn?: boolean
-    readonly models?: ReadonlyArray<{ readonly id: string; readonly enabled: boolean }>
+    readonly newModelsOn?: boolean | undefined
+    readonly models?: ReadonlyArray<{ readonly id: string; readonly enabled: boolean }> | undefined
   }["models"]
 }
 
 export type ProviderRenModelsUpdateOutput = ProviderCardRenModels
+
+export type LimitsGetInput = { readonly id: { readonly id: string }["id"] }
+
+export type LimitsGetOutput = LimitsInfo
 
 export type BillingGetOutput = BillingSummary
 
