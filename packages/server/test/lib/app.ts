@@ -28,7 +28,10 @@ import { Docker } from "@ren/core/machine-provider/docker"
 import { Hands } from "@ren/core/hands"
 import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
+import { ModelCatalog } from "@ren/core/model-catalog"
+import { ModelLists } from "@ren/core/model-lists"
 import { Models } from "@ren/core/models"
+import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Settings } from "@ren/core/settings"
@@ -150,6 +153,10 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([
     Models.layerNone,
+    ProviderSettings.layer.pipe(
+      Layer.provideMerge(ModelLists.layer),
+      Layer.provideMerge(ModelCatalog.layerFixture({ providers: [] })),
+    ),
     Hands.layer.pipe(
       Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
     ),

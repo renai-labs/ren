@@ -8,7 +8,7 @@ import type { Usage } from "@ren/schema/usage"
 import { RenInference } from "@ren/schema/ren-inference"
 import type { Space } from "@ren/schema/space"
 import { and, eq, gte, inArray, max, type SQL, sql } from "drizzle-orm"
-import { Clock, Config, Context, DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
+import { Clock, Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
@@ -34,6 +34,34 @@ export interface RenModels {
     readonly organizationId: Auth.OrganizationID
     readonly off: ReadonlyArray<string>
   }>
+}
+
+// oxlint-disable-next-line ren/no-comments -- Providers §10: a seat as the gateway reports it, with the vendor, the plan and the models its login lists.
+export interface Seat {
+  readonly id: string
+  readonly providerId: string
+  readonly plan: string | null
+  readonly models: ReadonlyArray<string>
+}
+
+export interface KeyFields {
+  readonly [name: string]: Redacted.Redacted
+}
+
+export interface CardState {
+  readonly enabled: boolean
+  readonly method: Models.Method
+}
+
+export interface SavedKey {
+  readonly last4: string
+  readonly testedAt: DateTime.Utc
+}
+
+export interface FreeUsage {
+  readonly used: number
+  readonly limit: number
+  readonly resetsAt: DateTime.Utc
 }
 
 export type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Primitive.Conflict | Unavailable
@@ -75,6 +103,22 @@ export interface Interface {
     input: RenInference.HarnessPlanInput,
   ) => Effect.Effect<RenInference.HarnessPlan, Failure>
   readonly renModels: (input: RenModels) => Effect.Effect<void, Failure>
+  readonly seats: (organizationId: Auth.OrganizationID) => Effect.Effect<ReadonlyArray<Seat>, Failure>
+  readonly cardState: (actor: Actor.Info, providerId: string, state: CardState) => Effect.Effect<void, Failure>
+  readonly testKey: (
+    actor: Actor.Info,
+    providerId: string,
+    fields: KeyFields,
+    model: string,
+  ) => Effect.Effect<{ readonly ok: boolean; readonly message?: string }, Failure>
+  readonly saveKey: (
+    actor: Actor.Info,
+    providerId: string,
+    fields: KeyFields,
+    model: string,
+  ) => Effect.Effect<SavedKey, Failure>
+  readonly removeKey: (actor: Actor.Info, providerId: string) => Effect.Effect<void, Failure>
+  readonly freeUsage: (organizationId: Auth.OrganizationID) => Effect.Effect<FreeUsage, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
@@ -92,6 +136,28 @@ const Upstream = Schema.Struct({
 })
 
 const notFound = new Primitive.NotFound({ message: "Connection not found." })
+
+const UpstreamSeat = Schema.Struct({
+  id: Schema.String,
+  providerId: Schema.optional(Schema.String),
+  plan: Schema.optional(Schema.NullOr(Schema.String)),
+  models: Schema.optional(Schema.Array(Schema.String)),
+})
+
+const TestAnswer = Schema.Struct({ ok: Schema.Boolean, message: Schema.optional(Schema.String) })
+
+const SavedAnswer = Schema.Struct({ last4: Schema.String, testedAt: Schema.DateTimeUtc })
+
+const FreeAnswer = Schema.Struct({ used: Schema.Int, limit: Schema.Int, resetsAt: Schema.DateTimeUtc })
+
+// oxlint-disable-next-line ren/no-comments -- Providers P17: the fields go to the gateway in this one body and nowhere else.
+const revealed = (fields: KeyFields) =>
+  Object.fromEntries(
+    Object.keys(fields).flatMap((name) => {
+      const value = fields[name]
+      return value ? [[name, Redacted.value(value)]] : []
+    }),
+  )
 
 const UpstreamKey = Schema.Struct({
   ...Struct.pick(RenInference.Key.fields, ["id", "name", "prefix", "status", "expiresAt", "createdAt"]),
@@ -168,7 +234,7 @@ export const layer = Layer.effect(
 
     const call = <A, I>(
       claims: { readonly org: string; readonly sub?: string; readonly member?: string },
-      method: "GET" | "POST" | "PATCH" | "DELETE",
+      method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
       path: string,
       success: Schema.Codec<A, I>,
       body?: object,
@@ -430,6 +496,42 @@ export const layer = Layer.effect(
       renModels: Effect.fn("RenInference.renModels")(function* (input) {
         yield* send({ org: renOrganization }, "PUT", "/v1/ren-models", input)
       }),
+      seats: Effect.fn("RenInference.seats")(function* (organizationId) {
+        const found = yield* call({ org: organizationId }, "GET", "/v1/connections", Schema.Array(UpstreamSeat))
+        return found.flatMap((seat): ReadonlyArray<Seat> =>
+          seat.providerId
+            ? [{ id: seat.id, providerId: seat.providerId, plan: seat.plan ?? null, models: seat.models ?? [] }]
+            : [],
+        )
+      }),
+      cardState: Effect.fn("RenInference.cardState")(function* (actor, providerId, state) {
+        yield* send(yield* personOf(actor), "PUT", `/v1/providers/${encodeURIComponent(providerId)}`, state)
+      }),
+      testKey: Effect.fn("RenInference.testKey")(function* (actor, providerId, fields, model) {
+        const answer = yield* call(
+          yield* personOf(actor),
+          "POST",
+          `/v1/providers/${encodeURIComponent(providerId)}/test`,
+          TestAnswer,
+          { fields: revealed(fields), model },
+        )
+        return answer.message ? { ok: answer.ok, message: answer.message } : { ok: answer.ok }
+      }),
+      saveKey: Effect.fn("RenInference.saveKey")(function* (actor, providerId, fields, model) {
+        return yield* call(
+          yield* personOf(actor),
+          "PUT",
+          `/v1/providers/${encodeURIComponent(providerId)}/key`,
+          SavedAnswer,
+          { fields: revealed(fields), model },
+        )
+      }),
+      removeKey: Effect.fn("RenInference.removeKey")(function* (actor, providerId) {
+        yield* send(yield* personOf(actor), "DELETE", `/v1/providers/${encodeURIComponent(providerId)}/key`)
+      }),
+      freeUsage: Effect.fn("RenInference.freeUsage")(function* (organizationId) {
+        return yield* call({ org: organizationId }, "GET", "/v1/usage/free", FreeAnswer)
+      }),
     })
   }),
 )
@@ -452,6 +554,12 @@ export const layerNone = Layer.succeed(
     keyUsage: () => Effect.succeed([]),
     harnessPlan: () => Effect.fail(notConfigured()),
     renModels: () => Effect.void,
+    seats: () => Effect.succeed([]),
+    cardState: () => Effect.fail(notConfigured()),
+    testKey: () => Effect.fail(notConfigured()),
+    saveKey: () => Effect.fail(notConfigured()),
+    removeKey: () => Effect.fail(notConfigured()),
+    freeUsage: () => Effect.fail(notConfigured()),
   }),
 )
 

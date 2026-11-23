@@ -1961,6 +1961,67 @@ const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   "harness-plan": EndpointRenInferenceHarnessPlan(raw),
 })
 
+const EndpointProviderList = (raw: RawClient["provider"]) => () =>
+  raw["provider.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type ProviderUpdateRequest = Parameters<RawClient["provider"]["provider.update"]>[0]
+type ProviderUpdateInput = {
+  readonly id: ProviderUpdateRequest["params"]["id"]
+  readonly enabled?: ProviderUpdateRequest["payload"]["enabled"]
+  readonly method?: ProviderUpdateRequest["payload"]["method"]
+}
+const EndpointProviderUpdate = (raw: RawClient["provider"]) => (input: ProviderUpdateInput) =>
+  raw["provider.update"]({
+    params: { id: input["id"] },
+    payload: { enabled: input["enabled"], method: input["method"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ProviderTestRequest = Parameters<RawClient["provider"]["provider.test"]>[0]
+type ProviderTestInput = {
+  readonly id: ProviderTestRequest["params"]["id"]
+  readonly fields: ProviderTestRequest["payload"]["fields"]
+}
+const EndpointProviderTest = (raw: RawClient["provider"]) => (input: ProviderTestInput) =>
+  raw["provider.test"]({ params: { id: input["id"] }, payload: { fields: input["fields"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ProviderKeySaveRequest = Parameters<RawClient["provider"]["provider.key.save"]>[0]
+type ProviderKeySaveInput = {
+  readonly id: ProviderKeySaveRequest["params"]["id"]
+  readonly fields: ProviderKeySaveRequest["payload"]["fields"]
+}
+const EndpointProviderKeySave = (raw: RawClient["provider"]) => (input: ProviderKeySaveInput) =>
+  raw["provider.key.save"]({ params: { id: input["id"] }, payload: { fields: input["fields"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ProviderKeyRemoveRequest = Parameters<RawClient["provider"]["provider.key.remove"]>[0]
+type ProviderKeyRemoveInput = { readonly id: ProviderKeyRemoveRequest["params"]["id"] }
+const EndpointProviderKeyRemove = (raw: RawClient["provider"]) => (input: ProviderKeyRemoveInput) =>
+  raw["provider.key.remove"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const EndpointProviderRenModelsList = (raw: RawClient["provider"]) => () =>
+  raw["provider.ren-models.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type ProviderRenModelsUpdateRequest = Parameters<RawClient["provider"]["provider.ren-models.update"]>[0]
+type ProviderRenModelsUpdateInput = {
+  readonly newModelsOn?: ProviderRenModelsUpdateRequest["payload"]["newModelsOn"]
+  readonly models?: ProviderRenModelsUpdateRequest["payload"]["models"]
+}
+const EndpointProviderRenModelsUpdate = (raw: RawClient["provider"]) => (input?: ProviderRenModelsUpdateInput) =>
+  raw["provider.ren-models.update"]({
+    payload: { newModelsOn: input?.["newModelsOn"], models: input?.["models"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupProvider = (raw: RawClient["provider"]) => ({
+  list: EndpointProviderList(raw),
+  update: EndpointProviderUpdate(raw),
+  test: EndpointProviderTest(raw),
+  key: { save: EndpointProviderKeySave(raw), remove: EndpointProviderKeyRemove(raw) },
+  "ren-models": { list: EndpointProviderRenModelsList(raw), update: EndpointProviderRenModelsUpdate(raw) },
+})
+
 const EndpointBillingGet = (raw: RawClient["billing"]) => () =>
   raw["billing.get"]({}).pipe(Effect.mapError(mapClientError))
 
@@ -2266,6 +2327,7 @@ const adaptClient = (raw: RawClient) => ({
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
+  provider: adaptGroupProvider(raw["provider"]),
   billing: adaptGroupBilling(raw["billing"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),

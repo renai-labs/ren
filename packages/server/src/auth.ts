@@ -4,6 +4,7 @@ import { fetchClientMetadataResource } from "@better-auth/cimd/node"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
 import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
+import { ProviderSettings } from "@ren/core/provider-settings"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { Mailer } from "@ren/core/mailer"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -77,6 +78,7 @@ export const layer = Layer.effect(
     const provisioning = yield* SpaceProvisioning.Service
     const inferenceRemoval = yield* RenInferenceRemoval.Service
     const billingEnrollment = yield* BillingEnrollment.Service
+    const providerSettings = yield* ProviderSettings.Service
     const accounts = yield* GitHubAccounts.Service
     const slack = yield* SlackApp.Service
     const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
@@ -164,6 +166,8 @@ export const layer = Layer.effect(
           runPromise(
             billingEnrollment.enroll({ organizationId: Auth.OrganizationID.make(organizationId), ...customer }),
           ),
+        applyDefaultModel: (organizationId) =>
+          runPromise(providerSettings.applyDefaultModel(Auth.OrganizationID.make(organizationId))),
       },
     })
     const context = yield* Effect.promise(() => auth.$context)

@@ -81,6 +81,65 @@
           "required": true
         }
       }
+    },
+    "/internal/inference/changed": {
+      "post": {
+        "tags": ["inference"],
+        "operationId": "inference.changed",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "The model gateway says that an organization’s seat, or the models it lists, changed. Ren reads the organization’s seats and updates its model list. Only the usage ingest key.",
+        "summary": "A seat changed",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCard.Changed"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -89,6 +148,10 @@
         "type": "string",
         "pattern": "^org_",
         "description": "From the workload’s key. Ren stores it as sent."
+      },
+      "Auth.OrganizationID_1": {
+        "type": "string",
+        "pattern": "^org_"
       },
       "Brain.ID": {
         "type": "string",
@@ -132,6 +195,17 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
+      },
+      "ProviderCard.Changed": {
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID_1"
+          }
+        },
+        "required": ["organizationId"],
+        "additionalProperties": false,
+        "description": "The gateway tells Ren that a seat of the organization, or its models, changed."
       },
       "Space.ID": {
         "type": "string",
@@ -470,6 +544,9 @@
   "tags": [
     {
       "name": "usage"
+    },
+    {
+      "name": "inference"
     }
   ]
 }

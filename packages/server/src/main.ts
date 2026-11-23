@@ -48,6 +48,7 @@ import { Mailer } from "@ren/core/mailer"
 import { ModelCatalog } from "@ren/core/model-catalog"
 import { ModelLists } from "@ren/core/model-lists"
 import { Models } from "@ren/core/models"
+import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -170,11 +171,16 @@ const models = Layer.unwrap(
   Effect.map(RenInferenceProvider.configured, (isConfigured) =>
     isConfigured
       ? Models.layer(RenInferenceProvider.make).pipe(
+          Layer.provideMerge(ProviderSettings.layer),
           Layer.provideMerge(ModelLists.layerJob),
           Layer.provideMerge(ModelLists.layer),
           Layer.provideMerge(ModelCatalog.layerModelsDev),
         )
-      : Models.layerNone,
+      : Models.layerNone.pipe(
+          Layer.merge(ProviderSettings.layer),
+          Layer.provideMerge(ModelLists.layer),
+          Layer.provideMerge(ModelCatalog.layerFixture({ providers: [] })),
+        ),
   ),
 ).pipe(Layer.provide(FetchHttpClient.layer), Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 

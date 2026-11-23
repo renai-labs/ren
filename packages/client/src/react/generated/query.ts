@@ -153,6 +153,11 @@ import type {
   RenInferenceKeyRevokeInput,
   RenInferenceKeySecretInput,
   RenInferenceHarnessPlanInput,
+  ProviderUpdateInput,
+  ProviderTestInput,
+  ProviderKeySaveInput,
+  ProviderKeyRemoveInput,
+  ProviderRenModelsUpdateInput,
   BillingInvoiceListInput,
   BillingInvoiceUrlInput,
   BillingSubscribeInput,
@@ -1655,6 +1660,68 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationKey: ["ren-inference", "harness-plan"] as const,
             mutationFn: (input: RenInferenceHarnessPlanInput) => client["ren-inference"]["harness-plan"](input),
           }),
+      },
+    },
+    provider: {
+      list: {
+        queryKey: () => ["provider", "list"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["provider", "list"] as const,
+            queryFn: (context) => client["provider"]["list"]({ signal: context.signal }),
+          }),
+      },
+      update: {
+        mutationKey: () => ["provider", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["provider", "update"] as const,
+            mutationFn: (input: ProviderUpdateInput) => client["provider"]["update"](input),
+          }),
+      },
+      test: {
+        mutationKey: () => ["provider", "test"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["provider", "test"] as const,
+            mutationFn: (input: ProviderTestInput) => client["provider"]["test"](input),
+          }),
+      },
+      key: {
+        save: {
+          mutationKey: () => ["provider", "key", "save"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["provider", "key", "save"] as const,
+              mutationFn: (input: ProviderKeySaveInput) => client["provider"]["key"]["save"](input),
+            }),
+        },
+        remove: {
+          mutationKey: () => ["provider", "key", "remove"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["provider", "key", "remove"] as const,
+              mutationFn: (input: ProviderKeyRemoveInput) => client["provider"]["key"]["remove"](input),
+            }),
+        },
+      },
+      "ren-models": {
+        list: {
+          queryKey: () => ["provider", "ren-models", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["provider", "ren-models", "list"] as const,
+              queryFn: (context) => client["provider"]["ren-models"]["list"]({ signal: context.signal }),
+            }),
+        },
+        update: {
+          mutationKey: () => ["provider", "ren-models", "update"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["provider", "ren-models", "update"] as const,
+              mutationFn: (input?: ProviderRenModelsUpdateInput) => client["provider"]["ren-models"]["update"](input),
+            }),
+        },
       },
     },
     billing: {
