@@ -9,6 +9,7 @@ const Claims = Schema.Struct({
 })
 const decodeClaims = Schema.decodeUnknownOption(Schema.fromJsonString(Claims))
 const decodeCreate = Schema.decodeUnknownSync(RenInference.CreateKeyInput)
+const decodeRevision = Schema.decodeUnknownOption(Schema.Struct({ revision: Schema.String }))
 
 const expiryDays: Readonly<Record<RenInference.Expiry, number | null>> = {
   "7d": 7,
@@ -53,6 +54,13 @@ export const start = (stub: string) => {
   const routes: Readonly<Record<string, (input: Request) => Response | Promise<Response>>> = {
     "GET /v1/connections": () => Response.json([]),
     "POST /v1/keys": () => Response.json({ key: "stub-key" }),
+    "PUT /v1/ren-models": async (input) => {
+      const body: unknown = await input.request.json()
+      return Response.json({
+        revision: Option.getOrUndefined(decodeRevision(body))?.revision ?? "",
+        models: 0,
+      })
+    },
     "GET /v1/inference-keys": (input) =>
       Response.json({
         baseUrl,

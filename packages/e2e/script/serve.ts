@@ -1,5 +1,5 @@
 import { PgClient } from "@effect/sql-pg"
-import { Shared } from "@ren/cell/testing"
+import { Shared, StubModel } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed, TestDrives } from "@ren/core/testing"
@@ -26,7 +26,10 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
-const ScriptedTool = Schema.Struct({ name: Schema.String, input: Schema.Unknown })
+const ScriptedTool = Schema.Struct({
+  name: Schema.String,
+  input: Schema.Unknown,
+})
 
 const Script = Schema.Struct({
   reply: Schema.optionalKey(Schema.String),
@@ -48,6 +51,48 @@ const stubRoute = (request: Request) => {
   return new Response(null, { status: 204 })
 }
 
+// oxlint-disable-next-line ren/no-comments -- Ren's upstream in the e2e stack: models.dev with one provider that lists the stub's models, under the ids the stub's old catalog used. A model list sent to /models changes it and its ETag.
+const upstream = "stub-upstream"
+
+let listed: ReadonlyArray<Models.Info> = StubModel.defaultModels
+
+const modelsDev = () => {
+  const body = JSON.stringify({
+    [upstream]: {
+      id: upstream,
+      name: "Stub upstream",
+      models: Object.fromEntries(
+        listed.map((model) => [
+          model.id,
+          {
+            id: model.id,
+            canonical_id: model.id,
+            name: model.name ?? model.id,
+            type: model.type,
+            capabilities: {
+              tools: { supported: true },
+              reasoning: {
+                supported: Boolean(model.efforts),
+                effort: model.efforts,
+              },
+            },
+            modalities: { input: model.input ?? ["text"] },
+            limit: model.limit,
+            cost: { text: { input: { price: 1 }, output: { price: 2 } } },
+          },
+        ]),
+      ),
+    },
+  })
+  return { body, etag: `"${Bun.hash(body).toString(16)}"` }
+}
+
+const modelsDevAnswer = (request: Request) => {
+  const current = modelsDev()
+  if (request.headers.get("if-none-match") === current.etag) return new Response(null, { status: 304 })
+  return new Response(current.body, { headers: { "content-type": "application/json", etag: current.etag } })
+}
+
 let log = ""
 const children: Bun.Subprocess[] = []
 const mailbox = Bun.serve({
@@ -55,9 +100,11 @@ const mailbox = Bun.serve({
   hostname: "127.0.0.1",
   fetch: async (request) => {
     if (request.method === "POST" && new URL(request.url).pathname === "/models") {
-      Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
+      listed = Schema.decodeUnknownSync(ModelEntries)(await request.json())
+      Shared.stub().modelInfo.set(listed)
       return new Response(null, { status: 204 })
     }
+    if (request.method === "GET" && new URL(request.url).pathname === "/models-dev") return modelsDevAnswer(request)
     const stubbed = stubRoute(request)
     if (stubbed) return stubbed
     if (request.method === "POST" && new URL(request.url).pathname === "/script") {
@@ -196,6 +243,9 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     ]),
     REN_INFERENCE_GATEWAY_URL: Shared.stub().root,
     REN_INFERENCE_GATEWAY_KEY: "stub-key",
+    MODELS_DEV_URL: `http://127.0.0.1:${ports.mailbox}/models-dev`,
+    MODELS_DEV_REFRESH: "2 seconds",
+    REN_MODELS_UPSTREAM: upstream,
     ENVELOPE_KEYS: JSON.stringify([
       {
         id: "local:e2e",

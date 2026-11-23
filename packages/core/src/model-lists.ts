@@ -185,11 +185,12 @@ export const publish = Effect.fn("ModelLists.publish")(function* (
   return yield* lists.sync
 })
 
-// oxlint-disable-next-line ren/no-comments -- Providers §6.1: read models.dev every 5 minutes with its ETag. At start the gateway hears the current list again, and organizations without a hash get one.
+// oxlint-disable-next-line ren/no-comments -- Providers §6.1: read models.dev every 5 minutes (MODELS_DEV_REFRESH) with its ETag. At start the gateway hears the current list again, and organizations without a hash get one.
 export const layerJob = Layer.effectDiscard(
   Effect.gen(function* () {
     const catalog = yield* ModelCatalog.Service
     const lists = yield* Service
+    const every = yield* Config.Duration("MODELS_DEV_REFRESH").pipe(Config.withDefault(refreshEvery))
     const context = yield* Effect.context<RenInference.Service | ModelCatalog.Service | Service>()
     const start = Effect.gen(function* () {
       yield* tell(yield* catalog.current)
@@ -206,7 +207,7 @@ export const layerJob = Layer.effectDiscard(
       Effect.andThen(
         tick.pipe(
           Effect.catch((error) => Effect.logWarning("The model catalog keeps its last copy", error)),
-          Effect.repeat(Schedule.spaced(refreshEvery)),
+          Effect.repeat(Schedule.spaced(every)),
         ),
       ),
       Effect.provide(context),
