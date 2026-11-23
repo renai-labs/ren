@@ -1,6 +1,10 @@
 import { Plugin } from "@opencode/plugin/tui"
+import { SyntaxStyle } from "@opentui/core"
 import { createEffect, createSignal, on, Show, untrack } from "solid-js"
 import { RenCommands } from "./commands.js"
+import { Changes } from "./panels/changes.js"
+import { Files } from "./panels/files.js"
+import { Shells } from "./panels/shells.js"
 import { RenRpc } from "./rpc.js"
 import { Support } from "./support.js"
 
@@ -37,6 +41,7 @@ export default Plugin.define({
       },
     }
     const [space, setSpace] = createSignal<RenRpc.SpaceInfo>()
+    const [shown, setShown] = createSignal<string>()
     const load = () => {
       void RenCommands.selected(surface).then((selected) => setSpace(selected))
     }
@@ -111,6 +116,36 @@ export default Plugin.define({
             })
           },
         },
+        {
+          id: "ren.diff",
+          title: "Ren changes",
+          description: "What changed in the Ren session’s folder on its hand",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:diff" },
+          run: () => void RenCommands.files(surface, RenCommands.panels.changes),
+        },
+        {
+          id: "ren.files",
+          title: "Ren files",
+          description: "Browse and read the files on the Ren session’s hand",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:files" },
+          run: () => void RenCommands.files(surface, RenCommands.panels.files),
+        },
+        {
+          id: "ren.shell",
+          title: "Ren shell",
+          description: "Run a command on the Ren session’s hand, or see the commands that run there",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:shell", arguments: true },
+          run: (input) =>
+            void RenCommands.shell(surface, input).then((shell) => {
+              if (shell) setShown(shell.id)
+            }),
+        },
       ],
     }))
     const catching = new Set<string>()
@@ -175,6 +210,23 @@ export default Plugin.define({
         </Show>
       )
     }
+    const theme = context.theme
+    const syntax = SyntaxStyle.fromStyles(
+      {
+        default: { fg: theme.text.base },
+        comment: { fg: theme.syntax.comment, italic: true },
+        string: { fg: theme.syntax.string },
+        number: { fg: theme.syntax.number },
+        boolean: { fg: theme.syntax.number },
+        keyword: { fg: theme.syntax.keyword },
+        function: { fg: theme.syntax.function },
+        variable: { fg: theme.syntax.variable },
+        type: { fg: theme.syntax.type },
+        operator: { fg: theme.syntax.operator },
+        punctuation: { fg: theme.syntax.punctuation },
+      },
+      context.renderer.nativeScene,
+    )
     const stops = [
       context.ui.slot({ append: "home.footer.status", render: status }),
       context.ui.slot({ append: "prompt.footer.status", render: sessionStatus }),
@@ -195,12 +247,29 @@ export default Plugin.define({
       context.data.on("server.connected", load),
       context.client.rpc(RenRpc.Definition).events.on("signedIn", load),
       context.client.rpc(RenRpc.Definition).events.on("signedOut", () => setSpace(undefined)),
+      context.ui.slot({
+        append: "session.panel",
+        render: (panel) => (
+          <>
+            <Show when={panel.name === RenCommands.panels.changes}>
+              <Changes context={context} reader={surface} panel={panel} syntax={syntax} />
+            </Show>
+            <Show when={panel.name === RenCommands.panels.files}>
+              <Files context={context} reader={surface} panel={panel} syntax={syntax} />
+            </Show>
+            <Show when={panel.name === RenCommands.panels.shells}>
+              <Shells context={context} reader={surface} panel={panel} shown={shown} show={setShown} />
+            </Show>
+          </>
+        ),
+      }),
     ]
     const requests = RenCommands.requests(surface)
     stops.push(context.data.on("server.connected", () => void RenCommands.syncRequests(surface)))
     return () => {
       for (const stop of stops) stop()
       void requests.then((stop) => stop())
+      void context.renderer.idle().then(() => syntax.destroy())
     }
   },
 })

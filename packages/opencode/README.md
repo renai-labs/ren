@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `outgoing`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `status`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). A prompt's files, agent mentions and skills reach the brain with it (Attachments). The prompt footer shows a Ren session's state, and `/ren:retry` starts a failed or stopped session again or sends a failed turn again (Status and retry). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `outgoing`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `status`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). A prompt's files, agent mentions and skills reach the brain with it (Attachments). The prompt footer shows a Ren session's state, and `/ren:retry` starts a failed or stopped session again or sends a failed turn again (Status and retry). `/ren:diff`, `/ren:files` and `/ren:shell` show the changes and files on a Ren session's hand and run commands there (Panels). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -36,28 +36,30 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 
 ## Modules
 
-| Module     | Holds                                                                                              |
-| ---------- | -------------------------------------------------------------------------------------------------- |
-| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                         |
-| `auth`     | `RenAuth`: the server URL and a currently valid token; `RenAuth.Login`: sign-in and sign-out.      |
-| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.                  |
-| `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh.     |
-| `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.              |
-| `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.               |
-| `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.             |
-| `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                                   |
-| `handlers` | `RenHandlers`: the server part's RPC handlers.                                                     |
-| `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.          |
-| `tui`      | The TUI part: the commands, the space in the footers, and the local forms of Ren questions.        |
-| `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns.    |
-| `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                             |
-| `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.      |
-| `requests` | `Requests`: the brain's permission requests and questions as local ones, and the answers.          |
-| `outgoing` | `Outgoing`: a local user message as a Chat API prompt; its files go to the space's drive.          |
-| `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range. |
-| `history`  | `History`: Chat API messages as OpenCode export messages, and the catch-up rules.                  |
-| `sessions` | `Sessions`: the session list, and the transcript to import on open and catch-up.                   |
-| `status`   | `Status`: the state of a Ren session, from its open link, and `/ren:retry`.                        |
+| Module     | Holds                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                                                   |
+| `auth`     | `RenAuth`: the server URL and a currently valid token; `RenAuth.Login`: sign-in and sign-out.                                |
+| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.                                            |
+| `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh.                               |
+| `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.                                        |
+| `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.                                         |
+| `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.                                       |
+| `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                                                             |
+| `handlers` | `RenHandlers`: the server part's RPC handlers.                                                                               |
+| `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.                                    |
+| `tui`      | The TUI part: the commands, the footers, the catch-up of the shown session, the local forms of Ren questions and the panels. |
+| `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns.                              |
+| `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                                                       |
+| `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.                                |
+| `requests` | `Requests`: the brain's permission requests and questions as local ones, and the answers.                                    |
+| `outgoing` | `Outgoing`: a local user message as a Chat API prompt; its files go to the space's drive.                                    |
+| `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range.                           |
+| `history`  | `History`: Chat API messages as OpenCode export messages, and the catch-up rules.                                            |
+| `sessions` | `Sessions`: the session list, and the transcript to import on open and catch-up.                                             |
+| `status`   | `Status`: the state of a Ren session, from its open link, and `/ren:retry`.                                                  |
+| `hand`     | `Hand`: the panels' reads and commands on a Ren session's hand, through the session's link.                                  |
+| `panels`   | `RenPanels`: the TUI side of the panels, as plain functions over the RPC client.                                             |
 
 ## Connection
 
@@ -204,8 +206,9 @@ Every command the plugin adds is `/ren:<command>`, in the slash completion and i
 - `/ren:move` moves the open local session to the selected space (Moving a session).
 - `/ren:sessions` lists the Ren sessions of the selected space and opens the chosen one (Open and catch up).
 - `/ren:retry` retries the open Ren session (Status and retry).
+- `/ren:diff`, `/ren:files` and `/ren:shell` open a panel with the changes, the files or the commands on the open Ren session's hand (Panels).
 
-Signed out, they say to run `/ren:login`. The home and prompt footers show `ren · <space>`.
+Signed out, they say to run `/ren:login`. The home footer shows `ren · <space>`; the prompt footer shows it too, and in a Ren session that session's space and state (Status and retry).
 
 ### Selecting a space
 
@@ -217,31 +220,39 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 
 `RenRpc.Definition` (id `ren`). Every method takes an object and can fail with `signed_out` (`data: { server }`, the message says to run `/ren:login`) or `unavailable` (`data: {}`, the message says what failed).
 
-| Method          | Input                               | Output                              |
-| --------------- | ----------------------------------- | ----------------------------------- |
-| `listSpaces`    | `{}`                                | `{ spaces: SpaceInfo[], selected }` |
-| `getSpace`      | `{}`                                | `SpaceInfo`, the selected space     |
-| `selectSpace`   | `{ spaceId }`                       | `SpaceInfo`                         |
-| `createSession` | `{ model?: { id, variant? } }`      | `{ sessionID, spaceId }`            |
-| `account`       | `{}`                                | `{ server, environment, user }`     |
-| `login`         | `{ attempt }`                       | `{ url }`                           |
-| `completeLogin` | `{ attempt, url }`                  | `{}`                                |
-| `cancelLogin`   | `{ attempt }`                       | `{}`                                |
-| `logout`        | `{}`                                | `{ server, signedOut }`             |
-| `moveSession`   | `{ sessionID, transcript, model? }` | `{ sessionID, spaceId }`            |
-| `requests`      | `{}`                                | `{ forms: LocalForm[], closed }`    |
-| `listSessions`  | `Filter`                            | `{ sessions, space, page, total }`  |
-| `openSession`   | `{ sessionId, existing?, … }`       | `{ sessionID, outcome, import? }`   |
-| `sessionStatus` | `{ sessionID }`                     | `SessionStatus`                     |
-| `retry`         | `{ sessionID }`                     | `{ outcome }`                       |
+| Method          | Input                               | Output                                       |
+| --------------- | ----------------------------------- | -------------------------------------------- |
+| `listSpaces`    | `{}`                                | `{ spaces: SpaceInfo[], selected }`          |
+| `getSpace`      | `{}`                                | `SpaceInfo`, the selected space              |
+| `selectSpace`   | `{ spaceId }`                       | `SpaceInfo`                                  |
+| `createSession` | `{ model?: { id, variant? } }`      | `{ sessionID, spaceId }`                     |
+| `account`       | `{}`                                | `{ server, environment, user }`              |
+| `login`         | `{ attempt }`                       | `{ url }`                                    |
+| `completeLogin` | `{ attempt, url }`                  | `{}`                                         |
+| `cancelLogin`   | `{ attempt }`                       | `{}`                                         |
+| `logout`        | `{}`                                | `{ server, signedOut }`                      |
+| `moveSession`   | `{ sessionID, transcript, model? }` | `{ sessionID, spaceId }`                     |
+| `requests`      | `{}`                                | `{ forms: LocalForm[], closed }`             |
+| `listSessions`  | `Filter`                            | `{ sessions, space, page, total }`           |
+| `openSession`   | `{ sessionId, existing?, … }`       | `{ sessionID, outcome, import? }`            |
+| `sessionStatus` | `{ sessionID }`                     | `SessionStatus`                              |
+| `retry`         | `{ sessionID }`                     | `{ outcome }`                                |
+| `changes`       | `{ sessionID, path?, mode? }`       | `{ projects, path, mode, branch, files }`    |
+| `listFiles`     | `{ sessionID, path? }`              | `{ path, entries }`                          |
+| `searchFiles`   | `{ sessionID, query }`              | `{ entries }`                                |
+| `readFile`      | `{ sessionID, path }`               | `{ path, size, binary, content, truncated }` |
+| `runShell`      | `{ sessionID, command }`            | `ShellInfo`                                  |
+| `listShells`    | `{ sessionID }`                     | `{ shells }`                                 |
+| `readShell`     | `{ sessionID, shellID, cursor }`    | `{ shell, output, cursor, size, truncated }` |
+| `stopShell`     | `{ sessionID, shellID }`            | `{}`                                         |
 
-`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). `SessionStatus` is `{ sessionID, ren, space, state, detail, retryAt, busy }` (Status and retry), and the event `statusChanged` carries it. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+The panel methods (`changes` to `stopShell`, Panels) take the local `sessionID` and can also fail with `not_ren` (`data: {}`) when the session is not a Ren session. `SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). `SessionStatus` is `{ sessionID, ren, space, state, detail, retryAt, busy }` (Status and retry), and the event `statusChanged` carries it. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
 Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact` and the model picker (Session controls), and stop.
 
-Planned features:
+Planned commands: `/ren:background`, `/ren:open`. Planned features:
 
 - The web app chat's features, where the stock TUI allows them.
 
@@ -275,6 +286,22 @@ A Ren session's brain starts, fails, stops when its space shuts down, and reconn
   - Ren has it, so the turn failed on the brain: sends its text again as a new local message, as the web app's "Try again" does. The message is sent once.
   - A local turn runs, or the last turn did not fail: says so and does nothing. Not a Ren session: says so.
 - **Notifications.** None are added. OpenCode's own notifications already announce the end or failure of every local execution when the terminal is not focused, and a remote turn the mirror shows and a turn that waits for a long start are local executions.
+
+## Panels
+
+A Ren session works on its hand, a remote machine, so the stock `@` file search, `/diff` and `!` shell, which act on this machine, do not show its work (spec, L3). Three commands open a session panel (`ui.panel.open`, the `session.panel` slot) beside a Ren session:
+
+- `/ren:diff` lists the changed files of the session's folder on the hand with their additions and deletions, and shows the selected file's patch with OpenTUI's `<diff>` and syntax colours from the theme. `m` switches the comparison (uncommitted, branch, committed: `vcs.diff`'s `working`, `branch`, `committed`), `p` picks a repository when the folder has several (`vcs.projects`).
+- `/ren:files` lists a folder on the hand, folders first, and reads a file with `<code>` and syntax colours. `/` searches the hand's files (`file.search`), `backspace` goes back.
+- `/ren:shell <command>` runs the command on the hand (`shell.create`) and shows its output as it grows, then its exit status. Without a command it opens the list of the commands that run on the hand, including those the brain or a subagent started in the background. `x` stops one (`shell.remove`), `n` runs another.
+
+Panel keys: `j`/`k` move, `enter` opens, `r` reloads, `f` toggles full screen, `pageup`/`pagedown` scroll. The panel takes the input when it opens; OpenCode's `<leader>left` and `<leader>right` move between the session and the panel.
+
+- **Each call opens the link for itself.** Every panel RPC call resolves the local session's binding, opens the session's link (or shares the one the mirror holds), makes its Chat API calls and lets the link go, so a panel that is open but idle keeps no brain awake. The shell panel reads output every second while the command runs and the panel shows it.
+- **A Ren session only.** A session that is not bound to a Ren session (or a fork's copy) gets `not_ren`; one created with `/ren:new` that has not had its first prompt says that the Ren session starts with it. The changes and files need the session's `files` capability, the shell its `shell` capability; a hand without them, or a brain without an environment, is refused with the brain's reason. The command shows the refusal as a toast and opens no panel.
+- **Bounded.** A file's patch is cut at 64 KiB and a diff at 512 KiB, a read file at 256 KiB (Ren itself returns at most 1 MiB), each output read at 64 KiB; the panel says when it cut. Binary files are not shown. Terminal escapes in the output are removed.
+
+The built-in `!` shell mode, `@` and `/diff` stay local: OpenCode's shell hook (`create.before`) can rewrite a `!` command but gets no session and runs it on this machine, and a VCS provider (`ctx.vcs.transform`) applies to a whole directory, so it would replace git for the local sessions there too.
 
 ## Install
 
@@ -348,13 +375,13 @@ mv /tmp/ren-oc/node_modules/@renai-labs/package /tmp/ren-oc/node_modules/@renai-
 
 Release (manual; no workflow publishes it yet): run the package checks and `REN_SLOW=1 bun run test`, check the newest OpenCode release by hand and widen `Support.opencode` if it works, then `bun run build --version X.Y.Z` and `npm publish dist` (or `bun publish --cwd dist`).
 
-## Commands
+## Development
 
 ```sh
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, agent mentions and a drive file sent to a real brain, /ren:retry of a stopped session on a real brain, and the built package
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, agent mentions and a drive file sent to a real brain, /ren:retry of a stopped session on a real brain, the panels on a real brain with a hand, and the built package
 bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```

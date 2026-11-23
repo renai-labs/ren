@@ -8,6 +8,7 @@ import { Deferred, Effect, FiberHandle, Option, Schema, Scope, Stream, Struct } 
 import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
 import { Mirror } from "./mirror.js"
+import { Hand } from "./hand.js"
 import { RenApi } from "./ren.js"
 import { Requests } from "./requests.js"
 import { RenRpc } from "./rpc.js"
@@ -24,6 +25,11 @@ const answer =
     error instanceof RenAuth.SignedOut
       ? context.error("signed_out", error.message, { server: error.server })
       : context.error("unavailable", error.message, {})
+
+const refuse =
+  (context: { readonly error: Rpc.ErrorFactory<Methods["changes"]> }) =>
+  (error: RenAuth.SignedOut | Hand.NotRen | { readonly message: string }) =>
+    error instanceof Hand.NotRen ? context.error("not_ren", error.message, {}) : answer(context)(error)
 
 const info = (space: Space.Info): RenRpc.SpaceInfo => Struct.pick(space, ["id", "slug", "name", "kind", "description"])
 
@@ -49,6 +55,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
       Effect.catchCause((cause) => Effect.logWarning("Could not announce the Ren sign-in", cause)),
     )
   const attempts = yield* FiberHandle.make<void>()
+  const hand = yield* Hand.make
   const pending: { attempt: string; redirect: RenAuth.Authorization["redirect"] } = {
     attempt: "",
     redirect: () => Effect.void,
@@ -259,6 +266,14 @@ export const register = Effect.fn("RenHandlers.register")(function* (
         Effect.map((outcome) => ({ outcome })),
         Effect.mapError(answer(context)),
       ),
+    changes: (input, context) => hand.changes(input).pipe(Effect.mapError(refuse(context))),
+    listFiles: (input, context) => hand.listFiles(input).pipe(Effect.mapError(refuse(context))),
+    searchFiles: (input, context) => hand.searchFiles(input).pipe(Effect.mapError(refuse(context))),
+    readFile: (input, context) => hand.readFile(input).pipe(Effect.mapError(refuse(context))),
+    runShell: (input, context) => hand.runShell(input).pipe(Effect.mapError(refuse(context))),
+    listShells: (input, context) => hand.listShells(input).pipe(Effect.mapError(refuse(context))),
+    readShell: (input, context) => hand.readShell(input).pipe(Effect.mapError(refuse(context))),
+    stopShell: (input, context) => hand.stopShell(input).pipe(Effect.mapError(refuse(context))),
   })
   yield* Deferred.succeed(emitter, (space) => registration.events.emit("spaceSelected", space))
   yield* Deferred.succeed(announcer, registration.events.emit)

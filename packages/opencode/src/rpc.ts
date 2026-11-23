@@ -120,6 +120,69 @@ export const Retried = Schema.Literals(["restarted", "restarted_resent", "resume
 
 const SessionInput = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String }))
 
+const handErrors = { ...errors, not_ren: Schema.toStandardSchemaV1(Schema.Struct({})) }
+
+const Local = { sessionID: Schema.String }
+
+export const DiffMode = Schema.Literals(["working", "branch", "committed"])
+export type DiffMode = typeof DiffMode.Type
+
+export interface Change extends Schema.Schema.Type<typeof Change> {}
+export const Change = Schema.Struct({
+  file: Schema.String,
+  status: Schema.Literals(["added", "deleted", "modified"]),
+  additions: Schema.Number,
+  deletions: Schema.Number,
+  patch: Schema.String,
+  truncated: Schema.Boolean,
+}).annotate({ identifier: "RenRpc.Change" })
+
+export interface Changes extends Schema.Schema.Type<typeof Changes> {}
+export const Changes = Schema.Struct({
+  projects: Schema.Array(Schema.Struct({ path: Schema.String, branch: Schema.optionalKey(Schema.String) })),
+  path: Schema.String,
+  mode: DiffMode,
+  repository: Schema.Boolean,
+  branch: Schema.Struct({ current: Schema.optionalKey(Schema.String), default: Schema.optionalKey(Schema.String) }),
+  files: Schema.Array(Change),
+}).annotate({ identifier: "RenRpc.Changes" })
+
+export interface Entry extends Schema.Schema.Type<typeof Entry> {}
+export const Entry = Schema.Struct({
+  path: Schema.String,
+  type: Schema.Literals(["file", "directory"]),
+  size: Schema.optionalKey(Schema.Number),
+}).annotate({ identifier: "RenRpc.Entry" })
+
+export interface File extends Schema.Schema.Type<typeof File> {}
+export const File = Schema.Struct({
+  path: Schema.String,
+  size: Schema.Number,
+  binary: Schema.Boolean,
+  content: Schema.String,
+  truncated: Schema.Boolean,
+}).annotate({ identifier: "RenRpc.File" })
+
+export interface ShellInfo extends Schema.Schema.Type<typeof ShellInfo> {}
+export const ShellInfo = Schema.Struct({
+  id: Schema.String,
+  sessionID: Schema.String,
+  command: Schema.String,
+  status: Schema.Literals(["running", "exited", "timeout", "killed"]),
+  exit: Schema.optionalKey(Schema.Number),
+}).annotate({ identifier: "RenRpc.ShellInfo" })
+
+export interface ShellOutput extends Schema.Schema.Type<typeof ShellOutput> {}
+export const ShellOutput = Schema.Struct({
+  shell: ShellInfo,
+  output: Schema.String,
+  cursor: Schema.Number,
+  size: Schema.Number,
+  truncated: Schema.Boolean,
+}).annotate({ identifier: "RenRpc.ShellOutput" })
+
+const Shell = Schema.Struct({ ...Local, shellID: Schema.String })
+
 export const Definition = Rpc.define({
   id: "ren",
   methods: {
@@ -219,6 +282,44 @@ export const Definition = Rpc.define({
       output: Schema.toStandardSchemaV1(Schema.Struct({ outcome: Retried })),
       errors,
     },
+    changes: {
+      input: Schema.toStandardSchemaV1(
+        Schema.Struct({ ...Local, path: Schema.optionalKey(Schema.String), mode: Schema.optionalKey(DiffMode) }),
+      ),
+      output: Schema.toStandardSchemaV1(Changes),
+      errors: handErrors,
+    },
+    listFiles: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ ...Local, path: Schema.optionalKey(Schema.String) })),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ path: Schema.String, entries: Schema.Array(Entry) })),
+      errors: handErrors,
+    },
+    searchFiles: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ ...Local, query: Schema.String })),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ entries: Schema.Array(Entry) })),
+      errors: handErrors,
+    },
+    readFile: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ ...Local, path: Schema.String })),
+      output: Schema.toStandardSchemaV1(File),
+      errors: handErrors,
+    },
+    runShell: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ ...Local, command: Schema.String })),
+      output: Schema.toStandardSchemaV1(ShellInfo),
+      errors: handErrors,
+    },
+    listShells: {
+      input: Schema.toStandardSchemaV1(Schema.Struct(Local)),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ shells: Schema.Array(ShellInfo) })),
+      errors: handErrors,
+    },
+    readShell: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ ...Shell.fields, cursor: Schema.Number })),
+      output: Schema.toStandardSchemaV1(ShellOutput),
+      errors: handErrors,
+    },
+    stopShell: { input: Schema.toStandardSchemaV1(Shell), output: none, errors: handErrors },
   },
   events: {
     spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },

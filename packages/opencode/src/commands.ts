@@ -470,3 +470,46 @@ export const describe = (status: RenRpc.SessionStatus, view: { readonly now: num
   const state = states[status.state] ?? (status.busy && !view.running ? "Working" : undefined)
   return [status.space ? `ren · ${status.space}` : "ren", ...(state ? [state] : [])].join(" · ")
 }
+
+export interface PanelSurface extends Surface {
+  readonly ui: Surface["ui"] & {
+    readonly panel: Pick<Context["ui"]["panel"], "open">
+  }
+}
+
+export const panels = { changes: "ren.changes", files: "ren.files", shells: "ren.shells" } as const
+
+const current = (surface: PanelSurface) => {
+  const route = surface.ui.router.current()
+  if (route.type !== "session")
+    surface.ui.toast.show({ title: "Ren", message: "Open a Ren session first.", variant: "warning" })
+  return route.type === "session" ? route.sessionID : ""
+}
+
+export const files = (surface: PanelSurface, panel: (typeof panels)["changes" | "files"]) => {
+  const sessionID = current(surface)
+  if (!sessionID) return Promise.resolve(false)
+  return surface.client
+    .rpc(RenRpc.Definition)
+    .listFiles({ sessionID }, at(surface))
+    .then(() => surface.ui.panel.open(panel))
+    .catch((error: unknown) => {
+      fail(surface)(error)
+      return false
+    })
+}
+
+export const shell = async (surface: PanelSurface, command: string | undefined): Promise<RenRpc.ShellInfo | void> => {
+  const sessionID = current(surface)
+  if (!sessionID) return
+  const rpc = surface.client.rpc(RenRpc.Definition)
+  const started: Promise<RenRpc.ShellInfo | undefined> = command?.trim()
+    ? rpc.runShell({ sessionID, command: command.trim() }, at(surface))
+    : rpc.listShells({ sessionID }, at(surface)).then(() => undefined)
+  return started
+    .then((shell) => {
+      surface.ui.panel.open(panels.shells)
+      return shell
+    })
+    .catch(fail(surface))
+}

@@ -2,6 +2,7 @@ export * as RenServer from "./ren.js"
 
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
+import { FileSystem } from "@ren/schema/file-system"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
@@ -10,6 +11,8 @@ import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Drive } from "@ren/schema/drive"
+import type { SessionVcs } from "@ren/schema/session/vcs"
+import { Shell } from "@ren/schema/shell"
 import { Factory } from "@ren/schema/factory"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
@@ -77,6 +80,7 @@ export interface Upload {
   readonly path: string
   readonly bytes: Uint8Array
 }
+const Command = Schema.Struct({ command: Schema.String })
 
 export interface Switch {
   readonly sessionID: string
@@ -126,6 +130,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const compacted = yield* Queue.unbounded<SessionMessage.ID>()
   const answered = yield* Queue.unbounded<Answer>()
   const uploaded = yield* Queue.unbounded<Upload>()
+  const accessed = yield* Queue.unbounded<string>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
@@ -177,6 +182,14 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     boot: new Map<string, { readonly status: string; readonly phase?: string; readonly reason?: string }>(),
     accessed: Array.of<string>(),
     retries: Array.of<{ readonly sessionID: string; readonly body: string }>(),
+    hand: {
+      files: true,
+      shell: true,
+      tree: new Map<string, string>(),
+      projects: Array.of<SessionVcs.Project>(),
+      diffs: new Map<string, ReadonlyArray<SessionInfo.FileDiff>>(),
+      shells: new Map<string, { info: Shell.Info; output: string }>(),
+    },
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
@@ -262,7 +275,11 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
         cost: 0,
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         time: { created: DateTime.nowUnsafe(), updated: DateTime.nowUnsafe() },
-        capabilities: Struct.assign(SessionCapabilities.of("opencode"), { compact: state.compactable }),
+        capabilities: Struct.assign(SessionCapabilities.of("opencode"), {
+          compact: state.compactable,
+          files: state.hand.files,
+          shell: state.hand.shell,
+        }),
       }),
     )
   }
@@ -270,6 +287,87 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const record = (answer: Answer) => {
     state.answers.push(answer)
     Queue.offerUnsafe(answered, answer)
+  }
+  const entry = (path: string): FileSystem.Entry =>
+    path.endsWith("/")
+      ? { path, type: "directory" }
+      : { path, type: "file", size: state.hand.tree.get(path)?.length ?? 0 }
+  const notFound = (message: string) => Response.json({ _tag: "NotFoundError", message }, { status: 404 })
+  const files = (url: URL) => {
+    const paths = [...state.hand.tree.keys()]
+    const path = url.searchParams.get("path") ?? ""
+    if (url.pathname.endsWith("/read")) {
+      const text = state.hand.tree.get(path)
+      if (text === undefined) return notFound(`No file ${path}`)
+      const bytes = encoder.encode(text)
+      return Response.json(
+        Schema.encodeSync(FileSystem.Content)(
+          FileSystem.contentOf({ path, mime: "text/plain", size: bytes.length, bytes }),
+        ),
+      )
+    }
+    if (!url.pathname.endsWith("/list")) {
+      const query = url.searchParams.get("query") ?? ""
+      return Response.json(paths.filter((each) => each.includes(query)).map(entry))
+    }
+    const names = new Set(
+      paths
+        .filter((each) => each.startsWith(path))
+        .map((each) => {
+          const rest = each.slice(path.length)
+          const slash = rest.indexOf("/")
+          return path + (slash === -1 ? rest : rest.slice(0, slash + 1))
+        }),
+    )
+    const entries = [...names].toSorted().map(entry)
+    return Response.json({
+      entries: [
+        ...entries.filter((each) => each.type === "directory"),
+        ...entries.filter((each) => each.type === "file"),
+      ],
+      cursor: null,
+      actions: [],
+    })
+  }
+  const vcs = (url: URL) => {
+    const path = url.searchParams.get("path") ?? ""
+    if (url.pathname.endsWith("/projects")) return Response.json(state.hand.projects)
+    const project = state.hand.projects.find((each) => each.path === path)
+    if (url.pathname.endsWith("/diff"))
+      return Response.json(state.hand.diffs.get(`${path}:${url.searchParams.get("mode") ?? "working"}`) ?? [])
+    return Response.json(
+      project ? { provider: "git", branch: { current: project.branch, default: "main" } } : { branch: {} },
+    )
+  }
+  const shells = async (sessionID: string, request: Request) => {
+    const url = new URL(request.url)
+    const id = url.pathname.split("/")[5]
+    const found = id ? state.hand.shells.get(id) : undefined
+    if (request.method === "POST") {
+      const info: Shell.Info = {
+        id: Shell.ID.make(`sh_${crypto.randomUUID()}`),
+        sessionID: Session.ID.make(sessionID),
+        status: "running",
+        command: Schema.decodeUnknownSync(Command)(await request.json()).command,
+        time: { started: Date.now() },
+      }
+      state.hand.shells.set(info.id, { info, output: "" })
+      return Response.json(info)
+    }
+    if (!id)
+      return Response.json(
+        [...state.hand.shells.values()].filter((each) => each.info.status === "running").map((each) => each.info),
+      )
+    if (!found) return notFound(`No shell ${id}`)
+    if (request.method === "DELETE") {
+      found.info = Struct.assign(found.info, { status: "killed" as const })
+      state.hand.shells.delete(id)
+      return new Response(null, { status: 204 })
+    }
+    if (!url.pathname.endsWith("/output")) return Response.json(found.info)
+    const cursor = Number(url.searchParams.get("cursor") ?? 0)
+    const output = found.output.slice(cursor, cursor + Number(url.searchParams.get("limit") ?? found.output.length))
+    return Response.json({ output, cursor: cursor + output.length, size: found.output.length, truncated: false })
   }
   const routes: Record<string, ((sessionID: string, request: Request) => Promise<Response>) | undefined> = {
     session,
@@ -341,6 +439,9 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     },
     agent: () => Promise.resolve(Response.json(state.agents)),
     skill: () => Promise.resolve(Response.json(state.skills)),
+    file: (_sessionID, request) => Promise.resolve(files(new URL(request.url))),
+    vcs: (_sessionID, request) => Promise.resolve(vcs(new URL(request.url))),
+    shell: shells,
     compact: async (sessionID, request) => {
       const id = Schema.decodeUnknownSync(Compacted)(await request.json()).id
       Queue.offerUnsafe(compacted, id)
@@ -358,7 +459,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     },
   }
   const chat = async (path: string, request: Request) => {
-    const parts = path.split("/")
+    const parts = String(path.split("?")[0]).split("/")
     const sessionID = String(parts[3])
     if (path === "/chat/event") return subscribe(request)
     if (state.refusing) {
@@ -502,6 +603,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   > = {
     chat: (sessionID, url) => {
       state.accessed.push(sessionID)
+      Queue.offerUnsafe(accessed, sessionID)
       return Promise.resolve(
         Response.json(
           state.boot.get(sessionID) ?? {
@@ -654,7 +756,23 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     compacted,
     answered,
     uploaded,
+    accessed,
     send,
+    shell: {
+      write: (id: string, text: string) => {
+        const found = state.hand.shells.get(id)
+        if (found) found.output += text
+      },
+      exit: (id: string, exit: number) => {
+        const found = state.hand.shells.get(id)
+        if (found)
+          found.info = Struct.assign(found.info, {
+            status: "exited" as const,
+            exit,
+            time: Struct.assign(found.info.time, { completed: Date.now() }),
+          })
+      },
+    },
     drop: () => {
       for (const controller of streams) controller.close()
       streams.clear()
