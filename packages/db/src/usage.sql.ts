@@ -2,6 +2,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Space } from "@ren/schema/space"
 import type { Usage } from "@ren/schema/usage"
+import { sql } from "drizzle-orm"
 import { bigint, bigserial, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 
 export const usage_event = pgTable(
@@ -35,6 +36,9 @@ export const usage_event = pgTable(
     index("usage_event_source_time_idx").on(table.source, table.time),
     index("usage_event_workload_time_idx").on(table.workload, table.time),
     index("usage_event_root_session_idx").on(table.root_session),
+    index("usage_event_root_session_seat_idx")
+      .on(table.root_session, table.time)
+      .where(sql`${table.data} ->> 'seat' is not null`),
     uniqueIndex("usage_event_position_idx").on(table.position),
   ],
 )

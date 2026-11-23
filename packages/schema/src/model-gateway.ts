@@ -68,3 +68,31 @@ export const Changed = Schema.Struct({
   identifier: "ModelGateway.Changed",
   description: "A provider’s models changed: for one organization, or for every organization without `organizationId`.",
 })
+
+export interface Window extends Schema.Schema.Type<typeof Window> {}
+export const Window = Schema.Struct({
+  key: Schema.NonEmptyString.annotate({ description: "The vendor’s window, such as `5h` or `7d`." }),
+  title: Schema.String.annotate({ description: "The gateway’s name of the window, such as “Weekly · Opus”." }),
+  percent: Schema.NullOr(Schema.Number).annotate({ description: "How much of the window is used, 0 to 100." }),
+  resetsAt: Schema.NullOr(Schema.DateTimeUtc),
+}).annotate({ identifier: "ModelGateway.Window", description: "One usage window of a seat." })
+
+export const Limit = Schema.Union([
+  Schema.TaggedStruct("free", {
+    used: Schema.Int,
+    limit: Schema.Int,
+    resetsAt: Schema.DateTimeUtc,
+  }).annotate({ description: "The organization’s free-model requests of today." }),
+  Schema.TaggedStruct("seat", {
+    id: Schema.NonEmptyString,
+    label: Schema.String,
+    plan: Schema.optionalKey(Schema.String),
+    connectedBy: Schema.optionalKey(Schema.String).annotate({ description: "The Ren user who connected the seat." }),
+    windows: Schema.Array(Window),
+  }).annotate({ description: "A seat and its usage windows." }),
+]).annotate({
+  identifier: "ModelGateway.Limit",
+  description:
+    "A cap the gateway or a vendor enforces, with a reset: the free cap or a seat’s windows. Not the credit.",
+})
+export type Limit = typeof Limit.Type

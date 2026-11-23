@@ -395,6 +395,27 @@ export type ModelGatewayField = {
 
 export type ProviderTestResult = { ok: boolean; message?: string }
 
+export type LimitsSeat = {
+  _tag: "seat"
+  key: string
+  percent: number
+  resetsAt: string | null
+  seat: string
+  providerName: string
+  window: string
+  title: string
+}
+
+export type LimitsFree = { _tag: "free"; key: string; percent: number; resetsAt: string; used: number; limit: number }
+
+export type LimitsCredit = {
+  _tag: "credit"
+  key: string
+  percent: number
+  resetsAt: string | null
+  availableMicroUsd: number
+}
+
 export type BillingSummary = {
   plan: string
   planStatus: string | null
@@ -1115,6 +1136,8 @@ export type ProviderModel = {
   enabled: boolean
 }
 
+export type LimitsLimit = LimitsSeat | LimitsFree
+
 export type BillingInvoice = {
   id: string
   number: string
@@ -1520,6 +1543,8 @@ export type RenInferenceHarnessPlan = {
 }
 
 export type ProviderModelList = { canManage: boolean; models: Array<ProviderModel> }
+
+export type LimitsInfo = { limits: Array<LimitsLimit>; credit: LimitsCredit | null }
 
 export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
@@ -9576,6 +9601,10 @@ export type ProviderModelsUpdateInput = {
 }
 
 export type ProviderModelsUpdateOutput = ProviderModelList
+
+export type LimitsGetInput = { readonly id: { readonly id: string }["id"] }
+
+export type LimitsGetOutput = LimitsInfo
 
 export type BillingGetOutput = BillingSummary
 

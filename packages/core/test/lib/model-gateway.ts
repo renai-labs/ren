@@ -34,6 +34,7 @@ export const make = Effect.fnUntraced(function* (options: {
   const enabled = yield* Ref.make(new Map<string, ReadonlyArray<Auth.OrganizationID>>())
   const settings = yield* Ref.make(new Map<string, Readonly<Record<string, ModelGateway.ProviderSettings>>>())
   const keys = yield* Ref.make(new Map<string, string>())
+  const limits = yield* Ref.make(new Map<string, ReadonlyArray<ModelGateway.Limit>>())
   const keyAt = (providerId: string, organizationId: string) => `${providerId}\u0000${organizationId}`
   const change = (
     providerId: string,
@@ -115,6 +116,15 @@ export const make = Effect.fnUntraced(function* (options: {
           off: current.off,
         }))
       }),
+    // oxlint-disable-next-line ren/no-comments -- As the gateway answers: the free cap only for a free model, a seat's windows only for the seat asked for.
+    limits: (providerId, organizationId, query) =>
+      Effect.gen(function* () {
+        const listed = yield* gateway.models(providerId, organizationId)
+        const free = listed.models.some((model) => (model.gateway ?? model.id) === query.model && model.free)
+        return ((yield* Ref.get(limits)).get(providerId) ?? []).filter((limit) =>
+          limit._tag === "free" ? free : limit.id === query.seat,
+        )
+      }),
   }
 
   return {
@@ -130,6 +140,8 @@ export const make = Effect.fnUntraced(function* (options: {
       }),
     setOrganizations: (providerId: string, organizationIds: ReadonlyArray<Auth.OrganizationID>) =>
       Ref.update(enabled, (all) => new Map(all).set(providerId, organizationIds)),
+    setLimits: (providerId: string, found: ReadonlyArray<ModelGateway.Limit>) =>
+      Ref.update(limits, (all) => new Map(all).set(providerId, found)),
   }
 })
 

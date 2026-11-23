@@ -118,6 +118,11 @@ export interface Interface {
     organizationId?: Auth.OrganizationID,
   ) => Effect.Effect<ModelGateway.Listed, Failure>
   readonly organizations: (provider: string) => Effect.Effect<ReadonlyArray<Auth.OrganizationID>, Failure>
+  readonly limits: (
+    organizationId: Auth.OrganizationID,
+    provider: string,
+    query: { readonly model: string; readonly seat?: string },
+  ) => Effect.Effect<ReadonlyArray<ModelGateway.Limit>, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
@@ -530,6 +535,16 @@ export const layer = Layer.effect(
           Schema.Array(Auth.OrganizationID),
         )
       }),
+      // oxlint-disable-next-line ren/no-comments -- Providers §9.3, §10: the free cap of a free model, and the windows of the seat when it is the provider's.
+      limits: Effect.fn("RenInference.limits")(function* (organizationId, provider, query) {
+        const search = new URLSearchParams({ model: query.model, ...(query.seat && { seat: query.seat }) })
+        return yield* call(
+          { org: organizationId },
+          "GET",
+          `${providerPath(provider)}/limits?${search.toString()}`,
+          Schema.Array(ModelGateway.Limit),
+        )
+      }),
     })
   }),
 )
@@ -559,6 +574,7 @@ export const layerNone = Layer.succeed(
     removeKey: () => Effect.fail(notConfigured()),
     models: () => Effect.fail(notConfigured()),
     organizations: () => Effect.fail(notConfigured()),
+    limits: () => Effect.fail(notConfigured()),
   }),
 )
 

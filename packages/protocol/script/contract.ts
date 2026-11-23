@@ -19,6 +19,10 @@ const exceptions = new Map([
     "provider",
     "The organization's providers: their settings and model switches live in the provider's gateway, and a key passes through Ren to the gateway without a record. No primitive operation is a key test or a key that Ren never stores.",
   ],
+  [
+    "limits",
+    "Reads the limits and the credit of a chat’s model from its model gateway and billing: no record, and no primitive operation reads a part of another service.",
+  ],
   ["health", "Server status for clients and load balancers."],
   ["feedback", "Sends a person’s or an agent’s feedback to the Ren team, and stores no record."],
   ["me", "The signed-in user and their active organization."],

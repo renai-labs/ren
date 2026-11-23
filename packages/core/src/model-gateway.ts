@@ -2,12 +2,12 @@ export * as ModelGateway from "./model-gateway.js"
 
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import { Changed, Field, Listed, Provider } from "@ren/schema/model-gateway"
+import { Changed, Field, Limit, Listed, Provider, Window } from "@ren/schema/model-gateway"
 import type { Models } from "@ren/schema/models"
 import type { Space } from "@ren/schema/space"
 import { Context, type DateTime, Effect, Layer, Option, type Redacted, Schema, type Stream } from "effect"
 
-export { Changed, Field, Listed, Provider }
+export { Changed, Field, Limit, Listed, Provider, Window }
 
 // oxlint-disable-next-line ren/no-comments -- The vendor refused a key, or the fields are not the provider's: the person can fix it.
 export class Rejected extends Schema.TaggedError<Rejected>()("ModelGateway.Rejected", { message: Schema.String }) {}
@@ -89,6 +89,12 @@ export interface Gateway {
     savedBy: typeof Auth.MemberID.Type,
   ) => Effect.Effect<Saved, Unavailable | Rejected>
   readonly disconnect: (provider: string, organizationId: Auth.OrganizationID) => Effect.Effect<void, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- Providers §9.3: the limits of a model: the free cap of a free model, and the windows of `seat` when it is one of the provider's seats in the organization. Not the credit, which is billing's.
+  readonly limits: (
+    provider: string,
+    organizationId: Auth.OrganizationID,
+    query: { readonly model: string; readonly seat?: string },
+  ) => Effect.Effect<ReadonlyArray<Limit>, Unavailable>
 }
 
 export interface Owned {

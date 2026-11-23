@@ -61,5 +61,7 @@ export const gateway = Effect.gen(function* () {
       inference.saveKey(organizationId, provider, fields, savedBy).pipe(Effect.mapError(rejectedOr)),
     disconnect: (provider, organizationId) =>
       inference.removeKey(organizationId, provider).pipe(Effect.mapError(unavailable)),
+    limits: (provider, organizationId, query) =>
+      inference.limits(organizationId, provider, query).pipe(Effect.mapError(unavailable)),
   } satisfies ModelGateway.Gateway
 })

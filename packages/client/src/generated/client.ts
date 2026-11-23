@@ -324,6 +324,8 @@ import type {
   ProviderModelsListOutput,
   ProviderModelsUpdateInput,
   ProviderModelsUpdateOutput,
+  LimitsGetInput,
+  LimitsGetOutput,
   BillingGetOutput,
   BillingPlanListOutput,
   BillingInvoiceListInput,
@@ -2729,6 +2731,19 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    limits: {
+      get: (input: LimitsGetInput, requestOptions?: RequestOptions) =>
+        request<LimitsGetOutput>(
+          {
+            method: "GET",
+            path: `/sessions/${encodeURIComponent(input.id)}/limits`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
     billing: {
       get: (requestOptions?: RequestOptions) =>

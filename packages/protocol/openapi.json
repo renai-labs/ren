@@ -13869,6 +13869,74 @@
         }
       }
     },
+    "/sessions/{id}/limits": {
+      "get": {
+        "tags": ["limits"],
+        "operationId": "limits.get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the chat’s current model uses up: the limits of its model gateway and the Ren credit. Empty when a source does not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Limits.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return what the chat’s current model uses up: the limits its model gateway reports (the free cap of a free model; the windows of the seat that served the chat’s last seat call) and, for a model Ren pays for, the organization’s Ren credit. Ren reads the gateway and billing on each call. A member of the chat’s space reads it.",
+        "summary": "Read the limits of a chat’s model"
+      }
+    },
     "/billing": {
       "get": {
         "tags": ["billing"],
@@ -21875,6 +21943,164 @@
       },
       "Label.UserNameEncoded": {
         "type": "string"
+      },
+      "Limits.Credit": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["credit"]
+          },
+          "key": {
+            "type": "string",
+            "description": "Which limit. A banner step shows once per chat, key and `resetsAt`."
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How much is used, in whole percent. Above 100 when it went over."
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The next billing date."
+          },
+          "availableMicroUsd": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The credit left, in millionths of a US dollar."
+          }
+        },
+        "required": ["_tag", "key", "percent", "resetsAt", "availableMicroUsd"],
+        "additionalProperties": false,
+        "description": "The organization’s Ren credit in billing: used ÷ granted. Not a limit."
+      },
+      "Limits.Free": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["free"]
+          },
+          "key": {
+            "type": "string",
+            "description": "Which limit. A banner step shows once per chat, key and `resetsAt`."
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How much is used, in whole percent. Above 100 when it went over."
+          },
+          "resetsAt": {
+            "type": "string"
+          },
+          "used": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["_tag", "key", "percent", "resetsAt", "used", "limit"],
+        "additionalProperties": false,
+        "description": "Today’s free-model requests of the organization."
+      },
+      "Limits.Info": {
+        "type": "object",
+        "properties": {
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Limits.Limit"
+            }
+          },
+          "credit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Limits.Credit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for a model that Ren pays for and that is not free, and only when credit was granted."
+          }
+        },
+        "required": ["limits", "credit"],
+        "additionalProperties": false,
+        "description": "What the chat’s current model uses up: the limits of its model gateway and the Ren credit. Empty when a source does not answer."
+      },
+      "Limits.Limit": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Limits.Seat"
+          },
+          {
+            "$ref": "#/components/schemas/Limits.Free"
+          }
+        ],
+        "description": "A cap the model gateway or a vendor enforces, with a reset: a seat’s window or the free cap."
+      },
+      "Limits.Seat": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["seat"]
+          },
+          "key": {
+            "type": "string",
+            "description": "Which limit. A banner step shows once per chat, key and `resetsAt`."
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "How much is used, in whole percent. Above 100 when it went over."
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seat": {
+            "type": "string",
+            "description": "Who connected the seat and its plan, such as “Asha’s Max”."
+          },
+          "providerName": {
+            "type": "string",
+            "description": "The provider of the seat, such as Anthropic."
+          },
+          "window": {
+            "type": "string",
+            "description": "The vendor’s window, such as `5h` or `7d`."
+          },
+          "title": {
+            "type": "string",
+            "description": "The gateway’s name of the window."
+          }
+        },
+        "required": ["_tag", "key", "percent", "resetsAt", "seat", "providerName", "window", "title"],
+        "additionalProperties": false,
+        "description": "One window of the seat that served the chat’s last seat call."
       },
       "Mcp.Auth": {
         "anyOf": [
@@ -31247,6 +31473,9 @@
     },
     {
       "name": "provider"
+    },
+    {
+      "name": "limits"
     },
     {
       "name": "billing"
