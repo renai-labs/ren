@@ -1,12 +1,13 @@
 export * as RenHandlers from "./handlers.js"
 
-import type { Plugin, Rpc } from "@opencode/plugin/effect"
+import { Model, type Plugin, Provider, type Rpc } from "@opencode/plugin/effect"
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import type { Space } from "@ren/schema/space"
-import { Deferred, Effect, FiberHandle, Schema, Scope, Struct } from "effect"
+import { Deferred, Effect, FiberHandle, Option, Schema, Scope, Struct } from "effect"
 import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
+import { Mirror } from "./mirror.js"
 import { RenApi } from "./ren.js"
 import { RenRpc } from "./rpc.js"
 
@@ -29,6 +30,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
 ) {
   const ren = yield* RenApi.Service
   const bindings = yield* Binding.Service
+  const mirror = yield* Mirror.Service
   const scope = yield* Scope.Scope
   const emitter = yield* Deferred.make<(space: RenRpc.SpaceInfo) => Effect.Effect<void, unknown>>()
   const auth = yield* RenAuth.Login
@@ -55,6 +57,27 @@ export const register = Effect.fn("RenHandlers.register")(function* (
       Effect.ignore,
       Effect.forkIn(scope),
     )
+  const choose = Effect.fnUntraced(function* (
+    spaceId: Space.ID,
+    wanted: { readonly id: string; readonly variant?: string } | undefined,
+  ) {
+    const client = yield* ren.client
+    const choices = yield* client.chat
+      .models({ id: Session.ID.create(), spaceId })
+      .pipe(Effect.mapError(() => new Unavailable({ message: "Could not list the models of the Ren space." })))
+    const found = choices.models.find((choice) => SessionModel.key(choice) === wanted?.id)
+    const variant = wanted?.variant
+    const first = choices.models.at(0)
+    const model: SessionModel.Ref | undefined = found
+      ? {
+          providerID: found.providerID,
+          id: found.id,
+          ...(variant && found.variants.some((each) => each.id === variant) && { variant }),
+        }
+      : (choices.default ?? (first && { providerID: first.providerID, id: first.id }))
+    if (!model) return yield* new Unavailable({ message: "The Ren space offers no models." })
+    return model
+  })
   const registration = yield* ctx.rpc.register(RenRpc.Definition, {
     listSpaces: (_input, context) =>
       Effect.gen(function* () {
@@ -82,21 +105,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
     createSession: (input, context) =>
       Effect.gen(function* () {
         const spaceId = yield* bindings.space
-        const client = yield* ren.client
-        const choices = yield* client.chat
-          .models({ id: Session.ID.create(), spaceId })
-          .pipe(Effect.mapError(() => new Unavailable({ message: "Could not list the models of the Ren space." })))
-        const wanted = choices.models.find((choice) => SessionModel.key(choice) === input.model?.id)
-        const variant = input.model?.variant
-        const first = choices.models.at(0)
-        const model = wanted
-          ? {
-              providerID: wanted.providerID,
-              id: wanted.id,
-              ...(variant && wanted.variants.some((each) => each.id === variant) && { variant }),
-            }
-          : (choices.default ?? (first && { providerID: first.providerID, id: first.id }))
-        if (!model) return yield* new Unavailable({ message: "The Ren space offers no models." })
+        const model = yield* choose(spaceId, input.model)
         yield* prepare(spaceId)
         return { sessionID: yield* bindings.create(spaceId, model), spaceId }
       }).pipe(Effect.mapError(answer(context))),
@@ -165,6 +174,63 @@ export const register = Effect.fn("RenHandlers.register")(function* (
           yield* announce("signedOut", { server: ren.server.origin })
         }
         return { server: ren.server.origin, signedOut }
+      }).pipe(Effect.mapError(answer(context))),
+    moveSession: (input, context) =>
+      Effect.gen(function* () {
+        const sessionID = yield* Schema.decodeUnknownEffect(Session.ID)(input.sessionID).pipe(
+          Effect.mapError(
+            () => new Unavailable({ message: `OpenCode session ${input.sessionID} has no ID Ren accepts.` }),
+          ),
+        )
+        const bound = Option.getOrUndefined(yield* bindings.get(sessionID))
+        if (bound && bound.sessionId !== sessionID)
+          return yield* new Unavailable({
+            message: bound.sessionId
+              ? "This session is a copy of a Ren session. It cannot move to Ren."
+              : "This session is already a Ren session. Send a message to start it in Ren.",
+          })
+        const spaceId = bound?.spaceId ?? (yield* bindings.space)
+        const model = yield* choose(spaceId, input.model)
+        if (!bound) {
+          const bytes = new TextEncoder().encode(JSON.stringify(input.transcript)).length
+          if (bytes > Session.maxImportBytes)
+            return yield* new Unavailable({
+              message: `This session is ${Math.ceil(bytes / 1024 / 1024)} MiB. Ren moves a session of at most ${Session.maxImportBytes / 1024 / 1024} MiB.`,
+            })
+          const client = yield* ren.client
+          yield* client.session
+            .import({ id: sessionID, spaceId, harness: "opencode", model, transcript: input.transcript })
+            .pipe(
+              Effect.mapError(
+                (error) =>
+                  new Unavailable({
+                    message:
+                      error._tag === "ClientError"
+                        ? `Ren did not take the session: ${error.message}`
+                        : `Ren did not move the session: ${error.message}`,
+                  }),
+              ),
+            )
+          yield* bindings.set(sessionID, { spaceId, sessionId: sessionID })
+        }
+        yield* ctx.session
+          .switchModel({
+            sessionID: Binding.LocalID.make(sessionID),
+            model: {
+              providerID: Provider.ID.make("ren"),
+              id: Model.ID.make(SessionModel.key(model)),
+              ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
+            },
+          })
+          .pipe(
+            Effect.mapError(
+              () =>
+                new Unavailable({ message: "The session is in Ren, but OpenCode did not switch it to a Ren model." }),
+            ),
+          )
+        yield* mirror.watch(sessionID)
+        yield* prepare(spaceId)
+        return { sessionID, spaceId }
       }).pipe(Effect.mapError(answer(context))),
   })
   yield* Deferred.succeed(emitter, (space) => registration.events.emit("spaceSelected", space))

@@ -4,6 +4,7 @@ import {
   IconClock,
   IconMessageCircle,
   IconSubtask,
+  IconTerminal2,
   IconTicket,
   IconWebhook,
 } from "@tabler/icons-react"
@@ -19,6 +20,7 @@ const originIcons = {
   linear: IconTicket,
   github: IconBrandGithubFilled,
   webhook: IconWebhook,
+  opencode: IconTerminal2,
 } as const
 
 export const origins = ChatFilters.origins.map((origin) => ({

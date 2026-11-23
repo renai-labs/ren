@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
+import { Session } from "@ren/schema/session"
 import { Sync } from "@ren/schema/sync"
 import { Seed, SyncFixture, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
@@ -85,5 +86,25 @@ describe("body limit", () => {
         )
         expect(statuses).toEqual([413, 413, 204, 413, 411])
       }),
+  )
+
+  it.live("a session import takes a body over 1 MiB up to maxImportBytes, and no other session route does", () =>
+    Effect.gen(function* () {
+      const http = yield* HttpClient.HttpClient
+      const id = Session.ID.create()
+      const statuses = yield* Effect.forEach(
+        [
+          json(`/sessions/${id}/import`, {}, { transcript: "x".repeat(2 * 1024 * 1024) }),
+          json(`/sessions/${id}/import`, {}, { transcript: "x".repeat(Session.maxImportBytes) }),
+          json(`/sessions/${id}/chat`, {}, { transcript: "x".repeat(2 * 1024 * 1024) }),
+        ],
+        (request) =>
+          http.execute(request).pipe(
+            Effect.tap((response) => response.text),
+            Effect.map((response) => response.status),
+          ),
+      )
+      expect(statuses).toEqual([401, 413, 413])
+    }),
   )
 })

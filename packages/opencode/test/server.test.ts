@@ -60,18 +60,22 @@ test("signed out, the plugin's RPC answers signed_out and the Ren commands tell 
       client: opened.host.promise,
       location: () => opened.host.location,
       ui: {
-        dialog: { select: () => Promise.reject(new Error("No dialog opens while signed out.")) },
+        dialog: {
+          select: () => Promise.reject(new Error("No dialog opens while signed out.")),
+          confirm: () => Promise.reject(new Error("No dialog opens while signed out.")),
+        },
         toast: { show: (toast) => toasts.push(toast) },
-        router: { navigate: () => undefined },
+        router: { navigate: () => undefined, current: () => ({ type: "session", sessionID: "ses_local" }) },
         model: { current: () => undefined },
       },
     }
     yield* Effect.promise(() => RenCommands.space(surface))
     yield* Effect.promise(() => RenCommands.create(surface))
+    yield* Effect.promise(() => RenCommands.move(surface))
     const told: ToastOptions = {
       title: "Sign in to Ren",
       message: `Not signed in to ${origin}. Run /ren:login.`,
       variant: "warning",
     }
-    expect(toasts).toEqual([told, told])
+    expect(toasts).toEqual([told, told, told])
   }).pipe(Effect.scoped, Effect.runPromise))

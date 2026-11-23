@@ -12,6 +12,7 @@ import { Space } from "../src/space.js"
 import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
+import { OpenCodeExport } from "./lib/opencode-export.js"
 import { SavedHistory } from "./lib/saved-history.js"
 import { Seed } from "./lib/seed.js"
 
@@ -207,5 +208,88 @@ describe("Session", () => {
       )
       expect((yield* sessions.messages(chat.actor, chat.id, { limit: 1 })).items).toHaveLength(1)
     }),
+  )
+
+  it.live(
+    "a member imports an OpenCode session into a space: the chat keeps its ID and title, starts from OpenCode and has its history; importing again is safe for its creator, and the ID is a conflict in another space or as a new chat",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const spaces = yield* Space.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* Configured.member(organizationId)
+        const grace = yield* Configured.member(organizationId)
+        const team = yield* spaces.create(ada, { name: "Team" })
+        const exported = yield* OpenCodeExport.make("Fix the login loop", ["Look at auth.ts.", "It loops on refresh."])
+        const input = {
+          spaceId: team.id,
+          harness: "opencode" as const,
+          model: { providerID: "stub", id: "stub-other" },
+          transcript: exported.transcript,
+        }
+        expect((yield* Effect.flip(sessions.import(grace, exported.id, input)))._tag).toBe("Primitive.NotFound")
+        const imported = yield* sessions.import(ada, exported.id, input)
+        expect(imported).toMatchObject({
+          id: exported.id,
+          spaceId: team.id,
+          createdBy: ada.userId,
+          origin: "opencode",
+          title: "Fix the login loop",
+        })
+        const history = yield* sessions.messages(ada, exported.id, {})
+        expect(
+          history.items.flatMap((message) =>
+            message.type === "user" || message.type === "assistant" ? [message.type] : [],
+          ),
+        ).toEqual(["assistant", "user", "assistant", "user"])
+        expect(
+          history.items.flatMap((message) =>
+            message.type === "assistant"
+              ? message.content.flatMap((part) => (part.type === "text" ? [part.text] : []))
+              : [],
+          ),
+        ).toEqual(["It loops on refresh.", "Look at auth.ts."])
+        expect(
+          (yield* sessions.list(ada, { ...Configured.page, origin: ["opencode"] })).items.map((item) => item.id),
+        ).toEqual([exported.id])
+        expect(yield* sessions.import(ada, exported.id, input)).toMatchObject({ id: exported.id, origin: "opencode" })
+        expect((yield* sessions.messages(ada, exported.id, {})).items).toEqual(history.items)
+        const other = (yield* spaces.list(ada, Configured.page)).items.find((space) => space.id !== team.id)
+        if (!other) return yield* Effect.die(new Error("Ada has one space"))
+        const conflicts = yield* Effect.all([
+          Effect.flip(sessions.create(ada, { id: exported.id, spaceId: team.id })),
+          Effect.flip(sessions.import(ada, exported.id, { ...input, spaceId: other.id })),
+        ])
+        expect(conflicts.map((error) => error._tag)).toEqual(["Primitive.Conflict", "Primitive.Conflict"])
+      }),
+  )
+
+  it.live(
+    "an import is refused when its transcript is of another session or is not an OpenCode export, or its model is not offered",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* Configured.member(organizationId)
+        const spaces = yield* Space.Service
+        const spaceId = (yield* spaces.list(ada, Configured.page)).items.at(0)?.id
+        if (!spaceId) return yield* Effect.die(new Error("Ada has no space"))
+        const exported = yield* OpenCodeExport.make("A session", ["Done."])
+        const refused = (id: Session.ID, input: Partial<Parameters<Session.Interface["import"]>[2]>) =>
+          sessions
+            .import(ada, id, { spaceId, harness: "opencode", transcript: exported.transcript, ...input })
+            .pipe(Effect.flip)
+        const errors = yield* Effect.all([
+          refused(Session.ID.create(), {}),
+          refused(exported.id, { transcript: { info: { id: exported.id }, messages: [] } }),
+          refused(exported.id, { model: { providerID: "stub", id: "gone" } }),
+        ])
+        expect(errors.map((error) => [error._tag, "field" in error ? error.field : undefined])).toEqual([
+          ["Primitive.Invalid", "transcript"],
+          ["Primitive.Invalid", "transcript"],
+          ["Primitive.NotFound", undefined],
+        ])
+        expect((yield* Effect.flip(sessions.get(ada, exported.id)))._tag).toBe("Primitive.NotFound")
+      }),
   )
 })

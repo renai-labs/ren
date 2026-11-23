@@ -69,6 +69,17 @@ export const Definition = Rpc.define({
       output: Schema.toStandardSchemaV1(Schema.Struct({ server: Schema.String, signedOut: Schema.Boolean })),
       errors,
     },
+    moveSession: {
+      input: Schema.toStandardSchemaV1(
+        Schema.Struct({
+          sessionID: Schema.String,
+          transcript: Schema.Json,
+          model: Schema.optionalKey(Schema.Struct({ id: Schema.String, variant: Schema.optionalKey(Schema.String) })),
+        }),
+      ),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String, spaceId: Space.ID })),
+      errors,
+    },
   },
   events: {
     spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },

@@ -12,7 +12,7 @@ import { Factory } from "@ren/schema/factory"
 import { Pagination } from "@ren/schema/pagination"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
-import { DateTime, Effect, Queue, Schema, Struct } from "effect"
+import { DateTime, Effect, Option, Queue, Schema, Struct } from "effect"
 
 export interface Prompt {
   readonly sessionID: string
@@ -24,9 +24,17 @@ export interface Prompt {
 export interface Options {
   readonly chat?: (path: string, request: Request) => Promise<Response>
   readonly created?: (sessionId: Session.ID) => Promise<void>
+  readonly imported?: (sessionId: Session.ID, transcript: unknown) => Promise<void>
 }
 
 const Created = Schema.Struct({ id: Session.ID, spaceId: Space.ID, model: Schema.optional(SessionModel.Ref) })
+const Imported = Schema.Struct({
+  spaceId: Space.ID,
+  harness: Schema.String,
+  model: Schema.optional(SessionModel.Ref),
+  transcript: Schema.Json,
+})
+const Exported = Schema.Struct({ info: Schema.Struct({ title: Schema.String }) })
 const Prompted = Schema.Struct({ id: Schema.String, text: Schema.String, delivery: Schema.String })
 const Renamed = Schema.Struct({ title: Schema.String })
 const Switched = Schema.Struct({ model: SessionModel.Ref })
@@ -95,6 +103,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     messages: new Map<string, SessionMessage.User>(),
     models: new Map<string, SessionModel.Choices>(),
     created: Array.of<typeof Created.Type>(),
+    imported: Array.of<typeof Imported.Type & { readonly id: Session.ID }>(),
+    refuseImport: (): Response | undefined => undefined,
     prompts: Array.of<Prompt>(),
     delivered: new Set<string>(),
     busy: new Set<string>(),
@@ -116,13 +126,13 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
   }
-  const info = (id: Session.ID, spaceId: Space.ID) =>
+  const info = (id: Session.ID, spaceId: Space.ID, origin: Session.Origin = "chat") =>
     Schema.encodeSync(Session.Info)({
       id,
       spaceId,
       createdBy: Auth.UserID.make("usr_test"),
       agentId: null,
-      origin: "chat",
+      origin,
       harness: "opencode",
       title: state.titles.get(id) ?? null,
       status: "idle",
@@ -184,7 +194,9 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       return new Response(null, { status: 204 })
     }
     const title = state.titles.get(sessionID)
-    const model = state.remoteModels.get(sessionID) ?? state.created.find((each) => each.id === sessionID)?.model
+    const model =
+      state.remoteModels.get(sessionID) ??
+      [...state.created, ...state.imported].find((each) => each.id === sessionID)?.model
     return Response.json(
       Schema.encodeSync(SessionInfo.Info)({
         id: Session.ID.make(sessionID),
@@ -303,6 +315,18 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       }),
     )
   }
+  const importing = async (id: Session.ID, request: Request) => {
+    const refused = state.refuseImport()
+    if (refused) return refused
+    const input = Schema.decodeUnknownSync(Imported)(await request.json())
+    state.imported.push({ id, ...input })
+    const title = Schema.decodeUnknownOption(Exported)(input.transcript).pipe(
+      Option.map((exported) => exported.info.title),
+    )
+    if (Option.isSome(title)) state.titles.set(id, title.value)
+    await options.imported?.(id, input.transcript)
+    return Response.json(info(id, input.spaceId, "opencode"))
+  }
   const api = async (url: URL, request: Request) => {
     const parts = url.pathname.split("/")
     if (url.pathname === "/sessions") {
@@ -381,6 +405,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
           }
           if (url.pathname.startsWith("/chat/")) return (options.chat ?? chat)(`${url.pathname}${url.search}`, request)
           if (url.pathname.startsWith("/.well-known/") || url.pathname.startsWith("/auth/")) return oauth(url, request)
+          const imported = url.pathname.match(/^\/sessions\/([^/]+)\/import$/u)?.[1]
+          if (imported) return importing(Session.ID.make(imported), request)
           return url.pathname === "/me" || url.pathname === "/space-members" ? people(url) : api(url, request)
         },
       }),

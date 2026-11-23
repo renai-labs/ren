@@ -7,12 +7,12 @@ import { RenRpc } from "./rpc.js"
 type Context = Plugin.Context
 
 export interface Surface {
-  readonly client: Pick<Context["client"], "rpc">
+  readonly client: Pick<Context["client"], "rpc" | "experimental">
   readonly location: () => Context["location"]
   readonly ui: {
-    readonly dialog: Pick<Context["ui"]["dialog"], "select">
+    readonly dialog: Pick<Context["ui"]["dialog"], "select" | "confirm">
     readonly toast: Context["ui"]["toast"]
-    readonly router: Pick<Context["ui"]["router"], "navigate">
+    readonly router: Pick<Context["ui"]["router"], "navigate" | "current">
     readonly model: Pick<Context["ui"]["model"], "current">
   }
 }
@@ -20,7 +20,7 @@ export interface Surface {
 export interface SignInSurface extends Surface {
   readonly open: (url: string) => void
   readonly ui: Surface["ui"] & {
-    readonly dialog: Pick<Context["ui"]["dialog"], "select" | "prompt" | "confirm" | "clear">
+    readonly dialog: Pick<Context["ui"]["dialog"], "prompt" | "clear">
   }
 }
 
@@ -74,6 +74,40 @@ export const create = (surface: Surface) => {
       at(surface),
     )
     .then((created) => surface.ui.router.navigate({ type: "session", sessionID: created.sessionID }))
+    .catch(fail(surface))
+}
+
+export const move = (surface: Surface) => {
+  const route = surface.ui.router.current()
+  if (route.type !== "session") {
+    surface.ui.toast.show({ title: "Ren", message: "Open the session to move to Ren first.", variant: "warning" })
+    return Promise.resolve()
+  }
+  const rpc = surface.client.rpc(RenRpc.Definition)
+  const model = surface.ui.model.current()
+  return rpc
+    .getSpace({}, at(surface))
+    .then(async (space) => {
+      const confirmed = await surface.ui.dialog.confirm({
+        title: "Move to Ren",
+        message: `Move this session to the Ren space ${space.name}? Its history goes with it, the members of ${space.name} can open it, and its next messages run on Ren, which cannot reach this computer’s files.`,
+        label: { confirm: "Move" },
+      })
+      if (!confirmed) return
+      surface.ui.toast.show({ message: `Moving the session to ${space.name}…`, variant: "info" })
+      const transcript = await surface.client.experimental.session.export({ sessionID: route.sessionID })
+      await rpc.moveSession(
+        {
+          sessionID: route.sessionID,
+          transcript: Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Json))(JSON.stringify(transcript)),
+          ...(model?.providerID === "ren" && {
+            model: { id: model.modelID, ...(model.variant && { variant: model.variant }) },
+          }),
+        },
+        at(surface),
+      )
+      surface.ui.toast.show({ message: `Moved to Ren space ${space.name}`, variant: "success" })
+    })
     .catch(fail(surface))
 }
 

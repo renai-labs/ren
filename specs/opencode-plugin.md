@@ -30,7 +30,7 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F11. The TUI composer's `@` file search and `!` shell act on the local machine. A plugin cannot add autocomplete sources.
 - F12. A slash command name is split on white space (`parseSlashHead` in the 2.2.6 TUI), and a keymap command checks only that its ID is set, so `ren:space` is a valid name. A slash command without `arguments` runs from the completion list _(TUI)_.
 - F13. Chat API events are not replayed on reconnect. After `server.connected` the client reads the resources again. A client token reaches only `/chat/*`, lasts 60 minutes, and carries the session ID; the brain sets the sender from the token.
-- F14. Ren has no session import endpoint, no presence, no fork and no unarchive. `session.rename` is on the Chat API only.
+- F14. Ren has no presence, no fork and no unarchive. `session.rename` is on the Chat API only. Ren's import endpoint is `session.import` (F36m).
 - F15. _(run)_ An external plugin's `effect` runs with only `Scope` and the loggers in its context (`Plugin.load` in OpenCode's `packages/core/src/plugin.ts`). The plugin provides its own platform services: `FetchHttpClient` from `effect/http`, and Bun or `node:` APIs for files, because `effect`'s `FileSystem` needs a platform package that OpenCode does not provide to plugins.
 
 - F16. `Provider.aisdk` is internal to OpenCode Core in 2.2.6 and not in `@opencode/plugin/effect`. A plugin's provider sets `package: "aisdk:<package>"`; the `sdk` hook's `event.package` is the name without the prefix, and the request's `providerOptions` key is the provider ID _(run)_.
@@ -65,27 +65,31 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F35b. The TUI's Solid transform (`@opentui/solid` 0.8.1 `createSolidTransformPlugin`, installed by `ensureRuntimePluginSupport`) compiles only files outside `node_modules`; an installed package's `.tsx` would load with Bun's default JSX. OpenTUI's runtime plugin rewrites `@opentui/*`, `solid-js`, `solid-js/store` and `@opencode/plugin/tui` imports in a `node_modules` ESM file to the TUI's instances, and leaves the specifiers OpenCode's runtime provides. So the published TUI part is JavaScript compiled with the same Solid transform; it loads and works from a `node_modules` folder in the stock 2.2.6 TUI (footers, `/ren:space`) _(TUI)_.
 - F36b. `opencode plugin add` installs a package with npm Arborist into OpenCode's cache, which installs required peer dependencies; `@opencode/plugin` marks its own TUI peers optional. `Host.resolve` resolves a directory whose `package.json` has `name` and `exports` through the package name, as for an installed package.
 - F37b. `ctx.app.version` (server) and `context.app.version` (TUI) are the host's version: the release `X.Y.Z` in the stock binary, `local` in a source build, `0.0.0-<channel>-<n>` in dev and beta builds, and `unknown` in an embedded host unless it passes `app` (`createEmbeddedRoutes`). OpenCode 2.2.6 is the first release with `effect` 4.1.0 (2.2.2 to 2.2.5 ship 4.0.6); 2.3.0 to 2.3.2 also ship 4.1.0, `@opentui/*` 0.8.4 and `solid-js` 1.9.17.
+- F34m. In 2.2.6 only the TUI part can export a session: `context.client.experimental.session.export({ sessionID })` returns OpenCode's `SessionTransfer.Data` (`{ info, messages }`) as its HTTP API encodes it, with unfinished assistant, shell and compaction messages left out. A server part's `ctx.session` has `context`, which lacks the full messages, and no export _(run)_.
+- F35m. An RPC call from the Promise client carries a 32 MiB input to the server part _(run)_.
+- F36m. Ren's `session.import` (`POST /sessions/:id/import`, hidden from Ren MCP) takes `{ spaceId, harness: "opencode", model?, transcript }`, with a body of at most 32 MiB (`Session.maxImportBytes`; other routes keep 1 MiB). `opencode-transcript` decodes the export with OpenCode's own schema (`Schema.toCodecJson(SessionTransfer.Data)`) and writes the rows OpenCode's import writes; a recorded chat's export gives back its message rows unchanged _(run)_. The chat gets `origin: "opencode"` and the local title, and the start restores the rows on the brain before it starts the chat _(run)_. The same person importing the same ID into the same space starts the brain again and changes nothing else; another space, another person or `session.create` with that ID is a conflict _(run)_.
+- F37m. A restored chat whose last message is a user message with no answer: the next prompt starts an execution whose first step answers that message, and the new message is delivered after it and answered by the next step _(run)_.
 
 ## 3. Modules
 
-| Module     | Holds                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                                                   |
-| `auth`     | Built. The server URL and a currently valid token (`RenAuth`); sign-in and sign-out (`RenAuth.Login`).                            |
-| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                                                |
-| `link`     | Built. One Chat API client and event stream per Ren root session, with `chat.access` renew (`Link`).                              |
-| `binding`  | Built. The `ren` session metadata and the selected space (`Binding`).                                                             |
-| `model`    | Built. The `LanguageModelV3` (`RenModel`).                                                                                        |
-| `provider` | Built. The provider, its models and the session hooks (`RenProvider`).                                                            |
-| `rpc`      | Built. Methods and events between the server part and the TUI part (`RenRpc`).                                                    |
-| `handlers` | Built. The server part's RPC handlers (`RenHandlers`).                                                                            |
-| `commands` | Built. The `/ren:*` command logic over a small part of the TUI context (`RenCommands`).                                           |
-| TUI        | Built: `/ren:login`, `/ren:logout`, `/ren:space`, `/ren:new` and the space in the footers. Later: the other commands and dialogs. |
-| `mirror`   | Built. Messages from other clients of a Ren session into the local session (`Mirror`).                                            |
-| `title`    | Built. The title of a Ren session, the same locally and on Ren (`Title`).                                                         |
-| `controls` | Built. Model picker, `/compact`, archive, delete and fork on a Ren session (`Controls`).                                          |
-| `support`  | Built. The supported OpenCode range, checked at load and written as the peer range (`Support`).                                   |
-| build      | Built. `script/build.ts`: the publishable package in `dist`.                                                                      |
+| Module     | Holds                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                                                                |
+| `auth`     | Built. The server URL and a currently valid token (`RenAuth`); sign-in and sign-out (`RenAuth.Login`).                                         |
+| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                                                             |
+| `link`     | Built. One Chat API client and event stream per Ren root session, with `chat.access` renew (`Link`).                                           |
+| `binding`  | Built. The `ren` session metadata and the selected space (`Binding`).                                                                          |
+| `model`    | Built. The `LanguageModelV3` (`RenModel`).                                                                                                     |
+| `provider` | Built. The provider, its models and the session hooks (`RenProvider`).                                                                         |
+| `rpc`      | Built. Methods and events between the server part and the TUI part (`RenRpc`).                                                                 |
+| `handlers` | Built. The server part's RPC handlers (`RenHandlers`).                                                                                         |
+| `commands` | Built. The `/ren:*` command logic over a small part of the TUI context (`RenCommands`).                                                        |
+| TUI        | Built: `/ren:login`, `/ren:logout`, `/ren:space`, `/ren:new`, `/ren:move` and the space in the footers. Later: the other commands and dialogs. |
+| `mirror`   | Built. Messages from other clients of a Ren session into the local session (`Mirror`).                                                         |
+| `title`    | Built. The title of a Ren session, the same locally and on Ren (`Title`).                                                                      |
+| `controls` | Built. Model picker, `/compact`, archive, delete and fork on a Ren session (`Controls`).                                                       |
+| `support`  | Built. The supported OpenCode range, checked at load and written as the peer range (`Support`).                                                |
+| build      | Built. `script/build.ts`: the publishable package in `dist`.                                                                                   |
 
 ## 4. Features, in build order
 
@@ -95,7 +99,6 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - **9. Open and catch up.** `/ren:sessions` lists Ren sessions with search and filters and opens one: import the Ren transcript into a local session with the same ID. On open, a local copy that is behind is removed and imported again. Opening a Ren session calls `Mirror.Service.watch`, and the catch-up also covers what the mirror did not see (L12).
 - **11. Attachments.** Local files and pasted images upload with `drive.startUpload` and go in `files` (maximum 10).
 - **12. Status and retry.** Starting, failed and stopped states are visible; `/ren:retry` calls `chat.retry`; notifications through the TUI attention API.
-- **13. Move a local session to Ren.** A Ren endpoint that creates a session in a space from an OpenCode export (session row and message rows), a new `origin` literal, and the restore of those rows on the brain; then `/ren:move`, and a model change from a local model to `ren/<model>`.
 - **15. Panels.** Files, changes, terminal (`/ren:files`, `/ren:diff`, `/ren:shell`), `/ren:background`, links to tasks and pull requests, context usage.
 
 ## 5. Limits
@@ -124,3 +127,7 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - L18s. When the server part runs on another machine than the TUI, the browser's redirect to `127.0.0.1` reaches nothing; the user pastes the address from the browser into the sign-in dialog (run with the fake Ren, in tests and by hand in the TUI).
 - L19s. After `/ren:logout`, a Ren session's open Chat API connection keeps working until its chat token needs renewing (at most 60 minutes, F13).
 - L16b. The supported range is `>=2.2.6 <2.4.0`; 2.3.x is covered by a typecheck of the source against `@opencode/plugin` 2.3.2 only, not run. The published `./rpc` has no type declarations.
+- L16m. A move takes the root session only: subagent sessions, fork lineage and a staged revert stay local, and OpenCode's export leaves out unfinished messages (F34m). The moved history's tool calls refer to the local machine's files; the brain continues on its hand, so the repository must be reachable in the space.
+- L17m. A session over 32 MiB as exported does not move (F36m).
+- L18m. A model change from a local model to `ren/<model>` does not move a session: one with a finished local answer is refused at its next prompt with a message to run `/ren:move` (F34m: the server part, where the turn runs, cannot export).
+- L19m. The brain restores a moved chat in the folder Ren gives it on its hand (`sync.restore` `directory`). When Ren gives none, as for a brain without environment connections, the chat keeps the local folder path, where its tools find nothing (not run on a hand).

@@ -126,6 +126,14 @@ const turn = (input: {
           .get({ sessionID: Binding.LocalID.make(sessionID) })
           .pipe(Effect.mapError(() => new TurnError({ message: "Could not read the local session." })))
         if (local.fork) return yield* new TurnError({ message: copied })
+        if (
+          Option.isNone(bound) &&
+          messages.some((message) => message.type === "assistant" && Boolean(message.time.completed))
+        )
+          return yield* new TurnError({
+            message:
+              "This session has history that Ren does not have. Run /ren:move to move it to Ren with its history, or start a new session with /ren:new.",
+          })
         const spaceId = Option.isSome(bound) ? bound.value.spaceId : yield* bindings.space
         const client = yield* ren.client
         yield* client.session

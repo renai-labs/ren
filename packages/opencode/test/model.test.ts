@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test"
 import { fileURLToPath } from "node:url"
 import { Model, Provider } from "@opencode/plugin/effect"
-import { OpenCodeHost } from "@ren/cell/testing"
+import { OpenCodeHost, Shared } from "@ren/cell/testing"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Fiber, Queue, Stream } from "effect"
+import { Effect, Fiber, Queue, Schema, Stream } from "effect"
 import { RenServer } from "./lib/ren.js"
 
 const plugin = fileURLToPath(new URL("..", import.meta.url))
@@ -197,5 +197,36 @@ test("the title of a Ren session is Ren's title, and OpenCode asks no model for 
       const local = yield* opened.host.client.session.get({ sessionID: opened.session.id }).pipe(Effect.orDie)
       expect(local.title).toBe("Ren's title")
       expect(opened.ren.state.prompts.map((prompt) => prompt.text)).toEqual(["first", "second"])
+    }),
+  ))
+
+test("a local session with local answers that switches to a Ren model is not created empty in Ren: its turn says to run /ren:move", () =>
+  run(
+    Effect.gen(function* () {
+      const ren = yield* RenServer.make()
+      const host = yield* OpenCodeHost.make({
+        ...Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))(
+          Shared.vars(Shared.stub().url).OPENCODE_CONFIG,
+        ),
+        plugins: [{ package: plugin, options: { url: ren.url, space: ren.state.spaceId } }],
+      })
+      const session = yield* host.client.session
+        .create({
+          location: host.location,
+          model: { providerID: Provider.ID.make("stub"), id: Model.ID.make("stub-model") },
+        })
+        .pipe(Effect.orDie)
+      const turn = (text: string) =>
+        host.client.session
+          .prompt({ sessionID: session.id, text })
+          .pipe(Effect.andThen(host.client.experimental.session.wait({ sessionID: session.id })), Effect.orDie)
+      yield* turn(Shared.stub().script({ reply: "A local answer." }).marker)
+      yield* host.client.session.switchModel({ sessionID: session.id, model }).pipe(Effect.orDie)
+      yield* turn("go on in Ren")
+      const messages = yield* host.client.session.context({ sessionID: session.id }).pipe(Effect.orDie)
+      expect(
+        messages.flatMap((message) => ("error" in message && message.error ? [message.error.message] : [])).at(-1),
+      ).toContain("Run /ren:move")
+      expect([ren.state.created, ren.state.prompts]).toEqual([[], []])
     }),
   ))

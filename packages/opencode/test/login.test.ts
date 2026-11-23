@@ -84,7 +84,7 @@ const setup = Effect.fnUntraced(function* (
         clear: () => dialog.close(),
       },
       toast: { show: (toast) => toasts.push(toast) },
-      router: { navigate: () => undefined },
+      router: { navigate: () => undefined, current: () => ({ type: "home" }) },
       model: { current: () => undefined },
     },
   }

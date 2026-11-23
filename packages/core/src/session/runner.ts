@@ -7,8 +7,9 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
+import type { Sync } from "@ren/schema/sync"
 import { and, eq, isNull, sql } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
+import { Array, Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
@@ -29,6 +30,11 @@ export interface Owner {
   readonly origin: Session.Origin
 }
 
+export interface Transcript {
+  readonly session: Sync.OpenCodeSessionRow
+  readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
+}
+
 export interface Info extends Owner {
   readonly id: Session.ID
   readonly rootId: Session.ID
@@ -46,7 +52,7 @@ export interface Interface {
   readonly create: (
     owner: Owner,
     input: Omit<Session.StartInput, "hand">,
-    options?: { readonly agentId?: Agent.ID },
+    options?: { readonly agentId?: Agent.ID; readonly transcript?: Transcript },
   ) => Effect.Effect<void, AlreadyExists | NotFound | Brains.BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
@@ -75,7 +81,7 @@ export const layer = Layer.effect(
       create: Effect.fn("SessionRunner.create")(function* (
         owner: Owner,
         input: Omit<Session.StartInput, "hand">,
-        options: { readonly agentId?: Agent.ID } = {},
+        options: { readonly agentId?: Agent.ID; readonly transcript?: Transcript } = {},
       ) {
         // oxlint-disable-next-line ren/no-comments -- Space settings rule 4: the chat keeps the hand that its space has now.
         const space = (yield* database.db
@@ -109,7 +115,7 @@ export const layer = Layer.effect(
                 .for("share")).length === 0
             )
               return yield* new NotFound({ message: "Agent not found." })
-            return yield* transaction
+            const inserted = yield* transaction
               .insert(Database.Schema.agent_session)
               .values({
                 id: input.sessionId,
@@ -126,6 +132,16 @@ export const layer = Layer.effect(
               })
               .onConflictDoNothing()
               .returning({ id: Database.Schema.agent_session.id })
+            // oxlint-disable-next-line ren/no-comments -- An imported chat's transcript is in Ren before its brain starts, so the start restores it.
+            if (inserted.length > 0 && options.transcript) {
+              yield* OpenCodeStore.writeSession(transaction, options.transcript.session)
+              yield* Effect.forEach(
+                Array.chunksOf(options.transcript.messages, 500),
+                (rows) => OpenCodeStore.writeMessages(transaction, rows),
+                { discard: true },
+              )
+            }
+            return inserted
           }),
         )
         if (created.length === 0) return yield* alreadyExists

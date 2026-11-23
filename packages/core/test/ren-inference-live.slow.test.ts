@@ -60,7 +60,11 @@ const it = testEffect(
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
     Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
-    Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
+    Layer.provideMerge(
+      TranscriptCodec.layer({
+        opencode: { messages: OpenCodeTranscript.messages, imported: OpenCodeTranscript.imported },
+      }),
+    ),
     Layer.provideMerge(Host.layer({}, models)),
     Layer.provideMerge(models),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),

@@ -79,6 +79,7 @@ import type {
   SessionGetInput,
   SessionCreateInput,
   SessionArchiveInput,
+  SessionImportInput,
   ChatAccessInput,
   ChatMessagesInput,
   ChatRetryInput,
@@ -965,6 +966,14 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["session", "archive"] as const,
             mutationFn: (input: SessionArchiveInput) => client["session"]["archive"](input),
+          }),
+      },
+      import: {
+        mutationKey: () => ["session", "import"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["session", "import"] as const,
+            mutationFn: (input: SessionImportInput) => client["session"]["import"](input),
           }),
       },
     },

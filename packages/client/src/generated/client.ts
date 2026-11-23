@@ -161,6 +161,8 @@ import type {
   SessionCreateOutput,
   SessionArchiveInput,
   SessionArchiveOutput,
+  SessionImportInput,
+  SessionImportOutput,
   ChatAccessInput,
   ChatAccessOutput,
   ChatMessagesInput,
@@ -1574,6 +1576,23 @@ export function make(options: ClientOptions) {
             path: `/sessions/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      import: (input: SessionImportInput, requestOptions?: RequestOptions) =>
+        request<SessionImportOutput>(
+          {
+            method: "POST",
+            path: `/sessions/${encodeURIComponent(input.id)}/import`,
+            body: {
+              spaceId: input["spaceId"],
+              harness: input["harness"],
+              model: input["model"],
+              transcript: input["transcript"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

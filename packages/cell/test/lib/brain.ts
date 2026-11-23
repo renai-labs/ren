@@ -7,6 +7,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import {
@@ -292,6 +293,25 @@ export const make = Effect.fnUntraced(function* (
     opencode,
     driver: OpenCodeDriver.make(opencode, directory),
     transcript: harness.transcript,
+    // oxlint-disable-next-line ren/no-comments -- An OpenCode export that Ren imported, restored as Ren's restore gives it: the rows of session.import, with no parent and no queue.
+    restoreExport: (transcript: unknown) =>
+      OpenCodeRows.fromExport(id, transcript).pipe(
+        Effect.flatMap((rows) =>
+          harness.transcript.restore({
+            chat: {
+              id,
+              harness: "opencode",
+              harnessVersion: null,
+              parentId: null,
+              revertMessageId: null,
+              session: rows.session,
+              inbox: [],
+            },
+            session: rows.session,
+            messages: rows.messages,
+          }),
+        ),
+      ),
     harness: host.fetch,
     chat,
     chatAs,

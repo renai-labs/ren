@@ -10,6 +10,7 @@ export const origins = [
   { value: "linear", label: "Linear" },
   { value: "github", label: "GitHub" },
   { value: "webhook", label: "Webhook" },
+  { value: "opencode", label: "OpenCode" },
 ] as const
 
 export type Origin = (typeof origins)[number]["value"]

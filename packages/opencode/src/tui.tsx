@@ -62,6 +62,15 @@ export default Plugin.define({
           slash: { name: "ren:logout" },
           run: () => RenCommands.logout(surface),
         },
+        {
+          id: "ren.move",
+          title: "Move session to Ren",
+          description: "This session, with its history, into the selected Ren space",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:move" },
+          run: () => RenCommands.move(surface),
+        },
       ],
     }))
     const status = () => (

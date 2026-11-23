@@ -52,7 +52,11 @@ export const sessionLayerWith = (
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(github))),
     Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
-    Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
+    Layer.provideMerge(
+      TranscriptCodec.layer({
+        opencode: { messages: OpenCodeTranscript.messages, imported: OpenCodeTranscript.imported },
+      }),
+    ),
     Layer.provideMerge(Host.layer({}, models)),
     Layer.provideMerge(models),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),

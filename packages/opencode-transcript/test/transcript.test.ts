@@ -28,6 +28,48 @@ describe.each(OpenCodeFixtures.recordings.map((recording) => [recording.version,
       }
     })
 
+    test("an OpenCode export of a chat, as its HTTP API sends it, becomes the same message rows in order, and a session row that restore reads", async () => {
+      const chats = recording.chats.filter((chat) => !chat.session.parent_id)
+      for (const chat of chats) {
+        const rows = await Effect.runPromise(
+          OpenCodeRows.fromExport(Session.ID.make(chat.session.id), OpenCodeFixtures.exported(chat)),
+        )
+        expect(rows.messages.map((row) => [row.id, row.type, row.seq, OpenCodeRows.stored(row)])).toEqual(
+          chat.messages.map((row, index) => [row.id, row.type, index + 1, OpenCodeRows.stored(row)]),
+        )
+        expect(OpenCodeRows.session(rows.session)).toMatchObject({
+          id: chat.session.id,
+          title: chat.session.title ?? undefined,
+          location: { directory: chat.session.directory, workspaceID: undefined },
+        })
+      }
+      expect(chats.length).toBeGreaterThan(0)
+    })
+
+    test("an export of another session, of a subagent session, or with one message ID twice is refused", async () => {
+      const chat = recording.chats.find((each) => !each.session.parent_id && each.messages.length > 0)
+      const child = recording.chats.find((each) => each.session.parent_id)
+      if (!chat) throw new Error("No recorded chat")
+      const refused = (id: string, transcript: unknown) =>
+        Effect.runPromise(
+          OpenCodeRows.fromExport(Session.ID.make(id), transcript).pipe(
+            Effect.flip,
+            Effect.map((error) => error._tag),
+          ),
+        )
+      const tags = await Promise.all([
+        refused(Session.ID.create(), OpenCodeFixtures.exported(chat)),
+        refused(
+          chat.session.id,
+          OpenCodeFixtures.exported({ ...chat, messages: [...chat.messages, ...chat.messages.slice(0, 1)] }),
+        ),
+        refused(chat.session.id, { info: { id: chat.session.id }, messages: [] }),
+        ...(child ? [refused(child.session.id, OpenCodeFixtures.exported(child))] : []),
+      ])
+      expect(new Set(tags)).toEqual(new Set(["OpenCodeRows.Unreadable"]))
+      expect(tags.length).toBe(child ? 4 : 3)
+    })
+
     test("the saved history has a Chat API message for each message row, in order", async () => {
       const history = await Effect.runPromise(OpenCodeTranscript.messages(messages))
       expect<ReadonlyArray<string>>(history.map((message) => message.id)).toEqual(messages.map((row) => row.id))

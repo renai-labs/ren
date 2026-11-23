@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, and `/ren:move` moves a local session there with its history. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -106,7 +106,7 @@ For a primary request `doStream`:
 1. Reads the OpenCode session ID from `x-opencode-session-id` and the request kind from `x-ren-request-kind`, which the plugin's `model.request` hook sets.
 2. Reads the binding. A session whose binding names another session is a copy (a fork) and is refused, and so is a fork without a Ren session (Session controls).
 3. Reads the local messages (`session.context`). The candidates are the user messages after the last assistant message that completed without an error.
-4. Without a Ren session in the binding, creates it with the local session's ID, the binding's space (else the selected space) and the model (`session.create`), then writes the binding.
+4. Without a binding, a session with a finished local answer is refused with a message to run `/ren:move`, so its history is never left behind. Without a Ren session in the binding, creates it with the local session's ID, the binding's space (else the selected space) and the model (`session.create`), then writes the binding.
 5. Opens the link for this turn, subscribes, and waits until it is connected.
 6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`. Before it sends to an existing Ren session, it switches the brain to the local model (Session controls).
 7. The turn starts at `session.inbox.delivered` of a sent message; earlier events are ignored. `turn` converts the events until the execution ends, or until the brain delivers a user message that is not one of the candidates (Multiplayer).
@@ -157,6 +157,7 @@ Every command the plugin adds is `/ren:<command>`, in the slash completion and i
 - `/ren:space` lists the spaces you joined, with the selected one marked, and searches them by name. Choosing one selects it.
 - `/ren:login` signs in through the browser and `/ren:logout` signs out (Sign-in).
 - `/ren:new` creates a local session bound to the selected space, with the prompt's `ren/<model>` model when the space offers it, else the space's default, and opens it.
+- `/ren:move` moves the open local session to the selected space (Moving a session).
 
 Signed out, they say to run `/ren:login`. The home and prompt footers show `ren · <space>`.
 
@@ -170,17 +171,18 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 
 `RenRpc.Definition` (id `ren`). Every method takes an object and can fail with `signed_out` (`data: { server }`, the message says to run `/ren:login`) or `unavailable` (`data: {}`, the message says what failed).
 
-| Method          | Input                          | Output                              |
-| --------------- | ------------------------------ | ----------------------------------- |
-| `listSpaces`    | `{}`                           | `{ spaces: SpaceInfo[], selected }` |
-| `getSpace`      | `{}`                           | `SpaceInfo`, the selected space     |
-| `selectSpace`   | `{ spaceId }`                  | `SpaceInfo`                         |
-| `createSession` | `{ model?: { id, variant? } }` | `{ sessionID, spaceId }`            |
-| `account`       | `{}`                           | `{ server, environment, user }`     |
-| `login`         | `{ attempt }`                  | `{ url }`                           |
-| `completeLogin` | `{ attempt, url }`             | `{}`                                |
-| `cancelLogin`   | `{ attempt }`                  | `{}`                                |
-| `logout`        | `{}`                           | `{ server, signedOut }`             |
+| Method          | Input                               | Output                              |
+| --------------- | ----------------------------------- | ----------------------------------- |
+| `listSpaces`    | `{}`                                | `{ spaces: SpaceInfo[], selected }` |
+| `getSpace`      | `{}`                                | `SpaceInfo`, the selected space     |
+| `selectSpace`   | `{ spaceId }`                       | `SpaceInfo`                         |
+| `createSession` | `{ model?: { id, variant? } }`      | `{ sessionID, spaceId }`            |
+| `account`       | `{}`                                | `{ server, environment, user }`     |
+| `login`         | `{ attempt }`                       | `{ url }`                           |
+| `completeLogin` | `{ attempt, url }`                  | `{}`                                |
+| `cancelLogin`   | `{ attempt }`                       | `{}`                                |
+| `logout`        | `{}`                                | `{ server, signedOut }`             |
+| `moveSession`   | `{ sessionID, transcript, model? }` | `{ sessionID, spaceId }`            |
 
 `SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
@@ -188,10 +190,25 @@ To add a feature: add its methods and events to `rpc.ts`, its handlers to `handl
 
 Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact` and the model picker (Session controls), and stop.
 
-Planned commands: `/ren:sessions`, `/ren:move`, `/ren:retry`. Planned features:
+Planned commands: `/ren:sessions`, `/ren:retry`. Planned features:
 
-- Move a local session to a Ren space. This needs a new Ren import endpoint.
 - The web app chat's features, where the stock TUI allows them.
+
+## Moving a session
+
+`/ren:move` asks to move the open session to the selected space, naming it. The TUI part exports the session (`experimental.session.export`, which only the TUI's client has; a server part cannot export) and sends the export to the server part (`moveSession`), which:
+
+1. Refuses a session that is already a Ren session or a copy of one, and an export over 32 MiB (`Session.maxImportBytes`, Ren's limit for the request), before it reaches Ren.
+2. Calls Ren's `session.import` with the local session's ID, the selected space, the prompt's `ren/<model>` (else the space's default) and the export as OpenCode sent it. Ren converts the export into OpenCode's own rows, stores them, and starts the brain, which restores them (`origin: "opencode"`, the local title).
+3. Binds the local session to the Ren session, switches it to the `ren/<model>`, and watches it (Multiplayer).
+
+The local transcript stays as it is. The next prompt sends only that message: the brain has every earlier one, with the same IDs. A last user message that no answer followed is on the brain too: the next prompt's execution answers it first, then the new message, and the local turn shows both answers.
+
+Every step can run again: Ren's import of the same ID by the same person into the same space starts the brain again and changes nothing else, and a session already bound is only switched to the Ren model and watched. A failed move leaves the session local; the toast says why (signed out, not allowed in the space, too large).
+
+Changing a session's model to `ren/<model>` is not a move: a session with a finished local answer is refused on its next prompt with a message to run `/ren:move`. A session with no answer yet is created in Ren at its first prompt, as from `/ren:new`.
+
+Limits: Ren does not get the session's subagent sessions, its fork lineage or its staged revert, and OpenCode's export leaves out unfinished messages. The history's tool calls refer to files on this computer; the brain continues on its own hand, so the repository must be reachable in the space for the brain to go on with the work.
 
 ## Install
 
@@ -271,7 +288,7 @@ Release (manual; no workflow publishes it yet): run the package checks and `REN_
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, and the built package
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, and the built package
 bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
