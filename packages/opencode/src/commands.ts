@@ -72,19 +72,29 @@ export const space = (surface: Surface) => {
     .catch(fail(surface))
 }
 
-export const create = (surface: Surface) => {
+const chosen = (surface: Surface) => {
   const model = surface.ui.model.current()
-  return surface.client
-    .rpc(RenRpc.Definition)
-    .createSession(
-      model?.providerID === "ren"
-        ? { model: { id: model.modelID, ...(model.variant && { variant: model.variant }) } }
-        : {},
-      at(surface),
-    )
-    .then((created) => surface.ui.router.navigate({ type: "session", sessionID: created.sessionID }))
-    .catch(fail(surface))
+  return (
+    model && {
+      model: { providerID: model.providerID, id: model.modelID, ...(model.variant && { variant: model.variant }) },
+    }
+  )
 }
+
+export const create = (surface: Surface) =>
+  surface.client
+    .rpc(RenRpc.Definition)
+    .createSession(chosen(surface) ?? {}, at(surface))
+    .then((created) => {
+      surface.ui.router.navigate({ type: "session", sessionID: created.sessionID })
+      if (!created.model.startsWith("ren/"))
+        surface.ui.toast.show({
+          title: "Ren",
+          message: `This Ren session runs on ${created.model}, because OpenCode already has a provider ren.`,
+          variant: "info",
+        })
+    })
+    .catch(fail(surface))
 
 export const move = (surface: Surface) => {
   const route = surface.ui.router.current()
@@ -93,7 +103,6 @@ export const move = (surface: Surface) => {
     return Promise.resolve()
   }
   const rpc = surface.client.rpc(RenRpc.Definition)
-  const model = surface.ui.model.current()
   return rpc
     .getSpace({}, at(surface))
     .then(async (space) => {
@@ -109,9 +118,7 @@ export const move = (surface: Surface) => {
         {
           sessionID: route.sessionID,
           transcript: Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Json))(JSON.stringify(transcript)),
-          ...(model?.providerID === "ren" && {
-            model: { id: model.modelID, ...(model.variant && { variant: model.variant }) },
-          }),
+          ...chosen(surface),
         },
         at(surface),
       )

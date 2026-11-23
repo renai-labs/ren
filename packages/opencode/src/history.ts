@@ -14,9 +14,7 @@ export interface Local {
 
 const encode = Schema.encodeSync(SessionMessage.Info)
 
-const providerID = "ren"
-
-export const model = (ref: SessionModel.Ref) => ({
+export const model = (ref: SessionModel.Ref, providerID: string) => ({
   providerID,
   id: SessionModel.key(ref),
   ...(ref.variant && ref.variant !== "default" && { variant: ref.variant }),
@@ -34,9 +32,9 @@ export const current = (messages: ReadonlyArray<SessionMessage.Info>) =>
       message.type === "assistant" || message.type === "model-switched",
   )?.model
 
-export const toOpenCode = (message: SessionMessage.Info, speaker?: Mirror.Speaker) => {
+export const toOpenCode = (message: SessionMessage.Info, providerID: string, speaker?: Mirror.Speaker) => {
   const encoded = encode(message)
-  return json(encoded.type === "user" ? user(encoded, speaker) : reshape(encoded))
+  return json(encoded.type === "user" ? user(encoded, speaker) : reshape(encoded, providerID))
 }
 
 const json = Schema.decodeUnknownSync(Schema.MutableJson)
@@ -54,23 +52,23 @@ const user = (encoded: typeof SessionMessage.User.Encoded, speaker: Mirror.Speak
   }
 }
 
-const reshape = (encoded: typeof SessionMessage.Info.Encoded): Schema.Json => {
+const reshape = (encoded: typeof SessionMessage.Info.Encoded, providerID: string): Schema.Json => {
   if (encoded.type === "assistant")
     return {
       ...encoded,
-      model: model(encoded.model),
+      model: model(encoded.model, providerID),
       content: encoded.content.map((content) => (content.type === "text" ? Struct.omit(content, ["time"]) : content)),
     }
   if (encoded.type === "model-switched")
     return {
       ...encoded,
-      model: model(encoded.model),
-      ...(encoded.previous && { previous: model(encoded.previous) }),
+      model: model(encoded.model, providerID),
+      ...(encoded.previous && { previous: model(encoded.previous, providerID) }),
     }
   if (encoded.type !== "compaction" || encoded.status === "failed") return encoded
   return {
     ...Struct.omit(encoded, ["recent"]),
-    ...(encoded.status === "completed" && encoded.model && { model: model(encoded.model) }),
+    ...(encoded.status === "completed" && encoded.model && { model: model(encoded.model, providerID) }),
   }
 }
 

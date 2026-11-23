@@ -22,7 +22,8 @@ import { Permission } from "@ren/schema/permission"
 import { Pagination } from "@ren/schema/pagination"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
-import { DateTime, Effect, Option, Queue, Schema, Struct } from "effect"
+import type { OpenCodeHost } from "@ren/cell/testing"
+import { DateTime, Effect, Option, Queue, Schema, Stream, Struct } from "effect"
 
 export interface Prompt {
   readonly sessionID: string
@@ -756,17 +757,19 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     "/drive/uploads": drive,
     "/upload": drive,
   }
+  const gate = { open: Promise.resolve() }
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
         idleTimeout: 0,
-        fetch: (request) => {
+        fetch: async (request) => {
+          await gate.open
           const url = new URL(request.url)
           if (url.pathname.startsWith("/local/")) {
             state.local.push(url.pathname)
-            return Response.json({ error: { message: "The local model was called" } }, { status: 500 })
+            return Response.json({ error: { message: "The local model was called" } }, { status: 400 })
           }
           if (request.method === "DELETE" && url.pathname.startsWith("/sessions/")) {
             Queue.offerUnsafe(archived, String(url.pathname.split("/")[2]))
@@ -820,5 +823,19 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       for (const controller of streams) controller.close()
       streams.clear()
     },
+    hold: () => {
+      const held = Promise.withResolvers<void>()
+      gate.open = held.promise
+      return () => held.resolve()
+    },
   }
 })
+
+export const models = (host: Effect.Success<ReturnType<typeof OpenCodeHost.make>>, providerID: string) =>
+  host.client.event.subscribe({ types: ["model.updated"] }).pipe(
+    Stream.mapEffect(() => host.client.model.list({ location: host.location }).pipe(Effect.orDie)),
+    Stream.map((listed) => listed.data.filter((each) => each.providerID === providerID)),
+    Stream.filter((found) => found.length > 0),
+    Stream.runHead,
+    Effect.map(Option.getOrElse(() => [])),
+  )

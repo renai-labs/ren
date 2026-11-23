@@ -30,7 +30,11 @@ export class Service extends Context.Service<
   {
     readonly get: (sessionID: Session.ID) => Effect.Effect<Option.Option<Info>, LocalError>
     readonly set: (sessionID: Session.ID, info: Info) => Effect.Effect<void, LocalError>
-    readonly create: (spaceId: Space.ID, model: SessionModel.Ref) => Effect.Effect<string, LocalError>
+    readonly create: (
+      spaceId: Space.ID,
+      model: SessionModel.Ref,
+      providerID: Provider.ID,
+    ) => Effect.Effect<string, LocalError>
     readonly space: Effect.Effect<Space.ID, NoSpace | RenAuth.SignedOut | RenAuth.AuthError>
     readonly select: (spaceId: Space.ID) => Effect.Effect<void>
   }
@@ -64,11 +68,11 @@ export const layer = (ctx: Pick<Plugin.Context, "session" | "storage" | "options
             })
             .pipe(Effect.mapError(() => new LocalError({ message: `Could not save the Ren session of ${sessionID}.` })))
         }),
-        create: Effect.fn("Binding.create")(function* (spaceId, model) {
+        create: Effect.fn("Binding.create")(function* (spaceId, model, providerID) {
           return (yield* ctx.session
             .create({
               model: {
-                providerID: Provider.ID.make("ren"),
+                providerID,
                 id: Model.ID.make(SessionModel.key(model)),
                 ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
               },

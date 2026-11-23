@@ -9,6 +9,7 @@ import { Context, DateTime, Effect, Layer, Option, Schedule, Schema } from "effe
 import type { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
 import { Mirror } from "./mirror.js"
+import { RenProvider } from "./provider.js"
 import { RenApi } from "./ren.js"
 import type { RenRpc } from "./rpc.js"
 import { History } from "./history.js"
@@ -54,6 +55,7 @@ export const layer = (ctx: Pick<Plugin.Context, "session" | "location">) =>
       const ren = yield* RenApi.Service
       const bindings = yield* Binding.Service
       const mirror = yield* Mirror.Service
+      const provider = yield* RenProvider.Service
       const unavailable = (message: string) => () => new OpenError({ message })
 
       const page = (sessionId: Session.ID, limit: number, cursor: string | undefined) =>
@@ -107,6 +109,8 @@ export const layer = (ctx: Pick<Plugin.Context, "session" | "location">) =>
             Effect.mapError(unavailable("Could not list the models of the Ren space.")),
           ))
         if (!model) return yield* new OpenError({ message: "The Ren session’s space offers no models." })
+        const providerID = yield* provider.id
+        if (Option.isNone(providerID)) return yield* new OpenError({ message: RenProvider.taken })
         const speakers = new Map(
           yield* Effect.forEach(
             messages.filter((message): message is SessionMessage.User => message.type === "user"),
@@ -117,7 +121,7 @@ export const layer = (ctx: Pick<Plugin.Context, "session" | "location">) =>
           info: {
             id: sessionId,
             projectID: ctx.location.project.id,
-            model: History.model(model),
+            model: History.model(model, providerID.value),
             ...(info.title && { title: info.title }),
             cost: 0,
             tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
@@ -127,7 +131,7 @@ export const layer = (ctx: Pick<Plugin.Context, "session" | "location">) =>
           },
           messages: messages
             .filter(History.isSettled)
-            .map((message) => History.toOpenCode(message, speakers.get(message.id))),
+            .map((message) => History.toOpenCode(message, providerID.value, speakers.get(message.id))),
         } satisfies RenRpc.Imported
       })
 

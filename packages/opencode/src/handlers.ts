@@ -1,6 +1,6 @@
 export * as RenHandlers from "./handlers.js"
 
-import { Model, type Plugin, Provider, type Rpc } from "@opencode/plugin/effect"
+import { Model, type Plugin, type Rpc } from "@opencode/plugin/effect"
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import type { Space } from "@ren/schema/space"
@@ -10,6 +10,7 @@ import { Binding } from "./binding.js"
 import { Mirror } from "./mirror.js"
 import { Hand } from "./hand.js"
 import { Info } from "./info.js"
+import { RenProvider } from "./provider.js"
 import { RenApi } from "./ren.js"
 import { Requests } from "./requests.js"
 import { RenRpc } from "./rpc.js"
@@ -34,11 +35,10 @@ const refuse =
 
 const info = (space: Space.Info): RenRpc.SpaceInfo => Struct.pick(space, ["id", "slug", "name", "kind", "description"])
 
-export const register = Effect.fn("RenHandlers.register")(function* (
-  ctx: Plugin.Context,
-  refresh: Effect.Effect<void>,
-) {
+export const register = Effect.fn("RenHandlers.register")(function* (ctx: Plugin.Context) {
   const ren = yield* RenApi.Service
+  const provider = yield* RenProvider.Service
+  const refresh = provider.refresh
   const bindings = yield* Binding.Service
   const mirror = yield* Mirror.Service
   const scope = yield* Scope.Scope
@@ -73,10 +73,22 @@ export const register = Effect.fn("RenHandlers.register")(function* (
       Effect.ignore,
       Effect.forkIn(scope),
     )
+  const providerID = provider.id.pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.fail(new Unavailable({ message: RenProvider.taken })),
+        onSome: Effect.succeed,
+      }),
+    ),
+  )
   const choose = Effect.fnUntraced(function* (
     spaceId: Space.ID,
-    wanted: { readonly id: string; readonly variant?: string } | undefined,
+    requested: { readonly providerID?: string; readonly id: string; readonly variant?: string } | undefined,
   ) {
+    const wanted =
+      requested && (!requested.providerID || provider.owns({ providerID: requested.providerID, id: requested.id }))
+        ? requested
+        : undefined
     const client = yield* ren.client
     const choices = yield* client.chat
       .models({ id: Session.ID.create(), spaceId })
@@ -121,9 +133,14 @@ export const register = Effect.fn("RenHandlers.register")(function* (
     createSession: (input, context) =>
       Effect.gen(function* () {
         const spaceId = yield* bindings.space
+        const id = yield* providerID
         const model = yield* choose(spaceId, input.model)
         yield* prepare(spaceId)
-        return { sessionID: yield* bindings.create(spaceId, model), spaceId }
+        return {
+          sessionID: yield* bindings.create(spaceId, model, id),
+          spaceId,
+          model: `${id}/${SessionModel.key(model)}`,
+        }
       }).pipe(Effect.mapError(answer(context))),
     account: () =>
       Effect.gen(function* () {
@@ -206,6 +223,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
               : "This session is already a Ren session. Send a message to start it in Ren.",
           })
         const spaceId = bound?.spaceId ?? (yield* bindings.space)
+        const id = yield* providerID
         const model = yield* choose(spaceId, input.model)
         if (!bound) {
           const bytes = new TextEncoder().encode(JSON.stringify(input.transcript)).length
@@ -233,7 +251,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
           .switchModel({
             sessionID: Binding.LocalID.make(sessionID),
             model: {
-              providerID: Provider.ID.make("ren"),
+              providerID: id,
               id: Model.ID.make(SessionModel.key(model)),
               ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
             },

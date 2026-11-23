@@ -8,9 +8,8 @@ import { Binding } from "./binding.js"
 import { Link } from "./link.js"
 import { Mirror } from "./mirror.js"
 import { RenModel } from "./model.js"
+import { RenProvider } from "./provider.js"
 import { RenApi } from "./ren.js"
-
-const providerID = "ren"
 
 class ControlError extends Schema.TaggedError<ControlError>()("Controls.ControlError", { message: Schema.String }) {}
 
@@ -21,6 +20,7 @@ export const register = Effect.fn("Controls.register")(function* (ctx: Plugin.Co
   const ren = yield* RenApi.Service
   const links = yield* Link.Service
   const mirror = yield* Mirror.Service
+  const provider = yield* RenProvider.Service
   const lock = yield* Semaphore.make(1)
   const refusals = new Map<string, string>()
 
@@ -38,19 +38,29 @@ export const register = Effect.fn("Controls.register")(function* (ctx: Plugin.Co
   const keepRen = Effect.fn("Controls.keepRen")(function* (sessionID: string) {
     yield* lock.withPermit(
       Effect.gen(function* () {
-        if (Option.isNone(yield* own(sessionID))) return
         const local = Binding.LocalID.make(sessionID)
         const current = (yield* ctx.session.get({ sessionID: local })).model
-        if (!current || current.providerID === providerID) return
+        const bound = yield* Schema.decodeUnknownEffect(Session.ID)(sessionID).pipe(
+          Effect.flatMap(bindings.get),
+          Effect.map(Option.filter((info) => !info.sessionId || info.sessionId === sessionID)),
+          Effect.orElseSucceed(() => Option.none<Binding.Info>()),
+        )
+        const id = yield* provider.id
+        if (Option.isNone(id) || !current) return
+        if (Option.isSome(bound) || RenProvider.ids.some((each) => each === current.providerID)) yield* provider.ready
+        if (Option.isNone(bound) || current.providerID === id.value) return
+        if (provider.owns(current))
+          return yield* ctx.session.switchModel({ sessionID: local, model: { ...current, providerID: id.value } })
+        if (!bound.value.sessionId) return
         const restored = (yield* ctx.session.context({ sessionID: local }))
           .flatMap((message) => (message.type === "model-switched" ? [message.previous, message.model] : []))
-          .findLast((ref) => ref?.providerID === providerID)
+          .findLast((ref) => Boolean(ref && provider.owns(ref)))
         if (!restored)
           return yield* Effect.logWarning("A Ren session switched to a local model has no Ren model to keep")
-        yield* ctx.session.switchModel({ sessionID: local, model: restored })
+        yield* ctx.session.switchModel({ sessionID: local, model: { ...restored, providerID: id.value } })
         yield* notice(
           sessionID,
-          `A Ren session runs only on ren models, so it stays on ren/${restored.id}. To continue on a local model, fork it.`,
+          `A Ren session runs only on ren models, so it stays on ${id.value}/${restored.id}. To continue on a local model, fork it.`,
         )
       }),
     )
@@ -123,16 +133,13 @@ export const register = Effect.fn("Controls.register")(function* (ctx: Plugin.Co
       ),
     ),
   )
-  yield* ctx.session.hook(
-    "model.request",
-    (event) =>
-      Effect.sync(() => {
-        const refusal = refusals.get(event.sessionID)
-        if (event.kind !== "compaction" || !refusal) return
-        refusals.delete(event.sessionID)
-        event.headers[RenModel.refusalHeader] = refusal
-      }),
-    { providerID },
+  yield* ctx.session.hook("model.request", (event) =>
+    Effect.sync(() => {
+      const refusal = refusals.get(event.sessionID)
+      if (event.kind !== "compaction" || !refusal) return
+      refusals.delete(event.sessionID)
+      event.headers[RenModel.refusalHeader] = refusal
+    }),
   )
   yield* ctx.event
     .subscribe({
@@ -142,7 +149,10 @@ export const register = Effect.fn("Controls.register")(function* (ctx: Plugin.Co
       Stream.runForEach((event) =>
         Effect.gen(function* () {
           const sessionID = event.data.sessionID
-          if (event.type === "session.model.selected" && event.data.model.providerID !== providerID)
+          if (
+            event.type === "session.model.selected" &&
+            !Option.contains(yield* provider.current, event.data.model.providerID)
+          )
             return yield* keepRen(sessionID)
           if (event.type === "session.deleted") {
             if (Option.isSome(yield* ctx.session.get({ sessionID }).pipe(Effect.option))) return

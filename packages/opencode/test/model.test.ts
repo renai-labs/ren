@@ -75,16 +75,14 @@ test("signed in, the plugin lists Ren's models as ren/<endpoint>/<model> with no
   run(
     Effect.gen(function* () {
       const opened = yield* setup()
-      const models = yield* opened.host.client.model.list({ location: opened.host.location }).pipe(Effect.orDie)
+      const models = yield* RenServer.models(opened.host, "ren")
       expect(
-        models.data
-          .filter((each) => each.providerID === "ren")
-          .map((each) => ({
-            id: String(each.id),
-            name: each.name,
-            limit: each.limit,
-            variants: each.variants.map((variant) => String(variant.id)),
-          })),
+        models.map((each) => ({
+          id: String(each.id),
+          name: each.name,
+          limit: each.limit,
+          variants: each.variants.map((variant) => String(variant.id)),
+        })),
       ).toEqual([{ id: "stub/stub-model", name: "Stub", limit: { context: 0, output: 0 }, variants: ["high"] }])
     }),
   ))

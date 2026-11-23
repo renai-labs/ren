@@ -44,7 +44,7 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh.                               |
 | `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.                                        |
 | `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.                                         |
-| `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.                                       |
+| `provider` | `RenProvider`: the provider `ren` (else `ren-cloud`), its models, and the session hooks of a Ren session.                    |
 | `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                                                             |
 | `handlers` | `RenHandlers`: the server part's RPC handlers.                                                                               |
 | `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.                                    |
@@ -106,7 +106,11 @@ A link is `ChatAccess` and `Connection` from `@ren/chat`, wired as `ChatSession`
 
 ## First turn
 
-Signed in, the plugin lists the models of the selected space (`chat.models`) as `ren/<endpoint>/<model>`, with their variants. Their context limit is 0, so OpenCode never compacts a Ren session locally: the brain owns its context. Cost is zero, because Ren lists no prices. Signed out, or when Ren does not answer at load (it waits at most 5 seconds), it registers nothing, and it asks again every 5 minutes, so a later `ren login` adds the models without a restart. After `/ren:login` and `/ren:logout` it asks at once.
+Signed in, the plugin lists the models of the selected space (`chat.models`) as `ren/<endpoint>/<model>`, with their variants. Their context limit is 0, so OpenCode never compacts a Ren session locally: the brain owns its context. Cost is zero, because Ren lists no prices. Loading the plugin never waits on the network: the provider, hooks and RPC register at once, and the models (with any token renewal and space lookup) load in the background and appear when Ren answers. A prompt on a Ren model, or in a Ren session, that is sent before then waits for that first answer (at most 30 seconds). Signed out, or when Ren does not answer, the plugin registers no models, and it asks again every 5 minutes, so a later `ren login` adds the models without a restart. After `/ren:login`, `/ren:logout` and `/ren:space` it asks at once.
+
+### Provider ID
+
+The provider is `ren`. When OpenCode already has another provider `ren`, such as the Ren inference gateway that `ren inference setup` writes into OpenCode's config, the plugin leaves that one untouched and uses `ren-cloud` ("Ren Cloud") instead, and `/ren:new` says so; pick a `ren-cloud/…` model then. When `ren-cloud` is taken too, it registers no models and logs one warning; its commands say why. A Ren session started under the other ID moves to the one in use at its next prompt. This is a stopgap until the provider ID is settled (spec, L29x).
 
 The selected space is the one `/ren:space` stored, else the plugin option `space` (a space ID or slug), else the first space you joined. The models are the selected space's.
 
@@ -223,37 +227,37 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 
 `RenRpc.Definition` (id `ren`). Every method takes an object and can fail with `signed_out` (`data: { server }`, the message says to run `/ren:login`) or `unavailable` (`data: {}`, the message says what failed).
 
-| Method          | Input                               | Output                                       |
-| --------------- | ----------------------------------- | -------------------------------------------- |
-| `listSpaces`    | `{}`                                | `{ spaces: SpaceInfo[], selected }`          |
-| `getSpace`      | `{}`                                | `SpaceInfo`, the selected space              |
-| `selectSpace`   | `{ spaceId }`                       | `SpaceInfo`                                  |
-| `createSession` | `{ model?: { id, variant? } }`      | `{ sessionID, spaceId }`                     |
-| `account`       | `{}`                                | `{ server, environment, user }`              |
-| `login`         | `{ attempt }`                       | `{ url }`                                    |
-| `completeLogin` | `{ attempt, url }`                  | `{}`                                         |
-| `cancelLogin`   | `{ attempt }`                       | `{}`                                         |
-| `logout`        | `{}`                                | `{ server, signedOut }`                      |
-| `moveSession`   | `{ sessionID, transcript, model? }` | `{ sessionID, spaceId }`                     |
-| `requests`      | `{}`                                | `{ forms: LocalForm[], closed }`             |
-| `listSessions`  | `Filter`                            | `{ sessions, space, page, total }`           |
-| `openSession`   | `{ sessionId, existing?, … }`       | `{ sessionID, outcome, import? }`            |
-| `sessionStatus` | `{ sessionID }`                     | `SessionStatus`                              |
-| `retry`         | `{ sessionID }`                     | `{ outcome }`                                |
-| `changes`       | `{ sessionID, path?, mode? }`       | `{ projects, path, mode, branch, files }`    |
-| `listFiles`     | `{ sessionID, path? }`              | `{ path, entries }`                          |
-| `searchFiles`   | `{ sessionID, query }`              | `{ entries }`                                |
-| `readFile`      | `{ sessionID, path }`               | `{ path, size, binary, content, truncated }` |
-| `runShell`      | `{ sessionID, command }`            | `ShellInfo`                                  |
-| `listShells`    | `{ sessionID }`                     | `{ shells }`                                 |
-| `readShell`     | `{ sessionID, shellID, cursor }`    | `{ shell, output, cursor, size, truncated }` |
-| `stopShell`     | `{ sessionID, shellID }`            | `{}`                                         |
-| `sessionInfo`   | `{ sessionID }`                     | `Details`                                    |
-| `activity`      | `{ sessionID }`                     | `{ items: Work[] }`                          |
-| `background`    | `{ sessionID }`                     | `{ moved: Work[] }`                          |
-| `stopSubagent`  | `{ sessionID, childID }`            | `{}`                                         |
+| Method          | Input                                       | Output                                       |
+| --------------- | ------------------------------------------- | -------------------------------------------- |
+| `listSpaces`    | `{}`                                        | `{ spaces: SpaceInfo[], selected }`          |
+| `getSpace`      | `{}`                                        | `SpaceInfo`, the selected space              |
+| `selectSpace`   | `{ spaceId }`                               | `SpaceInfo`                                  |
+| `createSession` | `{ model?: { providerID?, id, variant? } }` | `{ sessionID, spaceId, model }`              |
+| `account`       | `{}`                                        | `{ server, environment, user }`              |
+| `login`         | `{ attempt }`                               | `{ url }`                                    |
+| `completeLogin` | `{ attempt, url }`                          | `{}`                                         |
+| `cancelLogin`   | `{ attempt }`                               | `{}`                                         |
+| `logout`        | `{}`                                        | `{ server, signedOut }`                      |
+| `moveSession`   | `{ sessionID, transcript, model? }`         | `{ sessionID, spaceId }`                     |
+| `requests`      | `{}`                                        | `{ forms: LocalForm[], closed }`             |
+| `listSessions`  | `Filter`                                    | `{ sessions, space, page, total }`           |
+| `openSession`   | `{ sessionId, existing?, … }`               | `{ sessionID, outcome, import? }`            |
+| `sessionStatus` | `{ sessionID }`                             | `SessionStatus`                              |
+| `retry`         | `{ sessionID }`                             | `{ outcome }`                                |
+| `changes`       | `{ sessionID, path?, mode? }`               | `{ projects, path, mode, branch, files }`    |
+| `listFiles`     | `{ sessionID, path? }`                      | `{ path, entries }`                          |
+| `searchFiles`   | `{ sessionID, query }`                      | `{ entries }`                                |
+| `readFile`      | `{ sessionID, path }`                       | `{ path, size, binary, content, truncated }` |
+| `runShell`      | `{ sessionID, command }`                    | `ShellInfo`                                  |
+| `listShells`    | `{ sessionID }`                             | `{ shells }`                                 |
+| `readShell`     | `{ sessionID, shellID, cursor }`            | `{ shell, output, cursor, size, truncated }` |
+| `stopShell`     | `{ sessionID, shellID }`                    | `{}`                                         |
+| `sessionInfo`   | `{ sessionID }`                             | `Details`                                    |
+| `activity`      | `{ sessionID }`                             | `{ items: Work[] }`                          |
+| `background`    | `{ sessionID }`                             | `{ moved: Work[] }`                          |
+| `stopSubagent`  | `{ sessionID, childID }`                    | `{}`                                         |
 
-The panel methods (`changes` to `stopShell`, Panels, and `activity` to `stopSubagent`, Background and activity) take the local `sessionID` and can also fail with `not_ren` (`data: {}`) when the session is not a Ren session. `SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). `Details` is `sessionID`, `ren`, `created` (the Ren session exists), `app` (the web app), `url` (the session's page, or its space's before it exists), `space`, `startedBy`, `origin`, `links` (Ren's `SessionLinks.Info`), `pullRequests` (`PullRequest.Info`), `context` (tokens) and `cost` (`SessionUsage.Info`); a session that is not a Ren session has `ren: false` and nulls. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). `SessionStatus` is `{ sessionID, ren, space, state, detail, retryAt, busy }` (Status and retry), and the event `statusChanged` carries it. `Work` is `{ type: "shell" | "subagent", id, sessionID, label, blocking }`: a shell's ID and the session that started it, or a subagent's session ID twice; `id` is empty while Ren does not name it yet. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+The `model` of `createSession` and `moveSession` is the TUI's current model; the server part uses it only when it is a Ren model, else the space's default, and `createSession` returns the new session's model as `<provider>/<model>`. The panel methods (`changes` to `stopShell`, Panels, and `activity` to `stopSubagent`, Background and activity) take the local `sessionID` and can also fail with `not_ren` (`data: {}`) when the session is not a Ren session. `SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). `Details` is `sessionID`, `ren`, `created` (the Ren session exists), `app` (the web app), `url` (the session's page, or its space's before it exists), `space`, `startedBy`, `origin`, `links` (Ren's `SessionLinks.Info`), `pullRequests` (`PullRequest.Info`), `context` (tokens) and `cost` (`SessionUsage.Info`); a session that is not a Ren session has `ren: false` and nulls. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). `SessionStatus` is `{ sessionID, ren, space, state, detail, retryAt, busy }` (Status and retry), and the event `statusChanged` carries it. `Work` is `{ type: "shell" | "subagent", id, sessionID, label, blocking }`: a shell's ID and the session that started it, or a subagent's session ID twice; `id` is empty while Ren does not name it yet. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 

@@ -230,10 +230,18 @@ export const Definition = Rpc.define({
     createSession: {
       input: Schema.toStandardSchemaV1(
         Schema.Struct({
-          model: Schema.optionalKey(Schema.Struct({ id: Schema.String, variant: Schema.optionalKey(Schema.String) })),
+          model: Schema.optionalKey(
+            Schema.Struct({
+              providerID: Schema.optionalKey(Schema.String),
+              id: Schema.String,
+              variant: Schema.optionalKey(Schema.String),
+            }),
+          ),
         }),
       ),
-      output: Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String, spaceId: Space.ID })),
+      output: Schema.toStandardSchemaV1(
+        Schema.Struct({ sessionID: Schema.String, spaceId: Space.ID, model: Schema.String }),
+      ),
       errors,
     },
     account: {
@@ -264,7 +272,13 @@ export const Definition = Rpc.define({
         Schema.Struct({
           sessionID: Schema.String,
           transcript: Schema.Json,
-          model: Schema.optionalKey(Schema.Struct({ id: Schema.String, variant: Schema.optionalKey(Schema.String) })),
+          model: Schema.optionalKey(
+            Schema.Struct({
+              providerID: Schema.optionalKey(Schema.String),
+              id: Schema.String,
+              variant: Schema.optionalKey(Schema.String),
+            }),
+          ),
         }),
       ),
       output: Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String, spaceId: Space.ID })),

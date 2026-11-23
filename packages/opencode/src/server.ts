@@ -23,6 +23,7 @@ export default Plugin.define({
     return Layer.build(
       Status.layer(ctx).pipe(
         Layer.provideMerge(Sessions.layer(ctx)),
+        Layer.provideMerge(RenProvider.layer(ctx)),
         Layer.provideMerge(Mirror.layer(ctx)),
         Layer.provideMerge(Layer.mergeAll(Title.layer(ctx), Requests.layer(ctx))),
         Layer.provideMerge(Layer.mergeAll(Link.layer, Binding.layer(ctx))),
@@ -32,11 +33,7 @@ export default Plugin.define({
       ),
     ).pipe(
       Effect.flatMap((services) =>
-        RenProvider.register(ctx).pipe(
-          Effect.flatMap((refresh) => RenHandlers.register(ctx, refresh)),
-          Effect.andThen(Controls.register(ctx)),
-          Effect.provideContext(services),
-        ),
+        RenHandlers.register(ctx).pipe(Effect.andThen(Controls.register(ctx)), Effect.provideContext(services)),
       ),
       Effect.catch((error) => Effect.logWarning("The Ren plugin registers nothing", error)),
     )
