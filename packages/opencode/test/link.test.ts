@@ -171,6 +171,30 @@ test("when the brain's URL takes no connection the link asks Ren again with unre
     }),
   ))
 
+test("a consumer that subscribes while the link is connected starts with server.connected, so it reads what it needs as after a reconnect", () =>
+  run(
+    Effect.gen(function* () {
+      const sessionId = Session.ID.create()
+      const ren = yield* fake([ready("http://one", "t1")])
+      const link = yield* open(ren.links, sessionId)
+      const first = yield* follow(link)
+      const stream = yield* Queue.take(ren.opened)
+      stream.send(connected)
+      expect(yield* Queue.take(first)).toEqual(connected)
+      const later = yield* follow(link)
+      const renamed = {
+        id: "evt_renamed",
+        created: 2,
+        type: "session.renamed",
+        data: { sessionID: sessionId, title: "Renamed" },
+      } as const
+      stream.send(renamed)
+      expect((yield* Queue.take(later)).type).toBe("server.connected")
+      expect(yield* Queue.take(later)).toEqual(renamed)
+      expect(yield* Queue.take(first)).toEqual(renamed)
+    }),
+  ))
+
 test("one link serves a session while any scope holds it, and closing the last scope ends its stream", () =>
   run(
     Effect.gen(function* () {

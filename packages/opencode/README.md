@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. The server part registers nothing yet. Built: `turn`, `auth`, `ren` and `link` (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model` and `provider` (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -16,7 +16,7 @@ The three parts load. The server part registers nothing yet. Built: `turn`, `aut
 - OpenCode internals: everything goes through `@opencode/plugin`.
 - Imports from `core`, `db`, `server`, `host-api`, `hand-api` or `cell`. Only tests import `@ren/cell/testing`, to run a real brain.
 
-## How it works (not built)
+## How it works
 
 The server part registers a provider, `ren`. Its language model, an AI SDK `LanguageModelV3` like OpenCode's built-in `claude-agent` provider, sends the prompt to the Ren session's brain over the Chat API and streams the remote turn back into the local session: text, reasoning and the tool calls the brain ran.
 
@@ -42,9 +42,9 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `auth`     | `RenAuth`: the server URL and a currently valid token.                                         |
 | `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.              |
 | `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh. |
-| `model`    | _Not built._ The `LanguageModelV3`.                                                            |
-| `provider` | _Not built._ Provider and model registration.                                                  |
-| `binding`  | _Not built._ The `ren` session metadata.                                                       |
+| `binding`  | `Binding`: the `ren` session metadata and the selected space.                                  |
+| `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.           |
+| `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.         |
 | `mirror`   | _Not built._ Remote activity into the local session.                                           |
 | TUI        | _Not built._ The `/ren:*` commands.                                                            |
 
@@ -67,9 +67,28 @@ The plugin runs in OpenCode's process with only `Scope` in its context, so it pr
 A link is `ChatAccess` and `Connection` from `@ren/chat`, wired as `ChatSession` wires them for the web and mobile apps, so the rules are one copy:
 
 - `client` is a Chat API client with a valid token. It calls `chat.access` through `RenApi`, polls every 2 seconds while the brain starts, and fails with `ChatAccess.AccessFailed` when the brain failed or its space stopped. It authenticates to the brain's URL with Basic `ren:<token>` and asks again within a minute of `expiresAt`. After a gateway 502 or 504, a transport error or two connect timeouts, the next `chat.access` says `unreachable`. The URL can change at each access.
-- `frames` subscribes to the session's events from that moment. The stream reconnects with backoff and asks for access again after it drops or ends with `stream.ended`. Events are not replayed: each connect starts with `server.connected`, after which a consumer reads what it needs again.
+- `frames` subscribes to the session's events from that moment. The stream reconnects with backoff and asks for access again after it drops or ends with `stream.ended`. Events are not replayed: each connect starts with `server.connected`, after which a consumer reads what it needs again. A consumer that subscribes while the stream is connected gets a `server.connected` first, so every consumer starts the same way.
 - `boot` (checking, starting with its phase, ready, failed with its reason, stopped), `status` and `retryAt` are `SubscriptionRef`s.
 - `wake` reconnects a parked stream. `lost` marks the brain unreachable after a request that it refused with 401.
+
+## First turn
+
+Signed in, the plugin lists the models of the selected space (`chat.models`) as `ren/<endpoint>/<model>`, with their variants. Their context limit is 0, so OpenCode never compacts a Ren session locally: the brain owns its context. Cost is zero, because Ren lists no prices. Signed out, or when Ren does not answer at load (it waits at most 5 seconds), it registers nothing, and it asks again every 5 minutes, so a later `ren login` adds the models without a restart.
+
+The selected space is the plugin option `space` (a space ID or slug), else the first space you joined. `/ren:space` will replace this.
+
+For a primary request `doStream`:
+
+1. Reads the OpenCode session ID from `x-opencode-session-id` and the request kind from `x-ren-request-kind`, which the plugin's `model.request` hook sets.
+2. Reads the binding. A session whose binding names another session is a copy (a fork) and is refused.
+3. Reads the local messages (`session.context`). The candidates are the user messages after the last assistant message that completed without an error.
+4. Without a binding, creates the Ren session with the local session's ID, the selected space and the model (`session.create`), then writes the binding.
+5. Opens the link for this turn, subscribes, and waits until it is connected.
+6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`.
+7. The turn starts at `session.inbox.delivered` of a sent message; earlier events are ignored. `turn` converts the events until the execution ends.
+8. When nothing was sent (the brain has every candidate), and after every later `server.connected` (a reconnect, events may be lost), it reads the state again: once the brain has every candidate, a busy session means the turn runs (follow it), an idle one that it ended (finish).
+
+Stopping the local turn cancels the stream, which calls `session.interrupt`. OpenCode does not retry a Ren turn (the `retry` hook): the brain retries model calls itself. The `title` hook answers with the Ren session's title, or none yet, so OpenCode never asks the model for a title. Compaction and one-off generations fail with a message and never reach the brain.
 
 ## Commands the plugin adds (not built)
 
@@ -103,6 +122,21 @@ During development, add this directory to `plugins` in `opencode.jsonc` (the pro
 }
 ```
 
+To try a Ren model against a local server, pass the plugin's options with an entry object, then pick a `ren/…` model:
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "/absolute/path/to/ren/packages/opencode",
+      "options": { "url": "http://localhost:4000", "space": "my-space" },
+    },
+  ],
+}
+```
+
+`url` is the Ren server (default `REN_URL`, then `https://api.useren.ai`); sign in to it with `ren login`, or set `REN_TOKEN`. `space` is a space ID or slug (default: your first joined space).
+
 OpenCode resolves a local directory through its `package.json` `exports`, as it does a published package, so all three parts load from `src`. The TUI loads the TUI part of each plugin its server loads. OpenCode provides `effect` and `@opencode/plugin` to the plugin at runtime.
 
 ## Dependencies
@@ -121,7 +155,7 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests, such as a link to a real brain
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, and a turn from a local OpenCode on a real brain
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 

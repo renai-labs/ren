@@ -4,7 +4,18 @@ import { ChatAccess } from "@ren/chat/chat-access"
 import type { Connection } from "@ren/chat/connection"
 import type { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { Context, Effect, Layer, PubSub, RcMap, type Scope, Stream, type SubscriptionRef } from "effect"
+import {
+  Clock,
+  Context,
+  Effect,
+  Layer,
+  PubSub,
+  RcMap,
+  type Scope,
+  Semaphore,
+  Stream,
+  type SubscriptionRef,
+} from "effect"
 import { RenApi } from "./ren.js"
 
 export interface Link {
@@ -21,6 +32,8 @@ export interface Link {
 const make = Effect.fn("Link.make")(function* (sessionId: Session.ID) {
   const ren = yield* RenApi.Service
   const frames = yield* Effect.acquireRelease(PubSub.unbounded<SessionEvent.Frame>(), PubSub.shutdown)
+  const publishing = yield* Semaphore.make(1)
+  const live = { current: false }
   const access = yield* ChatAccess.make({
     access: (input) =>
       Effect.flatMap(ren.client, (client) =>
@@ -29,7 +42,21 @@ const make = Effect.fn("Link.make")(function* (sessionId: Session.ID) {
   })
   const connection = yield* ChatAccess.connect(access, {
     flushInterval: 0,
-    onFrames: (batch) => PubSub.publishAll(frames, batch).pipe(Effect.asVoid),
+    onFrames: (batch) =>
+      publishing.withPermit(
+        Effect.suspend(() => {
+          live.current ||= batch.some((frame) => frame.type === "server.connected")
+          return PubSub.publishAll(frames, batch)
+        }),
+      ),
+    onStatus: (status) =>
+      status === "connected"
+        ? Effect.void
+        : publishing.withPermit(
+            Effect.sync(() => {
+              live.current = false
+            }),
+          ),
   })
   return {
     sessionId,
@@ -37,7 +64,18 @@ const make = Effect.fn("Link.make")(function* (sessionId: Session.ID) {
     boot: access.boot,
     status: connection.status,
     retryAt: connection.retryAt,
-    frames: Effect.map(PubSub.subscribe(frames), Stream.fromSubscription),
+    frames: publishing.withPermit(
+      Effect.gen(function* () {
+        const subscription = yield* PubSub.subscribe(frames)
+        const connected: SessionEvent.Frame = {
+          id: "evt_link_connected",
+          created: yield* Clock.currentTimeMillis,
+          type: "server.connected",
+          data: {},
+        }
+        return Stream.fromSubscription(subscription).pipe(Stream.prepend(live.current ? [connected] : []))
+      }),
+    ),
     wake: connection.wake,
     lost: access.lost,
   } satisfies Link

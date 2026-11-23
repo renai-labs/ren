@@ -60,7 +60,7 @@ const count = (state: State, tokens: SessionMessage.TokenUsage | undefined): Nex
   parts: [],
 })
 
-const finish = (state: State, raw: string): Next => ({
+export const finish = (state: State, raw: string): Next => ({
   state: { ...state, ended: true },
   parts: [
     {
