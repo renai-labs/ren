@@ -10,6 +10,9 @@ import { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
+import { SessionLinks } from "@ren/schema/session/links"
+import { SessionUsage } from "@ren/schema/session/usage"
+import { PullRequest } from "@ren/schema/pull-request"
 import { Drive } from "@ren/schema/drive"
 import type { SessionVcs } from "@ren/schema/session/vcs"
 import { Shell } from "@ren/schema/shell"
@@ -182,6 +185,9 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     boot: new Map<string, { readonly status: string; readonly phase?: string; readonly reason?: string }>(),
     accessed: Array.of<string>(),
     retries: Array.of<{ readonly sessionID: string; readonly body: string }>(),
+    links: new Map<string, SessionLinks.Info>(),
+    pulls: new Map<string, ReadonlyArray<PullRequest.Info>>(),
+    usage: new Map<string, SessionUsage.Info>(),
     hand: {
       files: true,
       shell: true,
@@ -586,12 +592,27 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       }),
     )
   }
+  const sessionOf = (url: URL) => String(url.pathname.split("/")[2])
   const reads: Record<string, ((url: URL) => Response | Promise<Response>) | undefined> = {
     "/sessions": list,
     messages: (url) => {
-      const sessionId = String(url.pathname.split("/")[2])
+      const sessionId = sessionOf(url)
       return options.saved ? options.saved(sessionId, url) : saved(sessionId, url)
     },
+    links: (url) =>
+      Response.json(
+        Schema.encodeSync(SessionLinks.Info)(
+          state.links.get(sessionOf(url)) ?? { tasks: [], pullRequests: [], issues: [], threads: [] },
+        ),
+      ),
+    "pull-requests": (url) =>
+      Response.json(Schema.encodeSync(Schema.Array(PullRequest.Info))(state.pulls.get(sessionOf(url)) ?? [])),
+    usage: (url) =>
+      Response.json(
+        Schema.encodeSync(SessionUsage.Info)(
+          state.usage.get(sessionOf(url)) ?? { total: 0, models: 0, tools: 0, currency: "usd", source: "billed" },
+        ),
+      ),
   }
   const api = (url: URL, request: Request) => {
     const read = request.method === "GET" ? reads[url.pathname.split("/")[3] ?? url.pathname] : undefined

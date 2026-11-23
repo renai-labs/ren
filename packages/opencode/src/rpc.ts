@@ -2,7 +2,10 @@ export * as RenRpc from "./rpc.js"
 
 import { Rpc } from "@opencode/plugin/rpc"
 import { Form } from "@ren/schema/form"
+import { PullRequest } from "@ren/schema/pull-request"
 import { Session } from "@ren/schema/session"
+import { SessionLinks } from "@ren/schema/session/links"
+import { SessionUsage } from "@ren/schema/session/usage"
 import { Space } from "@ren/schema/space"
 import { Schema, Struct } from "effect"
 
@@ -183,6 +186,22 @@ export const ShellOutput = Schema.Struct({
 
 const Shell = Schema.Struct({ ...Local, shellID: Schema.String })
 
+export interface Details extends Schema.Schema.Type<typeof Details> {}
+export const Details = Schema.Struct({
+  sessionID: Schema.String,
+  ren: Schema.Boolean,
+  created: Schema.Boolean,
+  app: Schema.String,
+  url: Schema.NullOr(Schema.String),
+  space: Schema.NullOr(SpaceInfo),
+  startedBy: Schema.NullOr(Schema.String),
+  origin: Schema.NullOr(Session.Origin),
+  links: SessionLinks.Info,
+  pullRequests: Schema.Array(PullRequest.Info),
+  context: Schema.NullOr(Schema.Number),
+  cost: Schema.NullOr(SessionUsage.Info),
+}).annotate({ identifier: "RenRpc.Details" })
+
 export const Definition = Rpc.define({
   id: "ren",
   methods: {
@@ -320,6 +339,7 @@ export const Definition = Rpc.define({
       errors: handErrors,
     },
     stopShell: { input: Schema.toStandardSchemaV1(Shell), output: none, errors: handErrors },
+    sessionInfo: { input: SessionInput, output: Schema.toStandardSchemaV1(Details), errors },
   },
   events: {
     spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },

@@ -79,3 +79,22 @@ test("signed out, the plugin's RPC answers signed_out and the Ren commands tell 
     }
     expect(toasts).toEqual([told, told, told])
   }).pipe(Effect.scoped, Effect.runPromise))
+
+test("signed out, a Ren session's info answers signed_out, and a local session's info needs no login", () =>
+  Effect.gen(function* () {
+    const opened = yield* setup()
+    const at = { location: opened.host.location }
+    const rpc = opened.host.client.rpc(RenRpc.Definition)
+    const session = yield* opened.host.client.session.create(at).pipe(Effect.orDie)
+    expect(yield* rpc.sessionInfo({ sessionID: session.id }, at)).toMatchObject({ ren: false })
+    yield* opened.host.client.session
+      .update({
+        sessionID: session.id,
+        metadata: { ren: { spaceId: opened.ren.state.spaceId, sessionId: session.id } },
+      })
+      .pipe(Effect.orDie)
+    expect(yield* rpc.sessionInfo({ sessionID: session.id }, at).pipe(Effect.flip)).toMatchObject({
+      type: "signed_out",
+    })
+    expect(opened.ren.state.accessed).toEqual([])
+  }).pipe(Effect.scoped, Effect.runPromise))

@@ -9,6 +9,7 @@ import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
 import { Mirror } from "./mirror.js"
 import { Hand } from "./hand.js"
+import { Info } from "./info.js"
 import { RenApi } from "./ren.js"
 import { Requests } from "./requests.js"
 import { RenRpc } from "./rpc.js"
@@ -56,6 +57,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
     )
   const attempts = yield* FiberHandle.make<void>()
   const hand = yield* Hand.make
+  const details = yield* Info.make(ctx.options)
   const pending: { attempt: string; redirect: RenAuth.Authorization["redirect"] } = {
     attempt: "",
     redirect: () => Effect.void,
@@ -274,6 +276,7 @@ export const register = Effect.fn("RenHandlers.register")(function* (
     listShells: (input, context) => hand.listShells(input).pipe(Effect.mapError(refuse(context))),
     readShell: (input, context) => hand.readShell(input).pipe(Effect.mapError(refuse(context))),
     stopShell: (input, context) => hand.stopShell(input).pipe(Effect.mapError(refuse(context))),
+    sessionInfo: (input, context) => details(input.sessionID).pipe(Effect.mapError(answer(context))),
   })
   yield* Deferred.succeed(emitter, (space) => registration.events.emit("spaceSelected", space))
   yield* Deferred.succeed(announcer, registration.events.emit)

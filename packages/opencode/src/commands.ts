@@ -513,3 +513,151 @@ export const shell = async (surface: PanelSurface, command: string | undefined):
     })
     .catch(fail(surface))
 }
+
+export interface InfoSurface extends Surface {
+  readonly open: (url: string) => boolean
+  readonly ui: Surface["ui"] & {
+    readonly dialog: Pick<Context["ui"]["dialog"], "select" | "alert">
+  }
+}
+
+export const sessionInfo = (surface: Pick<Surface, "client" | "location">, sessionID: string) =>
+  surface.client
+    .rpc(RenRpc.Definition)
+    .sessionInfo({ sessionID }, at(surface))
+    .then(
+      (info): RenRpc.Details | undefined => info,
+      () => undefined,
+    )
+
+const taskStates: Record<RenRpc.Details["links"]["tasks"][number]["status"], string> = {
+  backlog: "backlog",
+  todo: "to do",
+  in_progress: "in progress",
+  done: "done",
+  dismissed: "dismissed",
+}
+
+const channels: Record<RenRpc.Details["links"]["threads"][number]["provider"], { title: string; prefix: string }> = {
+  slack: { title: "Slack", prefix: "#" },
+  github: { title: "GitHub", prefix: "" },
+  linear: { title: "Linear", prefix: "" },
+}
+
+const repositoryOf = (url: string) => URL.parse(url)?.pathname.split("/").slice(1, 3).join("/") ?? url
+
+export interface LinkRow {
+  readonly group: "Tasks" | "Pull requests" | "Issues" | "Threads"
+  readonly title: string
+  readonly detail: string
+  readonly url: string
+}
+
+export const linkRows = (info: RenRpc.Details): ReadonlyArray<LinkRow> => {
+  const pulls = new Map(info.pullRequests.map((pull) => [pull.url, pull]))
+  return [
+    ...info.links.tasks.map((task) => ({
+      group: "Tasks" as const,
+      title: `${task.identifier} ${task.title}`,
+      detail: taskStates[task.status],
+      url: `${info.app}/tasks/${task.id}`,
+    })),
+    ...info.links.pullRequests.map((pull) => ({
+      group: "Pull requests" as const,
+      title: pulls.get(pull.url)?.title ?? repositoryOf(pull.url),
+      detail: [`#${pull.number}`, pulls.get(pull.url)?.state].filter(Boolean).join(" · "),
+      url: pull.url,
+    })),
+    ...info.links.issues.map((issue) => ({
+      group: "Issues" as const,
+      ...(issue.kind === "github_issue"
+        ? { title: repositoryOf(issue.url), detail: `#${URL.parse(issue.url)?.pathname.split("/").at(4) ?? ""}` }
+        : {
+            title:
+              URL.parse(issue.url)
+                ?.pathname.split("/")
+                .find((part) => /^[A-Z][A-Z0-9]*-\d+$/u.test(part)) ?? "Linear issue",
+            detail: "Linear",
+          }),
+      url: issue.url,
+    })),
+    ...info.links.threads.map((thread) => ({
+      group: "Threads" as const,
+      title: thread.place
+        ? `${channels[thread.provider].prefix}${thread.place}`
+        : `${channels[thread.provider].title} thread`,
+      detail: channels[thread.provider].title,
+      url: thread.url,
+    })),
+  ]
+}
+
+const dollars = (micro: number) => (micro > 0 && micro < 10_000 ? "<$0.01" : `$${(micro / 1_000_000).toFixed(2)}`)
+
+export const about = (info: RenRpc.Details) => ({
+  started: [info.startedBy && `by ${info.startedBy}`, info.origin && origins[info.origin]].filter(Boolean).join(" · "),
+  context: info.context ? `${info.context.toLocaleString("en-US")} tokens` : "",
+  cost: info.cost
+    ? [
+        dollars(info.cost.total),
+        ...(info.cost.models > 0 ? [`LLM ${dollars(info.cost.models)}`] : []),
+        ...(info.cost.tools > 0 ? [`tools ${dollars(info.cost.tools)}`] : []),
+      ].join(" · ")
+    : "",
+})
+
+const visit = (surface: InfoSurface, url: string, title: string) => {
+  if (!surface.open(url)) void surface.ui.dialog.alert({ title, message: `Open this address in your browser:\n${url}` })
+}
+
+const shownInfo = async (surface: InfoSurface) => {
+  const route = surface.ui.router.current()
+  if (route.type !== "session") {
+    surface.ui.toast.show({ title: "Ren", message: "Open a Ren session first.", variant: "warning" })
+    return
+  }
+  const info = await surface.client.rpc(RenRpc.Definition).sessionInfo({ sessionID: route.sessionID }, at(surface))
+  if (!info.ren) surface.ui.toast.show({ title: "Ren", message: "This is not a Ren session.", variant: "warning" })
+  return info.ren ? info : undefined
+}
+
+export const openWeb = (surface: InfoSurface) =>
+  shownInfo(surface)
+    .then((info) => {
+      if (!info?.url) return
+      if (!info.created)
+        surface.ui.toast.show({
+          title: "Ren",
+          message: `This session starts on Ren with its first prompt, so its space ${info.space?.name ?? ""} opens instead.`,
+          variant: "info",
+        })
+      visit(surface, info.url, "Open in Ren")
+    })
+    .catch(fail(surface))
+
+export const links = (surface: InfoSurface) =>
+  shownInfo(surface)
+    .then(async (info) => {
+      if (!info) return
+      const rows = linkRows(info)
+      if (rows.length === 0) {
+        surface.ui.toast.show({
+          title: "Ren",
+          message: "This Ren session has no tasks, pull requests, issues or threads yet.",
+          variant: "info",
+        })
+        return
+      }
+      const chosen = await surface.ui.dialog.select({
+        title: "Ren session links",
+        placeholder: "Filter",
+        options: rows.map((row) => ({
+          title: row.title,
+          value: row.url,
+          description: row.detail,
+          category: row.group,
+        })),
+      })
+      if (chosen) visit(surface, chosen, "Open link")
+    })
+    .catch(fail(surface))

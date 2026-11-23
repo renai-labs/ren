@@ -4,6 +4,7 @@ import { createEffect, createSignal, on, Show, untrack } from "solid-js"
 import { RenCommands } from "./commands.js"
 import { Changes } from "./panels/changes.js"
 import { Files } from "./panels/files.js"
+import { Info } from "./panels/info.js"
 import { Shells } from "./panels/shells.js"
 import { RenRpc } from "./rpc.js"
 import { Support } from "./support.js"
@@ -37,7 +38,9 @@ export default Plugin.define({
       },
       open: (url: string) => {
         const opener = process.platform === "darwin" ? "open" : "xdg-open"
-        if (Bun.which(opener)) Bun.spawn([opener, url], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref()
+        if (!Bun.which(opener)) return false
+        Bun.spawn([opener, url], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref()
+        return true
       },
     }
     const [space, setSpace] = createSignal<RenRpc.SpaceInfo>()
@@ -145,6 +148,24 @@ export default Plugin.define({
             void RenCommands.shell(surface, input).then((shell) => {
               if (shell) setShown(shell.id)
             }),
+        },
+        {
+          id: "ren.open",
+          title: "Open in Ren",
+          description: "Open the Ren session in the web app",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:open" },
+          run: () => RenCommands.openWeb(surface),
+        },
+        {
+          id: "ren.links",
+          title: "Ren session links",
+          description: "Open a task, pull request, issue or thread of the Ren session",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:links" },
+          run: () => RenCommands.links(surface),
         },
       ],
     }))
@@ -266,6 +287,36 @@ export default Plugin.define({
     ]
     const requests = RenCommands.requests(surface)
     stops.push(context.data.on("server.connected", () => void RenCommands.syncRequests(surface)))
+    const [infos, setInfos] = createSignal<ReadonlyMap<string, RenRpc.Details | undefined>>(new Map())
+    const reloadInfo = (sessionID: string) => {
+      void RenCommands.sessionInfo(surface, sessionID).then((found) =>
+        setInfos((current) => new Map(current).set(sessionID, found)),
+      )
+    }
+    const reloadInfos = () => {
+      for (const sessionID of infos().keys()) reloadInfo(sessionID)
+    }
+    stops.push(
+      context.ui.slot({
+        append: "sidebar.content",
+        render: (input) => {
+          createEffect(on(() => input.sessionID, reloadInfo))
+          return <Info context={context} info={infos().get(input.sessionID)} />
+        },
+      }),
+      context.data.on("session.execution.succeeded", (event) => {
+        if (infos().has(event.data.sessionID)) reloadInfo(event.data.sessionID)
+      }),
+      context.data.on("session.execution.failed", (event) => {
+        if (infos().has(event.data.sessionID)) reloadInfo(event.data.sessionID)
+      }),
+      context.client.rpc(RenRpc.Definition).events.on("statusChanged", (event) => {
+        if (!event.data.busy && infos().has(event.data.sessionID)) reloadInfo(event.data.sessionID)
+      }),
+      context.client.rpc(RenRpc.Definition).events.on("signedIn", reloadInfos),
+      context.client.rpc(RenRpc.Definition).events.on("signedOut", reloadInfos),
+      context.data.on("server.connected", reloadInfos),
+    )
     return () => {
       for (const stop of stops) stop()
       void requests.then((stop) => stop())
