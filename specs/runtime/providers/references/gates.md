@@ -125,6 +125,27 @@ Imports: `@opencode/core/plugin/provider/claude-agent/{claude/io,claude/sessions
 
 **Result.** Turn 2 finishes on the old header. Turn 3 uses the new header. Transcript: user, assistant `stop`, idle for all three turns.
 
+## GR1. The Linux `claude` in a real brain
+
+**Setup.** A local Ren on E2B with its own template, the egress in Docker and the model gateway (LiteLLM) on the Mac, as the deployed path. The template carries the brain's dependency bundle, which holds the SDK's Linux binaries. A chat on a Ren Claude model (runtime `claude`), with a stand-in upstream behind the gateway.
+
+**Result.** The brain found the glibc binary next to the SDK and started `claude`. Each call left the sandbox as `POST /v1/messages` to the gateway host; the egress filled in `ren:MODELS` (in `Authorization` and `x-litellm-api-key`) and let it through. The gateway called the upstream; the chat finished `succeeded` with the upstream's text, under provider `ren`, with the Claude Agent session in the message's metadata.
+
+**Found.** The dependency bundle carries both Linux binaries of the SDK (glibc and musl, about 260 MB each unpacked), because the bundle installs for `--os linux --cpu x64` without a libc. Only glibc is used.
+
+## GR2. The egress refuses `claude`'s calls to other hosts
+
+**Setup.** In the same brain sandbox: `POST https://api.anthropic.com/v1/messages`, once with `Authorization: Bearer ren:MODELS` (what `claude` sends) and once without a placeholder.
+
+**Result.**
+
+| Call                      | Answer                                    |
+| ------------------------- | ----------------------------------------- |
+| With `ren:MODELS`         | `403`, `X-Ren-Egress: host_not_allowed`   |
+| Without a Ren placeholder | `401` from Anthropic: other programs pass |
+
+A turn on the Claude runtime still works (GR1).
+
 ## G6. `switchModel` in the `retry` hook
 
 **Setup.** `BrainTest` with a plugin. The stub model answers 503 once. The `retry` hook calls `context.session.switchModel` to `stub/stub-other` and sets `{ retry: true, delay: 0 }`.
