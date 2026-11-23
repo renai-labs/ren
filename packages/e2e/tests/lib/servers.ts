@@ -106,9 +106,23 @@ export async function script(
   input: {
     readonly reply?: string
     readonly tools?: ReadonlyArray<{ readonly name: string; readonly input: unknown }>
+    readonly status?: number
+    readonly code?: string
+    readonly headers?: Readonly<Record<string, string>>
   },
 ) {
   const response = await request.post(`${mailboxURL}/script`, { data: input })
   expect(response.ok()).toBe(true)
   return Schema.decodeUnknownSync(Schema.Struct({ marker: Schema.String }))(await response.json()).marker
+}
+
+// oxlint-disable-next-line ren/no-comments -- Sets how many free-model requests the stand-in gateway counted today for the signed-in person's organization.
+export async function setFreeUsed(request: APIRequestContext, used: number) {
+  const me = await request.get(`${serverURL}/me`)
+  expect(me.ok()).toBe(true)
+  const organizationId = Schema.decodeUnknownSync(
+    Schema.Struct({ organization: Schema.Struct({ id: Schema.String }) }),
+  )(await me.json()).organization.id
+  const response = await request.post(`${mailboxURL}/free`, { data: { organizationId, used } })
+  expect(response.ok()).toBe(true)
 }

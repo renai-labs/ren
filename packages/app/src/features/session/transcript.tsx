@@ -102,6 +102,7 @@ export interface TranscriptProps {
   readonly detail: TimelineDetail.Detail
   readonly foldMessages?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
+  readonly providerNames?: ReadonlyMap<string, string> | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
   readonly onTryAgain?: ((text: string) => void) | undefined
@@ -144,8 +145,10 @@ function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; con
       problem={TurnProblems.of({
         kind: row.kind,
         text: row.text,
+        body: row.body,
         assistants: props.context.turns.get(row.userMessageID) ?? [],
         modelNames: props.context.modelNames,
+        providerNames: props.context.providerNames,
         admin: props.context.admin,
       })}
       text={row.text}
@@ -157,7 +160,7 @@ function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; con
 function RetryRow(props: { row: Extract<TimelineRow.Row, { _tag: "Retry" }>; context: Context }) {
   const row = props.row
   if (props.context.activeMessageID !== row.userMessageID) return null
-  const retrying = TurnProblems.retrying(props.context.turns.get(row.userMessageID) ?? [])
+  const retrying = TurnProblems.retrying(props.context.turns.get(row.userMessageID) ?? [], props.context.providerNames)
   if (!retrying) return null
   return <TurnRetrying retrying={retrying} handlers={props.context.handlers(row.userMessageID)} />
 }
@@ -235,6 +238,7 @@ interface Context {
   readonly admin: boolean
   readonly handlers: (userMessageID: string) => TurnProblems.Handlers
   readonly modelNames: ReadonlyMap<string, string>
+  readonly providerNames: ReadonlyMap<string, string>
   readonly byId: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   readonly activeMessageID: string | undefined
@@ -679,6 +683,7 @@ function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMess
       }
     },
     modelNames: props.modelNames ?? new Map(),
+    providerNames: props.providerNames ?? new Map(),
     byId,
     turns: Projection.assistantMessagesByParent(props.messages),
     activeMessageID: props.activeMessageID,

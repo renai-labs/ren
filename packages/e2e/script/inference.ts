@@ -54,6 +54,7 @@ interface Request {
 export const start = (stub: string, ren: { readonly url: string; readonly usageKey: string }) => {
   const keys: Key[] = []
   const seats: Array<{ readonly id: string; readonly org: string; readonly label: string }> = []
+  const freeUsed = new Map<string, number>()
   const tellRen = (org: string) =>
     fetch(`${ren.url}/internal/inference/changed`, {
       method: "POST",
@@ -100,8 +101,12 @@ export const start = (stub: string, ren: { readonly url: string; readonly usageK
       return Response.json({ last4: key.slice(-4), testedAt: new Date().toISOString() })
     },
     "DELETE /v1/providers/:id/key": () => new Response(null, { status: 204 }),
-    "GET /v1/usage/free": () =>
-      Response.json({ used: 41, limit: 100, resetsAt: new Date(Date.now() + 3_600_000).toISOString() }),
+    "GET /v1/usage/free": (input) =>
+      Response.json({
+        used: freeUsed.get(input.claims?.org ?? "") ?? 41,
+        limit: 100,
+        resetsAt: new Date(new Date().setUTCHours(24, 0, 0, 0)).toISOString(),
+      }),
     "POST /v1/keys": () => Response.json({ key: "stub-key" }),
     "PUT /v1/ren-models": async (input) => {
       const body: unknown = await input.request.json()
@@ -167,6 +172,8 @@ export const start = (stub: string, ren: { readonly url: string; readonly usageK
   })
   return {
     url: `http://127.0.0.1:${server.port}`,
+    // oxlint-disable-next-line ren/no-comments -- A test sets an organization's free requests of today, as the gateway counts them.
+    setFreeUsed: (org: string, used: number) => void freeUsed.set(org, used),
     stop: () => server.stop(true),
   }
 }

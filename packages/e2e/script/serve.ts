@@ -34,7 +34,12 @@ const ScriptedTool = Schema.Struct({
 const Script = Schema.Struct({
   reply: Schema.optionalKey(Schema.String),
   tools: Schema.optionalKey(Schema.Array(ScriptedTool)),
+  status: Schema.optionalKey(Schema.Int),
+  code: Schema.optionalKey(Schema.String),
+  headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
 })
+
+const FreeUsed = Schema.Struct({ organizationId: Schema.String, used: Schema.Int })
 
 const held = new Map<string, ReturnType<ReturnType<typeof Shared.stub>["script"]>>()
 
@@ -73,6 +78,18 @@ const ownKeyProvider = (id: string, name: string, model: { readonly id: string; 
   },
 })
 
+// oxlint-disable-next-line ren/no-comments -- A free model of Ren's upstream: price 0 on models.dev.
+const freeModel = {
+  id: "stub/stub-free",
+  canonical_id: "stub/stub-free",
+  name: "Stub Free",
+  type: "chat",
+  capabilities: { tools: { supported: true } },
+  modalities: { input: ["text"] },
+  limit: { context: 100_000, output: 4000 },
+  cost: { text: { input: { price: 0 }, output: { price: 0 } } },
+}
+
 const modelsDev = () => {
   const body = JSON.stringify({
     groq: ownKeyProvider("groq", "Groq", { id: "llama-5", name: "Llama 5" }),
@@ -80,27 +97,30 @@ const modelsDev = () => {
     [upstream]: {
       id: upstream,
       name: "Stub upstream",
-      models: Object.fromEntries(
-        listed.map((model) => [
-          model.id,
-          {
-            id: model.id,
-            canonical_id: model.id,
-            name: model.name ?? model.id,
-            type: model.type,
-            capabilities: {
-              tools: { supported: true },
-              reasoning: {
-                supported: Boolean(model.efforts),
-                effort: model.efforts,
+      models: {
+        [freeModel.id]: freeModel,
+        ...Object.fromEntries(
+          listed.map((model) => [
+            model.id,
+            {
+              id: model.id,
+              canonical_id: model.id,
+              name: model.name ?? model.id,
+              type: model.type,
+              capabilities: {
+                tools: { supported: true },
+                reasoning: {
+                  supported: Boolean(model.efforts),
+                  effort: model.efforts,
+                },
               },
+              modalities: { input: model.input ?? ["text"] },
+              limit: model.limit,
+              cost: { text: { input: { price: 1 }, output: { price: 2 } } },
             },
-            modalities: { input: model.input ?? ["text"] },
-            limit: model.limit,
-            cost: { text: { input: { price: 1 }, output: { price: 2 } } },
-          },
-        ]),
-      ),
+          ]),
+        ),
+      },
     },
   })
   return { body, etag: `"${Bun.hash(body).toString(16)}"` }
@@ -110,6 +130,20 @@ const modelsDevAnswer = (request: Request) => {
   const current = modelsDev()
   if (request.headers.get("if-none-match") === current.etag) return new Response(null, { status: 304 })
   return new Response(current.body, { headers: { "content-type": "application/json", etag: current.etag } })
+}
+
+// oxlint-disable-next-line ren/no-comments -- A test scripts the stub model's next answers (`/script`), or sets how many free-model requests the stand-in gateway counted today for an organization (`/free`).
+const controlRoute = async (request: Request) => {
+  const pathname = new URL(request.url).pathname
+  if (request.method !== "POST") return
+  if (pathname === "/script") {
+    const script = Shared.stub().script(Schema.decodeUnknownSync(Script)(await request.json()))
+    return Response.json({ marker: script.marker })
+  }
+  if (pathname !== "/free") return
+  const free = Schema.decodeUnknownSync(FreeUsed)(await request.json())
+  inference.setFreeUsed(free.organizationId, free.used)
+  return new Response(null, { status: 204 })
 }
 
 let log = ""
@@ -124,12 +158,8 @@ const mailbox = Bun.serve({
       return new Response(null, { status: 204 })
     }
     if (request.method === "GET" && new URL(request.url).pathname === "/models-dev") return modelsDevAnswer(request)
-    const stubbed = stubRoute(request)
+    const stubbed = stubRoute(request) ?? (await controlRoute(request))
     if (stubbed) return stubbed
-    if (request.method === "POST" && new URL(request.url).pathname === "/script") {
-      const script = Shared.stub().script(Schema.decodeUnknownSync(Script)(await request.json()))
-      return Response.json({ marker: script.marker })
-    }
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })

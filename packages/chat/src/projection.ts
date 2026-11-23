@@ -355,7 +355,12 @@ const messageRows = (
     if (isActive && lastStep.message.retry) rows.push(new TimelineRow.Retry({ userMessageID: turnID }))
     else if (error && !isInterrupted(error))
       rows.push(
-        new TimelineRow.Error({ userMessageID: turnID, kind: error.type, text: unwrapErrorMessage(error.message) }),
+        new TimelineRow.Error({
+          userMessageID: turnID,
+          kind: error.type,
+          text: unwrapErrorMessage(error.message),
+          ...(error.response && { body: error.response.body }),
+        }),
       )
   }
 
@@ -389,6 +394,7 @@ const messageRows = (
             userMessageID: turnID,
             kind: entry.message.error.type,
             text: unwrapErrorMessage(entry.message.error.message),
+            ...(entry.message.error.response && { body: entry.message.error.response.body }),
           }),
         )
       return []

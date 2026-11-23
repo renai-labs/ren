@@ -37,6 +37,7 @@ export class Error extends Data.TaggedClass("Error")<{
   readonly userMessageID: string
   readonly kind: string
   readonly text: string
+  readonly body?: string
 }> {}
 
 export class Retry extends Data.TaggedClass("Retry")<{ readonly userMessageID: string }> {}
