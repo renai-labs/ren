@@ -414,13 +414,7 @@ Built in Ren core: every route above except `GET /v1/catalog`, which Ren no long
 
 ### 13.1 Gates
 
-Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6, GR1, GR2.
-
-Pending (Ren side):
-
-| Gate | Question                                                                                                | When              |
-| ---- | ------------------------------------------------------------------------------------------------------- | ----------------- |
-| GR3  | A models.dev change notifies only the organizations whose list changed, under load (many organizations) | with the list job |
+Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6, GR1, GR2, GR3. The paths of §13.3 that need the real gateway and real seats ran once on E2B ([`references/gates.md`](references/gates.md) "End to end on E2B").
 
 ### 13.2 Package tests
 

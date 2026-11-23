@@ -146,6 +146,29 @@ Imports: `@opencode/core/plugin/provider/claude-agent/{claude/io,claude/sessions
 
 A turn on the Claude runtime still works (GR1).
 
+## GR3. A models.dev change under load
+
+**Setup.** `core/test/model-lists.slow.test.ts`: 2,000 organizations in the test database, 1,000 with a Groq key. models.dev gains one Groq model.
+
+**Result.** The list job notified exactly the 1,000 Groq organizations (`org:<id>`, once each), no other and never `all`. The job took 53 ms.
+
+## End to end on E2B
+
+**Setup.** One local Ren on E2B (own template, the egress in Docker, the model gateway and inference of this build). Upstream and own-key vendors are a stand-in on the Mac; the ChatGPT seat is Ren's test account (token sharing); the Claude seat is a real local seat that the gateway asks for each call. Chats were started through Ren's API and checked in the app with a headless browser.
+
+| Path                                        | Result                                                                                                                                                                                           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ren credit, Claude model (`claude` runtime) | turn succeeded; usage row payer `ren`, `access: ren`                                                                                                                                             |
+| Ren credit, HTTP model                      | turn succeeded; cost at the models.dev price                                                                                                                                                     |
+| Ren free model; the 101st request           | turn succeeded; the 101st was refused at once (`x-should-retry: false`) with the free-cap text; `limits.get` showed 100%; the app showed the 90% banner and the card                             |
+| Own key (Groq)                              | the key test refused a wrong key with the vendor's message; the vendor received the organization's key; the key was in no Ren or gateway log or table; usage row payer `customer`, `access: key` |
+| ChatGPT seat                                | sign-in imported, 10 models listed, OpenAI card on the subscription method; turn succeeded through the seat hook (seat taken, outcome reported, seat given back)                                 |
+| Claude seat                                 | Anthropic card on the subscription method; turn on `claude` succeeded through the seat hook on the real seat                                                                                     |
+| No credit, Claude model                     | the `claude` program passes on only the error's message; with the code at its end (`(insufficient_credits)`) the app showed the out-of-credits card with Add credits, Change model and Providers |
+| Card off during a chat                      | the picker lost the card's models within 0.2 s; the brain pulled within 0.8 s; the next turn showed "model switched" and ran on the settings model                                               |
+
+**Found.** The dependency bundle's version changed between two builds of the same code, so a template seeded with one build did not match the next, and a brain downloaded the dependency bundle (517 MB) through the bundle tunnel. Pin the published bundle set to the template's dependencies when testing with tunnels.
+
 ## G6. `switchModel` in the `retry` hook
 
 **Setup.** `BrainTest` with a plugin. The stub model answers 503 once. The `retry` hook calls `context.session.switchModel` to `stub/stub-other` and sets `{ retry: true, delay: 0 }`.
