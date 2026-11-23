@@ -8,6 +8,7 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { type Context, Effect, Exit, Option, Schema, Stream, SubscriptionRef } from "effect"
 import { Binding } from "./binding.js"
 import { Link } from "./link.js"
+import { Mirror } from "./mirror.js"
 import { RenApi } from "./ren.js"
 import { Turn } from "./turn.js"
 
@@ -15,20 +16,23 @@ export const kindHeader = "x-ren-request-kind"
 export const variantHeader = "x-ren-variant"
 const sessionHeader = "x-opencode-session-id"
 
-export type Services = Binding.Service | RenApi.Service | Link.Service
+export type Services = Binding.Service | RenApi.Service | Link.Service | Mirror.Service
 
 class TurnError extends Schema.TaggedError<TurnError>()("RenModel.TurnError", { message: Schema.String }) {}
 
 interface Candidate {
   readonly id: SessionMessage.ID
   readonly text: string
+  readonly remote: boolean
 }
 
 interface State {
   readonly phase: "connecting" | "waiting" | "started" | "ended"
-  readonly missing: ReadonlySet<string>
+  readonly expected: ReadonlySet<string>
   readonly turn: Turn.State
 }
+
+const isRemote = Schema.is(Schema.Struct({ remote: Schema.Literal(true) }))
 
 const refused = {
   compaction:
@@ -86,6 +90,7 @@ const turn = (input: {
       const bindings = yield* Binding.Service
       const ren = yield* RenApi.Service
       const links = yield* Link.Service
+      const mirror = yield* Mirror.Service
       const sessionID = yield* Schema.decodeUnknownEffect(Session.ID)(input.sessionID).pipe(
         Effect.mapError(() => new TurnError({ message: `OpenCode session ${input.sessionID} has no ID Ren accepts.` })),
       )
@@ -105,7 +110,7 @@ const turn = (input: {
         if (message.type !== "user" || message.text.trim() === "") return []
         return Option.match(Schema.decodeUnknownOption(SessionMessage.ID)(message.id), {
           onNone: () => [],
-          onSome: (id) => [{ id, text: message.text }],
+          onSome: (id) => [{ id, text: message.text, remote: isRemote(message.metadata) }],
         })
       })
       if (Option.isNone(created)) {
@@ -127,8 +132,14 @@ const turn = (input: {
           )
         yield* bindings.set(sessionID, { spaceId, sessionId: sessionID })
       }
+      yield* mirror.watch(sessionID)
       const link = yield* links.open(sessionID)
-      const frames = yield* link.frames
+      const replay = yield* mirror.replay(
+        sessionID,
+        candidates.filter((candidate) => candidate.remote).map((candidate) => candidate.id),
+      )
+      const covered = Option.match(replay, { onNone: () => new Set<string>(), onSome: (found) => found.ids })
+      const frames = Option.isSome(replay) ? replay.value.frames : yield* link.frames
       yield* link.wake
       const chat = yield* link.client
       yield* Effect.addFinalizer((exit) =>
@@ -158,44 +169,65 @@ const turn = (input: {
         const next = Turn.finish(state.turn, "caught-up")
         return [{ ...state, phase: "ended", turn: next.state }, next.parts] as const
       })
+      const connect = Effect.fnUntraced(function* (state: State) {
+        const missing = yield* Effect.filter(
+          candidates.filter((candidate) => !covered.has(candidate.id)),
+          (candidate) => Effect.map(has(candidate.id), (found) => !found),
+        )
+        yield* Effect.forEach(
+          missing.filter((candidate) => !candidate.remote),
+          (candidate) =>
+            chat.session
+              .prompt({ sessionID, id: candidate.id, text: candidate.text, delivery: "steer" })
+              .pipe(Effect.mapError(failed)),
+          { discard: true },
+        )
+        const waiting: State = {
+          ...state,
+          phase: "waiting",
+          expected: new Set([...covered, ...missing.map((candidate) => candidate.id)]),
+        }
+        return waiting.expected.size === 0 ? yield* resync(waiting) : ([waiting, []] as const)
+      })
+      const isNextMessage = (state: State, delivered: Option.Option<SessionMessage.ID>) =>
+        Option.isSome(delivered) &&
+        state.expected.size === 0 &&
+        !candidates.some((candidate) => candidate.id === delivered.value)
+          ? chat.session.message({ sessionID, messageID: delivered.value }).pipe(
+              Effect.map((message) => message.type === "user"),
+              Effect.catchTag("NotFoundError", () => Effect.succeed(false)),
+              Effect.mapError(failed),
+            )
+          : Effect.succeed(false)
       const step = Effect.fnUntraced(function* (
         state: State,
         frame: SessionEvent.Frame,
       ): Effect.fn.Return<readonly [State, ReadonlyArray<Turn.Part>], TurnError> {
-        if (frame.type === "server.connected") {
-          if (state.phase !== "connecting") return yield* resync(state)
-          const missing = yield* Effect.filter(candidates, (candidate) =>
-            Effect.map(has(candidate.id), (found) => !found),
-          )
-          yield* Effect.forEach(
-            missing,
-            (candidate) =>
-              chat.session
-                .prompt({ sessionID, id: candidate.id, text: candidate.text, delivery: "steer" })
-                .pipe(Effect.mapError(failed)),
-            { discard: true },
-          )
-          const waiting: State = {
-            ...state,
-            phase: "waiting",
-            missing: new Set(missing.map((candidate) => candidate.id)),
-          }
-          return missing.length === 0 ? yield* resync(waiting) : [waiting, []]
-        }
+        if (frame.type === "server.connected")
+          return yield* state.phase === "connecting" ? connect(state) : resync(state)
         if (frame.type === "server.heartbeat" || frame.type === "stream.ended") return [state, []]
-        const started =
-          state.phase === "started" ||
-          (state.phase === "waiting" &&
-            frame.type === "session.inbox.delivered" &&
-            frame.data.sessionID === sessionID &&
-            state.missing.has(frame.data.inboxID))
-        if (!started) return [state, []]
-        const next = Turn.next(state.turn, frame)
+        const delivered =
+          frame.type === "session.inbox.delivered" && frame.data.sessionID === sessionID
+            ? Option.some(frame.data.inboxID)
+            : Option.none()
+        if (Option.isSome(delivered) && state.expected.has(delivered.value))
+          return [
+            {
+              ...state,
+              phase: "started",
+              expected: new Set([...state.expected].filter((id) => id !== delivered.value)),
+            },
+            [],
+          ]
+        if (state.phase !== "started") return [state, []]
+        const next = (yield* isNextMessage(state, delivered))
+          ? Turn.finish(state.turn, "next-message")
+          : Turn.next(state.turn, frame)
         return [{ ...state, phase: next.state.ended ? "ended" : "started", turn: next.state }, next.parts]
       })
       return frames.pipe(
         Stream.mapAccumEffect(
-          (): State => ({ phase: "connecting", missing: new Set(), turn: Turn.start(sessionID) }),
+          (): State => ({ phase: "connecting", expected: new Set(), turn: Turn.start(sessionID) }),
           step,
         ),
         Stream.takeUntil((part) => part.type === "finish" || part.type === "error"),

@@ -7,7 +7,9 @@ import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Factory } from "@ren/schema/factory"
+import { Pagination } from "@ren/schema/pagination"
 import { Space } from "@ren/schema/space"
+import { SpaceMember } from "@ren/schema/space-member"
 import { DateTime, Effect, Queue, Schema } from "effect"
 
 export interface Prompt {
@@ -37,6 +39,11 @@ export const otherChoices: SessionModel.Choices = {
   default: { providerID: "stub", id: "other-model" },
 }
 
+interface Person {
+  readonly id: Auth.UserID
+  readonly name: string
+}
+
 interface Joined {
   readonly id: Space.ID
   readonly slug: string
@@ -56,15 +63,22 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const opened = yield* Queue.unbounded<number>()
   const checked = yield* Queue.unbounded<string>()
   const prepared = yield* Queue.unbounded<Space.ID>()
+  const closed = yield* Queue.unbounded<string>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
   const beta: Joined = { id: Space.ID.create(), slug: "beta", name: "Beta" }
+  const me: Person = { id: Auth.UserID.create(), name: "Ada" }
+  const bea: Person = { id: Auth.UserID.create(), name: "Bea" }
   const state = {
     spaceId: alpha.id,
     alpha,
     beta,
     spaces: [alpha, beta],
+    me,
+    bea,
+    members: [me, bea],
+    messages: new Map<string, SessionMessage.User>(),
     models: new Map<string, SessionModel.Choices>(),
     created: Array.of<typeof Created.Type>(),
     prompts: Array.of<Prompt>(),
@@ -117,28 +131,35 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       updatedAt: DateTime.nowUnsafe(),
       archivedAt: null,
     })
+  const subscribe = (request: Request) => {
+    const owner = atob((request.headers.get("authorization") ?? "").replace("Basic ", "")).replace("ren:token-", "")
+    const opening: { controller?: ReadableStreamDefaultController<Uint8Array> } = {}
+    const body = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        opening.controller = controller
+        streams.add(controller)
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(frame("server.connected", {}))}\n\n`))
+        Queue.offerUnsafe(opened, streams.size)
+      },
+      cancel: () => {
+        if (opening.controller) streams.delete(opening.controller)
+        Queue.offerUnsafe(closed, owner)
+      },
+    })
+    return new Response(body, { headers: { "content-type": "text/event-stream" } })
+  }
   const chat = async (path: string, request: Request) => {
     const parts = path.split("/")
     const sessionID = String(parts[3])
-    if (path === "/chat/event") {
-      const body = new ReadableStream<Uint8Array>({
-        start: (controller) => {
-          streams.add(controller)
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(frame("server.connected", {}))}\n\n`))
-          Queue.offerUnsafe(opened, streams.size)
-        },
-        cancel: () => {
-          streams.clear()
-        },
-      })
-      return new Response(body, { headers: { "content-type": "text/event-stream" } })
-    }
+    if (path === "/chat/event") return subscribe(request)
     if (path === "/chat/status") {
       Queue.offerUnsafe(checked, path)
       return Response.json(Object.fromEntries([...state.busy].map((id) => [id, { type: "busy" }])))
     }
     if (parts[4] === "message") {
       const id = String(parts[5])
+      const stored = state.messages.get(id)
+      if (stored) return Response.json(Schema.encodeSync(SessionMessage.User)(stored))
       return state.delivered.has(id)
         ? Response.json(
             Schema.encodeSync(SessionMessage.User)({
@@ -163,6 +184,33 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       return new Response(null, { status: 204 })
     }
     return new Response("not found", { status: 404 })
+  }
+  const people = (url: URL) => {
+    if (url.pathname === "/me")
+      return Response.json(
+        Schema.encodeSync(Auth.Me)({
+          user: { id: state.me.id, name: state.me.name, email: "ada@example.com", emailVerified: true },
+          organization: null,
+        }),
+      )
+    return Response.json(
+      Schema.encodeSync(Pagination.Page(SpaceMember.Info))({
+        items: state.members.map((person) => ({
+          id: Space.MembershipID.create(),
+          spaceId: Space.ID.make(url.searchParams.get("spaceId") ?? ""),
+          status: "active",
+          userId: person.id,
+          name: person.name,
+          email: `${person.name.toLowerCase()}@example.com`,
+          image: null,
+          createdAt: DateTime.nowUnsafe(),
+          archivedAt: null,
+        })),
+        page: 1,
+        pageSize: 100,
+        total: state.members.length,
+      }),
+    )
   }
   const api = async (url: URL, request: Request) => {
     const parts = url.pathname.split("/")
@@ -193,7 +241,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       return Response.json({
         status: "ready",
         url: url.origin,
-        token: "a-client-token",
+        token: `token-${parts[2]}`,
         expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       })
     if (parts[3] === "models") return Response.json(state.models.get(url.searchParams.get("spaceId") ?? "") ?? choices)
@@ -207,9 +255,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
         idleTimeout: 0,
         fetch: (request) => {
           const url = new URL(request.url)
-          return url.pathname.startsWith("/chat/")
-            ? (options.chat ?? chat)(`${url.pathname}${url.search}`, request)
-            : api(url, request)
+          if (url.pathname.startsWith("/chat/")) return (options.chat ?? chat)(`${url.pathname}${url.search}`, request)
+          return url.pathname === "/me" || url.pathname === "/space-members" ? people(url) : api(url, request)
         },
       }),
     ),
@@ -223,6 +270,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     opened,
     checked,
     prepared,
+    closed,
     send,
     drop: () => {
       for (const controller of streams) controller.close()

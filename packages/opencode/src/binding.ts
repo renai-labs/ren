@@ -13,6 +13,8 @@ export const Info = Schema.Struct({ spaceId: Space.ID, sessionId: Schema.optiona
 
 export const LocalID = Schema.String.pipe(Schema.brand("SessionID"))
 
+export const LocalMessageID = Schema.String.pipe(Schema.brand("Session.Message.ID"))
+
 const Metadata = Schema.Struct({ ren: Info })
 
 const Options = Schema.Struct({ space: Schema.optional(Schema.String) })

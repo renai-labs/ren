@@ -5,7 +5,6 @@ import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import { Array, Effect, Option, Schedule, Schema } from "effect"
 import { Binding } from "./binding.js"
-import { Link } from "./link.js"
 import { RenModel } from "./model.js"
 import { RenApi } from "./ren.js"
 
@@ -47,7 +46,7 @@ export const register = Effect.fn("RenProvider.register")(function* (ctx: Plugin
   })
   yield* refresh.pipe(Effect.timeoutOption("5 seconds"))
   yield* refresh.pipe(Effect.repeat(Schedule.spaced("5 minutes")), Effect.delay("5 minutes"), Effect.forkScoped)
-  const context = yield* Effect.context<Binding.Service | RenApi.Service | Link.Service>()
+  const context = yield* Effect.context<RenModel.Services>()
   yield* ctx.aisdk.hook(
     "sdk",
     (event) =>
