@@ -70,6 +70,25 @@ describe("Billing.layerRenCloud", () => {
     }),
   )
 
+  it.live("asks billing to grant credit to the organization under a key", () =>
+    Effect.gen(function* () {
+      const service = yield* Billing.Service
+      seen.length = 0
+      reply = () => new Response(null, { status: 204 })
+
+      yield* service.grant(customer.organizationId, { microUsd: 5_000_000, key: "onboarding:slack.connected" })
+
+      expect(seen).toEqual([
+        {
+          method: "POST",
+          path: "/billing/v1/grants",
+          org: customer.organizationId,
+          body: { microUsd: 5_000_000, key: "onboarding:slack.connected" },
+        },
+      ])
+    }),
+  )
+
   it.live("fails with Billing.Unavailable when billing does not answer 204", () =>
     Effect.gen(function* () {
       const service = yield* Billing.Service

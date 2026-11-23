@@ -31,6 +31,11 @@ export interface Priced extends Costs {
   readonly source: SessionUsage.Source
 }
 
+export interface Grant {
+  readonly microUsd: number
+  readonly key: string
+}
+
 export interface Interface {
   readonly ensureCustomer: (customer: Customer) => Effect.Effect<void, Unavailable>
   readonly summary: (organizationId: Auth.OrganizationID) => Effect.Effect<Billing.Summary, Failure>
@@ -48,6 +53,7 @@ export interface Interface {
   readonly cancel: (organizationId: Auth.OrganizationID) => Effect.Effect<void, Failure>
   readonly portal: (organizationId: Auth.OrganizationID) => Effect.Effect<Billing.Link, Failure>
   readonly price: (organizationId: Auth.OrganizationID, costs: Costs) => Effect.Effect<Priced>
+  readonly grant: (organizationId: Auth.OrganizationID, input: Grant) => Effect.Effect<void, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Billing") {}
@@ -178,6 +184,12 @@ export const layerRenCloud = Layer.effect(
       portal: Effect.fn("Billing.portal")(function* (organizationId) {
         return yield* call(organizationId, HttpClientRequest.post("/billing/v1/portal"), Billing.Link)
       }),
+      grant: Effect.fn("Billing.grant")(function* (organizationId, input) {
+        yield* send(
+          organizationId,
+          HttpClientRequest.post("/billing/v1/grants").pipe(HttpClientRequest.bodyJsonUnsafe(input)),
+        )
+      }),
     })
   }),
 )
@@ -202,6 +214,7 @@ export const none = Service.of({
   cancel: () => Effect.void,
   portal: () => Effect.succeed({ url: "" }),
   price: (_organizationId, costs) => Effect.succeed({ ...costs, source: "provider" }),
+  grant: () => Effect.void,
 })
 
 export const layerNone = Layer.succeed(Service, none)
