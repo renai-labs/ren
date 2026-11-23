@@ -1,6 +1,6 @@
 # Providers: models, own keys and subscriptions through one gateway
 
-Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes); the Providers and Ren models pages, picker rows and the model chip (§5.1–§5.3). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
+Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes); the Providers and Ren models pages, picker rows and the model chip (§5.1–§5.3); the brain's HTTP and Claude runtimes (§7.2, §7.3). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
 
 This file is the core of the spec. The references hold the detail:
 
@@ -246,28 +246,29 @@ Built. `RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) is the
 
 ### 7.2 HTTP runtime
 
-`cell/src/harness/opencode/model-providers.ts` keeps mapping each card to an OpenCode provider with the card id and the protocol's package. Changes:
+Built. `cell/src/harness/opencode/model-providers.ts` keeps mapping each card to an OpenCode provider with the card id and the protocol's package. Changes:
 
-1. It does not remove `claude-agent` (`model-providers.ts:24`; tested in G4).
-2. OpenAI subscription models get the settings of OpenCode's ChatGPT plugin, which Ren does not activate: `transport: "http"`, summary compaction, `supportsEffortUpdates: false`, models with `reasoning.mode: "pro"` off, cost `[]` (`chatgpt.ts:306-339`). The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`chatgpt.ts:58-67`).
+1. A model with runtime `claude` gets the Claude Agent package (§7.3); the others keep their protocol's package.
+2. The models of OpenAI's card on the subscription method get the settings of OpenCode's ChatGPT plugin, which Ren does not activate: summary compaction, `supportsEffortUpdates: false`, cost `[]` (`chatgpt.ts:306-339`). The card already has `transport: "http"`. Ren's list has no model with `reasoning.mode: "pro"`, so none is switched off. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`model-providers.ts` `finalChatGptCodes`, from `chatgpt.ts:58-67`). The ChatGPT plugin's `session-id` headers are not sent: the gateway drops them (gate H1) and reads `prompt_cache_key`.
 
 ### 7.3 Claude runtime
 
-Claude models with runtime `claude` run on OpenCode's provider `claude-agent`, because its hooks and instructions are bound to that id ([`references/opencode.md`](references/opencode.md)).
+Built: `cell/src/harness/opencode/claude-agent.ts`, registered before `RenPlugin` (`server.ts`). Claude models with runtime `claude` run on the `claude` program through OpenCode's Claude Agent parts.
 
-1. **Ren-owned setup.** A new file `cell/src/harness/opencode/claude-agent.ts`: the 2.2.6 plugin body without the workspace check, built from `@opencode/core`'s exported parts. It registers the `claude-agent` provider and its models from the pull itself; it never calls `ClaudeProvider.register`, which replaces the list with Claude's short names (G4). It gives `ClaudeIntegration.register` the server's `Bus` service. It is registered next to `RenPlugin` (`server.ts:248`). The code that passed is in [`references/gates.md`](references/gates.md) G4. OpenCode's own copy stays loaded and stops at its workspace check.
-2. **Dependency.** `@anthropic-ai/claude-agent-sdk` 0.3.301 in `cell`. It ships `claude` 2.1.301; the plugin needs 2.1.248 or later. `OPENCODE_CLAUDE_PATH` points at the SDK's binary in the brain image (`packages/cell/e2b/e2b.Dockerfile`). No separate `claude` install.
-3. **Env and settings.**
+1. **Provider id.** A Claude model stays under its card's provider (`ren`, `anthropic`); only its package is `@opencode/claude-agent`, and its canonical provider is `claude-agent`, which keys the options the Claude Agent model reads. The first design moved these models to provider `claude-agent`. That breaks every place Ren and its clients name a model by card id (picker, chip, transcripts, the chat's settings model, `session.model.switch`), so the setup changes the hooks instead: OpenCode's `ClaudeSessionHooks` and `ClaudeInstructions` run unchanged, with each hook bound to `claude-agent` run for the models whose package is the Claude Agent package in that location. A change of method (key ↔ subscription) keeps the model id; the next turn runs on the other runtime.
+2. **Ren-owned setup.** The plugin body of 2.2.6 without the workspace check, from `@opencode/core`'s exported parts: the session registry, the AI SDK hook and the two hook sets. It never calls `ClaudeProvider.register`, which replaces the list with Claude's short names (G4), nor `ClaudeIntegration.register`, which is OpenCode's sign-in for a person's own `claude` and needs `Bus`. OpenCode's own copy stays loaded and stops at its workspace check; its hooks are bound to provider `claude-agent`, which Ren never lists.
+3. **Dependency.** `@anthropic-ai/claude-agent-sdk` 0.3.301 in `cell`. It ships `claude` 2.1.301 in `@anthropic-ai/claude-agent-sdk-<platform>`; the plugin needs 2.1.248 or later. The setup finds that binary next to the SDK (glibc first on Linux), so the image needs no `OPENCODE_CLAUDE_PATH` and a `claude` on `PATH` is never used. `OPENCODE_CLAUDE_PATH` still wins when set. The brain's dependency bundle carries the Linux binary.
+4. **Env and settings.** One `claude` process per chat. `claude` reads headers only at start, so the setup builds the env per call from the chat's usage headers and leaves out `ren-turn`, which changes each turn and would restart `claude`: usage rows of the Claude runtime have no turn.
 
-| Name                                            | Value                                                                        | Why                                                                                                                           |
-| ----------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_BASE_URL` (provider `baseURL`)       | the gateway                                                                  | every call through the gateway                                                                                                |
-| `ANTHROPIC_CUSTOM_HEADERS` (provider `headers`) | `x-litellm-api-key: Bearer ren:MODELS` and `ren-member: ren:PERSON.<member>` | the gateway key and the member, apart from `Authorization`                                                                    |
-| `CLAUDE_CODE_OAUTH_TOKEN`                       | a placeholder that does not start with `sk-ant-oat` (for example `ren-seat`) | subscription mode in `claude`. The gateway puts the seat's login in; a client token that looks like a login would win over it |
-| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`      | `1`                                                                          | no direct calls to `api.anthropic.com` (G1)                                                                                   |
+| Name                                            | Value                                                                                                  | Why                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_BASE_URL` (provider `baseURL`)       | the gateway, without its `/v1`                                                                         | every call through the gateway; `claude` adds `/v1/messages`                                                                            |
+| `ANTHROPIC_CUSTOM_HEADERS` (provider `headers`) | `x-litellm-api-key: Bearer ren:MODELS`, the chat's usage headers and `ren-member: ren:PERSON.<member>` | the gateway key, the usage claims and the member                                                                                        |
+| `CLAUDE_CODE_OAUTH_TOKEN`                       | Ren's key: `ren:MODELS` behind the egress                                                              | subscription mode in `claude`; the gateway puts the seat's login in. It does not start with `sk-ant-oat`, so it never passes as a login |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`      | `1`                                                                                                    | no direct calls to `api.anthropic.com` (G1)                                                                                             |
 
-4. **Egress.** Block `api.anthropic.com` from the brain sandbox.
-5. **Folder.** `claude` starts in a folder on the brain's machine. Tools still run on the hand through MCP.
+5. **Egress.** Every call of `claude` carries `ren:MODELS` in `Authorization`. The egress fills in `MODELS` only for the gateway host (`core/src/credential-source.ts`), so a call of `claude` to `api.anthropic.com` or any other host is refused with `403` and `X-Ren-Egress`, and the egress log names it. Other programs in the sandbox are not affected: a hand may still call `api.anthropic.com` with a customer's own key. No egress change was needed.
+6. **Folder.** `claude` starts in `.ren-claude` in the home folder of the brain's machine. Tools still run on the hand through MCP.
 
 ### 7.4 Session id
 
@@ -305,7 +306,7 @@ What a running chat sees:
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Card off, model removed                        | The call in flight finishes. The model leaves the picker. The next turn uses the chat's settings model and shows why (hot-reload row 33) |
 | Key replaced, login refreshed                  | Nothing. The next call uses the new credential                                                                                           |
-| Method key ↔ subscription                      | The runtime changes (`anthropic` ↔ `claude-agent`): a "model switched" row at the next turn                                              |
+| Method key ↔ subscription                      | The model id stays; the next turn runs on the other runtime (HTTP ↔ `claude`)                                                            |
 | Claude runtime connection change during a turn | The turn finishes on the old settings; the next turn uses the new ones (G5)                                                              |
 | New model                                      | In the picker after the push                                                                                                             |
 
@@ -384,8 +385,6 @@ Built in Ren core: every route above except `GET /v1/catalog`, which Ren no long
 | `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_seat_models`, `model_catalog`, `organization_model_list`; `organization_settings.ren_new_models`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                               |
 | `core`               | `ModelCatalog` and the list job; `Models.grant` and the pull from §6.5; `RenInference` client routes of §10; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; settings `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM`, `REN_MODELS_BLOCK` |
 | `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                         |
-| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                              |
-| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                     |
 | `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                           |
 | `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                    |
 
@@ -393,15 +392,13 @@ Built in Ren core: every route above except `GET /v1/catalog`, which Ren no long
 
 ### 13.1 Gates
 
-Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6.
+Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6, GR1, GR2.
 
 Pending (Ren side):
 
-| Gate | Question                                                                                                | When                    |
-| ---- | ------------------------------------------------------------------------------------------------------- | ----------------------- |
-| GR1  | The SDK's Linux `claude` binary runs in a real brain (own E2B template) and a turn reaches the gateway  | with the Claude runtime |
-| GR2  | The egress blocks `api.anthropic.com` from the brain, and a turn still works                            | with the Claude runtime |
-| GR3  | A models.dev change notifies only the organizations whose list changed, under load (many organizations) | with the list job       |
+| Gate | Question                                                                                                | When              |
+| ---- | ------------------------------------------------------------------------------------------------------- | ----------------- |
+| GR3  | A models.dev change notifies only the organizations whose list changed, under load (many organizations) | with the list job |
 
 ### 13.2 Package tests
 
@@ -410,7 +407,6 @@ Only rules that the code does not show:
 | Package | Test                                                                                                                                                                    |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core`  | the Ren model filter (§6.2); an organization's list from settings, seats and the catalog; only organizations whose list changed are notified; the default model setting |
-| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                         |
 | `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                              |
 
 ### 13.3 End-to-end (`packages/e2e/chaos`)
