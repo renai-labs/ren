@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin/tui"
-import { createEffect, createSignal, on, Show } from "solid-js"
+import { createEffect, createSignal, on, Show, untrack } from "solid-js"
 import { RenCommands } from "./commands.js"
 import { RenRpc } from "./rpc.js"
 import { Support } from "./support.js"
@@ -95,6 +95,22 @@ export default Plugin.define({
           slash: { name: "ren:sessions" },
           run: () => RenCommands.sessions(surface),
         },
+        {
+          id: "ren.retry",
+          title: "Retry the Ren session",
+          description: "Start a failed or stopped Ren session again, or send its failed last message again",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:retry" },
+          run: () => {
+            const route = context.ui.router.current()
+            const sessionID = route.type === "session" ? route.sessionID : undefined
+            return RenCommands.retry(surface, {
+              ...(sessionID && { sessionID }),
+              running: sessionID ? context.data.session.status(sessionID) === "running" : false,
+            })
+          },
+        },
       ],
     }))
     const catching = new Set<string>()
@@ -121,9 +137,58 @@ export default Plugin.define({
         </box>
       </Show>
     )
+    const [statuses, setStatuses] = createSignal<ReadonlyMap<string, RenRpc.SessionStatus>>(new Map())
+    const [now, setNow] = createSignal(Date.now())
+    const keep = (found: RenRpc.SessionStatus | undefined) => {
+      if (found) setStatuses((current) => new Map(current).set(found.sessionID, found))
+    }
+    const reload = (sessionID: string) => {
+      void RenCommands.sessionStatus(surface, sessionID).then(keep)
+    }
+    const reloadAll = () => {
+      for (const sessionID of statuses().keys()) reload(sessionID)
+    }
+    const ticker = setInterval(() => {
+      if ([...statuses().values()].some((found) => found.state === "reconnecting")) setNow(Date.now())
+    }, 1_000)
+    const sessionStatus = (input: { readonly sessionID?: string }) => {
+      createEffect(() => {
+        const sessionID = input.sessionID
+        if (sessionID && !untrack(statuses).has(sessionID)) reload(sessionID)
+      })
+      const described = () => {
+        const sessionID = input.sessionID
+        const found = sessionID ? statuses().get(sessionID) : undefined
+        return sessionID && found?.ren
+          ? RenCommands.describe(found, { now: now(), running: context.data.session.status(sessionID) === "running" })
+          : undefined
+      }
+      return (
+        <Show when={described()} fallback={status()}>
+          {(text) => (
+            <box flexShrink={0}>
+              <text fg={context.theme.text.muted} wrapMode="none">
+                {text()}
+              </text>
+            </box>
+          )}
+        </Show>
+      )
+    }
     const stops = [
       context.ui.slot({ append: "home.footer.status", render: status }),
-      context.ui.slot({ append: "prompt.footer.status", render: status }),
+      context.ui.slot({ append: "prompt.footer.status", render: sessionStatus }),
+      context.client.rpc(RenRpc.Definition).events.on("statusChanged", (event) => keep(event.data)),
+      context.client.rpc(RenRpc.Definition).events.on("signedIn", reloadAll),
+      context.client.rpc(RenRpc.Definition).events.on("signedOut", reloadAll),
+      context.data.on("server.connected", reloadAll),
+      context.data.on("session.execution.succeeded", (event) => {
+        if (statuses().has(event.data.sessionID)) reload(event.data.sessionID)
+      }),
+      context.data.on("session.execution.failed", (event) => {
+        if (statuses().has(event.data.sessionID)) reload(event.data.sessionID)
+      }),
+      () => clearInterval(ticker),
       context.client.rpc(RenRpc.Definition).events.on("spaceSelected", (event) => {
         setSpace(event.data)
       }),

@@ -161,7 +161,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       send(frame("session.compaction.started", { sessionID, reason: "manual", recent: "", inputID: id }))
       send(frame("session.compaction.ended", { sessionID, reason: "manual", text: "the summary", recent: "" }))
     },
-    oauth: { deny: false, revoked: Array.of<string>() },
+    oauth: { deny: false, refuse: false, revoked: Array.of<string>() },
     permissions: Array.of<Permission.Request>(),
     forms: Array.of<Form.Info>(),
     children: Array.of<Session.ID>(),
@@ -174,6 +174,9 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     maxUploadBytes: Drive.maxUploadBytes,
     agents: Array.of<SessionCatalog.Agent>(),
     skills: Array.of<SessionCatalog.Skill>(),
+    boot: new Map<string, { readonly status: string; readonly phase?: string; readonly reason?: string }>(),
+    accessed: Array.of<string>(),
+    retries: Array.of<{ readonly sessionID: string; readonly body: string }>(),
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
@@ -464,7 +467,15 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   }
   const saved = (sessionId: string, url: URL) => {
     state.reads.push(sessionId)
-    const newest = (state.saved.get(sessionId) ?? []).toReversed()
+    const newest = (
+      state.saved.get(sessionId) ??
+      [...state.delivered].map((id): SessionMessage.Info => ({
+        id: SessionMessage.ID.make(id),
+        time: { created: DateTime.nowUnsafe() },
+        text: "delivered",
+        type: "user",
+      }))
+    ).toReversed()
     const from = Number(url.searchParams.get("cursor") ?? 0)
     const to = from + Number(url.searchParams.get("limit") ?? 50)
     return Response.json(
@@ -484,6 +495,31 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const api = (url: URL, request: Request) => {
     const read = request.method === "GET" ? reads[url.pathname.split("/")[3] ?? url.pathname] : undefined
     return read ? read(url) : rest(url, request)
+  }
+  const sessionRoutes: Record<
+    string,
+    ((sessionID: string, url: URL, request: Request) => Promise<Response>) | undefined
+  > = {
+    chat: (sessionID, url) => {
+      state.accessed.push(sessionID)
+      return Promise.resolve(
+        Response.json(
+          state.boot.get(sessionID) ?? {
+            status: "ready",
+            url: url.origin,
+            token: `token-${sessionID}`,
+            expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+          },
+        ),
+      )
+    },
+    models: (_sessionID, url) =>
+      Promise.resolve(Response.json(state.models.get(url.searchParams.get("spaceId") ?? "") ?? choices)),
+    "chat/retry": async (sessionID, _url, request) => {
+      state.retries.push({ sessionID, body: await request.text() })
+      state.boot.delete(sessionID)
+      return new Response(null, { status: 204 })
+    },
   }
   const rest = async (url: URL, request: Request) => {
     const parts = url.pathname.split("/")
@@ -510,14 +546,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
         ? Response.json(space(found))
         : Response.json({ _tag: "NotFoundError", message: "No such space" }, { status: 404 })
     }
-    if (parts[3] === "chat")
-      return Response.json({
-        status: "ready",
-        url: url.origin,
-        token: `token-${parts[2]}`,
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      })
-    if (parts[3] === "models") return Response.json(state.models.get(url.searchParams.get("spaceId") ?? "") ?? choices)
+    const route = parts[1] === "sessions" ? sessionRoutes[parts.slice(3).join("/")] : undefined
+    if (route) return route(String(parts[2]), url, request)
     return Response.json(info(Session.ID.make(String(parts[2])), state.spaceId))
   }
   const drive = async (url: URL, request: Request) => {
@@ -573,6 +603,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       state.oauth.revoked.push(new URLSearchParams(await request.text()).get("token") ?? "")
       return new Response(null, { status: 200 })
     }
+    if (state.oauth.refuse) return Response.json({ error: "invalid_grant" }, { status: 400 })
     return Response.json({ access_token: "signed-in", refresh_token: "refresh-signed-in", expires_in: 3600 })
   }
   const paths: Record<string, ((url: URL, request: Request) => Response | Promise<Response>) | undefined> = {

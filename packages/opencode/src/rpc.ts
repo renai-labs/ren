@@ -93,6 +93,33 @@ export const Imported = Schema.Struct({
 export const Outcome = Schema.Literals(["current", "import", "busy", "unsent", "local"])
 export type Outcome = typeof Outcome.Type
 
+export interface SessionStatus extends Schema.Schema.Type<typeof SessionStatus> {}
+export const SessionStatus = Schema.Struct({
+  sessionID: Schema.String,
+  ren: Schema.Boolean,
+  space: Schema.NullOr(Schema.String),
+  state: Schema.Literals([
+    "closed",
+    "checking",
+    "starting",
+    "connecting",
+    "ready",
+    "reconnecting",
+    "parked",
+    "failed",
+    "stopped",
+    "signed_out",
+  ]),
+  detail: Schema.String,
+  retryAt: Schema.Number,
+  busy: Schema.Boolean,
+}).annotate({ identifier: "RenRpc.SessionStatus" })
+
+export type Retried = Schema.Schema.Type<typeof Retried>
+export const Retried = Schema.Literals(["restarted", "restarted_resent", "resumed", "sent_again", "running", "nothing"])
+
+const SessionInput = Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String }))
+
 export const Definition = Rpc.define({
   id: "ren",
   methods: {
@@ -186,6 +213,12 @@ export const Definition = Rpc.define({
       ),
       errors,
     },
+    sessionStatus: { input: SessionInput, output: Schema.toStandardSchemaV1(SessionStatus), errors },
+    retry: {
+      input: SessionInput,
+      output: Schema.toStandardSchemaV1(Schema.Struct({ outcome: Retried })),
+      errors,
+    },
   },
   events: {
     spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },
@@ -196,5 +229,6 @@ export const Definition = Rpc.define({
     signedOut: { schema: Schema.toStandardSchemaV1(Schema.Struct({ server: Schema.String })) },
     formAsked: { schema: Schema.toStandardSchemaV1(LocalForm) },
     requestClosed: { schema: Schema.toStandardSchemaV1(Closed) },
+    statusChanged: { schema: Schema.toStandardSchemaV1(SessionStatus) },
   },
 })

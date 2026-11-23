@@ -6,7 +6,8 @@ import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
-import { type Context, Effect, Exit, Option, Schema, Stream, SubscriptionRef } from "effect"
+import { type Context, Effect, Exit, Option, Predicate, Schema, Stream } from "effect"
+import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
 import { Link } from "./link.js"
 import { Mirror } from "./mirror.js"
@@ -48,8 +49,11 @@ const refused = {
 
 const explain = (error: { readonly _tag: string; readonly message: string; readonly cause?: unknown }) => {
   if (error._tag !== "ChatAccess.AccessFailed") return error.message
+  if (error.cause instanceof RenAuth.SignedOut) return error.cause.message
+  if (Predicate.isTagged(error.cause, "UnauthorizedError"))
+    return "Ren did not accept your login: it expired or was revoked. Run /ren:login."
   const reason = error.cause instanceof Error ? error.cause.message : "unknown reason"
-  return `Ren could not open this session’s brain: ${reason}. Send the message again later.`
+  return `Ren could not open this session’s brain: ${reason}. Run /ren:retry.`
 }
 
 export const make = (
@@ -157,14 +161,7 @@ const turn = (input: {
       yield* Effect.addFinalizer((exit) =>
         Exit.hasInterrupts(exit) ? chat.session.interrupt({ sessionID }).pipe(Effect.ignore) : Effect.void,
       )
-      yield* SubscriptionRef.changes(link.status).pipe(
-        Stream.filter((status) => status === "connected"),
-        Stream.runHead,
-        Effect.timeoutOrElse({
-          duration: "1 minute",
-          orElse: () => Effect.fail(new TurnError({ message: "Ren’s brain did not answer within a minute." })),
-        }),
-      )
+      yield* Link.connected(link)
       const failed = (error: { readonly message: string }) =>
         new TurnError({ message: `Ren’s brain refused a request: ${error.message}` })
       const has = (id: SessionMessage.ID) =>

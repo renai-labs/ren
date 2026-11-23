@@ -227,3 +227,27 @@ test("/ren:move tells why when Ren refuses, and leaves the session local so /ren
       })
     }),
   ))
+
+test("the status line names the space and the brain's state only when it is not simply ready: a retry at least 2 seconds away is a countdown, and a remote turn shows only when no local turn runs", () => {
+  const status = (
+    state: RenRpc.SessionStatus["state"],
+    more: { readonly detail?: string; readonly retryAt?: number; readonly busy?: boolean } = {},
+  ): RenRpc.SessionStatus => ({
+    sessionID: "ses_1",
+    ren: true,
+    space: "Alpha",
+    state,
+    detail: more.detail ?? "",
+    retryAt: more.retryAt ?? 0,
+    busy: more.busy ?? false,
+  })
+  const view = { now: 10_000, running: false }
+  expect(RenCommands.describe(status("ready"), view)).toBe("ren · Alpha")
+  expect(RenCommands.describe(status("reconnecting", { retryAt: 12_500 }), view)).toBe("ren · Alpha · Waiting 3s")
+  expect(RenCommands.describe(status("reconnecting", { retryAt: 11_000 }), view)).toBe("ren · Alpha · Reconnecting")
+  expect(RenCommands.describe(status("ready", { busy: true }), view)).toBe("ren · Alpha · Working")
+  expect(RenCommands.describe(status("ready", { busy: true }), { now: 10_000, running: true })).toBe("ren · Alpha")
+  expect(RenCommands.describe(status("failed", { detail: "no capacity" }), view)).toBe(
+    "ren · Alpha · Failed: no capacity · /ren:retry",
+  )
+})

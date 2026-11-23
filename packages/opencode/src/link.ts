@@ -11,10 +11,11 @@ import {
   Layer,
   PubSub,
   RcMap,
+  Schema,
   type Scope,
   Semaphore,
   Stream,
-  type SubscriptionRef,
+  SubscriptionRef,
 } from "effect"
 import { RenApi } from "./ren.js"
 
@@ -24,6 +25,7 @@ export interface Link {
   readonly boot: SubscriptionRef.SubscriptionRef<ChatAccess.Boot>
   readonly status: SubscriptionRef.SubscriptionRef<Connection.Status>
   readonly retryAt: SubscriptionRef.SubscriptionRef<number>
+  readonly busy: SubscriptionRef.SubscriptionRef<boolean>
   readonly frames: Effect.Effect<Stream.Stream<SessionEvent.Frame>, never, Scope.Scope>
   readonly wake: Effect.Effect<void>
   readonly lost: Effect.Effect<void>
@@ -58,38 +60,109 @@ const make = Effect.fn("Link.make")(function* (sessionId: Session.ID) {
             }),
           ),
   })
+  const subscribe = publishing.withPermit(
+    Effect.gen(function* () {
+      const subscription = yield* PubSub.subscribe(frames)
+      const connected: SessionEvent.Frame = {
+        id: "evt_link_connected",
+        created: yield* Clock.currentTimeMillis,
+        type: "server.connected",
+        data: {},
+      }
+      return Stream.fromSubscription(subscription).pipe(Stream.prepend(live.current ? [connected] : []))
+    }),
+  )
+  const busy = yield* SubscriptionRef.make(false)
+  yield* (yield* subscribe).pipe(
+    Stream.runForEach((frame) => {
+      if (frame.type === "server.connected") return SubscriptionRef.set(busy, false)
+      if (!("sessionID" in frame.data) || frame.data.sessionID !== sessionId) return Effect.void
+      if (frame.type === "session.execution.started") return SubscriptionRef.set(busy, true)
+      return frame.type === "session.execution.succeeded" ||
+        frame.type === "session.execution.failed" ||
+        frame.type === "session.execution.interrupted"
+        ? SubscriptionRef.set(busy, false)
+        : Effect.void
+    }),
+    Effect.forkScoped,
+  )
   return {
     sessionId,
     client: access.client,
     boot: access.boot,
     status: connection.status,
     retryAt: connection.retryAt,
-    frames: publishing.withPermit(
-      Effect.gen(function* () {
-        const subscription = yield* PubSub.subscribe(frames)
-        const connected: SessionEvent.Frame = {
-          id: "evt_link_connected",
-          created: yield* Clock.currentTimeMillis,
-          type: "server.connected",
-          data: {},
-        }
-        return Stream.fromSubscription(subscription).pipe(Stream.prepend(live.current ? [connected] : []))
-      }),
-    ),
-    wake: connection.wake,
+    busy,
+    frames: subscribe,
+    wake: Effect.andThen(connection.wake, connection.retryNow),
     lost: access.lost,
   } satisfies Link
 })
 
+class NotConnected extends Schema.TaggedError<NotConnected>()("Link.NotConnected", {
+  message: Schema.String,
+}) {}
+
+export const connected = (link: Link) =>
+  Effect.raceFirst(
+    SubscriptionRef.changes(link.status).pipe(
+      Stream.filter((status) => status === "connected"),
+      Stream.runHead,
+      Effect.asVoid,
+    ),
+    SubscriptionRef.changes(link.boot).pipe(
+      Stream.switchMap((boot) => {
+        if (boot._tag === "Starting") return Stream.never
+        if (boot._tag === "Failed")
+          return Stream.fail(
+            new NotConnected({ message: `Ren could not start this session’s brain: ${boot.reason}. Run /ren:retry.` }),
+          )
+        if (boot._tag === "Stopped")
+          return Stream.fail(
+            new NotConnected({ message: "The space of this session was shut down. Run /ren:retry to start it again." }),
+          )
+        return Stream.fromEffect(Effect.sleep("1 minute")).pipe(
+          Stream.flatMap(() =>
+            Stream.fail(new NotConnected({ message: "Ren’s brain did not answer within a minute." })),
+          ),
+        )
+      }),
+      Stream.runDrain,
+    ),
+  )
+
 export class Service extends Context.Service<
   Service,
-  { readonly open: (sessionId: Session.ID) => Effect.Effect<Link, never, Scope.Scope> }
+  {
+    readonly open: (sessionId: Session.ID) => Effect.Effect<Link, never, Scope.Scope>
+    readonly opened: SubscriptionRef.SubscriptionRef<ReadonlyMap<Session.ID, Link>>
+    readonly reset: (sessionId: Session.ID) => Effect.Effect<void>
+  }
 >()("@ren/opencode/Link") {}
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const links = yield* RcMap.make({ lookup: make })
-    return Service.of({ open: (sessionId) => RcMap.get(links, sessionId) })
+    const opened = yield* SubscriptionRef.make<ReadonlyMap<Session.ID, Link>>(new Map())
+    const links = yield* RcMap.make({
+      lookup: (sessionId: Session.ID) =>
+        Effect.tap(make(sessionId), (link) =>
+          Effect.acquireRelease(
+            SubscriptionRef.update(opened, (current) => new Map(current).set(sessionId, link)),
+            () =>
+              SubscriptionRef.update(opened, (current) => {
+                if (current.get(sessionId) !== link) return current
+                const next = new Map(current)
+                next.delete(sessionId)
+                return next
+              }),
+          ),
+        ),
+    })
+    return Service.of({
+      open: (sessionId) => RcMap.get(links, sessionId),
+      opened,
+      reset: (sessionId) => RcMap.invalidate(links, sessionId),
+    })
   }),
 )

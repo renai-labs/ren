@@ -189,7 +189,7 @@ test("the session list asks Ren for the selected space's sessions with the filte
     }),
   ))
 
-test("/ren:sessions opens a Ren session started elsewhere as a local copy with its ID, title, Ren model, binding, message IDs and names, and sends nothing to Ren", () =>
+test("/ren:sessions opens a Ren session started elsewhere as a local copy with its ID, title, Ren model, binding, message IDs and names, reports it as a Ren session of its space, and sends nothing to Ren", () =>
   run(
     Effect.gen(function* () {
       const opened = yield* setup({ query: "trip" })
@@ -204,6 +204,11 @@ test("/ren:sessions opens a Ren session started elsewhere as a local copy with i
         title: "Trip plan",
         model: { providerID: "ren", id: "stub/stub-model" },
         metadata: { ren: { spaceId: session.spaceId, sessionId: session.id } },
+      })
+      expect(yield* opened.rpc.sessionStatus({ sessionID: session.id }, opened.at)).toMatchObject({
+        sessionID: session.id,
+        ren: true,
+        space: "Alpha",
       })
       const local = yield* opened.messages(session.id)
       expect(local.map((message) => String(message.id))).toEqual(ren.map((message) => message.id))

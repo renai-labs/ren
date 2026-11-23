@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `outgoing`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). A prompt's files, agent mentions and skills reach the brain with it (Attachments). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, `/ren:move` moves a local session there with its history, and `/ren:sessions` opens one started anywhere (Open and catch up). Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `outgoing`, `history`, `sessions`, `rpc`, `handlers`, `commands`, `status`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). A prompt's files, agent mentions and skills reach the brain with it (Attachments). The prompt footer shows a Ren session's state, and `/ren:retry` starts a failed or stopped session again or sends a failed turn again (Status and retry). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -57,6 +57,7 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range. |
 | `history`  | `History`: Chat API messages as OpenCode export messages, and the catch-up rules.                  |
 | `sessions` | `Sessions`: the session list, and the transcript to import on open and catch-up.                   |
+| `status`   | `Status`: the state of a Ren session, from its open link, and `/ren:retry`.                        |
 
 ## Connection
 
@@ -97,7 +98,8 @@ A link is `ChatAccess` and `Connection` from `@ren/chat`, wired as `ChatSession`
 - `client` is a Chat API client with a valid token. It calls `chat.access` through `RenApi`, polls every 2 seconds while the brain starts, and fails with `ChatAccess.AccessFailed` when the brain failed or its space stopped. It authenticates to the brain's URL with Basic `ren:<token>` and asks again within a minute of `expiresAt`. After a gateway 502 or 504, a transport error or two connect timeouts, the next `chat.access` says `unreachable`. The URL can change at each access.
 - `frames` subscribes to the session's events from that moment. The stream reconnects with backoff and asks for access again after it drops or ends with `stream.ended`. Events are not replayed: each connect starts with `server.connected`, after which a consumer reads what it needs again. A consumer that subscribes while the stream is connected gets a `server.connected` first, so every consumer starts the same way.
 - `boot` (checking, starting with its phase, ready, failed with its reason, stopped), `status` and `retryAt` are `SubscriptionRef`s.
-- `wake` reconnects a parked stream. `lost` marks the brain unreachable after a request that it refused with 401.
+- `busy` is whether the session's execution runs, from the `session.execution.*` events since the stream connected.
+- `wake` reconnects a parked stream and skips the wait before the next reconnect. `lost` marks the brain unreachable after a request that it refused with 401.
 
 ## First turn
 
@@ -111,7 +113,7 @@ For a primary request `doStream`:
 2. Reads the binding. A session whose binding names another session is a copy (a fork) and is refused, and so is a fork without a Ren session (Session controls).
 3. Reads the local messages (`session.context`). The candidates are the user messages after the last assistant message that completed without an error.
 4. Without a binding, a session with a finished local answer is refused with a message to run `/ren:move`, so its history is never left behind. Without a Ren session in the binding, creates it with the local session's ID, the binding's space (else the selected space) and the model (`session.create`), then writes the binding.
-5. Opens the link for this turn, subscribes, and waits until it is connected.
+5. Opens the link for this turn, subscribes, and waits until it is connected (`Link.connected`): for as long as Ren answers `starting`, at once failing when Ren answers `failed` or `stopped`, and at most a minute otherwise.
 6. On the first `server.connected`, asks the brain which candidates it has (`session.message`) and sends the others with `session.prompt`, the local message ID as `id`, `delivery: "steer"`, with their files, agents and skills (Attachments). Before it sends to an existing Ren session, it switches the brain to the local model (Session controls).
 7. The turn starts at `session.inbox.delivered` of a sent message; earlier events are ignored. `turn` converts the events until the execution ends, or until the brain delivers a user message that is not one of the candidates (Multiplayer).
 8. When nothing was sent (the brain has every candidate), and after every later `server.connected` (a reconnect, events may be lost), it reads the state again: once the brain has every candidate, a busy session means the turn runs (follow it), an idle one that it ended (finish).
@@ -201,6 +203,7 @@ Every command the plugin adds is `/ren:<command>`, in the slash completion and i
 - `/ren:new` creates a local session bound to the selected space, with the prompt's `ren/<model>` model when the space offers it, else the space's default, and opens it.
 - `/ren:move` moves the open local session to the selected space (Moving a session).
 - `/ren:sessions` lists the Ren sessions of the selected space and opens the chosen one (Open and catch up).
+- `/ren:retry` retries the open Ren session (Status and retry).
 
 Signed out, they say to run `/ren:login`. The home and prompt footers show `ren · <space>`.
 
@@ -229,14 +232,16 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 | `requests`      | `{}`                                | `{ forms: LocalForm[], closed }`    |
 | `listSessions`  | `Filter`                            | `{ sessions, space, page, total }`  |
 | `openSession`   | `{ sessionId, existing?, … }`       | `{ sessionID, outcome, import? }`   |
+| `sessionStatus` | `{ sessionID }`                     | `SessionStatus`                     |
+| `retry`         | `{ sessionID }`                     | `{ outcome }`                       |
 
-`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. `Filter` is `scope` (`mine`, the default, or `space`), `status`, `origin`, `search`, `page` and `pageSize`; `listSessions` also returns `pageSize`, and each `SessionSummary` has `id`, `title`, `startedBy`, `mine`, `origin`, `status`, `updated` and `local`. `openSession` takes `existing` (only a session with a local copy), `imported` (just imported: only watch it) and `queued` (the local inbox holds items); its `outcome` is `current`, `import` (with the transcript to import), `busy`, `unsent` or `local` (not a Ren session). The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). `SessionStatus` is `{ sessionID, ren, space, state, detail, retryAt, busy }` (Status and retry), and the event `statusChanged` carries it. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
 Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact` and the model picker (Session controls), and stop.
 
-Planned commands: `/ren:retry`. Planned features:
+Planned features:
 
 - The web app chat's features, where the stock TUI allows them.
 
@@ -255,6 +260,21 @@ Every step can run again: Ren's import of the same ID by the same person into th
 Changing a session's model to `ren/<model>` is not a move: a session with a finished local answer is refused on its next prompt with a message to run `/ren:move`. A session with no answer yet is created in Ren at its first prompt, as from `/ren:new`.
 
 Limits: Ren does not get the session's subagent sessions, its fork lineage or its staged revert, and OpenCode's export leaves out unfinished messages. The history's tool calls refer to files on this computer; the brain continues on its own hand, so the repository must be reachable in the space for the brain to go on with the work.
+
+## Status and retry
+
+A Ren session's brain starts, fails, stops when its space shuts down, and reconnects. The plugin shows that in the prompt footer of the session and lets the user retry it.
+
+- **The state.** `Status.get` (RPC `sessionStatus`) derives a session's state from its binding, the signed-in login and the session's open link (`boot`, `status`, `retryAt`, `busy`): `closed` (no open link), `checking`, `starting` with Ren's phase, `connecting`, `ready`, `reconnecting` with `retryAt`, `parked`, `failed` with Ren's reason, `stopped`, or `signed_out`. A read never opens a link: `chat.access` wakes a sleeping brain, and Ren bills a running brain. A session's link opens at its first turn here and stays open while the mirror watches it (Multiplayer).
+- **Changes.** Each change of an open link's state, and a link that opens or closes, sends the RPC event `statusChanged` with the new state, once per change. The TUI reads the state again when it opens a session, after `signedIn` and `signedOut`, at `server.connected` and at the end of each local execution of a session it shows.
+- **The footer.** The prompt footer of a Ren session shows `ren · <space of the session>`, and after it, only when the brain is not simply ready: `Checking`, `Starting: <phase>`, `Waiting <n>s` (a reconnect at least 2 seconds away) or `Reconnecting`, `Failed: <reason> · /ren:retry`, `Stopped: the space was shut down · /ren:retry`, `Signed out · /ren:login`, or `Working` when the remote execution runs and no local turn does. A starting brain shows in the footer, not in the transcript.
+- **A long start.** A turn waits for its link for as long as Ren answers `starting`, as the web app does (it asks every 2 seconds), fails at once with Ren's reason when Ren answers `failed` or `stopped`, and fails after a minute when Ren says the brain is ready and the event stream still does not connect. Turn errors name the command that fixes them: `/ren:retry`, or `/ren:login` when the login is gone, expired and not renewed, or refused by Ren.
+- **`/ren:retry`** (RPC `retry`) on the open session:
+  - Its link says `failed` or `stopped`: calls `chat.retry` without a message, as the web app does (the plugin creates a Ren session without a first message, F21, so Ren never needs one), drops the link (`Mirror.unwatch` and `Link.reset`, because a link keeps `failed` and `stopped` for its life) and opens a new one, so the footer shows the start. When the last local user message has no answer, it also runs the turn again (below).
+  - The last local user message has no answer, and Ren's saved messages (`chat.messages`) do not have it: runs the local turn again with a synthetic notice (`resume: true`), so `doStream` sends what the brain lacks.
+  - Ren has it, so the turn failed on the brain: sends its text again as a new local message, as the web app's "Try again" does. The message is sent once.
+  - A local turn runs, or the last turn did not fail: says so and does nothing. Not a Ren session: says so.
+- **Notifications.** None are added. OpenCode's own notifications already announce the end or failure of every local execution when the terminal is not focused, and a remote turn the mirror shows and a turn that waits for a long start are local executions.
 
 ## Install
 
@@ -334,7 +354,7 @@ Release (manual; no workflow publishes it yet): run the package checks and `REN_
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, agent mentions and a drive file sent to a real brain, and the built package
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, opening and catching up a session a real brain answered, a permission request and a question on a real brain, agent mentions and a drive file sent to a real brain, /ren:retry of a stopped session on a real brain, and the built package
 bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```

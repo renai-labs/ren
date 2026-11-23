@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { Deferred, Effect, Exit, Layer, Queue, Scope, Stream, SubscriptionRef } from "effect"
+import { Deferred, Effect, Exit, Fiber, Layer, Option, Queue, Scope, Stream, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { RenAuth } from "../src/auth.js"
@@ -216,5 +216,85 @@ test("one link serves a session while any scope holds it, and closing the last s
       expect(reopened).not.toBe(first)
       yield* Queue.take(ren.opened)
       expect(ren.asked).toHaveLength(2)
+    }),
+  ))
+
+test("while Ren says the brain is starting after a reconnect, the wait for a connected link outlasts a minute and ends when the stream connects", () =>
+  run(
+    Effect.gen(function* () {
+      const answers: Array<unknown> = [ready("http://one", "t1")]
+      const ren = yield* fake(answers)
+      const link = yield* open(ren.links, Session.ID.create())
+      const first = yield* Queue.take(ren.opened)
+      first.send(connected)
+      yield* until(link.status, (status) => status === "connected")
+      answers.push(...Array.from({ length: 90 }, () => ({ status: "starting", phase: "resuming" })))
+      answers.push(ready("http://one", "t2"))
+      first.close()
+      yield* until(link.status, (status) => status === "reconnecting")
+      const waiting = yield* Link.connected(link).pipe(Effect.forkScoped)
+      yield* TestClock.adjust("2 minutes")
+      expect(yield* SubscriptionRef.get(link.boot)).toEqual({ _tag: "Starting", phase: "resuming" })
+      expect(waiting.pollUnsafe()).toBeUndefined()
+      const second = yield* TestClock.adjust("1 second").pipe(
+        Effect.andThen(Queue.poll(ren.opened)),
+        Effect.repeat({ until: Option.isSome }),
+      )
+      if (Option.isSome(second)) second.value.send(connected)
+      yield* Fiber.join(waiting)
+    }),
+  ))
+
+test("the wait for a connected link fails at once with Ren's reason when the brain fails to start", () =>
+  run(
+    Effect.gen(function* () {
+      const ren = yield* fake([
+        { status: "starting", phase: "waking" },
+        { status: "failed", reason: "no capacity" },
+      ])
+      const link = yield* open(ren.links, Session.ID.create())
+      const waiting = yield* Link.connected(link).pipe(Effect.flip, Effect.forkScoped)
+      yield* until(link.boot, (boot) => boot._tag === "Starting")
+      yield* TestClock.adjust("2 seconds")
+      expect((yield* Fiber.join(waiting)).message).toBe(
+        "Ren could not start this session’s brain: no capacity. Run /ren:retry.",
+      )
+    }),
+  ))
+
+test("a reset drops a stopped link, so the next open asks Ren again, and the open links are listed by session", () =>
+  run(
+    Effect.gen(function* () {
+      const sessionId = Session.ID.create()
+      const ren = yield* fake([{ status: "stopped" }, ready("http://one", "t1")])
+      const service = yield* Link.Service.pipe(Effect.provide(ren.links))
+      const holder = yield* Scope.make()
+      const stopped = yield* service.open(sessionId).pipe(Scope.provide(holder))
+      yield* until(stopped.boot, (boot) => boot._tag === "Stopped")
+      expect((yield* SubscriptionRef.get(service.opened)).get(sessionId)).toBe(stopped)
+      yield* service.reset(sessionId)
+      const reopened = yield* service.open(sessionId)
+      expect(reopened).not.toBe(stopped)
+      expect((yield* SubscriptionRef.get(service.opened)).get(sessionId)).toBe(reopened)
+      yield* Scope.close(holder, Exit.void)
+      expect((yield* SubscriptionRef.get(service.opened)).get(sessionId)).toBe(reopened)
+      ;(yield* Queue.take(ren.opened)).send(connected)
+      yield* until(reopened.status, (status) => status === "connected")
+      expect(ren.asked).toHaveLength(2)
+    }),
+  ))
+
+test("busy follows the session's execution on the event stream", () =>
+  run(
+    Effect.gen(function* () {
+      const sessionId = Session.ID.create()
+      const ren = yield* fake([ready("http://one", "t1")])
+      const link = yield* open(ren.links, sessionId)
+      const stream = yield* Queue.take(ren.opened)
+      stream.send(connected)
+      stream.send({ id: "evt_started", created: 2, type: "session.execution.started", data: { sessionID: sessionId } })
+      yield* until(link.busy, (busy) => busy)
+      stream.send({ id: "evt_ended", created: 3, type: "session.execution.succeeded", data: { sessionID: sessionId } })
+      yield* until(link.busy, (busy) => !busy)
     }),
   ))

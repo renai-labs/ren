@@ -12,6 +12,7 @@ import type {
 import { OpenCodeHost } from "@ren/cell/testing"
 import { Effect, Schema, type Scope } from "effect"
 import { RenAuth } from "../src/auth.js"
+import { Binding } from "../src/binding.js"
 import { RenCommands } from "../src/commands.js"
 import { RenRpc } from "../src/rpc.js"
 import { RenServer } from "./lib/ren.js"
@@ -207,5 +208,51 @@ test("/ren:logout revokes the login, removes it for this server only, and remove
         { message: `Not signed in to ${opened.origin}.`, variant: "info" },
       ])
       expect(yield* opened.rpc.getSpace({}, opened.at).pipe(Effect.flip)).toMatchObject({ type: "signed_out" })
+    }),
+  ))
+
+test("when the login expires in the middle of a Ren session and Ren refuses to renew it, a turn says to run /ren:login and the status shows it; after signing in the next prompt works", () =>
+  run(
+    Effect.gen(function* () {
+      const opened = yield* setup()
+      yield* Effect.promise(() => RenCommands.login(opened.surface))
+      const created = yield* opened.rpc.createSession({}, opened.at)
+      const sessionID = Binding.LocalID.make(created.sessionID)
+      yield* opened.host.client.session
+        .update({ sessionID, metadata: { ren: { spaceId: created.spaceId, sessionId: created.sessionID } } })
+        .pipe(Effect.orDie)
+      const prompt = (text: string) =>
+        opened.host.client.session.prompt({ sessionID, text }).pipe(
+          Effect.orDie,
+          Effect.tap(() => opened.host.client.experimental.session.wait({ sessionID }).pipe(Effect.orDie)),
+        )
+      const messages = opened.host.client.session.context({ sessionID }).pipe(Effect.orDie)
+      const expired = yield* stored()
+      yield* Effect.promise(() =>
+        Bun.write(file, JSON.stringify({ ...expired, [opened.origin]: { ...expired[opened.origin], expiresAt: 0 } })),
+      )
+      opened.ren.state.oauth.refuse = true
+
+      yield* prompt("hello")
+      expect(
+        (yield* messages).flatMap((message) =>
+          message.type === "assistant" && message.error ? [message.error.message] : [],
+        ),
+      ).toEqual([`Not signed in to ${opened.origin}. Run /ren:login.`])
+      expect(yield* opened.rpc.sessionStatus({ sessionID }, opened.at)).toMatchObject({ state: "signed_out" })
+
+      opened.ren.state.oauth.refuse = false
+      yield* Effect.promise(() => RenCommands.login(opened.surface))
+      expect((yield* opened.rpc.sessionStatus({ sessionID }, opened.at)).state).not.toBe("signed_out")
+      opened.ren.state.answer = (sent) => {
+        opened.ren.state.delivered.add(sent.id)
+        opened.ren.send(RenServer.frame("session.inbox.delivered", { sessionID: sent.sessionID, inboxID: sent.id }))
+        opened.ren.send(RenServer.frame("session.execution.succeeded", { sessionID: sent.sessionID }))
+      }
+      yield* prompt("again")
+      expect(opened.ren.state.prompts.map((sent) => sent.text)).toEqual(["hello", "again"])
+      expect(
+        (yield* messages).flatMap((message) => (message.type === "assistant" && message.error ? [message.error] : [])),
+      ).toHaveLength(1)
     }),
   ))

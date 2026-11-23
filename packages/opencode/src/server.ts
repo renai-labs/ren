@@ -11,6 +11,7 @@ import { RenProvider } from "./provider.js"
 import { RenApi } from "./ren.js"
 import { Requests } from "./requests.js"
 import { Sessions } from "./sessions.js"
+import { Status } from "./status.js"
 import { Support } from "./support.js"
 import { Title } from "./title.js"
 
@@ -20,7 +21,8 @@ export default Plugin.define({
     const refused = Support.refusal(ctx.app)
     if (refused) return Effect.logWarning(refused)
     return Layer.build(
-      Sessions.layer(ctx).pipe(
+      Status.layer(ctx).pipe(
+        Layer.provideMerge(Sessions.layer(ctx)),
         Layer.provideMerge(Mirror.layer(ctx)),
         Layer.provideMerge(Layer.mergeAll(Title.layer(ctx), Requests.layer(ctx))),
         Layer.provideMerge(Layer.mergeAll(Link.layer, Binding.layer(ctx))),

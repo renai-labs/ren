@@ -407,3 +407,66 @@ export const sessions = (surface: OpenSurface, filter: RenRpc.Filter = {}): Prom
       if (chosen) await open(surface, chosen)
     })
     .catch(fail(surface))
+
+const retried: Record<RenRpc.Retried, string> = {
+  restarted: "Ren is starting this session’s brain again.",
+  restarted_resent: "Ren is starting this session’s brain again. Your last message goes to it once it is ready.",
+  resumed: "Sent your last message to Ren again.",
+  sent_again: "Ren had your last message and its turn failed, so it was sent again.",
+  running: "Ren is still working on this session.",
+  nothing: "Nothing to retry: the last turn of this Ren session did not fail.",
+}
+
+export const retry = (surface: Surface, session: { readonly sessionID?: string; readonly running: boolean }) => {
+  const sessionID = session.sessionID
+  if (!sessionID || session.running) {
+    surface.ui.toast.show({
+      title: "Ren",
+      message: sessionID ? retried.running : "Open a Ren session to retry it.",
+      variant: "info",
+    })
+    return Promise.resolve()
+  }
+  return surface.client
+    .rpc(RenRpc.Definition)
+    .retry({ sessionID }, at(surface))
+    .then((result) =>
+      surface.ui.toast.show({
+        title: "Ren",
+        message: retried[result.outcome],
+        variant: result.outcome === "nothing" ? "info" : "success",
+      }),
+    )
+    .catch((error: unknown) =>
+      Schema.decodeUnknownOption(Failure)(error).pipe(Option.exists((failure) => failure.type === "rpc.unavailable"))
+        ? surface.ui.toast.show({
+            title: "Ren",
+            message: "The Ren plugin is not running in this OpenCode server.",
+            variant: "error",
+          })
+        : fail(surface)(error),
+    )
+}
+
+export const sessionStatus = (surface: Pick<Surface, "client" | "location">, sessionID: string) =>
+  surface.client
+    .rpc(RenRpc.Definition)
+    .sessionStatus({ sessionID }, at(surface))
+    .then(
+      (status): RenRpc.SessionStatus | undefined => status,
+      () => undefined,
+    )
+
+export const describe = (status: RenRpc.SessionStatus, view: { readonly now: number; readonly running: boolean }) => {
+  const waiting = status.retryAt - view.now
+  const states: Partial<Record<RenRpc.SessionStatus["state"], string>> = {
+    checking: "Checking",
+    starting: `Starting: ${status.detail}`,
+    reconnecting: waiting >= 2_000 ? `Waiting ${Math.ceil(waiting / 1_000)}s` : "Reconnecting",
+    failed: `Failed: ${status.detail} · /ren:retry`,
+    stopped: "Stopped: the space was shut down · /ren:retry",
+    signed_out: "Signed out · /ren:login",
+  }
+  const state = states[status.state] ?? (status.busy && !view.running ? "Working" : undefined)
+  return [status.space ? `ren · ${status.space}` : "ren", ...(state ? [state] : [])].join(" · ")
+}
