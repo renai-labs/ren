@@ -20,6 +20,9 @@ export const Connection = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
   providerName: Schema.String,
+  providerId: Schema.optionalKey(Schema.String).annotate({
+    description: "The card the seat belongs to: `anthropic` or `openai`. Omitted by an older gateway.",
+  }),
   iconUrl: Schema.String,
   status: Schema.Struct({ label: Schema.String, tone: Tone }),
   plan: Schema.optionalKey(Schema.String),

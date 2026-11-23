@@ -13220,6 +13220,635 @@
         }
       }
     },
+    "/providers": {
+      "get": {
+        "tags": ["provider"],
+        "operationId": "provider.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Ren’s card, the cards the organization added (own keys and subscriptions), and every provider it can add, with model counts from models.dev. Every member reads it.",
+        "summary": "List the organization’s providers"
+      }
+    },
+    "/providers/{id}": {
+      "patch": {
+        "tags": ["provider"],
+        "operationId": "provider.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one card. `ren` is Ren’s card. Off removes the card’s models from pickers at the next push. Only admins and owners.",
+        "summary": "Turn a provider on or off, or change its method",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCard.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/providers/{id}/test": {
+      "post": {
+        "tags": ["provider"],
+        "operationId": "provider.test",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.TestResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.TestResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Send one small request with the fields, through the model gateway, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
+        "summary": "Test a provider key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCard.KeyInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/providers/{id}/key": {
+      "put": {
+        "tags": ["provider"],
+        "operationId": "provider.key.save",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Test the fields, then store them in the model gateway. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
+        "summary": "Save a provider key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCard.KeyInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["provider"],
+        "operationId": "provider.key.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove the key from the model gateway. The next call with the provider’s models fails. Only admins and owners.",
+        "summary": "Remove a provider key"
+      }
+    },
+    "/providers/ren/models": {
+      "get": {
+        "tags": ["provider"],
+        "operationId": "provider.ren-models.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.RenModels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.RenModels"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Each of Ren’s models with its price per 1M tokens, whether it is free, and whether it is on.",
+        "summary": "List Ren’s models"
+      },
+      "patch": {
+        "tags": ["provider"],
+        "operationId": "provider.ren-models.update",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ProviderCard.RenModels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderCard.RenModels"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Switch models on or off, and set whether new models start on. A model that is off leaves pickers at the next push. Only admins and owners.",
+        "summary": "Turn Ren’s models on or off",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCard.RenModelsInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/billing": {
       "get": {
         "tags": ["billing"],
@@ -22078,6 +22707,63 @@
         "required": ["providerId", "modelId"],
         "additionalProperties": false
       },
+      "Models.Method": {
+        "type": "string",
+        "enum": ["key", "subscription"],
+        "description": "How a provider connects: the organization’s own key, or its members’ subscriptions."
+      },
+      "Models.Price": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheRead": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "cacheWrite": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          }
+        },
+        "required": ["input", "output"],
+        "additionalProperties": false,
+        "description": "US dollars per 1M tokens, as models.dev states them."
+      },
       "NotFoundErrorEncoded": {
         "type": "object",
         "properties": {
@@ -22947,6 +23633,331 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "The slug of an app that the space reaches."
       },
+      "ProviderCard.Available": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modelCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderCard.Field"
+            }
+          },
+          "added": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "name", "modelCount", "fields", "added"],
+        "additionalProperties": false,
+        "description": "One provider of the Add provider grid."
+      },
+      "ProviderCard.Field": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "multiline": {
+            "type": "boolean"
+          },
+          "placeholder": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "label", "secret"],
+        "additionalProperties": false,
+        "description": "One field of the Connect dialog."
+      },
+      "ProviderCard.FreeUsage": {
+        "type": "object",
+        "properties": {
+          "used": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "resetsAt": {
+            "type": "string"
+          }
+        },
+        "required": ["used", "limit", "resetsAt"],
+        "additionalProperties": false,
+        "description": "Today’s free-model requests (Providers P14)."
+      },
+      "ProviderCard.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "method": {
+            "$ref": "#/components/schemas/Models.Method"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Models.Method"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderCard.Field"
+            }
+          },
+          "key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderCard.Key"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "seats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenInference.Connection"
+            },
+            "description": "The members’ subscriptions; only Anthropic and OpenAI have them."
+          },
+          "modelCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "canManage": {
+            "type": "boolean",
+            "description": "True for admins and owners (Providers P7)."
+          }
+        },
+        "required": ["id", "name", "enabled", "method", "methods", "fields", "key", "seats", "modelCount", "canManage"],
+        "additionalProperties": false,
+        "description": "One card of the Providers page."
+      },
+      "ProviderCard.Key": {
+        "type": "object",
+        "properties": {
+          "last4": {
+            "type": "string",
+            "description": "The last 4 characters of the key."
+          },
+          "testedAt": {
+            "type": "string"
+          },
+          "savedBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RenInference.KeyOwner"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["last4", "testedAt", "savedBy"],
+        "additionalProperties": false
+      },
+      "ProviderCard.KeyInput": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 20000
+            },
+            "description": "The Connect dialog’s fields. Ren forwards them to the model gateway once and never stores them."
+          }
+        },
+        "required": ["fields"],
+        "additionalProperties": false
+      },
+      "ProviderCard.Page": {
+        "type": "object",
+        "properties": {
+          "ren": {
+            "$ref": "#/components/schemas/ProviderCard.RenInfo"
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderCard.Info"
+            }
+          },
+          "available": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderCard.Available"
+            }
+          }
+        },
+        "required": ["ren", "cards", "available"],
+        "additionalProperties": false
+      },
+      "ProviderCard.RenInfo": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "newModelsOn": {
+            "type": "boolean"
+          },
+          "modelCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "free": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderCard.FreeUsage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the gateway cannot say."
+          },
+          "canManage": {
+            "type": "boolean"
+          }
+        },
+        "required": ["enabled", "newModelsOn", "modelCount", "free", "canManage"],
+        "additionalProperties": false,
+        "description": "Ren’s card, always the first (Providers P1)."
+      },
+      "ProviderCard.RenModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "price": {
+            "$ref": "#/components/schemas/Models.Price"
+          },
+          "free": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "name", "price", "free", "enabled"],
+        "additionalProperties": false
+      },
+      "ProviderCard.RenModels": {
+        "type": "object",
+        "properties": {
+          "newModelsOn": {
+            "type": "boolean"
+          },
+          "canManage": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderCard.RenModel"
+            }
+          }
+        },
+        "required": ["newModelsOn", "canManage", "models"],
+        "additionalProperties": false
+      },
+      "ProviderCard.RenModelsInput": {
+        "type": "object",
+        "properties": {
+          "newModelsOn": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id", "enabled"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProviderCard.TestResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "description": "The vendor’s message when the test failed."
+          }
+        },
+        "required": ["ok"],
+        "additionalProperties": false
+      },
+      "ProviderCard.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "method": {
+            "$ref": "#/components/schemas/Models.Method"
+          }
+        },
+        "additionalProperties": false
+      },
       "PullRequest.Info": {
         "type": "object",
         "properties": {
@@ -23077,6 +24088,10 @@
           },
           "providerName": {
             "type": "string"
+          },
+          "providerId": {
+            "type": "string",
+            "description": "The card the seat belongs to: `anthropic` or `openai`. Omitted by an older gateway."
           },
           "iconUrl": {
             "type": "string"
@@ -30144,6 +31159,9 @@
     },
     {
       "name": "ren-inference"
+    },
+    {
+      "name": "provider"
     },
     {
       "name": "billing"

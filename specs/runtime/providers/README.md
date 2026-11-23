@@ -1,6 +1,6 @@
 # Providers: models, own keys and subscriptions through one gateway
 
-Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
+Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1); the Providers API, its tables and policy (§6.3–§6.5, §10 client routes). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
 
 This file is the core of the spec. The references hold the detail:
 
@@ -218,15 +218,17 @@ What the build found (models.dev, 22 Nov 2026):
 
 ### 6.3 Own-key models
 
-The provider's models on models.dev: type chat, not deprecated. No per-model switch in v1.
+The provider's models on models.dev: type chat, not deprecated. No per-model switch in v1. Built: an own-key card is listed once its row has a key and is on.
 
 ### 6.4 Subscription models
 
 The gateway reports each seat's models in `GET /v1/connections` (§10). Ren core keeps them in `organization_seat_models`. A card's list is the union over the organization's seats, joined with models.dev for names, limits and efforts. A model that models.dev does not know keeps the vendor's id and default limits.
 
+Built: a card without a row is on with the subscription method once a member connected a seat of its vendor. A seat model that models.dev does not know has no name and no limits.
+
 ### 6.5 An organization's list
 
-For each card that is on: the card's models (§6.2–6.4) minus switched-off Ren models. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free. Ren core stores a hash per organization in `organization_model_list` and compares it to decide on a push.
+Built (`core/src/model-lists.ts`, `core/src/provider-settings.ts`, `GET/PATCH /providers`, `/providers/:id/test`, `/providers/:id/key`, `/providers/ren/models`, `POST /internal/inference/changed`). For each card that is on: the card's models (§6.2–6.4) minus switched-off Ren models. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free. Ren core stores a hash per organization in `organization_model_list` and compares it to decide on a push.
 
 Gateway names:
 
@@ -288,10 +290,12 @@ New rules (P26):
 
 | Change                                                                           | Written to                                                                  | Notify                                  |
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------- |
-| Card on/off, method, key saved or removed                                        | `organization_provider`                                                     | `org:<id>`                              |
-| Ren model switch, "New models on"                                                | `organization_ren_model`, `organization_settings`                           | `org:<id>`                              |
-| Seat connected, removed, or its models changed (the gateway tells Ren core, §10) | `organization_seat_models`                                                  | `org:<id>`                              |
+| Card on/off, method, key saved or removed                                        | `organization_provider`                                                     | `org:<id>` when the list changed        |
+| Ren model switch, "New models on"                                                | `organization_ren_model`, `organization_provider.new_models` (row `ren`)    | `org:<id>` when the list changed        |
+| Seat connected, removed, or its models changed (the gateway tells Ren core, §10) | `organization_seat_models`                                                  | `org:<id>` when the list changed        |
 | models.dev changed                                                               | `model_catalog`, then `organization_model_list` only where the hash changed | `org:<id>` for those organizations only |
+
+Built differently from the first design: the settings tables have no trigger. Each write recomputes the organization's list hash, and only `organization_model_list` notifies, so a change that leaves the list as it was (a key replaced) wakes no brain. "New models on" is a column of Ren's row in `organization_provider`, not a separate settings table. Turning it off gives each of today's Ren models its own switch, so only models that arrive later start off.
 
 A Ren-wide `'all'` notify wakes every running brain (`specs/runtime/hot-reload/README.md` §2.5), so a models.dev change never sends `'all'`. The 30 s pull stays as the backup. The core and brain polls go.
 
@@ -342,20 +346,22 @@ Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the 
 
 Ren core calls the gateway with today's signed token (`core/src/ren-inference.ts`).
 
-| Route                                                                                | Status | Purpose                                                                                                                |
-| ------------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | `GET` adds each seat's models and plan                                                                                 |
-| `POST /v1/keys {brainId, spaceId}`                                                   | keep   | brain key                                                                                                              |
-| inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | —                                                                                                                      |
-| `PUT /v1/providers/:providerId {enabled, method}`                                    | new    | card state                                                                                                             |
-| `POST /v1/providers/:providerId/test {fields}`                                       | new    | test a key without saving; ok or the vendor's message                                                                  |
-| `PUT /v1/providers/:providerId/key {fields}`                                         | new    | test, then store; returns `{ last4, testedAt }`. Ren core forwards the fields and never stores or logs them            |
-| `DELETE /v1/providers/:providerId/key`                                               | new    | remove the key                                                                                                         |
-| `PUT /v1/ren-models {revision, models, switches}`                                    | new    | Ren's model list (id, upstream id, prices, free) and the organizations' switches. Ren core notifies brains after a 200 |
-| `GET /v1/usage/free`                                                                 | new    | `{ used, limit, resetsAt }`                                                                                            |
-| `GET /v1/catalog`                                                                    | remove | —                                                                                                                      |
+| Route                                                                                | Status | Purpose                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | `GET` adds each seat's models and plan                                                                                                                                       |
+| `POST /v1/keys {brainId, spaceId}`                                                   | keep   | brain key                                                                                                                                                                    |
+| inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | —                                                                                                                                                                            |
+| `PUT /v1/providers/:providerId {enabled, method}`                                    | new    | card state                                                                                                                                                                   |
+| `POST /v1/providers/:providerId/test {fields}`                                       | new    | test a key without saving; ok or the vendor's message                                                                                                                        |
+| `PUT /v1/providers/:providerId/key {fields, model}`                                  | new    | test, then store; returns `{ last4, testedAt }`, or 400 with the vendor's message. Ren core forwards the fields and never stores or logs them                                |
+| `DELETE /v1/providers/:providerId/key`                                               | new    | remove the key                                                                                                                                                               |
+| `PUT /v1/ren-models {revision, models, switches}`                                    | new    | Ren's model list (id, upstream id, prices, free) and the organizations' switches. Ren core notifies brains after a 200. A switched-off model is refused with `403 model_off` |
+| `GET /v1/usage/free`                                                                 | new    | `{ used, limit, resetsAt }`                                                                                                                                                  |
+| `GET /v1/catalog`                                                                    | remove | —                                                                                                                                                                            |
 
-Gateway → Ren core: `POST /internal/inference/changed {organizationId}` when a seat or its models change, authenticated like usage ingest. Ren core reads `GET /v1/connections`, writes `organization_seat_models` and notifies.
+Gateway → Ren core: `POST /internal/inference/changed {organizationId}` when a seat or its models change, authenticated like usage ingest. Ren core reads `GET /v1/connections`, writes `organization_seat_models` and notifies. Built: only the usage ingest key may call it; `GET /v1/connections` adds `providerId`, `plan` and `models` to each seat.
+
+Built in Ren core: every route above except `GET /v1/catalog`, which Ren no longer calls. The model gateway's side comes in its own changes.
 
 ## 11. Lifecycle states
 
@@ -447,5 +453,5 @@ Only rules that the code does not show:
 | Item                                                                                                           | Decision                                                                                                   |
 | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | A "Use this model on Ren" button on errors                                                                     | No. The error card offers "Change model" only (P4)                                                         |
-| The fields of Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks in the Connect dialog | The builder takes them from each provider's documentation and from the credential values the gateway needs |
+| The fields of Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway and Databricks in the Connect dialog | Built (`schema/src/provider-card.ts`): Azure key, endpoint, API version; Bedrock access key ID, secret, region; Vertex project, location, service account JSON; Cloudflare account ID and API token (models.dev's address names the account only); Databricks workspace URL and token |
 | The values of `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK`                                | Deployment settings. The owner sets and changes them; no code change                                       |

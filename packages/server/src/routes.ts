@@ -91,6 +91,7 @@ import { DriveHandler } from "./handlers/api/drive.js"
 import { FilesHandler } from "./handlers/api/files.js"
 import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
+import { ProviderHandler } from "./handlers/api/provider.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
@@ -112,7 +113,7 @@ import { LinkHandler } from "./handlers/api/link.js"
 import { TaskActivityHandler } from "./handlers/api/task-activity.js"
 import { TaskCommentHandler } from "./handlers/api/task-comment.js"
 import { SyncHandler } from "./handlers/sync.js"
-import { UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
+import { InferenceHandler, UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
@@ -225,6 +226,7 @@ export const layer = Layer.mergeAll(
         OAuthSessionHandler,
         OAuthAppHandler,
         RenInferenceHandler,
+        ProviderHandler,
         BillingHandler,
         ChannelInstallHandler,
         ChannelMappingHandler,
@@ -292,6 +294,7 @@ export const layer = Layer.mergeAll(
     ),
     HttpApiBuilder.layer(UsageIngestApi).pipe(
       Layer.provide(UsageHandler),
+      Layer.provide(InferenceHandler),
       Layer.provide(UsageAuthenticationLayer),
       Layer.provide(Usage.layer),
     ),
