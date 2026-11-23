@@ -24,3 +24,10 @@ test("the dependencies bundle contains the dependency patch referenced by the ro
 test("the dependencies bundle has no bin links, because bun links a different set of them on each install", () => {
   expect(state.listed.filter((path) => path.includes("/.bin/"))).toEqual([])
 })
+
+test("the dependencies bundle has the glibc claude program and not the musl one, because the machines run glibc", () => {
+  expect([
+    state.listed.some((path) => path.endsWith("/@anthropic-ai/claude-agent-sdk-linux-x64/claude")),
+    state.listed.some((path) => path.includes("claude-agent-sdk-linux-x64-musl")),
+  ]).toEqual([true, false])
+})

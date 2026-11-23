@@ -105,7 +105,7 @@ export const build = async (repository: string, out: string) => {
   const root = Schema.decodeUnknownSync(Runtime)(await Bun.file(join(repository, "package.json")).json())
   const dependencies = join(work, "dependencies")
   await copy(repository, dependencies, [...manifests, ...Object.values(root.patchedDependencies ?? {})])
-  await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64`
+  await Bun.$`bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts --os linux --cpu x64 --libc glibc`
     .cwd(dependencies)
     .quiet()
   // oxlint-disable-next-line ren/no-comments -- Bun links a different set of a package's peers' bins on each install, so they would change the version of the same dependencies. A machine runs no package scripts, so it uses none of them.
