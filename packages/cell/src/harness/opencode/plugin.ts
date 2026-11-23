@@ -45,6 +45,7 @@ import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { OpenCodeModelTools } from "./model-tools.js"
 import { OpenCodeActivity } from "./activity.js"
+import { OpenCodeFeedback } from "./feedback.js"
 import { basename, resolve } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
@@ -420,6 +421,24 @@ export const make = (
             event.messages = event.messages.map(withOrigin(yield* metadataOf(context.session, event.sessionID)))
           }),
         )
+        if (isSession && Option.isSome(ren))
+          yield* context.command.transform((editor) =>
+            editor.add({
+              name: OpenCodeFeedback.name,
+              description: OpenCodeFeedback.description,
+              execute: (input) => {
+                const text = input.prompt.text.trim()
+                return context.session
+                  .prompt({
+                    sessionID: input.sessionID,
+                    delivery: input.delivery,
+                    text: OpenCodeFeedback.instruction(text),
+                    metadata: { displayText: `/${OpenCodeFeedback.name} ${text}`.trim(), comments: [] },
+                  })
+                  .pipe(Effect.asVoid)
+              },
+            }),
+          )
         if (isSession) {
           yield* tool.hook("execute.before", (event) =>
             Effect.sync(() => {

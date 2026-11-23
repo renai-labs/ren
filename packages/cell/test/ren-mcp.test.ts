@@ -98,7 +98,7 @@ const open = Effect.fnUntraced(function* (
     yield* server.client.session.prompt({ sessionID: Session.ID.make(sessionId), text }).pipe(Effect.orDie)
     yield* wait(sessionId)
   })
-  return { call, chat, directory, prompt }
+  return { call, chat, directory, prompt, harness, wait }
 })
 
 const renAt = Effect.fnUntraced(function* (token = "host-1", tools: ReadonlyArray<string> = []) {
@@ -245,11 +245,39 @@ it.live(
     }),
 )
 
-it.live("a brain without Ren has no ren server", () =>
+it.live(
+  "/feedback asks the model to send the person's words with Ren's feedback_report, and the chat shows the command as they typed it",
+  () =>
+    Effect.gen(function* () {
+      const ren = yield* renAt("host-1", ["feedback_report"])
+      const opened = yield* open(Option.some(ren.ren))
+      const sessionId = yield* opened.chat()
+      const names = (yield* opened.harness.chat.commands(sessionId)).map((command) => command.name)
+      expect(names).toContain("feedback")
+      const script = stub.script({ reply: "Sent." })
+      yield* opened.harness.chat.command(sessionId, {
+        name: "feedback",
+        text: `${script.marker} the save button does nothing`,
+        delivery: "steer",
+      })
+      const call = yield* Effect.promise(() => script.called(1))
+      yield* opened.wait(sessionId)
+      const sent = JSON.stringify(call.body.messages)
+      expect(sent).toContain("feedback_report")
+      expect(sent).toContain(`<feedback>\\n${script.marker} the save button does nothing\\n</feedback>`)
+      const message = (yield* opened.harness.chat.messages(sessionId, {})).items.find((item) => item.type === "user")
+      expect(message?.type === "user" && message.presentation?.displayText).toBe(
+        `/feedback ${script.marker} the save button does nothing`,
+      )
+    }),
+)
+
+it.live("a brain without Ren has no ren server and no /feedback", () =>
   Effect.gen(function* () {
     const opened = yield* open(Option.none())
     const sessionId = yield* opened.chat()
     expect(yield* opened.call(sessionId, Option.some("usr_ada"))).toContain("Unknown tool 'ren.marker'")
+    expect((yield* opened.harness.chat.commands(sessionId)).map((command) => command.name)).not.toContain("feedback")
   }),
 )
 
