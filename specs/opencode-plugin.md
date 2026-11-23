@@ -61,6 +61,10 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F35s. The TUI plugin context of 2.2.6 has no helper to open a URL or to copy text (OpenCode's own dialogs use an internal `openUrl` and clipboard). The TUI part runs in Bun, so it spawns `open` or `xdg-open` itself. `ui.dialog.prompt` shows a wrapped `description`, returns the typed text or `undefined` on escape, and closes with `ui.dialog.clear()`; `ui.dialog.confirm` returns a boolean _(TUI)_.
 - F36s. A plugin can add an OAuth method to an integration (`ctx.integration.transform`, `editor.method.update({ integrationID, method: { id, type: "oauth", label }, authorize })`); OpenCode's `/connect` dialog then opens the URL, offers copy and paste of the redirect, polls the attempt and stores the `Credential.OAuth` the callback returns (`access`, `refresh`, `expires`) in OpenCode's credential store, which refreshes it with the method's `refresh`. An `external` method records a reference and runs no flow (`claude-agent`'s `integration.ts`).
 - F37s. The Promise RPC client's `events.on` filters by event type and drops `server.connected`, so a caller cannot see when its subscription is live; every subscription of one client shares its event connection. A sign-in's outcome arrives after a browser round trip, long after the TUI subscribed.
+- F34b. OpenCode's plugin runtime (`ensurePluginRuntime`, which the CLI and the TUI call at start) serves `effect`, every public `effect/*` subpath and every `@opencode/plugin` entrypoint to plugins from the host's copy, also to imports from a plugin's `node_modules`, and refuses to load files of a plugin's own copy of either. A bundle that keeps them external, alone in a `node_modules` folder with nothing to resolve them from, loads and runs a turn _(run, in-process and in the stock 2.2.6 binary)_.
+- F35b. The TUI's Solid transform (`@opentui/solid` 0.8.1 `createSolidTransformPlugin`, installed by `ensureRuntimePluginSupport`) compiles only files outside `node_modules`; an installed package's `.tsx` would load with Bun's default JSX. OpenTUI's runtime plugin rewrites `@opentui/*`, `solid-js`, `solid-js/store` and `@opencode/plugin/tui` imports in a `node_modules` ESM file to the TUI's instances, and leaves the specifiers OpenCode's runtime provides. So the published TUI part is JavaScript compiled with the same Solid transform; it loads and works from a `node_modules` folder in the stock 2.2.6 TUI (footers, `/ren:space`) _(TUI)_.
+- F36b. `opencode plugin add` installs a package with npm Arborist into OpenCode's cache, which installs required peer dependencies; `@opencode/plugin` marks its own TUI peers optional. `Host.resolve` resolves a directory whose `package.json` has `name` and `exports` through the package name, as for an installed package.
+- F37b. `ctx.app.version` (server) and `context.app.version` (TUI) are the host's version: the release `X.Y.Z` in the stock binary, `local` in a source build, `0.0.0-<channel>-<n>` in dev and beta builds, and `unknown` in an embedded host unless it passes `app` (`createEmbeddedRoutes`). OpenCode 2.2.6 is the first release with `effect` 4.1.0 (2.2.2 to 2.2.5 ship 4.0.6); 2.3.0 to 2.3.2 also ship 4.1.0, `@opentui/*` 0.8.4 and `solid-js` 1.9.17.
 
 ## 3. Modules
 
@@ -80,6 +84,8 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 | `mirror`   | Built. Messages from other clients of a Ren session into the local session (`Mirror`).                                            |
 | `title`    | Built. The title of a Ren session, the same locally and on Ren (`Title`).                                                         |
 | `controls` | Built. Model picker, `/compact`, archive, delete and fork on a Ren session (`Controls`).                                          |
+| `support`  | Built. The supported OpenCode range, checked at load and written as the peer range (`Support`).                                   |
+| build      | Built. `script/build.ts`: the publishable package in `dist`.                                                                      |
 
 ## 4. Features, in build order
 
@@ -90,7 +96,6 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - **11. Attachments.** Local files and pasted images upload with `drive.startUpload` and go in `files` (maximum 10).
 - **12. Status and retry.** Starting, failed and stopped states are visible; `/ren:retry` calls `chat.retry`; notifications through the TUI attention API.
 - **13. Move a local session to Ren.** A Ren endpoint that creates a session in a space from an OpenCode export (session row and message rows), a new `origin` literal, and the restore of those rows on the brain; then `/ren:move`, and a model change from a local model to `ren/<model>`.
-- **14. Build and release.** A build script that bundles the Ren packages, keeps `effect` and `@opencode/plugin` external, points `exports` at `dist`, widens the peer ranges, and a check of the OpenCode version at load.
 - **15. Panels.** Files, changes, terminal (`/ren:files`, `/ren:diff`, `/ren:shell`), `/ren:background`, links to tasks and pull requests, context usage.
 
 ## 5. Limits
@@ -118,3 +123,4 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - L17s. Ren is not an integration in OpenCode's `/connect`: an OAuth method's credential is a second copy of the refresh token in OpenCode's store (F36s), and the two copies cannot both stay valid when either side rotates it (F34s). `/ren:login` shows its own dialog instead.
 - L18s. When the server part runs on another machine than the TUI, the browser's redirect to `127.0.0.1` reaches nothing; the user pastes the address from the browser into the sign-in dialog (run with the fake Ren, in tests and by hand in the TUI).
 - L19s. After `/ren:logout`, a Ren session's open Chat API connection keeps working until its chat token needs renewing (at most 60 minutes, F13).
+- L16b. The supported range is `>=2.2.6 <2.4.0`; 2.3.x is covered by a typecheck of the source against `@opencode/plugin` 2.3.2 only, not run. The published `./rpc` has no type declarations.

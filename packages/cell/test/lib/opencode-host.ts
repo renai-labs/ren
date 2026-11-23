@@ -12,7 +12,7 @@ import { OpenCodeServer } from "../../src/harness/opencode/server.js"
 
 export const make = Effect.fnUntraced(function* (
   config: Readonly<Record<string, unknown>>,
-  options: { readonly database?: string } = {},
+  options: { readonly database?: string; readonly version?: string } = {},
 ) {
   const directory = yield* Effect.acquireRelease(
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-opencode-"))),
@@ -26,6 +26,7 @@ export const make = Effect.fnUntraced(function* (
           config: { directory, project: false, content: JSON.stringify(config) },
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
+          ...(options.version && { app: { version: options.version } }),
         }).pipe(Layer.provide(HttpServer.layerServices)),
       ),
     ),

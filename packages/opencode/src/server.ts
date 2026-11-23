@@ -9,12 +9,15 @@ import { Link } from "./link.js"
 import { Mirror } from "./mirror.js"
 import { RenProvider } from "./provider.js"
 import { RenApi } from "./ren.js"
+import { Support } from "./support.js"
 import { Title } from "./title.js"
 
 export default Plugin.define({
   id: "ren",
-  effect: (ctx) =>
-    Layer.build(
+  effect: (ctx) => {
+    const refused = Support.refusal(ctx.app)
+    if (refused) return Effect.logWarning(refused)
+    return Layer.build(
       Mirror.layer(ctx).pipe(
         Layer.provideMerge(Title.layer(ctx)),
         Layer.provideMerge(Layer.mergeAll(Link.layer, Binding.layer(ctx))),
@@ -31,5 +34,6 @@ export default Plugin.define({
         ),
       ),
       Effect.catch((error) => Effect.logWarning("The Ren plugin registers nothing", error)),
-    ),
+    )
+  },
 })

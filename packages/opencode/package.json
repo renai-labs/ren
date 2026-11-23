@@ -2,6 +2,7 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@renai-labs/opencode",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
@@ -9,13 +10,8 @@
     "./tui": "./src/tui.tsx",
     "./rpc": "./src/rpc.ts"
   },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
+    "build": "bun run script/build.ts",
     "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsrs -b",

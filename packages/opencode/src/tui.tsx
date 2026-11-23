@@ -2,10 +2,16 @@ import { Plugin } from "@opencode/plugin/tui"
 import { createSignal, Show } from "solid-js"
 import { RenCommands } from "./commands.js"
 import { RenRpc } from "./rpc.js"
+import { Support } from "./support.js"
 
 export default Plugin.define({
   id: "ren",
   setup(context) {
+    const refused = Support.refusal(context.app)
+    if (refused) {
+      context.ui.toast.show({ title: "Ren", message: refused, variant: "warning" })
+      return
+    }
     const surface = {
       client: context.client,
       location: () => context.location ?? context.data.location.default(),

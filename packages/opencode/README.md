@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -36,22 +36,23 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 
 ## Modules
 
-| Module     | Holds                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                      |
-| `auth`     | `RenAuth`: the server URL and a currently valid token; `RenAuth.Login`: sign-in and sign-out.   |
-| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.               |
-| `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh.  |
-| `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.           |
-| `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.            |
-| `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.          |
-| `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                                |
-| `handlers` | `RenHandlers`: the server part's RPC handlers.                                                  |
-| `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.       |
-| `tui`      | The TUI part: the commands, and the selected space in the footers.                              |
-| `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns. |
-| `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                          |
-| `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.   |
+| Module     | Holds                                                                                              |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                         |
+| `auth`     | `RenAuth`: the server URL and a currently valid token; `RenAuth.Login`: sign-in and sign-out.      |
+| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.                  |
+| `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh.     |
+| `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.              |
+| `model`    | `RenModel`: the `LanguageModelV3` that runs a local turn on the Ren session's brain.               |
+| `provider` | `RenProvider`: the provider `ren`, its models, and the session hooks of a Ren session.             |
+| `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                                   |
+| `handlers` | `RenHandlers`: the server part's RPC handlers.                                                     |
+| `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.          |
+| `tui`      | The TUI part: the commands, and the selected space in the footers.                                 |
+| `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns.    |
+| `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                             |
+| `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.      |
+| `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range. |
 
 ## Connection
 
@@ -194,7 +195,7 @@ Planned commands: `/ren:sessions`, `/ren:move`, `/ren:retry`. Planned features:
 
 ## Install
 
-Not published yet. Once it is:
+Not published yet (Build and release). Once it is:
 
 ```sh
 opencode plugin add @renai-labs/opencode
@@ -224,17 +225,45 @@ To try a Ren model against a local server, pass the plugin's options with an ent
 
 `url` is the Ren server (default `REN_URL`, then `https://api.useren.ai`); sign in to it with `/ren:login` or `ren login`, or set `REN_TOKEN`. `space` is a space ID or slug, used until `/ren:space` selects one (default: your first joined space).
 
-OpenCode resolves a local directory through its `package.json` `exports`, as it does a published package, so all three parts load from `src`. The TUI loads the TUI part of each plugin its server loads. OpenCode provides `effect` and `@opencode/plugin` to the plugin at runtime.
+OpenCode resolves a local directory through its `package.json` `exports`, as it does a published package, so all three parts load from `src`; the built `dist` loads the same way. The TUI loads the TUI part of each plugin its server loads. OpenCode provides `effect` and `@opencode/plugin` to the plugin at runtime.
 
 ## Dependencies
 
 `@opencode/plugin` and `effect` are peer dependencies: OpenCode provides its own copies at runtime, to the server part and to the TUI part. `@opentui/core`, `@opentui/solid` and `solid-js` are peer dependencies of the TUI part: the TUI provides them and compiles `tui.tsx` with Solid. All are dev dependencies too, for typecheck and tests, with `@opencode/theme` for the theme's types; `tsconfig.src.json` adds the `DOM` lib because Solid's `JSX.Element` names DOM's `Node`.
 
-`@ren/client`, `@ren/chat`, `@ren/schema` and `@ren/protocol` are private workspace packages. They become dependencies when code uses them, and the build bundles them.
+`@ren/client`, `@ren/chat`, `@ren/schema` and `@ren/protocol` are private workspace packages. They become dependencies when code uses them, and the build bundles them. The published manifest has no dependencies and widens the peers (Build and release).
 
-## Build and release (not built)
+## Supported OpenCode
 
-A build script will bundle the Ren packages into `dist` and keep `effect` and `@opencode/plugin` external, then point `exports` at the bundle. Publish only the built package, and test the installed package in a stock OpenCode release, not only this directory.
+`Support.opencode` (`src/support.ts`) is the range of OpenCode releases the plugin supports: `>=2.2.6 <2.4.0`. 2.2.6 is the first release whose `effect` is 4.1.0, the version the bundled Ren packages are built with, and the release every fact in the spec was run on; the source also typechecks against `@opencode/plugin` 2.3.2. At load, the server part and the TUI part read the host's version (`ctx.app.version`, `context.app.version`). Outside the range the server part logs one warning, the TUI part shows one toast, and neither registers anything. A version that is not a release `X.Y.Z` (a dev, beta or local build, or an embedded host's `unknown`) is not checked. Widen the range in that one place after you test a new OpenCode release; the build writes it as the `@opencode/plugin` peer range.
+
+## Build and release
+
+```sh
+bun run build                     # dist/, version from package.json
+bun run build --version 1.2.3     # the version to publish
+```
+
+`script/build.ts` bundles the three parts (`src/server.ts`, `src/tui.tsx`, `src/rpc.ts`) with `Bun.build` (target `bun`, ESM, code splitting) into `dist/server.js`, `dist/tui.js`, `dist/rpc.js` and shared chunks, and writes `dist/package.json`. `dist` is the whole package: publish that directory, never this one (this `package.json` is `private`).
+
+- **Inlined:** `@ren/client`, `@ren/chat` (only `chat-access` and `connection`, so no React and no timeline), `@ren/schema`, `@ren/protocol` and `ulid`. About 440 KiB for the server part, 33 KiB for the chunk with the RPC contract, 8 KiB for the TUI part.
+- **External, provided by OpenCode:** `effect` and `effect/*` and `@opencode/plugin/*` (OpenCode's plugin runtime resolves them to its own copies and refuses a plugin's own copy), and for the TUI part `solid-js`, `@opentui/core` and `@opentui/solid` (OpenTUI's runtime plugin support in the TUI). The build fails when a copy of one of them ends up in the bundle.
+- **The TUI part is built JavaScript.** OpenCode's TUI compiles `.tsx` with the Solid transform only outside `node_modules` (`createSolidTransformPlugin` in `@opentui/solid`), so an installed plugin's `.tsx` would not get it. The build applies the same transform OpenCode's own build uses (`@opentui/solid/bun-plugin`, universal, `@opentui/solid`), and the TUI rewrites the resulting `@opentui/solid` and `solid-js` imports to its own instances.
+- **The manifest** has `exports` for `.`, `./tui` and `./rpc`, `files`, the license, `publishConfig`, no dependencies, and peer dependencies on what the host provides: `@opencode/plugin` in `Support.opencode`, `effect` `^4.1.0`, `@opentui/*` `^0.8.1` and `solid-js` `^1.9.17`, the versions OpenCode 2.2.6 to 2.3.2 ship. All are optional, as `@opencode/plugin`'s own TUI peers are, so the install (npm Arborist, which installs required peers) never downloads them.
+- **No types.** `./rpc` ships without declarations: they would name the private `@ren/schema` types. Only the TUI part imports the contract today.
+
+`test/build.slow.test.ts` builds into a temporary `node_modules/@renai-labs/opencode` with nothing else around it, as an install leaves it, and checks what is inlined, resolves the parts with `Host.resolve`, runs a turn and an RPC call in a real OpenCode with OpenCode's plugin runtime (`ensurePluginRuntime`), and loads the TUI part with the modules the TUI provides.
+
+To try the built package by hand in the stock `opencode`, pack it and unpack it into a `node_modules` folder, then point a plugin entry at it (an isolated `HOME` and `XDG_*` keep your own config out):
+
+```sh
+bun run build && (cd dist && npm pack --pack-destination /tmp/ren-oc)
+mkdir -p /tmp/ren-oc/node_modules/@renai-labs && tar -xzf /tmp/ren-oc/renai-labs-opencode-0.0.0.tgz -C /tmp/ren-oc/node_modules/@renai-labs
+mv /tmp/ren-oc/node_modules/@renai-labs/package /tmp/ren-oc/node_modules/@renai-labs/opencode
+# plugins: [{ "package": "/tmp/ren-oc/node_modules/@renai-labs/opencode", "options": { "url": "…" } }]
+```
+
+Release (manual; no workflow publishes it yet): run the package checks and `REN_SLOW=1 bun run test`, check the newest OpenCode release by hand and widen `Support.opencode` if it works, then `bun run build --version X.Y.Z` and `npm publish dist` (or `bun publish --cwd dist`).
 
 ## Commands
 
@@ -242,7 +271,8 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, and the built package
+bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 

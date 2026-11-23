@@ -30,6 +30,21 @@ test("signed out, the plugin loads, registers no provider, and OpenCode works as
     expect(plugins.data.find((each) => each.id === "ren")?.state).toEqual({ status: "active" })
   }).pipe(Effect.scoped, Effect.runPromise))
 
+test("on an OpenCode release outside the supported range, the plugin loads but registers nothing, not even its RPC", () =>
+  Effect.gen(function* () {
+    const ren = yield* RenServer.make()
+    const host = yield* OpenCodeHost.make(
+      { plugins: [{ package: fileURLToPath(new URL("..", import.meta.url)), options: { url: ren.url } }] },
+      { version: "2.1.4" },
+    )
+    yield* host.client.model.list({ location: host.location }).pipe(Effect.orDie)
+    const plugins = yield* host.client.plugin.list({ location: host.location }).pipe(Effect.orDie)
+    expect(plugins.data.find((each) => each.id === "ren")?.state).toEqual({ status: "active" })
+    expect(
+      yield* host.client.rpc(RenRpc.Definition).listSpaces({}, { location: host.location }).pipe(Effect.flip),
+    ).toMatchObject({ type: "rpc.unavailable" })
+  }).pipe(Effect.scoped, Effect.runPromise))
+
 test("signed out, the plugin's RPC answers signed_out and the Ren commands tell the user to run /ren:login", () =>
   Effect.gen(function* () {
     const opened = yield* setup()
