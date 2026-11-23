@@ -277,6 +277,9 @@ export const register = Effect.fn("RenHandlers.register")(function* (
     readShell: (input, context) => hand.readShell(input).pipe(Effect.mapError(refuse(context))),
     stopShell: (input, context) => hand.stopShell(input).pipe(Effect.mapError(refuse(context))),
     sessionInfo: (input, context) => details(input.sessionID).pipe(Effect.mapError(answer(context))),
+    activity: (input, context) => hand.activity(input).pipe(Effect.mapError(refuse(context))),
+    background: (input, context) => hand.background(input).pipe(Effect.mapError(refuse(context))),
+    stopSubagent: (input, context) => hand.stopSubagent(input).pipe(Effect.mapError(refuse(context))),
   })
   yield* Deferred.succeed(emitter, (space) => registration.events.emit("spaceSelected", space))
   yield* Deferred.succeed(announcer, registration.events.emit)

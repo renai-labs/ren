@@ -202,6 +202,15 @@ export const Details = Schema.Struct({
   cost: Schema.NullOr(SessionUsage.Info),
 }).annotate({ identifier: "RenRpc.Details" })
 
+export interface Work extends Schema.Schema.Type<typeof Work> {}
+export const Work = Schema.Struct({
+  type: Schema.Literals(["shell", "subagent"]),
+  id: Schema.String,
+  sessionID: Schema.String,
+  label: Schema.String,
+  blocking: Schema.Boolean,
+}).annotate({ identifier: "RenRpc.Work" })
+
 export const Definition = Rpc.define({
   id: "ren",
   methods: {
@@ -340,6 +349,21 @@ export const Definition = Rpc.define({
     },
     stopShell: { input: Schema.toStandardSchemaV1(Shell), output: none, errors: handErrors },
     sessionInfo: { input: SessionInput, output: Schema.toStandardSchemaV1(Details), errors },
+    activity: {
+      input: Schema.toStandardSchemaV1(Schema.Struct(Local)),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ items: Schema.Array(Work) })),
+      errors: handErrors,
+    },
+    background: {
+      input: Schema.toStandardSchemaV1(Schema.Struct(Local)),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ moved: Schema.Array(Work) })),
+      errors: handErrors,
+    },
+    stopSubagent: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ ...Local, childID: Schema.String })),
+      output: none,
+      errors: handErrors,
+    },
   },
   events: {
     spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },

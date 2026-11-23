@@ -4,7 +4,7 @@ import type { ChatAccess } from "@ren/chat/chat-access"
 import { Session } from "@ren/schema/session"
 import type { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { Shell } from "@ren/schema/shell"
-import { Effect, Option, Schema, Struct } from "effect"
+import { Effect, Option, Predicate, Schema, Struct } from "effect"
 import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
 import { Link } from "./link.js"
@@ -39,14 +39,53 @@ const ansi = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g
 const shellInfo = (shell: Shell.Info): RenRpc.ShellInfo =>
   Struct.pick(shell, ["id", "sessionID", "command", "status", "exit"])
 
+const refusals = {
+  files: "This Ren session cannot show the files of its hand.",
+  shell: "This Ren session cannot run commands on its hand.",
+  interrupt: "This Ren session cannot stop its subagents.",
+}
+
+const text = (value: unknown) => (Predicate.isString(value) ? value : "")
+
+const waiting = (chat: ChatAccess.Client, sessionID: Session.ID) =>
+  chat.session.messages({ sessionID, limit: 20 }).pipe(
+    Effect.map((page) => {
+      const latest = page.items.find((message) => message.type === "assistant")
+      if (latest?.type !== "assistant" || latest.time.completed) return []
+      return latest.content.flatMap((part): ReadonlyArray<RenRpc.Work> => {
+        if (part.type !== "tool" || part.state.status !== "running") return []
+        const state = part.state
+        if (part.name === "shell")
+          return [
+            {
+              type: "shell",
+              id: text(state.metadata["shellID"]),
+              sessionID,
+              label: text(state.input["command"]),
+              blocking: true,
+            },
+          ]
+        if (part.name !== "subagent") return []
+        const child = text(state.metadata["sessionID"]) || text(state.metadata["sessionId"])
+        return [
+          { type: "subagent", id: child, sessionID: child, label: text(state.input["description"]), blocking: true },
+        ]
+      })
+    }),
+  )
+
 export const make = Effect.gen(function* () {
   const links = yield* Link.Service
   const bindings = yield* Binding.Service
 
   const reach = <A, E extends { readonly _tag: string; readonly message: string }>(
     sessionID: string,
-    capability: keyof Pick<SessionCapabilities.Info, "files" | "shell">,
-    body: (chat: ChatAccess.Client, sessionId: Session.ID) => Effect.Effect<A, E>,
+    capability: keyof typeof refusals | undefined,
+    body: (
+      chat: ChatAccess.Client,
+      sessionId: Session.ID,
+      capabilities: SessionCapabilities.Info,
+    ) => Effect.Effect<A, E>,
   ) =>
     Effect.gen(function* () {
       const id = yield* Schema.decodeUnknownEffect(Session.ID)(sessionID).pipe(
@@ -76,14 +115,8 @@ export const make = Effect.gen(function* () {
       const info = yield* chat.session
         .get({ sessionID: id })
         .pipe(Effect.mapError((error) => new Refused({ message: reason(error, "Ren’s brain did not answer.") })))
-      if (!info.capabilities[capability])
-        return yield* new Refused({
-          message:
-            capability === "files"
-              ? "This Ren session cannot show the files of its hand."
-              : "This Ren session cannot run commands on its hand.",
-        })
-      return yield* body(chat, id).pipe(
+      if (capability && !info.capabilities[capability]) return yield* new Refused({ message: refusals[capability] })
+      return yield* body(chat, id, info.capabilities).pipe(
         Effect.mapError((error) => new Refused({ message: reason(error, "Ren’s brain did not answer.") })),
       )
     }).pipe(Effect.scoped)
@@ -177,6 +210,57 @@ export const make = Effect.gen(function* () {
       reach(input.sessionID, "shell", (chat, sessionID) =>
         Schema.decodeUnknownEffect(Shell.ID)(input.shellID).pipe(
           Effect.flatMap((shellID) => chat.shell.remove({ sessionID, shellID })),
+          Effect.as({}),
+        ),
+      ),
+    activity: (input: { readonly sessionID: string }) =>
+      reach(input.sessionID, undefined, (chat, sessionID, capabilities) =>
+        Effect.gen(function* () {
+          const waited = yield* waiting(chat, sessionID)
+          const shells = capabilities.shell
+            ? (yield* chat.shell.list({ sessionID }).pipe(Effect.catchTag("ClientError", () => Effect.succeed([]))))
+                .filter((shell) => shell.status === "running")
+                .map((shell): RenRpc.Work => ({
+                  type: "shell",
+                  id: shell.id,
+                  sessionID: shell.sessionID,
+                  label: shell.command,
+                  blocking: false,
+                }))
+            : []
+          const children = yield* chat.session.children({ sessionID })
+          const running = yield* chat.session.status()
+          const subagents = children
+            .filter((child) => running[child.id]?.type === "busy")
+            .map((child): RenRpc.Work => ({
+              type: "subagent",
+              id: child.id,
+              sessionID: child.id,
+              label: (child.title ?? child.id).replace(/\s+\(@[^)]+ subagent\)$/u, ""),
+              blocking: false,
+            }))
+          const live = [...shells, ...subagents]
+          const named = new Map(live.map((item) => [`${item.type}:${item.label}`, item]))
+          const blocking = waited.map((work) => {
+            const found = work.id ? undefined : named.get(`${work.type}:${work.label}`)
+            return found ? Struct.assign(found, { blocking: true }) : work
+          })
+          const known = new Set(blocking.map((work) => work.id))
+          return { items: [...blocking, ...live.filter((item) => !known.has(item.id))] }
+        }),
+      ),
+    background: (input: { readonly sessionID: string }) =>
+      reach(input.sessionID, undefined, (chat, sessionID) =>
+        Effect.gen(function* () {
+          const moved = yield* waiting(chat, sessionID)
+          if (moved.length > 0) yield* chat.session.background({ sessionID })
+          return { moved }
+        }),
+      ),
+    stopSubagent: (input: { readonly sessionID: string; readonly childID: string }) =>
+      reach(input.sessionID, "interrupt", (chat) =>
+        Schema.decodeUnknownEffect(Session.ID)(input.childID).pipe(
+          Effect.flatMap((child) => chat.session.interrupt({ sessionID: child })),
           Effect.as({}),
         ),
       ),

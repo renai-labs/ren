@@ -2,12 +2,14 @@ import { expect, test } from "bun:test"
 import { fileURLToPath } from "node:url"
 import type { ToastOptions } from "@opencode/plugin/tui/context"
 import { OpenCodeHost } from "@ren/cell/testing"
-import { Effect, Queue, type Scope } from "effect"
+import { Session } from "@ren/schema/session"
+import { DateTime, Effect, Queue, type Scope, Struct } from "effect"
 import { Binding } from "../src/binding.js"
 import { RenCommands } from "../src/commands.js"
 import { Hand } from "../src/hand.js"
 import { RenPanels } from "../src/panels.js"
 import { RenRpc } from "../src/rpc.js"
+import { Messages } from "./lib/messages.js"
 import { RenServer } from "./lib/ren.js"
 
 const plugin = fileURLToPath(new URL("..", import.meta.url))
@@ -200,5 +202,116 @@ test("each call opens the session's link for itself and lets it go, so an idle p
       expect(yield* Queue.take(opened.ren.accessed)).toBe(sessionID)
       ready(yield* Effect.promise(() => RenPanels.list(opened.surface, { sessionID })))
       expect(yield* Queue.take(opened.ren.accessed)).toBe(sessionID)
+    }),
+  ))
+
+const running = (id: string, name: string, input: Record<string, string>, metadata: Record<string, string>) => ({
+  type: "tool" as const,
+  id,
+  name,
+  executed: true,
+  state: { status: "running" as const, input, metadata },
+  time: { created: DateTime.nowUnsafe() },
+})
+
+const blocked = (opened: Effect.Success<ReturnType<typeof setup>>, shellID: string, childID: string) => {
+  const turn = Messages.assistant(1, [
+    running("call_shell", "shell", { command: "sleep 60" }, { shellID }),
+    running("call_agent", "subagent", { description: "Look", agent: "general" }, { sessionID: childID }),
+  ])
+  opened.ren.state.saved.set(opened.sessionID, [
+    Messages.user(0, "go"),
+    Struct.assign(turn, { time: { created: turn.time.created } }),
+  ])
+}
+
+test("/ren:background moves the shell and subagent the turn waits for to the background and names them; with nothing blocking it says so and moves nothing", () =>
+  run(
+    Effect.gen(function* () {
+      const opened = yield* setup()
+      const shell = yield* Effect.promise(() => RenCommands.shell(opened.surface, "sleep 60"))
+      blocked(opened, shell?.id ?? "", Session.ID.create())
+      yield* Effect.promise(() => RenCommands.background(opened.surface))
+      expect(yield* Queue.take(opened.ren.backgrounded)).toBe(opened.sessionID)
+      expect(opened.toasts).toEqual([
+        { title: "Ren", message: "Moved to the background: sleep 60, Look. The turn goes on.", variant: "success" },
+      ])
+      opened.ren.state.saved.set(opened.sessionID, [Messages.user(0, "go"), Messages.assistant(1, [])])
+      yield* Effect.promise(() => RenCommands.background(opened.surface))
+      expect(opened.toasts.at(-1)).toEqual({
+        title: "Ren",
+        message: "Nothing blocks this Ren session’s turn.",
+        variant: "info",
+      })
+      expect(yield* Queue.size(opened.ren.backgrounded)).toBe(0)
+    }),
+  ))
+
+test("/ren:activity lists the running shells and subagents, the ones the turn waits for first, and stops each", () =>
+  run(
+    Effect.gen(function* () {
+      const opened = yield* setup()
+      const sessionID = opened.sessionID
+      const waited = yield* Effect.promise(() => RenCommands.shell(opened.surface, "sleep 60"))
+      const other = yield* Effect.promise(() => RenCommands.shell(opened.surface, "tail -f log"))
+      const look = Session.ID.create()
+      const check = Session.ID.create()
+      const done = Session.ID.create()
+      opened.ren.state.children.push(look, check, done)
+      opened.ren.state.titles.set(look, "Look (@general subagent)")
+      opened.ren.state.titles.set(check, "Check (@explore subagent)")
+      opened.ren.state.busy.add(sessionID).add(look).add(check)
+      blocked(opened, waited?.id ?? "", look)
+      expect(yield* Effect.promise(() => RenCommands.activity(opened.surface))).toBe(true)
+      expect(opened.opened.at(-1)).toBe("ren.activity")
+      const listed = ready(yield* Effect.promise(() => RenPanels.activity(opened.surface, { sessionID })))
+      expect(listed.items).toEqual([
+        { type: "shell", id: waited?.id ?? "", sessionID, label: "sleep 60", blocking: true },
+        { type: "subagent", id: look, sessionID: look, label: "Look", blocking: true },
+        { type: "shell", id: other?.id ?? "", sessionID, label: "tail -f log", blocking: false },
+        { type: "subagent", id: check, sessionID: check, label: "Check", blocking: false },
+      ])
+      ready(yield* Effect.promise(() => RenPanels.stopSubagent(opened.surface, { sessionID, childID: check })))
+      expect(yield* Queue.take(opened.ren.interrupted)).toBe(check)
+      ready(yield* Effect.promise(() => RenPanels.stop(opened.surface, { sessionID, shellID: other?.id ?? "" })))
+      opened.ren.state.saved.set(sessionID, [])
+      expect(
+        ready(yield* Effect.promise(() => RenPanels.activity(opened.surface, { sessionID }))).items.map(
+          (item) => item.label,
+        ),
+      ).toEqual(["sleep 60", "Look"])
+    }),
+  ))
+
+test("activity on a hand without the shell lists only subagents, a session that cannot interrupt refuses to stop one, and a local session gets not_ren", () =>
+  run(
+    Effect.gen(function* () {
+      const opened = yield* setup()
+      const sessionID = opened.sessionID
+      yield* Effect.promise(() => RenCommands.shell(opened.surface, "sleep 60"))
+      const look = Session.ID.create()
+      opened.ren.state.children.push(look)
+      opened.ren.state.busy.add(look)
+      opened.ren.state.hand.shell = false
+      opened.ren.state.interruptible = false
+      expect(
+        ready(yield* Effect.promise(() => RenPanels.activity(opened.surface, { sessionID }))).items.map(
+          (item) => item.type,
+        ),
+      ).toEqual(["subagent"])
+      expect(yield* Effect.promise(() => RenPanels.stopSubagent(opened.surface, { sessionID, childID: look }))).toEqual(
+        { type: "failed", message: "This Ren session cannot stop its subagents.", signedOut: false },
+      )
+      expect(yield* Queue.size(opened.ren.interrupted)).toBe(0)
+
+      const local = yield* opened.host.client.session.create({}).pipe(Effect.orDie)
+      opened.route.sessionID = local.id
+      expect(yield* Effect.promise(() => RenCommands.activity(opened.surface))).toBe(false)
+      yield* Effect.promise(() => RenCommands.background(opened.surface))
+      expect(opened.toasts).toEqual([
+        { title: "Ren", message: "This is not a Ren session.", variant: "error" },
+        { title: "Ren", message: "This is not a Ren session.", variant: "error" },
+      ])
+      expect(opened.opened).toEqual(["ren.shells"])
     }),
   ))

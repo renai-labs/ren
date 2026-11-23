@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import { SyntaxStyle } from "@opentui/core"
 import { createEffect, createSignal, on, Show, untrack } from "solid-js"
 import { RenCommands } from "./commands.js"
+import { Activity } from "./panels/activity.js"
 import { Changes } from "./panels/changes.js"
 import { Files } from "./panels/files.js"
 import { Info } from "./panels/info.js"
@@ -167,6 +168,24 @@ export default Plugin.define({
           slash: { name: "ren:links" },
           run: () => RenCommands.links(surface),
         },
+        {
+          id: "ren.activity",
+          title: "Ren activity",
+          description: "The shells and subagents that run in the Ren session, to stop one",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:activity" },
+          run: () => void RenCommands.activity(surface),
+        },
+        {
+          id: "ren.background",
+          title: "Move Ren work to the background",
+          description: "Let the shell or subagent the Ren session’s turn waits for run on, so the turn goes on",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:background" },
+          run: () => void RenCommands.background(surface),
+        },
       ],
     }))
     const catching = new Set<string>()
@@ -280,6 +299,18 @@ export default Plugin.define({
             </Show>
             <Show when={panel.name === RenCommands.panels.shells}>
               <Shells context={context} reader={surface} panel={panel} shown={shown} show={setShown} />
+            </Show>
+            <Show when={panel.name === RenCommands.panels.activity}>
+              <Activity
+                context={context}
+                reader={surface}
+                panel={panel}
+                background={() => RenCommands.background(surface)}
+                show={(shellID) => {
+                  setShown(shellID)
+                  context.ui.panel.open(RenCommands.panels.shells)
+                }}
+              />
             </Show>
           </>
         ),

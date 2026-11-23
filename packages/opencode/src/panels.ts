@@ -74,6 +74,16 @@ export const stop = (surface: Reader, input: { readonly sessionID: string; reado
   return load(ren.client.stopShell(input, ren.at))
 }
 
+export const activity = (surface: Reader, input: { readonly sessionID: string }) => {
+  const ren = rpc(surface)
+  return load(ren.client.activity(input, ren.at))
+}
+
+export const stopSubagent = (surface: Reader, input: { readonly sessionID: string; readonly childID: string }) => {
+  const ren = rpc(surface)
+  return load(ren.client.stopSubagent(input, ren.at))
+}
+
 export const problem = <A>(loaded: Loaded<A> | undefined) => (loaded?.type === "failed" ? loaded.message : undefined)
 
 export const ended = (read: RenRpc.ShellOutput) => read.shell.status !== "running" && read.cursor >= read.size

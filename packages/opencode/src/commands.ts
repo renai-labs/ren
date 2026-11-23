@@ -477,7 +477,12 @@ export interface PanelSurface extends Surface {
   }
 }
 
-export const panels = { changes: "ren.changes", files: "ren.files", shells: "ren.shells" } as const
+export const panels = {
+  changes: "ren.changes",
+  files: "ren.files",
+  shells: "ren.shells",
+  activity: "ren.activity",
+} as const
 
 const current = (surface: PanelSurface) => {
   const route = surface.ui.router.current()
@@ -661,3 +666,36 @@ export const links = (surface: InfoSurface) =>
       if (chosen) visit(surface, chosen, "Open link")
     })
     .catch(fail(surface))
+
+export const activity = (surface: PanelSurface) => {
+  const sessionID = current(surface)
+  if (!sessionID) return Promise.resolve(false)
+  return surface.client
+    .rpc(RenRpc.Definition)
+    .activity({ sessionID }, at(surface))
+    .then(() => surface.ui.panel.open(panels.activity))
+    .catch((error: unknown) => {
+      fail(surface)(error)
+      return false
+    })
+}
+
+export const background = (surface: PanelSurface) => {
+  const sessionID = current(surface)
+  if (!sessionID) return Promise.resolve()
+  return surface.client
+    .rpc(RenRpc.Definition)
+    .background({ sessionID }, at(surface))
+    .then((result) =>
+      surface.ui.toast.show(
+        result.moved.length > 0
+          ? {
+              title: "Ren",
+              message: `Moved to the background: ${result.moved.map((work) => work.label || work.type).join(", ")}. The turn goes on.`,
+              variant: "success",
+            }
+          : { title: "Ren", message: "Nothing blocks this Ren session’s turn.", variant: "info" },
+      ),
+    )
+    .catch(fail(surface))
+}

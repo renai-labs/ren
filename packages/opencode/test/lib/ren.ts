@@ -134,6 +134,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const answered = yield* Queue.unbounded<Answer>()
   const uploaded = yield* Queue.unbounded<Upload>()
   const accessed = yield* Queue.unbounded<string>()
+  const backgrounded = yield* Queue.unbounded<string>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
@@ -188,6 +189,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     links: new Map<string, SessionLinks.Info>(),
     pulls: new Map<string, ReadonlyArray<PullRequest.Info>>(),
     usage: new Map<string, SessionUsage.Info>(),
+    interruptible: true,
     hand: {
       files: true,
       shell: true,
@@ -285,6 +287,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
           compact: state.compactable,
           files: state.hand.files,
           shell: state.hand.shell,
+          interrupt: state.interruptible,
         }),
       }),
     )
@@ -384,6 +387,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
             Schema.encodeSync(SessionInfo.Info)({
               id,
               parentID: Session.ID.make(sessionID),
+              ...(state.titles.has(id) && { title: state.titles.get(id) ?? "" }),
               cost: 0,
               tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
               time: { created: DateTime.nowUnsafe(), updated: DateTime.nowUnsafe() },
@@ -448,6 +452,39 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     file: (_sessionID, request) => Promise.resolve(files(new URL(request.url))),
     vcs: (_sessionID, request) => Promise.resolve(vcs(new URL(request.url))),
     shell: shells,
+    background: (sessionID) => {
+      Queue.offerUnsafe(backgrounded, sessionID)
+      return Promise.resolve(new Response(null, { status: 204 }))
+    },
+    message: (sessionID, request) => {
+      const id = new URL(request.url).pathname.split("/")[5]
+      if (!id)
+        return Promise.resolve(
+          Response.json(
+            Schema.encodeSync(SessionMessage.Page)({
+              items: (state.saved.get(sessionID) ?? []).toReversed(),
+              cursor: {},
+            }),
+          ),
+        )
+      const compaction = state.compactions.get(id)
+      if (compaction)
+        return Promise.resolve(Response.json(Schema.encodeSync(SessionMessage.CompactionCompleted)(compaction)))
+      const stored = state.messages.get(id)
+      if (stored) return Promise.resolve(Response.json(Schema.encodeSync(SessionMessage.User)(stored)))
+      return Promise.resolve(
+        state.delivered.has(id)
+          ? Response.json(
+              Schema.encodeSync(SessionMessage.User)({
+                id: SessionMessage.ID.make(id),
+                time: { created: DateTime.nowUnsafe() },
+                text: "delivered",
+                type: "user",
+              }),
+            )
+          : Response.json({ _tag: "NotFoundError", message: "No such message" }, { status: 404 }),
+      )
+    },
     compact: async (sessionID, request) => {
       const id = Schema.decodeUnknownSync(Compacted)(await request.json()).id
       Queue.offerUnsafe(compacted, id)
@@ -478,23 +515,6 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     }
     const route = routes[parts.length === 4 ? "session" : String(parts[4])]
     if (route) return route(sessionID, request)
-    if (parts[4] === "message") {
-      const id = String(parts[5])
-      const compaction = state.compactions.get(id)
-      if (compaction) return Response.json(Schema.encodeSync(SessionMessage.CompactionCompleted)(compaction))
-      const stored = state.messages.get(id)
-      if (stored) return Response.json(Schema.encodeSync(SessionMessage.User)(stored))
-      return state.delivered.has(id)
-        ? Response.json(
-            Schema.encodeSync(SessionMessage.User)({
-              id: SessionMessage.ID.make(id),
-              time: { created: DateTime.nowUnsafe() },
-              text: "delivered",
-              type: "user",
-            }),
-          )
-        : Response.json({ _tag: "NotFoundError", message: "No such message" }, { status: 404 })
-    }
     if (parts[4] === "prompt") {
       const raw = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(await request.json())
       const body = Schema.decodeUnknownSync(Prompted)(
@@ -507,6 +527,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       return Response.json({ id: body.id })
     }
     if (parts[4] === "interrupt") {
+      state.busy.delete(sessionID)
       Queue.offerUnsafe(interrupted, sessionID)
       return new Response(null, { status: 204 })
     }
@@ -778,6 +799,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     answered,
     uploaded,
     accessed,
+    backgrounded,
     send,
     shell: {
       write: (id: string, text: string) => {
