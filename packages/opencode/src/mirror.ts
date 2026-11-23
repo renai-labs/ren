@@ -9,6 +9,7 @@ import { Clock, Context, Effect, Exit, Fiber, Layer, Option, PubSub, Scope, Sema
 import { Binding } from "./binding.js"
 import { Link } from "./link.js"
 import { RenApi } from "./ren.js"
+import { Requests } from "./requests.js"
 import { Title } from "./title.js"
 
 const limit = 4
@@ -66,6 +67,7 @@ export const layer = (ctx: Pick<Plugin.Context, "session">) =>
       const ren = yield* RenApi.Service
       const bindings = yield* Binding.Service
       const titles = yield* Title.Service
+      const requests = yield* Requests.Service
       const scope = yield* Effect.scope
       const lock = yield* Semaphore.make(1)
       const watchers = new Map<Session.ID, { readonly watcher: Watcher; readonly fiber: Fiber.Fiber<void> }>()
@@ -152,6 +154,7 @@ export const layer = (ctx: Pick<Plugin.Context, "session">) =>
             }),
           )
           yield* titles.frame(sessionId, frame)
+          yield* requests.frame(sessionId, frame)
           if (Option.isNone(delivered)) return
           const kept = yield* admit(watcher, sessionId, delivered.value).pipe(
             Effect.catchCause((cause) =>

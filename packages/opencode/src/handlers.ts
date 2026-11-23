@@ -4,11 +4,12 @@ import { Model, type Plugin, Provider, type Rpc } from "@opencode/plugin/effect"
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import type { Space } from "@ren/schema/space"
-import { Deferred, Effect, FiberHandle, Option, Schema, Scope, Struct } from "effect"
+import { Deferred, Effect, FiberHandle, Option, Schema, Scope, Stream, Struct } from "effect"
 import { RenAuth } from "./auth.js"
 import { Binding } from "./binding.js"
 import { Mirror } from "./mirror.js"
 import { RenApi } from "./ren.js"
+import { Requests } from "./requests.js"
 import { RenRpc } from "./rpc.js"
 
 class Unavailable extends Schema.TaggedError<Unavailable>()("RenHandlers.Unavailable", { message: Schema.String }) {}
@@ -34,6 +35,8 @@ export const register = Effect.fn("RenHandlers.register")(function* (
   const scope = yield* Scope.Scope
   const emitter = yield* Deferred.make<(space: RenRpc.SpaceInfo) => Effect.Effect<void, unknown>>()
   const auth = yield* RenAuth.Login
+  const requests = yield* Requests.Service
+  const changes = yield* requests.changes
   const announcer =
     yield* Deferred.make<(...args: Rpc.EventInput<typeof RenRpc.Definition>) => Effect.Effect<void, unknown>>()
   const announce = (...args: Rpc.EventInput<typeof RenRpc.Definition>) =>
@@ -232,7 +235,17 @@ export const register = Effect.fn("RenHandlers.register")(function* (
         yield* prepare(spaceId)
         return { sessionID, spaceId }
       }).pipe(Effect.mapError(answer(context))),
+    requests: () => requests.pending,
   })
   yield* Deferred.succeed(emitter, (space) => registration.events.emit("spaceSelected", space))
   yield* Deferred.succeed(announcer, registration.events.emit)
+  yield* changes.pipe(
+    Stream.runForEach((change) =>
+      (change.type === "formAsked"
+        ? registration.events.emit("formAsked", change.form)
+        : registration.events.emit("requestClosed", change.closed)
+      ).pipe(Effect.catchCause((cause) => Effect.logWarning("Could not announce a Ren request", cause))),
+    ),
+    Effect.forkIn(scope),
+  )
 })

@@ -92,8 +92,11 @@ export default Plugin.define({
       context.client.rpc(RenRpc.Definition).events.on("signedIn", load),
       context.client.rpc(RenRpc.Definition).events.on("signedOut", () => setSpace(undefined)),
     ]
+    const requests = RenCommands.requests(surface)
+    stops.push(context.data.on("server.connected", () => void RenCommands.syncRequests(surface)))
     return () => {
       for (const stop of stops) stop()
+      void requests.then((stop) => stop())
     }
   },
 })

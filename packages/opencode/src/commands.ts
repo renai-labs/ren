@@ -1,6 +1,7 @@
 export * as RenCommands from "./commands.js"
 
 import type { Plugin } from "@opencode/plugin/tui"
+import { Form } from "@ren/schema/form"
 import { Option, Schema } from "effect"
 import { RenRpc } from "./rpc.js"
 
@@ -212,4 +213,62 @@ export const logout = (surface: Surface) => {
       )
     })
     .catch(fail(surface))
+}
+
+export interface RequestSurface extends Surface {
+  readonly client: Pick<Context["client"], "rpc" | "experimental" | "session">
+}
+
+const shown = Schema.is(Schema.Struct({ _tag: Schema.Literal("ConflictError") }))
+
+const show = (surface: RequestSurface, form: RenRpc.LocalForm) =>
+  surface.client.session.form.create(form).then(
+    () => undefined,
+    (error: unknown) => {
+      if (!shown(error))
+        surface.ui.toast.show({
+          title: "Ren",
+          message: `Could not show the question “${form.title}”.`,
+          variant: "error",
+        })
+    },
+  )
+
+const dismiss = (surface: RequestSurface, ref: RenRpc.FormRef) =>
+  surface.client.session.form.cancel(ref).then(
+    () => undefined,
+    () => undefined,
+  )
+
+export const syncRequests = (surface: RequestSurface) =>
+  surface.client
+    .rpc(RenRpc.Definition)
+    .requests({}, at(surface))
+    .then((listed) =>
+      Promise.all([
+        ...listed.forms.map((form) => show(surface, form)),
+        ...listed.closed.map((ref) => dismiss(surface, ref)),
+      ]),
+    )
+    .then(
+      () => undefined,
+      () => undefined,
+    )
+
+export const requests = async (surface: RequestSurface) => {
+  const rpc = surface.client.rpc(RenRpc.Definition)
+  const stops = [
+    rpc.events.on("formAsked", (event) => {
+      void show(surface, event.data)
+    }),
+    rpc.events.on("requestClosed", (event) => {
+      surface.ui.toast.show({ title: "Ren", message: event.data.message, variant: "info" })
+      if (event.data.kind === "form")
+        void dismiss(surface, { sessionID: event.data.sessionID, formID: Form.ID.make(event.data.id) })
+    }),
+  ]
+  await syncRequests(surface)
+  return () => {
+    for (const stop of stops) stop()
+  }
 }

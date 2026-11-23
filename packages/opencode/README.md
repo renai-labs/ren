@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, and `/ren:move` moves a local session there with its history. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space, `/ren:new` starts a Ren session in it, and `/ren:move` moves a local session there with its history. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `requests`, `provider`, `controls`, `rpc`, `handlers`, `commands`, `support` and the TUI part (see Modules), and the build of the publishable package (Build and release). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls), and the brain's permission requests and questions show as OpenCode's own prompts (Permissions and questions). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -48,10 +48,11 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | `rpc`      | `RenRpc`: the contract between the server part and the TUI part.                                   |
 | `handlers` | `RenHandlers`: the server part's RPC handlers.                                                     |
 | `commands` | `RenCommands`: what each `/ren:*` command does, over the part of the TUI context it uses.          |
-| `tui`      | The TUI part: the commands, and the selected space in the footers.                                 |
+| `tui`      | The TUI part: the commands, the space in the footers, and the local forms of Ren questions.        |
 | `mirror`   | `Mirror`: messages from other clients of a Ren session into the local session, and their turns.    |
 | `title`    | `Title`: the title of a Ren session, kept the same locally and on Ren.                             |
 | `controls` | `Controls`: the built-in model picker, `/compact`, archive, delete and fork on a Ren session.      |
+| `requests` | `Requests`: the brain's permission requests and questions as local ones, and the answers.          |
 | `support`  | `Support`: the OpenCode releases the plugin supports, checked at load and used for the peer range. |
 
 ## Connection
@@ -150,6 +151,19 @@ The built-in controls act on a Ren session (`Controls`, registered from the serv
 
 Notices are synthetic messages with a description (`resume: false`), which the TUI shows as a notice row; the brain never receives them. A compaction that someone else starts on Ren is not shown locally.
 
+## Permissions and questions
+
+When the brain stops a turn to ask (a permission request or a question), the local session shows OpenCode's own prompt, and the answer goes to the brain (`Requests`, fed by the mirror's frames). The local turn keeps streaming: the remote execution goes on after the answer.
+
+- **Which requests.** Those the brain asks while the Ren session is watched (Multiplayer), on the session and on its subagents. At each connect of the watched link the plugin lists them again (`session.permission.list` and `session.form.list` for the session and its `session.children`, as far as the capabilities `permissions` and `forms` allow), so a request asked while the session was not watched shows when it is watched, and one answered meanwhile closes. All show on the local session itself, as the web app shows a subagent's request in the parent chat.
+- **Permissions.** The server part asks OpenCode with `ctx.permission.assert` on the local session: the action, resources and metadata of the Ren request, with `metadata.ren` naming it. The stock TUI shows its own permission prompt. The plugin's `evaluate` hook makes such a request always ask, so no local allow rule answers it. Allow once, always (shown when the request has `save`) and reject go to `session.permission.reply` on the requesting session, with the rejection's message. The `save` patterns are shown with ` (on Ren)`, because OpenCode stores them as saved rules of the local project when the user picks always; that suffix keeps them from matching any local resource.
+- **Questions.** A server plugin cannot create a form, so the server part sends the RPC event `formAsked` and each TUI creates the local form with `session.form.create`, with the Ren form's ID and fields (the first TUI wins; the others get a conflict). The stock TUI shows its own form, one tab per field. The local answer goes to `session.form.reply`, a dismissal to `session.form.cancel`. Web search consent (`websearch.provider`) is a form like any other.
+- **Answered elsewhere.** When another member or client answers first, or the turn stops, the brain's `permission.replied`, `form.replied` or `form.cancelled` closes the local request (the plugin answers a local permission `once` itself and forwards nothing; a TUI cancels the local form), and the RPC event `requestClosed` makes each TUI show a toast that says so.
+- **Expired questions.** As in the web app, a question (`kind: "question"`) that the brain cancels stays open locally. Its answer, or an answer that Ren refuses because the question is gone, goes to the session as a new local prompt that quotes each question, with the text of the web app's `ChatSession.quote` (a copy: importing `chat-session` would bundle the whole chat runtime).
+- **Late TUIs.** A TUI that starts or reconnects calls the RPC method `requests`, creates the pending forms and cancels local forms that closed while no TUI listened.
+
+Stopping the local turn while a request is pending interrupts the remote turn as before; the brain then closes the request. Limits: spec L20p to L22p.
+
 ## Commands
 
 Every command the plugin adds is `/ren:<command>`, in the slash completion and in the command palette under Ren.
@@ -183,8 +197,9 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 | `cancelLogin`   | `{ attempt }`                       | `{}`                                |
 | `logout`        | `{}`                                | `{ server, signedOut }`             |
 | `moveSession`   | `{ sessionID, transcript, model? }` | `{ sessionID, spaceId }`            |
+| `requests`      | `{}`                                | `{ forms: LocalForm[], closed }`    |
 
-`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. `formAsked` carries a `LocalForm` (`sessionID`, `id`, `title`, `metadata.ren`, `fields`: the input of `session.form.create`); `requestClosed` carries `{ sessionID, id, kind, message }`; `requests` returns the pending `LocalForm`s and the local forms to cancel (`closed`: `{ sessionID, formID }`). The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
@@ -288,7 +303,7 @@ Release (manual; no workflow publishes it yet): run the package checks and `REN_
 bun typecheck
 bun run lint
 bun run test
-REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, and the built package
+REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:new session's turn on a real brain, teammates, renames, a model switch and /compact on a real brain, a moved session on a real brain, a permission request and a question on a real brain, and the built package
 bun run build
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```

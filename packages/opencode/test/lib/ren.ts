@@ -9,6 +9,8 @@ import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Factory } from "@ren/schema/factory"
+import { Form } from "@ren/schema/form"
+import { Permission } from "@ren/schema/permission"
 import { Pagination } from "@ren/schema/pagination"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
@@ -39,6 +41,15 @@ const Prompted = Schema.Struct({ id: Schema.String, text: Schema.String, deliver
 const Renamed = Schema.Struct({ title: Schema.String })
 const Switched = Schema.Struct({ model: SessionModel.Ref })
 const Compacted = Schema.Struct({ id: SessionMessage.ID })
+const PermissionReplied = Schema.Struct({
+  reply: Permission.Reply,
+  message: Schema.optionalKey(Schema.NullOr(Schema.String)),
+})
+
+export type Answer =
+  | { readonly type: "permission"; readonly requestID: string; readonly reply: string; readonly message?: string }
+  | { readonly type: "form"; readonly formID: string; readonly answer: Form.Answer }
+  | { readonly type: "cancel"; readonly formID: string }
 
 export interface Switch {
   readonly sessionID: string
@@ -86,6 +97,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
   const refused = yield* Queue.unbounded<string>()
   const archived = yield* Queue.unbounded<string>()
   const compacted = yield* Queue.unbounded<SessionMessage.ID>()
+  const answered = yield* Queue.unbounded<Answer>()
   const encoder = new TextEncoder()
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>()
   const alpha: Joined = { id: Space.ID.create(), slug: "alpha", name: "Alpha" }
@@ -122,6 +134,10 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       send(frame("session.compaction.ended", { sessionID, reason: "manual", text: "the summary", recent: "" }))
     },
     oauth: { deny: false, revoked: Array.of<string>() },
+    permissions: Array.of<Permission.Request>(),
+    forms: Array.of<Form.Info>(),
+    children: Array.of<Session.ID>(),
+    answers: Array.of<Answer>(),
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
@@ -209,8 +225,63 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       }),
     )
   }
+  const missing = () => Response.json({ _tag: "NotFoundError", message: "No such request" }, { status: 404 })
+  const record = (answer: Answer) => {
+    state.answers.push(answer)
+    Queue.offerUnsafe(answered, answer)
+  }
   const routes: Record<string, ((sessionID: string, request: Request) => Promise<Response>) | undefined> = {
     session,
+    children: (sessionID) =>
+      Promise.resolve(
+        Response.json(
+          state.children.map((id) =>
+            Schema.encodeSync(SessionInfo.Info)({
+              id,
+              parentID: Session.ID.make(sessionID),
+              cost: 0,
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              time: { created: DateTime.nowUnsafe(), updated: DateTime.nowUnsafe() },
+              capabilities: SessionCapabilities.of("opencode"),
+            }),
+          ),
+        ),
+      ),
+    permission: async (sessionID, request) => {
+      const requestID = new URL(request.url).pathname.split("/")[5]
+      if (!requestID)
+        return Response.json(
+          Schema.encodeSync(Schema.Array(Permission.Request))(
+            state.permissions.filter((each) => each.sessionID === sessionID),
+          ),
+        )
+      const found = state.permissions.find((each) => each.id === requestID && each.sessionID === sessionID)
+      if (!found) return missing()
+      const body = Schema.decodeUnknownSync(PermissionReplied)(await request.json())
+      record({ type: "permission", requestID, reply: body.reply, ...(body.message && { message: body.message }) })
+      state.permissions = state.permissions.filter((each) => each !== found)
+      send(frame("permission.replied", { sessionID, requestID, reply: body.reply }))
+      return new Response(null, { status: 204 })
+    },
+    form: async (sessionID, request) => {
+      const formID = new URL(request.url).pathname.split("/")[5]
+      if (!formID)
+        return Response.json(
+          Schema.encodeSync(Schema.Array(Form.Info))(state.forms.filter((each) => each.sessionID === sessionID)),
+        )
+      const found = state.forms.find((each) => each.id === formID && each.sessionID === sessionID)
+      if (!found) return missing()
+      state.forms = state.forms.filter((each) => each !== found)
+      if (request.method === "DELETE") {
+        record({ type: "cancel", formID })
+        send(frame("form.cancelled", { id: formID, sessionID }))
+        return new Response(null, { status: 204 })
+      }
+      const answer = Schema.decodeUnknownSync(Form.Reply)(await request.json()).answer
+      record({ type: "form", formID, answer })
+      send(frame("form.replied", { id: formID, sessionID, answer }))
+      return new Response(null, { status: 204 })
+    },
     model: async (sessionID, request) => {
       const model = Schema.decodeUnknownSync(Switched)(await request.json()).model
       const spaceId = state.created.find((each) => each.id === sessionID)?.spaceId ?? state.spaceId
@@ -426,6 +497,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     refused,
     archived,
     compacted,
+    answered,
     send,
     drop: () => {
       for (const controller of streams) controller.close()
