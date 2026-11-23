@@ -89,6 +89,17 @@ export const Info = Schema.Struct({
   runtime: Schema.optionalKey(Runtime).annotate({ description: "Absent: `http`." }),
   price: Schema.optionalKey(Price).annotate({ description: "Absent for a model the organization pays itself." }),
   free: Schema.optionalKey(Schema.Boolean),
+  client: Schema.optionalKey(
+    Schema.Struct({
+      effortUpdates: Schema.optionalKey(Schema.Boolean).annotate({
+        description: "False: the effort is set at start only.",
+      }),
+      compaction: Schema.optionalKey(Schema.Literals(["summary"])),
+      cost: Schema.optionalKey(Schema.Boolean).annotate({ description: "False: the client shows no cost." }),
+    }),
+  ).annotate({
+    description: "Client settings a brain applies to the model, such as those of a ChatGPT seat (providers §7.2).",
+  }),
 }).annotate({ identifier: "Models.Info" })
 
 export interface Endpoint extends Schema.Schema.Type<typeof Endpoint> {}

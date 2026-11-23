@@ -5,6 +5,7 @@ import { Model } from "@opencode/core/model"
 import { Variant } from "@opencode/core/variant"
 import { Provider } from "@opencode/schema/provider"
 import type { Models } from "@ren/schema/models"
+import { ClaudeAgent } from "./claude-agent.js"
 
 const protocols = {
   "anthropic-messages": { canonical: Provider.ID.make("anthropic"), package: "@opencode/ai/providers/anthropic" },
@@ -19,6 +20,28 @@ const protocols = {
 } satisfies Record<Models.ModelProtocol, { readonly canonical?: Provider.ID; readonly package: string }>
 
 const supportedTypes = new Set<Models.Type>(["chat", "image", "transcription", "decision"])
+
+// oxlint-disable-next-line ren/no-comments -- The codes of a ChatGPT seat's refusal that another try cannot fix (OpenCode `chatgpt.ts:58-67`).
+export const finalChatGptCodes = [
+  "subscription_sharing_usage_limit_exceeded",
+  "subscription_sharing_workplace_individual_usage_limit_exceeded",
+  "subscription_sharing_user_not_eligible",
+  "subscription_sharing_unsupported_capability",
+  "subscription_sharing_route_not_supported",
+  "subscription_sharing_invalid_user",
+  "chatpass_v2_scope_not_authorized",
+  "chatpass_v2_invalid_authorization_context",
+]
+
+// oxlint-disable-next-line ren/no-comments -- Client settings the gateway puts on a model, such as those of OpenCode's ChatGPT plugin, which Ren does not activate (providers §7.2).
+const applyClient = (
+  info: Parameters<Parameters<ProviderEditor["models"]["update"]>[2]>[0],
+  client: NonNullable<Models.Info["client"]>,
+) => {
+  if (client.effortUpdates === false) info.compatibility = { ...info.compatibility, supportsEffortUpdates: false }
+  if (client.compaction) info.settings = { ...info.settings, compaction: { type: client.compaction } }
+  if (client.cost === false) info.cost = []
+}
 
 export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.Endpoint>) => {
   if (endpoints.length > 0)
@@ -40,7 +63,8 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
       if (!listed.has(id)) editor.models.remove(endpoint.id, id)
     for (const model of supported) {
       // oxlint-disable-next-line ren/no-comments -- OpenCode calls a model with its own package before its provider's (core/src/model.ts:142).
-      const own: { readonly canonical?: Provider.ID; readonly package: string } = protocols[model.protocol]
+      const own: { readonly canonical?: Provider.ID; readonly package: string } =
+        model.runtime === "claude" ? ClaudeAgent.runtime : protocols[model.protocol]
       editor.models.update(endpoint.id, Model.ID.make(model.id), (info) => {
         // oxlint-disable-next-line ren/no-comments -- The gateway knows a model by its gateway name (`ren/<id>`, `<provider>/<model>`); the picker keeps Ren's id.
         info.modelID = Model.ID.make(model.gateway ?? model.id)
@@ -50,17 +74,22 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
         if (model.name) info.name = model.name
         if (model.input) info.capabilities.input = [...model.input]
         if (model.limit) info.limit = { ...info.limit, ...model.limit }
-        info.variants = [
-          ...Variant.resolve(
-            {
-              ...Model.Info.default(Provider.ID.make(endpoint.id), Model.ID.make(model.id)),
-              package: own.package,
-              ...(model.limit && { limit: model.limit }),
-            },
-            // oxlint-disable-next-line ren/no-comments -- Ren's catalog is the only source of efforts, the same for every harness; OpenCode adds none of its own.
-            model.efforts ? [{ type: "effort", values: model.efforts }] : [],
-          ),
-        ]
+        if (model.client) applyClient(info, model.client)
+        // oxlint-disable-next-line ren/no-comments -- `claude` takes the effort by name (G4).
+        info.variants =
+          model.runtime === "claude"
+            ? (model.efforts ?? []).map((effort) => ({ id: Model.VariantID.make(effort), settings: { effort } }))
+            : [
+                ...Variant.resolve(
+                  {
+                    ...Model.Info.default(Provider.ID.make(endpoint.id), Model.ID.make(model.id)),
+                    package: own.package,
+                    ...(model.limit && { limit: model.limit }),
+                  },
+                  // oxlint-disable-next-line ren/no-comments -- Ren's catalog is the only source of efforts, the same for every harness; OpenCode adds none of its own.
+                  model.efforts ? [{ type: "effort", values: model.efforts }] : [],
+                ),
+              ]
       })
     }
   }

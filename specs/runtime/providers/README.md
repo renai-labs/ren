@@ -356,28 +356,29 @@ Ren core keeps one thing in memory: a brain's key, the gateway's `grant`, per wo
 
 ### 7.2 HTTP runtime
 
-`cell/src/harness/opencode/model-providers.ts` keeps mapping each provider to an OpenCode provider with the provider id and the protocol's package. Changes:
+Built. `cell/src/harness/opencode/model-providers.ts` keeps mapping each provider to an OpenCode provider with the provider id and the protocol's package. Changes:
 
-1. It does not remove `claude-agent` (`model-providers.ts:24`; tested in G4).
-2. A model carries the client settings it needs as fields, and the adapter applies them without a vendor check: `effortUpdates: false`, `compaction: "summary"`, `cost: false`. The gateway sets them on ChatGPT seat models (§6.2), as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`chatgpt.ts:58-67`).
+1. A model with runtime `claude` gets the Claude Agent package (§7.3); the others keep their protocol's package.
+2. A model carries the client settings it needs as fields (`client` in `Models.Info`), and the adapter applies them without a vendor check: `effortUpdates: false` (`supportsEffortUpdates: false`), `compaction: "summary"`, `cost: false` (cost `[]`). The gateway sets them on ChatGPT seat models (§6.2), as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`model-providers.ts` `finalChatGptCodes`, from `chatgpt.ts:58-67`). The ChatGPT plugin's `session-id` headers are not sent: the gateway drops them (gate H1) and reads `prompt_cache_key`.
 
 ### 7.3 Claude runtime
 
-Claude models with runtime `claude` run on OpenCode's provider `claude-agent`, because its hooks and instructions are bound to that id ([`references/opencode.md`](references/opencode.md)).
+Built: `cell/src/harness/opencode/claude-agent.ts`, registered before `RenPlugin` (`server.ts`). Claude models with runtime `claude` run on the `claude` program through OpenCode's Claude Agent parts.
 
-1. **Ren-owned setup.** A new file `cell/src/harness/opencode/claude-agent.ts`: the 2.2.6 plugin body without the workspace check, built from `@opencode/core`'s exported parts. It registers the `claude-agent` provider and its models from the pull itself; it never calls `ClaudeProvider.register`, which replaces the list with Claude's short names (G4). It gives `ClaudeIntegration.register` the server's `Bus` service. It is registered next to `RenPlugin` (`server.ts:248`). The code that passed is in [`references/gates.md`](references/gates.md) G4. OpenCode's own copy stays loaded and stops at its workspace check.
-2. **Dependency.** `@anthropic-ai/claude-agent-sdk` 0.3.301 in `cell`. It ships `claude` 2.1.301; the plugin needs 2.1.248 or later. `OPENCODE_CLAUDE_PATH` points at the SDK's binary in the brain image (`packages/cell/e2b/e2b.Dockerfile`). No separate `claude` install.
-3. **Env and settings.**
+1. **Provider id.** A Claude model stays under its provider (`ren`, `anthropic`); only its package is `@opencode/claude-agent`, and its canonical provider is `claude-agent`, which keys the options the Claude Agent model reads. The first design moved these models to provider `claude-agent`. That breaks every place Ren and its clients name a model by provider id (picker, chip, transcripts, the chat's settings model, `session.model.switch`), so the setup changes the hooks instead: OpenCode's `ClaudeSessionHooks` and `ClaudeInstructions` run unchanged, with each hook bound to `claude-agent` run for the models whose package is the Claude Agent package in that location. A change of method (key ↔ subscription) keeps the model id; the next turn runs on the other runtime.
+2. **Ren-owned setup.** The plugin body of 2.2.6 without the workspace check, from `@opencode/core`'s exported parts: the session registry, the AI SDK hook and the two hook sets. It never calls `ClaudeProvider.register`, which replaces the list with Claude's short names (G4), nor `ClaudeIntegration.register`, which is OpenCode's sign-in for a person's own `claude` and needs `Bus`. OpenCode's own copy stays loaded and stops at its workspace check; its hooks are bound to provider `claude-agent`, which Ren never lists.
+3. **Dependency.** `@anthropic-ai/claude-agent-sdk` 0.3.301 in `cell`. It ships `claude` 2.1.301 in `@anthropic-ai/claude-agent-sdk-<platform>`; the plugin needs 2.1.248 or later. The setup finds that binary next to the SDK (glibc first on Linux), so the image needs no `OPENCODE_CLAUDE_PATH` and a `claude` on `PATH` is never used. `OPENCODE_CLAUDE_PATH` still wins when set. The brain's dependency bundle carries the Linux binary.
+4. **Env and settings.** One `claude` process per chat. `claude` reads headers only at start, so the setup builds the env per call from the chat's usage headers and leaves out `ren-turn`, which changes each turn and would restart `claude`: usage rows of the Claude runtime have no turn.
 
-| Name                                            | Value                                                                        | Why                                                                                                                           |
-| ----------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_BASE_URL` (provider `baseURL`)       | the gateway                                                                  | every call through the gateway                                                                                                |
-| `ANTHROPIC_CUSTOM_HEADERS` (provider `headers`) | `x-litellm-api-key: Bearer ren:MODELS` and `ren-member: ren:PERSON.<member>` | the gateway key and the member, apart from `Authorization`                                                                    |
-| `CLAUDE_CODE_OAUTH_TOKEN`                       | a placeholder that does not start with `sk-ant-oat` (for example `ren-seat`) | subscription mode in `claude`. The gateway puts the seat's login in; a client token that looks like a login would win over it |
-| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`      | `1`                                                                          | no direct calls to `api.anthropic.com` (G1)                                                                                   |
+| Name                                            | Value                                                                                                  | Why                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_BASE_URL` (provider `baseURL`)       | the gateway, without its `/v1`                                                                         | every call through the gateway; `claude` adds `/v1/messages`                                                                            |
+| `ANTHROPIC_CUSTOM_HEADERS` (provider `headers`) | `x-litellm-api-key: Bearer ren:MODELS`, the chat's usage headers and `ren-member: ren:PERSON.<member>` | the gateway key, the usage claims and the member                                                                                        |
+| `CLAUDE_CODE_OAUTH_TOKEN`                       | Ren's key: `ren:MODELS` behind the egress                                                              | subscription mode in `claude`; the gateway puts the seat's login in. It does not start with `sk-ant-oat`, so it never passes as a login |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`      | `1`                                                                                                    | no direct calls to `api.anthropic.com` (G1)                                                                                             |
 
-4. **Egress.** Block `api.anthropic.com` from the brain sandbox.
-5. **Folder.** `claude` starts in a folder on the brain's machine. Tools still run on the hand through MCP.
+5. **Egress.** Every call of `claude` carries `ren:MODELS` in `Authorization`. The egress fills in `MODELS` only for the gateway host (`core/src/credential-source.ts`), so a call of `claude` to `api.anthropic.com` or any other host is refused with `403` and `X-Ren-Egress`, and the egress log names it. Other programs in the sandbox are not affected: a hand may still call `api.anthropic.com` with a customer's own key. No egress change was needed.
+6. **Folder.** `claude` starts in `.ren-claude` in the home folder of the brain's machine. Tools still run on the hand through MCP.
 
 ### 7.4 Session id
 
@@ -411,7 +412,7 @@ What a running chat sees:
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Provider off, model removed                    | The call in flight finishes. The model leaves the picker. The next turn uses the chat's settings model and shows why (hot-reload row 33) |
 | Key replaced, login refreshed                  | Nothing. The next call uses the new credential                                                                                           |
-| Method key ↔ subscription                      | The runtime changes (`anthropic` ↔ `claude-agent`): a "model switched" row at the next turn                                              |
+| Method key ↔ subscription                      | The model id stays; the next turn runs on the other runtime (HTTP ↔ `claude`)                                                            |
 | Claude runtime connection change during a turn | The turn finishes on the old settings; the next turn uses the new ones (G5)                                                              |
 | New model                                      | In the picker after the push                                                                                                             |
 

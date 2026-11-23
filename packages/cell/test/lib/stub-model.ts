@@ -7,6 +7,7 @@ interface Behaviour {
   readonly reply?: string
   readonly hold?: boolean
   readonly status?: number
+  readonly code?: string
   readonly rejectKey?: string
   readonly cut?: boolean
   readonly malformed?: boolean
@@ -352,7 +353,10 @@ export const start = (): Server => {
     }[call.kind]
     const status = statusOf(behaviour, call)
     if (status)
-      return Response.json({ error: { message: `stub model status ${status}`, type: "stub_error" } }, { status })
+      return Response.json(
+        { error: { message: `stub model status ${status}`, type: "stub_error", code: behaviour.code ?? null } },
+        { status },
+      )
     const chunks = endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve())
     const body = new ReadableStream<Uint8Array>({
       pull: async (controller) => {
