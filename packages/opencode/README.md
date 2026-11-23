@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. Signed in, the server part registers the provider `ren`, and a local session with a `ren/<model>` model runs its turns on a Ren brain. `/ren:login` and `/ren:logout` sign in and out, `/ren:space` selects the Ren space and `/ren:new` starts a Ren session in it. Built: `turn`, `auth`, `ren`, `link`, `binding`, `model`, `mirror`, `title`, `provider`, `controls`, `rpc`, `handlers`, `commands` and the TUI part (see Modules). Messages that other people and clients write in a Ren session show in the local session (Multiplayer), a rename on either side reaches the other (Rename), and the built-in model picker, `/compact`, archive, delete and fork act on a Ren session (Session controls). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -39,7 +39,7 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 | Module     | Holds                                                                                           |
 | ---------- | ----------------------------------------------------------------------------------------------- |
 | `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                      |
-| `auth`     | `RenAuth`: the server URL and a currently valid token.                                          |
+| `auth`     | `RenAuth`: the server URL and a currently valid token; `RenAuth.Login`: sign-in and sign-out.   |
 | `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.               |
 | `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh.  |
 | `binding`  | `Binding`: the `ren` session metadata, new local Ren sessions and the selected space.           |
@@ -57,13 +57,31 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 
 The server URL is the plugin option `url`, then `REN_URL`, then `https://api.useren.ai`. Only `http` and `https` URLs are accepted.
 
-The token is `REN_TOKEN`, else the `ren` CLI's login in `${XDG_CONFIG_HOME:-~/.config}/ren/credentials.json` for the server's origin, so `ren login` signs in both. The plugin reads the file on each request for a token, so a later `ren login` or `ren logout` applies without a restart. Within 60 seconds of `expiresAt` it renews the login with the stored refresh token, as the CLI does (the same discovery, `client_id` and `resource`), and writes it back in the CLI's format, atomically, with mode `0600`. Concurrent requests share one renewal. When the server refuses the renewal because the CLI already rotated the login, the plugin uses the CLI's new login.
+The token is `REN_TOKEN`, else the `ren` CLI's login in `${XDG_CONFIG_HOME:-~/.config}/ren/credentials.json` for the server's origin, so `/ren:login` and `ren login` sign in both. The plugin reads the file on each request for a token, so a later `ren login` or `ren logout` applies without a restart. Within 60 seconds of `expiresAt` it renews the login with the stored refresh token, as the CLI does (the same discovery, `client_id` and `resource`), and writes it back in the CLI's format, atomically, with mode `0600`. Concurrent requests share one renewal. When the server refuses the renewal because the CLI already rotated the login, the plugin uses the CLI's new login.
 
-Without a token, or when the server refuses the renewal, `RenAuth.token` and `RenApi.client` fail with `RenAuth.SignedOut`. Other failures (an unreadable file, an unreachable server) are `RenAuth.AuthError`.
+Without a token, or when the server refuses the renewal, `RenAuth.token` and `RenApi.client` fail with `RenAuth.SignedOut`, whose message says to run `/ren:login`. Other failures (an unreadable file, an unreachable server) are `RenAuth.AuthError`.
 
 The file format, the discovery and the renewal are a port of `packages/cli/src/services/{credentials,oauth,connection}.ts`: the plugin cannot depend on the private CLI package. Change both together.
 
 The plugin runs in OpenCode's process with only `Scope` in its context, so it provides its own platform services: `FetchHttpClient` from `effect/http` for HTTP, and Bun and `node:fs` for the credentials file, because `effect`'s `FileSystem` needs a platform package that OpenCode does not provide to plugins.
+
+### Sign-in
+
+`/ren:login` is the CLI's `ren login`, run by the server part, which owns the credentials file:
+
+- `RenAuth.Login.authorize` discovers the endpoints, listens on `127.0.0.1` on a free port for `/callback`, and returns the authorization URL: authorization code with PKCE (S256), the CLI's `client_id`, scope `openid offline_access ren`, `resource` and a random `state`. A request to the listener with another `state` gets 400 and changes nothing. The first one with the right `state` ends the wait, and the listener closes.
+- The TUI opens the URL in the browser (`open` on macOS, else `xdg-open` when it exists) and shows it in a dialog that closes once the sign-in ends. When the browser cannot reach the listener (the server part runs on another machine, see below), the user pastes the address the browser was sent to; `redirect` accepts it when its `state` matches. Closing the dialog cancels the sign-in and closes the listener.
+- A denied consent or no answer within 5 minutes fails it (`RenAuth.SignInFailed`, with Ren's `error_description` when it sends one). Otherwise the code is exchanged with the verifier, the new token is checked with `me.get`, and the login is stored in the CLI's format for this server's origin, keeping every other server's.
+- Then the plugin lists the selected space's models at once and sends the RPC event `signedIn`, so every TUI shows the space in its footers without a restart.
+- `/ren:login` while signed in names the account and asks before it signs in again.
+
+`/ren:logout` revokes the refresh token at the server's `revocation_endpoint` (errors are ignored, as in the CLI), removes this server's login only, lists the models again (none, so they disappear) and sends `signedOut`. With `REN_TOKEN` set both commands say that the token comes from the environment and do nothing.
+
+The plugin signs in as the CLI's OAuth client (`Auth.cliClient`, named "Ren CLI" on the consent page). Ren binds a refresh token to the client that got it, and both tools renew the one login in the shared file, so they must be the same client. A client of its own would need its own hosted metadata document and the client recorded with each stored login, which changes the CLI's file format.
+
+When the TUI runs on another machine than the server part, the browser opens on the TUI's machine and its redirect to `127.0.0.1` reaches nothing; the dialog's paste field finishes the sign-in. The server part's listener closes after 5 minutes.
+
+Ren is not an integration in OpenCode's `/connect`: an integration's OAuth method stores the tokens in OpenCode's own credential store, a second copy of a refresh token that Ren rotates at each renewal (spec, L17s).
 
 ## Link
 
@@ -78,7 +96,7 @@ A link is `ChatAccess` and `Connection` from `@ren/chat`, wired as `ChatSession`
 
 ## First turn
 
-Signed in, the plugin lists the models of the selected space (`chat.models`) as `ren/<endpoint>/<model>`, with their variants. Their context limit is 0, so OpenCode never compacts a Ren session locally: the brain owns its context. Cost is zero, because Ren lists no prices. Signed out, or when Ren does not answer at load (it waits at most 5 seconds), it registers nothing, and it asks again every 5 minutes, so a later `ren login` adds the models without a restart.
+Signed in, the plugin lists the models of the selected space (`chat.models`) as `ren/<endpoint>/<model>`, with their variants. Their context limit is 0, so OpenCode never compacts a Ren session locally: the brain owns its context. Cost is zero, because Ren lists no prices. Signed out, or when Ren does not answer at load (it waits at most 5 seconds), it registers nothing, and it asks again every 5 minutes, so a later `ren login` adds the models without a restart. After `/ren:login` and `/ren:logout` it asks at once.
 
 The selected space is the one `/ren:space` stored, else the plugin option `space` (a space ID or slug), else the first space you joined. The models are the selected space's.
 
@@ -136,9 +154,10 @@ Notices are synthetic messages with a description (`resume: false`), which the T
 Every command the plugin adds is `/ren:<command>`, in the slash completion and in the command palette under Ren.
 
 - `/ren:space` lists the spaces you joined, with the selected one marked, and searches them by name. Choosing one selects it.
+- `/ren:login` signs in through the browser and `/ren:logout` signs out (Sign-in).
 - `/ren:new` creates a local session bound to the selected space, with the prompt's `ren/<model>` model when the space offers it, else the space's default, and opens it.
 
-Signed out, both say to run `ren login`. The home and prompt footers show `ren · <space>`.
+Signed out, they say to run `/ren:login`. The home and prompt footers show `ren · <space>`.
 
 ### Selecting a space
 
@@ -148,7 +167,7 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 
 ### RPC
 
-`RenRpc.Definition` (id `ren`). Every method takes an object and can fail with `signed_out` (`data: { server }`, the message says to run `ren login`) or `unavailable` (`data: {}`, the message says what failed).
+`RenRpc.Definition` (id `ren`). Every method takes an object and can fail with `signed_out` (`data: { server }`, the message says to run `/ren:login`) or `unavailable` (`data: {}`, the message says what failed).
 
 | Method          | Input                          | Output                              |
 | --------------- | ------------------------------ | ----------------------------------- |
@@ -156,14 +175,19 @@ The server part keeps the selection in plugin storage, which is OpenCode's datab
 | `getSpace`      | `{}`                           | `SpaceInfo`, the selected space     |
 | `selectSpace`   | `{ spaceId }`                  | `SpaceInfo`                         |
 | `createSession` | `{ model?: { id, variant? } }` | `{ sessionID, spaceId }`            |
+| `account`       | `{}`                           | `{ server, environment, user }`     |
+| `login`         | `{ attempt }`                  | `{ url }`                           |
+| `completeLogin` | `{ attempt, url }`             | `{}`                                |
+| `cancelLogin`   | `{ attempt }`                  | `{}`                                |
+| `logout`        | `{}`                           | `{ server, signedOut }`             |
 
-`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
+`SpaceInfo` is `id`, `slug`, `name`, `kind` and `description` from Ren's `Space.Info`. The event `spaceSelected` carries the new `SpaceInfo`. `user` is `{ name, email }` or `null`. `login` starts a sign-in under an `attempt` ID that the TUI chooses and returns once the listener is up; a new one cancels the one before. Its end comes as the event `signedIn` (`{ attempt, user }`) or `loginFailed` (`{ attempt, message }`), so a TUI subscribes before it calls `login` and keeps the events of its own attempt. `signedOut` carries the `server`. The schemas are Effect schemas wrapped with `Schema.toStandardSchemaV1`, so the TUI's Promise client accepts them, and keep the same shape encoded and decoded, because the Promise client returns the server's JSON without decoding it.
 
 To add a feature: add its methods and events to `rpc.ts`, its handlers to `handlers.ts` (map failures with `answer`), its command logic to `commands.ts` as plain functions over `Surface`, and its keymap entries or slots to `tui.tsx`. Test the handlers through a real OpenCode (`OpenCodeHost`, `host.client.rpc(RenRpc.Definition)`), and the commands with `host.promise`, the Promise client a TUI gets, and a recording stand-in for the dialogs, toasts and router. No test runs `tui.tsx`: OpenCode does not publish its TUI, so check the keymap entries and slots by hand in a stock OpenCode (Install).
 
-Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact`, stop and the model picker.
+Built-in commands keep their names and act on Ren sessions through hooks and events: `/rename` (Rename), `/compact` and the model picker (Session controls), and stop.
 
-Planned commands: `/ren:sessions`, `/ren:move`, `/ren:retry`, `/ren:login`, `/ren:logout`. Planned features:
+Planned commands: `/ren:sessions`, `/ren:move`, `/ren:retry`. Planned features:
 
 - Move a local session to a Ren space. This needs a new Ren import endpoint.
 - The web app chat's features, where the stock TUI allows them.
@@ -198,7 +222,7 @@ To try a Ren model against a local server, pass the plugin's options with an ent
 }
 ```
 
-`url` is the Ren server (default `REN_URL`, then `https://api.useren.ai`); sign in to it with `ren login`, or set `REN_TOKEN`. `space` is a space ID or slug, used until `/ren:space` selects one (default: your first joined space).
+`url` is the Ren server (default `REN_URL`, then `https://api.useren.ai`); sign in to it with `/ren:login` or `ren login`, or set `REN_TOKEN`. `space` is a space ID or slug, used until `/ren:space` selects one (default: your first joined space).
 
 OpenCode resolves a local directory through its `package.json` `exports`, as it does a published package, so all three parts load from `src`. The TUI loads the TUI part of each plugin its server loads. OpenCode provides `effect` and `@opencode/plugin` to the plugin at runtime.
 
@@ -222,4 +246,4 @@ REN_SLOW=1 bun run test   # also the slow tests: a link to a real brain, a /ren:
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 
-The end-to-end test `packages/e2e/tests/opencode.spec.ts` signs in with the `ren` CLI against a real server and checks that the plugin uses and renews that login.
+The end-to-end test `packages/e2e/tests/opencode.spec.ts` signs in with the `ren` CLI against a real server and checks that the plugin uses and renews that login. It also signs in through the plugin's RPC `login` in an in-process OpenCode (`packages/e2e/script/opencode-account.ts`) with a real consent in the browser, checks that the plugin and `ren whoami` share the login and that the CLI renews it, then signs out with `logout` and checks that both are signed out.

@@ -57,38 +57,41 @@ Read in OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Facts marked _(
 - F35c. The 2.2.6 TUI keeps a picked model as a draft and commits it with `session.switchModel` right before each prompt or command it sends (read in its source, not run). `session.model.selected` carries `previous`; switching to the current model publishes nothing; `session.context` returns `model-switched` messages with `model` and `previous`. The `prompt` hook runs before the prompt is admitted and before its step reads the session's model, and `ctx.session.switchModel` and `ctx.session.synthetic` work inside it, so a switch made in the hook applies to that prompt's step _(run)_. Session hooks cannot fail (their failure type is `never`).
 - F36c. A `compaction` hook `result` with `summary` makes OpenCode store a completed compaction with that summary and call no model. Afterwards `session.context` starts at the compaction: earlier messages are not returned _(run)_. Without a `result` the compaction calls the model with kind `compaction`, after the `model.request` hook. The compaction runs on the `compaction` agent's model when one is configured, so the plugin registers the hook for every provider and checks the binding.
 - F37c. A real brain's Chat API `session.get` reports a model without a variant as `variant: "default"`; `session.model.switch` sets the model of the next step, and the model call uses it _(run)_. The brain's compaction message has the `id` sent to `session.compact`, so `session.message` finds it after a reconnect _(run)_.
+- F34s. Ren's OAuth server (Better Auth `@better-auth/oauth-provider` 1.7.7) binds a refresh token to the client that got it: the refresh grant answers `invalid_grant` when `client_id` differs (`refreshToken.clientId !== client_id`), and revocation checks the client too. Reusing a rotated refresh token after a short reuse window revokes the whole family (`invalidateRefreshFamily`). The consent page names the client by its metadata's `client_name` (`packages/app` `consent-page.tsx`); the CLI's is "Ren CLI", served by the server itself (`ClientMetadataFetch`). A login the plugin got as the CLI's client is renewed by `ren` and the other way round _(run, e2e)_.
+- F35s. The TUI plugin context of 2.2.6 has no helper to open a URL or to copy text (OpenCode's own dialogs use an internal `openUrl` and clipboard). The TUI part runs in Bun, so it spawns `open` or `xdg-open` itself. `ui.dialog.prompt` shows a wrapped `description`, returns the typed text or `undefined` on escape, and closes with `ui.dialog.clear()`; `ui.dialog.confirm` returns a boolean _(TUI)_.
+- F36s. A plugin can add an OAuth method to an integration (`ctx.integration.transform`, `editor.method.update({ integrationID, method: { id, type: "oauth", label }, authorize })`); OpenCode's `/connect` dialog then opens the URL, offers copy and paste of the redirect, polls the attempt and stores the `Credential.OAuth` the callback returns (`access`, `refresh`, `expires`) in OpenCode's credential store, which refreshes it with the method's `refresh`. An `external` method records a reference and runs no flow (`claude-agent`'s `integration.ts`).
+- F37s. The Promise RPC client's `events.on` filters by event type and drops `server.connected`, so a caller cannot see when its subscription is live; every subscription of one client shares its event connection. A sign-in's outcome arrives after a browser round trip, long after the TUI subscribed.
 
 ## 3. Modules
 
-| Module     | Holds                                                                                                |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                      |
-| `auth`     | Built. The server URL and a currently valid token (`RenAuth`).                                       |
-| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                   |
-| `link`     | Built. One Chat API client and event stream per Ren root session, with `chat.access` renew (`Link`). |
-| `binding`  | Built. The `ren` session metadata and the selected space (`Binding`).                                |
-| `model`    | Built. The `LanguageModelV3` (`RenModel`).                                                           |
-| `provider` | Built. The provider, its models and the session hooks (`RenProvider`).                               |
-| `rpc`      | Built. Methods and events between the server part and the TUI part (`RenRpc`).                       |
-| `handlers` | Built. The server part's RPC handlers (`RenHandlers`).                                               |
-| `commands` | Built. The `/ren:*` command logic over a small part of the TUI context (`RenCommands`).              |
-| TUI        | Built: `/ren:space`, `/ren:new` and the space in the footers. Later: the other commands and dialogs. |
-| `mirror`   | Built. Messages from other clients of a Ren session into the local session (`Mirror`).               |
-| `title`    | Built. The title of a Ren session, the same locally and on Ren (`Title`).                            |
-| `controls` | Built. Model picker, `/compact`, archive, delete and fork on a Ren session (`Controls`).             |
+| Module     | Holds                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                                                   |
+| `auth`     | Built. The server URL and a currently valid token (`RenAuth`); sign-in and sign-out (`RenAuth.Login`).                            |
+| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                                                |
+| `link`     | Built. One Chat API client and event stream per Ren root session, with `chat.access` renew (`Link`).                              |
+| `binding`  | Built. The `ren` session metadata and the selected space (`Binding`).                                                             |
+| `model`    | Built. The `LanguageModelV3` (`RenModel`).                                                                                        |
+| `provider` | Built. The provider, its models and the session hooks (`RenProvider`).                                                            |
+| `rpc`      | Built. Methods and events between the server part and the TUI part (`RenRpc`).                                                    |
+| `handlers` | Built. The server part's RPC handlers (`RenHandlers`).                                                                            |
+| `commands` | Built. The `/ren:*` command logic over a small part of the TUI context (`RenCommands`).                                           |
+| TUI        | Built: `/ren:login`, `/ren:logout`, `/ren:space`, `/ren:new` and the space in the footers. Later: the other commands and dialogs. |
+| `mirror`   | Built. Messages from other clients of a Ren session into the local session (`Mirror`).                                            |
+| `title`    | Built. The title of a Ren session, the same locally and on Ren (`Title`).                                                         |
+| `controls` | Built. Model picker, `/compact`, archive, delete and fork on a Ren session (`Controls`).                                          |
 
 ## 4. Features, in build order
 
 Each is one commit. Built features leave the list; the others keep their numbers.
 
-8. **Permissions and questions.** Remote `permission.asked` and `form.created` reach the user (the native prompt if a plugin can raise it, else a dialog through RPC), and the reply goes to `session.permission.reply`, `session.form.reply` or `session.form.cancel`.
-9. **Open and catch up.** `/ren:sessions` lists Ren sessions with search and filters and opens one: import the Ren transcript into a local session with the same ID. On open, a local copy that is behind is removed and imported again. Opening a Ren session calls `Mirror.Service.watch`, and the catch-up also covers what the mirror did not see (L12).
-10. **Sign-in.** `/ren:login` and `/ren:logout` with OAuth (authorization code with PKCE on a loopback redirect) and the plugin's own public client metadata document. The credentials file is shared with the `ren` CLI.
-11. **Attachments.** Local files and pasted images upload with `drive.startUpload` and go in `files` (maximum 10).
-12. **Status and retry.** Starting, failed and stopped states are visible; `/ren:retry` calls `chat.retry`; notifications through the TUI attention API.
-13. **Move a local session to Ren.** A Ren endpoint that creates a session in a space from an OpenCode export (session row and message rows), a new `origin` literal, and the restore of those rows on the brain; then `/ren:move`, and a model change from a local model to `ren/<model>`.
-14. **Build and release.** A build script that bundles the Ren packages, keeps `effect` and `@opencode/plugin` external, points `exports` at `dist`, widens the peer ranges, and a check of the OpenCode version at load.
-15. **Panels.** Files, changes, terminal (`/ren:files`, `/ren:diff`, `/ren:shell`), `/ren:background`, links to tasks and pull requests, context usage.
+- **8. Permissions and questions.** Remote `permission.asked` and `form.created` reach the user (the native prompt if a plugin can raise it, else a dialog through RPC), and the reply goes to `session.permission.reply`, `session.form.reply` or `session.form.cancel`.
+- **9. Open and catch up.** `/ren:sessions` lists Ren sessions with search and filters and opens one: import the Ren transcript into a local session with the same ID. On open, a local copy that is behind is removed and imported again. Opening a Ren session calls `Mirror.Service.watch`, and the catch-up also covers what the mirror did not see (L12).
+- **11. Attachments.** Local files and pasted images upload with `drive.startUpload` and go in `files` (maximum 10).
+- **12. Status and retry.** Starting, failed and stopped states are visible; `/ren:retry` calls `chat.retry`; notifications through the TUI attention API.
+- **13. Move a local session to Ren.** A Ren endpoint that creates a session in a space from an OpenCode export (session row and message rows), a new `origin` literal, and the restore of those rows on the brain; then `/ren:move`, and a model change from a local model to `ren/<model>`.
+- **14. Build and release.** A build script that bundles the Ren packages, keeps `effect` and `@opencode/plugin` external, points `exports` at `dist`, widens the peer ranges, and a check of the OpenCode version at load.
+- **15. Panels.** Files, changes, terminal (`/ren:files`, `/ren:diff`, `/ren:shell`), `/ren:background`, links to tasks and pull requests, context usage.
 
 ## 5. Limits
 
@@ -111,3 +114,7 @@ Each is one commit. Built features leave the list; the others keep their numbers
 - L17c. A compaction that another client or the brain starts on Ren is not shown in the local session. When a `compaction` agent model is configured to a local model and Ren refuses a compaction, OpenCode summarizes the local history with that model.
 - L18c. Ren has no unarchive (F14): unarchiving a local Ren session leaves the Ren session archived, with a notice. Deleting a local copy never changes the Ren session.
 - L19c. A fork of a Ren session is local only (F14): it is disconnected from Ren, and its `ren/*` model refuses to run until the user picks a local model.
+- L16s. The consent page says "Ren CLI": the plugin signs in as the CLI's client, because the two tools renew one stored login and a refresh token works only for the client that got it (F34s). A client of its own would need a hosted client metadata document, an entry in the server's `ClientMetadataFetch`, and the client recorded with each login in the shared file, which changes the CLI's format.
+- L17s. Ren is not an integration in OpenCode's `/connect`: an OAuth method's credential is a second copy of the refresh token in OpenCode's store (F36s), and the two copies cannot both stay valid when either side rotates it (F34s). `/ren:login` shows its own dialog instead.
+- L18s. When the server part runs on another machine than the TUI, the browser's redirect to `127.0.0.1` reaches nothing; the user pastes the address from the browser into the sign-in dialog (run with the fake Ren, in tests and by hand in the TUI).
+- L19s. After `/ren:logout`, a Ren session's open Chat API connection keeps working until its chat token needs renewing (at most 60 minutes, F13).

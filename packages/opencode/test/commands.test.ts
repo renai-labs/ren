@@ -77,3 +77,39 @@ test("/ren:new opens a new session in the selected space with the prompt's Ren m
       expect(opened.toasts).toEqual([])
     }),
   ))
+
+test("with REN_TOKEN, /ren:login and /ren:logout say that the token comes from the environment and change nothing", () =>
+  run(
+    Effect.gen(function* () {
+      const opened = yield* setup()
+      const asked: Array<string> = []
+      const surface: RenCommands.SignInSurface = {
+        ...opened.surface,
+        open: (url) => asked.push(url),
+        ui: {
+          ...opened.surface.ui,
+          dialog: {
+            ...opened.surface.ui.dialog,
+            prompt: (prompt) => Promise.resolve(void asked.push(prompt.title)),
+            confirm: (confirm) => Promise.resolve(Boolean(asked.push(confirm.title))),
+            clear: () => undefined,
+          },
+        },
+      }
+      yield* Effect.promise(() => RenCommands.login(surface))
+      yield* Effect.promise(() => RenCommands.logout(surface))
+      const told: ToastOptions = {
+        title: "Ren",
+        message: "Ren uses REN_TOKEN from the environment. Unset it to sign in or out from OpenCode.",
+        variant: "warning",
+      }
+      expect(opened.toasts).toEqual([told, told])
+      expect(asked).toEqual([])
+      expect(opened.ren.state.oauth.revoked).toEqual([])
+      expect(yield* opened.rpc.account({}, opened.at)).toEqual({
+        server: new URL(opened.ren.url).origin,
+        environment: true,
+        user: { name: "Ada", email: "ada@example.com" },
+      })
+    }),
+  ))

@@ -10,6 +10,10 @@ export default Plugin.define({
       client: context.client,
       location: () => context.location ?? context.data.location.default(),
       ui: context.ui,
+      open: (url: string) => {
+        const opener = process.platform === "darwin" ? "open" : "xdg-open"
+        if (Bun.which(opener)) Bun.spawn([opener, url], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref()
+      },
     }
     const [space, setSpace] = createSignal<RenRpc.SpaceInfo>()
     const load = () => {
@@ -36,6 +40,22 @@ export default Plugin.define({
           slash: { name: "ren:new" },
           run: () => RenCommands.create(surface),
         },
+        {
+          id: "ren.login",
+          title: "Sign in to Ren",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:login" },
+          run: () => RenCommands.login(surface),
+        },
+        {
+          id: "ren.logout",
+          title: "Sign out of Ren",
+          group: "Ren",
+          palette: true,
+          slash: { name: "ren:logout" },
+          run: () => RenCommands.logout(surface),
+        },
       ],
     }))
     const status = () => (
@@ -54,6 +74,8 @@ export default Plugin.define({
         setSpace(event.data)
       }),
       context.data.on("server.connected", load),
+      context.client.rpc(RenRpc.Definition).events.on("signedIn", load),
+      context.client.rpc(RenRpc.Definition).events.on("signedOut", () => setSpace(undefined)),
     ]
     return () => {
       for (const stop of stops) stop()

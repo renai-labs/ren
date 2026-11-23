@@ -281,6 +281,7 @@
         "@ren/schema": "workspace:*",
         "@ren/server": "workspace:*",
         "@ren/util": "workspace:*",
+        "@renai-labs/opencode": "workspace:*",
         "@types/bun": "catalog:",
         "effect": "catalog:",
         "tsrs": "catalog:",

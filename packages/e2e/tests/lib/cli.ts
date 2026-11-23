@@ -20,8 +20,12 @@ export const Me = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ user: Schema.Struct({ email: Schema.String }) })),
 )
 
-export const login = async (page: Page, env: Record<string, string>) => {
-  const login = spawn("bun", [cli, "login", "--no-browser"], {
+export const login = async (
+  page: Page,
+  env: Record<string, string>,
+  command: ReadonlyArray<string> = [cli, "login", "--no-browser"],
+) => {
+  const login = spawn("bun", command, {
     env: { ...process.env, REN_URL: serverURL, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   })

@@ -12,6 +12,7 @@ export class Service extends Context.Service<
   {
     readonly server: URL
     readonly client: Effect.Effect<Client, RenAuth.SignedOut | RenAuth.AuthError>
+    readonly connect: (token: string) => Effect.Effect<Client>
   }
 >()("@ren/opencode/RenApi") {}
 
@@ -20,16 +21,10 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
     const auth = yield* RenAuth.Service
-    return Service.of({
-      server: auth.server,
-      client: Effect.flatMap(auth.token, (token) =>
-        Ren.make({ baseUrl: auth.server }).pipe(
-          Effect.provideService(
-            HttpClient.HttpClient,
-            HttpClient.mapRequest(http, HttpClientRequest.bearerToken(token)),
-          ),
-        ),
-      ),
-    })
+    const connect = (token: string) =>
+      Ren.make({ baseUrl: auth.server }).pipe(
+        Effect.provideService(HttpClient.HttpClient, HttpClient.mapRequest(http, HttpClientRequest.bearerToken(token))),
+      )
+    return Service.of({ server: auth.server, client: Effect.flatMap(auth.token, connect), connect })
   }),
 )

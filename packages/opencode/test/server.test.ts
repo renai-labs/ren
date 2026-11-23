@@ -30,14 +30,14 @@ test("signed out, the plugin loads, registers no provider, and OpenCode works as
     expect(plugins.data.find((each) => each.id === "ren")?.state).toEqual({ status: "active" })
   }).pipe(Effect.scoped, Effect.runPromise))
 
-test("signed out, the plugin's RPC answers signed_out and the Ren commands tell the user to run ren login", () =>
+test("signed out, the plugin's RPC answers signed_out and the Ren commands tell the user to run /ren:login", () =>
   Effect.gen(function* () {
     const opened = yield* setup()
     const origin = new URL(opened.ren.url).origin
     const rpc = opened.host.client.rpc(RenRpc.Definition)
     expect(yield* rpc.listSpaces({}, { location: opened.host.location }).pipe(Effect.flip)).toEqual({
       type: "signed_out",
-      message: `Not signed in to ${origin}. Run ren login.`,
+      message: `Not signed in to ${origin}. Run /ren:login.`,
       data: { server: origin },
     })
     const toasts: Array<ToastOptions> = []
@@ -55,7 +55,7 @@ test("signed out, the plugin's RPC answers signed_out and the Ren commands tell 
     yield* Effect.promise(() => RenCommands.create(surface))
     const told: ToastOptions = {
       title: "Sign in to Ren",
-      message: `Not signed in to ${origin}. Run ren login.`,
+      message: `Not signed in to ${origin}. Run /ren:login.`,
       variant: "warning",
     }
     expect(toasts).toEqual([told, told])

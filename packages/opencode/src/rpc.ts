@@ -16,6 +16,11 @@ const errors = {
 
 const none = Schema.toStandardSchemaV1(Schema.Struct({}))
 
+export interface User extends Schema.Schema.Type<typeof User> {}
+export const User = Schema.Struct({ name: Schema.String, email: Schema.String }).annotate({ identifier: "RenRpc.User" })
+
+const Attempt = Schema.Struct({ attempt: Schema.String })
+
 export const Definition = Rpc.define({
   id: "ren",
   methods: {
@@ -41,8 +46,36 @@ export const Definition = Rpc.define({
       output: Schema.toStandardSchemaV1(Schema.Struct({ sessionID: Schema.String, spaceId: Space.ID })),
       errors,
     },
+    account: {
+      input: none,
+      output: Schema.toStandardSchemaV1(
+        Schema.Struct({ server: Schema.String, environment: Schema.Boolean, user: Schema.NullOr(User) }),
+      ),
+      errors,
+    },
+    login: {
+      input: Schema.toStandardSchemaV1(Attempt),
+      output: Schema.toStandardSchemaV1(Schema.Struct({ url: Schema.String })),
+      errors,
+    },
+    completeLogin: {
+      input: Schema.toStandardSchemaV1(Schema.Struct({ attempt: Schema.String, url: Schema.String })),
+      output: none,
+      errors,
+    },
+    cancelLogin: { input: Schema.toStandardSchemaV1(Attempt), output: none, errors },
+    logout: {
+      input: none,
+      output: Schema.toStandardSchemaV1(Schema.Struct({ server: Schema.String, signedOut: Schema.Boolean })),
+      errors,
+    },
   },
   events: {
     spaceSelected: { schema: Schema.toStandardSchemaV1(SpaceInfo) },
+    signedIn: { schema: Schema.toStandardSchemaV1(Schema.Struct({ attempt: Schema.String, user: User })) },
+    loginFailed: {
+      schema: Schema.toStandardSchemaV1(Schema.Struct({ attempt: Schema.String, message: Schema.String })),
+    },
+    signedOut: { schema: Schema.toStandardSchemaV1(Schema.Struct({ server: Schema.String })) },
   },
 })

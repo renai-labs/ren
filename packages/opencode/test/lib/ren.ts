@@ -111,6 +111,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
       send(frame("session.compaction.started", { sessionID, reason: "manual", recent: "", inputID: id }))
       send(frame("session.compaction.ended", { sessionID, reason: "manual", text: "the summary", recent: "" }))
     },
+    oauth: { deny: false, revoked: Array.of<string>() },
   }
   const send = (event: ReturnType<typeof frame> | SessionEvent.Frame) => {
     for (const controller of streams) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
@@ -337,6 +338,31 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
     if (parts[3] === "models") return Response.json(state.models.get(url.searchParams.get("spaceId") ?? "") ?? choices)
     return Response.json(info(Session.ID.make(String(parts[2])), state.spaceId))
   }
+  const oauth = async (url: URL, request: Request) => {
+    if (url.pathname === "/.well-known/oauth-protected-resource")
+      return Response.json({ resource: url.origin, authorization_servers: [`${url.origin}/auth`] })
+    if (url.pathname === "/.well-known/oauth-authorization-server/auth")
+      return Response.json({
+        authorization_endpoint: `${url.origin}/auth/oauth2/authorize`,
+        token_endpoint: `${url.origin}/auth/oauth2/token`,
+        revocation_endpoint: `${url.origin}/auth/oauth2/revoke`,
+      })
+    if (url.pathname === "/auth/oauth2/authorize") {
+      const redirect = new URL(url.searchParams.get("redirect_uri") ?? "")
+      redirect.search = new URLSearchParams({
+        ...(state.oauth.deny
+          ? { error: "access_denied", error_description: "You denied access to Ren." }
+          : { code: "the-code" }),
+        state: url.searchParams.get("state") ?? "",
+      }).toString()
+      return Response.redirect(redirect.href, 302)
+    }
+    if (url.pathname === "/auth/oauth2/revoke") {
+      state.oauth.revoked.push(new URLSearchParams(await request.text()).get("token") ?? "")
+      return new Response(null, { status: 200 })
+    }
+    return Response.json({ access_token: "signed-in", refresh_token: "refresh-signed-in", expires_in: 3600 })
+  }
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
@@ -354,6 +380,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
             return api(url, request)
           }
           if (url.pathname.startsWith("/chat/")) return (options.chat ?? chat)(`${url.pathname}${url.search}`, request)
+          if (url.pathname.startsWith("/.well-known/") || url.pathname.startsWith("/auth/")) return oauth(url, request)
           return url.pathname === "/me" || url.pathname === "/space-members" ? people(url) : api(url, request)
         },
       }),

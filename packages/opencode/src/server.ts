@@ -19,7 +19,7 @@ export default Plugin.define({
         Layer.provideMerge(Title.layer(ctx)),
         Layer.provideMerge(Layer.mergeAll(Link.layer, Binding.layer(ctx))),
         Layer.provideMerge(RenApi.layer),
-        Layer.provide(RenAuth.layer(ctx.options)),
+        Layer.provideMerge(RenAuth.layer(ctx.options)),
         Layer.provide(FetchHttpClient.layer),
       ),
     ).pipe(
