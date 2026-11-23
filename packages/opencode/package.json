@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@renai-labs/opencode",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/server.ts",
+    "./tui": "./src/tui.ts",
+    "./rpc": "./src/rpc.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
+    "typecheck": "tsrs -b"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "catalog:",
+    "@types/bun": "catalog:",
+    "effect": "catalog:",
+    "tsrs": "catalog:"
+  }
+}

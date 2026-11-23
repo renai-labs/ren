@@ -414,6 +414,20 @@
         "typescript": "~6.0.3",
       },
     },
+    "packages/opencode": {
+      "name": "@renai-labs/opencode",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@opencode/plugin": "catalog:",
+        "@types/bun": "catalog:",
+        "effect": "catalog:",
+        "tsrs": "catalog:",
+      },
+      "peerDependencies": {
+        "@opencode/plugin": "catalog:",
+        "effect": "catalog:",
+      },
+    },
     "packages/opencode-transcript": {
       "name": "@ren/opencode-transcript",
       "version": "0.0.0",
@@ -2018,6 +2032,8 @@
     "@ren/util": ["@ren/util@workspace:packages/util"],
 
     "@renai-labs/cli": ["@renai-labs/cli@workspace:packages/cli"],
+
+    "@renai-labs/opencode": ["@renai-labs/opencode@workspace:packages/opencode"],
 
     "@renai-labs/sdk": ["@renai-labs/sdk@workspace:packages/sdk"],
 

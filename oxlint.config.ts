@@ -123,6 +123,13 @@ const packageBoundaries: ReadonlyArray<{
       "The chat runtime runs on web, desktop and mobile. It depends on schema, protocol, client and effect, and on React only in src/react.ts.",
   },
   {
+    files: ["packages/opencode/**"],
+    regex: "^@ren/chat/react$",
+    group: only(["schema", "protocol", "client", "chat"]),
+    message:
+      "The OpenCode plugin is a Ren client. It depends on schema, protocol, client and chat's Effect modules, never on React.",
+  },
+  {
     files: ["packages/telemetry/**"],
     regex: "^@ren/",
     message: "Telemetry knows nothing about Ren. It depends on effect and posthog-node only.",
@@ -905,6 +912,10 @@ export default defineConfig({
     },
     {
       files: ["packages/mobile/src/app/**"],
+      rules: { "import/no-default-export": "off" },
+    },
+    {
+      files: ["packages/opencode/src/{server,tui}.{ts,tsx}"],
       rules: { "import/no-default-export": "off" },
     },
     {

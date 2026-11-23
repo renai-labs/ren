@@ -4,6 +4,8 @@ import type { ESTree } from "@oxlint/plugins"
 const OPENCODE = /^@opencode\/|(^|[/\\])node_modules[/\\]@opencode[/\\]/
 const BOUNDARY = /[/\\]packages[/\\](cell[/\\](src[/\\]harness[/\\]opencode|test)|opencode-transcript)[/\\]/
 const E2E = /[/\\]packages[/\\]e2e[/\\]/
+const PLUGIN = /[/\\]packages[/\\]opencode[/\\]/
+const PLUGIN_API = /^@opencode\/plugin(\/|$)/
 
 export const opencodeBoundary = defineRule({
   meta: {
@@ -13,14 +15,21 @@ export const opencodeBoundary = defineRule({
       outside:
         "Only cell/src/harness/opencode, opencode-transcript and cell's tests use OpenCode. Core takes a harness's code through a registry such as TranscriptCodec; other packages use Ren's types and @ren/cell/testing.",
       e2e: "End-to-end tests drive a brain from outside, with @opencode/client only.",
+      plugin:
+        "The OpenCode plugin runs in the user's OpenCode, which provides only @opencode/plugin and effect. Import OpenCode through @opencode/plugin.",
     },
   },
   create(context) {
     const file = context.filename
     if (BOUNDARY.test(file)) return {}
     const e2e = E2E.test(file)
+    const plugin = PLUGIN.test(file)
     const check = (node: ESTree.Node, source: string) => {
       if (!OPENCODE.test(source)) return
+      if (plugin) {
+        if (!PLUGIN_API.test(source)) context.report({ node, messageId: "plugin" })
+        return
+      }
       if (!e2e) return context.report({ node, messageId: "outside" })
       if (source !== "@opencode/client") context.report({ node, messageId: "e2e" })
     }
