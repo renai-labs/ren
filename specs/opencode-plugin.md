@@ -35,24 +35,23 @@ Verified by reading OpenCode 2.3.0 source (the dependency is 2.2.6) and Ren. Not
 
 ## 3. Modules
 
-| Module     | Holds                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                                          |
-| `auth`     | Built. The server URL and a currently valid token (`RenAuth`).                                                           |
-| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                                       |
-| `link`     | One Chat API client (`@ren/client/chat/effect`) and one event stream for one Ren root session, with `chat.access` renew. |
-| `binding`  | The `ren` session metadata and the selected space.                                                                       |
-| `model`    | The `LanguageModelV3`.                                                                                                   |
-| `provider` | The provider and its models.                                                                                             |
-| `mirror`   | Remote activity into the local session.                                                                                  |
-| `rpc`      | Methods and events between the server part and the TUI part.                                                             |
-| TUI        | The `/ren:*` commands, dialogs and slots.                                                                                |
+| Module     | Holds                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| `turn`     | Built. Pure conversion of Ren session events into stream parts.                                      |
+| `auth`     | Built. The server URL and a currently valid token (`RenAuth`).                                       |
+| `ren`      | Built. The Ren API client with the token of the moment (`RenApi`).                                   |
+| `link`     | Built. One Chat API client and event stream per Ren root session, with `chat.access` renew (`Link`). |
+| `binding`  | The `ren` session metadata and the selected space.                                                   |
+| `model`    | The `LanguageModelV3`.                                                                               |
+| `provider` | The provider and its models.                                                                         |
+| `mirror`   | Remote activity into the local session.                                                              |
+| `rpc`      | Methods and events between the server part and the TUI part.                                         |
+| TUI        | The `/ren:*` commands, dialogs and slots.                                                            |
 
 ## 4. Features, in build order
 
 Each is one commit. Built features leave the list; the others keep their numbers.
 
-2. **Link.** `chat.access` with the `starting` poll (2 seconds), `failed` and `stopped` states; Basic auth `ren:<token>`; renew before `expiresAt`; a new `chat.access` after 401, 502, 504 or `stream.ended`; `unreachable` after two connect timeouts. Use `@ren/chat`'s connection code where it fits.
 3. **First turn (`binding`, `model`, `provider`).** Without a token (`RenAuth.SignedOut`) the server part registers nothing and OpenCode works as before. Models from `chat.models` as `ren/<id>`. `doStream`: read the binding; create the Ren session if it does not exist (`session.create` with the same ID, the selected space and the first message); send each local user message that Ren does not have, with the local message ID; convert the events with `turn`; stop calls `session.interrupt`. The `title` hook returns the Ren title. `compaction` and `generate` requests do not reach the brain as prompts.
 4. **Spaces and new sessions.** `/ren:space` selects a space (RPC `space.list`, `space.select`; the selection is in plugin storage; `chat.prepare` wakes the brain). `/ren:new` creates a session bound to the selected space. A status slot shows the space.
 5. **Multiplayer (`mirror`).** A user message from another client becomes a local user message through `session.prompt` with the Ren message ID and metadata `{ userID, userName, remote: true }`, and the local turn streams the remote turn without sending. The local text has the sender's name as a prefix (F10). Names come from the organization member list.

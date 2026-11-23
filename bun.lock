@@ -418,12 +418,14 @@
       "name": "@renai-labs/opencode",
       "version": "0.0.0",
       "dependencies": {
+        "@ren/chat": "workspace:*",
         "@ren/client": "workspace:*",
         "@ren/schema": "workspace:*",
       },
       "devDependencies": {
         "@ai-sdk/provider": "3.0.8",
         "@opencode/plugin": "catalog:",
+        "@ren/cell": "workspace:*",
         "@types/bun": "catalog:",
         "effect": "catalog:",
         "tsrs": "catalog:",

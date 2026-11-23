@@ -694,7 +694,7 @@ test("a prompt that Ren cannot give access for stays in the chat as unsent, and 
         connection: { reconnectDelay: 60_000 },
       }).pipe(Effect.provide(http(brain)))
       const failed = yield* chat.prompt({ text: script.marker }).pipe(Effect.flip)
-      expect(failed._tag).toBe("ChatSession.AccessFailed")
+      expect(failed._tag).toBe("ChatAccess.AccessFailed")
       const unsent = yield* SubscriptionRef.get(chat.state)
       const id = ChatState.messages(unsent, brain.id).at(0)?.id ?? ""
       expect(ChatState.messages(unsent, brain.id)).toMatchObject([{ text: script.marker }])

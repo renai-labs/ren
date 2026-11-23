@@ -125,9 +125,18 @@ const packageBoundaries: ReadonlyArray<{
   {
     files: ["packages/opencode/**"],
     regex: "^@ren/chat/react$",
+    message: "The OpenCode plugin renders OpenCode's own session. It never uses chat's React modules.",
+  },
+  {
+    files: ["packages/opencode/{src,script}/**"],
     group: only(["schema", "protocol", "client", "chat"]),
+    message: "The OpenCode plugin is a Ren client. It depends on schema, protocol, client and chat's Effect modules.",
+  },
+  {
+    files: ["packages/opencode/test/**"],
+    group: only(["schema", "protocol", "client", "chat", "cell/testing"]),
     message:
-      "The OpenCode plugin is a Ren client. It depends on schema, protocol, client and chat's Effect modules, never on React.",
+      "The OpenCode plugin's tests use what the plugin uses, and a real brain from @ren/cell/testing for end-to-end tests.",
   },
   {
     files: ["packages/telemetry/**"],

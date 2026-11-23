@@ -2,7 +2,7 @@
 
 An OpenCode plugin that makes the OpenCode TUI a Ren client. A user's local OpenCode sessions keep working beside their Ren sessions.
 
-The three parts load. The server part registers nothing yet. Built: `turn`, `auth` and `ren` (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
+The three parts load. The server part registers nothing yet. Built: `turn`, `auth`, `ren` and `link` (see Modules). Everything marked _not built_ is the plan in [`specs/opencode-plugin.md`](../../specs/opencode-plugin.md).
 
 ## What belongs here
 
@@ -14,7 +14,7 @@ The three parts load. The server part registers nothing yet. Built: `turn`, `aut
 
 - Ren's API and Chat API clients (`@ren/client`) or the chat connection (`@ren/chat`): use them.
 - OpenCode internals: everything goes through `@opencode/plugin`.
-- Imports from `core`, `db`, `server`, `host-api`, `hand-api` or `cell`.
+- Imports from `core`, `db`, `server`, `host-api`, `hand-api` or `cell`. Only tests import `@ren/cell/testing`, to run a real brain.
 
 ## How it works (not built)
 
@@ -36,17 +36,17 @@ OpenCode loads each part's default export; the RPC part exports its contract by 
 
 ## Modules
 
-| Module     | Holds                                                                                               |
-| ---------- | --------------------------------------------------------------------------------------------------- |
-| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                          |
-| `auth`     | `RenAuth`: the server URL and a currently valid token.                                              |
-| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.                   |
-| `link`     | _Not built._ One Chat API client and event stream per Ren root session, with `chat.access` refresh. |
-| `model`    | _Not built._ The `LanguageModelV3`.                                                                 |
-| `provider` | _Not built._ Provider and model registration.                                                       |
-| `binding`  | _Not built._ The `ren` session metadata.                                                            |
-| `mirror`   | _Not built._ Remote activity into the local session.                                                |
-| TUI        | _Not built._ The `/ren:*` commands.                                                                 |
+| Module     | Holds                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| `turn`     | Pure conversion of Ren session events into `LanguageModelV3` stream parts.                     |
+| `auth`     | `RenAuth`: the server URL and a currently valid token.                                         |
+| `ren`      | `RenApi`: the Ren API client (`@ren/client/effect`) with the token of the moment.              |
+| `link`     | `Link`: one Chat API client and event stream per Ren root session, with `chat.access` refresh. |
+| `model`    | _Not built._ The `LanguageModelV3`.                                                            |
+| `provider` | _Not built._ Provider and model registration.                                                  |
+| `binding`  | _Not built._ The `ren` session metadata.                                                       |
+| `mirror`   | _Not built._ Remote activity into the local session.                                           |
+| TUI        | _Not built._ The `/ren:*` commands.                                                            |
 
 ## Connection
 
@@ -59,6 +59,17 @@ Without a token, or when the server refuses the renewal, `RenAuth.token` and `Re
 The file format, the discovery and the renewal are a port of `packages/cli/src/services/{credentials,oauth,connection}.ts`: the plugin cannot depend on the private CLI package. Change both together.
 
 The plugin runs in OpenCode's process with only `Scope` in its context, so it provides its own platform services: `FetchHttpClient` from `effect/http` for HTTP, and Bun and `node:fs` for the credentials file, because `effect`'s `FileSystem` needs a platform package that OpenCode does not provide to plugins.
+
+## Link
+
+`Link.Service.open(sessionId)` gives the link of a Ren root session, in a `Scope`. While any scope holds it, every caller gets the same link; when the last one closes, its event stream stops.
+
+A link is `ChatAccess` and `Connection` from `@ren/chat`, wired as `ChatSession` wires them for the web and mobile apps, so the rules are one copy:
+
+- `client` is a Chat API client with a valid token. It calls `chat.access` through `RenApi`, polls every 2 seconds while the brain starts, and fails with `ChatAccess.AccessFailed` when the brain failed or its space stopped. It authenticates to the brain's URL with Basic `ren:<token>` and asks again within a minute of `expiresAt`. After a gateway 502 or 504, a transport error or two connect timeouts, the next `chat.access` says `unreachable`. The URL can change at each access.
+- `frames` subscribes to the session's events from that moment. The stream reconnects with backoff and asks for access again after it drops or ends with `stream.ended`. Events are not replayed: each connect starts with `server.connected`, after which a consumer reads what it needs again.
+- `boot` (checking, starting with its phase, ready, failed with its reason, stopped), `status` and `retryAt` are `SubscriptionRef`s.
+- `wake` reconnects a parked stream. `lost` marks the brain unreachable after a request that it refused with 401.
 
 ## Commands the plugin adds (not built)
 
@@ -110,6 +121,7 @@ A build script will bundle the Ren packages into `dist` and keep `effect` and `@
 bun typecheck
 bun run lint
 bun run test
+REN_SLOW=1 bun run test   # also the slow tests, such as a link to a real brain
 bun script/whoami.ts   # the signed-in user, through the plugin's connection
 ```
 

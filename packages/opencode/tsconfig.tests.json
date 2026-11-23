@@ -11,6 +11,12 @@
       "path": "./tsconfig.src.json"
     },
     {
+      "path": "../cell/tsconfig.worker.json"
+    },
+    {
+      "path": "../chat/tsconfig.src.json"
+    },
+    {
       "path": "../client/tsconfig.src.json"
     },
     {

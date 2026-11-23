@@ -1,3 +1,4 @@
+export { ChatAccess } from "./chat-access.js"
 export { ChatAtoms } from "./atoms.js"
 export { ChatCache } from "./chat-cache.js"
 export { ChatHost } from "./host.js"
