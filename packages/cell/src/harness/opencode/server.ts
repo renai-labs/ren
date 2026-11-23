@@ -49,6 +49,7 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
+import { ClaudeAgent } from "./claude-agent.js"
 import { OpenCodeArtifacts } from "./artifacts.js"
 import { GitSources } from "../../git-sources.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
@@ -245,6 +246,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       ),
       Effect.orElseSucceed(() => undefined),
     )
+  yield* plugins.register(ClaudeAgent.make())
   yield* plugins.register(
     RenPlugin.make(
       desired,
