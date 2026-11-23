@@ -19,6 +19,8 @@ import { Envelope } from "@ren/core/envelope"
 import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
+import { ModelCatalog } from "@ren/core/model-catalog"
+import { ModelLists } from "@ren/core/model-lists"
 import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
@@ -49,6 +51,27 @@ const template = process.env.CHAOS_E2B_TEMPLATE ?? ""
 const root = path.resolve(import.meta.dir, "../../..")
 const adminUrl = process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:54320/ren"
 const small = "anthropic/claude-haiku-5-5"
+
+// oxlint-disable-next-line ren/no-comments -- Ren's upstream in this test lists the one small model the LiteLLM key may call.
+const upstreamCatalog: ModelCatalog.Data = {
+  providers: [
+    {
+      id: "e2e-upstream",
+      name: "Upstream",
+      models: [
+        {
+          id: small,
+          name: "Small",
+          type: "chat",
+          tools: true,
+          deprecated: false,
+          input: ["text"],
+          price: { input: 1, output: 5 },
+        },
+      ],
+    },
+  ],
+}
 // oxlint-disable-next-line ren/no-comments -- The egress's tunnel port and its public TCP address (for example an ngrok TCP tunnel to that port); E2B sends all sandbox traffic there.
 const egressPort = Number(process.env.CHAOS_EGRESS_PORT ?? 4222)
 const egressPublic = process.env.CHAOS_EGRESS_PUBLIC ?? ""
@@ -136,6 +159,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
       REN_INFERENCE_GATEWAY_URL: process.env.CHAOS_INFERENCE_URL ?? "",
       REN_INFERENCE_BRAIN_URL: litellmTunnel,
       REN_INFERENCE_GATEWAY_KEY: key,
+      REN_MODELS_UPSTREAM: "e2e-upstream",
       ENVELOPE_KEYS: JSON.stringify([
         { id: "local:e2b", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
       ]),
@@ -221,7 +245,12 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
             Layer.provide(Settings.layer),
-            Layer.provide(Models.layer([RenInferenceProvider.make]).pipe(Layer.provide(RenInference.layerNone))),
+            Layer.provide(
+              Models.layer(RenInferenceProvider.make).pipe(
+                Layer.provide(RenInference.layerNone),
+                Layer.provide(ModelLists.layer.pipe(Layer.provide(ModelCatalog.layerFixture(upstreamCatalog)))),
+              ),
+            ),
             Layer.provide(
               Hands.layer
                 .pipe(

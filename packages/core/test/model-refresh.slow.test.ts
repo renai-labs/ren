@@ -22,8 +22,14 @@ const models = Layer.succeed(
   Models.Service.of({
     revision: Effect.succeed("test"),
     catalog: () => Effect.sync(() => Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url))),
-    providers: Effect.sync(() =>
-      Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url))),
+    providers: () =>
+      Effect.sync(() =>
+        Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url))),
+      ),
+    baseUrls: Effect.sync(() =>
+      Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url)).endpoints.map(
+        (endpoint) => endpoint.baseUrl,
+      ),
     ),
     grant: () =>
       Effect.gen(function* () {

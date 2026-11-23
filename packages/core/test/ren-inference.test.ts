@@ -4,9 +4,11 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { ModelCatalog } from "../src/model-catalog.js"
+import { ModelLists } from "../src/model-lists.js"
 import { Models } from "../src/models.js"
 import { RenInference } from "../src/ren-inference.js"
 import { RenInferenceProvider } from "../src/ren-inference/provider.js"
@@ -30,23 +32,9 @@ type Seen = { claims: typeof Claims.Type; body: unknown; path: string; method: s
 const seen: Seen[] = []
 const replies = new Map<string, () => Response>()
 
-const discovery: Readonly<Record<string, unknown>> = {
-  "/v1/catalog": {
-    baseUrl: "https://llm.ren.test/v1",
-    models: [{ id: "opaque-chat", type: "chat", protocol: "openai-chat" }],
-  },
-}
-const catalogReads: Array<string | null> = []
-
 const service = Bun.serve({
   port: 0,
   fetch: async (request) => {
-    const found = discovery[new URL(request.url).pathname]
-    if (found) {
-      catalogReads.push(request.headers.get("authorization"))
-      if (request.headers.get("authorization") !== "Bearer catalog-key") return new Response(null, { status: 401 })
-      return Response.json(found)
-    }
     const token = request.headers.get("authorization")?.replace(/^Bearer /u, "") ?? ""
     const claims = await Effect.runPromise(Signature.verify(publicKeys, Claims, token))
     if (Option.isNone(claims)) return new Response(null, { status: 401 })
@@ -62,7 +50,8 @@ const service = Bun.serve({
 })
 
 const it = testEffect(
-  Models.layer([RenInferenceProvider.make]).pipe(
+  Models.layer(RenInferenceProvider.make).pipe(
+    Layer.provide(ModelLists.layer.pipe(Layer.provide(ModelCatalog.layerFixture({ providers: [] })))),
     Layer.provideMerge(RenInference.layer),
     Layer.provide([Signer.layerLocal, FetchHttpClient.layer, Access.layer]),
     Layer.provideMerge(Testing.layer),
@@ -82,32 +71,23 @@ const it = testEffect(
 )
 
 describe("RenInferenceProvider with the Ren Inference Service", () => {
-  it.live(
-    "reads the shared catalog with the deployment key and grants the catalog's one base URL with a brain key",
-    () =>
-      Effect.gen(function* () {
-        const models = yield* Models.Service
-        const owner = yield* Seed.owner()
-        const brainId = Brain.ofSession(yield* Seed.session(owner))
-        const expiresAt = new Date(Date.now() + 6 * 3600_000).toISOString()
-        replies.set("/v1/keys", () => Response.json({ key: "key-brain", expiresAt }))
-        seen.length = 0
+  it.live("grants each card the brains' gateway URL with a brain key", () =>
+    Effect.gen(function* () {
+      const models = yield* Models.Service
+      const owner = yield* Seed.owner()
+      const brainId = Brain.ofSession(yield* Seed.session(owner))
+      const expiresAt = new Date(Date.now() + 6 * 3600_000).toISOString()
+      replies.set("/v1/keys", () => Response.json({ key: "key-brain", expiresAt }))
+      seen.length = 0
 
-        const granted = yield* models.grant(brainId, owner.organizationId, owner.spaceId)
-        const catalog = yield* models.catalog(owner.organizationId)
+      const granted = yield* models.grant(brainId, owner.organizationId, owner.spaceId)
 
-        expect(granted.endpoints.map((endpoint) => [endpoint.id, endpoint.baseUrl])).toEqual([
-          ["ren", "https://llm.ren.test/v1"],
-        ])
-        expect(granted.endpoints[0]?.models).toEqual([])
-        expect(catalog.endpoints[0]?.models.map((model) => model.id)).toEqual(["opaque-chat"])
-        expect(catalogReads.at(-1)).toBe("Bearer catalog-key")
-        expect(granted.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))).toEqual(["key-brain"])
-        expect(granted.endpoints[0]?.apiKey.expiresAt?.epochMilliseconds).toBe(Date.parse(expiresAt))
-        expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([
-          ["/v1/keys", { brainId, spaceId: owner.spaceId }, { org: owner.organizationId }],
-        ])
-      }),
+      expect(yield* models.baseUrls).toEqual(["https://llm.ren.test/v1"])
+      expect(granted.endpoints).toEqual([])
+      expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([
+        ["/v1/keys", { brainId, spaceId: owner.spaceId }, { org: owner.organizationId }],
+      ])
+    }),
   )
 
   it.live("fails with Models.Unavailable on a key reply with no key, and on a 503", () =>
@@ -125,6 +105,25 @@ describe("RenInferenceProvider with the Ren Inference Service", () => {
       expect((yield* Effect.flip(models.grant(brainId, owner.organizationId, owner.spaceId)))._tag).toBe(
         "Models.Unavailable",
       )
+    }),
+  )
+
+  it.live("sends Ren's models to the gateway as a Ren-wide call", () =>
+    Effect.gen(function* () {
+      const inference = yield* RenInference.Service
+      replies.set("PUT /v1/ren-models", () => Response.json({ revision: "r1" }))
+      seen.length = 0
+      const input = {
+        revision: "r1",
+        models: [{ id: "ren/vendor/model", upstream: "vendor/model", price: { input: 1, output: 2 }, free: false }],
+        switches: [],
+      }
+      yield* inference.renModels(input)
+      expect(seen.map((each) => [each.method, each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual(
+        [["PUT", "/v1/ren-models", input, { org: "ren" }]],
+      )
+      replies.set("PUT /v1/ren-models", () => new Response("down", { status: 503 }))
+      expect((yield* Effect.flip(inference.renModels(input)))._tag).toBe("RenInference.Unavailable")
     }),
   )
 })

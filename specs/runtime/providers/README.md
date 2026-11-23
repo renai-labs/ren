@@ -1,6 +1,6 @@
 # Providers: models, own keys and subscriptions through one gateway
 
-Status: designed, not built. Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
+Status: in build. Built: the model catalog, Ren's models, each organization's list and its push (§6.1, §6.2, §7.1). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
 
 This file is the core of the spec. The references hold the detail:
 
@@ -184,12 +184,15 @@ A table like the Console's Models page: name, id, price per 1M tokens (input, ou
 
 ### 6.1 Reading models.dev
 
-1. A `ModelCatalog` service in `core` with layers `modelsDev` and `fixture`. It reads `https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video` every 5 min with `If-None-Match`. A 304 does nothing.
-2. It keeps only the providers Ren offers: the 35 Console providers, Ren's upstream, Anthropic and OpenAI. It stores the normalized result and the ETag in table `model_catalog` and keeps the last good copy. At start without a copy it uses a bundled snapshot.
-3. A change starts a job that builds each organization's list (§6.5) and notifies only organizations whose list changed (§8).
-4. The brain no longer reads models.dev (already `models: { fetch: false }`, `cell/src/harness/opencode/server.ts:85,119`) and no longer fetches `/catalog` (`cell/src/model-discovery.ts` goes).
+Built: `core/src/model-catalog.ts` (`ModelCatalog`, layers `layerModelsDev` and `layerFixture`), the list job in `core/src/model-lists.ts`, the bundled copy `core/src/model-catalog/snapshot.json` (`core/script/model-catalog-snapshot.ts` writes it), and tables `model_catalog` and `organization_model_list`. The brain reads no catalog: `cell/src/model-discovery.ts` and core's poll of the gateway's catalog are gone.
 
-Facts on 21 Nov 2026: the v2 catalog had 327 providers and 11.8 MB. `canonical_id` links one model across providers; 9 of 18 Anthropic models had none.
+What the build found:
+
+1. Ren stores only what it uses of each model: id, name, canonical id, type, tool calling, deprecated, input types, limits, efforts and the text price. The kept copy of the 35 providers is 0.6 MB (2,421 models on 22 Nov 2026); the full answer is 11.8 MB.
+2. models.dev gives input types as MIME types (`image/png`, `application/pdf`). Ren maps them to `text`, `image`, `pdf`, `audio`, `video`.
+3. A price has more parts than Ren keeps: a price above a context size (`overrides`) and two cache write prices (5 minutes, 1 hour). Ren keeps the base price and the 5-minute cache write.
+4. Each server instance reads models.dev on its own with the shared ETag; the first that stores a copy notifies, and the others then find no change. A pull on any instance reads the shared copy's revision at most every 5 s.
+5. The job stores a new copy only after the gateway answered `PUT /v1/ren-models`. While the gateway refuses, pickers keep the last list.
 
 ### 6.2 Ren's models
 
@@ -204,6 +207,14 @@ Facts on 21 Nov 2026: the v2 catalog had 327 providers and 11.8 MB. `canonical_i
 | Runtime  | Claude models (`ren/anthropic/…`): `claude`. Others: HTTP                           |
 
 Ren core sends this list to the gateway (§10) before it notifies brains, so the gateway knows a model before a picker shows it.
+
+What the build found (models.dev, 22 Nov 2026):
+
+1. A free model has the same `canonical_id` as the paid model it is a copy of (`google/gemma-4-31b-it:free` and `google/gemma-4-31b-it`). A free model keeps its upstream id, so the two never share an id.
+2. Two paid models can share a `canonical_id` (`openai/gpt-5.6-terra` and `openai/gpt-5.6-terra-pro`). The one whose own id matches it, with `.` read as `-`, takes it; the others keep their upstream id.
+3. A model without a price on models.dev is not kept: Ren could not charge for it.
+4. `REN_MODELS_UPSTREAM` has no default. Without it the Ren card has no models.
+5. Claude models (`ren/anthropic/…`) use the `anthropic-messages` protocol; the others `openai-chat`.
 
 ### 6.3 Own-key models
 
@@ -229,7 +240,7 @@ Gateway names:
 
 ### 7.1 What the pull carries
 
-`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.5): per card the id, name, gateway base URL and headers, and the models with their gateway names, runtime and metadata. The key is always the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
+Built. `RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) is the organization's list (§6.5): per card the id, name, gateway base URL and headers, and the models with their gateway names, runtime and metadata. The key is always the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`). Each model carries `gateway` (the name the brain sends, `ren/<id>`), `runtime`, `price` and `free`; the card carries `method`. OpenCode keeps Ren's id in the picker and sends the gateway name (`modelID`).
 
 ### 7.2 HTTP runtime
 
@@ -416,11 +427,10 @@ Only rules that the code does not show:
 
 ## 14. Removed and superseded
 
-| Item                                                                                           | Fate                     |
-| ---------------------------------------------------------------------------------------------- | ------------------------ |
-| `specs/runtime/media-models.md` §8 items B0–B4 (own key through the egress)                    | replaced by this spec    |
-| `core/src/ren-inference/provider.ts` 30 s poll of `/v1/catalog`; `cell/src/model-discovery.ts` | removed                  |
-| `vendorNames`, `providerLabels`                                                                | removed; names from data |
+| Item                                                                        | Fate                     |
+| --------------------------------------------------------------------------- | ------------------------ |
+| `specs/runtime/media-models.md` §8 items B0–B4 (own key through the egress) | replaced by this spec    |
+| `vendorNames`, `providerLabels`                                             | removed; names from data |
 
 ## 15. Build order (Ren side)
 

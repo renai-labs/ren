@@ -45,6 +45,8 @@ import { HandProvider } from "@ren/core/hand-provider"
 import { Docker } from "@ren/core/machine-provider/docker"
 import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
+import { ModelCatalog } from "@ren/core/model-catalog"
+import { ModelLists } from "@ren/core/model-lists"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
@@ -163,9 +165,16 @@ const artifactProvider = Layer.unwrap(
   ),
 )
 
+// oxlint-disable-next-line ren/no-comments -- Providers §6: with the model gateway, models.dev is read and each organization's list is built; without it there are no models.
 const models = Layer.unwrap(
   Effect.map(RenInferenceProvider.configured, (isConfigured) =>
-    Models.layer(isConfigured ? [RenInferenceProvider.make] : []),
+    isConfigured
+      ? Models.layer(RenInferenceProvider.make).pipe(
+          Layer.provideMerge(ModelLists.layerJob),
+          Layer.provideMerge(ModelLists.layer),
+          Layer.provideMerge(ModelCatalog.layerModelsDev),
+        )
+      : Models.layerNone,
   ),
 ).pipe(Layer.provide(FetchHttpClient.layer), Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 

@@ -21,6 +21,21 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("RenInference
   cause: Schema.optional(Schema.Defect()),
 }) {}
 
+// oxlint-disable-next-line ren/no-comments -- Providers §10: Ren's model list, which the gateway serves under `ren/<id>`, and each organization's switched-off models.
+export interface RenModels {
+  readonly revision: string
+  readonly models: ReadonlyArray<{
+    readonly id: string
+    readonly upstream: string
+    readonly price: Models.Price
+    readonly free: boolean
+  }>
+  readonly switches: ReadonlyArray<{
+    readonly organizationId: Auth.OrganizationID
+    readonly off: ReadonlyArray<string>
+  }>
+}
+
 export type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Primitive.Conflict | Unavailable
 
 export interface Interface {
@@ -59,11 +74,15 @@ export interface Interface {
     actor: Actor.Info,
     input: RenInference.HarnessPlanInput,
   ) => Effect.Effect<RenInference.HarnessPlan, Failure>
+  readonly renModels: (input: RenModels) => Effect.Effect<void, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
 
 const tokenLifetimeSeconds = 5 * 60
+
+// oxlint-disable-next-line ren/no-comments -- A call about all of Ren, not one organization, names this organization.
+const renOrganization = "ren"
 
 const ErrorBody = Schema.Struct({ error: Schema.optional(Schema.String) })
 
@@ -113,7 +132,7 @@ export const layer = Layer.effect(
 
     const send = (
       claims: { readonly org: string; readonly sub?: string; readonly member?: string },
-      method: "GET" | "POST" | "PATCH" | "DELETE",
+      method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
       path: string,
       body?: object,
     ) =>
@@ -408,6 +427,9 @@ export const layer = Layer.effect(
       harnessPlan: Effect.fn("RenInference.harnessPlan")(function* (actor, input) {
         return yield* call(yield* personOf(actor), "POST", "/v1/harness-plans", RenInference.HarnessPlan, input)
       }),
+      renModels: Effect.fn("RenInference.renModels")(function* (input) {
+        yield* send({ org: renOrganization }, "PUT", "/v1/ren-models", input)
+      }),
     })
   }),
 )
@@ -429,6 +451,7 @@ export const layerNone = Layer.succeed(
     keySecret: () => Effect.fail(notConfigured()),
     keyUsage: () => Effect.succeed([]),
     harnessPlan: () => Effect.fail(notConfigured()),
+    renModels: () => Effect.void,
   }),
 )
 

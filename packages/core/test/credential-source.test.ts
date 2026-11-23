@@ -48,7 +48,8 @@ const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
-    providers: Effect.succeed([]),
+    providers: () => Effect.succeed([]),
+    baseUrls: Effect.succeed([]),
     revision: Ref.get(revision),
     grant: () =>
       Effect.gen(function* () {

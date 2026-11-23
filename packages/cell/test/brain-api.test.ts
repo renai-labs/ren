@@ -445,6 +445,37 @@ it.live("an expired key refuses start and send without a model call until a fres
 )
 
 it.live(
+  "a model with a gateway name keeps Ren's id in the list and is called by its gateway name (Providers §6.5)",
+  () =>
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      yield* brain.start()
+      yield* brain.install({
+        endpoints: catalog([
+          {
+            id: "vendor/model",
+            type: "chat",
+            protocol: "openai-chat",
+            name: "Vendor Model",
+            limit,
+            gateway: "ren/vendor/model",
+          },
+        ]).endpoints,
+      })
+      expect(
+        (yield* brain.opencode.model.list()).data.some(
+          (model) => model.providerID === "stub" && model.id === "vendor/model",
+        ),
+      ).toBe(true)
+      yield* brain.start({ model: { endpointId: "stub", modelId: "vendor/model" } })
+      const script = Shared.stub().script()
+      yield* brain.send(`gateway ${script.marker}`)
+      yield* brain.opencode.experimental.session.wait({ sessionID: SessionID.make(brain.id) })
+      expect(script.calls.map((call) => call.body.model)).toEqual(["ren/vendor/model"])
+    }),
+)
+
+it.live(
   "a model and an endpoint added while the harness is open are listed with their metadata and serve the next turns; a model without efforts has no variants, as in Ren's list",
   () =>
     Effect.gen(function* () {

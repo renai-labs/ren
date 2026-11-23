@@ -46,8 +46,14 @@ const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     revision: Effect.succeed("test"),
-    providers: Effect.sync(() =>
-      Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url))),
+    providers: () =>
+      Effect.sync(() =>
+        Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url))),
+      ),
+    baseUrls: Effect.sync(() =>
+      Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url)).endpoints.map(
+        (endpoint) => endpoint.baseUrl,
+      ),
     ),
     catalog: () =>
       Effect.sync(() => Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url))),

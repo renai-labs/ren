@@ -11,6 +11,8 @@ import { Billing } from "../src/billing.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { EgressControl } from "../src/egress-control.js"
 import { GitHubApp } from "../src/github-app.js"
+import { ModelCatalog } from "../src/model-catalog.js"
+import { ModelLists } from "../src/model-lists.js"
 import { Models } from "../src/models.js"
 import { PullRequest } from "../src/pull-request.js"
 import { RenInference } from "../src/ren-inference.js"
@@ -37,7 +39,8 @@ const live = {
   organization: process.env.REN_INFERENCE_LIVE_ORG ?? "",
 }
 
-const models = Models.layer([RenInferenceProvider.make]).pipe(
+const models = Models.layer(RenInferenceProvider.make).pipe(
+  Layer.provide(ModelLists.layer.pipe(Layer.provide(ModelCatalog.layerModelsDev))),
   Layer.provideMerge(RenInference.layer),
   Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer, Access.layer]),
   Layer.provide(Testing.layer),

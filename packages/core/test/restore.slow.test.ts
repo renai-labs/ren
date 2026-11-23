@@ -38,7 +38,8 @@ const fixed = Layer.succeed(
   Models.Service.of({
     revision: Effect.succeed("test"),
     catalog: () => Effect.succeed(Models.catalog(configured)),
-    providers: Effect.succeed(Models.registrations(Models.catalog(configured))),
+    providers: () => Effect.succeed(Models.registrations(Models.catalog(configured))),
+    baseUrls: Effect.sync(() => Models.catalog(configured).endpoints.map((endpoint) => endpoint.baseUrl)),
     grant: () => Effect.succeed(configured),
   }),
 )

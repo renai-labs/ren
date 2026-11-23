@@ -26,7 +26,8 @@ const models = Layer.succeed(
   Models.Service.of({
     revision: Effect.succeed("test"),
     catalog: () => Effect.sync(() => Models.catalog(source.access)),
-    providers: Effect.sync(() => Models.registrations(Models.catalog(source.access))),
+    providers: () => Effect.sync(() => Models.registrations(Models.catalog(source.access))),
+    baseUrls: Effect.sync(() => Models.catalog(source.access).endpoints.map((endpoint) => endpoint.baseUrl)),
     grant: () => Effect.sync(() => source.access),
   }),
 )

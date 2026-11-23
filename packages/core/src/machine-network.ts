@@ -76,9 +76,7 @@ export const layer = Layer.effect(
     // oxlint-disable-next-line ren/no-comments -- A brain also reaches the addresses of its model providers, which can differ from Ren's own.
     const models = yield* Models.Service
     const withPreviousHosts = yield* Deployment.withPreviousHosts.pipe(Effect.orDie)
-    const inference = (yield* models.providers.pipe(Effect.orElseSucceed(() => []))).flatMap((provider) =>
-      Option.toArray(hostOf(provider.baseUrl)),
-    )
+    const inference = (yield* models.baseUrls).flatMap((url) => Option.toArray(hostOf(url)))
     const ofSpace = Effect.fnUntraced(function* (
       scope: Credentials.Scope,
       networking: Extract<MachineTemplate.Networking, { readonly type: "limited" }>,
