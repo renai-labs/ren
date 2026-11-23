@@ -497,10 +497,10 @@ const groupFiles = (blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot>) =>
 
 const shownBlocks = (
   blocks: ReadonlyArray<TranscriptBlocks.Block>,
-  live: { readonly simple: boolean; readonly turn: string | undefined; readonly line: boolean },
+  live: { readonly simple: boolean; readonly turn: string | undefined },
 ): ReadonlyArray<TranscriptBlocks.Block | LiveSlot> => {
   const turn = live.turn
-  if (!live.simple || !turn || !live.line) return blocks
+  if (!live.simple || !turn) return blocks
   const step = blocks.findIndex((block) => block.kind === "steps" && block.turn === turn)
   const at = step === -1 ? blocks.findIndex((block) => block.kind === "user" && block.message.id === turn) + 1 : step
   if (at === 0) return blocks
@@ -512,17 +512,14 @@ const shownBlocks = (
   )
 }
 
-const liveOf = (
-  props: TranscriptProps,
-  blocks: ReadonlyArray<TranscriptBlocks.Block>,
-  turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>,
-) => {
+const liveOf = (props: TranscriptProps, blocks: ReadonlyArray<TranscriptBlocks.Block>) => {
   const waiting = props.starting === true || props.waiting === true
   const newest = blocks.findLast((block) => block.kind === "user")
   const pending = waiting && newest?.kind === "user" ? newest.message.id : undefined
-  const turn = props.busy ? props.activeMessageID : pending
-  return { turn, line: liveLine(props, turns, turn) !== undefined }
+  return { turn: props.busy ? props.activeMessageID : pending }
 }
+
+const thinkingLine: LiveLine = { text: "Thinking", kind: "thinking" }
 
 // oxlint-disable-next-line ren/no-comments -- The line reads the turn it stands in, so a message just sent shows Thinking rather than the last step of the turn before it.
 const liveLine = (
@@ -543,10 +540,26 @@ function TurnLine(props: {
   const openPanel = useOpenActivity()
   const transcript = props.transcript
   const turn = props.turn
-  const line = liveLine(transcript, props.turns, turn)
-  if (!line) return null
+  // oxlint-disable-next-line ren/no-comments -- While Ren writes text the turn has no step to name, but the line stays, so the live row keeps its height until the turn ends.
+  const line = liveLine(transcript, props.turns, turn) ?? thinkingLine
   return (
     <LiveActivity line={line} onOpen={openPanel && turn ? () => openPanel({ kind: "activity", turn }) : undefined} />
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- The marker sits inside the last row rather than after it, so a message the person sends is the transcript's last row and MessageScroller holds it at the top with room below. With no rows yet, it is a row of its own.
+function MarkerFrame(props: { tail: boolean; hidden?: boolean; children: ReactNode }) {
+  if (props.tail)
+    return (
+      <div aria-hidden={props.hidden} className={cn("mt-6", props.hidden && "invisible")}>
+        {props.children}
+      </div>
+    )
+  return (
+    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
+    <MessageScrollerItem messageId="working" aria-hidden={props.hidden} className={cn(props.hidden && "invisible")}>
+      {props.children}
+    </MessageScrollerItem>
   )
 }
 
@@ -554,18 +567,18 @@ function LiveMarker(props: {
   transcript: TranscriptProps
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   busy: boolean
+  tail: boolean
 }) {
   const transcript = props.transcript
   if (!markerOf(transcript, { busy: props.busy })) return null
   return (
-    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
-    <MessageScrollerItem messageId="working" aria-hidden className="invisible">
+    <MarkerFrame tail={props.tail} hidden>
       <Message>
         <MessageContent>
           <TurnLine transcript={transcript} turns={props.turns} turn={transcript.activeMessageID} />
         </MessageContent>
       </Message>
-    </MessageScrollerItem>
+    </MarkerFrame>
   )
 }
 
@@ -574,20 +587,29 @@ function TurnMarker(props: {
   transcript: TranscriptProps
   turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   busy: boolean
+  tail: boolean
 }) {
-  if (props.simple) return <LiveMarker transcript={props.transcript} turns={props.turns} busy={props.busy} />
+  if (props.simple)
+    return <LiveMarker transcript={props.transcript} turns={props.turns} busy={props.busy} tail={props.tail} />
   return (
-    <WorkingMarker marker={markerOf(props.transcript, { busy: props.busy })} background={props.transcript.background} />
+    <WorkingMarker
+      marker={markerOf(props.transcript, { busy: props.busy })}
+      background={props.transcript.background}
+      tail={props.tail}
+    />
   )
 }
 
-function WorkingMarker(props: { marker: ReturnType<typeof markerOf>; background: TranscriptProps["background"] }) {
+function WorkingMarker(props: {
+  marker: ReturnType<typeof markerOf>
+  background: TranscriptProps["background"]
+  tail: boolean
+}) {
   if (!props.marker) return null
   const labelled = props.marker.labelled
   const label = props.marker.label
   return (
-    // ast-grep-ignore: require-message-scroller-parts -- rendered only inside the transcript's MessageScrollerContent
-    <MessageScrollerItem messageId="working">
+    <MarkerFrame tail={props.tail}>
       <Marker
         key={label}
         className={cn(
@@ -624,7 +646,7 @@ function WorkingMarker(props: { marker: ReturnType<typeof markerOf>; background:
           </Button>
         ) : null}
       </Marker>
-    </MessageScrollerItem>
+    </MarkerFrame>
   )
 }
 
@@ -635,6 +657,7 @@ const freshMs = 2000
 function useSentAnchor(
   blocks: ReadonlyArray<TranscriptBlocks.Block | LiveSlot | FilesGroup>,
   statuses: ReadonlyMap<string, ChatState.PendingStatus>,
+  where: { readonly atEnd: boolean },
 ) {
   const users = blocks.filter((block) => block.kind === "user")
   const now = useNow()
@@ -649,7 +672,12 @@ function useSentAnchor(
     setFresh(
       new Map([
         ...fresh,
-        [last.key, !queued.has(last.message.id) && DateTime.toEpochMillis(last.message.time.created) > now - freshMs],
+        [
+          last.key,
+          where.atEnd &&
+            !queued.has(last.message.id) &&
+            DateTime.toEpochMillis(last.message.time.created) > now - freshMs,
+        ],
       ]),
     )
   return last && fresh.get(last.key) === true ? last.key : undefined
@@ -725,9 +753,6 @@ function FindOverlay(props: { find: FindBarProps; blocks: ReadonlyArray<Transcri
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- MessageScroller's default peek of the row above an anchored message, so a sent message lands where MessageScroller itself would put it.
-const previousPeek = 64
-
 // oxlint-disable-next-line ren/no-comments -- Scrolled up during a run, the jump button says Ren is still working.
 function JumpToLatest(props: { working: boolean }) {
   const behavior = ReducedMotion.useReduced() ? "auto" : "smooth"
@@ -783,14 +808,11 @@ function TranscriptScroller(input: {
     activeTurn,
   )
   const simple = props.simple === true
-  const shown = groupFiles(shownBlocks(blocks, { simple, ...liveOf(props, blocks, turns) }))
+  const shown = groupFiles(shownBlocks(blocks, { simple, ...liveOf(props, blocks) }))
   const live = props.busy || watched.live(props.activeMessageID)
-  const sent = useSentAnchor(shown, props.statuses)
-  const easing = TranscriptScroll.useSendGlide(sent)
-  TranscriptScroll.useAnchorSent(sent, (messageId) =>
-    scroller.scrollToMessage(messageId, { align: "start", scrollMargin: previousPeek }),
-  )
+  const sent = useSentAnchor(shown, props.statuses, { atEnd: TranscriptScroll.useAtEnd(viewport) })
   const from = TranscriptScroll.useOpening(shown, { all: props.find !== undefined, place })
+  TranscriptScroll.useKeptRoom(viewport, props.view.sessionID)
   TranscriptScroll.useKeptPlace(viewport, place, {
     session: props.view.sessionID,
     more: props.more,
@@ -821,8 +843,7 @@ function TranscriptScroller(input: {
           data-scroll-restoration-id="transcript"
           preserveScrollOnPrepend
           pinEnd={false}
-          data-easing={easing}
-          className="relative scrollbar-gutter-both outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-easing:scroll-smooth data-placing:invisible motion-reduce:scroll-auto"
+          className="relative scrollbar-gutter-both outline-none not-data-pointer:focus-visible:shadow-[inset_0_0_0_1px_var(--color-border)] data-placing:invisible"
           onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
             const viewport = event.currentTarget
             viewport.dataset.pointer = ""
@@ -859,6 +880,9 @@ function TranscriptScroller(input: {
                   copyOf={copyOf}
                   workedFor={workedFor}
                 />
+                {from + index === shown.length - 1 ? (
+                  <TurnMarker simple={simple} transcript={props} turns={turns} busy={live} tail />
+                ) : null}
               </MessageScrollerItem>
             ))}
             {empty ? (
@@ -866,7 +890,9 @@ function TranscriptScroller(input: {
                 <EmptyState>{props.empty}</EmptyState>
               </MessageScrollerItem>
             ) : null}
-            <TurnMarker simple={simple} transcript={props} turns={turns} busy={live} />
+            {shown.length === 0 ? (
+              <TurnMarker simple={simple} transcript={props} turns={turns} busy={live} tail={false} />
+            ) : null}
           </MessageScrollerContent>
         </MessageScrollerViewport>
         {props.find ? <FindOverlay find={props.find} blocks={blocks} /> : null}
