@@ -136,7 +136,9 @@ function UsageList(props: { scope: Insights.Scope; search: UsageSearch.Search; b
       ? Array.from({ length: shown }, (_, index) => sample(index))
       : props.by === "agent"
         ? query.data.rows.filter((row) => row.key !== null && names.has(row.key))
-        : query.data.rows
+        : props.by === "member"
+          ? query.data.rows.filter((row) => row.key !== null)
+          : query.data.rows
   const largest = Math.max(0, ...rows.map(Insights.cost))
   const hidden = rows.length - shown
   return (
