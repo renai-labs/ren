@@ -16,7 +16,7 @@ const addTrigger = async (page: Browser, choice: { readonly schedule: string } |
   return page.getByRole("menuitem", { name: choice.schedule, exact: true }).click()
 }
 
-test("a member creates a daily automation, tests it, opens the run beside its history, and finds it under Runs but not in the chat list", async ({
+test("a member creates a daily automation, tests it, opens the run beside its history, and does not find it in the chat list", async ({
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
@@ -43,11 +43,8 @@ test("a member creates a daily automation, tests it, opens the run beside its hi
   await page.keyboard.press("Escape")
   await expect(run).toHaveCount(0)
 
-  await page.goto("/automations?tab=runs")
-  await expect(page.getByRole("cell", { name: "Schedule" })).toBeVisible()
-  await expect(page.getByRole("navigation").getByText("Summarize the day")).toHaveCount(0)
-
   await page.goto("/automations")
+  await expect(page.getByRole("navigation").getByText("Summarize the day")).toHaveCount(0)
   await expect(page.getByRole("cell", { name: /every day/u })).toBeVisible()
   await expect(page.getByRole("cell", { name: /Active/u })).toBeVisible()
   await page.getByRole("tab", { name: /^Webhooks/u }).click()

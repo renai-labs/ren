@@ -9,10 +9,8 @@ import { cadenceOf, dateKey, describe, whenOf, type Cadence, type Frequency } fr
 import { Webhooks } from "./webhooks.js"
 
 const SearchSchema = Schema.Struct({
-  tab: Schema.optional(Schema.Literals(["automations", "runs"])),
   kind: Schema.optional(Schema.Literals(["schedules", "webhooks"])),
   schedule: Schema.optional(Schema.String),
-  session: Schema.optional(Schema.String),
 })
 
 export type Search = typeof SearchSchema.Type
@@ -42,7 +40,7 @@ export type ListKind = (typeof kinds)[number]["value"]
 
 export const runOrigins: ReadonlyArray<Session.Origin> = ["schedule", "webhook"]
 
-// oxlint-disable-next-line ren/no-comments -- The chats that people start. Runs of schedules and webhooks show under Automations; search leaves them out, and the chat list shows them only when its filter asks for them.
+// oxlint-disable-next-line ren/no-comments -- The chats that people start. Runs of schedules and webhooks show in each automation's run history; search leaves them out, and the chat list shows them only when its filter asks for them.
 export const chatOrigins: ReadonlyArray<Session.Origin> = Session.Origin.literals.filter(
   (origin) => !runOrigins.includes(origin),
 )

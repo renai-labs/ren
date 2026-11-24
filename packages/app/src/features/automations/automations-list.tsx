@@ -1,11 +1,10 @@
-import type { ScheduleInfo, SessionInfo, WebhookInfo } from "@ren/client"
+import type { ScheduleInfo, WebhookInfo } from "@ren/client"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import {
   IconClock,
   IconWebhook,
   IconCode,
-  IconHistory,
   IconCopy,
   IconPlayerPause,
   IconPlayerPlay,
@@ -35,12 +34,9 @@ import { RowMenu } from "../../components/row-menu.js"
 import { SpaceLabel } from "../../components/space-label.js"
 import { Automations, type Automation } from "../../lib/automations.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { useAutomationActions, useRuns, useScheduleList, useWebhookList } from "../../lib/use-automations.js"
+import { useAutomationActions, useScheduleList, useWebhookList } from "../../lib/use-automations.js"
 import { useNow } from "../../lib/use-now.js"
 import { Webhooks } from "../../lib/webhooks.js"
-import { RunStatus } from "./run-status.js"
-
-export type Tab = "automations" | "runs"
 
 export function NewAutomationButton(props: { spaceId: string | undefined }) {
   const content = (
@@ -264,7 +260,9 @@ function KindTable<A>(props: {
             Try again
           </Button>
         }
-      />
+      >
+        Check your connection and try again.
+      </EmptyState>
     )
   return (
     <div className="flex min-h-0 flex-col gap-4">
@@ -323,91 +321,21 @@ function AutomationTables(props: {
   )
 }
 
-function RunRow(props: { run: SessionInfo; scoped: boolean; now: number; onOpen: (sessionId: string) => void }) {
-  const run = props.run
-  const busy = run.status === "busy"
-  return (
-    <TableRow className="relative cursor-pointer">
-      <TableCell className="max-w-96 truncate">
-        <button
-          type="button"
-          onClick={() => props.onOpen(run.id)}
-          className="max-w-full truncate text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-        >
-          {run.title || "Untitled run"}
-        </button>
-      </TableCell>
-      <TableCell className="text-muted-foreground max-md:hidden">
-        {run.origin === "webhook" ? "Webhook" : "Schedule"}
-      </TableCell>
-      {props.scoped ? null : <SpaceCell spaceId={run.spaceId} />}
-      <TableCell className="text-muted-foreground">{RelativeTime.format(run.createdAt, props.now)}</TableCell>
-      <TableCell>
-        <RunStatus tone={busy ? "working" : "quiet"}>{busy ? "Working" : "Idle"}</RunStatus>
-      </TableCell>
-    </TableRow>
-  )
-}
-
-const runColumns = (scoped: boolean) => ["Run", "Trigger", ...(scoped ? [] : ["Space"]), "Started", "Status"]
-
-function RunsTable(props: { spaceId: string | undefined; onOpen: (sessionId: string) => void }) {
-  const runs = useRuns({ spaceId: props.spaceId })
-  const now = useNow()
-  const shapeId = useShapeId("automation-runs")
-  const items = runs.data?.pages.flatMap((page) => page.items)
-  const scoped = props.spaceId !== undefined
-  return (
-    <div className="flex min-h-0 flex-col gap-4">
-      <Loading id={shapeId} loading={!items} label="Loading runs" className="flex min-h-0 flex-col">
-        {items ? null : <TableSample columns={runColumns(scoped)} />}
-        {items?.length === 0 ? (
-          <EmptyState title="No runs yet">Runs show here when a schedule fires or a webhook gets a request.</EmptyState>
-        ) : null}
-        {items && items.length > 0 ? (
-          <TableCard scroll>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  {runColumns(scoped).map((column) => (
-                    <TableHead key={column} className={cn(phoneHidden.has(column) && "max-md:hidden")}>
-                      {column}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((run) => (
-                  <RunRow key={run.id} run={run} scoped={scoped} now={now} onOpen={props.onOpen} />
-                ))}
-              </TableBody>
-            </Table>
-          </TableCard>
-        ) : null}
-      </Loading>
-      <LoadMore more={runs.hasNextPage} loading={runs.isFetchingNextPage} onMore={() => void runs.fetchNextPage()} />
-    </div>
-  )
-}
-
-// oxlint-disable-next-line ren/no-comments -- The one Automations view, in the sidebar's Automations page and in a space: a tab for schedules, a tab for webhooks, and Runs, the chats they all started.
+// oxlint-disable-next-line ren/no-comments -- The one Automations view, in the sidebar's Automations page and in a space: a tab for schedules and a tab for webhooks.
 export function AutomationsList(props: {
   spaceId: string | undefined
-  tab: Tab
-  onTab: (tab: Tab) => void
   kind: Automations.ListKind
   onKind: (kind: Automations.ListKind) => void
-  onOpenRun: (sessionId: string) => void
   actions?: React.ReactNode
 }) {
   const schedules = useScheduleList(props.spaceId)
   const webhooks = useWebhookList(props.spaceId)
-  const runs = props.tab === "runs"
   return (
     <Tabs
-      value={runs ? "runs" : props.kind}
-      onValueChange={(value) => {
-        if (value === "schedules" || value === "webhooks") props.onKind(value)
+      value={props.kind}
+      onValueChange={(value: unknown) => {
+        const kind = Automations.kinds.find((choice) => choice.value === value)
+        if (kind) props.onKind(kind.value)
       }}
       className="min-h-0"
     >
@@ -421,24 +349,10 @@ export function AutomationsList(props: {
           </PageTabsTrigger>
         </PageTabsList>
       </PageTabs>
-      <PageActions>
-        <Button
-          variant={runs ? "secondary" : "outline"}
-          aria-pressed={runs}
-          onClick={() => props.onTab(runs ? "automations" : "runs")}
-        >
-          <IconHistory data-icon="inline-start" />
-          Runs
-        </Button>
-        {props.actions}
-      </PageActions>
-      {runs ? (
-        <RunsTable spaceId={props.spaceId} onOpen={props.onOpenRun} />
-      ) : (
-        <TabsContent value={props.kind} className="flex min-h-0 flex-col">
-          <AutomationTables spaceId={props.spaceId} kind={props.kind} schedules={schedules} webhooks={webhooks} />
-        </TabsContent>
-      )}
+      <PageActions>{props.actions}</PageActions>
+      <TabsContent value={props.kind} className="flex min-h-0 flex-col">
+        <AutomationTables spaceId={props.spaceId} kind={props.kind} schedules={schedules} webhooks={webhooks} />
+      </TabsContent>
     </Tabs>
   )
 }
