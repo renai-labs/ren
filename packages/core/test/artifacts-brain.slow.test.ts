@@ -110,7 +110,7 @@ describe("artifacts from a chat", () => {
       const sessionId = Session.ID.create()
       const published = stub.script(
         create(
-          'return await tools.opencode.artifact_create({ title: "Report", files: { "index.html": "<h1>from a chat</h1>" } })',
+          'return await tools.ren.artifact_create({ title: "Report", files: { "index.html": "<h1>from a chat</h1>" } })',
         ),
       )
       yield* sessions.create(owner, {
@@ -156,7 +156,7 @@ describe("artifacts from a chat", () => {
 
       const updated = stub.script(
         create(
-          `return await tools.opencode.artifact_update({ id: "${row.id}", baseDeploymentId: "${deployed?.published_deployment_id}", files: { "index.html": "<h1>updated</h1>" } })`,
+          `return await tools.ren.artifact_update({ id: "${row.id}", baseDeploymentId: "${deployed?.published_deployment_id}", files: { "index.html": "<h1>updated</h1>" } })`,
         ),
       )
       const brains = yield* Brains.Service
@@ -205,7 +205,7 @@ describe("artifacts from a chat", () => {
           await writeFile(join(folder, "site/logo.png"), logo)
         })
         const published = stub.script(
-          create('return await tools.opencode.artifact_create({ title: "Site", directory: "site" })'),
+          create('return await tools.ren.artifact_create({ title: "Site", directory: "site" })'),
         )
         yield* sessions.create(owner, {
           sessionId,
@@ -245,9 +245,7 @@ describe("artifacts from a chat", () => {
           ),
         ).toEqual(logo)
 
-        const read = stub.script(
-          create(`return await tools.opencode.artifact_read({ id: "${row.id}", directory: "copy" })`),
-        )
+        const read = stub.script(create(`return await tools.ren.artifact_read({ id: "${row.id}", directory: "copy" })`))
         yield* brains.send({
           sessionId,
           messageId: Session.MessageID.create(),
@@ -295,7 +293,7 @@ describe.skipIf(process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1")("artifacts fro
         const worker = `export default { fetch: () => fetch("http://127.0.0.1:${held.port}/") }`
         const published = stub.script(
           create(
-            `return await tools.opencode.artifact_create({ title: "Asleep", entry: "_worker.js", files: { "_worker.js": ${JSON.stringify(worker)} } })`,
+            `return await tools.ren.artifact_create({ title: "Asleep", entry: "_worker.js", files: { "_worker.js": ${JSON.stringify(worker)} } })`,
           ),
         )
         yield* sessions.create(owner, {

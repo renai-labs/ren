@@ -13,7 +13,7 @@ artifacts in v1, 66 have images or fonts, and 4 are over the old 5 MiB file or
 20 MiB total limit. So Ren does not use OpenCode's artifact plugin:
 
 - The cell removes `opencode.tool.artifact` and its `ren.artifact` plugin serves
-  OpenCode's tool names and inputs under the `opencode` namespace:
+  OpenCode's tool names and inputs in Ren MCP's `ren` namespace:
   `artifact_create`, `artifact_update`, `artifact_read` and `artifact_delete`,
   plus `artifact_status`. Create and update also take `directory`, a folder on
   the environment, published with its binary files. Read returns the
@@ -37,7 +37,7 @@ artifacts in v1, 66 have images or fonts, and 4 are over the old 5 MiB file or
   `ren artifacts`. Archiving stops serving the artifact, hides it, and refuses
   its next upload or deploy; Ren keeps its source and data.
 - One tool for each job. An agent publishes, reads, stops and follows an
-  artifact with the `opencode` tools above, as its brain, and finds the space's
+  artifact with the `ren` tools above, as its brain, and finds the space's
   artifacts with Ren MCP's `artifact_list`, as the person in the chat. Ren MCP
   hides `artifact_get` and `artifact_archive`: `artifact_read` reads, and
   archiving is a person's choice in the app. An agent's `artifact_delete`
@@ -45,7 +45,7 @@ artifacts in v1, 66 have images or fonts, and 4 are over the old 5 MiB file or
 
 When OpenCode takes bytes or file references, Ren removes its plugin, enables
 OpenCode's, and registers Ren as an OpenCode artifact provider. The tool names
-stay the same, so transcripts and clients do not change. OpenCode would also
+stay the same and the tools move back to the `opencode` namespace. OpenCode would also
 need an idea of a deployment that is still in progress, and records that are
 not per brain.
 
@@ -58,7 +58,7 @@ not per brain.
    mode, so the agent calls them inside `execute`: find
    `.artifact_create` and `.artifact_update` in the `execute` call's
    `toolCalls` metadata, as `AppConnect` finds `.app_request_connect`, as well
-   as a direct `opencode_artifact_create` or `opencode_artifact_update` call.
+   as a direct `ren_artifact_create` or `ren_artifact_update` call.
 3. The space's Artifacts page and a chat's artifacts panel, as in v1.
 4. The site's artifacts page (`concepts/artifacts.mdx`) describes the
    Artifacts page, its card menu (Open, Copy link, Archive) and

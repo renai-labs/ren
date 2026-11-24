@@ -124,6 +124,19 @@ it.live("Ren and Slack tools survive a server restart without transport sessions
   }),
 )
 
+it.live("the first turn has Ren MCP's tools and the brain's artifact tools side by side in the ren namespace", () =>
+  Effect.gen(function* () {
+    const ren = yield* renAt()
+    const opened = yield* open(Option.some(ren.ren))
+    const sessionId = yield* opened.chat()
+    const script = McpPeer.execute("ren.marker")
+    yield* opened.prompt(sessionId, `${script.marker} read the marker`)
+    expect(script.calls.at(0)?.system).toContain("tools.ren.marker(")
+    expect(script.calls.at(0)?.system).toContain("tools.ren.artifact_create(")
+    expect(McpPeer.result(script)).toBe("first")
+  }),
+)
+
 it.live(
   "each chat calls Ren MCP with the host token and its own chat; a prompt from another member calls Ren as that member, and a prompt with no sender keeps the last sender",
   () =>

@@ -23,7 +23,7 @@ describe("artifacts", () => {
     await opened.start()
     const created = stub.script({
       tool: run(
-        'return await tools.opencode.artifact_create({ title: "Report", files: { "index.html": "<h1>v1</h1>", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })',
+        'return await tools.ren.artifact_create({ title: "Report", files: { "index.html": "<h1>v1</h1>", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })',
       ),
     })
     await opened.prompt(created.marker)
@@ -43,10 +43,10 @@ describe("artifacts", () => {
 
     const updated = stub.script({
       tools: [
-        run(`return await tools.opencode.artifact_read({ id: "${id}" })`),
-        run(`return await tools.opencode.artifact_status({ id: "${id}", deploymentId: "${deploymentId}" })`),
+        run(`return await tools.ren.artifact_read({ id: "${id}" })`),
+        run(`return await tools.ren.artifact_status({ id: "${id}", deploymentId: "${deploymentId}" })`),
         run(
-          `return await tools.opencode.artifact_update({ id: "${id}", baseDeploymentId: "${deploymentId}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
+          `return await tools.ren.artifact_update({ id: "${id}", baseDeploymentId: "${deploymentId}", files: { "index.html": "<h1>v2</h1>", "app.js": "1", "ren-artifact.json": JSON.stringify({ durableObjects: { STATE: "SampleState" } }), "_worker.js": "export class SampleState {}; export default { fetch: () => new Response() }" } })`,
         ),
       ],
     })
@@ -80,7 +80,7 @@ describe("artifacts", () => {
     expect(outputs).toContain("does not mean the app is live")
     expect(outputs).toContain(deploymentId)
 
-    const deleted = stub.script({ tool: run(`return await tools.opencode.artifact_delete({ id: "${id}" })`) })
+    const deleted = stub.script({ tool: run(`return await tools.ren.artifact_delete({ id: "${id}" })`) })
     await opened.prompt(deleted.marker)
     const stopped = Schema.decodeUnknownSync(Schema.String)(
       (await deleted.called(2)).body.messages.findLast((message) => message.role === "tool")?.content,
@@ -97,7 +97,7 @@ describe("artifacts", () => {
     await opened.start()
     celld.ren.loseDeployAnswer()
     const created = stub.script({
-      tool: run('return await tools.opencode.artifact_create({ title: "Retried", files: { "index.html": "again" } })'),
+      tool: run('return await tools.ren.artifact_create({ title: "Retried", files: { "index.html": "again" } })'),
     })
     await opened.prompt(created.marker)
     await created.called(2)
@@ -112,7 +112,7 @@ describe("artifacts", () => {
     await opened.models()
     await opened.start()
     const created = stub.script({
-      tool: run('return await tools.opencode.artifact_create({ title: "Reset", files: { "index.html": "v1" } })'),
+      tool: run('return await tools.ren.artifact_create({ title: "Reset", files: { "index.html": "v1" } })'),
     })
     await opened.prompt(created.marker)
     await created.called(2)
@@ -124,7 +124,7 @@ describe("artifacts", () => {
     if (!stored) throw new Error("Artifact was not stored")
     celld.ren.artifacts.set(id, { ...stored, info: Struct.assign(stored.info, { publishedDeploymentId: null }) })
     const updated = stub.script({
-      tool: run(`return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "v2" } })`),
+      tool: run(`return await tools.ren.artifact_update({ id: "${id}", files: { "index.html": "v2" } })`),
     })
     await opened.prompt(updated.marker)
     const answer = JSON.stringify(
@@ -140,7 +140,7 @@ describe("artifacts", () => {
     await opened.models()
     await opened.start()
     const created = stub.script({
-      tool: run('return await tools.opencode.artifact_create({ title: "Based", files: { "index.html": "v1" } })'),
+      tool: run('return await tools.ren.artifact_create({ title: "Based", files: { "index.html": "v1" } })'),
     })
     await opened.prompt(created.marker)
     await created.called(2)
@@ -148,7 +148,7 @@ describe("artifacts", () => {
     const id = [...celld.ren.artifacts.entries()].find((entry) => entry[1].info.title === "Based")?.[0] ?? "art_missing"
     const before = celld.ren.artifacts.get(Artifact.ID.make(id))?.deployments.size
     const updated = stub.script({
-      tool: run(`return await tools.opencode.artifact_update({ id: "${id}", files: { "index.html": "v2" } })`),
+      tool: run(`return await tools.ren.artifact_update({ id: "${id}", files: { "index.html": "v2" } })`),
     })
     await opened.prompt(updated.marker)
     const answer = JSON.stringify(
