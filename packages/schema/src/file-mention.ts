@@ -19,5 +19,3 @@ export const split = (text: string): ReadonlyArray<Part> => {
     { text: text.slice(ends.at(-1)), mention: false },
   ].filter((part) => part.text !== "")
 }
-
-export const names = (text: string) => split(text).flatMap((part) => (part.mention ? [part.text] : []))

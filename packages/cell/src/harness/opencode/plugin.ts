@@ -56,7 +56,6 @@ import { OpenCodeCopies } from "./copies.js"
 import { OpenCodeHandTools } from "./hand-tools.js"
 import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
-import { OpenCodeUnshownFiles } from "./unshown-files.js"
 import type { HarnessConfig } from "../config.js"
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 keys a skill by its id and an MCP's tools by the server key with each character outside [A-Za-z0-9_-] as "_"; a later registration silently replaces an earlier one with the same name.
@@ -237,8 +236,6 @@ const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
 
 const maxErrorDepth = 8
-
-const clockSkew = 2_000
 
 const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
   const failure = HandConnections.failureOf(value)
@@ -625,37 +622,6 @@ export const make = (
                 ),
             })
           })
-          yield* context.session.hook("experimental.idle", (event) =>
-            Effect.gen(function* () {
-              if (event.sessionID !== sessionId || event.background.length > 0) return
-              if (!hasWorkspace || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
-                return
-              const unshown = OpenCodeUnshownFiles.of(
-                yield* context.session.context({ sessionID: event.sessionID }),
-                folder,
-              )
-              if (!unshown?.paths.length) return
-              const changed = yield* onSpaceDrive((client) =>
-                Effect.filter(unshown.paths, (path) =>
-                  client["files.stat"]({ path }).pipe(
-                    Effect.map((info) => info.type === "file" && info.modifiedAtMs >= unshown.since - clockSkew),
-                    Effect.orElseSucceed(() => false),
-                  ),
-                ),
-              )
-              if (changed.length === 0) return
-              yield* context.session.synthetic({
-                sessionID: event.sessionID,
-                text: OpenCodeUnshownFiles.prompt(changed, folder),
-                description: "Showing the files Ren made",
-                metadata: { [OpenCodeUnshownFiles.marker]: true },
-              })
-            }).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning("Ren could not check for files it made and did not show", cause),
-              ),
-            ),
-          )
           yield* context.session.hook("context", (event) =>
             Effect.gen(function* () {
               const metadata = yield* metadataOf(context.session, event.sessionID)
