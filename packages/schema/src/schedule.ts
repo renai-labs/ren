@@ -6,6 +6,7 @@ import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Search } from "./search.js"
 import { Session } from "./session.js"
 import { Space } from "./space.js"
 
@@ -146,7 +147,7 @@ export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
   spaceId: Schema.optional(Space.ID).annotate({ description: "Without it, the schedules of every space you are in." }),
   status: Schema.optional(Status),
-  search: Schema.optional(Schema.String).annotate({ description: "Part of the name or the message." }),
+  search: Search.field("the name or the message"),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Schedule.ListInput" })
 

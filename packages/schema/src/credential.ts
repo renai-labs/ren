@@ -6,6 +6,7 @@ import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Search } from "./search.js"
 import { Space } from "./space.js"
 
 export const reservedFieldNames: ReadonlyArray<string> = ["token", "accessToken", "username", "password", "basic"]
@@ -385,7 +386,7 @@ export const ListInput = Schema.Struct({
   owner: Schema.optional(OwnerKind),
   spaceId: Schema.optional(Space.ID),
   type: Schema.optional(Type),
-  search: Schema.optional(Schema.String),
+  search: Search.field("the label or the name"),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Credential.ListInput" })
 
