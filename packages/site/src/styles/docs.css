@@ -752,6 +752,14 @@ html.light .docs-when-dark {
   color: var(--ren-color-text-secondary);
 }
 
+#nd-page .prose > astro-slot > p:first-child {
+  max-width: 600px;
+  margin-top: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ren-color-text-secondary);
+}
+
 .docs-hero figure {
   margin: 0;
 }
