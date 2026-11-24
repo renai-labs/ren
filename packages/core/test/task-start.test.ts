@@ -74,26 +74,34 @@ describe("Task start", () => {
 })
 
 describe("Task assign", () => {
-  it.live("the agent must be usable and the owner a member, and removing the agent turns review off", () =>
-    Effect.gen(function* () {
-      const tasks = yield* Task.Service
-      const o = yield* org
-      const plan = yield* o.agent("plan")
-      const engAgent = yield* o.agent("eng-build", o.eng.id)
-      const created = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Plan", agentId: plan })
-      expect((yield* Effect.flip(tasks.assign(o.ada, created.id, { agentId: engAgent })))._tag).toBe(
-        "Primitive.Invalid",
-      )
-      expect((yield* Effect.flip(tasks.assign(o.ada, created.id, { ownerId: o.grace.userId })))._tag).toBe(
-        "Primitive.Invalid",
-      )
-      yield* tasks.review(o.ada, created.id, { humanReview: true, reason: "Check the plan" })
-      expect(yield* tasks.assign(o.ada, created.id, { agentId: null })).toMatchObject({
-        agentId: null,
-        humanReview: false,
-        humanReviewReason: null,
-      })
-    }),
+  it.live(
+    "the agent must be usable and the owner a member; removing the agent turns review off, and a new owner without one keeps it",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const o = yield* org
+        const plan = yield* o.agent("plan")
+        const engAgent = yield* o.agent("eng-build", o.eng.id)
+        const created = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Plan", agentId: plan })
+        expect((yield* Effect.flip(tasks.assign(o.ada, created.id, { agentId: engAgent })))._tag).toBe(
+          "Primitive.Invalid",
+        )
+        expect((yield* Effect.flip(tasks.assign(o.ada, created.id, { ownerId: o.grace.userId })))._tag).toBe(
+          "Primitive.Invalid",
+        )
+        yield* tasks.review(o.ada, created.id, { humanReview: true, reason: "Check the plan" })
+        expect(yield* tasks.assign(o.ada, created.id, { agentId: null })).toMatchObject({
+          agentId: null,
+          humanReview: false,
+          humanReviewReason: null,
+        })
+        yield* tasks.review(o.ada, created.id, { humanReview: true, reason: "Check the owner" })
+        expect(yield* tasks.assign(o.ada, created.id, { ownerId: o.ada.userId })).toMatchObject({
+          ownerId: o.ada.userId,
+          humanReview: true,
+          humanReviewReason: "Check the owner",
+        })
+      }),
   )
 
   it.live(
