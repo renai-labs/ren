@@ -16,7 +16,7 @@ const DOCS: Section = {
   icon: "BookOpen",
   home: "",
   groups: [
-    { title: "Get started", items: ["", "quickstart", "models"] },
+    { title: "Get started", items: ["", "quickstart"] },
     {
       title: "Work",
       items: [

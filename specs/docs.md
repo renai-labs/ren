@@ -22,7 +22,6 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 | Screenshots     | Light and dark, following the reader's theme. Captured from Ren's own organization, with private data blurred.                                                          |
 | Video           | Only for multi-step flows: Quickstart, connecting an app.                                                                                                               |
 | Welcome         | Keeps its skeleton and the hero line "Build your agent factory". It absorbs "How Ren is organized".                                                                     |
-| Models          | Written from what is true today. It grows later.                                                                                                                        |
 | Removed         | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                       |
 | Method          | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab. |
 | Shipping        | One draft PR. Commit 1 is the frame (§7), then one commit per finalized page, the Documentation tab first.                                                              |
@@ -44,7 +43,6 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 | ------------ | --------------- | ----------------- | --------------------------------------------------- |
 | Get started  | Welcome         | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
 |              | Quickstart      | `quickstart`      | `quickstart`                                        |
-|              | Models          | `models`          | New                                                 |
 | Work         | Chat            | `chats`           | `concepts/chats`                                    |
 |              | Tasks           | `tasks`           | `concepts/tasks`                                    |
 |              | Automations     | `automations`     | `concepts/schedules`                                |
@@ -85,7 +83,7 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |             | The `.ren` folder | `developers/ren-folder`      | New                          |
 |             | llms.txt          | `developers/llms-txt`        | `developers/llms-txt`        |
 
-Sidebar entries: 28 on the Documentation tab and 9 on the Developers tab. `nav.ts` fails the production build for a page that has no sidebar entry, so every page has one. Skills and Custom MCPs are sections of **Apps**. Slack and GitHub are sections of **Channels**.
+Sidebar entries: 27 on the Documentation tab and 9 on the Developers tab. `nav.ts` fails the production build for a page that has no sidebar entry, so every page has one. Skills and Custom MCPs are sections of **Apps**. Slack and GitHub are sections of **Channels**.
 
 ## 3. Page routes
 
@@ -489,15 +487,6 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Remove the Blueprints link.
 - New video.
 
-**Models**
-
-- The model picker (⌘').
-- Default model order: space → organization → Ren.
-- Credits and "Uses Ren credits" on managed apps.
-- Tool pricing.
-- Link to Model Providers for provider setup.
-- Link to `/pricing` for plan prices.
-
 ### Work, Integrations, Behavior, Admin
 
 **Chat**
@@ -602,7 +591,13 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 **Model Providers**
 
-- Configure an inference provider for the organisation in **Settings → Providers → Inference keys**. Link from Models for readers who want to bring their own provider.
+- Configure an inference provider for the organisation in **Settings → Providers → Inference keys**.
+- The model picker (⌘').
+- Default model order: space → organization → Ren.
+- Credits and "Uses Ren credits" on managed apps.
+- Tool pricing.
+- Link to `/pricing` for plan prices.
+- Written from what is true today. It grows later.
 
 **Billing**
 
