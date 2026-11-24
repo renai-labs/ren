@@ -27,7 +27,7 @@ const DOCS: Section = {
         "artifacts",
       ],
     },
-    { title: "Connections", items: ["apps", "credentials", "channels"] },
+    { title: "Integrations", items: ["apps", "credentials", "channels"] },
     { title: "Behavior", items: ["instructions", "memory", "permissions"] },
     { title: "Admin", items: [{ slug: "machines", label: "Machines" }, "usage", "members"] },
     {
