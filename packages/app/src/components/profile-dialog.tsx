@@ -841,7 +841,7 @@ const switchCopy = (input: { change: Switch; from: Target; app: App; inUse: Read
   }
 }
 
-const currentLabel = (current: string, inUse: ReadonlyArray<AppProfile>) =>
+const currentLabel = (current: string) =>
   current === managedChoice ? statusLabel.credits : "Connected · your own account"
 
 function submitChoice(input: {
@@ -921,7 +921,7 @@ function ManagedState(
       title={props.title}
       description={
         current ? (
-          <StatusLine status="connected">{currentLabel(current, inUse)}</StatusLine>
+          <StatusLine status="connected">{currentLabel(current)}</StatusLine>
         ) : (
           `Choose how ${from.name} connects to ${app.name}.`
         )

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { ChannelInstallInfo, ChannelMappingInfo, ChannelTrigger, SpaceInfo } from "@ren/client"
+import type { ChannelInstallInfo, ChannelMappingInfo, ChannelPlaceInfo, ChannelTrigger, SpaceInfo } from "@ren/client"
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { getRouteApi, Link } from "@tanstack/react-router"
 import { IconAlertCircle, IconArrowLeft, IconCube, IconLock, IconPlus, IconPlugOff } from "@tabler/icons-react"
@@ -319,6 +319,23 @@ function MappingToolbar(props: { spaces: ReadonlyArray<SpaceInfo>; disabled: boo
 const flatCommand =
   "rounded-none bg-transparent p-0 **:data-[slot=command-input-wrapper]:mx-0 **:data-[slot=command-input-wrapper]:mt-0"
 
+function PlaceLabel(props: { provider: Channels.Provider; place: ChannelPlaceInfo; picked: boolean }) {
+  return (
+    <>
+      <Checkbox checked={props.picked} tabIndex={-1} aria-hidden className="pointer-events-none" />
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="min-w-0 break-words">
+          <PlaceName provider={props.provider} name={props.place.name} />
+          <span className="sr-only">{props.picked ? ", selected" : ""}</span>
+        </span>
+        {props.place.private ? (
+          <IconLock aria-label="Private" className="size-3.5 shrink-0 text-muted-foreground" />
+        ) : null}
+      </span>
+    </>
+  )
+}
+
 function AddMappingDialog(props: {
   install: ChannelInstallInfo
   provider: Channels.Info
@@ -344,7 +361,9 @@ function AddMappingDialog(props: {
         create.mutateAsync({ installId: props.install.id, place, spaceId, fallback: false, triggers: [] }),
       ),
     ).then(() => {
-      toast.success(`${count > 1 ? `${count} ${props.provider.plural}` : props.provider.title + " " + props.provider.noun} linked`)
+      toast.success(
+        `${count > 1 ? `${count} ${props.provider.plural}` : `${props.provider.title} ${props.provider.noun}`} linked`,
+      )
       props.onClose()
     })
   return (
@@ -386,17 +405,13 @@ function AddMappingDialog(props: {
               </CommandEmpty>
               <CommandGroup className="p-0">
                 {free.map((place) => (
-                  <CommandItem key={place.id} value={place.id} keywords={[place.name]} onSelect={() => toggle(place.id)}>
-                    <Checkbox checked={picked.has(place.id)} tabIndex={-1} aria-hidden className="pointer-events-none" />
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                      <span className="min-w-0 break-words">
-                        <PlaceName provider={props.provider.id} name={place.name} />
-                        <span className="sr-only">{picked.has(place.id) ? ", selected" : ""}</span>
-                      </span>
-                      {place.private ? (
-                        <IconLock aria-label="Private" className="size-3.5 shrink-0 text-muted-foreground" />
-                      ) : null}
-                    </span>
+                  <CommandItem
+                    key={place.id}
+                    value={place.id}
+                    keywords={[place.name]}
+                    onSelect={() => toggle(place.id)}
+                  >
+                    <PlaceLabel provider={props.provider.id} place={place} picked={picked.has(place.id)} />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -422,7 +437,10 @@ function AddMappingDialog(props: {
           <DialogClose render={<Button variant="outline" />} disabled={create.isPending}>
             Cancel
           </DialogClose>
-          <Button disabled={count === 0 || !spaceId || create.isPending} onClick={() => void link().catch(() => undefined)}>
+          <Button
+            disabled={count === 0 || !spaceId || create.isPending}
+            onClick={() => void link().catch(() => undefined)}
+          >
             {create.isPending ? <Spinner data-icon="inline-start" /> : null}
             Link {noun}
           </Button>

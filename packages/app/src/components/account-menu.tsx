@@ -25,7 +25,7 @@ function useRemoveFromSpace(profile: AppProfile, from: From | undefined) {
     !profile.spaces.some((space) => space.id === from.spaceId) ||
     !profile.canRemove.some((shape) => shape === "joined" || shape === "shared")
   )
-    return undefined
+    return
   const others = reachedSpaces(profile).filter((name) => name !== from.name)
   return {
     label: `Remove from ${from.name}`,

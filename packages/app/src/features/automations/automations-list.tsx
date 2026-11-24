@@ -1,5 +1,5 @@
 import type { ScheduleInfo, WebhookInfo } from "@ren/client"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, type InfiniteData, type UseInfiniteQueryResult } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import {
   IconClock,
@@ -238,14 +238,10 @@ function WebhookRow(props: { webhook: WebhookInfo; scoped: boolean; now: number 
 function KindTable<A>(props: {
   name: string
   columns: ReadonlyArray<string>
-  list: {
-    readonly data?: { readonly pages: ReadonlyArray<{ readonly items: ReadonlyArray<A> }> } | undefined
-    readonly isError: boolean
-    readonly hasNextPage: boolean
-    readonly isFetchingNextPage: boolean
-    readonly fetchNextPage: () => unknown
-    readonly refetch: () => unknown
-  }
+  list: Pick<
+    UseInfiniteQueryResult<InfiniteData<{ readonly items: ReadonlyArray<A> }>>,
+    "data" | "isError" | "hasNextPage" | "isFetchingNextPage" | "fetchNextPage" | "refetch"
+  >
   empty: React.ReactNode
   row: (item: A) => React.ReactNode
 }) {

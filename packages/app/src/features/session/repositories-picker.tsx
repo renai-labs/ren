@@ -5,7 +5,7 @@ import { Repositories } from "@ren/chat"
 import { SpaceRepositories } from "@ren/client/react"
 import { Button } from "@ren/ui/button"
 import { toast } from "@ren/ui/sonner"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import { AddRepositoriesDialog } from "../../components/add-repositories-dialog.js"
 import { PaletteDialog, PaletteEmpty, PaletteHeading, PaletteRow } from "../../components/palette.js"
 import { GitHubMark } from "../../icons/brands.js"
@@ -39,10 +39,9 @@ const keyOf = (reference: Reference) => `repository:${reference.alias}`
 
 function RepositoriesPalette(props: {
   references: ReadonlyArray<Reference>
-  canAdd: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: () => void
+  onAdd?: (() => void) | undefined
 }) {
   const { platform } = RouterContext.useRouterContext()
   const [query, setQuery] = useState("")
@@ -53,13 +52,13 @@ function RepositoriesPalette(props: {
   )
   const rows: ReadonlyArray<Row> = [
     ...matches.map((reference) => ({ key: keyOf(reference), reference })),
-    ...(props.canAdd ? [{ key: "add" as const, reference: null }] : []),
+    ...(props.onAdd ? [{ key: "add" as const, reference: null }] : []),
   ]
   const current = rows.find((row) => row.key === active) ?? rows[0]
   const pick = (row: Row) => {
     props.onOpenChange(false)
     if (row.reference) platform.openExternal(row.reference.repository)
-    else props.onAdd()
+    else props.onAdd?.()
   }
   const move = (delta: number) => {
     if (rows.length === 0) return
@@ -167,10 +166,9 @@ export function RepositoriesPicker(props: { spaceId: string | undefined; disable
       </Button>
       <RepositoriesPalette
         references={references}
-        canAdd={settings.data?.canUpdate === true}
         open={open}
         onOpenChange={setOpen}
-        onAdd={() => setAdding(true)}
+        onAdd={settings.data?.canUpdate === true ? () => setAdding(true) : undefined}
       />
       {adding ? <RepositoriesDialog spaceId={spaceId} onClose={() => setAdding(false)} /> : null}
     </>

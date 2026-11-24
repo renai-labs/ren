@@ -5,6 +5,8 @@ import { Platform } from "../platform/platform.js"
 import { errorMessage } from "./errors.js"
 import { RouterContext } from "./router-context.js"
 
+const waitKey = () => ["credential-connect", "wait"] as const
+
 const closed = (tab: Window) =>
   new Promise<void>((resolve) => {
     const timer = setInterval(() => {
@@ -18,7 +20,7 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void, onFailed?: 
   const platform = Platform.usePlatform()
   const { api } = RouterContext.useRouterContext()
   const connect = useMutation(api["credential-connect"].credential.connect.mutationOptions())
-  const wait = useMutation({ mutationKey: ["credential-connect", "wait"], mutationFn: closed })
+  const wait = useMutation({ mutationKey: waitKey(), mutationFn: closed })
   return {
     pending: connect.isPending,
     start: (

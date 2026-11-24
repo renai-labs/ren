@@ -2,7 +2,6 @@ import type { BillingSummary, RenInferenceConnection } from "@ren/client"
 import { IconChevronRight } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import type { ReactNode } from "react"
 import { formatUsd } from "@ren/ui/format"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
@@ -62,19 +61,22 @@ function Credits(props: { billing: BillingSummary }) {
 function Subscription(props: { connection: RenInferenceConnection }) {
   const connection = props.connection
   const meter = connection.meters.find((each) => each.percent !== null)
-  const detail: ReactNode =
-    connection.status.tone !== "ok" ? (
-      <StatusBadge tone={connection.status.tone}>{connection.status.label}</StatusBadge>
-    ) : meter ? (
-      <span className="text-muted-foreground tabular-nums">
-        {meter.title} {meter.percent}%
-      </span>
-    ) : null
+  const detail = () => {
+    if (connection.status.tone !== "ok")
+      return <StatusBadge tone={connection.status.tone}>{connection.status.label}</StatusBadge>
+    if (meter)
+      return (
+        <span className="text-muted-foreground tabular-nums">
+          {meter.title} {meter.percent}%
+        </span>
+      )
+    return null
+  }
   return (
     <Link to="/settings/providers" className={item}>
       <ProviderMark provider={connection.providerName} />
       <span>{connection.label}</span>
-      {detail}
+      {detail()}
       <Chevron />
     </Link>
   )
@@ -91,18 +93,18 @@ export function UsageBalances() {
   if (!summary && subscriptions.length === 0) return null
   return (
     <Loading id={shapeId} loading={pending} label="Loading credits and subscriptions">
-        <ul aria-label="Credits and subscriptions" className="flex items-center gap-1">
-          {summary ? (
-            <li>
-              <Credits billing={summary} />
-            </li>
-          ) : null}
-          {subscriptions.map((connection) => (
-            <li key={connection.id}>
-              <Subscription connection={connection} />
-            </li>
-          ))}
-        </ul>
+      <ul aria-label="Credits and subscriptions" className="flex items-center gap-1">
+        {summary ? (
+          <li>
+            <Credits billing={summary} />
+          </li>
+        ) : null}
+        {subscriptions.map((connection) => (
+          <li key={connection.id}>
+            <Subscription connection={connection} />
+          </li>
+        ))}
+      </ul>
     </Loading>
   )
 }

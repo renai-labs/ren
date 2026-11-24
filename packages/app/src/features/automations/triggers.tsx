@@ -387,6 +387,7 @@ export function WebhookTrigger(props: {
 function PresetItem(props: { preset: AppPreset; current: boolean; onPick: (preset: AppPreset) => void }) {
   const preset = props.preset
   return (
+    // ast-grep-ignore: require-item-group -- AddTrigger puts each preset inside its group
     <DropdownMenuItem
       disabled={props.current || preset.turnedOn}
       onClick={() => props.onPick(preset)}

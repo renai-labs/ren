@@ -7,6 +7,7 @@ import { Badge } from "@ren/ui/badge"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@ren/ui/dialog"
+import { Link } from "@ren/ui/link"
 import { Loading } from "@ren/ui/loading"
 import { formatUsdRate } from "@ren/ui/format"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
@@ -410,11 +411,6 @@ type Skill = NonNullable<App["skills"]>[string]
 
 function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClose: () => void }) {
   const skill = props.skill
-  const title = (
-    <DialogTitle className="text-lg [overflow-wrap:anywhere]">
-      {props.slug} <span className="font-normal text-muted-foreground">Skill</span>
-    </DialogTitle>
-  )
   return (
     <Dialog
       open
@@ -426,12 +422,14 @@ function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClo
         <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="gap-3 px-6 pt-6 pr-14 pb-5">
             {props.icon}
-            {title}
+            <DialogTitle className="text-lg [overflow-wrap:anywhere]">
+              {props.slug} <span className="font-normal text-muted-foreground">Skill</span>
+            </DialogTitle>
             <DialogDescription className="text-pretty">{skill.description}</DialogDescription>
           </DialogHeader>
           {skill.instructions.trim() ? (
             <div className="mx-6 mb-6 min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card px-5 py-4">
-              <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0!">{skill.instructions}</Markdown>
+              <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0">{skill.instructions}</Markdown>
             </div>
           ) : null}
         </DialogContent>
@@ -439,7 +437,9 @@ function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClo
         <DialogContent className="justify-items-center gap-4 p-6 sm:max-w-sm">
           <DialogHeader className="items-center gap-3 px-8 text-center">
             {props.icon}
-            {title}
+            <DialogTitle className="text-lg [overflow-wrap:anywhere]">
+              {props.slug} <span className="font-normal text-muted-foreground">Skill</span>
+            </DialogTitle>
           </DialogHeader>
           <UpstreamLink upstream={skill.upstream} />
         </DialogContent>
@@ -453,15 +453,15 @@ function UpstreamLink(props: { upstream: Extract<Skill, { type: "upstream" }>["u
   const github = url?.hostname === "github.com"
   const folder = props.upstream.path === "." ? "" : `/tree/${props.upstream.ref ?? "HEAD"}/${props.upstream.path}`
   return (
-    <a
+    <Link
       href={github ? `${props.upstream.url.replace(/\/$/u, "")}${folder}` : props.upstream.url}
-      target="_blank"
-      rel="noreferrer"
+      external
+      appearance="plain"
       className={buttonVariants({ variant: "secondary", size: "sm", className: "w-fit" })}
     >
       {github ? <GitHubMark data-icon="inline-start" /> : null}
       {github ? "View on GitHub" : (url?.hostname ?? props.upstream.url)}
-    </a>
+    </Link>
   )
 }
 
