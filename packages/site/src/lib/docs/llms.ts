@@ -33,7 +33,7 @@ export const index = () =>
       `- [Complete documentation](${absolute("/llms-full.txt")}): every page as Markdown in one file`,
       `- [Abridged documentation](${absolute("/llms-small.txt")}): every page without code samples`,
       "",
-      "Append `.md` to a page under /raw/ to get it as Markdown, for example /raw/docs/concepts/tasks.md.",
+      "Append `.md` to a page under /raw/ to get it as Markdown, for example /raw/docs/tasks.md.",
       "",
     ].join("\n"),
   )
