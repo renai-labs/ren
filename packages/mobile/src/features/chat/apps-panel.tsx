@@ -1,7 +1,7 @@
 import type { Composer } from "@ren/chat"
 import { Apps } from "@ren/client"
 import { AppRegistryPages, SpaceApps } from "@ren/client/react"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native"
@@ -108,10 +108,12 @@ function CatalogResults(props: {
   readonly heading?: string | undefined
   readonly onPick: (appId: string) => void
 }) {
-  const search = AppRegistryPages.useSearch(
-    { client: Api.client, api: Api.query, query: props.query, added: props.added },
-    Search.matches,
-  )
+  const search = AppRegistryPages.useSearch({
+    client: Api.client,
+    api: Api.query,
+    query: props.query,
+    added: props.added,
+  })
   if (search.loading) return <ActivityIndicator colorClassName="accent-muted-foreground" className="py-6" />
   if (search.found.length === 0)
     return props.heading ? null : (

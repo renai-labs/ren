@@ -1,5 +1,6 @@
 export * as AppRegistryPages from "./app-registry.js"
 
+import { Search } from "@ren/schema/search"
 import { infiniteQueryOptions, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Apps } from "../apps.js"
 import type { Ren } from "../generated/index.js"
@@ -23,21 +24,18 @@ export const options = (client: ReturnType<typeof Ren.make>, query: string, cate
     staleTime: 60_000,
   })
 
-export function useSearch(
-  input: {
-    readonly client: ReturnType<typeof Ren.make>
-    readonly api: ReturnType<typeof RenQuery.make>
-    readonly query: string
-    readonly added: ReadonlySet<string>
-  },
-  matches: (query: string, ...texts: ReadonlyArray<string>) => boolean,
-) {
+export function useSearch(input: {
+  readonly client: ReturnType<typeof Ren.make>
+  readonly api: ReturnType<typeof RenQuery.make>
+  readonly query: string
+  readonly added: ReadonlySet<string>
+}) {
   const pages = useInfiniteQuery(options(input.client, Debounce.useValue(input.query.trim(), 200)))
   const apps = useQuery(input.api.app.list.queryOptions({ page: 1, pageSize: ownSize }))
   const listed = (pages.data?.pages ?? []).flatMap((page) => page.items)
   const own = (apps.data?.items ?? [])
     .map(Apps.fromApp)
-    .filter((app) => matches(input.query, app.name, app.description))
+    .filter((app) => Search.matches(input.query, app.name, app.description))
   const managed = new Set([
     ...listed.filter((app) => app.managed).map((app) => app.id),
     ...own.filter(Apps.hasManaged).map((app) => app.id),

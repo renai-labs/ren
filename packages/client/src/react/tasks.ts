@@ -1,6 +1,7 @@
 export * as Tasks from "./tasks.js"
 
 import { queryOptions } from "@tanstack/react-query"
+import { Struct } from "effect"
 import type {
   Ren,
   TaskActivityInfo,
@@ -57,6 +58,9 @@ export function listInput(given: Filters | undefined, space?: string): Filter {
     ...(label && { label }),
   }
 }
+
+export const searchInput = (input: Filter, search: string): Filter =>
+  search ? { ...Struct.omit(input, ["parentId"]), search } : input
 
 export const filterValues = (task: TaskInfo, userId?: string): Record<string, ReadonlyArray<string>> => ({
   space: [task.spaceId],
