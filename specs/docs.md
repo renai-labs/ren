@@ -1,6 +1,6 @@
 # Product docs and technical docs revamp: pending
 
-The docs at `useren.ai/docs` describe Ren v1. They were ported on 27 Oct 2026 (`d9253dbd`). 21 of 35 pages have not changed since, and every screenshot and video shows the v1 app. This spec records the decisions for one rewrite, in one pull request. The owner is Laxman Patel (`laxman-patel`). The pull request's final commit removes this spec, as `specs/README.md` asks; git history keeps it.
+The docs at `useren.ai/docs` describe Ren v1. They were ported on 27 Oct 2026 (`d9253dbd`). 21 of 35 pages have not changed since, and every screenshot and video shows the v1 app. This spec records the decisions for one rewrite, in one pull request. The owner is Parth Kashikar (`kashikarparth`). The pull request's final commit removes this spec, as `specs/README.md` asks; git history keeps it.
 
 Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs/nav.ts`. Checked against `main` at `9ad8b9d`.
 
@@ -42,33 +42,40 @@ The **Organisation** and **Space** overviews link directly to the relevant headi
 
 Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organisation or in one space. **Billing** answers “How do I change our plan?”
 
-| Group         | Page            | Slug              | Source                                              |
-| ------------- | --------------- | ----------------- | --------------------------------------------------- |
-| Get started   | Welcome         | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
-|               | Quickstart      | `quickstart`      | `quickstart`                                        |
-|               | Models          | `models`          | New                                                 |
-| Work with Ren | Chat            | `chats`           | `concepts/chats`                                    |
-|               | Tasks           | `tasks`           | `concepts/tasks`                                    |
-|               | Automations     | `automations`     | `concepts/schedules`                                |
-|               | Drive           | `drive`           | `concepts/storage`                                  |
-|               | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
-|               | Apps            | `apps`            | `concepts/apps`                                     |
-|               | Credentials     | `credentials`     | `concepts/credentials`                              |
-|               | Channels        | `channels`        | `concepts/channels/index`                           |
-|               | Permissions     | `permissions`     | New                                                 |
-|               | Memory          | `memory`          | Parts of `concepts/storage`                         |
-|               | Machines        | `machines`        | `concepts/environments`                             |
-|               | Usage           | `usage`           | New                                                 |
-|               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
-| Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
-|               | Model Providers | `model-providers` | New                                                 |
-|               | Billing         | `billing`         | New                                                 |
-| Spaces        | Space           | `spaces`          | `concepts/spaces`                                   |
-|               | Inbox           | `inbox`           | New                                                 |
-|               | Agents          | `agents`          | New                                                 |
-|               | Factory         | `factory`         | New                                                 |
-|               | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
-|               | Compute         | `compute`         | Space compute settings from `concepts/environments` |
+| Group         | Page               | Slug              | Source                                              |
+| ------------- | ------------------ | ----------------- | --------------------------------------------------- |
+| Get started   | Welcome            | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
+|               | Quickstart         | `quickstart`      | `quickstart`                                        |
+|               | Models             | `models`          | New                                                 |
+| Work with Ren | Chat               | `chats`           | `concepts/chats`                                    |
+|               | Tasks              | `tasks`           | `concepts/tasks`                                    |
+|               | Automations        | `automations`     | `concepts/schedules`                                |
+|               | Drive              | `drive`           | `concepts/storage`                                  |
+|               | Artifacts          | `artifacts`       | `concepts/artifacts`                                |
+|               | Apps               | `apps`            | `concepts/apps`                                     |
+|               | Credentials        | `credentials`     | `concepts/credentials`                              |
+|               | Channels           | `channels`        | `concepts/channels/index`                           |
+|               | Permissions        | `permissions`     | New                                                 |
+|               | Memory             | `memory`          | Parts of `concepts/storage`                         |
+|               | Machines           | `machines`        | `concepts/environments`                             |
+|               | Usage              | `usage`           | New                                                 |
+|               | Members            | `members`         | `concepts/organizations`, `concepts/spaces`         |
+| Organisations | Organisation       | `organisation`    | Parts of `concepts/organizations`                   |
+|               | Model Providers    | `model-providers` | New                                                 |
+|               | Billing            | `billing`         | New                                                 |
+| Spaces        | Space              | `spaces`          | `concepts/spaces`                                   |
+|               | Inbox              | `inbox`           | New                                                 |
+|               | Agents             | `agents`          | New                                                 |
+|               | Factory            | `factory`         | New                                                 |
+|               | Repositories       | `repositories`    | Parts of `concepts/projects`                        |
+|               | Compute            | `compute`         | Space compute settings from `concepts/environments` |
+| Resources     | Instructions       | `instructions`    | New                                                 |
+|               | Claude & ChatGPT   | `claude-chatgpt`  | New                                                 |
+|               | Security & privacy | `security`        | New                                                 |
+|               | Mobile app         | `mobile`          | New                                                 |
+|               | FAQ                | `faq`             | `faq`                                               |
+|               | Troubleshooting    | `troubleshooting` | New                                                 |
+|               | Support            | `support`         | New                                                 |
 
 ### Developers tab
 
@@ -84,7 +91,7 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |             | The `.ren` folder | `developers/ren-folder`      | New                          |
 |             | llms.txt          | `developers/llms-txt`        | `developers/llms-txt`        |
 
-Sidebar entries: 25 on the Documentation tab and 9 on the Developers tab. Supporting guides may be linked without a sidebar entry.
+Sidebar entries: 32 on the Documentation tab and 9 on the Developers tab. `nav.ts` fails the production build for a page that has no sidebar entry, so every page has one. Skills and Custom MCPs are sections of **Apps**. Slack and GitHub are sections of **Channels**.
 
 ## 3. Page routes
 
@@ -114,7 +121,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 
 ### 4.2 Sidebar
 
-Keep **Work with Ren** and rebuild it around shared features. Replace **Organize** with **Organisations** and **Spaces**. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
+Keep **Work with Ren** and rebuild it around shared features. Replace **Organize** with **Organisations** and **Spaces**. Keep **Resources** for the pages in §5 Supporting topics. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -306,7 +313,7 @@ Keep **Work with Ren** and rebuild it around shared features. Replace **Organize
 | "Bearer Token … (coming soon)"                  | Bearer Token is available |
 | API key "sent in the header that you name" only | Header or Query string    |
 
-**`concepts/credentials` (becomes Secrets)**
+**`concepts/credentials` (becomes Credentials)**
 
 | Removed                                                        | Replaced by                                                                                    |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -647,7 +654,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 ### Supporting topics
 
-Keep the following material available through relevant feature pages or direct links. These briefs do not add sidebar groups.
+Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sections of **Channels**. The other topics are pages in the **Resources** group (§2).
 
 **Instructions**
 
@@ -797,13 +804,13 @@ No page starts before the one before it is finalized. A finalized page is reopen
 
 One branch, one draft PR.
 
-| #           | Commit              | Contents                                                                                                                                                                          |
-| ----------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1           | Frame               | `nav.ts` groups and tabs; delete removed pages and media (§4); `packages/site/AGENTS.md` (§6); set page routes and update internal links (§3).                                    |
-| Next        | Documentation pages | One commit per finalized page, in sidebar order.                                                                                                                                  |
-| Then        | Developers pages    | One commit per finalized page, in sidebar order.                                                                                                                                  |
-| After pages | Check               | `bun run build`, `bun run test`, `script/check-routes.ts`, a link check, a search of `content/docs` and `lib/docs` for removed terms (§4.4), commands (§4.5) and UI paths (§4.6). |
-| Last        | Remove spec         | Delete `specs/docs.md` and its row in `specs/README.md`.                                                                                                                          |
+| #           | Commit              | Contents                                                                                                                                                                                                                                                    |
+| ----------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1           | Frame               | `nav.ts` groups and tabs; delete removed pages and media (§4); `packages/site/AGENTS.md` (§6); set page routes and update internal links (§3). A page that merges into another page, and media that a kept page still shows, stay until that page's commit. |
+| Next        | Documentation pages | One commit per finalized page, in sidebar order.                                                                                                                                                                                                            |
+| Then        | Developers pages    | One commit per finalized page, in sidebar order.                                                                                                                                                                                                            |
+| After pages | Check               | `bun run build`, `bun run test`, `script/check-routes.ts`, a link check, a search of `content/docs` and `lib/docs` for removed terms (§4.4), commands (§4.5) and UI paths (§4.6).                                                                           |
+| Last        | Remove spec         | Delete `specs/docs.md` and its row in `specs/README.md`.                                                                                                                                                                                                    |
 
 Then mark the PR ready and ask `kashikarparth` and `shreyansh073` to review.
 
@@ -823,7 +830,7 @@ The owner answers these in step 2 (Ask) of the page they belong to (§7.1).
 | Email invite expiry                                                    | Members                             |
 | Time before an idle machine pauses                                     | Machines                            |
 | Drive file size limits, and whether `WHOAMI.md` still exists           | Drive, Memory                       |
-| Is there a limit on secrets per level (v1 had 100)?                    | Secrets                             |
+| Is there a limit on secrets per level (v1 had 100)?                    | Credentials                         |
 | Where the CLI is published (`install.sh` URL)                          | CLI                                 |
 | Can scheduled and channel chats ask questions?                         | Chats                               |
 | Can the app add links to a task?                                       | Tasks                               |
