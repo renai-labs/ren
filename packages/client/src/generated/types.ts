@@ -287,6 +287,21 @@ export type SessionUsageSource = "provider" | "billed"
 
 export type PullRequestState = "open" | "draft" | "merged" | "closed"
 
+export type ViewID = string
+
+export type ViewType = "task"
+
+export type ViewFilters = { [x: string]: Array<string> }
+
+export type ViewDisplay = {
+  layout: "list" | "board"
+  groupBy: string
+  orderBy: string
+  direction: "asc" | "desc"
+  showEmpty: boolean
+  properties: Array<string>
+}
+
 export type ScheduleID = string
 
 export type ScheduleOnce = { at: string }
@@ -862,6 +877,22 @@ export type SessionUsageInfo = {
 
 export type PullRequestInfo = { url: string; number: number; title: string | null; state: PullRequestState | null }
 
+export type ViewInfo = {
+  id: ViewID
+  organizationId: AuthOrganizationID | null
+  ownerId: AuthUserID | null
+  spaceId: SpaceID | null
+  type: ViewType
+  name: string
+  shared: boolean
+  isSystem: boolean
+  filters: ViewFilters
+  display: ViewDisplay | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
 
 export type ScheduleLastRun = { id: ScheduleRunID; scheduledAt: string; status: ScheduleRunStatus }
@@ -1409,6 +1440,8 @@ export type TaskEventData =
   | TaskEventLinksChanged
   | TaskEventParentChanged
   | TaskEventArchived
+
+export type ViewPage = { items: Array<ViewInfo>; page: number; pageSize: number; total: number }
 
 export type ScheduleInfo = {
   id: ScheduleID
@@ -8239,6 +8272,192 @@ export type LabelUpdateOutput = LabelInfo
 export type LabelArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type LabelArchiveOutput = LabelInfo
+
+export type ViewListInput = {
+  readonly type?: {
+    readonly type?: "task" | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["type"]
+  readonly spaceId?: {
+    readonly type?: "task" | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: {
+    readonly type?: "task" | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly type?: "task" | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ViewListOutput = ViewPage
+
+export type ViewCreateInput = {
+  readonly type: {
+    readonly type: "task"
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly shared?: boolean | null
+    readonly filters: { readonly [x: string]: ReadonlyArray<string> }
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["type"]
+  readonly spaceId?: {
+    readonly type: "task"
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly shared?: boolean | null
+    readonly filters: { readonly [x: string]: ReadonlyArray<string> }
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["spaceId"]
+  readonly name: {
+    readonly type: "task"
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly shared?: boolean | null
+    readonly filters: { readonly [x: string]: ReadonlyArray<string> }
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["name"]
+  readonly shared?: {
+    readonly type: "task"
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly shared?: boolean | null
+    readonly filters: { readonly [x: string]: ReadonlyArray<string> }
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["shared"]
+  readonly filters: {
+    readonly type: "task"
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly shared?: boolean | null
+    readonly filters: { readonly [x: string]: ReadonlyArray<string> }
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["filters"]
+  readonly display?: {
+    readonly type: "task"
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly shared?: boolean | null
+    readonly filters: { readonly [x: string]: ReadonlyArray<string> }
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["display"]
+}
+
+export type ViewCreateOutput = ViewInfo
+
+export type ViewUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly shared?: boolean | null
+    readonly filters?: { readonly [x: string]: ReadonlyArray<string> } | null
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["name"]
+  readonly shared?: {
+    readonly name?: string | null
+    readonly shared?: boolean | null
+    readonly filters?: { readonly [x: string]: ReadonlyArray<string> } | null
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["shared"]
+  readonly filters?: {
+    readonly name?: string | null
+    readonly shared?: boolean | null
+    readonly filters?: { readonly [x: string]: ReadonlyArray<string> } | null
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["filters"]
+  readonly display?: {
+    readonly name?: string | null
+    readonly shared?: boolean | null
+    readonly filters?: { readonly [x: string]: ReadonlyArray<string> } | null
+    readonly display?: {
+      readonly layout: "list" | "board"
+      readonly groupBy: string
+      readonly orderBy: string
+      readonly direction: "asc" | "desc"
+      readonly showEmpty: boolean
+      readonly properties: ReadonlyArray<string>
+    } | null | null
+  }["display"]
+}
+
+export type ViewUpdateOutput = ViewInfo
+
+export type ViewArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ViewArchiveOutput = ViewInfo
 
 export type ScheduleListInput = {
   readonly spaceId?: {

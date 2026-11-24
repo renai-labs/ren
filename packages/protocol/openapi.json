@@ -8927,6 +8927,361 @@
         "summary": "Archive label"
       }
     },
+    "/views": {
+      "get": {
+        "tags": ["view"],
+        "operationId": "view.list",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/View.Type"
+                }
+              ],
+              "description": "Only views of this type. Without it, views of every type."
+            },
+            "required": false
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              ],
+              "description": "The views of this space’s page. Without it, the views of the organization’s page. Both start with the system views."
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "View.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the views that the caller can see.",
+        "summary": "List views"
+      },
+      "post": {
+        "tags": ["view"],
+        "operationId": "view.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "View.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one view.",
+        "summary": "Create view",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/View.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/views/{id}": {
+      "patch": {
+        "tags": ["view"],
+        "operationId": "view.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/View.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "View.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one view.",
+        "summary": "Update view",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/View.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["view"],
+        "operationId": "view.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/View.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "View.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one view and return it. Archiving an archived view returns it unchanged.",
+        "summary": "Archive view"
+      }
+    },
     "/schedules": {
       "get": {
         "tags": ["schedule"],
@@ -29160,6 +29515,304 @@
         "type": "string",
         "enum": ["ren", "customer"]
       },
+      "View.CreateInput": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/View.Type"
+          },
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Show the view on this space’s page. Without it, on the organization’s page."
+          },
+          "name": {
+            "$ref": "#/components/schemas/View.NameEncoded"
+          },
+          "shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Defaults to `false`: only you see the view."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/View.Filters"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/View.Display"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["type", "name", "filters"],
+        "additionalProperties": false
+      },
+      "View.Display": {
+        "type": "object",
+        "properties": {
+          "layout": {
+            "type": "string",
+            "enum": ["list", "board"]
+          },
+          "groupBy": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z]{0,31}$"
+          },
+          "orderBy": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z]{0,31}$"
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["asc", "desc"]
+          },
+          "showEmpty": {
+            "type": "boolean",
+            "description": "Show groups that have no items."
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-zA-Z]{0,31}$"
+            },
+            "maxItems": 20,
+            "description": "The fields each item shows, in order."
+          }
+        },
+        "required": ["layout", "groupBy", "orderBy", "direction", "showEmpty", "properties"],
+        "additionalProperties": false
+      },
+      "View.Filters": {
+        "type": "object",
+        "patternProperties": {
+          "^[a-z][a-zA-Z]{0,31}$": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "maxItems": 100
+          }
+        },
+        "additionalProperties": false,
+        "maxProperties": 20,
+        "description": "The values each field must match, keyed by field. For tasks: `status`, `priority`, `agent`, `owner`, `label`, `space` and `review`. An item matches when each field has one of its values; `none` matches an empty field and `me` the person viewing."
+      },
+      "View.ID": {
+        "type": "string",
+        "pattern": "^vw_"
+      },
+      "View.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/View.ID"
+          },
+          "organizationId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.OrganizationID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a system view."
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person who made the view. Null for a system view."
+          },
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The space whose page shows the view. Null for the page of the whole organization."
+          },
+          "type": {
+            "$ref": "#/components/schemas/View.Type"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "Shown to everyone who sees the view’s page: the members of its space, or the whole organization. Otherwise only its owner sees it. Sharing a view shows no item a person could not already see."
+          },
+          "isSystem": {
+            "type": "boolean",
+            "description": "A view Ren gives every page, which nobody can change."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/View.Filters"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/View.Display"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: the page keeps the layout the person last used."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "ownerId",
+          "spaceId",
+          "type",
+          "name",
+          "shared",
+          "isSystem",
+          "filters",
+          "display",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "View.NameEncoded": {
+        "type": "string"
+      },
+      "View.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/View.Info"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "View.Type": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["task"]
+          }
+        ],
+        "description": "What the view lists. `task`: tasks."
+      },
+      "View.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/View.NameEncoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/View.Filters"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/View.Display"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "Webhook.CreateInput": {
         "type": "object",
         "properties": {
@@ -30485,6 +31138,9 @@
     },
     {
       "name": "label"
+    },
+    {
+      "name": "view"
     },
     {
       "name": "schedule"

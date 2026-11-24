@@ -106,6 +106,10 @@ import type {
   LabelCreateInput,
   LabelUpdateInput,
   LabelArchiveInput,
+  ViewListInput,
+  ViewCreateInput,
+  ViewUpdateInput,
+  ViewArchiveInput,
   ScheduleListInput,
   ScheduleGetInput,
   ScheduleCreateInput,
@@ -1218,6 +1222,41 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["label", "archive"] as const,
             mutationFn: (input: LabelArchiveInput) => client["label"]["archive"](input),
+          }),
+      },
+    },
+    view: {
+      list: {
+        queryKey: (input?: ViewListInput) =>
+          input === undefined ? (["view", "list"] as const) : (["view", "list", input] as const),
+        queryOptions: (input: ViewListInput) =>
+          queryOptions({
+            queryKey: ["view", "list", input] as const,
+            queryFn: (context) => client["view"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["view", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["view", "create"] as const,
+            mutationFn: (input: ViewCreateInput) => client["view"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["view", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["view", "update"] as const,
+            mutationFn: (input: ViewUpdateInput) => client["view"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["view", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["view", "archive"] as const,
+            mutationFn: (input: ViewArchiveInput) => client["view"]["archive"](input),
           }),
       },
     },

@@ -1000,6 +1000,54 @@ export const LabelArchive = (input: Command.Command.Config.Infer<typeof Commands
     (client, request) => client["label"]["archive"]({ ...request.params }),
   )
 
+export const ViewList = (input: Command.Command.Config.Infer<typeof Commands.ViewList>) =>
+  Operation.run(
+    ClientApi.groups["view"].endpoints["view.list"],
+    {
+      query: { type: input["type"], spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+      labels: { type: "--type", spaceId: "--space", page: "--page", pageSize: "--page-size" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["view"]["list"]({ ...request.query }),
+  )
+
+export const ViewCreate = (input: Command.Command.Config.Infer<typeof Commands.ViewCreate>) =>
+  Operation.run(
+    ClientApi.groups["view"].endpoints["view.create"],
+    {
+      payload: { type: input["type"], spaceId: input["spaceId"], name: input["name"], shared: input["shared"] },
+      input: input["input"],
+      labels: { type: "--type", spaceId: "--space", name: "--name", shared: "--shared" },
+      lookups: {
+        spaceId: (client, value) =>
+          client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+      },
+    },
+    (client, request) => client["view"]["create"]({ ...request.payload }),
+  )
+
+export const ViewUpdate = (input: Command.Command.Config.Infer<typeof Commands.ViewUpdate>) =>
+  Operation.run(
+    ClientApi.groups["view"].endpoints["view.update"],
+    {
+      params: { id: input["id"] },
+      payload: { name: input["name"], shared: input["shared"] },
+      input: input["input"],
+      labels: { id: "<view>", name: "--name", shared: "--shared" },
+    },
+    (client, request) => client["view"]["update"]({ ...request.params, ...request.payload }),
+  )
+
+export const ViewArchive = (input: Command.Command.Config.Infer<typeof Commands.ViewArchive>) =>
+  Operation.run(
+    ClientApi.groups["view"].endpoints["view.archive"],
+    { params: { id: input["id"] }, labels: { id: "<view>" } },
+    (client, request) => client["view"]["archive"]({ ...request.params }),
+  )
+
 export const ScheduleList = (input: Command.Command.Config.Infer<typeof Commands.ScheduleList>) =>
   Operation.run(
     ClientApi.groups["schedule"].endpoints["schedule.list"],
