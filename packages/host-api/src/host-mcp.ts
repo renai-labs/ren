@@ -25,7 +25,6 @@ export const channelServers: Readonly<
   },
 }
 
-// oxlint-disable-next-line ren/no-comments -- The tools a brain serves itself beside Ren MCP's in the ren namespace. OpenCode keys a tool by namespace and name, so a Ren MCP tool of one of these names would silently replace the brain's, or the brain's would replace it.
 export const brainTools = [
   "artifact_create",
   "artifact_update",

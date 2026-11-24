@@ -237,7 +237,7 @@ export const make = (input: {
             description: `Publish an artifact: a page, site, dashboard or app the person can open and share at its own URL. Use it whenever they ask for an artifact; a loose HTML file is not one. ${prompt}`,
             input: CreateToolInput,
             output: Published,
-            options: { ...options, pinned: true },
+            options,
             execute: (args) => publish(Artifact.ID.make(`art_${Identifier.ascending()}`), args),
           })
           editor.add({
@@ -246,7 +246,7 @@ export const make = (input: {
               "Replace an existing artifact’s files at the same ID and URL, from files or a directory. Find the space’s artifacts and their ids with Ren’s artifact_list tool.",
             input: UpdateToolInput,
             output: Published,
-            options: { ...options, pinned: true },
+            options,
             execute: (args) => publish(args.id, args),
           })
           editor.add({

@@ -252,7 +252,7 @@ export const make = Effect.fnUntraced(function* (input: {
       editor.namespace({
         name: renServer,
         description:
-          "Ren itself: the team’s spaces, chats, tasks, agents and apps, and artifacts, which are pages, sites, dashboards and apps that Ren publishes at their own URL",
+          "Work with the team’s spaces, chats, tasks, agents and apps. Publish artifacts: pages, sites, dashboards and apps, each at its own URL.",
       })
     for (const each of namespaces(Ref.getUnsafe(latest), local)) editor.namespace(each)
   })
