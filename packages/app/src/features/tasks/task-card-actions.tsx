@@ -1,61 +1,22 @@
 import type { TaskInfo } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
-import { IconArchive, IconCircleCheck, IconCircleX, IconExternalLink, IconPlayerPlay } from "@tabler/icons-react"
+import { IconPlayerPlay } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
-import { toast } from "@ren/ui/sonner"
-import { RowMenu } from "../../components/row-menu.js"
-import { errorMessage } from "../../lib/errors.js"
+import { RowMenu, type RowMenuItem } from "../../components/row-menu.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { TaskScopeContext } from "./task-scope-context.js"
+import { TaskActions } from "./task-actions.js"
 
-const failed = (title: string) => (error: unknown) => toast.error(title, { description: errorMessage(error) })
-
-export function TaskCardActions(props: { task: TaskInfo }) {
+export function TaskCardActions(props: { task: TaskInfo; actions: ReadonlyArray<RowMenuItem> }) {
   const { api } = RouterContext.useRouterContext()
   const scope = TaskScopeContext.useOpen()
   const task = props.task
   const start = useMutation(api.task.start.mutationOptions())
-  const update = useMutation(api.task.update.mutationOptions())
-  const archive = useMutation(api.task.archive.mutationOptions())
   const open = (session?: string) => scope.task(task.id, session)
   return (
     <span className="absolute right-2.5 bottom-2.5 z-10 flex items-center gap-1 rounded-md bg-card opacity-0 transition-opacity duration-150 ease-out group-hover/card:opacity-100 focus-within:opacity-100 has-data-popup-open:opacity-100 pointer-coarse:opacity-100">
-      <RowMenu
-        label={`Actions for ${task.title}`}
-        className="flex text-muted-foreground"
-        items={[
-          { label: "Open", icon: IconExternalLink, onSelect: () => open() },
-          {
-            label: "Mark done",
-            icon: IconCircleCheck,
-            onSelect: () => update.mutateAsync({ id: task.id, status: "done" }, { onError: failed("Couldn’t save") }),
-          },
-          {
-            label: "Dismiss",
-            icon: IconCircleX,
-            onSelect: () =>
-              update.mutateAsync({ id: task.id, status: "dismissed" }, { onError: failed("Couldn’t save") }),
-          },
-          {
-            label: "Archive",
-            icon: IconArchive,
-            onSelect: () =>
-              archive.mutateAsync(
-                { id: task.id },
-                {
-                  onSuccess: () => toast.success(`${task.identifier} archived`),
-                  onError: failed("Couldn’t archive the task"),
-                },
-              ),
-            confirm: {
-              title: "Archive this task?",
-              description: "It leaves the task list. Its chats stay.",
-              action: "Archive",
-            },
-          },
-        ]}
-      />
+      <RowMenu label={`Actions for ${task.title}`} className="flex text-muted-foreground" items={props.actions} />
       {task.agentId ? (
         <Button
           variant="outline"
@@ -67,7 +28,7 @@ export function TaskCardActions(props: { task: TaskInfo }) {
               { id: task.id, mode: "new" },
               {
                 onSuccess: (started) => open(started.session?.id),
-                onError: failed("Couldn’t start the task"),
+                onError: TaskActions.failed("Couldn’t start the task"),
               },
             )
           }

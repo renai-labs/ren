@@ -106,7 +106,7 @@ export function UnassignedIcon(props: GlyphProps) {
       className={cn("size-4 text-muted-foreground", props.className)}
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- an inline SVG glyph with a label
       role="img"
-      aria-label={props["aria-label"] ?? "Unassigned"}
+      aria-label={props["aria-label"] ?? "No assignee"}
     >
       <circle
         cx="8"
@@ -134,7 +134,7 @@ export const statuses = {
   backlog: { label: Task.statusLabels.backlog, ring: "dashed", color: "text-muted-foreground" },
   todo: { label: Task.statusLabels.todo, ring: "empty", color: "text-muted-foreground" },
   in_progress: { label: Task.statusLabels.in_progress, ring: "half", color: "text-chart-3" },
-  done: { label: Task.statusLabels.done, ring: "complete", color: "text-[#5e6ad2]" },
+  done: { label: Task.statusLabels.done, ring: "complete", color: "text-chart-6" },
   dismissed: { label: Task.statusLabels.dismissed, ring: "dismissed", color: "text-muted-foreground" },
 } as const
 
@@ -180,22 +180,44 @@ export function PriorityIcon(props: { priority: string | null; className?: strin
   )
 }
 
-export const labelColor = (color: string | null | undefined) => color ?? "var(--muted-foreground)"
+const labelPalette = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+]
+
+const paletteIndex = (name: string) => {
+  let hash = 0
+  for (const char of name.toLowerCase()) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % 9973
+  return hash % labelPalette.length
+}
+
+export const labelColor = (color: string | null | undefined, name?: string) => {
+  if (color) return color
+  return (name && labelPalette[paletteIndex(name)]) || "var(--muted-foreground)"
+}
 
 export function SpaceBadge(props: { name: string }) {
   return (
-    <Badge variant="outline" className="h-6 gap-1.5 rounded-full bg-muted">
-      <IconCube />
-      {props.name}
+    <Badge variant="outline" title={props.name} className="h-6 max-w-40 min-w-0 gap-1.5 rounded-full bg-muted">
+      <IconCube className="shrink-0" />
+      <span className="truncate">{props.name}</span>
     </Badge>
   )
 }
 
-export function LabelBadge(props: { name: string; color?: string | null | undefined }) {
+export function LabelBadge(props: { name: string; color?: string | null | undefined; className?: string }) {
   return (
-    <Badge variant="outline" className="h-6 gap-2 rounded-full bg-muted">
-      <ColorDot color={labelColor(props.color)} />
-      {props.name}
+    <Badge
+      variant="outline"
+      title={props.name}
+      className={cn("h-6 max-w-full min-w-0 gap-2 rounded-full bg-muted", props.className)}
+    >
+      <ColorDot color={labelColor(props.color, props.name)} />
+      <span className="truncate">{props.name}</span>
     </Badge>
   )
 }

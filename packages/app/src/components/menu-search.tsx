@@ -9,7 +9,7 @@ export function MenuSearch(props: {
   separator?: boolean | undefined
 }) {
   return (
-    <>
+    <div className="sticky -top-1 z-10 -mx-1 -mt-1 bg-popover px-1 pt-1">
       <div className="relative">
         <IconSearch className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -24,6 +24,6 @@ export function MenuSearch(props: {
         />
       </div>
       {props.separator === false ? null : <DropdownMenuSeparator className="mt-0" />}
-    </>
+    </div>
   )
 }

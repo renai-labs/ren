@@ -16,6 +16,7 @@ const displayChoices = [
       { value: "space", label: "Space" },
       { value: "status", label: "Status" },
       { value: "agent", label: "Agent" },
+      { value: "label", label: "Label" },
     ],
   },
   {
@@ -93,7 +94,7 @@ export function DisplayOptions(props: {
       >
         <IconAdjustmentsHorizontal />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 gap-0 bg-sidebar p-0">
+      <PopoverContent align="end" className="w-80 gap-0 p-0">
         <Tabs value={props.value.layout} onValueChange={(layout: string) => set({ layout })} className="p-3">
           <TabsList className="h-9 w-full gap-1">
             <TabsTrigger value="list" className="h-7 gap-1.5 border-0 dark:data-active:bg-secondary">

@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react"
+import { Fragment, useState, type ReactElement, type ReactNode } from "react"
 import { IconDots, type Icon } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
@@ -9,6 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@ren/ui/context-menu"
 import { ConfirmDialog, type Confirmation } from "./confirm-dialog.js"
 
 export interface RowMenuItem {
@@ -19,25 +26,46 @@ export interface RowMenuItem {
   readonly destructive?: boolean | undefined
 }
 
+const separated = (items: ReadonlyArray<RowMenuItem>, index: number) =>
+  Boolean(items[index]?.confirm) && index > 0 && !items[index - 1]?.confirm
+
+const variantOf = (item: RowMenuItem) => ((item.destructive ?? Boolean(item.confirm)) ? "destructive" : "default")
+
+function useChoice() {
+  const [confirming, setConfirming] = useState<RowMenuItem>()
+  const [chosen, setChosen] = useState<RowMenuItem>()
+  return {
+    choose: setChosen,
+    onOpenChangeComplete: (open: boolean) => {
+      if (open || !chosen) return
+      setChosen(undefined)
+      if (chosen.confirm) setConfirming(chosen)
+      else void chosen.onSelect()
+    },
+    dialog: confirming?.confirm ? (
+      <ConfirmDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setConfirming(undefined)
+        }}
+        confirmation={confirming.confirm}
+        onConfirm={confirming.onSelect}
+      />
+    ) : null,
+  }
+}
+
 export function RowMenu(props: {
   label: string
   items: ReadonlyArray<RowMenuItem>
   className?: string | undefined
   side?: "top" | "right" | "bottom" | "left"
 }) {
-  const [confirming, setConfirming] = useState<RowMenuItem>()
-  const [chosen, setChosen] = useState<RowMenuItem>()
+  const choice = useChoice()
   if (props.items.length === 0) return null
   return (
     <>
-      <DropdownMenu
-        onOpenChangeComplete={(open) => {
-          if (open || !chosen) return
-          setChosen(undefined)
-          if (chosen.confirm) setConfirming(chosen)
-          else void chosen.onSelect()
-        }}
-      >
+      <DropdownMenu onOpenChangeComplete={choice.onOpenChangeComplete}>
         <DropdownMenuTrigger
           render={
             <Button
@@ -54,11 +82,8 @@ export function RowMenu(props: {
           <DropdownMenuGroup>
             {props.items.map((item, index) => (
               <Fragment key={item.label}>
-                {item.confirm && index > 0 && !props.items[index - 1]?.confirm ? <DropdownMenuSeparator /> : null}
-                <DropdownMenuItem
-                  variant={(item.destructive ?? Boolean(item.confirm)) ? "destructive" : "default"}
-                  onClick={() => setChosen(item)}
-                >
+                {separated(props.items, index) ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuItem variant={variantOf(item)} onClick={() => choice.choose(item)}>
                   <item.icon />
                   {item.label}
                 </DropdownMenuItem>
@@ -67,16 +92,34 @@ export function RowMenu(props: {
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-      {confirming?.confirm ? (
-        <ConfirmDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setConfirming(undefined)
-          }}
-          confirmation={confirming.confirm}
-          onConfirm={confirming.onSelect}
-        />
-      ) : null}
+      {choice.dialog}
+    </>
+  )
+}
+
+export function RowContextMenu(props: {
+  items: ReadonlyArray<RowMenuItem>
+  render: ReactElement
+  children: ReactNode
+}) {
+  const choice = useChoice()
+  return (
+    <>
+      <ContextMenu onOpenChangeComplete={choice.onOpenChangeComplete}>
+        <ContextMenuTrigger render={props.render}>{props.children}</ContextMenuTrigger>
+        <ContextMenuContent className="w-44">
+          {props.items.map((item, index) => (
+            <Fragment key={item.label}>
+              {separated(props.items, index) ? <ContextMenuSeparator /> : null}
+              <ContextMenuItem variant={variantOf(item)} onClick={() => choice.choose(item)}>
+                <item.icon />
+                {item.label}
+              </ContextMenuItem>
+            </Fragment>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
+      {choice.dialog}
     </>
   )
 }

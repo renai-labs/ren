@@ -16,7 +16,7 @@ const isStatus = (value: string): value is Status => Object.keys(statuses).inclu
 const isPriority = (value: string): value is NonNullable<Priority> => Object.keys(priorities).includes(value)
 
 export function StatusMenu(props: {
-  status: Status
+  status: string
   trigger: ReactElement
   children: ReactNode
   onChange: (status: Status) => void
@@ -49,7 +49,7 @@ const priorityChoices = [
 ]
 
 export function PriorityMenu(props: {
-  priority: Priority
+  priority: string | null
   trigger: ReactElement
   children: ReactNode
   onChange: (priority: Priority) => void

@@ -20,7 +20,7 @@ export const preference = Preference.make("tasks.display.v1", Display, {
   orderBy: "created",
   direction: "desc",
   showEmpty: false,
-  properties: ["status", "priority", "assignee", "space", "labels"],
+  properties: ["status", "priority", "assignee", "space", "labels", "due"],
 })
 
 export const scoped = (display: Display, spaceId: string | undefined) => {

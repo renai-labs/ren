@@ -3,6 +3,7 @@ import { useScrollEdges } from "../../lib/use-scroll-edges.js"
 import type { TaskInfo } from "@ren/client"
 import { IconCalendarDue, IconHandStop, IconPlus } from "@tabler/icons-react"
 import { IconAgent } from "../../icons/heroicons.js"
+import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 import { NewTaskDialog } from "../../components/new-task-dialog.js"
@@ -14,6 +15,8 @@ import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { LinkChip } from "./task-links.js"
 import { TaskCardActions } from "./task-card-actions.js"
+import { TaskActions } from "./task-actions.js"
+import { RowContextMenu } from "../../components/row-menu.js"
 import { TaskLink } from "./task-scope.js"
 
 export type BoardGroup = {
@@ -26,12 +29,48 @@ export type BoardGroup = {
 
 const dragType = "application/x-ren-task"
 
+const shownLabels = 3
+
 function BoardAssignee(props: { task: TaskInfo }) {
   const agent = useAgents().agent(props.task.agentId)
   const owner = useMembers().member(props.task.ownerId)
-  if (props.task.agentId) return <IconAgent className="size-4" aria-label={agent?.name ?? "Agent"} />
-  if (owner) return <PersonAvatar name={owner.name} image={owner.image} />
-  return <UnassignedIcon />
+  if (!props.task.agentId && !owner) return <UnassignedIcon />
+  return (
+    <span className="flex items-center gap-1">
+      {props.task.agentId ? <IconAgent className="size-4" aria-label={agent?.name ?? "Agent"} /> : null}
+      {owner ? <PersonAvatar name={owner.name} image={owner.image} /> : null}
+    </span>
+  )
+}
+
+function CardLabels(props: { labels: TaskInfo["labels"] }) {
+  const labels = props.labels
+  return (
+    <>
+      {labels.map((label, index) => (
+        <LabelBadge
+          key={label.id}
+          name={label.name}
+          color={label.color}
+          className={cn(
+            index >= shownLabels && "hidden group-focus-within/card:inline-flex group-hover/card:inline-flex",
+          )}
+        />
+      ))}
+      {labels.length > shownLabels ? (
+        <Badge
+          variant="outline"
+          title={labels
+            .slice(shownLabels)
+            .map((label) => label.name)
+            .join(", ")}
+          className="h-6 rounded-full bg-muted tabular-nums group-focus-within/card:hidden group-hover/card:hidden"
+        >
+          +{labels.length - shownLabels}
+        </Badge>
+      ) : null}
+    </>
+  )
 }
 
 function CardFooter(props: { task: TaskInfo; show: (property: string) => boolean }) {
@@ -44,11 +83,14 @@ function CardFooter(props: { task: TaskInfo; show: (property: string) => boolean
   const due = show("due") ? task.dueAt : null
   if (!space && labels.length === 0 && !priority && !due) return null
   return (
-    <div className={cn("flex min-h-5 flex-wrap items-center gap-1.5", show("status") && "pl-6")}>
+    <div
+      className={cn(
+        "flex min-h-5 flex-wrap items-center gap-1.5 [&_[data-slot=badge]]:text-muted-foreground",
+        show("status") && "pl-6",
+      )}
+    >
       {space}
-      {labels.map((label) => (
-        <LabelBadge key={label.id} name={label.name} color={label.color} />
-      ))}
+      <CardLabels labels={labels} />
       <span className="grow" />
       {due ? (
         <span className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
@@ -70,18 +112,24 @@ function BoardCard(props: {
   const task = props.task
   const show = props.show
   const link = task.links.find((each) => each.kind === "github_pr") ?? task.links.at(0)
+  const actions = TaskActions.useItems(task)
   return (
-    <div
-      draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData(dragType, task.id)
-        event.dataTransfer.effectAllowed = "move"
-        props.onDrag(task.id)
-      }}
-      className={cn(
-        "group/card relative flex cursor-grab flex-col gap-2.5 rounded-xl border bg-card p-3.5 text-sm transition-[opacity,background-color] duration-150 ease-out hover:bg-muted/50 active:cursor-grabbing",
-        props.dragging && "opacity-40",
-      )}
+    <RowContextMenu
+      items={actions}
+      render={
+        <div
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData(dragType, task.id)
+            event.dataTransfer.effectAllowed = "move"
+            props.onDrag(task.id)
+          }}
+          className={cn(
+            "group/card relative flex cursor-grab flex-col gap-2.5 rounded-xl border bg-card p-3.5 text-sm transition-[opacity,background-color] duration-150 ease-out hover:bg-muted/50 active:cursor-grabbing",
+            props.dragging && "opacity-40",
+          )}
+        />
+      }
     >
       <div className="flex items-start gap-2">
         {show("status") ? (
@@ -103,8 +151,8 @@ function BoardCard(props: {
         </span>
       </div>
       <CardFooter task={task} show={show} />
-      <TaskCardActions task={task} />
-    </div>
+      <TaskCardActions task={task} actions={actions} />
+    </RowContextMenu>
   )
 }
 

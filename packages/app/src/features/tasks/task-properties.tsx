@@ -1,9 +1,18 @@
 import type { AgentInfo, LabelInfo, SpaceInfo, TaskInfo } from "@ren/client"
-import { IconAntennaBars5, IconCube, IconEye, IconProgress, IconTag, IconUsers } from "@tabler/icons-react"
+import { IconAntennaBars5, IconCube, IconHandStop, IconProgress, IconTag, IconUserCircle } from "@tabler/icons-react"
 import { Tasks } from "@ren/client/react"
 import { IconAgent } from "../../icons/heroicons.js"
-import type { FilterProperty } from "../../components/filter-menu.js"
-import { PriorityIcon, StatusGlyph, priorities, statuses } from "../../components/task-meta.js"
+import { spaceOptions, type FilterProperty } from "../../components/filter-menu.js"
+import { PersonAvatar } from "../../components/person-avatar.js"
+import { cn } from "cn"
+import {
+  PriorityIcon,
+  StatusGlyph,
+  UnassignedIcon,
+  labelColor,
+  priorities,
+  statuses,
+} from "../../components/task-meta.js"
 import type { Member } from "../../lib/use-members.js"
 
 type Task = TaskInfo
@@ -22,10 +31,7 @@ const propertiesFor = (lookups: TaskLookups): FilterProperty[] => [
     any: "All spaces",
     icon: IconCube,
     single: true,
-    options: lookups.spaces.map((space) => ({
-      value: space.id,
-      label: space.name,
-    })),
+    options: spaceOptions(lookups.spaces),
   },
   {
     key: "status",
@@ -60,19 +66,33 @@ const propertiesFor = (lookups: TaskLookups): FilterProperty[] => [
     any: "Any",
     icon: IconAgent,
     options: [
-      ...lookups.agents.map((agent) => ({ value: agent.id, label: agent.name })),
-      { value: "none", label: "No agent" },
+      ...lookups.agents.map((agent) => ({
+        value: agent.id,
+        label: agent.name,
+        icon: IconAgent,
+      })),
+      {
+        value: "none",
+        label: "No agent",
+        icon: (glyph: { className?: string | undefined }) => (
+          <IconAgent className={cn("text-muted-foreground/50", glyph.className)} />
+        ),
+      },
     ],
   },
   {
     key: "owner",
-    label: "Owner",
+    label: "Assignee",
     any: "Any",
-    icon: IconUsers,
+    icon: IconUserCircle,
     options: [
-      { value: "me", label: "Me" },
-      ...lookups.members.map((member) => ({ value: member.id, label: member.name })),
-      { value: "none", label: "No owner" },
+      { value: "me", label: "Me", icon: IconUserCircle },
+      ...lookups.members.map((member) => ({
+        value: member.id,
+        label: member.name,
+        icon: () => <PersonAvatar name={member.name} image={member.image} />,
+      })),
+      { value: "none", label: "No assignee", icon: UnassignedIcon },
     ],
   },
   {
@@ -83,15 +103,24 @@ const propertiesFor = (lookups: TaskLookups): FilterProperty[] => [
     options: lookups.labels.map((label) => ({
       value: label.name,
       label: label.name,
+      color: labelColor(label.color, label.name),
     })),
   },
   {
     key: "review",
     label: "Review",
     any: "Any",
-    icon: IconEye,
+    icon: IconHandStop,
     single: true,
-    options: [{ value: "needed", label: "Needs review" }],
+    options: [
+      {
+        value: "needed",
+        label: "Needs review",
+        icon: (glyph: { className?: string | undefined }) => (
+          <IconHandStop className={cn("text-chart-3", glyph.className)} />
+        ),
+      },
+    ],
   },
 ]
 
@@ -112,6 +141,7 @@ export const countedTaskProperties = (
       value: option.value,
       label: option.label,
       icon: option.icon,
+      color: option.color,
       count: tasks.filter((task) => (Tasks.filterValues(task, userId)[property.key] ?? []).includes(option.value))
         .length,
     })),
