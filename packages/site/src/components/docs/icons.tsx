@@ -5,22 +5,42 @@ import {
   IconBolt,
   IconBook,
   IconBracketsAngle,
+  IconBrain,
   IconBuildingCommunity,
+  IconBuildingFactory2,
+  IconChartBar,
   IconChartColumn,
   IconChecklist,
   IconClock,
   IconCode,
+  IconCpu,
+  IconCreditCard,
   IconCube,
   IconDeviceDesktop,
+  IconDeviceMobile,
+  IconFileCode,
   IconFileText,
   IconFolder,
+  IconFolderCode,
   IconHome,
+  IconInbox,
   IconLayoutBoard,
+  IconLifebuoy,
+  IconLock,
   IconMailFilled,
   IconMessage,
+  IconMessageChatbot,
   IconPlugConnected,
   IconRulerMeasure,
+  IconScript,
+  IconServer,
+  IconShield,
+  IconSparkles,
+  IconTerminal,
   IconTerminal2,
+  IconTool,
+  IconTools,
+  IconUsers,
   IconVault,
 } from "@tabler/icons-react"
 
@@ -53,29 +73,81 @@ function McpMark(props: { className?: string | undefined }) {
   )
 }
 
+const AGENT_POINTS = [
+  { x: 10, y: 3 },
+  { x: 16.06, y: 6.5 },
+  { x: 16.06, y: 13.5 },
+  { x: 10, y: 17 },
+  { x: 3.94, y: 13.5 },
+  { x: 3.94, y: 6.5 },
+]
+
+function AgentMark(props: { className?: string | undefined }) {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
+      <path
+        d={AGENT_POINTS.map((point) => `M10 10L${point.x} ${point.y}`).join("")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        strokeLinecap="round"
+      />
+      <circle cx={10} cy={10} r={2.6} />
+      {AGENT_POINTS.map((point) => (
+        <circle key={`${point.x},${point.y}`} cx={point.x} cy={point.y} r={1.8} />
+      ))}
+    </svg>
+  )
+}
+
 const ICONS: Record<string, Glyph> = {
+  Agent: AgentMark,
   AtSign: IconAt,
   Blueprint: IconRulerMeasure,
   BookOpen: IconBook,
+  Brain: IconBrain,
   Building2: IconBuildingCommunity,
   Cable: IconPlugConnected,
   CanvasBoard: IconLayoutBoard,
+  ChartBar: IconChartBar,
+  Chatbot: IconMessageChatbot,
   Checklist: IconChecklist,
   Clock: IconClock,
   Code: IconCode,
+  Cpu: IconCpu,
+  CreditCard: IconCreditCard,
   Cube: IconCube,
   Dashboard: IconChartColumn,
   Developer: IconBracketsAngle,
   EnvVariable: IconTerminal2,
+  Factory: IconBuildingFactory2,
+  FileCode: IconFileCode,
   FileText: IconFileText,
   Folder: IconFolder,
+  FolderCode: IconFolderCode,
   Home: IconHome,
+  Inbox: IconInbox,
+  Lifebuoy: IconLifebuoy,
+  Lock: IconLock,
   MailFilled: IconMailFilled,
   MessageSquare: IconMessage,
+  Mobile: IconDeviceMobile,
   Monitor: IconDeviceDesktop,
+  Script: IconScript,
+  Server: IconServer,
+  Shield: IconShield,
   Skill: IconBook,
+  Sparkles: IconSparkles,
+  Terminal: IconTerminal,
+  Tool: IconTool,
+  Tools: IconTools,
+  Users: IconUsers,
   Vault: IconVault,
   Zap: IconBolt,
+  Git: mark(
+    "0 0 24 24",
+    "M23.546 10.93L13.067.452c-.604-.603-1.582-.603-2.188 0L8.708 2.627l2.76 2.76c.645-.215 1.379-.07 1.889.441.516.515.658 1.258.438 1.9l2.658 2.66c.645-.223 1.387-.078 1.9.435.721.72.721 1.884 0 2.604-.719.719-1.881.719-2.6 0-.539-.541-.674-1.337-.404-1.996L12.86 8.955v6.525c.176.086.342.203.488.348.713.721.713 1.883 0 2.6-.719.721-1.889.721-2.609 0-.719-.719-.719-1.879 0-2.598.182-.18.387-.316.605-.406V8.835c-.217-.091-.424-.222-.6-.401-.545-.545-.676-1.342-.396-2.009L7.636 3.7.45 10.881c-.6.605-.6 1.584 0 2.189l10.48 10.477c.604.604 1.582.604 2.186 0l10.43-10.43c.605-.603.605-1.582 0-2.187",
+  ),
   Github: mark(
     "0 0 98 96",
     "M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z",
