@@ -20,16 +20,17 @@ const TITLE_MONO_CHAR_WIDTH = 8.4
 const TITLE_PAD = 8
 const ARROW_GAP = 14
 
-function LabelStack(props: { labels: string[]; x: number }) {
-  const startY = MID_Y - ((props.labels.length - 1) * LINE_HEIGHT) / 2
+function LabelStack(props: { labels: string[]; x: number; scale: number }) {
+  const lineHeight = LINE_HEIGHT * props.scale
+  const startY = MID_Y - ((props.labels.length - 1) * lineHeight) / 2
   return (
     <g className="text-(--diagram-fg)/85">
       {props.labels.map((label, i) => (
         <text
           key={label}
           x={props.x}
-          y={startY + i * LINE_HEIGHT}
-          fontSize={LABEL_FONT_SIZE}
+          y={startY + i * lineHeight}
+          fontSize={LABEL_FONT_SIZE * props.scale}
           fill="currentColor"
           fontFamily={MONO}
           dominantBaseline="middle"
@@ -51,13 +52,13 @@ function segmentsAround(start: number, end: number, gap: Segment) {
   return segments.filter((segment) => segment.from < segment.to)
 }
 
-function BoxBorder(props: { layer: Layer }) {
+function BoxBorder(props: { layer: Layer; scale: number }) {
   const box = props.layer.box
   const x2 = box.x + box.width
   const y2 = box.y + box.height
   const topSegments = segmentsAround(box.x, x2, {
     from: props.layer.labelsX - TITLE_PAD,
-    to: props.layer.labelsX + props.layer.title.length * TITLE_MONO_CHAR_WIDTH + TITLE_PAD,
+    to: props.layer.labelsX + props.layer.title.length * TITLE_MONO_CHAR_WIDTH * props.scale + TITLE_PAD,
   })
   const sideSegments = segmentsAround(box.y, y2, { from: MID_Y - ARROW_GAP / 2, to: MID_Y + ARROW_GAP / 2 })
 
@@ -85,8 +86,10 @@ export function LayerDiagram(props: {
   end: Edge
   arrows: { x1: number; x2: number }[]
   dash: { x1: number; x2: number }
+  fontScale?: number
 }) {
   const marker = useId()
+  const scale = props.fontScale ?? 1
   return (
     <div className={`w-full overflow-hidden ${props.colors}`}>
       <svg
@@ -111,11 +114,11 @@ export function LayerDiagram(props: {
 
         {props.layers.map((layer) => (
           <g key={layer.title} className="text-(--diagram-muted)/60">
-            <BoxBorder layer={layer} />
+            <BoxBorder layer={layer} scale={scale} />
             <text
               x={layer.labelsX}
               y={layer.box.y}
-              fontSize={TITLE_FONT_SIZE}
+              fontSize={TITLE_FONT_SIZE * scale}
               fill="currentColor"
               fontFamily={MONO}
               dominantBaseline="middle"
@@ -127,14 +130,26 @@ export function LayerDiagram(props: {
         ))}
 
         {props.layers.map((layer) => (
-          <LabelStack key={`labels-${layer.title}`} labels={layer.labels} x={layer.labelsX} />
+          <LabelStack key={`labels-${layer.title}`} labels={layer.labels} x={layer.labelsX} scale={scale} />
         ))}
 
         <g className="text-(--diagram-fg)" fontFamily={MONO}>
-          <text x={props.start.x} y={MID_Y} fontSize={LABEL_FONT_SIZE} fill="currentColor" dominantBaseline="middle">
+          <text
+            x={props.start.x}
+            y={MID_Y}
+            fontSize={LABEL_FONT_SIZE * scale}
+            fill="currentColor"
+            dominantBaseline="middle"
+          >
             {props.start.text}
           </text>
-          <text x={props.end.x} y={MID_Y} fontSize={LABEL_FONT_SIZE} fill="currentColor" dominantBaseline="middle">
+          <text
+            x={props.end.x}
+            y={MID_Y}
+            fontSize={LABEL_FONT_SIZE * scale}
+            fill="currentColor"
+            dominantBaseline="middle"
+          >
             {props.end.text}
           </text>
         </g>
