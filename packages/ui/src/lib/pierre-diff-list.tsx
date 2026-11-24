@@ -2,7 +2,9 @@ import { useEffect, useRef, type ReactNode } from "react"
 import { parseDiffFromFile, processFile, type CodeViewDiffItem, type FileDiffMetadata } from "@pierre/diffs"
 import { CodeView, WorkerPoolContext, type CodeViewHandle } from "@pierre/diffs/react"
 import { IconChevronDown, IconChevronRight } from "@tabler/icons-react"
+import { cn } from "cn"
 import type { FileDiffStyle } from "../components/file-diff.js"
+import css from "./pierre-diff-list.css?raw"
 import { longLine } from "./highlighter.js"
 import type { Source } from "./pierre-diff.js"
 import { preferredHighlighter, theme, workerPool } from "./worker-pool.js"
@@ -17,49 +19,7 @@ export interface DiffListFile {
   readonly status: "added" | "deleted" | "modified"
 }
 
-// oxlint-disable-next-line ren/no-comments -- Pierre's stylesheet for the viewer: Ren's surface and fonts, a pinned file header of a fixed height (the virtualizer places rows from it), equal split columns so wrapped rows do not shift, and quiet hunk separators.
-const css = `
-* { --diffs-bg: var(--background) !important; }
-[data-diff] {
-  --diffs-bg-addition-emphasis-override: var(--diff-addition-word);
-  --diffs-bg-deletion-emphasis-override: var(--diff-deletion-word);
-  --diffs-font-family: var(--font-mono);
-}
-[data-diff-type="split"][data-overflow="wrap"] {
-  --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
-}
-[data-diffs-header] {
-  position: sticky !important;
-  top: 0;
-  z-index: 4;
-  height: 36px !important;
-  min-height: 36px !important;
-  padding-block: 0 !important;
-  padding-inline: 6px 12px !important;
-  align-items: center !important;
-  background-color: var(--card) !important;
-  border-bottom: 1px solid var(--border) !important;
-  font-family: var(--font-sans) !important;
-  font-size: 12px !important;
-  line-height: 1 !important;
-}
-[data-diffs-header] :is([data-title], [data-prev-name]) { line-height: 16px !important; }
-[data-diffs-header] [data-metadata] { font-variant-numeric: tabular-nums; }
-[data-diffs-header] :is([data-additions-count], [data-deletions-count]) { display: none !important; }
-:is([data-separator="line-info"], [data-separator="line-info-basic"]) {
-  height: 28px !important;
-  margin-block: 0 !important;
-}
-:is([data-separator="line-info"], [data-separator="line-info-basic"]) [data-separator-content] {
-  font-family: var(--font-sans) !important;
-  font-size: 11px !important;
-}
-@media (prefers-reduced-motion: no-preference) {
-  [data-diff], [data-file] { transition: opacity 150ms ease-out; }
-  @starting-style { [data-diff], [data-file] { opacity: 0; } }
-}
-`
-
+// oxlint-disable-next-line ren/no-comments -- The header and separator heights match pierre-diff-list.css: the virtualizer places rows from them.
 const metrics = { diffHeaderHeight: 36, hunkSeparatorHeight: 28, spacing: 0, paddingTop: 0, paddingBottom: 8 }
 
 const layout = { paddingTop: 0, paddingBottom: 0, gap: 0 }
@@ -96,7 +56,8 @@ const fileDiffOf = (file: DiffListFile) => {
 }
 
 // oxlint-disable-next-line ren/no-comments -- CodeView redraws an item only when its version changes, so the version follows the file's contents and whether it is folded.
-const versionOf = (text: string) => [...text].reduce((hash, char) => (Math.imul(31, hash) + char.charCodeAt(0)) | 0, 0)
+const versionOf = (text: string) =>
+  Array.from(text, (char) => char.codePointAt(0) ?? 0).reduce((hash, code) => (Math.imul(31, hash) + code) | 0, 0)
 
 export function PierreDiffList(props: {
   files: ReadonlyArray<DiffListFile>
@@ -127,7 +88,7 @@ export function PierreDiffList(props: {
       <CodeView
         ref={viewer}
         items={items}
-        className={props.className}
+        className={cn(props.className)}
         options={{
           theme,
           themeType: props.theme,
@@ -145,6 +106,7 @@ export function PierreDiffList(props: {
           itemMetrics: metrics,
           layout,
         }}
+        // ast-grep-ignore: no-render-props -- CodeView hands back the file whose header it draws
         renderHeaderPrefix={(item) => {
           const collapsed = props.collapsed.has(item.id)
           return (
@@ -159,6 +121,7 @@ export function PierreDiffList(props: {
             </button>
           )
         }}
+        // ast-grep-ignore: no-render-props -- CodeView hands back the file whose header it draws
         renderHeaderFilenameSuffix={(item) => (
           <>
             {item.type === "diff" && item.fileDiff.hunks.length === 0 ? (
@@ -167,6 +130,7 @@ export function PierreDiffList(props: {
             {props.action?.(byId.get(item.id)?.path ?? item.id)}
           </>
         )}
+        // ast-grep-ignore: no-render-props -- CodeView hands back the file whose header it draws
         renderHeaderMetadata={(item) => (
           <span className="flex items-center gap-2 text-xs tabular-nums">
             <span className="text-chart-2">+{byId.get(item.id)?.additions ?? 0}</span>
