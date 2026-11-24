@@ -31,12 +31,12 @@ const DOCS: Section = {
     { title: "Behavior", items: ["instructions", "memory", "permissions"] },
     { title: "Admin", items: [{ slug: "machines", label: "Machines" }, "usage", "members"] },
     {
-      title: "Spaces",
-      items: [{ slug: "spaces", label: "Space" }, "inbox", "agents", "factory", "repositories", "compute"],
+      title: "Space",
+      items: [{ slug: "spaces", label: "Overview" }, "inbox", "agents", "factory", "repositories", "compute"],
     },
     {
-      title: "Organisations",
-      items: [{ slug: "organisation", label: "Organisation" }, "model-providers", "billing"],
+      title: "Organisation",
+      items: [{ slug: "organisation", label: "Overview" }, "model-providers", "billing"],
     },
     {
       title: "Clients",
