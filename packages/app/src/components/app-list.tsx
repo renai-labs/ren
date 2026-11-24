@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { useState, type ReactNode } from "react"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
@@ -523,8 +524,7 @@ function McpDialog(props: { mcp: Mcp; listing: Listing; sample: number; icon: Re
   const pending = props.listing.pending
   const tools = props.listing.tools
   const count = pending ? props.sample : tools.length
-  const needle = query.trim().toLowerCase()
-  const shown = tools.filter((tool) => `${tool.name} ${tool.description}`.toLowerCase().includes(needle))
+  const shown = tools.filter((tool) => Search.matches(query, tool.name, tool.description))
   const groups = [
     { title: "Read", tools: shown.filter((tool) => tool.readOnly) },
     { title: "Write", tools: shown.filter((tool) => !tool.readOnly) },

@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { useState, type ComponentType } from "react"
 import {
   IconCircleDashed,
@@ -182,8 +183,7 @@ function CheckboxOptions(props: {
   noun?: string | undefined
 }) {
   const [query, setQuery] = useState("")
-  const needle = query.trim().toLowerCase()
-  const options = props.property.options.filter((option) => option.label.toLowerCase().includes(needle))
+  const options = props.property.options.filter((option) => Search.matches(query, option.label))
   return (
     <>
       {props.property.options.length > 5 ? (

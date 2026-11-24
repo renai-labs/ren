@@ -69,9 +69,7 @@ const wants = (scope: Scope | undefined, prefix: Prefix) =>
   scope !== undefined && (scope.category?.prefix === prefix || (!scope.category && scope.query !== ""))
 
 const named = (entries: ReadonlyArray<Entry>, filter: string) =>
-  entries.filter((entry) =>
-    [entry.item.label, entry.item.handle].some((value) => value.toLowerCase().includes(filter.toLowerCase())),
-  )
+  entries.filter((entry) => Mentions.named(entry.item, filter))
 
 const escaped = (title: string) => title.replaceAll(/[[\]\\]/gu, "\\$&")
 

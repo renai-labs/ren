@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { useState } from "react"
 import { IconChevronDown, IconWorld } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -23,8 +24,7 @@ export function TimeZonePicker(props: {
   className?: string | undefined
 }) {
   const [query, setQuery] = useState("")
-  const needle = query.trim().toLowerCase().replaceAll(" ", "_")
-  const matches = timeZones().filter((zone) => zone.toLowerCase().includes(needle))
+  const matches = timeZones().filter((zone) => Search.matches(query, zone))
   const label =
     props.automatic && props.value === "" ? `Automatic · ${readable(localTimeZone())}` : readable(props.value)
   return (
@@ -54,7 +54,7 @@ export function TimeZonePicker(props: {
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">No timezones match “{query.trim()}”</p>
         ) : null}
         <DropdownMenuRadioGroup value={props.value} onValueChange={(value: string) => props.onChange(value)}>
-          {props.automatic && !needle ? (
+          {props.automatic && !query.trim() ? (
             <>
               <DropdownMenuRadioItem value="" closeOnClick>
                 Automatic · {readable(localTimeZone())}
