@@ -1,6 +1,8 @@
 export * as Database from "./database.js"
 export * as Schema from "./schema.js"
 
+import { Search } from "@ren/schema/search"
+import { and, or, type SQL } from "drizzle-orm"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { makeWithDefaults } from "drizzle-orm/effect-postgres"
 import { Context, Effect, Layer } from "effect"
@@ -44,7 +46,15 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/db/Database") {}
 
-export const contains = (text: string) => `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
+const contains = (text: string) => `%${text.replaceAll(/[\\%_]/gu, "\\$&")}%`
+
+export const search = (
+  text: string | undefined,
+  fields: (pattern: string, word: string) => ReadonlyArray<SQL | undefined>,
+) => {
+  const words = Search.words(text)
+  return words.length > 0 ? and(...words.map((word) => or(...fields(contains(word), word)))) : undefined
+}
 
 export const layer = Layer.effect(
   Service,
