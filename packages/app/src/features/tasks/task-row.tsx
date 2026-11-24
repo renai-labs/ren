@@ -58,7 +58,7 @@ function ProgressRing(props: { done: number; total: number }) {
   )
 }
 
-function SubtaskProgress(props: { done: number; total: number; className?: string }) {
+export function SubtaskProgress(props: { done: number; total: number; className?: string }) {
   return (
     <Badge
       variant="outline"

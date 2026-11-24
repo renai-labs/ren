@@ -3,6 +3,7 @@ import { AppListingSample } from "./app-list.js"
 import { Loading } from "@ren/ui/loading"
 import { Button } from "@ren/ui/button"
 import { Card } from "@ren/ui/card"
+import { Separator } from "@ren/ui/separator"
 import { Switch } from "@ren/ui/switch"
 import { Channels } from "../lib/channels.js"
 import { Routing } from "../lib/routing.js"
@@ -14,6 +15,8 @@ import { ChatSkeleton, ComposerFrame } from "./chat-skeleton.js"
 import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
 import { PermissionRulesSample } from "./permission-rules.js"
+import { Breadcrumb } from "./breadcrumb.js"
+import { TaskLayout } from "./task-layout.js"
 import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId, type PageWidth } from "./page.js"
 
 type SpaceSection = { title: string; description?: (space: string) => string; width?: PageWidth }
@@ -91,24 +94,43 @@ export function FactorySample() {
   )
 }
 
+const taskSections = [
+  { title: "Properties", rows: ["Backlog", "No priority", "No agent", "No assignee", "Set due date"] },
+  { title: "Links", rows: ["Add link"] },
+  { title: "Labels", rows: ["Add label"] },
+  { title: "Space", rows: ["Task space"] },
+  { title: "Parent", rows: ["No parent"] },
+]
+
 function TaskSkeleton() {
   return (
-    <Loading label="Loading task" className="flex-1">
-      <div className="flex min-h-full flex-col gap-8 p-8 lg:flex-row">
-        <article className="flex flex-1 flex-col gap-6">
-          <h1 className="text-2xl font-semibold">Task title</h1>
-          <p>Task description and details.</p>
-          <h2 className="text-sm font-medium">Activity</h2>
-          <p className="text-sm text-muted-foreground">Task activity</p>
-        </article>
-        <aside className="flex w-64 flex-col gap-6 text-sm">
-          {["Status", "Priority", "Assignee", "Space", "Labels"].map((title) => (
-            <div key={title} className="flex flex-col gap-2">
-              <span>{title}</span>
-              <span className="text-muted-foreground">Task property</span>
-            </div>
-          ))}
-        </aside>
+    <Loading label="Loading task" className="flex min-h-0 flex-1 flex-col">
+      <Breadcrumb.Header className={TaskLayout.header}>
+        <span>Tasks</span>
+        <span>Task title</span>
+      </Breadcrumb.Header>
+      <div className={TaskLayout.scroller}>
+        <div className={TaskLayout.body}>
+          <article className={TaskLayout.article}>
+            <h1 className="text-2xl font-semibold">Task title</h1>
+            <p className="text-muted-foreground">Add description…</p>
+            <Separator />
+            <h2 className="text-sm font-medium">Activity</h2>
+            <p className="text-sm text-muted-foreground">Someone created the task · a while ago</p>
+          </article>
+          <aside className={TaskLayout.aside}>
+            {taskSections.map((section) => (
+              <section key={section.title} className="flex flex-col">
+                <h2 className={TaskLayout.sectionTitle}>{section.title}</h2>
+                {section.rows.map((row) => (
+                  <span key={row} className="flex h-8 items-center text-sm">
+                    {row}
+                  </span>
+                ))}
+              </section>
+            ))}
+          </aside>
+        </div>
       </div>
     </Loading>
   )

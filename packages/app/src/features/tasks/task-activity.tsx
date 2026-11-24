@@ -200,16 +200,20 @@ function Events(props: {
           )
         return (
           <div key={event.id} className="flex flex-col gap-1.5">
-            <TraceLine>
-              <TraceIcon className="relative bg-background text-muted-foreground">
+            <TraceLine className="items-start">
+              <TraceIcon className="relative mt-0.5 bg-background text-muted-foreground">
                 <EventMark event={event} />
               </TraceIcon>
-              <TraceTitle>
+              <TraceTitle className="[overflow-wrap:anywhere] whitespace-normal">
                 {props.names.actor(event.actor)} {TaskEvent.describe(event.data, props.names)}{" "}
-                <span className="text-muted-foreground/70">· {when(event.createdAt)}</span>
+                <span className="text-muted-foreground">· {when(event.createdAt)}</span>
               </TraceTitle>
             </TraceLine>
-            {note ? <p className="pl-6 text-sm whitespace-pre-wrap text-muted-foreground">{note}</p> : null}
+            {note ? (
+              <Markdown source="user" className="pl-6 text-sm text-muted-foreground">
+                {note}
+              </Markdown>
+            ) : null}
           </div>
         )
       })}
@@ -233,10 +237,14 @@ function CommentCard(props: {
     >
       <ItemHeader className="justify-start gap-2">
         <ActorMark actor={props.comment.author} names={props.names} />
-        <span className="font-medium">{props.names.actor(props.comment.author)}</span>
-        <span className="text-muted-foreground">{when(props.comment.createdAt)}</span>
+        <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{props.names.actor(props.comment.author)}</span>
+        <span className="shrink-0 text-muted-foreground">{when(props.comment.createdAt)}</span>
       </ItemHeader>
-      <Markdown driveFile={driveFile} className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md">
+      <Markdown
+        driveFile={driveFile}
+        videos
+        className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md"
+      >
         {props.comment.body}
       </Markdown>
     </Item>
@@ -361,6 +369,14 @@ export function TaskActivity(props: { task: TaskInfo; onOpenSession: (sessionId:
           </Trace>
         </Loading>
       ) : null}
+      {activity.isError ? (
+        <p className="text-sm text-muted-foreground">
+          Couldn’t load the activity.{" "}
+          <Button variant="link" className="h-auto p-0" onClick={() => void activity.refetch()}>
+            Try again
+          </Button>
+        </p>
+      ) : null}
       <div className="flex flex-col gap-4">
         {blocksOf(activity.data ?? []).map((block) =>
           block.kind === "events" ? (
@@ -374,9 +390,11 @@ export function TaskActivity(props: { task: TaskInfo; onOpenSession: (sessionId:
             />
           ),
         )}
-        <div className="pt-4">
-          <CommentComposer task={props.task} />
-        </div>
+        {props.task.canUpdate ? (
+          <div className="pt-4">
+            <CommentComposer task={props.task} />
+          </div>
+        ) : null}
       </div>
     </section>
   )
