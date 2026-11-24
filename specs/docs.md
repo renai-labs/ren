@@ -53,14 +53,13 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |               | Drive           | `drive`           | `concepts/storage`                                  |
 |               | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
 |               | Apps            | `apps`            | `concepts/apps`                                     |
-|               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
-|               | Permissions     | `permissions`     | New                                                 |
-|               | Memory          | `memory`          | Parts of `concepts/storage`                         |
 |               | Credentials     | `credentials`     | `concepts/credentials`                              |
 |               | Channels        | `channels`        | `concepts/channels/index`                           |
+|               | Permissions     | `permissions`     | New                                                 |
+|               | Memory          | `memory`          | Parts of `concepts/storage`                         |
 |               | Machines        | `machines`        | `concepts/environments`                             |
 |               | Usage           | `usage`           | New                                                 |
-|               | Custom Apps     | `custom-apps`     | Parts of `concepts/apps`                            |
+|               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
 | Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
 |               | Model Providers | `model-providers` | New                                                 |
 |               | Billing         | `billing`         | New                                                 |
@@ -85,7 +84,7 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |             | The `.ren` folder | `developers/ren-folder`      | New                          |
 |             | llms.txt          | `developers/llms-txt`        | `developers/llms-txt`        |
 
-Sidebar entries: 26 on the Documentation tab and 9 on the Developers tab. Supporting guides may be linked without a sidebar entry.
+Sidebar entries: 25 on the Documentation tab and 9 on the Developers tab. Supporting guides may be linked without a sidebar entry.
 
 ## 3. Redirects
 
@@ -574,24 +573,8 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Each app's page: example prompts, start a chat, connection details, share links.
 - Add to space. Managed apps are added in one click.
 - App accounts: unique names, space pills, **Change owner**.
-- Bundles. Link to Custom Apps for app definitions and dependencies.
+- Bundles. Cover Custom Apps here: define an organisation app and its dependencies (up to three levels).
 - The connect card works on web and mobile.
-
-**Members**
-
-- **Add members**: Emails, Invite role, Add to spaces.
-- Invite links (1, 7 or 30 days). Space invite links. Asking to join, with approve or decline.
-- Owners and removals. Leave organization. Delete account (7 days).
-- Cover organisation membership and space access in separate task sections. Give each a stable heading for overview links.
-
-**Permissions**
-
-- Organization, space and agent permission pages, and how they stack.
-
-**Memory**
-
-- Org memory in **Settings → Memory**. Space memory.
-- The list and editor sheet. How agents read and edit memory.
 
 **Credentials**
 
@@ -607,6 +590,15 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - A place maps to a space and an optional agent. The default space. The fallback switch, off for public repos.
 - Triggers. The `channel_reply` tool.
 
+**Permissions**
+
+- Organization, space and agent permission pages, and how they stack.
+
+**Memory**
+
+- Org memory in **Settings → Memory**. Space memory.
+- The list and editor sheet. How agents read and edit memory.
+
 **Machines**
 
 - Brain and Hand, defined.
@@ -620,10 +612,12 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 - Show organisation spending and how to inspect a single space. Explain model, compute and tool costs, and cost in the chat header.
 
-**Custom Apps**
+**Members**
 
-- Define an organisation app and its dependencies. Link to Apps for adding an existing app to a space and connecting an app account.
-- Dependencies come only from the spec, at most 3 levels deep.
+- **Add members**: Emails, Invite role, Add to spaces.
+- Invite links (1, 7 or 30 days). Space invite links. Asking to join, with approve or decline.
+- Owners and removals. Leave organization. Delete account (7 days).
+- Cover organisation membership and space access in separate task sections. Give each a stable heading for overview links.
 
 ### Organisations
 
