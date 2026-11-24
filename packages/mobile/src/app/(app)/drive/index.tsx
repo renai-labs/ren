@@ -3,7 +3,7 @@ import type { FileSystemAction, FileSystemEntry, FileSystemPage, SpaceInfo } fro
 import { DriveQuery } from "@ren/client/react"
 import { Bytes } from "@ren/util/bytes"
 import { FileName } from "@ren/util/file-name"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import IconX from "@tabler/icons-react-native/IconX"
 import {
   type InfiniteData,
