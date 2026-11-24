@@ -18,7 +18,7 @@ import { Agents } from "../../lib/agents.js"
 import { errorMessage } from "../../lib/errors.js"
 import { modelKey } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import { useSpaces } from "../../lib/use-spaces.js"
 
 const modelsProbe = Session.ID.create()

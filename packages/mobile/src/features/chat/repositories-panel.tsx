@@ -1,7 +1,7 @@
 import { Repositories } from "@ren/chat"
 import { SpaceRepositories } from "@ren/client/react"
 import { ErrorText } from "@ren/util/error-text"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import { useQuery, type UseQueryResult } from "@tanstack/react-query"
 import { cn } from "cn"
 import { useState } from "react"
