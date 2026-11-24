@@ -26,6 +26,7 @@ import { SessionPolicy } from "./session/policy.js"
 import { SettingsPolicy } from "./settings/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 import { TaskPolicy } from "./task/policy.js"
+import { ViewPolicy } from "./view/policy.js"
 import { WebhookPolicy } from "./webhook/policy.js"
 
 // oxlint-disable-next-line ren/no-comments -- access §2: services pass facts; only policy documents decide.
@@ -107,6 +108,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...AppPolicy.documents,
   ...AppProfilePolicy.documents,
   ...TaskPolicy.documents,
+  ...ViewPolicy.documents,
   ...CredentialPolicy.documents,
   ...OAuthAppPolicy.documents,
   ...RenInferencePolicy.documents,
