@@ -4,28 +4,39 @@ The docs at `useren.ai/docs` describe Ren v1. They were ported on 27 Oct 2026 (`
 
 Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs/nav.ts`. Checked against `main` at `9ad8b9d`.
 
+### Sources
+
+The content is complete. It is spread over two sources, and every page starts from both:
+
+- **The live docs** at `useren.ai/docs`: the baseline text of each page.
+- **[Product documentation notes](https://app.notion.com/p/dotren/Product-documentation-notes-3eb99288f2118002b1afebace49e1577)** (Notion): the questions each page must answer. The notes were written for v1. Read "project" as "space", and drop the questions about removed features (§4).
+
+The **[Docs writing style guidelines](https://app.notion.com/p/3eb99288f2118057ba98cb1c66b26462)** (Notion) set how a page reads. §6 adds Ren's own rules.
+
+Each page gets the same four changes: trim it, rewrite it more concisely, update stale facts against `main`, and move content to the page that owns it. Product docs answer every question a reader has about the subject of the page.
+
 ## 1. Decisions
 
-| Topic           | Decision                                                                                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Address         | Stays at `useren.ai/docs`.                                                                                                                                              |
-| Readers         | Product pages: founders and senior leads, technical enough to follow. Developers tab: engineers only.                                                                   |
-| Layout          | Group pages by the reader’s task. A feature shared by organisations and spaces has one page in the shared groups: Work, Integrations, Behavior or Admin (§2).           |
-| Page shape      | Definition, screenshot and "how to use" on every page. Rules & limits, When it fails and Examples only when there is real content.                                      |
-| Code            | None in product pages. They link to the Developers tab.                                                                                                                 |
-| Beta            | Only the Mobile app; mark its entry on Welcome with a Beta badge. A later beta feature gets a "Beta" badge on its normal page.                                          |
-| Unreleased work | Documented only when it ships, with the Beta label if it is in beta.                                                                                                    |
-| Examples        | Real uses only. Before each page, the author asks the team for 3 to 5.                                                                                                  |
-| Terms           | chat, space, secret, app account, agent.                                                                                                                                |
-| Voice           | "You", US English, Ren is "it".                                                                                                                                         |
-| Writing rules   | Diátaxis for page purpose and the no-ai-slop rules for sentences (§6).                                                                                                  |
-| Screenshots     | Light and dark, following the reader's theme. Captured from Ren's own organization, with private data blurred.                                                          |
-| Video           | Only for multi-step flows: Quickstart, connecting an app.                                                                                                               |
-| Welcome         | Keeps its skeleton and the hero line "Build your agent factory". It absorbs "How Ren is organized".                                                                     |
-| Removed         | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                       |
-| Method          | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab. |
-| Shipping        | One draft PR. Commit 1 is the frame (§7), then one commit per finalized page, the Documentation tab first.                                                              |
-| Review          | `kashikarparth` and `shreyansh073` review once, at the end.                                                                                                             |
+| Topic           | Decision                                                                                                                                                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Address         | Stays at `useren.ai/docs`.                                                                                                                                                                                           |
+| Readers         | Product pages: founders and senior leads, technical enough to follow. Developers tab: engineers only.                                                                                                                |
+| Layout          | Group pages by the reader’s task. A feature shared by organizations and spaces has one page in the shared groups: Work, Integrations, Behavior or Admin (§2).                                                        |
+| Page shape      | Definition, screenshot and "how to use" on every page. Rules & limits, When it fails and Examples only when there is real content.                                                                                   |
+| Code            | None in product pages. They link to the Developers tab.                                                                                                                                                              |
+| Beta            | Only the Mobile app; mark its entry on Welcome with a Beta badge. A later beta feature gets a "Beta" badge on its normal page.                                                                                       |
+| Unreleased work | Documented only when it ships, with the Beta label if it is in beta.                                                                                                                                                 |
+| Examples        | Real uses only. Before each page, the author asks the team for 3 to 5.                                                                                                                                               |
+| Terms           | chat, space, secret, app account, agent.                                                                                                                                                                             |
+| Voice           | "You", US English, Ren is "it".                                                                                                                                                                                      |
+| Writing rules   | The Notion style guidelines (Sources), Diátaxis for page purpose and the no-ai-slop rules for sentences (§6).                                                                                                        |
+| Screenshots     | Light (`<name>.png`) and dark (`<name>.dark.png`), following the reader's theme. Captured from a local Ren seeded with the Northwind organization and its member Maya Shen. Tiles use 16:10 crops of the main panel. |
+| Video           | Only for multi-step flows: Quickstart, connecting an app.                                                                                                                                                            |
+| Welcome         | The hero line "Build your agent factory", then How Ren is organized, Use from anywhere and Working with Ren. Read next comes from the sidebar (§6).                                                                  |
+| Removed         | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                                                                    |
+| Method          | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab.                                              |
+| Shipping        | One draft PR. Commit 1 is the frame (§7), then one commit per finalized page, the Documentation tab first.                                                                                                           |
+| Review          | `kashikarparth` and `shreyansh073` review once, at the end.                                                                                                                                                          |
 
 ## 2. Sidebar
 
@@ -33,11 +44,11 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 
 ### Documentation tab
 
-**One page per feature.** When a feature appears at both organisation and space level, give it one page in **Work**, **Integrations**, **Behavior** or **Admin**. On that page, show what a reader can do at each level and where the steps differ. Use task headings, such as “Invite someone to the organisation” and “Add someone to a space” on **Members**.
+**One page per feature.** When a feature appears at both organization and space level, give it one page in **Work**, **Integrations**, **Behavior** or **Admin**. On that page, show what a reader can do at each level and where the steps differ. Use task headings, such as “Invite someone to the organization” and “Add someone to a space” on **Members**.
 
-The **Organisation** and **Space** overviews link directly to the relevant heading on the shared page. For example, link from Space to **Members → Add someone to a space**. Reserve the two groups for work specific to that level: **Billing** belongs under **Organisation**; **Inbox**, **Agents**, and **Factory** belong under **Space**. The first page of each group is labelled **Overview**.
+The **Organization** and **Space** overviews link directly to the relevant heading on the shared page. For example, link from Space to **Members → Add someone to a space**. Reserve the two groups for work specific to that level: **Billing** belongs under **Organization**; **Inbox**, **Agents**, and **Factory** belong under **Space**. The first page of each group is labelled **Overview**.
 
-Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organisation or in one space. **Billing** answers “How do I change our plan?”
+Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organization or in one space. **Billing** answers “How do I change our plan?”
 
 | Group        | Page            | Slug              | Source                                              |
 | ------------ | --------------- | ----------------- | --------------------------------------------------- |
@@ -63,7 +74,7 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |              | Factory         | `factory`         | New                                                 |
 |              | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
 |              | Compute         | `compute`         | Space compute settings from `concepts/environments` |
-| Organisation | Overview        | `organisation`    | Parts of `concepts/organizations`                   |
+| Organization | Overview        | `organization`    | Parts of `concepts/organizations`                   |
 |              | Model Providers | `model-providers` | New                                                 |
 |              | Billing         | `billing`         | New                                                 |
 | Clients      | Ren MCP         | `ren-mcp`         | New                                                 |
@@ -114,7 +125,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 
 ### 4.2 Sidebar
 
-Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Space** and **Organisation**. Add **Clients** for Ren MCP and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
+Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Space** and **Organization**. Add **Clients** for Ren MCP and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -473,10 +484,10 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 **Welcome**
 
-- Keep the skeleton: Hero ("Build your agent factory"), Use from anywhere, Working with Ren, Continue.
-- Entries: App, Slack, GitHub, Claude/ChatGPT, CLI, Mobile (Beta).
-- Spotlights: Chats, Tasks, Agents & factory, Automations, Artifacts, Apps. No Projects.
-- Add a short "How Ren is organized" section: organization → spaces (shared and private) → agents → chats and tasks, with what each level holds.
+- Sections: Hero ("Build your agent factory") and its screenshot, How Ren is organized, Use from anywhere, Working with Ren. Read next comes from the sidebar (§6).
+- Entries: App, Slack, GitHub, Ren MCP, CLI, Mobile (Beta).
+- Spotlights: Chats, Tasks, Agent factory, Automations, Artifacts, Apps. No Projects.
+- How Ren is organized: the diagram, then one line per level (organization, space, agent, chats and tasks). No examples.
 
 **Quickstart**
 
@@ -537,7 +548,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Each app's page: example prompts, start a chat, connection details, share links.
 - Add to space. Managed apps are added in one click.
 - App accounts: unique names, space pills, **Change owner**.
-- Bundles. Cover Custom Apps here: define an organisation app and its dependencies (up to three levels).
+- Bundles. Cover Custom Apps here: define an organization app and its dependencies (up to three levels).
 - The connect card works on web and mobile.
 
 **Credentials**
@@ -574,24 +585,24 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 **Usage**
 
-- Show organisation spending and how to inspect a single space. Explain model, compute and tool costs, and cost in the chat header.
+- Show organization spending and how to inspect a single space. Explain model, compute and tool costs, and cost in the chat header.
 
 **Members**
 
 - **Add members**: Emails, Invite role, Add to spaces.
 - Invite links (1, 7 or 30 days). Space invite links. Asking to join, with approve or decline.
 - Owners and removals. Leave organization. Delete account (7 days).
-- Cover organisation membership and space access in separate task sections. Give each a stable heading for overview links.
+- Cover organization membership and space access in separate task sections. Give each a stable heading for overview links.
 
-### Organisation
+### Organization
 
-**Organisation**
+**Organization**
 
-- Explain what the organisation holds and which settings apply to all spaces. Link to organisation tasks on Members, Permissions, Memory, Credentials and Usage, and to Model Providers and Billing.
+- Explain what the organization holds and which settings apply to all spaces. Link to organization tasks on Members, Permissions, Memory, Credentials and Usage, and to Model Providers and Billing.
 
 **Model Providers**
 
-- Configure an inference provider for the organisation in **Settings → Providers → Inference keys**.
+- Configure an inference provider for the organization in **Settings → Providers → Inference keys**.
 - The model picker (⌘').
 - Default model order: space → organization → Ren.
 - Credits and "Uses Ren credits" on managed apps.
@@ -601,7 +612,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 **Billing**
 
-- Show how to manage the organisation’s plan and subscription. Link to Usage for the spending breakdown.
+- Show how to manage the organization’s plan and subscription. Link to Usage for the spending breakdown.
 
 ### Space
 
@@ -741,6 +752,8 @@ Commit 1 adds this file. Every later commit follows it.
   - Bold sprinkled mid-sentence
   - Clusters of em dashes
 - **Portability test.** Cut any sentence that could appear unchanged in another product's docs.
+- **Read next.** Every page ends with the next six pages of its sidebar tab. The page template adds it, so never write one by hand.
+- **Summary.** Each page has a `summary` of at most 8 words for its Read next card, and a full-sentence `description` for search results.
 - **Beta.** Use the `Beta` badge on a page or section. Never document a feature that has not shipped.
 - **Private services.** Call them only "the inference service" and "the integrations service".
 - **Facts.** Check every fact against `main` before the page ships. Write no stubs or "coming soon" pages.
@@ -751,13 +764,13 @@ The rewrite goes page by page. A page is finished before the next one starts. Bo
 
 ### 7.1 The loop for each page
 
-| Step        | Who           | What                                                                                                                                                                                             |
-| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Analyze  | Agent         | Read the current page (if any), its §4.3 removals and its §5 contents. Check every fact against `main` again, since the code moves on. List what stays, what changes, what goes and what is new. |
-| 2. Ask      | Agent → owner | One round of questions for the page: real examples, its §8 items, and anything the code cannot answer.                                                                                           |
-| 3. Draft    | Agent         | Write the page to the §6 rules. Take its screenshots.                                                                                                                                            |
-| 4. Review   | Owner         | Read the draft. Ask for changes until it is right.                                                                                                                                               |
-| 5. Finalize | Owner         | Approve the page. The agent commits it, updates this spec (§2, §4, §5, §8) with anything that changed, and starts the next page.                                                                 |
+| Step        | Who           | What                                                                                                                                                                                                                              |
+| ----------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Analyze  | Agent         | Read the live page, its questions in the Notion notes (Sources), its §4.3 removals and its §5 contents. Check every fact against `main` again, since the code moves on. List what stays, what changes, what goes and what is new. |
+| 2. Ask      | Agent → owner | One round of questions for the page: real examples, its §8 items, and anything the code cannot answer.                                                                                                                            |
+| 3. Draft    | Agent         | Trim, rewrite, update and relocate (Sources), to the §6 rules. Take its screenshots.                                                                                                                                              |
+| 4. Review   | Owner         | Read the draft. Ask for changes until it is right.                                                                                                                                                                                |
+| 5. Finalize | Owner         | Approve the page. The agent commits it, updates this spec (§2, §4, §5, §8) with anything that changed, and starts the next page.                                                                                                  |
 
 No page starts before the one before it is finalized. A finalized page is reopened only if a later page proves it wrong.
 
