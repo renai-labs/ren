@@ -58,6 +58,7 @@ import { useLabels } from "../../lib/use-labels.js"
 import { useMembers, type Member } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { ColorDot } from "@ren/ui/color-dot"
+import { DriveSpace } from "../../components/drive-file.js"
 import { TaskDescription } from "./task-description.js"
 import { TaskActivity } from "./task-activity.js"
 import { TaskLinks } from "./task-links.js"
@@ -293,47 +294,49 @@ function TaskArticle(props: {
 }) {
   const task = props.task
   return (
-    <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 self-start pt-12 pb-24">
-      <h1 className="sr-only">{task.title}</h1>
-      {task.parent ? (
-        <TaskLink
-          taskId={task.parent.id}
-          title={`Back to ${task.parent.identifier}`}
-          className="-mb-3 flex h-7 w-fit max-w-full items-center gap-1.5 rounded-full border bg-muted px-2.5 text-xs text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
-        >
-          <IconArrowUpLeft className="size-3.5 shrink-0" />
-          <IconChecklist className="size-3.5 shrink-0" />
-          <span className="truncate font-medium text-foreground">{task.parent.title}</span>
-        </TaskLink>
-      ) : null}
-      <Textarea
-        key={`title-${task.title}`}
-        defaultValue={task.title}
-        readOnly={!task.canUpdate}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault()
-            event.currentTarget.blur()
-          }
-          if (event.key === "Escape") {
-            event.currentTarget.value = task.title
-            event.currentTarget.blur()
-          }
-        }}
-        onBlur={(event) => {
-          const title = event.currentTarget.value.trim()
-          if (!title) event.currentTarget.value = task.title
-          else if (title !== task.title) props.onChange({ title })
-        }}
-        aria-label="Task title"
-        className="min-h-0 shrink-0 resize-none rounded-none border-0 bg-transparent p-0 text-2xl font-semibold tracking-heading shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
-      />
-      {task.humanReview ? <ReviewBanner task={task} onOpenSession={props.onOpenSession} /> : null}
-      <TaskDescription task={task} onChange={(description) => props.onChange({ description })} />
-      <Subtasks task={task} />
-      <Separator />
-      <TaskActivity taskId={task.id} onOpenSession={props.onOpenSession} />
-    </article>
+    <DriveSpace value={task.spaceId}>
+      <article className="mx-auto flex w-full max-w-200 min-w-0 flex-col gap-6 self-start pt-12 pb-24">
+        <h1 className="sr-only">{task.title}</h1>
+        {task.parent ? (
+          <TaskLink
+            taskId={task.parent.id}
+            title={`Back to ${task.parent.identifier}`}
+            className="-mb-3 flex h-7 w-fit max-w-full items-center gap-1.5 rounded-full border bg-muted px-2.5 text-xs text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground"
+          >
+            <IconArrowUpLeft className="size-3.5 shrink-0" />
+            <IconChecklist className="size-3.5 shrink-0" />
+            <span className="truncate font-medium text-foreground">{task.parent.title}</span>
+          </TaskLink>
+        ) : null}
+        <Textarea
+          key={`title-${task.title}`}
+          defaultValue={task.title}
+          readOnly={!task.canUpdate}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              event.currentTarget.blur()
+            }
+            if (event.key === "Escape") {
+              event.currentTarget.value = task.title
+              event.currentTarget.blur()
+            }
+          }}
+          onBlur={(event) => {
+            const title = event.currentTarget.value.trim()
+            if (!title) event.currentTarget.value = task.title
+            else if (title !== task.title) props.onChange({ title })
+          }}
+          aria-label="Task title"
+          className="min-h-0 shrink-0 resize-none rounded-none border-0 bg-transparent p-0 text-2xl font-semibold tracking-heading shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
+        />
+        {task.humanReview ? <ReviewBanner task={task} onOpenSession={props.onOpenSession} /> : null}
+        <TaskDescription task={task} onChange={(description) => props.onChange({ description })} />
+        <Subtasks task={task} />
+        <Separator />
+        <TaskActivity task={task} onOpenSession={props.onOpenSession} />
+      </article>
+    </DriveSpace>
   )
 }
 
