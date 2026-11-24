@@ -224,7 +224,10 @@ export function RouteSkeleton() {
   if (path === "/tasks") return <TasksSkeleton />
   if (path === "/automations")
     return (
-      <PageSkeleton title="Automations" description="Agents that run on a schedule, or when another app sends a request.">
+      <PageSkeleton
+        title="Automations"
+        description="Agents that run on a schedule, or when another app sends a request."
+      >
         <TableSample columns={["Automation", "Trigger", "Next run", "Status", ""]} />
       </PageSkeleton>
     )

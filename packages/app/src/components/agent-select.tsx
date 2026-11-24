@@ -12,7 +12,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { InputGroupButton } from "@ren/ui/input-group"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import { pickerPageSize } from "../lib/pagination.js"
 import { RouterContext } from "../lib/router-context.js"
 import { useModels } from "../lib/use-models.js"

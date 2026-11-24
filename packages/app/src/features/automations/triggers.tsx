@@ -414,6 +414,7 @@ export function AddTrigger(props: {
   onWebhook: () => void
   onPreset: (preset: AppPreset) => void
 }) {
+  const label = props.current ? "Change trigger" : "Add trigger"
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -425,7 +426,7 @@ export function AddTrigger(props: {
         }
       >
         {props.current ? <IconArrowsExchange data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-        {props.only ? "Change schedule" : props.current ? "Change trigger" : "Add trigger"}
+        {props.only ? "Change schedule" : label}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuGroup>
