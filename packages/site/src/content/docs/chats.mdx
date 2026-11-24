@@ -1,119 +1,180 @@
 ---
 title: Chats
 icon: MessageSquare
-description: Start a chat in the right project, pick a model and reasoning effort, mention what Ren needs, and attach files.
-summary: Message Ren and follow each step
+description: Start a chat in a space, pick the model, mention what Ren needs, steer it while it works, and follow each step in the side panel.
+summary: Message Ren, steer it and follow each step
 ---
 
-A chat is a conversation with Ren in a [project](/docs/concepts/projects/). It holds your requests, the replies from Ren, and the actions of Ren. Ren uses the instructions, repositories, apps, skills, storage, and permissions of the project.
+A chat is a conversation with Ren in a [space](/docs/spaces/). Ren uses the instructions, apps, repositories, drive and permissions of that space.
 
 <Screenshot
-  shot="chats/transcript"
-  alt="A chat with a request from the user and Ren's reply"
-  caption="A chat with a request from the user and the reply from Ren."
+  shot="chats/overview-split"
+  alt="A chat in the Engineering space with the Changes tab open in the right side panel, in Split view"
+  caption="A chat with the side panel open."
 />
-
-## Where chats come from
-
-You can start a chat in the web app. A [channel](/docs/channels/), a [schedule](/docs/automations/), or a [task](/docs/tasks/) can also start a chat. All chats show in the chat list in the sidebar. You can filter the list by source, creator, space, project, or status.
-
-## Who can see a chat
-
-| Location of the project | Who can see its chats                |
-| ----------------------- | ------------------------------------ |
-| A shared space          | Everyone in the space of the project |
-| Your personal space     | Only you                             |
 
 ## Start a chat
 
-1. Select **New chat** in the sidebar.
-2. Look at **Working in** below the composer. It shows the space and the project that the chat runs in.
-3. If you want another project, select **Working in** and choose the project.
-4. Type your request and press Enter.
+<Steps>
 
-<Video
-  clip="chats/composer"
-  title="Start a chat: choose the project, the model, and the effort, attach a file, mention an app, and send"
-  caption="Choose the project, the model, and the effort, attach a file, and mention an app before you send."
-/>
+1. Select **New Chat** in the sidebar.
 
-## Model and reasoning effort
+2. Check **Working in** above the composer. It shows the space of the chat. Select it to choose another space.
 
-Select the model picker in the composer to choose a model. For models that support it, the same picker sets the reasoning effort. With a higher effort, Ren spends more time on thinking before it answers.
+3. Type your request and press Enter.
 
-If you do not pick a model, Ren uses the first available default in this order:
+</Steps>
 
-1. Project
-2. Space
-3. Organization
-4. Ren
+A chat can also start from a [channel](/docs/channels/), a [schedule](/docs/automations/) or a [task](/docs/tasks/). Filter all your chats by space, status, where they started or when they were updated from **Chats** in the sidebar.
 
-To go back to this behavior, select the default entry in the model picker.
+## Who can see a chat
+
+| Space of the chat  | Who can see it            |
+| ------------------ | ------------------------- |
+| A shared space     | Every member of the space |
+| Your private space | Only you                  |
+
+## Model
+
+Select the model name in the composer to choose another model. For models that support it, the dropdown next to the model sets the reasoning effort. You can also press `⌘` + `'` or send `/model`.
+
+A new model applies from your next message. If you do not pick one, Ren uses the default model of the space, or of the organization if the space has none.
 
 ## Mentions
 
-Type `@` in the composer to mention an item. Ren adds the item to the message as context.
+Type `@` in the composer. Pick a category, then the item. The mention applies to that message only.
 
-| Mention      | What it tells Ren                                                         |
-| ------------ | ------------------------------------------------------------------------- |
-| An app       | Use this app. If it is not connected yet, Ren shows a card to connect it. |
-| A skill      | Use this skill's instructions.                                            |
-| A custom MCP | Use this custom MCP's tools.                                              |
-| A repository | Work in this repository from the project.                                 |
-| A project    | The request is about this project.                                        |
+<Screenshot
+  shot="chats/mentions"
+  alt="The mention menu below the composer with Tasks, Chats, Apps, Agents, Files and Repositories"
+  caption="Type @ to open the mention menu."
+/>
 
-A mention applies to one message. To make an app, a skill, or a custom MCP available in every chat, attach it to the project. See [Projects](/docs/concepts/projects/).
+| Category     | What Ren gets                                                              |
+| ------------ | -------------------------------------------------------------------------- |
+| Tasks        | A link to the task.                                                        |
+| Chats        | The ID of the chat, so Ren can read it.                                    |
+| Apps         | Access to the app. If it is not connected, Ren shows a card to connect it. |
+| Agents       | The name of the agent, so you can hand work to it.                         |
+| Files        | The path of the file on the computer of the chat or in the space drive.    |
+| Repositories | The repository to work in.                                                 |
 
-## Attachments
+## Attach files
 
-To attach a file, drag it onto the composer. You can also select **+** and then **Upload attachment**.
+Select **+** in the composer, drag a file onto it, or paste it. Ren reads images, PDFs and text files directly. It saves other files to the computer of the chat and opens them with its tools.
 
-| File                                               | What Ren does                                                          |
-| -------------------------------------------------- | ---------------------------------------------------------------------- |
-| Image up to 20 MB, or PDF or text file up to 10 MB | Reads the file directly                                                |
-| Larger file, or other format                       | Saves the file to the machine of the space and opens it with its tools |
+## Send while Ren works
 
-## File viewer
+You do not have to wait for Ren to finish. A message you send while Ren works waits above the composer until the current turn ends (queue). To make Ren read it now (steer), hover over it and select **Send now**.
 
-Select a file in the chat to open it in the viewer. This works for files that you attach and for files that Ren creates.
+<Screenshot
+  shot="chats/send-now"
+  alt="Two queued messages above the composer, with Send now on the first one"
+  caption="Hover over a queued message to send it now."
+/>
 
-| File type                                                                        | What the viewer does                                   |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Images, PDFs, spreadsheets, Word documents, PowerPoint decks, text or code files | Shows a preview in place                               |
-| Audio and video                                                                  | Plays the file                                         |
-| Other formats                                                                    | Shows the type and size of the file, with **Download** |
+| Key      | What it does                 |
+| -------- | ---------------------------- |
+| Enter    | Queue the message            |
+| `⌘Enter` | Steer the message            |
+| `⌘↑`     | Edit the last queued message |
+| Esc      | Stop Ren                     |
 
-## Repositories and permissions
-
-Select **+** in the composer to get to two project settings from the chat:
-
-- **Repositories** adds or removes the repositories of the project. It also sets the branch that Ren uses for each repository.
-- **Permissions** changes what Ren can do without asking.
-
-Both settings apply to every chat in the project. See [Projects](/docs/concepts/projects/).
+To make steer the default, open **Settings → Preferences** and set **Messages sent while Ren works** to **Steer the current turn**.
 
 ## Questions and permission requests
 
-When Ren has a question or needs permission, it pauses. It shows the question or the permission request above the composer.
-
-- **Question:** select an answer or enter your own. Then select **Continue**.
-- **Permission request:** choose **Allow once**, **Always allow**, or **Deny**.
-
-You can also type what Ren must do instead.
-
-## See what Ren did
-
-Select the **Worked for** line above the reply from Ren. The line expands and shows each step and tool call that Ren made, with its input and result.
+When Ren has a question or needs permission, it pauses and shows a card above the composer.
 
 <Screenshot
-  shot="chats/tool-calls"
-  alt="A chat with Ren's tool calls expanded to show what it did"
-  caption="The Worked for line, expanded to show the tool calls of Ren."
+  shot="chats/permission"
+  alt="A permission card asking to run bun run db migrate --env staging, with Allow once, Always allow and Deny"
+  caption="A permission request."
 />
+
+- **Question:** select an answer or type your own, then select **Continue**.
+- **Permission request:** select **Allow once**, **Always allow** or **Deny**.
+
+To change what Ren can do without asking, see [Permissions](/docs/permissions/).
+
+## The side panel
+
+The right side panel shows what Ren does on the computer of the chat. Open it with the panel button at the top right of the chat. Select **+** to add a tab.
+
+<Screenshot
+  shot="chats/tab-menu"
+  alt="The + menu of the side panel with Browser, Files, Changes, Activity and Terminal"
+  caption="Select + to open a tab."
+/>
+
+| Tab      | What it shows                             |
+| -------- | ----------------------------------------- |
+| Activity | Every step Ren took in this chat          |
+| Changes  | The files Ren created or edited, as diffs |
+| Files    | The files on the computer of the chat     |
+| Browser  | The pages Ren opens                       |
+| Terminal | A shell on the computer of the chat       |
+
+### Activity
+
+Activity lists every step Ren took, such as each command it ran and each file it edited. Open a step to see its inputs and outputs. Select **Worked for** above a reply to jump to that reply's steps.
+
+### Changes
+
+Changes shows each file Ren edited, with removed lines in red and added lines in green. Select **Split** to see the old and new versions side by side, or **Stacked** to see them in one column.
+
+### Files
+
+Files shows the file tree of the computer of the chat. Select a file to open it in the viewer. A file path in a reply also opens the file here.
+
+| File type                                                    | What the viewer does                               |
+| ------------------------------------------------------------ | -------------------------------------------------- |
+| Images, PDFs, spreadsheets, Word documents, PowerPoint decks | Shows a preview                                    |
+| Text and code                                                | Shows the file with line numbers                   |
+| HTML pages                                                   | Shows the page, with zoom and **Open full screen** |
+| Audio and video                                              | Plays the file                                     |
+| Other formats                                                | Shows the type and size, with **Download**         |
+
+You can also send `/open <file>`.
+
+### Browser
+
+Browser shows the page that Ren uses, live. Select **Take control** to use the page yourself, for example to sign in. Select **Give control back** when you are done.
+
+### Terminal
+
+Terminal opens a shell on the computer of the chat. You can open more than one. You can also send `/terminal`, or press `⇧⌘X` to switch the composer to shell mode.
+
+## Quote or comment on a reply
+
+Select text in a reply of Ren to quote it in your next message, or to comment on it.
+
+## Edit your messages
+
+- **Edit:** hover over a message you sent, select `✎`, change the text and select **Send**. This replaces the message and removes everything after it.
+
+<Screenshot
+  shot="chats/edit-hover"
+  alt="A sent message on hover, with the time, a pencil button and a copy button below it"
+  caption="Hover over your message to edit it."
+/>
+
+- **Retry:** if a message shows **Not sent**, select **Retry**.
+- **Undo:** send `/undo` to undo your last message, and `/redo` to bring it back.
+- **Find:** press `⌘F` to search the chat.
+
+## Chat actions
+
+Select `⋯` at the top right of the chat to rename the chat, copy its link or archive it.
+
+When the chat is linked to tasks, pull requests, issues or channel threads, the same menu lists them. An archived chat leaves your chat list. Only the API can bring it back.
+
+## Commands
+
+Type `/` in the composer to see every command.
 
 ## Good to know
 
-- In the API and CLI, a chat is a `session`.
-- Each attached file can be up to 100 MB.
-- You can change the model between messages. The new choice applies from your next message.
-- Chats from a channel or a schedule deny actions that need approval.
+- On Windows and Linux, use Ctrl instead of `⌘`.
+- A chat from a channel or a schedule denies any action that needs approval, unless you allow it in the [permissions](/docs/permissions/).
+- If neither the space nor the organization has a default model, Ren uses its system default.
