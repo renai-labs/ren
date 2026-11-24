@@ -45,6 +45,7 @@ import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
 import { SlackTaskCard } from "@ren/core/slack-task-card"
 import { TaskCard } from "@ren/core/task-card"
+import { TaskFiles } from "@ren/core/task/files"
 import { SlackApp } from "@ren/core/slack-app"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { CredentialEnv } from "@ren/core/credential-env"
@@ -94,6 +95,7 @@ const server = HttpRouter.serve(Routes.layer).pipe(
     Intake.workers(Effect.succeed([])),
     ChannelNotice.layerLog,
     TaskCard.layerNone,
+    TaskFiles.layer,
     SlackTaskCard.layerNone,
     AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
     SignupGuard.layer,

@@ -79,6 +79,7 @@ import { Signer } from "@ren/core/signer"
 import { SlackApp } from "@ren/core/slack-app"
 import { SlackTaskCard } from "@ren/core/slack-task-card"
 import { TaskCard } from "@ren/core/task-card"
+import { TaskFiles } from "@ren/core/task/files"
 import { EgressControl } from "@ren/core/egress-control"
 import { MachineNetwork } from "@ren/core/machine-network"
 import { AppResolve } from "@ren/core/app/resolve"
@@ -219,7 +220,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       BillingEnrollment.layer.pipe(Layer.provideMerge(Billing.layerConfig)),
     ),
     Layer.mergeAll(
-      Layer.mergeAll(ChannelNotice.layer, TaskCard.layer).pipe(
+      Layer.mergeAll(ChannelNotice.layer, TaskCard.layer, TaskFiles.layer).pipe(
         Layer.provideMerge(Layer.mergeAll(GitHubTaskCard.layer, SlackTaskCard.layer)),
       ),
       ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer)),

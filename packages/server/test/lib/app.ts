@@ -11,6 +11,7 @@ import { ChannelNotice } from "@ren/core/channel-notice"
 import { GitHubApp } from "@ren/core/github-app"
 import { SlackTaskCard } from "@ren/core/slack-task-card"
 import { TaskCard } from "@ren/core/task-card"
+import { TaskFiles } from "@ren/core/task/files"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelProvider } from "@ren/core/channel-provider"
@@ -138,6 +139,7 @@ export const services = Layer.mergeAll(
   PersistedQueue.layer.pipe(Layer.provide(PersistedQueue.layerStoreSql())),
   ChannelNotice.layerLog,
   TaskCard.layerNone,
+  TaskFiles.layerNone,
   SlackTaskCard.layerNone,
   AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
   SignupGuard.layer,
