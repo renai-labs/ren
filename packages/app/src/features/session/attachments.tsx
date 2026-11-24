@@ -161,7 +161,7 @@ function UploadChip(props: {
       <AttachmentContent>
         <AttachmentTitle>{upload.name}</AttachmentTitle>
         <AttachmentDescription className={cn(!failed && "tabular-nums")}>
-          {upload.error ?? `Uploading · ${formatBytes(upload.file.size)}`}
+          {upload.error ?? `Uploading · ${formatBytes(upload.size)}`}
         </AttachmentDescription>
       </AttachmentContent>
       <AttachmentActions>

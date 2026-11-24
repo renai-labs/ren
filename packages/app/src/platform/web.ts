@@ -52,11 +52,11 @@ export function createWebPlatform(stores: {
         globalThis.fetch(input, { ...init, credentials: "include" }),
       globalThis.fetch,
     ),
-    upload: async (form, file, signal) => {
+    upload: async (form, file, options) => {
       const body = new FormData()
       for (const [name, value] of Object.entries(form.fields)) body.append(name, value)
       body.append("file", file)
-      const response = await globalThis.fetch(form.uploadUrl, { method: "POST", body, signal })
+      const response = await globalThis.fetch(form.uploadUrl, { method: "POST", body, signal: options.signal })
       if (!response.ok) throw new Error(`The upload failed (${response.status}).`)
     },
     windowStorage: {
