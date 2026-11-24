@@ -26,6 +26,8 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import { Switch } from "@ren/ui/switch"
+import { useHeldFiles } from "../lib/task-files.js"
+import { MarkdownEditor } from "./markdown-editor.js"
 import { Textarea } from "@ren/ui/textarea"
 import { Calendar } from "@ren/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
@@ -283,23 +285,31 @@ export function NewTaskDialog(props: {
 }) {
   const { api } = RouterContext.useRouterContext()
   const [open, setOpen] = useOpen(props)
+  const held = useHeldFiles()
   const spaces = useSpaces()
   const defaultSpace = fallbackSpace(props.spaceId, spaces.joined)
   const [expanded, setExpanded] = useState(false)
   const [createMore, setCreateMore] = useState(false)
   const [draft, setDraft] = useState(() => Tasks.draft(defaultSpace))
+  const [created, setCreated] = useState(0)
   const spaceId = draft.spaceId || defaultSpace
   const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }))
   const mutation = useMutation(api.task.create.mutationOptions())
   const create = () => {
-    mutation.mutate(Tasks.createInput(draft, spaceId, props.parent?.id), {
-      onSuccess: (task) => {
-        toast.success(`${task.identifier} created`)
-        setDraft(Tasks.draft(spaceId))
-        if (!createMore) setOpen(false)
+    const description = draft.description
+    mutation.mutate(
+      Tasks.createInput({ ...draft, description: held.without(description) }, spaceId, props.parent?.id),
+      {
+        onSuccess: (task) => {
+          toast.success(`${task.identifier} created`)
+          held.attach(task, description)
+          setDraft(Tasks.draft(spaceId))
+          setCreated((count) => count + 1)
+          if (!createMore) setOpen(false)
+        },
+        onError: (error) => toast.error("Could not create the task", { description: errorMessage(error) }),
       },
-      onError: (error) => toast.error("Could not create the task", { description: errorMessage(error) }),
-    })
+    )
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -362,15 +372,14 @@ export function NewTaskDialog(props: {
               rows={1}
               className="min-h-7 resize-none rounded-none border-0 bg-transparent p-0 text-xl font-medium shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent"
             />
-            <Textarea
+            <MarkdownEditor
+              key={created}
               value={draft.description}
-              onChange={(event) => set({ description: event.target.value })}
+              label="Task description"
               placeholder="Add description…"
-              aria-label="Task description"
-              className={cn(
-                "resize-none rounded-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0 md:text-base dark:bg-transparent",
-                expanded ? "min-h-80" : "min-h-20",
-              )}
+              media={held.hold}
+              onChange={(description) => set({ description })}
+              className={expanded ? "[&_.tiptap]:min-h-80" : "[&_.tiptap]:min-h-20"}
             />
           </div>
           <TaskChips draft={draft} spaceId={spaceId} onChange={set} />

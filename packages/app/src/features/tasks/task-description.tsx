@@ -1,9 +1,9 @@
 import type { TaskInfo } from "@ren/client"
 import { MarkdownEditor } from "../../components/markdown-editor.js"
-import { useTaskUploads } from "./task-files.js"
+import { useTaskUploads } from "../../lib/task-files.js"
 
 export function TaskDescription(props: { task: TaskInfo; onChange: (description: string | null) => void }) {
-  const upload = useTaskUploads(props.task)
+  const upload = useTaskUploads()
   const description = props.task.description ?? ""
   if (!description && !props.task.canUpdate) return null
   return (
@@ -13,7 +13,7 @@ export function TaskDescription(props: { task: TaskInfo; onChange: (description:
       label="Task description"
       placeholder="Add description…"
       editable={props.task.canUpdate}
-      media={props.task.canUpdate ? upload : undefined}
+      media={props.task.canUpdate && upload ? (files) => upload(props.task, files) : undefined}
       onCommit={(next) => props.onChange(next.trim() || null)}
     />
   )
