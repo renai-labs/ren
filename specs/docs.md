@@ -57,8 +57,8 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 | Work         | Chat            | `chats`           | `concepts/chats`                                    |
 |              | Tasks           | `tasks`           | `concepts/tasks`                                    |
 |              | Automations     | `automations`     | `concepts/schedules`                                |
-|              | Drive           | `drive`           | `concepts/storage`                                  |
 |              | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
+|              | Drive           | `drive`           | `concepts/storage`                                  |
 | Integrations | Apps            | `apps`            | `concepts/apps`                                     |
 |              | Credentials     | `credentials`     | `concepts/credentials`                              |
 |              | Channels        | `channels`        | `concepts/channels/index`                           |
@@ -546,9 +546,9 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 **Drive**
 
-- The home Drive (Spaces and Org memory folders) and space drives.
-- Upload, delete, the viewer, attaching files in the composer.
-- Slack files are saved to the space drive. Chat files are hidden.
+- The organization drive (with a folder for each space and the Artifacts row) and space drives. Ren reads the organization drive and writes the space drive.
+- Upload (100 MB per file), download, delete, the viewer, `@` → **Files**.
+- Chat attachments, including Slack files, sit under the hidden `chats/` folder and do not show in Drive.
 
 **Artifacts**
 
