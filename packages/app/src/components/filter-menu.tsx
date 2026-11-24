@@ -26,6 +26,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
+import { ColorDot } from "@ren/ui/color-dot"
 import { MenuSearch } from "./menu-search.js"
 
 export type FilterProperty = {
@@ -38,6 +39,7 @@ export type FilterProperty = {
     value: string
     label: string
     icon?: ComponentType<{ className?: string | undefined }> | undefined
+    color?: string | undefined
     count?: number | undefined
   }[]
 }
@@ -113,7 +115,10 @@ export function FilterMenu(props: {
                   <span className="flex-1">{property.label}</span>
                   <span className="text-muted-foreground">{summary(property, selected)}</span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent sideOffset={2} className={props.noun ? "w-60" : "w-56"}>
+                <DropdownMenuSubContent
+                  sideOffset={2}
+                  className={cn("max-h-[min(--spacing(96),var(--available-height))]", props.noun ? "w-60" : "w-56")}
+                >
                   {property.single ? (
                     <RadioOptions property={property} selected={selected} onChange={set} />
                   ) : (
@@ -162,12 +167,17 @@ function RadioOptions(props: { property: FilterProperty; selected: string[]; onC
         ...property.options,
       ].map((option) => (
         <DropdownMenuRadioItem key={option.value} value={option.value} className={marked}>
-          {option.icon ? <option.icon /> : null}
+          <OptionMark option={option} />
           <span className="min-w-0 flex-1 break-words">{option.label}</span>
         </DropdownMenuRadioItem>
       ))}
     </DropdownMenuRadioGroup>
   )
+}
+
+function OptionMark(props: { option: FilterProperty["options"][number] }) {
+  if (props.option.color) return <ColorDot color={props.option.color} className="mx-1" />
+  return props.option.icon ? <props.option.icon /> : null
 }
 
 function summary(property: FilterProperty, selected: ReadonlyArray<string>) {
@@ -202,10 +212,10 @@ function CheckboxOptions(props: {
             )
           }
         >
-          {option.icon ? <option.icon /> : null}
+          <OptionMark option={option} />
           <span className="min-w-0 flex-1 break-words">{option.label}</span>
           {props.noun && option.count !== undefined ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
               {option.count} {option.count === 1 ? props.noun : `${props.noun}s`}
             </span>
           ) : null}

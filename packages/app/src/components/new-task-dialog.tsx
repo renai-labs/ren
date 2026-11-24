@@ -1,7 +1,17 @@
 import { Tasks } from "@ren/client/react"
 import { Breadcrumb } from "./breadcrumb.js"
-import { useState, type ReactElement, type ReactNode } from "react"
-import { useMutation, useQuery } from "@tanstack/react-query"
+import {
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from "react"
+import type { KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useMutation } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
 import {
   IconCalendarDue,
@@ -10,74 +20,31 @@ import {
   IconMaximize,
   IconMinimize,
   IconTag,
-  IconUserCircle,
   IconX,
 } from "@tabler/icons-react"
-import { IconAgent } from "../icons/heroicons.js"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@ren/ui/dropdown-menu"
 import { Switch } from "@ren/ui/switch"
 import { useHeldFiles } from "../lib/task-files.js"
 import { MarkdownEditor } from "./markdown-editor.js"
 import { Textarea } from "@ren/ui/textarea"
-import { Calendar } from "@ren/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { formatDate } from "@ren/ui/time"
-import { PriorityIcon, StatusGlyph, priorityLabelOf, statusOf, labelColor, priorities, statuses } from "./task-meta.js"
+import { PriorityIcon, StatusGlyph, UnassignedIcon, priorityLabelOf, statusOf } from "./task-meta.js"
+import { PriorityMenu, StatusMenu } from "./task-pickers.js"
 import { Spinner } from "@ren/ui/spinner"
-import { pickerPageSize } from "../lib/pagination.js"
-import { useLabels } from "../lib/use-labels.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { errorMessage } from "../lib/errors.js"
-import { ColorDot } from "@ren/ui/color-dot"
 import { RouterContext } from "../lib/router-context.js"
 import { Keyboard } from "../platform/keyboard.js"
-
-function Chip(props: {
-  label: string
-  value: string
-  options: { value: string; label: string }[]
-  icon: ReactElement
-  text: string
-  muted?: boolean
-  onChange: (value: string) => void
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={props.label}
-            className={cn("rounded-full px-3", !props.muted && "text-foreground")}
-          />
-        }
-      >
-        {props.icon}
-        {props.text}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        <DropdownMenuRadioGroup value={props.value} onValueChange={props.onChange}>
-          {props.options.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value}>
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
+import { TaskAgentPicker, TaskPersonPicker } from "./assignee-picker.js"
+import { PersonAvatar } from "./person-avatar.js"
+import { useMembers } from "../lib/use-members.js"
+import { LabelPicker } from "./label-picker.js"
+import { DueDatePicker } from "./due-date-picker.js"
+import { SpacePicker } from "./space-picker.js"
+import { useAgents } from "../lib/use-agents.js"
+import { IconAgent } from "../icons/heroicons.js"
 
 const isBareKey = (event: KeyboardEvent) =>
   !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat && !event.isComposing
@@ -97,173 +64,160 @@ export function useNewTaskShortcut(onOpen: () => void) {
 function SpaceChip(props: { spaceId: string; onChange: (spaceId: string) => void }) {
   const spaces = useSpaces()
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full px-3 font-normal text-foreground"
-            aria-label={`Space: ${spaces.spaceName(props.spaceId)}`}
-          />
-        }
-      >
-        <IconCube />
-        {spaces.spaceName(props.spaceId)}
-        <IconChevronDown className="text-muted-foreground" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuRadioGroup value={props.spaceId} onValueChange={(next: string) => props.onChange(next)}>
-          {spaces.joined.map((space) => (
-            <DropdownMenuRadioItem key={space.id} value={space.id}>
-              <IconCube />
-              {space.name}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <SpacePicker
+      value={props.spaceId}
+      heading="Create in a space"
+      onChange={props.onChange}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full px-3 font-normal text-foreground"
+          aria-label={`Space: ${spaces.spaceName(props.spaceId)}`}
+        />
+      }
+    >
+      <IconCube />
+      {spaces.spaceName(props.spaceId)}
+      <IconChevronDown className="text-muted-foreground" />
+    </SpacePicker>
   )
 }
 
-function LabelsChip(props: { value: ReadonlyArray<string>; onChange: (labels: string[]) => void }) {
-  const labels = useLabels()
+function LabelsChip(props: { value: ReadonlyArray<string>; spaceId: string; onChange: (labels: string[]) => void }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Labels"
-            className={cn("rounded-full px-3", props.value.length > 0 && "text-foreground")}
-          />
-        }
-      >
-        <IconTag />
-        {props.value.length === 0 ? "Labels" : props.value.join(", ")}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        {labels.map((label) => (
-          <DropdownMenuCheckboxItem
-            key={label.id}
-            checked={props.value.includes(label.name)}
-            onCheckedChange={(checked) =>
-              props.onChange(checked ? [...props.value, label.name] : props.value.filter((name) => name !== label.name))
-            }
-          >
-            <ColorDot color={labelColor(label.color)} />
-            {label.name}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <LabelPicker
+      value={props.value}
+      spaceId={props.spaceId}
+      onChange={props.onChange}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={props.value.length === 0 ? "Labels" : `Labels: ${props.value.join(", ")}`}
+          className={cn("rounded-full px-3", props.value.length > 0 && "text-foreground")}
+        />
+      }
+    >
+      <IconTag />
+      {props.value.length === 0 ? "Labels" : props.value.join(", ")}
+    </LabelPicker>
   )
 }
 
-function TaskChips(props: { draft: Tasks.Draft; spaceId: string; onChange: (patch: Partial<Tasks.Draft>) => void }) {
-  const { api } = RouterContext.useRouterContext()
-  const agents =
-    useQuery({
-      ...api.agent.list.queryOptions({
-        spaceId: props.spaceId,
-        isSubagent: false,
-        page: 1,
-        pageSize: pickerPageSize,
-      }),
-      enabled: props.spaceId !== "",
-    }).data?.items ?? []
+function AgentChip(props: { draft: Tasks.Draft; spaceId: string; onChange: (patch: Partial<Tasks.Draft>) => void }) {
+  const agentId = props.draft.agentId === "none" ? null : props.draft.agentId
+  const name = useAgents().agent(agentId)?.name
   return (
-    <div className="flex flex-wrap gap-2 px-4 pt-4 pb-2">
-      <Chip
-        label="Status"
-        value={props.draft.status}
-        options={Object.entries(statuses).map(([value, status]) => ({
-          value,
-          label: status.label,
-        }))}
-        icon={<StatusGlyph status={props.draft.status} />}
-        text={statusOf(props.draft.status).label}
+    <TaskAgentPicker
+      value={agentId}
+      spaceId={props.spaceId}
+      onChange={(next) => props.onChange({ agentId: next ?? "none" })}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={name ? `Agent: ${name}` : "Agent"}
+          className={cn("rounded-full px-3", name && "text-foreground")}
+        />
+      }
+    >
+      <IconAgent />
+      {name ?? "Agent"}
+    </TaskAgentPicker>
+  )
+}
+
+function PersonChip(props: { draft: Tasks.Draft; onChange: (patch: Partial<Tasks.Draft>) => void }) {
+  const ownerId = props.draft.ownerId === "none" ? null : props.draft.ownerId
+  const owner = useMembers().member(ownerId)
+  return (
+    <TaskPersonPicker
+      value={ownerId}
+      onChange={(next) => props.onChange({ ownerId: next ?? "none" })}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={owner ? `Assignee: ${owner.name}` : "Assignee"}
+          className={cn("rounded-full px-3", owner && "text-foreground")}
+        />
+      }
+    >
+      {owner ? <PersonAvatar name={owner.name} image={owner.image} /> : <UnassignedIcon />}
+      {owner?.name ?? "Assignee"}
+    </TaskPersonPicker>
+  )
+}
+
+function TaskChips(props: {
+  draft: Tasks.Draft
+  spaceId: string
+  className?: string
+  onChange: (patch: Partial<Tasks.Draft>) => void
+}) {
+  const noPriority = props.draft.priority === "none"
+  return (
+    <div className={cn("flex flex-wrap gap-2 px-4 pt-4 pb-2", props.className)}>
+      <StatusMenu
+        status={props.draft.status}
         onChange={(status) => props.onChange({ status })}
+        trigger={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={`Status: ${statusOf(props.draft.status).label}`}
+            className="rounded-full px-3 text-foreground"
+          />
+        }
+      >
+        <StatusGlyph status={props.draft.status} />
+        {statusOf(props.draft.status).label}
+      </StatusMenu>
+      <PriorityMenu
+        priority={props.draft.priority}
+        onChange={(priority) => props.onChange({ priority: priority ?? "none" })}
+        trigger={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={noPriority ? "Priority" : `Priority: ${priorityLabelOf(props.draft.priority)}`}
+            className={cn("rounded-full px-3", !noPriority && "text-foreground")}
+          />
+        }
+      >
+        <PriorityIcon priority={noPriority ? null : props.draft.priority} />
+        {noPriority ? "Priority" : priorityLabelOf(props.draft.priority)}
+      </PriorityMenu>
+      <AgentChip draft={props.draft} spaceId={props.spaceId} onChange={props.onChange} />
+      <PersonChip draft={props.draft} onChange={props.onChange} />
+      <LabelsChip
+        value={props.draft.labels}
+        spaceId={props.spaceId}
+        onChange={(next) => props.onChange({ labels: next })}
       />
-      <Chip
-        label="Priority"
-        value={props.draft.priority}
-        options={[
-          { value: "none", label: "No priority" },
-          ...Object.entries(priorities).map(([value, label]) => ({
-            value,
-            label,
-          })),
-        ]}
-        icon={<PriorityIcon priority={props.draft.priority === "none" ? null : props.draft.priority} />}
-        text={props.draft.priority === "none" ? "Priority" : priorityLabelOf(props.draft.priority)}
-        muted={props.draft.priority === "none"}
-        onChange={(priority) => props.onChange({ priority })}
-      />
-      <Chip
-        label="Assignee"
-        value={props.draft.agentId}
-        options={[
-          { value: "none", label: "No assignee" },
-          ...agents.map((agent) => ({
-            value: agent.id,
-            label: agent.name,
-          })),
-        ]}
-        icon={props.draft.agentId === "none" ? <IconUserCircle /> : <IconAgent />}
-        text={agents.find((agent) => agent.id === props.draft.agentId)?.name ?? "Assignee"}
-        muted={props.draft.agentId === "none"}
-        onChange={(agentId) => props.onChange({ agentId })}
-      />
-      <LabelsChip value={props.draft.labels} onChange={(next) => props.onChange({ labels: next })} />
       <DueChip value={props.draft.dueAt} onChange={(dueAt) => props.onChange({ dueAt })} />
     </div>
   )
 }
 
 function DueChip(props: { value: string; onChange: (value: string) => void }) {
-  const [open, setOpen] = useState(false)
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Due date"
-            className={cn("rounded-full px-3", props.value && "text-foreground")}
-          />
-        }
-      >
-        <IconCalendarDue />
-        {props.value ? formatDate(props.value) : "Due date"}
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 gap-2 p-3">
-        <Calendar
-          mode="single"
-          selected={props.value ? new Date(props.value) : undefined}
-          onSelect={(day: Date | undefined) => {
-            props.onChange(day ? day.toISOString() : "")
-            setOpen(false)
-          }}
-          className="w-full p-0"
+    <DueDatePicker
+      value={props.value || null}
+      onChange={(value) => props.onChange(value ?? "")}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={props.value ? `Due date: ${formatDate(props.value)}` : "Due date"}
+          className={cn("rounded-full px-3", props.value && "text-foreground")}
         />
-        {props.value ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="self-start"
-            onClick={() => {
-              props.onChange("")
-              setOpen(false)
-            }}
-          >
-            Clear
-          </Button>
-        ) : null}
-      </PopoverContent>
-    </Popover>
+      }
+    >
+      <IconCalendarDue />
+      {props.value ? formatDate(props.value) : "Due date"}
+    </DueDatePicker>
   )
 }
 
@@ -275,6 +229,88 @@ function useOpen(controlled: { open?: boolean | undefined; onOpenChange?: ((open
   return [controlled.open ?? own, controlled.onOpenChange ?? setOwn] as const
 }
 
+function TitleField({
+  ref,
+  ...props
+}: {
+  ref: Ref<HTMLTextAreaElement>
+  value: string
+  missing: boolean
+  className?: string
+  onChange: (title: string) => void
+}) {
+  const errorId = useId()
+  return (
+    <>
+      <Textarea
+        ref={ref}
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+        placeholder="Task title"
+        aria-label="Task title"
+        aria-invalid={props.missing || undefined}
+        aria-describedby={props.missing ? errorId : undefined}
+        rows={1}
+        className={cn(
+          "min-h-7 resize-none rounded-none border-0 bg-transparent p-0 text-xl font-medium wrap-break-word shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent",
+          props.className,
+        )}
+      />
+      {props.missing ? (
+        <p id={errorId} className="text-xs text-destructive">
+          Give the task a title.
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+const submitShortcut = (event: ReactKeyboardEvent<HTMLFormElement>) => {
+  if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.currentTarget.requestSubmit()
+}
+
+function useTaskForm(spaceId: string, parentId: string | undefined, titleRef: RefObject<HTMLTextAreaElement | null>) {
+  const { api } = RouterContext.useRouterContext()
+  const held = useHeldFiles()
+  const mutation = useMutation(api.task.create.mutationOptions())
+  const [draft, setDraft] = useState(() => Tasks.draft(spaceId))
+  const [missing, setMissing] = useState(false)
+  const set = (patch: Partial<Tasks.Draft>) => setDraft((current) => ({ ...current, ...patch }))
+  return {
+    draft,
+    set,
+    held,
+    missing,
+    pending: mutation.isPending,
+    reset: (next: string) => setDraft(Tasks.draft(next)),
+    setTitle: (title: string) => {
+      set({ title })
+      setMissing(false)
+    },
+    submit: (event: FormEvent<HTMLFormElement>, target: string, onCreated: () => void) => {
+      event.preventDefault()
+      if (!draft.title.trim()) {
+        setMissing(true)
+        titleRef.current?.focus()
+        return
+      }
+      const description = draft.description
+      mutation.mutate(Tasks.createInput({ ...draft, description: held.without(description) }, target, parentId), {
+        onSuccess: (task) => {
+          toast.success(`${task.identifier} created`)
+          held.attach(task, description)
+          onCreated()
+        },
+        onError: (error) =>
+          toast.error(`Could not create the ${parentId ? "sub-task" : "task"}`, { description: errorMessage(error) }),
+      })
+    },
+  }
+}
+
 export function NewTaskDialog(props: {
   trigger?: ReactElement | undefined
   children?: ReactNode
@@ -283,39 +319,23 @@ export function NewTaskDialog(props: {
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
 }) {
-  const { api } = RouterContext.useRouterContext()
   const [open, setOpen] = useOpen(props)
-  const held = useHeldFiles()
   const spaces = useSpaces()
   const defaultSpace = fallbackSpace(props.spaceId, spaces.joined)
   const [expanded, setExpanded] = useState(false)
   const [createMore, setCreateMore] = useState(false)
-  const [draft, setDraft] = useState(() => Tasks.draft(defaultSpace))
   const [created, setCreated] = useState(0)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
+  const form = useTaskForm(defaultSpace, props.parent?.id, titleRef)
+  const draft = form.draft
+  const set = form.set
   const spaceId = draft.spaceId || defaultSpace
-  const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }))
-  const mutation = useMutation(api.task.create.mutationOptions())
-  const create = () => {
-    const description = draft.description
-    mutation.mutate(
-      Tasks.createInput({ ...draft, description: held.without(description) }, spaceId, props.parent?.id),
-      {
-        onSuccess: (task) => {
-          toast.success(`${task.identifier} created`)
-          held.attach(task, description)
-          setDraft(Tasks.draft(spaceId))
-          setCreated((count) => count + 1)
-          if (!createMore) setOpen(false)
-        },
-        onError: (error) => toast.error("Could not create the task", { description: errorMessage(error) }),
-      },
-    )
-  }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {props.trigger ? <DialogTrigger render={props.trigger}>{props.children}</DialogTrigger> : null}
       <DialogContent
         showCloseButton={false}
+        initialFocus={titleRef}
         className={cn("top-[12%] translate-y-0 gap-0 p-0", expanded ? "sm:max-w-5xl" : "sm:max-w-3xl")}
       >
         <div className="flex items-center gap-2 p-4 pb-2">
@@ -333,7 +353,7 @@ export function NewTaskDialog(props: {
           >
             <DialogTitle>{props.parent ? "New sub-task" : "New task"}</DialogTitle>
           </Breadcrumb.Root>
-          <DialogDescription className="sr-only">Add a task to a space.</DialogDescription>
+          <DialogDescription className="sr-only">Give the task a title, then set its properties.</DialogDescription>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -357,27 +377,24 @@ export function NewTaskDialog(props: {
           </DialogClose>
         </div>
         <form
-          className="flex flex-col"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (draft.title.trim()) create()
-          }}
+          className="flex min-w-0 flex-col"
+          onKeyDownCapture={submitShortcut}
+          onSubmit={(event) =>
+            form.submit(event, spaceId, () => {
+              form.reset(spaceId)
+              setCreated((count) => count + 1)
+              if (!createMore) setOpen(false)
+            })
+          }
         >
           <div className="flex flex-col gap-2 px-6 pt-2">
-            <Textarea
-              value={draft.title}
-              onChange={(event) => set({ title: event.target.value })}
-              placeholder="Task title"
-              aria-label="Task title"
-              rows={1}
-              className="min-h-7 resize-none rounded-none border-0 bg-transparent p-0 text-xl font-medium shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent"
-            />
+            <TitleField ref={titleRef} value={draft.title} missing={form.missing} onChange={form.setTitle} />
             <MarkdownEditor
               key={created}
               value={draft.description}
               label="Task description"
               placeholder="Add description…"
-              media={held.hold}
+              media={form.held.hold}
               onChange={(description) => set({ description })}
               className={expanded ? "[&_.tiptap]:min-h-80" : "[&_.tiptap]:min-h-20"}
             />
@@ -389,8 +406,8 @@ export function NewTaskDialog(props: {
               <Switch checked={createMore} onCheckedChange={setCreateMore} />
               Create more
             </label>
-            <Button type="submit" disabled={!draft.title.trim() || !spaceId || mutation.isPending}>
-              {mutation.isPending ? <Spinner data-icon="inline-start" /> : null}
+            <Button type="submit" disabled={!spaceId || form.pending}>
+              {form.pending ? <Spinner data-icon="inline-start" /> : null}
               Create task
             </Button>
           </div>

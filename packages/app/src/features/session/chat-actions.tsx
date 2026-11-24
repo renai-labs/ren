@@ -3,7 +3,7 @@ import type { SessionLinksInfo, SessionLinksIssue } from "@ren/client"
 import type { Session } from "@ren/schema/session"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconArchive, IconChecklist, IconDots, IconLink, IconPencil } from "@tabler/icons-react"
+import { IconArchive, IconDots, IconLink, IconPencil, IconSubtask } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import {
   DropdownMenu,
@@ -96,7 +96,7 @@ function ChatLinks(props: Pick<ReturnType<typeof useChatLinks>, "links" | "pulls
         label="Tasks"
         rows={links.tasks.map((task) => ({
           key: task.id,
-          icon: <IconChecklist />,
+          icon: <IconSubtask />,
           label: task.title,
           shortcut: task.identifier,
           onClick: () => void navigate({ to: "/tasks/$taskId", params: { taskId: task.id } }),

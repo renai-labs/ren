@@ -11,7 +11,7 @@ import {
   IconClock,
   IconCopy,
   IconPencil,
-  IconChecklist,
+  IconSubtask,
   IconWebhook,
 } from "@tabler/icons-react"
 import { PersonAvatar } from "../../components/person-avatar.js"
@@ -262,7 +262,7 @@ function TaskHandoff(props: { task: NonNullable<SessionMessage.User["task"]> }) 
   return (
     <div className="flex w-full max-w-md flex-col self-end overflow-hidden rounded-xl border bg-card text-sm">
       <div className="relative flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 ease-out hover:bg-muted/50">
-        <IconChecklist className="size-4.5 shrink-0 text-muted-foreground" />
+        <IconSubtask className="size-4.5 shrink-0 text-muted-foreground" />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="text-xs text-muted-foreground">
             Task assigned<span className="font-mono"> · {props.task.identifier}</span>

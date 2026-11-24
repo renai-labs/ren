@@ -133,7 +133,7 @@ function PageHeader(props: PageProps) {
       </header>
     )
   return (
-    <header className="flex items-end justify-between gap-4">
+    <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
       <div className="flex min-w-0 flex-col gap-1">
         <h1 className="text-xl font-medium">{props.title}</h1>
         {props.description ? (
