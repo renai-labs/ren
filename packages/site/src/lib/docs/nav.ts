@@ -18,24 +18,18 @@ const DOCS: Section = {
   groups: [
     { title: "Get started", items: ["", "quickstart", "models"] },
     {
-      title: "Work with Ren",
+      title: "Work",
       items: [
         { slug: "chats", label: "Chat" },
         "tasks",
         { slug: "automations", label: "Automations" },
         { slug: "drive", label: "Drive" },
         "artifacts",
-        "apps",
-        "credentials",
-        "channels",
-        "instructions",
-        "permissions",
-        "memory",
-        { slug: "machines", label: "Machines" },
-        "usage",
-        "members",
       ],
     },
+    { title: "Connections", items: ["apps", "credentials", "channels"] },
+    { title: "Behavior", items: ["instructions", "memory", "permissions"] },
+    { title: "Admin", items: [{ slug: "machines", label: "Machines" }, "usage", "members"] },
     {
       title: "Organisations",
       items: [{ slug: "organisation", label: "Organisation" }, "model-providers", "billing"],
