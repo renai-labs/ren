@@ -142,7 +142,7 @@ function useFileText(spaceId: string | undefined, file: SessionMessage.DriveFile
   })
 }
 
-function useOpen(spaceId: string | undefined, file: SessionMessage.DriveFile) {
+export function useOpenDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
   const navigate = useNavigate()
   const panel = use(OpenPanel)
   const [open, setOpen] = useState(false)
@@ -384,7 +384,7 @@ function PreviewCard(props: {
   onArrived: () => void
 }) {
   const drive = useDriveFile(props.spaceId, props.file)
-  const open = useOpen(props.spaceId, props.file)
+  const open = useOpenDriveFile(props.spaceId, props.file)
   const kind = kindOf(props.file)
   const body = !drive.deleted && bodyKinds.has(kind)
   const opens = !drive.deleted

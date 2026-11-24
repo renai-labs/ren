@@ -48,6 +48,7 @@ import {
 } from "@tabler/icons-react"
 import { cn } from "cn"
 import { ChatLink } from "@ren/chat/chat-link"
+import { FileMentions } from "@ren/chat/file-mentions"
 import { Fences } from "@ren/chat/fences"
 import type { Mentions } from "@ren/chat/mentions"
 import { TexMath } from "@ren/chat/tex-math"
@@ -152,7 +153,9 @@ function MarkdownCode({ node, className, children, ...props }: ComponentProps<"c
         {children}
       </code>
     )
-    return markdown.fileReference && typeof children === "string" ? markdown.fileReference(children, code) : code
+    return markdown.fileReference && typeof children === "string"
+      ? markdown.fileReference(children, code, { code: true })
+      : code
   }
   return (
     <MarkdownCodeBlock
@@ -188,7 +191,11 @@ function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & Ext
     return render(path, typeof children === "string" ? children : "", {
       inline: node?.properties["data-gallery"] !== true,
     })
-  return <span {...props}>{children}</span>
+  const mention = node?.properties["data-file-mention"]
+  const span = <span {...props}>{children}</span>
+  if (typeof mention === "string" && markdown.fileReference)
+    return markdown.fileReference(mention, span, { code: false })
+  return span
 }
 
 function MarkdownInput(props: ComponentProps<"input"> & ExtraProps) {
@@ -342,6 +349,36 @@ const driveFiles = () => (tree: MarkdownNode) =>
     node.properties = { "data-drive-file": path, ...(image && { "data-drive-image": true }) }
   })
 
+const mentionless = new Set(["a", "code", "pre", "svg", "math"])
+
+const fileMentions = () => (tree: MarkdownNode) => {
+  const visit = (node: MarkdownNode) => {
+    if (
+      (node.tagName && mentionless.has(node.tagName)) ||
+      node.properties?.["data-workspace-image"] !== undefined ||
+      String(node.properties?.className ?? "").includes("katex")
+    )
+      return
+    node.children = node.children?.flatMap((child): MarkdownNode[] => {
+      if (child.type !== "text") {
+        visit(child)
+        return [child]
+      }
+      return FileMentions.split(child.value ?? "").map((part) =>
+        part.mention
+          ? {
+              type: "element",
+              tagName: "span",
+              properties: { "data-file-mention": part.text },
+              children: [{ type: "text", value: part.text }],
+            }
+          : { type: "text", value: part.text },
+      )
+    })
+  }
+  visit(tree)
+}
+
 const isImage = (node: MarkdownNode) =>
   node.tagName === "img" || (node.tagName === "span" && node.properties?.["data-workspace-image"] !== undefined)
 
@@ -468,6 +505,7 @@ const pipeline = (first: ReadonlyArray<(typeof defaultRehypePlugins)[string]>) =
 ]
 const rehypePlugins = pipeline([])
 const workspaceRehypePlugins = pipeline([workspaceImages])
+const fileRehypePlugins = pipeline([workspaceImages, fileMentions])
 const userRehypePlugins = rehypePlugins.filter((plugin) => plugin !== defaultRehypePlugins.raw)
 const remarkPlugins = Object.values(defaultRemarkPlugins)
 const userRemarkPlugins = [...remarkPlugins, remarkBreaks]
@@ -527,7 +565,7 @@ export function Markdown(props: {
   apps?: ReadonlyArray<CatalogApp> | undefined
   mentioned?: ReadonlyArray<Mentions.Item> | undefined
   workspaceImage?: ((path: string, alt: string, options: { inline: boolean }) => ReactNode) | undefined
-  fileReference?: ((text: string, code: ReactNode) => ReactNode) | undefined
+  fileReference?: ((text: string, fallback: ReactNode, options: { readonly code: boolean }) => ReactNode) | undefined
   driveFile?: ((path: string, text: ReactNode, options: { image: boolean }) => ReactNode) | undefined
 }) {
   const id = useId()
@@ -540,7 +578,8 @@ export function Markdown(props: {
   }, [wantsMermaid])
   const dark = useSyncExternalStore(wantsMermaid ? subscribeDark : unsubscribed, isDark, () => false)
   const user = props.source === "user"
-  const rehype = props.workspaceImage ? workspaceRehypePlugins : rehypePlugins
+  const workspacePlugins = props.fileReference ? fileRehypePlugins : workspaceRehypePlugins
+  const rehype = props.workspaceImage ? workspacePlugins : rehypePlugins
   return (
     <MarkdownContext
       value={{

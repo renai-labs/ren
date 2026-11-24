@@ -45,7 +45,7 @@ import { ImageThumbnail } from "../../components/image-set.js"
 import type { CatalogApp } from "../../lib/apps.js"
 import { useSmoothText } from "../../lib/use-smooth-text.js"
 import { WorkspaceImage } from "./workspace-image.js"
-import { InlineFile } from "./file-chip.js"
+import { InlineFile, type ChatDriveFiles } from "./file-chip.js"
 import { DiffFile } from "./diff-file.js"
 import { OpenPanel, useOpenActivity } from "./open-panel.js"
 import { workspacePath } from "./workspace-edits.js"
@@ -622,10 +622,13 @@ export function SmoothMarkdown(props: {
   apps?: ReadonlyArray<CatalogApp> | undefined
   root?: Session.ID | undefined
   files?: boolean | undefined
+  drive?: ChatDriveFiles | undefined
   images?: ReadonlyMap<string, string> | undefined
 }) {
   const text = useSmoothText(props.text, { streaming: props.streaming })
   const root = props.root
+  const computer = props.files === true
+  const drive = props.drive?.files.length ? props.drive : undefined
   return (
     <Markdown
       streaming={props.streaming || text.length < props.text.length}
@@ -639,8 +642,17 @@ export function SmoothMarkdown(props: {
           : undefined
       }
       fileReference={
-        root && props.files && !props.streaming
-          ? (text, code) => <InlineFile root={root} text={text} code={code} />
+        root && (computer || drive) && !props.streaming
+          ? (text, fallback, options) => (
+              <InlineFile
+                root={root}
+                computer={computer}
+                drive={drive}
+                text={text}
+                fallback={fallback}
+                code={options.code}
+              />
+            )
           : undefined
       }
     >

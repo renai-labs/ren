@@ -13,6 +13,7 @@ import {
   Activity,
   ChannelReply,
   ChatState,
+  FileMentions,
   Projection,
   TimelineDetail,
   TimelineRow,
@@ -281,6 +282,7 @@ function AnswerBlock(props: {
   copy: string | undefined
   root: Session.ID
   files: boolean
+  spaceId: string | undefined
   messages: ReadonlyArray<SessionMessage.Info>
 }) {
   const apps = useMentionedApps(props.text)
@@ -310,6 +312,7 @@ function AnswerBlock(props: {
               text={props.text}
               root={props.root}
               files={props.files}
+              drive={{ spaceId: props.spaceId, files: FileMentions.known(props.messages) }}
               images={images}
               streaming={props.streaming}
               apps={apps}
@@ -409,6 +412,7 @@ function BlockView(props: {
       <AnswerBlock
         root={props.transcript.view.root}
         files={props.transcript.files === true}
+        spaceId={props.transcript.spaceId}
         messages={props.transcript.messages}
         text={block.text}
         streaming={block.streaming}
