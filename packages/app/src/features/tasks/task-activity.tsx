@@ -44,7 +44,7 @@ import { useAgents } from "../../lib/use-agents.js"
 import { useNow } from "../../lib/use-now.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
-import { useTaskUploads } from "./task-files.js"
+import { useTaskUploads } from "../../lib/task-files.js"
 
 type Names = TaskEvent.Names & {
   readonly actor: (actor: TaskActor) => string
@@ -263,7 +263,7 @@ const freshFor = 10_000
 function CommentComposer(props: { task: TaskInfo }) {
   const { api } = RouterContext.useRouterContext()
   const create = useMutation(api["task-comment"].create.mutationOptions())
-  const upload = useTaskUploads(props.task)
+  const upload = useTaskUploads()
   const picker = useRef<HTMLInputElement>(null)
   const [body, setBody] = useState("")
   const [sent, setSent] = useState(0)
@@ -296,7 +296,7 @@ function CommentComposer(props: { task: TaskInfo }) {
         value=""
         label="Comment"
         placeholder="Leave a comment…"
-        media={upload}
+        media={upload && ((files) => upload(props.task, files))}
         onChange={setBody}
         className="min-h-23 w-full px-4 pt-3.5 pb-12"
         footer={(attach) => (
