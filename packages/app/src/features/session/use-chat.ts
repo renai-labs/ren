@@ -40,10 +40,12 @@ import { Drafts } from "../../lib/drafts.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { useShellHistory } from "../../lib/use-shell-history.js"
+import { Browser } from "../../lib/browser.js"
 
 export interface WorkspaceCommands {
   readonly openTerminal: () => void
   readonly openFile: (path: string) => void
+  readonly openBrowser: () => void
 }
 
 function useChatSuggestions(input: {
@@ -272,6 +274,8 @@ export function useChat(
   const abilities = capabilitiesOf(info)
   const boot = AsyncResult.getOrElse(view.session.boot, () => undefined)
   const connection = AsyncResult.getOrElse(view.session.status, () => undefined)
+  const browserIds = Browser.idsOf(ChatState.messages(state, root))
+  Browser.useAutoOpen(root, { ids: browserIds, running, onOpen: () => options.workspace?.openBrowser() })
   const prompt = ChatReact.usePrompt(root)
   const runShell = ChatReact.useAction(root, (opened, command: string) => opened.runShell(command))
   const shellHistory = useShellHistory()
@@ -369,6 +373,7 @@ export function useChat(
       formExpired: view.formExpired,
     },
     tasks: visibleTasks(tasks, { running, unfinished: SessionTasks.unfinished(tasks) }),
+    browserIds,
     running,
     queued: Composer.queued(ChatState.pending(state, root)),
     removeQueued: (id: SessionMessage.ID) =>

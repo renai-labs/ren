@@ -62,6 +62,7 @@ export type PanelTarget =
     }
   | { readonly kind: "changes"; readonly path: string }
   | { readonly kind: "activity"; readonly turn?: string; readonly shell?: ShellReport }
+  | { readonly kind: "browser" }
 
 export type PanelRequest = PanelTarget & { readonly id: string }
 
@@ -196,6 +197,8 @@ function TabBody(props: {
   onMention: ((path: string) => void) | undefined
   onTerminal: (folder: string) => void
   running: boolean
+  browserIds: ReadonlyArray<string>
+  open: boolean
 }) {
   const request = props.tab.request
   switch (props.tab.kind) {
@@ -211,7 +214,7 @@ function TabBody(props: {
         />
       )
     case "browser":
-      return <BrowserTab />
+      return props.open ? <BrowserTab root={props.root} ids={props.browserIds} running={props.running} /> : null
     case "files":
       return (
         <FilesTab
@@ -243,6 +246,8 @@ export function WorkspacePanel(props: {
   saved: ChatWorkspace.Panel
   request: PanelRequest | undefined
   messages: ReadonlyArray<SessionMessage.Info>
+  browserIds: ReadonlyArray<string>
+  open: boolean
   maximized: boolean
   onMaximize: (maximized: boolean) => void
   onClose: () => void
@@ -389,6 +394,8 @@ export function WorkspacePanel(props: {
               onClose={() => close(tab.id)}
               onMention={props.onMention}
               running={props.running}
+              browserIds={props.browserIds}
+              open={props.open}
               onTerminal={(folder) => pick("terminal", { kind: "terminal", folder, id: crypto.randomUUID() })}
             />
           </TabsContent>
