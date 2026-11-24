@@ -17,6 +17,7 @@ The marketing site and the docs at `useren.ai/docs`.
 - **Name kinds, not options.** Do not list every option of a menu the reader can see. Name the kinds: "a frequency, or **Custom cron**".
 - **Terms.** Use chat, space, secret, app account and agent. Never use session, thread, team, workspace, project, credential, key (for a secret) or connection (for an app account). A UI label keeps the app's words, such as **Start new session**.
 - **Voice.** Write to "you", in US English. Ren is "it".
+- **Recommend, do not forbid.** When Ren allows something that another feature does better, name where it belongs: "For code, use a repository", not "Do not keep a git repository in Drive".
 - **No code in product pages.** Link to the Developers tab.
 - **Banned words.** leverage, seamless, robust, streamline, empower, utilize, facilitate, elevate, supercharge, harness, delve, foster, cutting-edge, game changer, transformative, paramount.
 - **Banned patterns.**
@@ -29,7 +30,7 @@ The marketing site and the docs at `useren.ai/docs`.
   - Emoji in headings
   - Bold sprinkled mid-sentence
   - Clusters of em dashes
-- **No empty statements.** Cut a sentence that tells the reader nothing they can act on: what does not happen ("A new owner starts nothing"), what stays the same ("Its chats stay"), or what the page already said.
+- **No empty statements.** Cut a sentence that tells the reader nothing they can act on: what does not happen ("A new owner starts nothing"), what stays the same ("Its chats stay"), or what the page or its screenshots already said.
 - **Portability test.** Cut a sentence that could appear unchanged in the docs of a different product.
 - **Define once.** Define a concept that more than one section uses, such as an owner, once in its own section. After its first use, shorten a repeated phrase.
 - **Tables and prose do not repeat.** Do not restate a table in prose, or prose in a table. Cut a table row that explains itself.
@@ -45,6 +46,6 @@ The marketing site and the docs at `useren.ai/docs`.
 
   Use text, a table or nothing for a button that names itself, a menu that one sentence can list, a step that the numbered steps cover, and reference lists such as file types or shortcuts.
 
-  One overview screenshot at the top of the page shows the whole screen; do not repeat a part it already shows. Capture it at a 1536×768 viewport with a 2.5 scale (3840×1920). Crop to the part the section is about, with enough around it to show where it is: a panel crop includes the edge of the chat. Show the state the reader acts in: the hover state, the open menu. Seed real data: real model names and titles, no "Stub title". Video only for the Quickstart.
+  One overview screenshot at the top of the page shows the whole screen; do not repeat a part it already shows. Capture it at a 1536×768 viewport with a 2.5 scale (3840×1920). Crop to the part the section is about, with enough around it to show where it is: a panel crop includes the edge of the chat. Crop to whole elements: no half card or cut label at an edge, and no empty page background at the sides. When the content is narrower than the viewport, crop to its width; the frame takes any shape. Blur private data in captures of live artifacts. Show the state the reader acts in: the hover state, the open menu. Seed real data: real model names and titles, no "Stub title". Video only for the Quickstart.
 
 - **Icon-only buttons.** Write the icon in backticks, like a shortcut: `⋯`, `✎`.
