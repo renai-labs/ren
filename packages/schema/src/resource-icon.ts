@@ -39,7 +39,7 @@ export const tablerOf = (name: string, color: Color) => `tabler:${name}:${color}
 
 export const emojiOf = (emoji: string) => `:${emoji}`
 
-const read = (value: string | null | undefined, inlinePresets: boolean): Value | undefined => {
+const read = (value: string | null | undefined, options: { readonly inlinePresets: boolean }): Value | undefined => {
   if (!value) return undefined
   const glyph = tabler.exec(value)
   if (glyph) {
@@ -48,17 +48,17 @@ const read = (value: string | null | undefined, inlinePresets: boolean): Value |
     return name && color && isColor(color) ? { type: "tabler", name, color } : undefined
   }
   if (value.startsWith(":") && /\P{ASCII}/u.test(value)) return { type: "emoji", emoji: value.slice(1) }
-  if (isImageUrl(value) || (inlinePresets && inlinePreset.test(value))) return { type: "image", url: value }
+  if (isImageUrl(value) || (options.inlinePresets && inlinePreset.test(value))) return { type: "image", url: value }
   return undefined
 }
 
-export const parse = (value: string | null | undefined) => read(value, true)
+export const parse = (value: string | null | undefined) => read(value, { inlinePresets: true })
 
 export const Descriptor = Schema.String.check(
   Schema.isMaxLength(maximumLength, { message: `Use ${maximumLength} characters or fewer.` }),
   Schema.makeFilter(
     (value) =>
-      read(value, false) !== undefined ||
+      Boolean(read(value, { inlinePresets: false })) ||
       "Use a Tabler icon (tabler:<Name>:<color>), an emoji (:<emoji>) or an uploaded image URL.",
   ),
 ).annotate({
