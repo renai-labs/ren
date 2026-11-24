@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import type { FileSystemAction, FileSystemEntry } from "@ren/client"
-import { DriveQuery } from "@ren/client/react"
+import { DriveQuery, Uploads } from "@ren/client/react"
 import { Button } from "@ren/ui/button"
 import { FileIcon } from "@ren/ui/file-icon"
 import { Input } from "@ren/ui/input"
@@ -79,17 +79,21 @@ function Upload(props: {
       })
     for (const each of named) {
       const id = toast.loading(`Uploading ${FileName.base(each.path)}`)
-      void client.drive
-        .startUpload({ ...(props.space && { spaceId: props.space }), path: each.path, size: each.file.size })
-        .then((form) => send(form, each.file, new AbortController().signal))
-        .then(
-          () => {
-            toast.success(`${FileName.base(each.path)} uploaded`, { id })
-            props.onDone()
-          },
-          (error: unknown) =>
-            toast.error(`Could not upload ${FileName.base(each.path)}`, { id, description: errorMessage(error) }),
-        )
+      void Uploads.send(client, send, {
+        file: each.file,
+        spaceId: props.space,
+        path: each.path,
+        name: FileName.base(each.path),
+        mime: Drive.typeOf(each.path),
+        size: each.file.size,
+      }).then(
+        () => {
+          toast.success(`${FileName.base(each.path)} uploaded`, { id })
+          props.onDone()
+        },
+        (error: unknown) =>
+          toast.error(`Could not upload ${FileName.base(each.path)}`, { id, description: errorMessage(error) }),
+      )
     }
   }
   return (

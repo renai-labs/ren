@@ -1,5 +1,6 @@
 export * as Platform from "./platform.js"
 
+import type { Uploads } from "@ren/client/react"
 import { createContext, use } from "react"
 import type { ReactNode } from "react"
 import type { Analytics } from "./analytics.js"
@@ -48,11 +49,7 @@ interface Base {
   readonly notificationPermission?: () => NotificationPermission | "unsupported"
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
-  readonly upload?: (
-    form: { readonly uploadUrl: string; readonly fields: Readonly<Record<string, string>> },
-    file: Blob,
-    signal: AbortSignal,
-  ) => Promise<void>
+  readonly upload?: Uploads.Transfer<Blob>
   readonly writeClipboardText?: (text: string) => Promise<void>
   readonly copyImage?: (src: string) => Promise<void>
   readonly saveFile?: (url: string, name: string) => void
