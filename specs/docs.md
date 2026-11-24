@@ -10,7 +10,7 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Address         | Stays at `useren.ai/docs`.                                                                                                                                              |
 | Readers         | Product pages: founders and senior leads, technical enough to follow. Developers tab: engineers only.                                                                   |
-| Layout          | Group pages by the reader’s task. A feature shared by organisations and spaces has one page in the shared groups: Work, Connections, Behavior or Admin (§2).            |
+| Layout          | Group pages by the reader’s task. A feature shared by organisations and spaces has one page in the shared groups: Work, Integrations, Behavior or Admin (§2).           |
 | Page shape      | Definition, screenshot and "how to use" on every page. Rules & limits, When it fails and Examples only when there is real content.                                      |
 | Code            | None in product pages. They link to the Developers tab.                                                                                                                 |
 | Beta            | Only the Mobile app; mark its entry on Welcome with a Beta badge. A later beta feature gets a "Beta" badge on its normal page.                                          |
@@ -34,7 +34,7 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 
 ### Documentation tab
 
-**One page per feature.** When a feature appears at both organisation and space level, give it one page in **Work**, **Connections**, **Behavior** or **Admin**. On that page, show what a reader can do at each level and where the steps differ. Use task headings, such as “Invite someone to the organisation” and “Add someone to a space” on **Members**.
+**One page per feature.** When a feature appears at both organisation and space level, give it one page in **Work**, **Integrations**, **Behavior** or **Admin**. On that page, show what a reader can do at each level and where the steps differ. Use task headings, such as “Invite someone to the organisation” and “Add someone to a space” on **Members**.
 
 The **Organisation** and **Space** overviews link directly to the relevant heading on the shared page. For example, link from Space to **Members → Add someone to a space**. Reserve the two groups for work specific to that level: **Billing** belongs under Organisations; **Inbox**, **Agents**, and **Factory** belong under Spaces.
 
@@ -50,7 +50,7 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |               | Automations      | `automations`     | `concepts/schedules`                                |
 |               | Drive            | `drive`           | `concepts/storage`                                  |
 |               | Artifacts        | `artifacts`       | `concepts/artifacts`                                |
-| Connections   | Apps             | `apps`            | `concepts/apps`                                     |
+| Integrations  | Apps             | `apps`            | `concepts/apps`                                     |
 |               | Credentials      | `credentials`     | `concepts/credentials`                              |
 |               | Channels         | `channels`        | `concepts/channels/index`                           |
 | Behavior      | Instructions     | `instructions`    | New                                                 |
@@ -116,7 +116,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 
 ### 4.2 Sidebar
 
-Replace **Work with Ren** with four groups of shared features: **Work**, **Connections**, **Behavior** and **Admin**. Replace **Organize** with **Organisations** and **Spaces**. Add **Clients** for Claude & ChatGPT and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
+Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Organisations** and **Spaces**. Add **Clients** for Claude & ChatGPT and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -498,7 +498,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Link to Model Providers for provider setup.
 - Link to `/pricing` for plan prices.
 
-### Work, Connections, Behavior, Admin
+### Work, Integrations, Behavior, Admin
 
 **Chat**
 
