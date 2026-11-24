@@ -29,6 +29,7 @@ const SearchSchema = Schema.Struct({
   tab: Schema.optional(Schema.Literals(["setup", "requests"])),
   request: Schema.optional(Schema.String),
   outcome: Schema.optional(Schema.String),
+  session: Schema.optional(Schema.String),
 })
 
 export type Search = typeof SearchSchema.Type
