@@ -179,6 +179,26 @@ describe("Drives", () => {
   )
 
   it.live(
+    "move takes every file of a folder to the same folder of another drive, and leaves the folders beside it",
+    () =>
+      Effect.gen(function* () {
+        const drives = yield* Drives.Service
+        const found = yield* ownerActor
+        const from = found.owner
+        const to = { organizationId: from.organizationId, spaceId: yield* Seed.space(from.organizationId) }
+        yield* drives.put(from, "tasks/ENG-1/shot one.png", new TextEncoder().encode("png"), "image/png")
+        yield* drives.put(from, "tasks/ENG-1/logs/run.txt", new TextEncoder().encode("ok"), "text/plain")
+        yield* drives.put(from, "tasks/ENG-10/other.png", new TextEncoder().encode("png"), "image/png")
+        yield* drives.move(from, to, "tasks/ENG-1")
+        const paths = (owner: typeof to) =>
+          drives.files(owner, "tasks").pipe(Effect.map((files) => files.map((file) => file.path).toSorted()))
+        expect(yield* paths(from)).toEqual(["tasks/ENG-10/other.png"])
+        expect(yield* paths(to)).toEqual(["tasks/ENG-1/logs/run.txt", "tasks/ENG-1/shot one.png"])
+        expect(new TextDecoder().decode(yield* drives.read(to, "tasks/ENG-1/shot one.png"))).toBe("png")
+      }),
+  )
+
+  it.live(
     "only members use a space's drive, every person in the organization uses its drive, and an agent uses neither",
     () =>
       Effect.gen(function* () {
