@@ -1,108 +1,158 @@
 ---
-title: Schedules
+title: Automations
 icon: Clock
-description: Run a prompt in a project on a recurring schedule, and pause, edit, or delete it when the work changes.
+description: Start chats in a space on a schedule, or when another app sends a request to a webhook, and see each run and request.
 summary: Start chats on a schedule or an event
 ---
 
-A schedule is a recurring request to Ren, such as every weekday at 9am. Each run starts a new chat in the project of the schedule. Use a schedule for work that repeats.
-
-For example, a schedule can examine your sales data every morning and update a dashboard [artifact](/docs/artifacts/). Another schedule can summarize the support tickets of the week every Friday afternoon.
-
-## Settings
-
-| Setting  | What it does                                                                                                        |
-| -------- | ------------------------------------------------------------------------------------------------------------------- |
-| Message  | The request Ren gets on each run.                                                                                   |
-| Project  | Where the chat of each run starts. The run uses the instructions, tools, and permissions of the project.            |
-| Repeat   | **Every hour**, **Every day**, **Every weekday**, **Every week**, **Every month**, or **Custom cron**, with a time. |
-| Timezone | The time zone that the schedule follows. New schedules use the time zone of your organization.                      |
-| Until    | An optional end date. After this date, the schedule stops.                                                          |
-| Model    | An optional model for the runs. Without one, runs use the default model of the project.                             |
-
-## Create a schedule
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-1. Open **Scheduled** in the sidebar.
-2. Select **Create schedule**.
-3. Enter the **Message**, like "Summarize yesterday's support tickets and post the top three issues."
-4. Choose the **Project**.
-5. Choose a repeat interval and a time.
-6. For a custom schedule, select **Custom cron**.
-7. Enter a cron expression, such as `0 9 * * 1-5` for weekdays at 9am.
-8. If you want, change the **Timezone**, set an **Until** date, or pick a **Model**.
-9. Select **Create schedule**. The dialog shows the time of the next run.
+An automation starts a chat in a [space](/docs/spaces/) without you. A schedule starts one at set times. A webhook starts one when another app sends it a request.
 
 <Screenshot
-  shot="schedules/drawer"
-  alt="The New schedule dialog with message, project, repeat, time, timezone, and model filled in"
-  caption="The New schedule dialog with all settings filled in and the time of the next run."
+  shot="automations/schedules"
+  alt="The Automations page with six schedules across four spaces, each with its frequency, last run, next run and status switch"
+  caption="Automations, with the schedules of every space."
 />
 
-</Fragment>
-<Fragment slot="ask-ren">
+**Automations** in the sidebar lists every space's automations. Each space also has its own, under **Schedules** and **Webhooks**.
 
-After Ren does the work one time, send this in the chat:
+## Schedules
 
-<AskRen prompt="Run this every weekday at 9am Pacific time." />
+### Create a schedule
 
-</Fragment>
-<Fragment slot="cli">
+<Steps>
 
-```sh
-ren cron-triggers create <project-id> \
-  --input-message "Summarize yesterday's support tickets." \
-  --schedule "0 9 * * 1-5" \
-  --timezone "America/Los_Angeles"
-```
+1. Open the **Schedules** tab and select **Create schedule**.
 
-</Fragment>
-</SurfaceTabs>
+2. Write the prompt. Without a name, the schedule uses the first line of the prompt.
 
-## Run history
+3. Choose how often it runs and at what time, or choose **Custom cron** and enter a cron expression.
 
-To find past runs, filter the chat list in the sidebar by the **Scheduled** source. Chats from earlier runs stay in the chat list after you pause, edit, or delete the schedule.
+4. Optionally choose an agent and an end date. Without an agent, the chat uses the default settings of the space.
 
-## Edit, pause, resume, or delete a schedule
+5. Select **Create schedule**.
 
-A paused schedule keeps its settings but does not run. Its card does not show a next run time.
+</Steps>
 
-<SurfaceTabs>
-<Fragment slot="app">
+A schedule follows the timezone in its form. New schedules start in your timezone from **Settings → Preferences**.
 
-Open **Scheduled** in the sidebar. To show only **Enabled** or **Paused** schedules, use **Filter schedules**. On the card of the schedule:
+### Runs
 
-- To change the settings, select the edit button, then **Save**.
-- To pause the schedule, select the pause button. To resume it, select the resume button.
-- To remove the schedule, select the delete button, then **Delete**.
+Each run starts a new chat, or posts into the chat it targets.
+
+Select a schedule to see its runs. Select **Run now** to run it.
+
+A run fails when it cannot reach its chat. Ren skips a run when the previous run is still working, the schedule is paused or deleted, the owner or the agent left the space, or the target chat is archived.
+
+Pause a schedule with the switch in its row; edit or delete it from `⋯`.
+
+### When Ren pauses a schedule
+
+| Status                     | Cause                     | To fix                                 |
+| -------------------------- | ------------------------- | -------------------------------------- |
+| **Paused · owner left**    | The owner left the space. | Edit it to become the owner.           |
+| **Paused · agent removed** | The agent left the space. | Choose another agent.                  |
+| **Paused · failing**       | The last 5 runs failed.   | Open the failed runs, fix, turn it on. |
+
+## Webhooks
+
+A webhook is a URL that another app sends requests to, such as Stripe on a payment or Linear on a new issue. Each request it accepts starts or continues a session.
+
+### Create a webhook
+
+<Steps>
+
+1. Open the **Webhooks** tab and select **Create webhook**.
+
+2. Enter a name and the message: what the agent must do with each request. Optionally choose an agent.
+
+3. Select **Create webhook**, then copy the URL into the other app. The URL holds a token. Treat it like a password.
+
+4. Set the [signing secret](#signature) if the other app signs its requests.
+
+5. Send a test event from the other app. It shows under its requests.
+
+6. Turn the switch from **Debug** to **Live**.
+
+</Steps>
+
+**Debug** only records requests; **Live** acts on them.
+
+An app can also offer webhooks. They show under **From apps** on the **Webhooks** tab. Their message and rules come from the app, and their page shows the setup steps for the other app.
+
+### Signature
+
+Pick the check the other app supports:
+
+| Check                        | Use it for                                 |
+| ---------------------------- | ------------------------------------------ |
+| **URL only**                 | Apps that cannot sign requests.            |
+| **Header equals the secret** | Apps that send a fixed secret in a header. |
+| **HMAC of the body**         | Apps that sign the body, such as GitHub.   |
+| **Standard Webhooks**        | Svix, Clerk, Resend.                       |
+| **Stripe**                   | Stripe.                                    |
+
+Select **Set the signing secret**. Ren makes a secret and shows it once, or you paste the one the other app gave you. **Live** stays off until the secret is set.
+
+### Which requests start a session
+
+- Start a session when: a condition on the request, such as "the action is create". Other requests are ignored. Without a condition, every request does.
+- Session continuation key: a value from the request, such as an issue ID. Requests with the same value go to one session.
+- Event identifier: a delivery ID. Ren skips a request it has already seen.
+- Session title: a value from the request that names the new session.
+
+To set one, open a recorded request, select a value in its body, and select **Add as condition**, **Use as session continuation key** or **Use as session title**. Then select **Save**.
 
 <Screenshot
-  shot="schedules/list"
-  alt="The Scheduled page with one active and one paused schedule"
-  caption="The Scheduled page with one active schedule and one paused schedule."
+  shot="automations/request-menu"
+  frame="detail"
+  alt="The body of a recorded Linear request with the issue title selected and a menu with Add as condition, Use as session continuation key and Use as session title"
+  caption="Select a value in a recorded request to use it."
 />
 
-</Fragment>
-<Fragment slot="ask-ren">
+For the expression syntax, see [Ren as code](/docs/developers/ren-as-code/).
 
-<AskRen prompt="Pause the daily support summary schedule." />
+### Requests
 
-</Fragment>
-<Fragment slot="cli">
+The webhook page lists its requests.
 
-```sh
-ren cron-triggers update <project-id> <schedule-id> --is-enabled false
-ren cron-triggers archive <project-id> <schedule-id>
-```
+| Outcome   | Meaning                                                                    |
+| --------- | -------------------------------------------------------------------------- |
+| Failed    | The session did not take it.                                               |
+| Recorded  | Kept, no session: the webhook is in **Debug**, or its owner or agent left. |
+| Ignored   | The condition was false, or a rule failed.                                 |
+| Duplicate | Ren saw its event identifier before.                                       |
+| Rejected  | Wrong or missing signature, or a body over 1 MB.                           |
+| Throttled | Over 60 requests in one minute.                                            |
+| Answered  | A URL check from the other app.                                            |
 
-</Fragment>
-</SurfaceTabs>
+Select **Replay** to send the queued, recorded, throttled and failed requests to their sessions. The webhook must be **Live**.
+
+### Rotate the URL
+
+Select **Rotate URL** when the URL leaks. Paste the new one in the other app.
+
+### When Ren turns a webhook back to Debug
+
+<Screenshot
+  shot="automations/webhook-warning"
+  frame="detail"
+  alt="The Webhooks tab with Stripe failed payments marked with a red warning and the reason Debug: the parser broke on 5 requests in a row"
+  caption="A webhook that Ren switched back to Debug."
+/>
+
+Ren switches a webhook to **Debug**, marked with a warning, when:
+
+- the owner and the fallback person left the space,
+- its agent left the space,
+- 5 requests in a row broke a rule,
+- the app removed the webhook it offered.
+
+Fix the cause, turn it **Live**, then select **Replay** to run the requests it recorded meanwhile.
 
 ## Good to know
 
-- In the API and CLI, a schedule is a `cronTrigger`.
-- Scheduled chats deny actions set to **Ask**. Set the necessary actions to **Allow** in the permissions of the [project](/docs/concepts/projects/).
-- If your organization has no more credits, Ren pauses its schedules. Ren skips their runs until someone adds credits.
-- When you pause, edit, or delete a schedule, an active chat does not stop.
+- A chat from an automation denies any action that needs approval, unless you allow it in the [permissions](/docs/permissions/).
+- An automation runs as its owner: the last person who changed what it does, such as its prompt, agent, time or rules. Any member of the space can manage its automations.
+- After a webhook's owner leaves the space, its sessions run as the fallback person. Select **Use me instead** on the webhook to become it.
+- Runs and requests are kept for 30 days.
+- A space can have 50 active schedules, each at least 5 minutes apart. After its end date, a schedule is **Ended**.
