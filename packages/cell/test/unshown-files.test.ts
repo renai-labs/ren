@@ -49,6 +49,14 @@ describe("OpenCodeUnshownFiles.of", () => {
     expect(found?.paths).toEqual([`${folder}/site/index.html`])
   })
 
+  test("an HTML page the agent edited is unshown too", () => {
+    const found = OpenCodeUnshownFiles.of(
+      [user("msg_1", 1_000), assistant("msg_2", [tool("edit", "q1-goals.html")]), answer("msg_3", "Updated.")],
+      folder,
+    )
+    expect(found?.paths).toEqual([`${folder}/q1-goals.html`])
+  })
+
   test("a file the agent showed in this turn, code and names that are not files are left out", () => {
     const found = OpenCodeUnshownFiles.of(
       [

@@ -46,12 +46,14 @@ const deliverables = new Set([
 
 const maxFiles = 10
 
+const writes = new Set(["write", "edit"])
+
 const pathOf = (input: unknown) =>
   Predicate.isObject(input) && "path" in input && typeof input.path === "string" ? input.path : undefined
 
 const withoutSuffix = (name: string) => name.replace(/(?:#L\d+(?:-L?\d+)?|:\d+(?:-\d+)?)$/u, "")
 
-// oxlint-disable-next-line ren/no-comments -- The files the agent made or named in its last answer this turn and did not show: every HTML page it wrote, and every deliverable its answer names. The caller keeps the ones that exist and changed since the turn started. Undefined once Ren has already asked in this turn.
+// oxlint-disable-next-line ren/no-comments -- The files the agent made or named in its last answer this turn and did not show: every HTML page it wrote or edited, and every deliverable its answer names. The caller keeps the ones that exist and changed since the turn started. Undefined once Ren has already asked in this turn.
 export const of = (messages: ReadonlyArray<SessionMessage.Info>, folder: string) => {
   const start = messages.findLastIndex((message) => message.type === "user")
   const user = messages[start]
@@ -70,7 +72,7 @@ export const of = (messages: ReadonlyArray<SessionMessage.Info>, folder: string)
     }),
   )
   const written = tools.flatMap((part) => {
-    const path = part.name === "write" ? pathOf(part.state.input) : undefined
+    const path = writes.has(part.name) ? pathOf(part.state.input) : undefined
     return path && pages.has(extname(path).toLowerCase()) ? [resolve(folder, path)] : []
   })
   const answer = Option.fromUndefinedOr(turn.findLast((message) => message.type === "assistant")).pipe(
