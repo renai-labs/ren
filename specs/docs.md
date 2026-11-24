@@ -40,36 +40,36 @@ The **Organisation** and **Space** overviews link directly to the relevant headi
 
 Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organisation or in one space. **Billing** answers “How do I change our plan?”
 
-| Group         | Page             | Slug              | Source                                              |
-| ------------- | ---------------- | ----------------- | --------------------------------------------------- |
-| Get started   | Welcome          | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
-|               | Quickstart       | `quickstart`      | `quickstart`                                        |
-|               | Models           | `models`          | New                                                 |
-| Work          | Chat             | `chats`           | `concepts/chats`                                    |
-|               | Tasks            | `tasks`           | `concepts/tasks`                                    |
-|               | Automations      | `automations`     | `concepts/schedules`                                |
-|               | Drive            | `drive`           | `concepts/storage`                                  |
-|               | Artifacts        | `artifacts`       | `concepts/artifacts`                                |
-| Integrations  | Apps             | `apps`            | `concepts/apps`                                     |
-|               | Credentials      | `credentials`     | `concepts/credentials`                              |
-|               | Channels         | `channels`        | `concepts/channels/index`                           |
-| Behavior      | Instructions     | `instructions`    | New                                                 |
-|               | Memory           | `memory`          | Parts of `concepts/storage`                         |
-|               | Permissions      | `permissions`     | New                                                 |
-| Admin         | Machines         | `machines`        | `concepts/environments`                             |
-|               | Usage            | `usage`           | New                                                 |
-|               | Members          | `members`         | `concepts/organizations`, `concepts/spaces`         |
-| Organisations | Organisation     | `organisation`    | Parts of `concepts/organizations`                   |
-|               | Model Providers  | `model-providers` | New                                                 |
-|               | Billing          | `billing`         | New                                                 |
-| Spaces        | Space            | `spaces`          | `concepts/spaces`                                   |
-|               | Inbox            | `inbox`           | New                                                 |
-|               | Agents           | `agents`          | New                                                 |
-|               | Factory          | `factory`         | New                                                 |
-|               | Repositories     | `repositories`    | Parts of `concepts/projects`                        |
-|               | Compute          | `compute`         | Space compute settings from `concepts/environments` |
-| Clients       | Claude & ChatGPT | `claude-chatgpt`  | New                                                 |
-|               | Mobile app       | `mobile`          | New                                                 |
+| Group         | Page            | Slug              | Source                                              |
+| ------------- | --------------- | ----------------- | --------------------------------------------------- |
+| Get started   | Welcome         | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
+|               | Quickstart      | `quickstart`      | `quickstart`                                        |
+|               | Models          | `models`          | New                                                 |
+| Work          | Chat            | `chats`           | `concepts/chats`                                    |
+|               | Tasks           | `tasks`           | `concepts/tasks`                                    |
+|               | Automations     | `automations`     | `concepts/schedules`                                |
+|               | Drive           | `drive`           | `concepts/storage`                                  |
+|               | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
+| Integrations  | Apps            | `apps`            | `concepts/apps`                                     |
+|               | Credentials     | `credentials`     | `concepts/credentials`                              |
+|               | Channels        | `channels`        | `concepts/channels/index`                           |
+| Behavior      | Instructions    | `instructions`    | New                                                 |
+|               | Memory          | `memory`          | Parts of `concepts/storage`                         |
+|               | Permissions     | `permissions`     | New                                                 |
+| Admin         | Machines        | `machines`        | `concepts/environments`                             |
+|               | Usage           | `usage`           | New                                                 |
+|               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
+| Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
+|               | Model Providers | `model-providers` | New                                                 |
+|               | Billing         | `billing`         | New                                                 |
+| Spaces        | Space           | `spaces`          | `concepts/spaces`                                   |
+|               | Inbox           | `inbox`           | New                                                 |
+|               | Agents          | `agents`          | New                                                 |
+|               | Factory         | `factory`         | New                                                 |
+|               | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
+|               | Compute         | `compute`         | Space compute settings from `concepts/environments` |
+| Clients       | Ren MCP         | `ren-mcp`         | New                                                 |
+|               | Mobile app      | `mobile`          | New                                                 |
 
 ### Developers tab
 
@@ -116,7 +116,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 
 ### 4.2 Sidebar
 
-Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Organisations** and **Spaces**. Add **Clients** for Claude & ChatGPT and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
+Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Organisations** and **Spaces**. Add **Clients** for Ren MCP and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -640,7 +640,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 ### Supporting topics
 
-Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sections of **Channels**. Instructions is a page in **Behavior**. Claude & ChatGPT and Mobile app are pages in the **Clients** group (§2).
+Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sections of **Channels**. Instructions is a page in **Behavior**. Ren MCP and Mobile app are pages in the **Clients** group (§2).
 
 **Instructions**
 
@@ -669,7 +669,7 @@ Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sect
 - 👀 then 🚀 or 😕. Unmapped repos go to the default space.
 - The "Review pull requests when ready" trigger. Tasks are done on merge.
 
-**Use Ren from Claude or ChatGPT**
+**Ren MCP**
 
 - A non-technical setup for the Ren MCP: add the URL, sign in, pick an organization. Links to `developers/mcp`.
 

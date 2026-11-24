@@ -40,7 +40,7 @@ const DOCS: Section = {
     },
     {
       title: "Clients",
-      items: ["claude-chatgpt", "mobile"],
+      items: ["ren-mcp", "mobile"],
     },
   ],
 }
