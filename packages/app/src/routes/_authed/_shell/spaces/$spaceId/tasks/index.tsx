@@ -4,7 +4,7 @@ import { TaskScopeProvider } from "../../../../../../features/tasks/task-scope.j
 import { TasksPage } from "../../../../../../features/tasks/tasks-page.js"
 import { useSpace } from "../../../../../../features/spaces/use-space.js"
 import { Loader } from "../../../../../../lib/loader.js"
-import { TaskSearch } from "../../../../../../lib/tasks.js"
+import { TaskSearch, viewsInput } from "../../../../../../lib/tasks.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/tasks/")({
   head: () => ({ meta: [{ title: "Tasks · Space · Ren" }] }),
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/tasks/")({
       options.context.queryClient.query(
         Tasks.all(options.context.client, Tasks.listInput(options.deps.filters, options.params.spaceId)),
       ),
+      options.context.queryClient.query(options.context.api.view.list.queryOptions(viewsInput(options.params.spaceId))),
     )
   },
   wrapInSuspense: false,

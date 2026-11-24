@@ -22,7 +22,7 @@ import { Page, useShapeId } from "../../components/page.js"
 import { Loading } from "@ren/ui/loading"
 import { NewTaskDialog } from "../../components/new-task-dialog.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
-import { FilterChips, FilterMenu, type Filters } from "../../components/filter-menu.js"
+import { FilterChips, FilterMenu } from "../../components/filter-menu.js"
 import { DisplayOptions } from "./task-filters.js"
 import { TaskBoard } from "./task-board.js"
 import { PriorityMenu, StatusMenu } from "../../components/task-pickers.js"
@@ -50,6 +50,9 @@ import { useAgents } from "../../lib/use-agents.js"
 import { useLabels } from "../../lib/use-labels.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import type { TaskSearch } from "../../lib/tasks.js"
+import { useMe } from "../../lib/use-me.js"
+import { TaskViewTabs } from "./task-views.js"
+import { useTaskView } from "./use-task-view.js"
 import { TaskDisplay } from "./task-display.js"
 import { TaskLink } from "./task-scope.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -315,8 +318,11 @@ export function TasksPage(props: {
   const { api, client } = RouterContext.useRouterContext()
   const search = props.search
   const spaceId = props.spaceId
+  const me = useMe()
+  const views = useTaskView({ search, spaceId, setSearch: props.setSearch })
+  const filters = views.filters
   const tasks = useQuery({
-    ...Tasks.all(client, Tasks.listInput(search.filters, spaceId)),
+    ...Tasks.all(client, Tasks.listInput(filters, spaceId)),
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
@@ -338,15 +344,10 @@ export function TasksPage(props: {
   const update = useMutation(api.task.update.mutationOptions())
   const assign = useMutation(api.task.assign.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
-  const filters: Filters = Object.fromEntries(
-    Object.entries(search.filters ?? {})
-      .filter((entry) => !spaceId || entry[0] !== "space")
-      .map(([key, values]) => [key, [...values]]),
-  )
   const needle = query.trim().toLowerCase()
   const roots: ReadonlyArray<TaskInfo> = tasks.data?.items ?? []
   const visible = roots
-    .filter((task) => FilterMatch.passes(filters, Tasks.filterValues(task)))
+    .filter((task) => FilterMatch.passes(filters, Tasks.filterValues(task, me.user.id)))
     .filter((task) => !needle || `${task.identifier} ${task.title}`.toLowerCase().includes(needle))
     .toSorted(Tasks.order(display))
   const bulk = async (ids: ReadonlyArray<string>, run: (id: string) => Promise<unknown>, done: string) => {
@@ -359,14 +360,9 @@ export function TasksPage(props: {
   const shapeId = useShapeId(`tasks-${display.layout}`)
   const stale = tasks.isPlaceholderData
   const idWidth = Math.max(0, ...roots.map((task) => task.identifier.length)) + 1
-  const setFilters = (next: Filters) =>
-    props.setSearch((previous) => ({
-      ...previous,
-      filters: Object.values(next).some((values) => values.length > 0) ? next : undefined,
-    }))
   const clearFilters = () => {
     setQuery("")
-    props.setSearch((previous) => ({ ...previous, filters: undefined }))
+    views.setFilters({})
   }
   const shown = TaskDisplay.scoped(display, spaceId)
   const groupBy = shown.groupBy
@@ -421,11 +417,12 @@ export function TasksPage(props: {
       title="Tasks"
       width="full"
       shape={`page-${display.layout}`}
+      tabs={<TaskViewTabs state={views} />}
       leading={
         <FilterChips
           properties={taskProperties(lookups).filter((property) => !spaceId || property.key !== "space")}
           value={filters}
-          onChange={setFilters}
+          onChange={views.setFilters}
         />
       }
       actions={
@@ -433,11 +430,12 @@ export function TasksPage(props: {
           <ToolbarSearch label="Search tasks" value={query} onChange={setQuery} />
           <FilterMenu
             label="Filter tasks"
-            properties={countedTaskProperties(lookups, roots).filter(
+            properties={countedTaskProperties(lookups, roots, me.user.id).filter(
               (property) => !spaceId || property.key !== "space",
             )}
             value={filters}
-            onChange={setFilters}
+            defaults={views.viewFilters}
+            onChange={views.setFilters}
             noun="task"
           />
           <DisplayOptions
