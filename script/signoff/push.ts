@@ -23,6 +23,33 @@ const commits = [
 ]
 if (commits.length === 0) process.exit(0)
 
+const merged = (
+  await Promise.all(
+    commits.map(async (commit) => {
+      const merges = (
+        await Bun.$`git rev-list --merges --parents refs/remotes/${remote}/main..${commit}`.quiet().nothrow().text()
+      )
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line) => line.split(" "))
+      const subtree = await Promise.all(
+        merges
+          .flatMap((merge) => merge.slice(2))
+          .map(async (parent) =>
+            (await Bun.$`git log -1 --format=%B ${parent}`.quiet().text()).includes("git-subtree-dir:"),
+          ),
+      )
+      return subtree.some(Boolean) ? [] : merges.map((merge) => merge[0] ?? "")
+    }),
+  )
+).flat()
+if (merged.length > 0) {
+  console.error(
+    `signoff: ${merged.map((commit) => commit.slice(0, 7)).join(", ")} merges ${remote}/main or another branch into this one. Rebase onto ${remote}/main instead (git rebase ${remote}/main) and push again.`,
+  )
+  process.exit(1)
+}
+
 const root = "ren"
 const blocking = ["lint", "typecheck"] as const
 const PackageJson = Schema.Struct({
