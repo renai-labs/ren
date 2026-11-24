@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { ModelChoice } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
@@ -116,8 +117,7 @@ function ModelSheet(props: {
 }) {
   const [query, setQuery] = useState("")
   const [drilled, setDrilled] = useState<Choice>()
-  const needle = query.trim().toLowerCase()
-  const match = (model: Choice) => model.name.toLowerCase().includes(needle)
+  const match = (model: Choice) => Search.matches(query, model.name)
   const featured = ModelChoice.featured(props.models).filter((each) => match(each.model))
   const providers = [...new Set(props.models.map((model) => model.providerID))]
   const close = () => {
