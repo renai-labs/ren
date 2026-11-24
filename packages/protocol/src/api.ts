@@ -44,6 +44,7 @@ import { SpaceSettingsGroup } from "./groups/space-settings.js"
 import { TaskGroup } from "./groups/task.js"
 import { TaskActivityGroup } from "./groups/task-activity.js"
 import { TaskCommentGroup } from "./groups/task-comment.js"
+import { ViewGroup } from "./groups/view.js"
 
 export const Api = HttpApi.make("server")
   .add(HealthGroup)
@@ -79,6 +80,7 @@ export const Api = HttpApi.make("server")
   .add(TaskActivityGroup)
   .add(LinkGroup)
   .add(LabelGroup)
+  .add(ViewGroup)
   .add(ScheduleGroup)
   .add(ScheduleRunGroup)
   .add(WebhookGroup)

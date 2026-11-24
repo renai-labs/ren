@@ -166,6 +166,7 @@ const resources: ReadonlyArray<Resource> = [
     parent: "taskId",
   },
   { group: "label", about: "Manage labels", path: ["label"], name: "label", one: "a label", many: "labels" },
+  { group: "view", about: "Manage saved views", path: ["view"], name: "view", one: "a view", many: "views" },
   {
     group: "schedule",
     about: "Manage schedules",
