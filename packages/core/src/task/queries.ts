@@ -189,8 +189,34 @@ export const byParent = (parentId: Task.ListInput["parentId"]) => {
   return { where: undefined, order: desc }
 }
 
+const taskNumber = /^(?:#|(?<prefix>.+)-)?(?<number>\d{1,9})$/u
+
 export const search = (text: string | undefined) =>
-  text ? ilike(Database.Schema.task.title, Database.contains(text)) : undefined
+  Database.search(text, (pattern, word) => {
+    const number = taskNumber.exec(word)?.groups
+    return [
+      ilike(Database.Schema.task.title, pattern),
+      ilike(Database.Schema.task.description, pattern),
+      sql`exists (
+        select 1 from ${Database.Schema.task_label}
+        inner join ${Database.Schema.label} on ${Database.Schema.label.id} = ${Database.Schema.task_label.label_id}
+        where ${Database.Schema.task_label.task_id} = ${Database.Schema.task.id}
+          and ${Database.Schema.label.name} ilike ${pattern}
+      )`,
+      number?.number
+        ? and(
+            eq(Database.Schema.task.number, Number(number.number)),
+            number.prefix
+              ? sql`exists (
+                  select 1 from ${Database.Schema.task_sequence}
+                  where ${Database.Schema.task_sequence.organization_id} = ${Database.Schema.task.organization_id}
+                    and lower(${Database.Schema.task_sequence.prefix}) = ${number.prefix.toLowerCase()}
+                )`
+              : undefined,
+          )
+        : undefined,
+    ]
+  })
 
 export const latestSessions = (transaction: Database.Transaction, taskIds: ReadonlyArray<Task.ID>) =>
   transaction

@@ -47,10 +47,8 @@ export const message = {
 
 export const inboxIsFilesReset = sql<boolean>`coalesce(${Database.Schema.opencode_inbox.payload}::jsonb -> 'metadata' ->> 'source' = ${filesResetSource}, false)`
 
-export const search = (text: string | undefined) => {
-  if (!text) return
-  const pattern = Database.contains(text)
-  return or(
+export const search = (text: string | undefined) =>
+  Database.search(text, (pattern) => [
     ilike(Database.Schema.opencode_session.title, pattern),
     sql`exists (
       select 1 from ${Database.Schema.opencode_message}
@@ -58,8 +56,7 @@ export const search = (text: string | undefined) => {
         and ${Database.Schema.opencode_message.removed_at} is null
         and ${message.text} ilike ${pattern}
     )`,
-  )
-}
+  ])
 
 export const writeMessages = Effect.fnUntraced(function* (
   transaction: Database.Transaction,

@@ -143,7 +143,7 @@ it.live("browsing lists active listings by text, category and slugs", () =>
       ],
     })
     const slugs = (input: {
-      readonly query?: string
+      readonly search?: string
       readonly category?: string
       readonly slugs?: ReadonlyArray<string>
     }) => Effect.map(registry.list(reader, { ...page, ...input }), (result) => result.items.map((item) => item.slug))
@@ -152,7 +152,7 @@ it.live("browsing lists active listings by text, category and slugs", () =>
       ["linear", false],
       ["notion", true],
     ])
-    expect(yield* slugs({ query: "ISSUES" })).toEqual(["linear"])
+    expect(yield* slugs({ search: "ISSUES" })).toEqual(["linear"])
     expect(yield* slugs({ category: "writer" })).toEqual(["notion"])
     expect(yield* slugs({ slugs: ["notion", "unlisted", "linear"] })).toEqual(["linear", "notion"])
     expect((yield* Effect.flip(registry.get(reader, "unlisted")))._tag).toBe("Primitive.NotFound")

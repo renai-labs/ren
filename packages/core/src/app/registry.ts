@@ -6,7 +6,7 @@ import { App } from "@ren/schema/app"
 import type { AppListing } from "@ren/schema/app-listing"
 import { AppRegistry } from "@ren/schema/app-registry"
 import { Pagination } from "@ren/util/pagination"
-import { and, asc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, eq, ilike, inArray, isNull, sql } from "drizzle-orm"
 import { Context, Data, DateTime, Effect, Layer } from "effect"
 import { Access } from "../access.js"
 import type { Actor } from "../actor.js"
@@ -357,18 +357,15 @@ export const layer = Layer.effect(
         if (!isAllowed(actor, "list")) return Pagination.page([], input)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const pattern = input.query && Database.contains(input.query)
             const page = Pagination.page(
               yield* browse(
                 transaction,
                 and(
-                  pattern
-                    ? or(
-                        ilike(Database.Schema.app.slug, pattern),
-                        ilike(Database.Schema.app.name, pattern),
-                        ilike(Database.Schema.app.description, pattern),
-                      )
-                    : undefined,
+                  Database.search(input.search, (pattern) => [
+                    ilike(Database.Schema.app.slug, pattern),
+                    ilike(Database.Schema.app.name, pattern),
+                    ilike(Database.Schema.app.description, pattern),
+                  ]),
                   input.category
                     ? sql`exists (select 1 from jsonb_each(${Database.Schema.app_listing.categories}) as entry(key, value) where entry.value @> ${JSON.stringify([input.category])}::jsonb)`
                     : undefined,
