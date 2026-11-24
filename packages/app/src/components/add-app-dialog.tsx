@@ -10,7 +10,7 @@ import { CustomAppDialog } from "./custom-app-dialog.js"
 import { LoadMore } from "./load-more.js"
 import { useAddManaged } from "./profile-dialog.js"
 import { Loading } from "@ren/ui/loading"
-import { Search } from "@ren/util/search"
+import { Search } from "@ren/schema/search"
 import type { CatalogApp } from "../lib/apps.js"
 import { errorMessage } from "../lib/errors.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -79,10 +79,12 @@ function AppResults(props: {
   const spaces = useSpaces()
   const addManaged = useAddManaged()
   const [adding, setAdding] = useState<string>()
-  const search = AppRegistryPages.useSearch(
-    { client: context.client, api: context.api, query: props.query, added: props.added },
-    Search.matches,
-  )
+  const search = AppRegistryPages.useSearch({
+    client: context.client,
+    api: context.api,
+    query: props.query,
+    added: props.added,
+  })
   const found = search.found
   const loading = search.loading
   const space = spaces.space(props.space.id)
