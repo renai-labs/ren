@@ -2,12 +2,15 @@ import { getRouteApi } from "@tanstack/react-router"
 import { Page } from "../../components/page.js"
 import { AutomationEditor, type EditorTab } from "./automation-editor.js"
 import { AutomationsList, NewAutomationButton, type Tab } from "./automations-list.js"
+import type { Automations } from "../../lib/automations.js"
 
 const globalList = getRouteApi("/_authed/_shell/automations/")
 const spaceList = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/")
 const globalNew = getRouteApi("/_authed/_shell/automations/new")
 const globalEditor = getRouteApi("/_authed/_shell/automations/$spaceId/$slug")
 const spaceEditor = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/$slug")
+
+const kindParam = (kind: Automations.ListKind) => (kind === "webhooks" ? "webhooks" : undefined)
 
 export function AutomationsPage() {
   const search = globalList.useSearch()
@@ -17,7 +20,10 @@ export function AutomationsPage() {
       <AutomationsList
         spaceId={undefined}
         tab={search.tab ?? "automations"}
-        onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined } })}
+        onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined, kind: search.kind } })}
+        kind={search.kind ?? "schedules"}
+        onKind={(kind) => void navigate({ search: { kind: kindParam(kind) } })}
+        onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
         actions={<NewAutomationButton spaceId={undefined} />}
       />
     </Page>
@@ -32,7 +38,10 @@ export function SpaceAutomationsTab() {
     <AutomationsList
       spaceId={spaceId}
       tab={search.tab ?? "automations"}
-      onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined } })}
+      onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined, kind: search.kind } })}
+      kind={search.kind ?? "schedules"}
+      onKind={(kind) => void navigate({ search: { kind: kindParam(kind) } })}
+      onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
       actions={<NewAutomationButton spaceId={spaceId} />}
     />
   )
@@ -51,6 +60,7 @@ export function NewAutomationPage() {
       defaultSpace={search.space}
       tab={search.tab ?? "settings"}
       onTab={(tab) => void navigate({ search: (previous) => ({ ...previous, tab: editorTab(tab) }) })}
+      onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
     />
   )
 }
@@ -67,6 +77,7 @@ export function AutomationEditorPage() {
       scoped={false}
       tab={search.tab ?? "settings"}
       onTab={(tab) => void navigate({ search: (previous) => ({ ...previous, tab: editorTab(tab) }) })}
+      onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
     />
   )
 }
@@ -83,6 +94,7 @@ export function SpaceAutomationEditorPage() {
       scoped
       tab={search.tab ?? "settings"}
       onTab={(tab) => void navigate({ search: (previous) => ({ ...previous, tab: editorTab(tab) }) })}
+      onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
     />
   )
 }
