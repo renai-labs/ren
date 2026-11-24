@@ -35,13 +35,15 @@ const isPriority = (value: string | undefined): value is NonNullable<TaskInfo["p
 
 const one = (values: ReadonlyArray<string> | undefined) => (values?.length === 1 ? values.at(0) : undefined)
 
+const person = (value: string | undefined) => (value === "none" || value === "me" ? undefined : value)
+
 export function listInput(given: Filters | undefined, space?: string): Filter {
   const filters = given ?? {}
   const status = one(filters.status)
   const priority = one(filters.priority)
   const spaceId = space ?? one(filters.space)
-  const agentId = one(filters.agent)
-  const ownerId = one(filters.owner)
+  const agentId = person(one(filters.agent))
+  const ownerId = person(one(filters.owner))
   const label = one(filters.label)
   const open = isOpen(status)
   return {
@@ -56,13 +58,14 @@ export function listInput(given: Filters | undefined, space?: string): Filter {
   }
 }
 
-export const filterValues = (task: TaskInfo): Record<string, ReadonlyArray<string>> => ({
+export const filterValues = (task: TaskInfo, userId?: string): Record<string, ReadonlyArray<string>> => ({
   space: [task.spaceId],
   status: [task.status],
   priority: [task.priority ?? "none"],
-  agent: [task.agentId ?? ""],
-  owner: [task.ownerId ?? ""],
+  agent: [task.agentId ?? "none"],
+  owner: [task.ownerId ?? "none", ...(userId && task.ownerId === userId ? ["me"] : [])],
   label: task.labels.map((label) => label.name),
+  review: task.humanReview ? ["needed"] : [],
 })
 
 const priorityRank: Readonly<Record<string, number>> = { high: 0, medium: 1, low: 2 }
