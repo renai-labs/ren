@@ -51,6 +51,8 @@ export const input = (
 
 export const dollars = (micro: number) => micro / 1_000_000
 
+export const shortModel = (model: string) => model.split("/").at(-1) ?? model
+
 export const cost = (row: InsightsRow) => row.cost.models + row.cost.compute + row.cost.tools
 
 export const tokens = (row: InsightsRow) =>

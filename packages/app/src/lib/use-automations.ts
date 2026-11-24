@@ -53,12 +53,15 @@ export function useWebhookList(spaceId: string | undefined) {
   })
 }
 
+const findKey = (kind: "schedule" | "webhook", address: { readonly spaceId: string; readonly handle: string }) =>
+  [kind, "find", address] as const
+
 // oxlint-disable-next-line ren/no-comments -- One automation of a space by its address: a slug, or the ID of a webhook made before automations had one trigger, whose slug a schedule also has.
 export function useAutomation(spaceId: string, handle: string) {
   const { client } = RouterContext.useRouterContext()
   const matches = (item: { readonly id: string; readonly slug: string }) => item.slug === handle || item.id === handle
   const schedule = useQuery({
-    queryKey: ["schedule", "find", { spaceId, handle }],
+    queryKey: findKey("schedule", { spaceId, handle }),
     queryFn: (context) =>
       search(
         (page) => client.schedule.list({ spaceId, page, pageSize: Automations.listSize }, { signal: context.signal }),
@@ -66,7 +69,7 @@ export function useAutomation(spaceId: string, handle: string) {
       ).then((found) => found ?? null),
   })
   const webhook = useQuery({
-    queryKey: ["webhook", "find", { spaceId, handle }],
+    queryKey: findKey("webhook", { spaceId, handle }),
     queryFn: (context) =>
       search(
         (page) => client.webhook.list({ spaceId, page, pageSize: Automations.listSize }, { signal: context.signal }),

@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { RelativeTime } from "@ren/util/relative-time"
 import { localTimeZone } from "@ren/ui/time"
+import { Equal } from "effect"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { RouteNotFound } from "../../components/route-error.js"
@@ -513,7 +514,7 @@ function Editor(props: {
   )
   const [draft, setDraft] = useState(initial)
   const automation = props.automation
-  const changed = JSON.stringify(draft) !== JSON.stringify(initial)
+  const changed = !Equal.equals(draft, initial)
   const change = (patch: Partial<Draft>) => setDraft((previous) => ({ ...previous, ...patch }))
   const leaving = useRef(false)
   const blocker = useBlocker({

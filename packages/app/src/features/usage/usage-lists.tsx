@@ -37,11 +37,9 @@ const muted = "size-4 text-muted-foreground"
 const nameOf = (by: UsageSearch.Breakdown, row: InsightsRow, member: Member | undefined) => {
   if (by === "space") return row.key === null ? "Inference keys" : (row.label ?? row.key)
   if (by === "member" && row.key !== null) return member?.name ?? row.label ?? "Former member"
-  if (by === "model" && row.key !== null) return shortModel(row.key)
+  if (by === "model" && row.key !== null) return Insights.shortModel(row.key)
   return row.key ?? "Compute & other"
 }
-
-export const shortModel = (model: string) => model.split("/").at(-1) ?? model
 
 export function ModelIcon(props: { model: string }) {
   return <ProviderIcon provider={props.model.split("/")[0] ?? props.model} />
@@ -51,7 +49,7 @@ export function AgentIcon(props: { name: string }) {
   return props.name === "ren" ? (
     <Logomark className="size-4" />
   ) : (
-    <DefaultIcon kind="skill" name={props.name} className="size-4 rounded" />
+    <DefaultIcon kind="skill" name={props.name} className="size-4 rounded-sm" />
   )
 }
 
@@ -98,6 +96,7 @@ function Row(props: { by: UsageSearch.Breakdown; row: InsightsRow; fill: number 
       <span
         aria-hidden
         className="absolute inset-y-0.5 left-0 rounded-md bg-muted/70"
+        // oxlint-disable-next-line react/forbid-dom-props -- the bar's length is this row's share of the largest cost
         style={{ width: `${Math.max(props.fill, 0.5)}%` }}
       />
       <span className="relative flex min-w-0 items-center gap-2.5">
@@ -107,6 +106,42 @@ function Row(props: { by: UsageSearch.Breakdown; row: InsightsRow; fill: number 
         <span className="min-w-0 break-words">{name}</span>
       </span>
       <span className="relative shrink-0 tabular-nums">{formatUsd(Insights.dollars(Insights.cost(props.row)))}</span>
+    </div>
+  )
+}
+
+const listed = (by: UsageSearch.Breakdown, rows: ReadonlyArray<InsightsRow>, agents: ReadonlySet<string>) => {
+  if (by === "agent") return rows.filter((row) => row.key !== null && agents.has(row.key))
+  if (by === "member") return rows.filter((row) => row.key !== null)
+  return rows
+}
+
+function Rows(props: { by: UsageSearch.Breakdown; rows: ReadonlyArray<InsightsRow>; title: string }) {
+  const [open, setOpen] = useState(false)
+  if (props.rows.length === 0)
+    return <p className="px-3 pb-2 text-sm text-muted-foreground">No usage in this period.</p>
+  const largest = Math.max(0, ...props.rows.map(Insights.cost))
+  const hidden = props.rows.length - shown
+  return (
+    <div className="flex flex-col gap-1">
+      <ul aria-label={`Cost by ${props.title.toLowerCase()}`} className="flex flex-col gap-0.5">
+        {(open ? props.rows : props.rows.slice(0, shown)).map((row, index) => (
+          <li key={row.key ?? `none-${index}`}>
+            <Row by={props.by} row={row} fill={largest > 0 ? (Insights.cost(row) / largest) * 100 : 0} />
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-start text-muted-foreground"
+          aria-expanded={open}
+          onClick={() => setOpen((was) => !was)}
+        >
+          {open ? "Show fewer" : `Show ${hidden} more`}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -128,19 +163,12 @@ function UsageList(props: { scope: Insights.Scope; search: UsageSearch.Search; b
   })
   const names = new Set(agents.data?.items.map((agent) => agent.name))
   const shapeId = useShapeId(`usage-${props.by}`)
-  const [open, setOpen] = useState(false)
   const title = titles[props.by]
   const pending = query.isPending || (props.by === "agent" && agents.isPending)
   const rows =
     pending || !query.data
       ? Array.from({ length: shown }, (_, index) => sample(index))
-      : props.by === "agent"
-        ? query.data.rows.filter((row) => row.key !== null && names.has(row.key))
-        : props.by === "member"
-          ? query.data.rows.filter((row) => row.key !== null)
-          : query.data.rows
-  const largest = Math.max(0, ...rows.map(Insights.cost))
-  const hidden = rows.length - shown
+      : listed(props.by, query.data.rows, names)
   return (
     <Card className={cn("gap-3 px-2 pt-5 pb-2 transition-opacity", query.isPlaceholderData && "opacity-60")}>
       <div className="flex items-baseline justify-between gap-3 px-3">
@@ -155,29 +183,8 @@ function UsageList(props: { scope: Insights.Scope; search: UsageSearch.Search; b
               Try again
             </Button>
           </div>
-        ) : rows.length === 0 ? (
-          <p className="px-3 pb-2 text-sm text-muted-foreground">No usage in this period.</p>
         ) : (
-          <div className="flex flex-col gap-1">
-            <ul aria-label={`Cost by ${title.toLowerCase()}`} className="flex flex-col gap-0.5">
-              {(open ? rows : rows.slice(0, shown)).map((row, index) => (
-                <li key={row.key ?? `none-${index}`}>
-                  <Row by={props.by} row={row} fill={largest > 0 ? (Insights.cost(row) / largest) * 100 : 0} />
-                </li>
-              ))}
-            </ul>
-            {hidden > 0 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="self-start text-muted-foreground"
-                aria-expanded={open}
-                onClick={() => setOpen((was) => !was)}
-              >
-                {open ? "Show fewer" : `Show ${hidden} more`}
-              </Button>
-            ) : null}
-          </div>
+          <Rows by={props.by} rows={rows} title={title} />
         )}
       </Loading>
     </Card>

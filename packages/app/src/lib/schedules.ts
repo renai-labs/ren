@@ -1,6 +1,5 @@
-import { RelativeTime } from "@ren/util/relative-time"
-import type { ScheduleInfo, ScheduleRunReason, ScheduleWhen } from "@ren/client"
-import { Cron, DateTime, Option, Result } from "effect"
+import type { ScheduleRunReason, ScheduleWhen } from "@ren/client"
+import { DateTime, Option } from "effect"
 import { civilDate, formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
 
 export const runReasons: Readonly<Record<ScheduleRunReason, string>> = {
@@ -14,22 +13,8 @@ export const runReasons: Readonly<Record<ScheduleRunReason, string>> = {
 
 export const refreshEvery = 5_000
 
-export const runColumns = ["Scheduled for", "Trigger", "Status", "Chat"]
-
 const frequencies = ["hourly", "daily", "weekdays", "weekly", "monthly", "custom", "once"] as const
 export type Frequency = (typeof frequencies)[number]
-
-export const frequencyOptions = [
-  { value: "hourly", label: "Every hour" },
-  { value: "daily", label: "Every day" },
-  { value: "weekdays", label: "Every weekday" },
-  { value: "weekly", label: "Every week" },
-  { value: "monthly", label: "Every month" },
-  { value: "custom", label: "Custom cron" },
-  { value: "once", label: "Once" },
-] satisfies ReadonlyArray<{ value: Frequency; label: string }>
-
-export const isFrequency = (value: unknown): value is Frequency => frequencies.some((frequency) => frequency === value)
 
 export const weekdays = [
   { value: "1", label: "Monday" },
@@ -176,7 +161,7 @@ const clock = (time: string) => {
 
 const zoneName = (timeZone: string) => timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone
 
-export const describeCadence = (cadence: Cadence) => {
+const describeCadence = (cadence: Cadence) => {
   const days = cadence.weekday.split(",").flatMap((value) => {
     const day = weekdayNames.get(value)
     return day ? [day.slice(0, 3)] : []
@@ -199,40 +184,3 @@ export const describe = (when: ScheduleWhen, viewerZone: string) => {
 }
 
 export const formatRun = formatInZone
-
-const pauseWords = {
-  user: "Paused",
-  owner_left: "Paused · owner left",
-  agent_removed: "Paused · agent removed",
-  failing: "Paused · failing",
-} as const
-
-export const statusOf = (schedule: ScheduleInfo, now: number) => {
-  if (schedule.status === "paused") return pauseWords[schedule.pausedReason ?? "user"]
-  if (schedule.status === "ended" || !schedule.nextRunAt) return "Expired"
-  return `Next run ${RelativeTime.format(schedule.nextRunAt, now)}`
-}
-
-export const nameOf = (message: string) =>
-  (
-    message
-      .trim()
-      .split("\n")
-      .find((line) => line.trim() !== "") ?? ""
-  )
-    .trim()
-    .slice(0, 80)
-    .trim()
-
-export const preview = (cadence: Cadence) => {
-  const when = whenOf(cadence)
-  if (Option.isNone(when)) return { kind: "invalid" as const }
-  if ("at" in when.value) return { kind: "next" as const, at: when.value.at }
-  const parsed = Cron.parse(when.value.cron, when.value.timeZone)
-  if (Result.isFailure(parsed)) return { kind: "invalid" as const }
-  const next = Option.liftThrowable(Cron.next)(parsed.success)
-  if (Option.isNone(next)) return { kind: "never" as const }
-  const until = when.value.until
-  if (until && next.value.getTime() > Date.parse(until)) return { kind: "never" as const }
-  return { kind: "next" as const, at: next.value.toISOString() }
-}

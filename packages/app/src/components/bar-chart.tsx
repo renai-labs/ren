@@ -118,17 +118,19 @@ export function BarChart(props: {
           <div aria-hidden className="absolute inset-x-0 top-0 border-t border-dashed" />
           <div aria-hidden className="absolute inset-x-0 top-1/2 border-t border-dashed" />
           <div aria-hidden className="absolute inset-x-0 bottom-0 border-t" />
+          {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- arrow keys move focus between the bars, and each bar is a button */}
           <div className="absolute inset-0 flex gap-1" onKeyDown={step}>
             {props.bars.map((bar, index) => (
               <Tooltip key={bar.key}>
                 <TooltipTrigger
                   render={
+                    // oxlint-disable-next-line react/forbid-elements -- a bar is a column of the chart; Button would restyle it
                     <button
                       type="button"
                       tabIndex={index === current ? 0 : -1}
                       aria-label={describe(bar, props.series, props.format)}
                       onFocus={() => setChosen(index)}
-                      className="min-w-0 flex-1 rounded-sm px-px outline-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      className="min-w-0 flex-1 rounded-sm px-px outline-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
                     />
                   }
                 >

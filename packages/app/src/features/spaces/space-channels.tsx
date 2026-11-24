@@ -1,6 +1,12 @@
 import { useState } from "react"
-import type { ChannelInstallInfo, ChannelMappingCreateInput, ChannelMappingInfo, ChannelPlaceInfo } from "@ren/client"
-import { useMutation, useQueries, useSuspenseQuery } from "@tanstack/react-query"
+import type {
+  ChannelInstallInfo,
+  ChannelMappingCreateInput,
+  ChannelMappingInfo,
+  ChannelPlaceInfo,
+  ChannelPlacePage,
+} from "@ren/client"
+import { useMutation, useQueries, useSuspenseQuery, type UseQueryResult } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { IconAt, IconChevronRight, IconLinkOff, IconLock, IconPlus } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
@@ -8,14 +14,7 @@ import { cn } from "cn"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@ren/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
 import { FieldError } from "@ren/ui/field"
 import { Spinner } from "@ren/ui/spinner"
 import { Tabs } from "@ren/ui/tabs"
@@ -165,6 +164,7 @@ function PlaceRow(props: {
   onToggle: () => void
 }) {
   return (
+    // ast-grep-ignore: require-item-group -- rows render inside the dialog's CommandGroup
     <CommandItem value={props.value} keywords={[props.place.name]} onSelect={props.onToggle}>
       <Checkbox checked={props.picked} tabIndex={-1} aria-hidden className="pointer-events-none" />
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -172,9 +172,7 @@ function PlaceRow(props: {
           <PlaceName provider={props.provider} name={props.place.name} />
           <span className="sr-only">{props.picked ? ", selected" : ""}</span>
         </span>
-        {props.place.private ? (
-          <IconLock aria-label="Private" className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : null}
+        {props.place.private ? <IconLock aria-label="Private" className="shrink-0 text-muted-foreground" /> : null}
       </span>
       {props.place.mapping ? (
         <span className={cn("shrink-0 text-xs", props.picked ? "text-foreground" : "text-muted-foreground")}>
@@ -184,6 +182,158 @@ function PlaceRow(props: {
     </CommandItem>
   )
 }
+
+type Group = {
+  readonly install: ChannelInstallInfo
+  readonly query: UseQueryResult<ChannelPlacePage> | undefined
+  readonly free: ReadonlyArray<ChannelPlaceInfo>
+  readonly taken: ReadonlyArray<ChannelPlaceInfo>
+}
+
+const placeKey = (installId: string, placeId: string) => `${installId} ${placeId}`
+
+const kindOf = (kinds: ReadonlyArray<Channels.Provider>, current: Channels.Info | undefined) => {
+  const only = kinds.length === 1 ? kinds.at(0) : undefined
+  if (only) return Channels.byId[only]
+  return kinds.length === 0 && current ? current : Channels.byId.slack
+}
+
+const emptyText = (group: Group, provider: Channels.Info, query: string) => {
+  if (group.query?.isPending) return "Loading…"
+  if (group.query?.error) return errorMessage(group.query.error, `Couldn’t list the ${provider.plural}.`)
+  if (group.free.length + group.taken.length === 0) return `Every ${provider.noun} is already in this space.`
+  if (group.free.length === 0 && !query.trim()) return `The other ${provider.plural} are in other spaces.`
+  return `No matching ${provider.plural}.`
+}
+
+function PlaceList(props: {
+  group: Group
+  provider: Channels.Info
+  picked: ReadonlySet<string>
+  onToggle: (key: string) => void
+}) {
+  const group = props.group
+  const [query, setQuery] = useState("")
+  const [others, setOthers] = useState(false)
+  const showOthers = others || query.trim() !== ""
+  const rows = (places: ReadonlyArray<ChannelPlaceInfo>) =>
+    places.map((place) => {
+      const key = placeKey(group.install.id, place.id)
+      return (
+        <PlaceRow
+          key={key}
+          value={key}
+          provider={group.install.provider}
+          place={place}
+          picked={props.picked.has(key)}
+          onToggle={() => props.onToggle(key)}
+        />
+      )
+    })
+  return (
+    <>
+      <Command className={flatCommand}>
+        <CommandInput value={query} onValueChange={setQuery} placeholder={`Search ${props.provider.plural}…`} />
+        <CommandList className="h-72 pt-1">
+          <CommandEmpty>{emptyText(group, props.provider, query)}</CommandEmpty>
+          {group.free.length > 0 ? <CommandGroup className="p-0">{rows(group.free)}</CommandGroup> : null}
+          {group.taken.length > 0 && !query.trim() ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showOthers}
+              className="mt-1 text-muted-foreground"
+              onClick={() => setOthers((was) => !was)}
+            >
+              In other spaces · {group.taken.length}
+              <IconChevronRight
+                data-icon="inline-end"
+                className={showOthers ? "rotate-90 transition-transform" : "transition-transform"}
+              />
+            </Button>
+          ) : null}
+          {group.taken.length > 0 && showOthers ? (
+            <CommandGroup className="p-0">{rows(group.taken)}</CommandGroup>
+          ) : null}
+        </CommandList>
+      </Command>
+      <p className="text-xs text-muted-foreground">
+        {group.install.provider === "slack" ? (
+          <>
+            Missing a channel? Run <code>/invite @Ren</code> in it.
+          </>
+        ) : (
+          "Missing a repo? Give the Ren app access to it on GitHub."
+        )}
+      </p>
+    </>
+  )
+}
+
+function ProviderTabs(props: {
+  groups: ReadonlyArray<Group>
+  current: string
+  pickedIn: (installId: string) => number
+  onTab: (installId: string) => void
+}) {
+  if (props.groups.length < 2) return null
+  return (
+    <Tabs value={props.current} onValueChange={(value: string) => props.onTab(value)}>
+      <PageTabsList aria-label="Provider">
+        {props.groups.map((each) => (
+          <PageTabsTrigger
+            key={each.install.id}
+            value={each.install.id}
+            count={props.pickedIn(each.install.id) || undefined}
+          >
+            <ChannelMark provider={each.install.provider} className="size-4" />
+            {Channels.byId[each.install.provider].title}
+          </PageTabsTrigger>
+        ))}
+      </PageTabsList>
+    </Tabs>
+  )
+}
+
+function AddButton(props: {
+  chosen: ReadonlyArray<ChannelMappingCreateInput>
+  kind: Channels.Info
+  saving: boolean
+  onAdd: (picked: ReadonlyArray<ChannelMappingCreateInput>) => Promise<void>
+}) {
+  return (
+    <Button
+      disabled={props.chosen.length === 0 || props.saving}
+      onClick={() => void props.onAdd(props.chosen).catch(() => undefined)}
+    >
+      {props.saving ? <Spinner data-icon="inline-start" /> : null}
+      {props.chosen.length > 1 ? `Add ${props.chosen.length} ${props.kind.plural}` : `Add ${props.kind.noun}`}
+    </Button>
+  )
+}
+
+const chosenOf = (
+  groups: ReadonlyArray<Group>,
+  picked: ReadonlySet<string>,
+  spaceId: string,
+): ReadonlyArray<ChannelMappingCreateInput> =>
+  groups.flatMap((each) =>
+    [...each.free, ...each.taken].flatMap((place) => {
+      if (!picked.has(placeKey(each.install.id, place.id))) return []
+      return [
+        place.mapping ? Channels.settingsOf(place.mapping) : { installId: each.install.id, place: place.id, spaceId },
+      ]
+    }),
+  )
+
+const movingOf = (groups: ReadonlyArray<Group>, picked: ReadonlySet<string>) =>
+  groups.flatMap((each) =>
+    each.taken.flatMap((place) =>
+      place.mapping && picked.has(placeKey(each.install.id, place.id))
+        ? [`${Channels.label(each.install.provider, place.name)} will stop reaching ${place.mapping.space.name}.`]
+        : [],
+    ),
+  )
 
 function AddChannelsDialog(props: {
   spaceId: string
@@ -199,9 +349,7 @@ function AddChannelsDialog(props: {
   })
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set())
   const [tab, setTab] = useState(props.installs[0]?.id ?? "")
-  const [query, setQuery] = useState("")
-  const [others, setOthers] = useState(false)
-  const groups = props.installs.map((install, index) => {
+  const groups = props.installs.map((install, index): Group => {
     const listed = (places[index]?.data?.items ?? []).filter((place) => place.mapping?.space.id !== props.spaceId)
     return {
       install,
@@ -211,46 +359,18 @@ function AddChannelsDialog(props: {
     }
   })
   const group = groups.find((each) => each.install.id === tab) ?? groups[0]
-  const keyOf = (installId: string, placeId: string) => `${installId} ${placeId}`
   const toggle = (key: string) =>
     setPicked((current) =>
       current.has(key) ? new Set([...current].filter((each) => each !== key)) : new Set([...current, key]),
     )
-  const chosen = groups.flatMap((each) =>
-    [...each.free, ...each.taken].flatMap((place) =>
-      picked.has(keyOf(each.install.id, place.id))
-        ? [
-            place.mapping
-              ? Channels.settingsOf(place.mapping)
-              : { installId: each.install.id, place: place.id, spaceId: props.spaceId },
-          ]
-        : [],
-    ),
-  )
-  const moving = groups.flatMap((each) =>
-    each.taken.flatMap((place) =>
-      place.mapping && picked.has(keyOf(each.install.id, place.id))
-        ? [`${Channels.label(each.install.provider, place.name)} will stop reaching ${place.mapping.space.name}.`]
-        : [],
-    ),
-  )
+  const chosen = chosenOf(groups, picked, props.spaceId)
+  const moving = movingOf(groups, picked)
   const provider = group ? Channels.byId[group.install.provider] : undefined
   const pickedIn = (installId: string) => [...picked].filter((key) => key.startsWith(`${installId} `)).length
   const kinds = [
     ...new Set(groups.filter((each) => pickedIn(each.install.id) > 0).map((each) => each.install.provider)),
   ]
-  const only = kinds.length === 1 && kinds[0] ? Channels.byId[kinds[0]] : undefined
-  const kind = only ?? (kinds.length === 0 && provider ? provider : Channels.byId.slack)
-  const addLabel = chosen.length > 1 ? `Add ${chosen.length} ${kind.plural}` : `Add ${kind.noun}`
-  const showOthers = others || query.trim() !== ""
-  const empty = () => {
-    if (!group || !provider) return null
-    if (group.query?.isPending) return "Loading…"
-    if (group.query?.error) return errorMessage(group.query.error, `Couldn’t list the ${provider.plural}.`)
-    if (group.free.length + group.taken.length === 0) return `Every ${provider.noun} is already in this space.`
-    if (group.free.length === 0 && !query.trim()) return `The other ${provider.plural} are in other spaces.`
-    return `No matching ${provider.plural}.`
-  }
+  const kind = kindOf(kinds, provider)
   return (
     <Dialog open onOpenChange={(open) => (open || props.saving ? undefined : props.onClose())}>
       <DialogContent>
@@ -259,93 +379,8 @@ function AddChannelsDialog(props: {
         </DialogHeader>
         {group && provider ? (
           <div className="flex flex-col gap-3">
-            {groups.length > 1 ? (
-              <Tabs
-                value={group.install.id}
-                onValueChange={(value: string) => {
-                  setTab(value)
-                  setQuery("")
-                  setOthers(false)
-                }}
-              >
-                <PageTabsList aria-label="Provider">
-                  {groups.map((each) => (
-                    <PageTabsTrigger
-                      key={each.install.id}
-                      value={each.install.id}
-                      count={pickedIn(each.install.id) || undefined}
-                    >
-                      <ChannelMark provider={each.install.provider} className="size-4" />
-                      {Channels.byId[each.install.provider].title}
-                    </PageTabsTrigger>
-                  ))}
-                </PageTabsList>
-              </Tabs>
-            ) : null}
-            <Command key={group.install.id} className={flatCommand}>
-              <CommandInput value={query} onValueChange={setQuery} placeholder={`Search ${provider.plural}…`} />
-              <CommandList className="h-72 pt-1">
-                <CommandEmpty>{empty()}</CommandEmpty>
-                {group.free.length > 0 ? (
-                  <CommandGroup className="p-0">
-                    {group.free.map((place) => {
-                      const key = keyOf(group.install.id, place.id)
-                      return (
-                        <PlaceRow
-                          key={key}
-                          value={key}
-                          provider={group.install.provider}
-                          place={place}
-                          picked={picked.has(key)}
-                          onToggle={() => toggle(key)}
-                        />
-                      )
-                    })}
-                  </CommandGroup>
-                ) : null}
-                {group.taken.length > 0 && !query.trim() ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-expanded={showOthers}
-                    className="mt-1 text-muted-foreground"
-                    onClick={() => setOthers((was) => !was)}
-                  >
-                    In other spaces · {group.taken.length}
-                    <IconChevronRight
-                      data-icon="inline-end"
-                      className={showOthers ? "rotate-90 transition-transform" : "transition-transform"}
-                    />
-                  </Button>
-                ) : null}
-                {group.taken.length > 0 && showOthers ? (
-                  <CommandGroup className="p-0">
-                    {group.taken.map((place) => {
-                      const key = keyOf(group.install.id, place.id)
-                      return (
-                        <PlaceRow
-                          key={key}
-                          value={key}
-                          provider={group.install.provider}
-                          place={place}
-                          picked={picked.has(key)}
-                          onToggle={() => toggle(key)}
-                        />
-                      )
-                    })}
-                  </CommandGroup>
-                ) : null}
-              </CommandList>
-            </Command>
-            <p className="text-xs text-muted-foreground">
-              {group.install.provider === "slack" ? (
-                <>
-                  Missing a channel? Run <code>/invite @Ren</code> in it.
-                </>
-              ) : (
-                "Missing a repo? Give the Ren app access to it on GitHub."
-              )}
-            </p>
+            <ProviderTabs groups={groups} current={group.install.id} pickedIn={pickedIn} onTab={setTab} />
+            <PlaceList key={group.install.id} group={group} provider={provider} picked={picked} onToggle={toggle} />
           </div>
         ) : (
           <EmptyState
@@ -359,23 +394,13 @@ function AddChannelsDialog(props: {
             Connect Slack or GitHub first.
           </EmptyState>
         )}
-        <p role="status" className="sr-only">
-          {moving.join(" ")}
-        </p>
+        <output className="sr-only">{moving.join(" ")}</output>
         {props.error ? <FieldError>{errorMessage(props.error)}</FieldError> : null}
         <DialogFooter className={group ? undefined : "sm:justify-end"}>
           <DialogClose render={<Button variant="outline" />} disabled={props.saving}>
             Cancel
           </DialogClose>
-          {group ? (
-            <Button
-              disabled={chosen.length === 0 || props.saving}
-              onClick={() => void props.onAdd(chosen).catch(() => undefined)}
-            >
-              {props.saving ? <Spinner data-icon="inline-start" /> : null}
-              {addLabel}
-            </Button>
-          ) : null}
+          {group ? <AddButton chosen={chosen} kind={kind} saving={props.saving} onAdd={props.onAdd} /> : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -75,9 +75,7 @@ export function MappingDialog(props: {
                   setSender("")
                 }}
               />
-              {props.spaces.length === 0 ? (
-                <FieldDescription>Join or create a space first.</FieldDescription>
-              ) : null}
+              {props.spaces.length === 0 ? <FieldDescription>Join or create a space first.</FieldDescription> : null}
             </Field>
             <FallbackSender
               key={spaceId}

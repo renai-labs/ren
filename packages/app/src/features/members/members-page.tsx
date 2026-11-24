@@ -409,7 +409,15 @@ function MembersTab(props: {
   const rows = useMembers()
     .members.filter((member) => FilterMatch.passes(props.filters, { role: [member.role] }))
     .filter((member) => Search.matches(props.query, member.name, member.email))
-    .map((member) => ({ ...member, you: member.id === me.user.id }))
+    .map((member) => ({
+      id: member.id,
+      memberId: member.memberId,
+      name: member.name,
+      email: member.email,
+      image: member.image,
+      role: member.role,
+      you: member.id === me.user.id,
+    }))
   const shown = useShown(rows)
   const remove = async (memberId: string, name: string) => {
     const result = await auth.organization.removeMember({

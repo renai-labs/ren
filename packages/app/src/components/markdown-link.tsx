@@ -19,9 +19,9 @@ import { Platform } from "../platform/platform.js"
 import { ChatChip } from "./chat-chip.js"
 import { AgentIcon, RepositoryIcon, SkillIcon, TaskIcon } from "./mention-icon.js"
 
-export const appLink = "#ren-app:"
+const appLink = "#ren-app:"
 
-export const mentionLink = "#ren-mention:"
+const mentionLink = "#ren-mention:"
 
 const mentionKinds = { "ren-agent": AgentIcon, agent: AgentIcon, skill: SkillIcon, repository: RepositoryIcon }
 

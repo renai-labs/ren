@@ -383,25 +383,22 @@ function TypedBubble(props: {
   )
 }
 
+const mentioned = (
+  item: { readonly kind: "agent" | "skill"; readonly id: string; readonly label: string; readonly handle: string },
+  mention: { readonly text: string } | undefined,
+): Mentions.Item => (mention ? { ...item, sent: mention.text } : item)
+
 // oxlint-disable-next-line ren/no-comments -- What the composer could have sent for a mention, so the message shows each as the mention it was.
 function useMentioned(message: SessionMessage.User, spaceId: string | undefined): ReadonlyArray<Mentions.Item> {
   const repositories = MentionSources.useRepositories(RouterContext.useRouterContext().api, spaceId)
   const agents = useRenAgents(spaceId)
   return [
-    ...(message.agents ?? []).map((agent): Mentions.Item => ({
-      kind: "agent",
-      id: agent.name,
-      label: agent.name,
-      handle: agent.name,
-      ...(agent.mention && { sent: agent.mention.text }),
-    })),
-    ...(message.skills ?? []).map((skill): Mentions.Item => ({
-      kind: "skill",
-      id: skill.id,
-      label: skill.name,
-      handle: skill.id,
-      ...(skill.mention && { sent: skill.mention.text }),
-    })),
+    ...(message.agents ?? []).map((agent) =>
+      mentioned({ kind: "agent", id: agent.name, label: agent.name, handle: agent.name }, agent.mention),
+    ),
+    ...(message.skills ?? []).map((skill) =>
+      mentioned({ kind: "skill", id: skill.id, label: skill.name, handle: skill.id }, skill.mention),
+    ),
     ...repositories.map(Mentions.fromRepository),
     ...agents.map((entry) => entry.item),
   ]

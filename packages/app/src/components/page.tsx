@@ -101,7 +101,7 @@ function PageTabsRow(props: { tabs: ReactNode; onSlot: (element: HTMLElement | n
         <div ref={(node) => props.onSlot(node)} className="contents" />
       </div>
       {props.actions ? (
-        <PageToolbar className="min-w-min flex-1 basis-0 justify-end **:data-[slot=input-group]:w-auto **:data-[slot=input-group]:min-w-36 **:data-[slot=input-group]:flex-[0_1_14rem]">
+        <PageToolbar className="min-w-min flex-1 basis-0 justify-end **:data-[slot=input-group]:w-auto **:data-[slot=input-group]:min-w-36 **:data-[slot=input-group]:shrink **:data-[slot=input-group]:grow-0 **:data-[slot=input-group]:basis-56">
           {props.actions}
         </PageToolbar>
       ) : null}
