@@ -10,7 +10,7 @@ import { FileName } from "@ren/util/file-name"
 import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { useCopy } from "../../lib/use-copy.js"
-import { useOpenDriveFile } from "./file-outputs.js"
+import { useDriveFilePreview } from "./use-drive-file-preview.js"
 import { OpenPanel } from "./open-panel.js"
 
 export interface ChatDriveFiles {
@@ -41,7 +41,7 @@ export function WorkspaceFileChip(props: {
 function Named(props: { name: string; mime?: string | undefined; text: string }) {
   return (
     <>
-      <FileIcon name={props.name} mime={props.mime} className="mr-1 inline-block size-[1.1em] align-[-0.2em]" />
+      <FileIcon name={props.name} mime={props.mime} className="mr-1 inline-block size-3.5 shrink-0 align-text-bottom" />
       {props.text}
     </>
   )
@@ -53,7 +53,7 @@ function DriveFileChip(props: {
   className: string
   children: ReactNode
 }) {
-  const open = useOpenDriveFile(props.spaceId, props.file)
+  const open = useDriveFilePreview(props.spaceId, props.file)
   const copy = useCopy()
   return (
     <>

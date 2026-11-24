@@ -10,7 +10,7 @@ import { ToolState } from "./tool-state.js"
 
 export interface Known {
   readonly file: SessionMessage.DriveFile
-  readonly source?: string | undefined
+  readonly source?: string
 }
 
 const normal = (path: string) =>
@@ -23,14 +23,15 @@ export const known = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArr
     return message.content.flatMap((part) => {
       if (part.type !== "tool") return []
       const source = ToolState.input(part).path
-      return Option.toArray(ShownFile.of(part)).map((file) => ({
-        file,
-        source: typeof source === "string" ? normal(source) : undefined,
-      }))
+      const file = ShownFile.of(part)
+      if (Option.isNone(file)) return []
+      return [typeof source === "string" ? { file: file.value, source: normal(source) } : { file: file.value }]
     })
   })
 
-export const listed = (entries: ReadonlyArray<FileSystem.Entry>): ReadonlyArray<Known> =>
+export const listed = (
+  entries: ReadonlyArray<Pick<FileSystem.Entry, "path" | "type" | "size" | "mime">>,
+): ReadonlyArray<Known> =>
   entries.flatMap((entry) => {
     if (entry.type !== "file") return []
     const name = entry.path.slice(entry.path.lastIndexOf("/") + 1)

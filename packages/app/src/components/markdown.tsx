@@ -181,17 +181,18 @@ function MarkdownImage({ node, src, alt }: ComponentProps<"img"> & ExtraProps) {
 function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & ExtraProps) {
   const markdown = use(MarkdownContext)
   const render = markdown.workspaceImage
-  const file = node?.properties["data-drive-file"]
+  const properties = node?.properties ?? {}
+  const file = properties["data-drive-file"]
   if (typeof file === "string")
     return markdown.driveFile
-      ? markdown.driveFile(file, children, { image: node?.properties["data-drive-image"] === true })
+      ? markdown.driveFile(file, children, { image: properties["data-drive-image"] === true })
       : children
-  const path = node?.properties["data-workspace-image"]
+  const path = properties["data-workspace-image"]
   if (typeof path === "string" && render)
     return render(path, typeof children === "string" ? children : "", {
-      inline: node?.properties["data-gallery"] !== true,
+      inline: properties["data-gallery"] !== true,
     })
-  const mention = node?.properties["data-file-mention"]
+  const mention = properties["data-file-mention"]
   const span = <span {...props}>{children}</span>
   if (typeof mention === "string" && markdown.fileReference)
     return markdown.fileReference(mention, span, { code: false })
@@ -356,7 +357,7 @@ const fileMentions = () => (tree: MarkdownNode) => {
     if (
       (node.tagName && mentionless.has(node.tagName)) ||
       node.properties?.["data-workspace-image"] !== undefined ||
-      String(node.properties?.className ?? "").includes("katex")
+      [node.properties?.className].flat().some((name) => typeof name === "string" && name.includes("katex"))
     )
       return
     node.children = node.children?.flatMap((child): MarkdownNode[] => {

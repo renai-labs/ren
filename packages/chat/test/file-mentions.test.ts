@@ -22,7 +22,12 @@ const shown = (id: string, source: string, file: SessionMessage.DriveFile): Sess
       type: "tool",
       id: `${id}-tool`,
       name: SessionMessage.showFileTool,
-      state: { status: "completed", input: { path: source }, metadata: { file }, content: [] },
+      state: {
+        status: "completed",
+        input: { path: source },
+        metadata: { file },
+        content: [{ type: "text", text: "ok" }],
+      },
       time: { created: at(1), completed: at(2) },
     },
   ],

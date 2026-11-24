@@ -1,7 +1,6 @@
-import { lazy, Suspense, use, useRef, useState } from "react"
+import { lazy, Suspense, useRef, useState } from "react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { useQuery } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
 import { IconArrowUpRight, IconDownload } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { CodeBlock, CodeBlockContent } from "@ren/ui/code-block"
@@ -9,7 +8,6 @@ import { FileIcon } from "@ren/ui/file-icon"
 import { Skeleton } from "@ren/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { cn } from "cn"
-import { DriveFilePreview } from "../../components/file-preview/drive-file-view.js"
 import { useNear } from "../../components/file-preview/page-field.js"
 import { parseCsv } from "../../components/file-preview/xlsx.js"
 import { Markdown } from "../../components/markdown.js"
@@ -20,7 +18,7 @@ import { PageHeights } from "../../lib/page-heights.js"
 import { playableKind, useDriveFile } from "../../lib/use-drive-file.js"
 import { Platform } from "../../platform/platform.js"
 import { HtmlPageBridge } from "./html-page-bridge.js"
-import { OpenPanel } from "./open-panel.js"
+import { useDriveFilePreview } from "./use-drive-file-preview.js"
 
 const PdfFirstPage = lazy(() =>
   import("../../components/file-preview/pdf.js").then((module) => ({ default: module.PdfFirstPage })),
@@ -140,25 +138,6 @@ function useFileText(spaceId: string | undefined, file: SessionMessage.DriveFile
     retry: false,
     queryFn: async (context) => new TextDecoder().decode(await drive.bytes(context.signal, textBytes)),
   })
-}
-
-export function useOpenDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
-  const navigate = useNavigate()
-  const panel = use(OpenPanel)
-  const [open, setOpen] = useState(false)
-  if (panel) return { open: () => panel({ kind: "files", path: file.path, drive: { spaceId, file } }), dialog: null }
-  return {
-    open: () => setOpen(true),
-    dialog: (
-      <DriveFilePreview
-        space={spaceId}
-        file={file}
-        open={open}
-        onOpenChange={setOpen}
-        onFolder={(folder) => void navigate({ to: "/drive", search: { space: spaceId, folder } })}
-      />
-    ),
-  }
 }
 
 function TypeIcon(props: { file: SessionMessage.DriveFile; className?: string | undefined }) {
@@ -384,7 +363,7 @@ function PreviewCard(props: {
   onArrived: () => void
 }) {
   const drive = useDriveFile(props.spaceId, props.file)
-  const open = useOpenDriveFile(props.spaceId, props.file)
+  const open = useDriveFilePreview(props.spaceId, props.file)
   const kind = kindOf(props.file)
   const body = !drive.deleted && bodyKinds.has(kind)
   const opens = !drive.deleted
