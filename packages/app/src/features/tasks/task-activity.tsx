@@ -1,8 +1,8 @@
 import { Loading } from "@ren/ui/loading"
 import { RelativeTime } from "@ren/util/relative-time"
 import { cn } from "cn"
-import { useState } from "react"
-import type { TaskActivityInfo, TaskActor, TaskEventInfo } from "@ren/client"
+import { useRef, useState } from "react"
+import type { TaskActivityInfo, TaskActor, TaskEventInfo, TaskInfo } from "@ren/client"
 import {
   IconArchive,
   IconArrowRight,
@@ -20,13 +20,13 @@ import {
   IconTag,
   IconArrowBackUp,
 } from "@tabler/icons-react"
-import { IconAgent } from "../../icons/heroicons.js"
+import { IconAgent, IconPaperclip } from "../../icons/heroicons.js"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ChatReact } from "@ren/chat/react"
 import { Tasks } from "@ren/client/react"
 import { Session } from "@ren/schema/session"
 import { TaskEvent } from "@ren/schema/task-event"
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@ren/ui/input-group"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@ren/ui/input-group"
 import { toast } from "@ren/ui/sonner"
 import { formatDateTime } from "@ren/ui/time"
 import { PersonAvatar } from "../../components/person-avatar.js"
@@ -35,13 +35,16 @@ import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
 import { Trace, TraceIcon, TraceLine, TraceTitle } from "@ren/ui/trace"
 import { StatusGlyph } from "../../components/task-meta.js"
+import { driveFile } from "../../components/drive-file.js"
 import { Markdown } from "../../components/markdown.js"
+import { MarkdownEditor } from "../../components/markdown-editor.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useAgents } from "../../lib/use-agents.js"
 import { useNow } from "../../lib/use-now.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useSpaces } from "../../lib/use-spaces.js"
+import { useTaskUploads } from "./task-files.js"
 
 type Names = TaskEvent.Names & {
   readonly actor: (actor: TaskActor) => string
@@ -233,7 +236,7 @@ function CommentCard(props: {
         <span className="font-medium">{props.names.actor(props.comment.author)}</span>
         <span className="text-muted-foreground">{when(props.comment.createdAt)}</span>
       </ItemHeader>
-      <Markdown className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md">
+      <Markdown driveFile={driveFile} className="w-full text-md/6 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-md">
         {props.comment.body}
       </Markdown>
     </Item>
@@ -257,56 +260,92 @@ function blocksOf(items: ReadonlyArray<TaskActivityInfo>) {
 
 const freshFor = 10_000
 
-function CommentComposer(props: { taskId: string }) {
+function CommentComposer(props: { task: TaskInfo }) {
   const { api } = RouterContext.useRouterContext()
   const create = useMutation(api["task-comment"].create.mutationOptions())
+  const upload = useTaskUploads(props.task)
+  const picker = useRef<HTMLInputElement>(null)
   const [body, setBody] = useState("")
+  const [sent, setSent] = useState(0)
   const send = () => {
     const text = body.trim()
     if (!text || create.isPending) return
     create.mutate(
-      { taskId: props.taskId, body: text },
+      { taskId: props.task.id, body: text },
       {
-        onSuccess: () => setBody(""),
+        onSuccess: () => {
+          setBody("")
+          setSent((count) => count + 1)
+        },
         onError: (error) => toast.error("Couldn’t post the comment", { description: errorMessage(error) }),
       },
     )
   }
   return (
-    <InputGroup className="relative rounded-xl">
-      <InputGroupTextarea
-        aria-label="Comment"
+    <InputGroup
+      className="relative h-auto rounded-xl focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return
+        event.preventDefault()
+        event.stopPropagation()
+        send()
+      }}
+    >
+      <MarkdownEditor
+        key={sent}
+        value=""
+        label="Comment"
         placeholder="Leave a comment…"
-        value={body}
-        onChange={(event) => setBody(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return
-          event.preventDefault()
-          send()
-        }}
-        className="min-h-23 px-4 pt-3.5 pb-12 text-md md:text-md"
+        media={upload}
+        onChange={setBody}
+        className="min-h-23 w-full px-4 pt-3.5 pb-12"
+        footer={(attach) => (
+          <InputGroupAddon align="block-end" className="absolute right-0 bottom-0 w-auto gap-1 px-3 pb-3">
+            {upload ? (
+              <>
+                <InputGroupButton
+                  variant="ghost"
+                  size="icon-xs"
+                  className="rounded-full"
+                  aria-label="Attach files"
+                  onClick={() => picker.current?.click()}
+                >
+                  <IconPaperclip />
+                </InputGroupButton>
+                <InputGroupInput
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    attach([...(event.target.files ?? [])])
+                    event.target.value = ""
+                  }}
+                />
+              </>
+            ) : null}
+            <InputGroupButton
+              variant={body.trim() ? "default" : "ghost"}
+              size="icon-xs"
+              className="rounded-full"
+              aria-label="Post comment"
+              disabled={create.isPending || !body.trim()}
+              onClick={send}
+            >
+              <IconArrowUp />
+            </InputGroupButton>
+          </InputGroupAddon>
+        )}
       />
-      <InputGroupAddon align="block-end" className="absolute right-0 bottom-0 w-auto px-3 pb-3">
-        <InputGroupButton
-          variant={body.trim() ? "default" : "ghost"}
-          size="icon-xs"
-          className="rounded-full"
-          aria-label="Comment"
-          disabled={create.isPending || !body.trim()}
-          onClick={send}
-        >
-          <IconArrowUp />
-        </InputGroupButton>
-      </InputGroupAddon>
     </InputGroup>
   )
 }
 
-export function TaskActivity(props: { taskId: string; onOpenSession: (sessionId: string) => void }) {
+export function TaskActivity(props: { task: TaskInfo; onOpenSession: (sessionId: string) => void }) {
   const { client } = RouterContext.useRouterContext()
   const names = useNames()
   const now = useNow()
-  const activity = useQuery(Tasks.activity(client, props.taskId))
+  const activity = useQuery(Tasks.activity(client, props.task.id))
   return (
     <section className="flex flex-col gap-5">
       <h2 className="text-md font-semibold">Activity</h2>
@@ -336,7 +375,7 @@ export function TaskActivity(props: { taskId: string; onOpenSession: (sessionId:
           ),
         )}
         <div className="pt-4">
-          <CommentComposer taskId={props.taskId} />
+          <CommentComposer task={props.task} />
         </div>
       </div>
     </section>
