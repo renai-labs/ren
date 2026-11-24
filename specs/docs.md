@@ -59,15 +59,15 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 | Admin         | Machines        | `machines`        | `concepts/environments`                             |
 |               | Usage           | `usage`           | New                                                 |
 |               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
-| Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
-|               | Model Providers | `model-providers` | New                                                 |
-|               | Billing         | `billing`         | New                                                 |
 | Spaces        | Space           | `spaces`          | `concepts/spaces`                                   |
 |               | Inbox           | `inbox`           | New                                                 |
 |               | Agents          | `agents`          | New                                                 |
 |               | Factory         | `factory`         | New                                                 |
 |               | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
 |               | Compute         | `compute`         | Space compute settings from `concepts/environments` |
+| Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
+|               | Model Providers | `model-providers` | New                                                 |
+|               | Billing         | `billing`         | New                                                 |
 | Clients       | Ren MCP         | `ren-mcp`         | New                                                 |
 |               | Mobile app      | `mobile`          | New                                                 |
 
