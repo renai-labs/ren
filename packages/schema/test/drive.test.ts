@@ -50,3 +50,13 @@ describe("Drive.typeOf", () => {
     expect(Drive.typeOf("clip.mp4")).toBe("video/mp4")
   })
 })
+
+describe("Drive.spaceLink", () => {
+  test("encodes each part of the path so Markdown can hold it, and linkedPath reads it back", () => {
+    const link = Drive.spaceLink("tasks/ENG-12/my shot (2).png")
+    expect(link).toBe("drive:space/tasks/ENG-12/my%20shot%20(2).png")
+    expect(Drive.linkedPath(link)).toBe("tasks/ENG-12/my shot (2).png")
+    expect(Drive.linkedPath("https://example.com/a.png")).toBeUndefined()
+    expect(Drive.linkedPath("drive:space/tasks/%E0%A4%A.png")).toBeUndefined()
+  })
+})
