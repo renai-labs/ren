@@ -6,29 +6,29 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 
 ## 1. Decisions
 
-| Topic            | Decision                                                                                                                                                                |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Address          | Stays at `useren.ai/docs`.                                                                                                                                              |
-| Readers          | Product pages: founders and senior leads, technical enough to follow. Developers tab: engineers only.                                                                   |
-| Layout           | Capy-style groups by product area, with short noun titles.                                                                                                              |
-| Page shape       | Definition, screenshot and "how to use" on every page. Rules & limits, When it fails and Examples only when there is real content.                                      |
-| Code             | None in product pages. They link to the Developers tab.                                                                                                                 |
-| Beta             | Only the Mobile app, in its own Beta section. A later beta feature gets a "Beta" badge on its normal page.                                                              |
-| Unreleased work  | Documented only when it ships, with the Beta label if it is in beta.                                                                                                    |
-| Examples         | Real uses only. Before each page, the author asks the team for 3 to 5.                                                                                                  |
-| Terms            | chat, space, secret, app account, agent.                                                                                                                                |
-| Voice            | "You", US English, Ren is "it".                                                                                                                                         |
-| Writing rules    | Diátaxis for page purpose and the no-ai-slop rules for sentences (§6).                                                                                                  |
-| Screenshots      | Light and dark, following the reader's theme. Captured from Ren's own organization, with private data blurred.                                                          |
-| Video            | Only for multi-step flows: Quickstart, connecting an app.                                                                                                               |
-| Welcome          | Keeps its skeleton and the hero line "Build your agent factory". It absorbs "How Ren is organized".                                                                     |
-| Models & pricing | Written from what is true today. It grows later.                                                                                                                        |
-| Support          | `support@renai.build`.                                                                                                                                                  |
-| FAQ              | Stays, kept short. Setup problems move to Troubleshooting.                                                                                                              |
-| Removed          | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                       |
-| Method           | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab. |
-| Shipping         | One draft PR. Commit 1 is the frame (§7), then one commit per finalized page, the Documentation tab first.                                                              |
-| Review           | `kashikarparth` and `shreyansh073` review once, at the end.                                                                                                             |
+| Topic           | Decision                                                                                                                                                                |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Address         | Stays at `useren.ai/docs`.                                                                                                                                              |
+| Readers         | Product pages: founders and senior leads, technical enough to follow. Developers tab: engineers only.                                                                   |
+| Layout          | Group pages by the reader’s task. A feature shared by organisations and spaces has one page under Work with Ren (§2).                                                   |
+| Page shape      | Definition, screenshot and "how to use" on every page. Rules & limits, When it fails and Examples only when there is real content.                                      |
+| Code            | None in product pages. They link to the Developers tab.                                                                                                                 |
+| Beta            | Only the Mobile app; mark its entry on Welcome with a Beta badge. A later beta feature gets a "Beta" badge on its normal page.                                          |
+| Unreleased work | Documented only when it ships, with the Beta label if it is in beta.                                                                                                    |
+| Examples        | Real uses only. Before each page, the author asks the team for 3 to 5.                                                                                                  |
+| Terms           | chat, space, secret, app account, agent.                                                                                                                                |
+| Voice           | "You", US English, Ren is "it".                                                                                                                                         |
+| Writing rules   | Diátaxis for page purpose and the no-ai-slop rules for sentences (§6).                                                                                                  |
+| Screenshots     | Light and dark, following the reader's theme. Captured from Ren's own organization, with private data blurred.                                                          |
+| Video           | Only for multi-step flows: Quickstart, connecting an app.                                                                                                               |
+| Welcome         | Keeps its skeleton and the hero line "Build your agent factory". It absorbs "How Ren is organized".                                                                     |
+| Models          | Written from what is true today. It grows later.                                                                                                                        |
+| Support         | `support@renai.build`.                                                                                                                                                  |
+| FAQ             | Stays, kept short. Setup problems move to Troubleshooting.                                                                                                              |
+| Removed         | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                       |
+| Method          | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab. |
+| Shipping        | One draft PR. Commit 1 is the frame (§7), then one commit per finalized page, the Documentation tab first.                                                              |
+| Review          | `kashikarparth` and `shreyansh073` review once, at the end.                                                                                                             |
 
 ## 2. Sidebar
 
@@ -36,38 +36,40 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 
 ### Documentation tab
 
-| Group        | Page                           | Slug                             | Source                                           |
-| ------------ | ------------------------------ | -------------------------------- | ------------------------------------------------ |
-| Get started  | Welcome                        | ``                               | `index`, `concepts/overview`, `surfaces/web-app` |
-|              | Quickstart                     | `quickstart`                     | `quickstart`                                     |
-|              | Models & pricing               | `models-and-pricing`             | New                                              |
-| Agent        | Chats                          | `chats`                          | `concepts/chats`                                 |
-|              | Tasks                          | `tasks`                          | `concepts/tasks`                                 |
-|              | Agents & factory               | `agents`                         | New                                              |
-|              | Automations                    | `automations`                    | `concepts/schedules`                             |
-| Workspace    | Spaces                         | `spaces`                         | `concepts/spaces`                                |
-|              | Machines                       | `machines`                       | `concepts/environments`                          |
-|              | Repositories                   | `repositories`                   | New (parts of `concepts/projects`)               |
-|              | Instructions                   | `instructions`                   | New (parts of `concepts/projects`)               |
-|              | Memory                         | `memory`                         | New (parts of `concepts/storage`)                |
-|              | Drive                          | `drive`                          | `concepts/storage`                               |
-|              | Artifacts                      | `artifacts`                      | `concepts/artifacts`                             |
-|              | Permissions                    | `permissions`                    | New                                              |
-| Integrations | Apps                           | `apps`                           | `concepts/apps`                                  |
-|              | Skills                         | `skills`                         | `concepts/skills`                                |
-|              | Custom MCPs                    | `custom-mcps`                    | `concepts/custom-mcps`                           |
-|              | Secrets                        | `secrets`                        | `concepts/credentials`                           |
-|              | Channels                       | `channels`                       | `concepts/channels/index`                        |
-|              | Slack                          | `channels/slack`                 | `concepts/channels/slack`                        |
-|              | GitHub                         | `channels/github`                | `concepts/channels/github`                       |
-|              | Use Ren from Claude or ChatGPT | `use-ren-from-claude-or-chatgpt` | New (parts of `surfaces/mcp`)                    |
-| Account      | Members & invites              | `members`                        | `concepts/organizations`                         |
-|              | Usage & billing                | `usage-and-billing`              | New                                              |
-|              | Security & privacy             | `security`                       | New                                              |
-| Beta         | Mobile app                     | `mobile`                         | New                                              |
-| Resources    | FAQ                            | `faq`                            | `faq`                                            |
-|              | Troubleshooting                | `troubleshooting`                | New                                              |
-|              | Support                        | `support`                        | New                                              |
+**One page per feature.** When a feature appears at both organisation and space level, give it one page under **Work with Ren**. On that page, show what a reader can do at each level and where the steps differ. Use task headings, such as “Invite someone to the organisation” and “Add someone to a space” on **Members**.
+
+The **Organisation** and **Space** overviews link directly to the relevant heading on the shared page. For example, link from Space to **Members → Add someone to a space**. Reserve the two groups for work specific to that level: **Billing** belongs under Organisations; **Inbox**, **Agents**, and **Factory** belong under Spaces.
+
+Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organisation or in one space. **Billing** answers “How do I change our plan?”
+
+| Group         | Page            | Slug              | Source                                              |
+| ------------- | --------------- | ----------------- | --------------------------------------------------- |
+| Get started   | Welcome         | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
+|               | Quickstart      | `quickstart`      | `quickstart`                                        |
+|               | Models          | `models`          | New                                                 |
+| Work with Ren | Chat            | `chats`           | `concepts/chats`                                    |
+|               | Tasks           | `tasks`           | `concepts/tasks`                                    |
+|               | Automations     | `automations`     | `concepts/schedules`                                |
+|               | Drive           | `drive`           | `concepts/storage`                                  |
+|               | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
+|               | Apps            | `apps`            | `concepts/apps`                                     |
+|               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
+|               | Permissions     | `permissions`     | New                                                 |
+|               | Memory          | `memory`          | Parts of `concepts/storage`                         |
+|               | Credentials     | `credentials`     | `concepts/credentials`                              |
+|               | Channels        | `channels`        | `concepts/channels/index`                           |
+|               | Machines        | `machines`        | `concepts/environments`                             |
+|               | Usage           | `usage`           | New                                                 |
+|               | Custom Apps     | `custom-apps`     | Parts of `concepts/apps`                            |
+| Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
+|               | Model Providers | `model-providers` | New                                                 |
+|               | Billing         | `billing`         | New                                                 |
+| Spaces        | Space           | `spaces`          | `concepts/spaces`                                   |
+|               | Inbox           | `inbox`           | New                                                 |
+|               | Agents          | `agents`          | New                                                 |
+|               | Factory         | `factory`         | New                                                 |
+|               | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
+|               | Compute         | `compute`         | Space compute settings from `concepts/environments` |
 
 ### Developers tab
 
@@ -83,7 +85,7 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 |             | The `.ren` folder | `developers/ren-folder`      | New                          |
 |             | llms.txt          | `developers/llms-txt`        | `developers/llms-txt`        |
 
-Totals: 30 pages on the Documentation tab and 9 on the Developers tab. 14 of the Documentation pages and 5 of the Developers pages are new.
+Sidebar entries: 26 on the Documentation tab and 9 on the Developers tab. Supporting guides may be linked without a sidebar entry.
 
 ## 3. Redirects
 
@@ -94,12 +96,12 @@ The app links only to the docs root (`app/src/lib/links.ts:1`), so in-app links 
 | `concepts/overview`, `surfaces/web-app`                                                                                                                  | `/docs/`                            |
 | `concepts/chats`, `concepts/tasks`, `concepts/artifacts`                                                                                                 | `chats`, `tasks`, `artifacts`       |
 | `concepts/schedules`                                                                                                                                     | `automations`                       |
-| `concepts/organizations`                                                                                                                                 | `members`                           |
+| `concepts/organizations`                                                                                                                                 | `organisation`                      |
 | `concepts/spaces`                                                                                                                                        | `spaces`                            |
 | `concepts/environments`                                                                                                                                  | `machines`                          |
 | `concepts/storage`                                                                                                                                       | `drive`                             |
 | `concepts/apps`, `concepts/skills`, `concepts/custom-mcps`                                                                                               | `apps`, `skills`, `custom-mcps`     |
-| `concepts/credentials`                                                                                                                                   | `secrets`                           |
+| `concepts/credentials`                                                                                                                                   | `credentials`                       |
 | `concepts/channels`                                                                                                                                      | `channels`                          |
 | `concepts/channels/slack`, `concepts/channels/github`                                                                                                    | `channels/slack`, `channels/github` |
 | `surfaces/cli`, `surfaces/mcp`                                                                                                                           | `developers/cli`, `developers/mcp`  |
@@ -127,19 +129,11 @@ Everything that leaves the docs, so the new version can be compared with the old
 | `migrate/devin`              | Group dropped. A 7-line stub.                                            |                                                                            |
 | `surfaces/sdk`               | The SDK is no longer supported.                                          |                                                                            |
 | `concepts/overview`          | Merged.                                                                  | A section of Welcome                                                       |
-| `surfaces/web-app`           | Merged.                                                                  | Welcome's "Send work from anywhere"                                        |
+| `surfaces/web-app`           | Merged.                                                                  | Welcome's "Use from anywhere"                                              |
 
 ### 4.2 Sidebar
 
-| Removed                                                                                                                                                                                                                                  | Replaced by                                    |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Group "Work with Ren"                                                                                                                                                                                                                    | Agent                                          |
-| Group "Organize"                                                                                                                                                                                                                         | Workspace, Account                             |
-| Group "Tools and access"                                                                                                                                                                                                                 | Integrations                                   |
-| Group "Channels"                                                                                                                                                                                                                         | Channels, Slack and GitHub inside Integrations |
-| Group "Move to Ren"                                                                                                                                                                                                                      |                                                |
-| Developers group "Use Ren from your tools"                                                                                                                                                                                               | Get started, Guides                            |
-| Sidebar labels "Claude", "GPT", "Cursor", "Devin", "Blueprints", "Projects", "Environments", "Storage", "Credentials", "Schedules", "Organizations", "How Ren is organized", "Web app", "Linear", "Email", "Telegram", "WhatsApp", "SDK" | Labels in §2                                   |
+Keep **Work with Ren** and rebuild it around shared features. Replace **Organize** with **Organisations** and **Spaces**. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -235,7 +229,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 - Sections: "Blueprint types", "Install a blueprint", "What installing adds", "Finish the setup", "Good to know".
 - `ren blueprints`, `ren registry blueprints`, **Marketplace → Blueprints**.
 
-**`concepts/organizations` (becomes Members & invites)**
+**`concepts/organizations` (becomes Members)**
 
 | Removed                                                                                                | Replaced by                                         |
 | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
@@ -264,7 +258,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 | Default model and settings on the "Overview" tab                               | The space **Settings** page      |
 | Credentials in **Settings → Credentials**                                      | The space **Credentials** page   |
 | **Team actions → Archive team**                                                | **Archive space**                |
-| Section "Usage": Spend, LLM calls, Per session                                 | Usage & billing                  |
+| Section "Usage": Spend, LLM calls, Per session                                 | Usage and Billing                |
 | `spaces/scope-picker`, `spaces/add-member` images; `spaces/create-space` video | New captures                     |
 
 **`concepts/projects` (whole page)**
@@ -507,7 +501,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 **Welcome**
 
-- Keep the skeleton: Hero ("Build your agent factory"), Send work from anywhere, What Ren runs for you, Keep going.
+- Keep the skeleton: Hero ("Build your agent factory"), Use from anywhere, Working with Ren, Continue.
 - Entries: App, Slack, GitHub, Claude/ChatGPT, CLI, Mobile (Beta).
 - Spotlights: Chats, Tasks, Agents & factory, Automations, Artifacts, Apps. No Projects.
 - Add a short "How Ren is organized" section: organization → spaces (shared and private) → agents → chats and tasks, with what each level holds.
@@ -521,18 +515,18 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Remove the Blueprints link.
 - New video.
 
-**Models & pricing**
+**Models**
 
 - The model picker (⌘').
 - Default model order: space → organization → Ren.
 - Credits and "Uses Ren credits" on managed apps.
 - Tool pricing.
-- Bring your own provider, and **Settings → Providers → Inference keys**.
+- Link to Model Providers for provider setup.
 - Link to `/pricing` for plan prices.
 
-### Agent
+### Work with Ren
 
-**Chats**
+**Chat**
 
 - "Working in" picks a space.
 - Filters: Space, Status, Started from, Updated.
@@ -554,49 +548,12 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - PR state on links, GitHub PR comments, Slack task cards, space Tasks pages.
 - Remove every mention of project handoff.
 
-**Agents & factory**
-
-- Custom agents per space: the form, a required description for subagents, permissions.
-- The space Factory page: handoffs, the handoff limit, which agents finish a task, human review.
-
 **Automations**
 
 - Schedules: name, message, agent, target (new chat or this chat), when (cron, one time, delay), Until.
 - Personal time zone. 5-minute minimum interval. Paused after 5 failed runs.
 - Pause reasons, Active / Paused / Ended statuses, a runs page per schedule.
 - Webhooks: create one, signing secret, request history.
-
-### Workspace
-
-**Spaces**
-
-- Shared and private spaces. One private space per person.
-- Overview, Inbox, Settings, Archive space.
-- Pin up to 3 spaces. Browsing shared spaces.
-- Remove: Teams, `pod`, space roles, the v1 wizard.
-
-**Machines**
-
-- Brain and Hand, defined.
-- Brain scope: per chat or per space. Hand: colocated, remote or none.
-- **Settings → Machines**: Create, Edit, Archive.
-- Machine fields: Chats per machine, Allowed hosts, Allow package managers, MCP servers.
-- Build statuses: queued, building, ready, failed.
-- Space **Compute**: Shut down space and its last report, "Change pending".
-- Remove the size presets.
-
-**Repositories**
-
-- Per-space repositories. Add one by pasting a GitHub URL. A description is required.
-
-**Instructions**
-
-- Organization instructions (**Settings → General**) and space instructions, and how they combine.
-
-**Memory**
-
-- Org memory in **Settings → Memory**. Space memory.
-- The list and editor sheet. How agents read and edit memory.
 
 **Drive**
 
@@ -611,32 +568,32 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Names and host names. Statuses: deploying, ready, failed, stopped.
 - Apps that keep data (Workers, SQLite). v1 share links redirect.
 
-**Permissions**
-
-- Organization, space and agent permission pages, and how they stack.
-
-### Integrations
-
 **Apps**
 
 - Tabs: All, Managed, Organization, Installed. Categories.
 - Each app's page: example prompts, start a chat, connection details, share links.
 - Add to space. Managed apps are added in one click.
 - App accounts: unique names, space pills, **Change owner**.
-- Bundles. Dependencies come only from the spec, at most 3 levels deep.
+- Bundles. Link to Custom Apps for app definitions and dependencies.
 - The connect card works on web and mobile.
 
-**Skills**
+**Members**
 
-- Remove "project instructions". The frontmatter rules are correct.
+- **Add members**: Emails, Invite role, Add to spaces.
+- Invite links (1, 7 or 30 days). Space invite links. Asking to join, with approve or decline.
+- Owners and removals. Leave organization. Delete account (7 days).
+- Cover organisation membership and space access in separate task sections. Give each a stable heading for overview links.
 
-**Custom MCPs**
+**Permissions**
 
-- Bearer Token is available. Basic Auth is not.
-- API key in a Header or the Query string.
-- Ren inspects the server's auth, info and tools. Tool pricing.
+- Organization, space and agent permission pages, and how they stack.
 
-**Secrets**
+**Memory**
+
+- Org memory in **Settings → Memory**. Space memory.
+- The list and editor sheet. How agents read and edit memory.
+
+**Credentials**
 
 - Tabs: Apps and Secrets.
 - **Add secret**: Env name, Secret, Who can use it (Organization, a space, Only me), Use on any website / Websites.
@@ -649,6 +606,86 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - **Settings → Channels**, and the space **Channels** page.
 - A place maps to a space and an optional agent. The default space. The fallback switch, off for public repos.
 - Triggers. The `channel_reply` tool.
+
+**Machines**
+
+- Brain and Hand, defined.
+- Brain scope: per chat or per space. Hand: colocated, remote or none.
+- **Settings → Machines**: Create, Edit, Archive.
+- Machine fields: Chats per machine, Allowed hosts, Allow package managers, MCP servers.
+- Build statuses: queued, building, ready, failed.
+- Remove the size presets.
+
+**Usage**
+
+- Show organisation spending and how to inspect a single space. Explain model, compute and tool costs, and cost in the chat header.
+
+**Custom Apps**
+
+- Define an organisation app and its dependencies. Link to Apps for adding an existing app to a space and connecting an app account.
+- Dependencies come only from the spec, at most 3 levels deep.
+
+### Organisations
+
+**Organisation**
+
+- Explain what the organisation holds and which settings apply to all spaces. Link to organisation tasks on Members, Permissions, Memory, Credentials and Usage, and to Model Providers and Billing.
+
+**Model Providers**
+
+- Configure an inference provider for the organisation in **Settings → Providers → Inference keys**. Link from Models for readers who want to bring their own provider.
+
+**Billing**
+
+- Show how to manage the organisation’s plan and subscription. Link to Usage for the spending breakdown.
+
+### Spaces
+
+**Space**
+
+- Shared and private spaces. One private space per person.
+- Overview, Settings, Archive space.
+- Pin up to 3 spaces. Browsing shared spaces.
+- Remove: Teams, `pod`, space roles, the v1 wizard.
+- Link to Inbox and Compute. For shared features, link to the space task on the feature page.
+
+**Inbox**
+
+- Show how a space member finds work that needs attention and opens the underlying item.
+
+**Agents**
+
+- Custom agents per space: the form, a required description for subagents, permissions.
+
+**Factory**
+
+- The space Factory page: handoffs, the handoff limit, which agents finish a task, human review.
+
+**Repositories**
+
+- Per-space repositories. Add one by pasting a GitHub URL. A description is required.
+
+**Compute**
+
+- Show the machine configuration for this space, how to shut down the space, its last report, and what “Change pending” means. Link to Machines for configuring machines.
+
+### Supporting topics
+
+Keep the following material available through relevant feature pages or direct links. These briefs do not add sidebar groups.
+
+**Instructions**
+
+- Organization instructions (**Settings → General**) and space instructions, and how they combine.
+
+**Skills**
+
+- Remove "project instructions". The frontmatter rules are correct.
+
+**Custom MCPs**
+
+- Bearer Token is available. Basic Auth is not.
+- API key in a Header or the Query string.
+- Ren inspects the server's auth, info and tools. Tool pricing.
 
 **Slack**
 
@@ -667,19 +704,6 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 - A non-technical setup for the Ren MCP: add the URL, sign in, pick an organization. Links to `developers/mcp`.
 
-### Account
-
-**Members & invites**
-
-- **Add members**: Emails, Invite role, Add to spaces.
-- Invite links (1, 7 or 30 days). Space invite links. Asking to join, with approve or decline.
-- Owners and removals. Leave organization. Delete account (7 days).
-
-**Usage & billing**
-
-- Org and space usage, split into models, compute and tools.
-- Plans, subscriptions, the billing page. Cost in the chat header.
-
 **Security & privacy**
 
 - Secrets never reach the machine (placeholders, egress, website allow-lists).
@@ -687,15 +711,11 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Chats deleted 30 days after last activity.
 - Account deletion. Name the inference service and integrations service only in those words.
 
-### Beta
-
 **Mobile app**
 
 - iOS and Android.
 - Sign-in, chats, tasks, drive and artifacts, connecting apps, updates, deleting your account.
 - Labelled Beta.
-
-### Resources
 
 **FAQ**
 
@@ -801,19 +821,19 @@ No page starts before the one before it is finalized. A finalized page is reopen
 
 One branch, one draft PR.
 
-| #     | Commit              | Contents                                                                                                                                                                          |
-| ----- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Frame               | `nav.ts` groups and tabs; delete removed pages and media (§4); redirects (§3); `packages/site/AGENTS.md` (§6); move the kept pages to their new slugs unchanged.                  |
-| 2–31  | Documentation pages | One commit per finalized page, in sidebar order.                                                                                                                                  |
-| 32–40 | Developers pages    | One commit per finalized page, in sidebar order.                                                                                                                                  |
-| 41    | Check               | `bun run build`, `bun run test`, `script/check-routes.ts`, a link check, a search of `content/docs` and `lib/docs` for removed terms (§4.4), commands (§4.5) and UI paths (§4.6). |
-| 42    | Remove spec         | Delete `specs/docs.md` and its row in `specs/README.md`.                                                                                                                          |
+| #           | Commit              | Contents                                                                                                                                                                          |
+| ----------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1           | Frame               | `nav.ts` groups and tabs; delete removed pages and media (§4); redirects (§3); `packages/site/AGENTS.md` (§6); move the kept pages to their new slugs unchanged.                  |
+| Next        | Documentation pages | One commit per finalized page, in sidebar order.                                                                                                                                  |
+| Then        | Developers pages    | One commit per finalized page, in sidebar order.                                                                                                                                  |
+| After pages | Check               | `bun run build`, `bun run test`, `script/check-routes.ts`, a link check, a search of `content/docs` and `lib/docs` for removed terms (§4.4), commands (§4.5) and UI paths (§4.6). |
+| Last        | Remove spec         | Delete `specs/docs.md` and its row in `specs/README.md`.                                                                                                                          |
 
 Then mark the PR ready and ask `kashikarparth` and `shreyansh073` to review.
 
 ### 7.3 Order
 
-Documentation: Welcome → Quickstart → Models & pricing → Chats → Tasks → Agents & factory → Automations → Spaces → Machines → Repositories → Instructions → Memory → Drive → Artifacts → Permissions → Apps → Skills → Custom MCPs → Secrets → Channels → Slack → GitHub → Use Ren from Claude or ChatGPT → Members & invites → Usage & billing → Security & privacy → Mobile app → FAQ → Troubleshooting → Support.
+Documentation: follow the four groups and page order in §2. Review supporting material with the feature that links to it.
 
 Developers: CLI → MCP → Ren as code → Inference setup → Scripting & CI → CLI commands → MCP tools → The `.ren` folder → llms.txt.
 
@@ -824,7 +844,7 @@ The owner answers these in step 2 (Ask) of the page they belong to (§7.1).
 | Item                                                                   | Page                                |
 | ---------------------------------------------------------------------- | ----------------------------------- |
 | 3 to 5 real examples                                                   | Every page with an Examples section |
-| Email invite expiry                                                    | Members & invites                   |
+| Email invite expiry                                                    | Members                             |
 | Time before an idle machine pauses                                     | Machines                            |
 | Drive file size limits, and whether `WHOAMI.md` still exists           | Drive, Memory                       |
 | Is there a limit on secrets per level (v1 had 100)?                    | Secrets                             |
