@@ -22,61 +22,37 @@ const DOCS: Section = {
     },
     {
       title: "Work with Ren",
-      items: ["concepts/chats", "concepts/tasks", "concepts/schedules", "concepts/artifacts", "concepts/blueprints"],
-    },
-    {
-      title: "Organize",
       items: [
-        "concepts/organizations",
-        "concepts/spaces",
-        "concepts/projects",
-        "concepts/environments",
-        "concepts/storage",
+        "chats",
+        "tasks",
+        "automations",
+        "drive",
+        "artifacts",
+        "apps",
+        "skills",
+        "custom-mcps",
+        "credentials",
+        "channels",
+        "channels/slack",
+        "channels/github",
+        "machines",
       ],
     },
-    {
-      title: "Tools and access",
-      items: ["concepts/apps", "concepts/skills", "concepts/custom-mcps", "concepts/credentials"],
-    },
-    {
-      title: "Channels",
-      items: [
-        { slug: "concepts/channels", label: "Overview" },
-        "concepts/channels/slack",
-        "concepts/channels/linear",
-        "concepts/channels/github",
-        "concepts/channels/email",
-        "concepts/channels/telegram",
-        "concepts/channels/whatsapp",
-      ],
-    },
-    {
-      title: "Move to Ren",
-      items: [
-        { slug: "migrate/claude", label: "Claude" },
-        { slug: "migrate/gpt", label: "GPT" },
-        "migrate/cursor",
-        "migrate/devin",
-      ],
-    },
+    { title: "Organisations", items: ["organisation"] },
+    { title: "Spaces", items: ["spaces"] },
     { title: "Resources", items: ["faq"] },
   ],
 }
 
 const DEVELOPERS: Section = {
   title: "Developers",
-  description: "CLI, MCP, and SDK",
+  description: "CLI and MCP",
   icon: "Code",
-  home: "surfaces/cli",
+  home: "developers/cli",
   groups: [
-    {
-      title: "Use Ren from your tools",
-      items: ["surfaces/cli", "surfaces/mcp", "surfaces/sdk"],
-    },
-    {
-      title: "Reference",
-      items: ["developers/inference-setup", "developers/llms-txt"],
-    },
+    { title: "Get started", items: ["developers/cli", "developers/mcp"] },
+    { title: "Guides", items: ["developers/inference-setup"] },
+    { title: "Reference", items: ["developers/llms-txt"] },
   ],
 }
 
