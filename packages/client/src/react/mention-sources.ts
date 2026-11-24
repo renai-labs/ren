@@ -26,7 +26,7 @@ export function useApps(
   const searchable = query !== undefined
   const own = useQuery(api.app.list.queryOptions({ page: 1, pageSize: ownSize }))
   const found = useQuery({
-    ...api["app-registry"].list.queryOptions({ page: 1, pageSize: searchSize, ...(query && { query }) }),
+    ...api["app-registry"].list.queryOptions({ page: 1, pageSize: searchSize, ...(query && { search: query }) }),
     enabled: searchable,
     placeholderData: keepPreviousData,
   })

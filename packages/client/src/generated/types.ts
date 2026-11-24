@@ -7223,36 +7223,36 @@ export type AppProfileReachAppRequestConnectInput = { readonly app: { readonly a
 export type AppProfileReachAppRequestConnectOutput = AppProfileConnect
 
 export type AppRegistryListInput = {
-  readonly query?: {
-    readonly query?: string | undefined
+  readonly search?: {
+    readonly search?: string | undefined
     readonly category?: string | undefined
     readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
-  }["query"]
+  }["search"]
   readonly category?: {
-    readonly query?: string | undefined
+    readonly search?: string | undefined
     readonly category?: string | undefined
     readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["category"]
   readonly slugs?: {
-    readonly query?: string | undefined
+    readonly search?: string | undefined
     readonly category?: string | undefined
     readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["slugs"]
   readonly page: {
-    readonly query?: string | undefined
+    readonly search?: string | undefined
     readonly category?: string | undefined
     readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
   readonly pageSize: {
-    readonly query?: string | undefined
+    readonly search?: string | undefined
     readonly category?: string | undefined
     readonly slugs?: ReadonlyArray<string> | undefined
     readonly page: number

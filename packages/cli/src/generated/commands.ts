@@ -277,9 +277,9 @@ export const AppProfilePromote = {
 }
 
 export const AppRegistryList = {
-  query: Flag.String("query").pipe(
+  search: Flag.String("search").pipe(
     Flag.optional,
-    Flag.withDescription("Match the slug, name or description, ignoring case."),
+    Flag.withDescription("Words to find in any case: each must be part of the slug, the name or the description."),
   ),
   category: Flag.String("category").pipe(Flag.optional, Flag.withDescription("Match a category in any group.")),
   slugs: Flag.String("slugs").pipe(
@@ -317,7 +317,9 @@ export const SessionList = {
   status: Flag.Literals("status", ["idle", "busy"]).pipe(Flag.optional),
   search: Flag.String("search").pipe(
     Flag.optional,
-    Flag.withDescription("Part of the title, or of the text of a message from a person or an assistant."),
+    Flag.withDescription(
+      "Words to find in any case: each must be part of the title or of a message from a person or an assistant.",
+    ),
   ),
   archived: Flag.Boolean("archived").pipe(Flag.optional, Flag.withDescription("Only archived chats.")),
   orderBy: Flag.Literals("order-by", ["updated", "created"]).pipe(
@@ -345,7 +347,12 @@ export const TaskList = {
   priority: Flag.Literals("priority", ["low", "medium", "high"]).pipe(Flag.optional),
   agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
   ownerId: Flag.String("owner-id").pipe(Flag.optional),
-  search: Flag.String("search").pipe(Flag.optional, Flag.withDescription("Part of the title.")),
+  search: Flag.String("search").pipe(
+    Flag.optional,
+    Flag.withDescription(
+      "Words to find in any case: each must be part of the title, the description or a label, or be the task’s number (`12`, `#12` or `ENG-12`).",
+    ),
+  ),
   label: Flag.String("label").pipe(Flag.optional, Flag.withDescription("A label name, in any case.")),
   humanReview: Flag.Boolean("human-review").pipe(Flag.optional),
   linkedTo: Flag.String("linked-to").pipe(Flag.optional, Flag.withDescription("Only tasks that link this URL.")),
@@ -525,7 +532,10 @@ export const ViewArchive = { id: Argument.String("view").pipe(Argument.withDescr
 export const ScheduleList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   status: Flag.Literals("status", ["active", "paused", "ended"]).pipe(Flag.optional),
-  search: Flag.String("search").pipe(Flag.optional, Flag.withDescription("Part of the name or the message.")),
+  search: Flag.String("search").pipe(
+    Flag.optional,
+    Flag.withDescription("Words to find in any case: each must be part of the name or the message."),
+  ),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
@@ -686,7 +696,10 @@ export const CredentialList = {
   owner: Flag.Literals("owner", ["org", "space", "person", "profile"]).pipe(Flag.optional),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   type: Flag.Literals("type", ["key", "basic", "oauth", "fields", "route", "client_credentials"]).pipe(Flag.optional),
-  search: Flag.String("search").pipe(Flag.optional),
+  search: Flag.String("search").pipe(
+    Flag.optional,
+    Flag.withDescription("Words to find in any case: each must be part of the label or the name."),
+  ),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }

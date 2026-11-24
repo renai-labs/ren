@@ -1448,7 +1448,7 @@ export function make(options: ClientOptions) {
             method: "GET",
             path: `/app-registry`,
             query: {
-              query: input["query"],
+              search: input["search"],
               category: input["category"],
               slugs: input["slugs"],
               page: input["page"],

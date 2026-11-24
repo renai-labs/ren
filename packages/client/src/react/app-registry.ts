@@ -15,7 +15,7 @@ export const options = (client: ReturnType<typeof Ren.make>, query: string, cate
     queryKey: ["app-registry", "infinite", { query, category, pageSize: size }] as const,
     queryFn: (context) =>
       client["app-registry"].list(
-        { page: context.pageParam, pageSize: size, ...(query && { query }), ...(category && { category }) },
+        { page: context.pageParam, pageSize: size, ...(query && { search: query }), ...(category && { category }) },
         { signal: context.signal },
       ),
     initialPageParam: 1,

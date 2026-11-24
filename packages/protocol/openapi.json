@@ -5693,11 +5693,15 @@
         "operationId": "app-registry.list",
         "parameters": [
           {
-            "name": "query",
+            "name": "search",
             "in": "query",
             "schema": {
-              "type": "string",
-              "description": "Match the slug, name or description, ignoring case."
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Words to find in any case: each must be part of the slug, the name or the description."
             },
             "required": false
           },
@@ -6304,7 +6308,7 @@
                   "type": "string"
                 }
               ],
-              "description": "Part of the title, or of the text of a message from a person or an assistant."
+              "description": "Words to find in any case: each must be part of the title or of a message from a person or an assistant."
             },
             "required": false
           },
@@ -7148,7 +7152,7 @@
                   "type": "string"
                 }
               ],
-              "description": "Part of the title."
+              "description": "Words to find in any case: each must be part of the title, the description or a label, or be the task’s number (`12`, `#12` or `ENG-12`)."
             },
             "required": false
           },
@@ -9317,7 +9321,7 @@
                   "type": "string"
                 }
               ],
-              "description": "Part of the name or the message."
+              "description": "Words to find in any case: each must be part of the name or the message."
             },
             "required": false
           },
@@ -11439,7 +11443,12 @@
             "name": "search",
             "in": "query",
             "schema": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "Words to find in any case: each must be part of the label or the name."
             },
             "required": false
           },
