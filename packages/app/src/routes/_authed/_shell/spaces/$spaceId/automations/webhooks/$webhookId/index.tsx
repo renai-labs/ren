@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { RunSheet } from "../../../../../automations/-run-sheet.js"
 import { WebhookPage } from "../../../../../../../../features/webhooks/webhook-page.js"
 import { Loader } from "../../../../../../../../lib/loader.js"
 import { Webhooks } from "../../../../../../../../lib/webhooks.js"
@@ -21,5 +22,19 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/automation
     )
   },
   wrapInSuspense: false,
-  component: WebhookPage,
+  component: RouteComponent,
 })
+
+function RouteComponent() {
+  const session = Route.useSearch().session
+  const navigate = Route.useNavigate()
+  return (
+    <>
+      <WebhookPage />
+      <RunSheet
+        session={session}
+        onClose={() => void navigate({ search: (previous) => ({ ...previous, session: undefined }), replace: true })}
+      />
+    </>
+  )
+}

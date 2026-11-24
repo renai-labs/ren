@@ -1,6 +1,6 @@
 import type { WebhookInfo, WebhookRequestInfo, WebhookRequestOutcome } from "@ren/client"
 import { keepPreviousData, useMutation, useQueries, useQuery } from "@tanstack/react-query"
-import { getRouteApi, Link } from "@tanstack/react-router"
+import { getRouteApi } from "@tanstack/react-router"
 import { IconAlertTriangle } from "@tabler/icons-react"
 import { Schema } from "effect"
 import { toast } from "@ren/ui/sonner"
@@ -87,6 +87,9 @@ export function WebhookRequests(props: { webhook: WebhookInfo }) {
                   key={item.id}
                   request={item}
                   selected={item.id === search.request}
+                  onOpenSession={(session) =>
+                    void navigate({ search: (previous) => ({ ...previous, session }), replace: true })
+                  }
                   onSelect={() =>
                     void navigate({
                       search: (previous) => ({
@@ -167,8 +170,14 @@ function RequestsToolbar(props: { webhook: WebhookInfo; outcome: WebhookRequestO
   )
 }
 
-function RequestRow(props: { request: WebhookRequestInfo; selected: boolean; onSelect: () => void }) {
+function RequestRow(props: {
+  request: WebhookRequestInfo
+  selected: boolean
+  onSelect: () => void
+  onOpenSession: (session: string) => void
+}) {
   const delivery = props.request
+  const session = delivery.sessionId
   const outcome = Webhooks.outcomes[delivery.outcome]
   const OutcomeIcon = delivery.broken ? IconAlertTriangle : outcome.icon
   return (
@@ -193,14 +202,14 @@ function RequestRow(props: { request: WebhookRequestInfo; selected: boolean; onS
         {delivery.reason ?? "—"}
       </TableCell>
       <TableCell>
-        {delivery.sessionId ? (
-          <Link
-            to="/sessions/$sessionId"
-            params={{ sessionId: delivery.sessionId }}
-            className="relative hover:underline"
+        {session ? (
+          <Button
+            variant="link"
+            onClick={() => props.onOpenSession(session)}
+            className="relative h-auto p-0 font-normal text-foreground"
           >
             Open session
-          </Link>
+          </Button>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}

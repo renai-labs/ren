@@ -1,4 +1,5 @@
 import { Seed, Tasks } from "@ren/client/react"
+import { SessionSheet } from "../../components/session-sheet.js"
 import { SkeletonRows } from "../../components/page.js"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { useState, type ReactNode } from "react"
@@ -35,7 +36,6 @@ import {
 } from "@ren/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@ren/ui/popover"
 import { Separator } from "@ren/ui/separator"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
 import { Textarea } from "@ren/ui/textarea"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
@@ -167,17 +167,14 @@ export function TaskPage(props: {
           )
         }
       />
-      <Sheet open={props.sessionId !== undefined} onOpenChange={(open) => (open ? undefined : openSession(undefined))}>
-        <SheetContent className="data-[side=right]:sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>Task session</SheetTitle>
-            <SheetDescription>Chat with the agent working on this task.</SheetDescription>
-          </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col [--container-chat:--spacing(192)]">
-            {props.session?.(task.humanReview ? <ReviewCard task={task} /> : null)}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <SessionSheet
+        open={props.sessionId !== undefined}
+        onClose={() => openSession(undefined)}
+        title="Task session"
+        description="Chat with the agent working on this task."
+      >
+        {props.session?.(task.humanReview ? <ReviewCard task={task} /> : null)}
+      </SessionSheet>
     </div>
   )
 }
