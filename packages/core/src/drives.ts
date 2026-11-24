@@ -1,6 +1,7 @@
 export * as Drives from "./drives.js"
 
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -59,6 +60,7 @@ export interface Interface {
   readonly put: (owner: Owner, path: string, body: Uint8Array, type: string) => Effect.Effect<void, Unavailable>
   readonly files: (owner: Owner, folder: string) => Effect.Effect<ReadonlyArray<Drive.File>, Unavailable>
   readonly read: (owner: Owner, path: string) => Effect.Effect<Uint8Array, Primitive.NotFound | Unavailable>
+  readonly move: (from: Owner, to: Owner, folder: string) => Effect.Effect<void, Unavailable>
   readonly sweep: (archivedBefore: Date) => Effect.Effect<void>
   readonly availability: (
     owner: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
@@ -194,6 +196,21 @@ export const layer = Layer.effect(
       const path = yield* valid(input.path, "path")
       return { path, key: `${yield* prefix(actor, input.spaceId, action)}${path}` }
     })
+
+    const objects = (prefix: string) =>
+      Stream.paginate("", (cursor) =>
+        send((signal) =>
+          s3.send(
+            new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ...(cursor && { ContinuationToken: cursor }) }),
+            { abortSignal: signal },
+          ),
+        ).pipe(
+          Effect.map((listed) => [listed.Contents ?? [], Option.fromNullishOr(listed.NextContinuationToken)] as const),
+        ),
+      ).pipe(
+        Stream.runCollect,
+        Effect.map((pages) => pages.flat()),
+      )
 
     const deletePage = Effect.fnUntraced(function* (under: string) {
       const listed = yield* send((signal) =>
@@ -342,23 +359,47 @@ export const layer = Layer.effect(
       }),
       files: Effect.fn("Drives.files")(function* (owner: Owner, folder: string) {
         const root = prefixOf(owner)
-        const pages = yield* Stream.paginate("", (cursor) =>
-          send((signal) =>
-            s3.send(
-              new ListObjectsV2Command({
-                Bucket: bucket,
-                Prefix: `${root}${folder}/`,
-                ...(cursor && { ContinuationToken: cursor }),
-              }),
-              { abortSignal: signal },
+        return filesOf(root, yield* objects(`${root}${folder}/`))
+      }),
+      move: Effect.fn("Drives.move")(function* (from: Owner, to: Owner, folder: string) {
+        const source = prefixOf(from)
+        const target = prefixOf(to)
+        const keys = (yield* objects(`${source}${folder}/`)).flatMap((object) => (object.Key ? [object.Key] : []))
+        yield* Effect.forEach(
+          keys,
+          (key) =>
+            send((signal) =>
+              s3.send(
+                new CopyObjectCommand({
+                  Bucket: bucket,
+                  CopySource: `${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`,
+                  Key: `${target}${key.slice(source.length)}`,
+                }),
+                { abortSignal: signal },
+              ),
             ),
-          ).pipe(
-            Effect.map(
-              (listed) => [filesOf(root, listed.Contents), Option.fromNullishOr(listed.NextContinuationToken)] as const,
-            ),
+          { concurrency: 8, discard: true },
+        )
+        yield* Effect.forEach(
+          Array.from({ length: Math.ceil(keys.length / 1000) }, (_, index) =>
+            keys.slice(index * 1000, (index + 1) * 1000),
           ),
-        ).pipe(Stream.runCollect)
-        return pages.flat()
+          (batch) =>
+            send((signal) =>
+              s3.send(
+                new DeleteObjectsCommand({
+                  Bucket: bucket,
+                  Delete: { Objects: batch.map((key) => ({ Key: key })), Quiet: true },
+                }),
+                { abortSignal: signal },
+              ),
+            ).pipe(
+              Effect.flatMap((deleted) =>
+                deleted.Errors?.length ? Effect.fail(new Unavailable({ cause: deleted.Errors })) : Effect.void,
+              ),
+            ),
+          { discard: true },
+        )
       }),
       read: Effect.fn("Drives.read")(function* (owner: Owner, path: string) {
         const object = yield* send((signal) =>
