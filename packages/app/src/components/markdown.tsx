@@ -1,3 +1,4 @@
+import { Drive } from "@ren/schema/drive"
 import {
   type ComponentProps,
   type ReactNode,
@@ -174,7 +175,13 @@ function MarkdownImage({ node, src, alt }: ComponentProps<"img"> & ExtraProps) {
 }
 
 function MarkdownSpan({ node, children, ...props }: ComponentProps<"span"> & ExtraProps) {
-  const render = use(MarkdownContext).workspaceImage
+  const markdown = use(MarkdownContext)
+  const render = markdown.workspaceImage
+  const file = node?.properties["data-drive-file"]
+  if (typeof file === "string")
+    return markdown.driveFile
+      ? markdown.driveFile(file, children, { image: node?.properties["data-drive-image"] === true })
+      : children
   const path = node?.properties["data-workspace-image"]
   if (typeof path === "string" && render)
     return render(path, typeof children === "string" ? children : "", {
@@ -321,6 +328,19 @@ const workspaceImages = () => (tree: MarkdownNode) =>
     node.properties = { "data-workspace-image": path }
   })
 
+const driveFiles = () => (tree: MarkdownNode) =>
+  each(tree, (node) => {
+    if (node.tagName !== "img" && node.tagName !== "a") return
+    const image = node.tagName === "img"
+    const url = image ? node.properties?.src : node.properties?.href
+    const path = typeof url === "string" ? Drive.linkedPath(url) : undefined
+    if (!path) return
+    if (image)
+      node.children = [{ type: "text", value: typeof node.properties?.alt === "string" ? node.properties.alt : "" }]
+    node.tagName = "span"
+    node.properties = { "data-drive-file": path, ...(image && { "data-drive-image": true }) }
+  })
+
 const isImage = (node: MarkdownNode) =>
   node.tagName === "img" || (node.tagName === "span" && node.properties?.["data-workspace-image"] !== undefined)
 
@@ -426,19 +446,20 @@ const chipPunctuation = () => (tree: MarkdownNode) =>
       if (child.tagName === "a" && String(child.properties?.href).startsWith(appLink)) wrapChip(children, index)
   })
 
-const withDataImages = (schema: unknown) => {
+const withRenUrls = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
   const protocols = schema.protocols
   if (typeof protocols !== "object" || protocols === null) return schema
   const src: ReadonlyArray<unknown> = "src" in protocols && Array.isArray(protocols.src) ? protocols.src : []
-  return { ...schema, protocols: { ...protocols, src: [...src, "data"] } }
+  const href: ReadonlyArray<unknown> = "href" in protocols && Array.isArray(protocols.href) ? protocols.href : []
+  return { ...schema, protocols: { ...protocols, src: [...src, "data", "drive"], href: [...href, "drive"] } }
 }
 const chatLinks = () => ChatLink.link
 const safePlugins = Object.entries(defaultRehypePlugins).map(([name, plugin]): (typeof defaultRehypePlugins)[string] =>
-  name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withDataImages(plugin[1])] : plugin,
+  name === "sanitize" && Array.isArray(plugin) ? [plugin[0], withRenUrls(plugin[1])] : plugin,
 )
 const pipeline = (first: ReadonlyArray<(typeof defaultRehypePlugins)[string]>) => [
-  ...safePlugins.toSpliced(Object.keys(defaultRehypePlugins).indexOf("harden"), 0, ...first, chatLinks),
+  ...safePlugins.toSpliced(Object.keys(defaultRehypePlugins).indexOf("harden"), 0, ...first, chatLinks, driveFiles),
   mediaGallery,
   rehypeCallouts,
   chipPunctuation,
@@ -504,6 +525,7 @@ export function Markdown(props: {
   apps?: ReadonlyArray<CatalogApp> | undefined
   workspaceImage?: ((path: string, alt: string, options: { inline: boolean }) => ReactNode) | undefined
   fileReference?: ((text: string, code: ReactNode) => ReactNode) | undefined
+  driveFile?: ((path: string, text: ReactNode, options: { image: boolean }) => ReactNode) | undefined
 }) {
   const id = useId()
   const apps = props.apps ?? []
@@ -524,6 +546,7 @@ export function Markdown(props: {
         mermaid: mermaid !== null,
         workspaceImage: props.workspaceImage,
         fileReference: props.fileReference,
+        driveFile: props.driveFile,
       }}
     >
       <div
