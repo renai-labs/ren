@@ -1,7 +1,6 @@
 export * as DriveFiles from "./drive-files.js"
 
-import type { WriteResultUpload } from "@ren/client"
-import { DriveQuery } from "@ren/client/react"
+import { DriveQuery, type Uploads } from "@ren/client/react"
 import { Drive } from "@ren/schema/drive"
 import { FileName } from "@ren/util/file-name"
 import { queryOptions } from "@tanstack/react-query"
@@ -37,22 +36,17 @@ export const share = (target: Target) =>
     .query(savedOptions(target))
     .then((file) => shareAsync(file.uri, { mimeType: Drive.typeOf(file.name), dialogTitle: file.name }))
 
-export const upload = async (
-  form: WriteResultUpload,
-  file: File,
-  mimeType: string,
-  signal: AbortSignal,
-  onProgress: (fraction: number) => void,
-) => {
+export const upload: Uploads.Transfer<File> = async (form, file, options) => {
   const result = await file.upload(form.uploadUrl, {
     httpMethod: "POST",
     uploadType: UploadType.MULTIPART,
     fieldName: "file",
-    mimeType,
+    mimeType: options.mime,
     parameters: form.fields,
     sessionType: "foreground",
-    signal,
-    onProgress: (progress) => onProgress(progress.totalBytes > 0 ? progress.bytesSent / progress.totalBytes : 0),
+    signal: options.signal,
+    onProgress: (progress) =>
+      options.onProgress(progress.totalBytes > 0 ? progress.bytesSent / progress.totalBytes : 0),
   })
   if (result.status < 200 || result.status >= 300) throw new Error(`The upload failed (${result.status}).`)
 }

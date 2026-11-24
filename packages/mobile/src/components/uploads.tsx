@@ -1,12 +1,11 @@
+import { Uploads } from "@ren/client/react"
 import { Drive } from "@ren/schema/drive"
 import { ErrorText } from "@ren/util/error-text"
 import { FileName } from "@ren/util/file-name"
 import { cn } from "cn"
-import { Struct } from "effect"
 import { getDocumentAsync } from "expo-document-picker"
 import { File } from "expo-file-system"
 import { launchImageLibraryAsync } from "expo-image-picker"
-import { useState } from "react"
 import { View } from "react-native"
 import DocumentIcon from "react-native-heroicons/mini/DocumentIcon"
 import PhotoIcon from "react-native-heroicons/mini/PhotoIcon"
@@ -21,13 +20,7 @@ interface Picked {
   readonly size: number
 }
 
-interface Upload extends Picked {
-  readonly id: string
-  readonly path: string
-  readonly progress: number
-  readonly controller: AbortController
-  readonly error?: string
-}
+type Upload = Uploads.Upload<Picked>
 
 const picked = (uri: string, name: string, mime: string | undefined): Picked => ({
   uri,
@@ -64,60 +57,31 @@ const pickerItems = (onPick: (picked: ReadonlyArray<Picked>) => void): ReadonlyA
   },
 ]
 
+const transfer: Uploads.Transfer<Picked> = (form, file, options) => DriveFiles.upload(form, new File(file.uri), options)
+
 function useUploads(options: { readonly space: string | undefined; readonly onDone: (upload: Upload) => void }) {
-  const [uploads, setUploads] = useState<ReadonlyArray<Upload>>([])
-  const replace = (next: Upload) =>
-    setUploads((current) => current.map((upload) => (upload.id === next.id ? next : upload)))
-  const advance = (id: string, progress: number) =>
-    setUploads((current) =>
-      current.some((upload) => upload.id === id && upload.progress !== progress)
-        ? current.map((upload) => (upload.id === id ? { ...upload, progress } : upload))
-        : current,
-    )
-  const drop = (id: string) => setUploads((current) => current.filter((upload) => upload.id !== id))
-  const send = (upload: Upload) =>
-    void Api.client.drive
-      .startUpload({ ...(options.space && { spaceId: options.space }), path: upload.path, size: upload.size })
-      .then((form) =>
-        DriveFiles.upload(form, new File(upload.uri), upload.mime, upload.controller.signal, (fraction) =>
-          advance(upload.id, Math.round(fraction * 100)),
-        ),
-      )
-      .then(
-        () => {
-          if (upload.controller.signal.aborted) return
-          drop(upload.id)
-          options.onDone(upload)
-        },
-        (error: unknown) => {
-          if (!upload.controller.signal.aborted)
-            replace({ ...upload, error: ErrorText.of(error, "The upload failed. Try again.") })
-        },
-      )
+  const queue = Uploads.useQueue({
+    client: Api.client,
+    transfer,
+    describe: (error) => ErrorText.of(error, "The upload failed. Try again."),
+    onDone: options.onDone,
+  })
   return {
-    uploads,
-    start: (entries: ReadonlyArray<{ readonly picked: Picked; readonly path: string; readonly error?: string }>) => {
-      const added = entries.map((entry): Upload => ({
-        ...entry.picked,
-        id: crypto.randomUUID(),
-        name: FileName.base(entry.path),
-        path: entry.path,
-        progress: 0,
-        controller: new AbortController(),
-        ...(entry.error && { error: entry.error }),
-      }))
-      setUploads((current) => [...current, ...added])
-      for (const upload of added.filter((each) => !each.error)) send(upload)
-    },
-    retry: (upload: Upload) => {
-      const next = { ...Struct.omit(upload, ["error"]), progress: 0, controller: new AbortController() }
-      replace(next)
-      send(next)
-    },
-    cancel: (upload: Upload) => {
-      upload.controller.abort()
-      drop(upload.id)
-    },
+    uploads: queue.uploads,
+    start: (entries: ReadonlyArray<{ readonly picked: Picked; readonly path: string; readonly error?: string }>) =>
+      queue.start(
+        entries.map((entry) => ({
+          file: entry.picked,
+          spaceId: options.space,
+          path: entry.path,
+          name: FileName.base(entry.path),
+          mime: entry.picked.mime,
+          size: entry.picked.size,
+          ...(entry.error && { error: entry.error }),
+        })),
+      ),
+    retry: queue.retry,
+    cancel: queue.cancel,
   }
 }
 

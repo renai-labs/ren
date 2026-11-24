@@ -197,7 +197,7 @@ function UploadChip(props: {
     <Chip
       name={upload.name}
       mime={upload.mime}
-      thumbnail={thumbnailed(upload.mime) ? upload.uri : undefined}
+      thumbnail={thumbnailed(upload.mime) ? upload.file.uri : undefined}
       failed={Boolean(upload.error)}
       detail={
         upload.error ? (
