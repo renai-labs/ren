@@ -27,6 +27,7 @@ export const MarkdownContext = createContext<{
   readonly mermaid: boolean
   readonly workspaceImage?: ((path: string, alt: string, options: { inline: boolean }) => ReactNode) | undefined
   readonly fileReference?: ((text: string, code: ReactNode) => ReactNode) | undefined
+  readonly driveFile?: ((path: string, text: ReactNode, options: { image: boolean }) => ReactNode) | undefined
 }>({ apps: [], streaming: false, mermaid: false })
 
 const labelText = (node: ReactNode): string => {
