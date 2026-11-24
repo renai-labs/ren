@@ -191,7 +191,6 @@ Replace **Work with Ren** with four groups of shared features: **Work**, **Integ
 | Section "Hand a task to another project"                                                          | Agents & factory                                     |
 | All other project-handoff text                                                                    |                                                      |
 | `ren tasks create --pod-id --project-id`, `ren tasks assign --project-id`                         |                                                      |
-| "The app shows links but does not add them" **(unconfirmed)**                                     |                                                      |
 | `tasks/list`, `tasks/kanban`, `tasks/start` images; `tasks/create-task`, `tasks/open-task` videos | New captures                                         |
 
 **`concepts/schedules` (becomes Automations)**
@@ -441,7 +440,7 @@ Replace **Work with Ren** with four groups of shared features: **Work**, **Integ
 
 ### 4.5 CLI commands
 
-None of these exist in the v2 CLI. They are removed from every page.
+None of these exist in the v2 CLI. They are removed from every page. `ren cron-triggers …` becomes `ren schedule …`; webhooks are `ren webhook …` and `ren webhook-requests …`.
 
 `ren org list` · `ren org switch` · `ren org create` · `ren orgs update --instructions` · `ren pods …` · `ren pods update --environment-id` · `ren projects …` · `ren environments …` · `ren file-stores …` · `ren memory-stores …` · `ren pod-databases …` · `ren vaults list` · `ren cron-triggers …` · `ren tasks create --pod-id --project-id` · `ren tasks assign --project-id` · `ren blueprints …` · `ren registry blueprints …` · `ren slack …` · `ren github …` · `ren linear …` · `ren pats …`
 
@@ -516,18 +515,34 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 **Tasks**
 
 - Statuses including Backlog.
-- Properties: Owner and Agent.
-- **Display options**, with Group by Space, Status or Agent. Board with drag.
-- Labels, sub-tasks, review (approve or changes requested).
+- Properties: Owner and Agent. Assigning an agent starts it; a new owner or space does not.
+- View tabs: All, Active, Backlog, Needs review, My tasks. Not saved views: the app cannot save them yet.
+- Filters: Space, Status, Priority, Agent (No agent), Owner (Me, No owner), Label, Review. Filters stay in the address.
+- **Display options**, with Group by Space, Status or Agent, Order by Created or Priority. Board with drag.
+- Bulk actions: Change status, Move, Archive.
+- Labels, sub-tasks (one level).
+- Human review: Request review, Approve, Request changes. Link to Agents & factory for why agents ask.
+- Start: Start new session, Continue last session, Open session. Actions: Mark done, Dismiss, Unassign.
+- Finish: done by the agent, or on merge of the linked pull request. Link to Agents & factory.
+- Links: the app shows links and does not add them.
 - PR state on links, GitHub PR comments, Slack task cards, space Tasks pages.
+- Limits: 16 labels, 32 links, 256-character title.
+- No Examples section.
 - Remove every mention of project handoff.
 
 **Automations**
 
-- Schedules: name, message, agent, target (new chat or this chat), when (cron, one time, delay), Until.
-- Personal time zone. 5-minute minimum interval. Paused after 5 failed runs.
-- Pause reasons, Active / Paused / Ended statuses, a runs page per schedule.
-- Webhooks: create one, signing secret, request history.
+- Two places: **Automations** lists every space; a space's **Automations** has the **Schedules** and **Webhooks** tabs. Each schedule and each webhook has its own page.
+- Schedules: name, message, agent, target (new chat or one chat), when (cron, one time, delay), Until. People pick a frequency or a cron; one time and delay are for agents (`this-chat` too).
+- Each run sends the message as the owner. A change to the message, agent, target or time makes you the owner. Every space member can edit every schedule.
+- Personal time zone. 5-minute minimum interval. 50 active schedules per space. Paused after 5 failed runs.
+- Pause reasons, Active / Paused / Ended statuses, **Run now**, a runs page per schedule (30 days). Skipped runs and why: previous run busy, paused, owner left, agent removed, chat archived.
+- Webhooks: create one (custom, or **From apps**), copy the URL, **Rotate URL**.
+- **Debug** records requests and starts no chat; **Live** starts or continues chats. A new webhook is in Debug. Ren sets it back to Debug when the owner and the fallback person left, the agent was removed, 5 requests in a row broke the parser, or the app dropped the preset.
+- **Runs as**: the owner, or the fallback person (**Use me instead**) after the owner leaves.
+- Signing secret: Ren makes one, or you paste the app's. Set it before **Live** when the signature needs one.
+- **Start a session when** (filter) and **Session continuation key** (one chat per issue or sender), in plain words. Field reference is on the Developers tab.
+- Request history (30 days) with each outcome, **Check** (test the parser on recorded requests), replay. Limits: 60 requests a minute, 1 MB body.
 
 **Drive**
 
@@ -704,6 +719,7 @@ Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sect
 
 - `ren infra validate → plan → apply → pull`.
 - `--force`, `--plan`, `--allow-archive`. Conflicts.
+- Webhook reference: parser fields (handshake, signed handshake, filter, event ID, thread key, title) as CEL over `method`, `query`, `headers`, `body`; signature kinds (`none`, `header`, `hmac`, `standard`, `stripe`); the 10 request outcomes.
 
 **Inference setup**
 
@@ -725,7 +741,7 @@ Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sect
 
 **The `.ren` folder**
 
-- `org.yaml`, `deploy.yaml`, `memory/`, `spaces/<slug>/space.yaml`, `agent.yaml`, `instructions.md`, `skills/*/skill.yaml`, `app.yaml`, `mcps.yaml`.
+- `org.yaml`, `deploy.yaml`, `memory/`, `spaces/<slug>/space.yaml`, `agent.yaml`, `instructions.md`, `skills/*/skill.yaml`, `app.yaml`, `mcps.yaml`, `spaces/<slug>/schedules.yaml`, `spaces/<slug>/webhooks.yaml` (apply creates a webhook in Debug; mode, URL and signing secret stay in the app).
 
 **llms.txt**
 
@@ -818,7 +834,6 @@ The owner answers these in step 2 (Ask) of the page they belong to (§7.1).
 | Is there a limit on secrets per level (v1 had 100)?                    | Credentials                         |
 | Where the CLI is published (`install.sh` URL)                          | CLI                                 |
 | Can scheduled and channel chats ask questions?                         | Chats                               |
-| Can the app add links to a task?                                       | Tasks                               |
 | Which app wins when two skills share a name?                           | Skills                              |
 | GitHub's "Needs attention" flow, and which email it matches senders on | GitHub                              |
 | The exact Slack error messages in v2                                   | Channels                            |

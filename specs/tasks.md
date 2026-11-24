@@ -1,6 +1,6 @@
 # Tasks: pending
 
-Phase 1 (tasks, labels, links, comments, the trail, assign, start, human review, the factory order, the agent tools, the list, board and detail UI) and subtasks are built.
+Phase 1 (tasks, labels, links, comments, the trail, assign, start, human review, the factory order, the agent tools, the list, board with drag and drop, and detail UI) and subtasks are built.
 
 Words: the **factory order** is the space field `agentOrder`, an ordered list of the space's agents. It sets the board's column order. It does not limit which agent can have a task.
 
@@ -10,17 +10,11 @@ Words: the **factory order** is the space field `agentOrder`, an ordered list of
 
 Packages: `core`, `server`.
 
-## 2. Drag and drop on the board
-
-A drop between board columns does `assign` with `start: "none"`. Today the board has no drag and drop (`app/src/features/tasks/task-board.tsx`).
-
-Packages: `ui`, `app`.
-
-## 3. Review start as a flag
+## 2. Review start as a flag
 
 The decision on a human review takes `start: "continue" | "none"`. The default is the constant `Task.reviewStart = "continue"` (`core/src/task.ts:44`), and no other code assumes it. When the `FeatureFlags` service exists ([`runtime/README.md`](runtime/README.md)), a flag targeted by space replaces the constant, and the flag goes in that file's table. The app sends no `start` unless the user changes it, so it follows the default.
 
-## 4. Later
+## 3. Later
 
 - **The factory dashboard.** It gets its own spec before it is built. The design mock shows, for one space and a period: counts in a sentence, the cost, a daily activity grid, a "Needs you" list, and time, cost, tokens and runs for each stage, as an average per task. Phase 1 records the data:
 
