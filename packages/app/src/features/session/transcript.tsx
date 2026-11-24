@@ -63,6 +63,7 @@ import { isShellNotice } from "./chat-view.js"
 import { ShellNoticeStep, SmoothMarkdown, StepRuns, Steps, StepsProvider } from "./steps.js"
 import { revealOnHover } from "./message-actions.js"
 import { useTerminalShells } from "./terminal-shells.js"
+import { useListedChatFiles } from "./use-chat-files.js"
 import { CopyButton, UserMessage, type Person } from "./user-message.js"
 
 export interface TranscriptHandle {
@@ -286,6 +287,7 @@ function AnswerBlock(props: {
   messages: ReadonlyArray<SessionMessage.Info>
 }) {
   const apps = useMentionedApps(props.text)
+  const listed = useListedChatFiles(props.spaceId, props.root)
   const images = new Map(
     props.messages.flatMap((message) =>
       message.type !== "assistant"
@@ -312,7 +314,7 @@ function AnswerBlock(props: {
               text={props.text}
               root={props.root}
               files={props.files}
-              drive={{ spaceId: props.spaceId, files: FileMentions.known(props.messages) }}
+              drive={{ spaceId: props.spaceId, files: [...listed, ...FileMentions.known(props.messages)] }}
               images={images}
               streaming={props.streaming}
               apps={apps}

@@ -37,34 +37,6 @@ const uploaded = (id: string, files: ReadonlyArray<SessionMessage.DriveFile>): S
   time: { created: at(0) },
 })
 
-const mentions = (text: string) => FileMentions.split(text).flatMap((part) => (part.mention ? [part.text] : []))
-
-describe("split", () => {
-  test("finds a file name in a sentence and keeps the text around it", () => {
-    expect(FileMentions.split("Files are in outputs: bloon_visuals.html")).toEqual([
-      { text: "Files are in outputs: ", mention: false },
-      { text: "bloon_visuals.html", mention: true },
-    ])
-  })
-
-  test.each([
-    ["See reports/q3.pdf.", "reports/q3.pdf"],
-    ["Open app.tsx:42 now", "app.tsx:42"],
-    ["(Bloon_Audience_Visuals.pptx)", "Bloon_Audience_Visuals.pptx"],
-    ["the résumé.pdf, attached", "résumé.pdf"],
-    ["./out/data.csv", "./out/data.csv"],
-  ])("finds the file in %s", (text, file) => {
-    expect(mentions(text)).toEqual([file])
-  })
-
-  test.each(["e.g. this", "version 1.2.3", "i.e. that", "https://example.com/a.html", "costs $0.00 now"])(
-    "finds no file in %s",
-    (text) => {
-      expect(mentions(text)).toEqual([])
-    },
-  )
-})
-
 describe("find", () => {
   const visuals = driveFile("bloon_visuals.html")
   const files = FileMentions.known([shown("msg_a1", "reports/bloon_visuals.html", visuals)])
@@ -98,5 +70,21 @@ describe("find", () => {
     const second = driveFile("deck.pptx", "ses_2")
     const known = FileMentions.known([shown("msg_a1", "deck.pptx", first), shown("msg_a2", "deck.pptx", second)])
     expect(FileMentions.find(known, "deck.pptx")).toEqual(second)
+  })
+})
+
+describe("listed", () => {
+  test("files in a listed drive folder become known files, and folders are skipped", () => {
+    const listed = FileMentions.listed([
+      { path: "chats/ses_1/outputs/old/", type: "directory" },
+      { path: "chats/ses_1/outputs/deck.pptx", type: "file", size: 2048, mime: "application/x-deck" },
+    ])
+    expect(FileMentions.find(listed, "deck.pptx")).toEqual({
+      path: "chats/ses_1/outputs/deck.pptx",
+      name: "deck.pptx",
+      mime: "application/x-deck",
+      size: 2048,
+    })
+    expect(listed).toHaveLength(1)
   })
 })

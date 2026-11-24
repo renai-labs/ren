@@ -101,7 +101,7 @@ export function InlineFile(props: {
         <Named name={file.name} mime={file.mime} text={props.text} />
       </DriveFileChip>
     )
-  const path = props.computer ? InlineCodeKind.workspacePath(props.text) : undefined
+  const path = props.computer && props.code ? InlineCodeKind.workspacePath(props.text) : undefined
   return path ? (
     <ExistingFile root={props.root} path={path} text={props.text} fallback={props.fallback} className={className} />
   ) : (

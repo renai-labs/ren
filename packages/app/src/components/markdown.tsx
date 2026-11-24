@@ -48,7 +48,7 @@ import {
 } from "@tabler/icons-react"
 import { cn } from "cn"
 import { ChatLink } from "@ren/chat/chat-link"
-import { FileMentions } from "@ren/chat/file-mentions"
+import { FileMention } from "@ren/schema/file-mention"
 import { Fences } from "@ren/chat/fences"
 import type { Mentions } from "@ren/chat/mentions"
 import { TexMath } from "@ren/chat/tex-math"
@@ -364,7 +364,7 @@ const fileMentions = () => (tree: MarkdownNode) => {
         visit(child)
         return [child]
       }
-      return FileMentions.split(child.value ?? "").map((part) =>
+      return FileMention.split(child.value ?? "").map((part) =>
         part.mention
           ? {
               type: "element",

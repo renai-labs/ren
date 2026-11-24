@@ -1,5 +1,7 @@
 export * as FileMentions from "./file-mentions.js"
 
+import { Drive } from "@ren/schema/drive"
+import type { FileSystem } from "@ren/schema/file-system"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { Option } from "effect"
 import { InlineCodeKind } from "./inline-code-kind.js"
@@ -9,26 +11,6 @@ import { ToolState } from "./tool-state.js"
 export interface Known {
   readonly file: SessionMessage.DriveFile
   readonly source?: string | undefined
-}
-
-export interface Part {
-  readonly text: string
-  readonly mention: boolean
-}
-
-const mention =
-  /(?<![\p{L}\p{N}_@+./\\-])(?:\.{0,2}\/)?(?:[\p{L}\p{N}_@+-][\p{L}\p{N}_@+.-]*\/)*[\p{L}\p{N}_@+-][\p{L}\p{N}_@+.-]*\.[A-Za-z][A-Za-z0-9]{1,7}(?:#L\d+(?:-L?\d+)?|:\d+(?:-\d+)?)?(?![\p{L}\p{N}_@+/-])/gu
-
-export const split = (text: string): ReadonlyArray<Part> => {
-  const found = Array.from(text.matchAll(mention))
-  const ends = [0, ...found.map((match) => match.index + match[0].length)]
-  return [
-    ...found.flatMap((match, index) => [
-      { text: text.slice(ends[index], match.index), mention: false },
-      { text: match[0], mention: true },
-    ]),
-    { text: text.slice(ends.at(-1)), mention: false },
-  ].filter((part) => part.text !== "")
 }
 
 const normal = (path: string) =>
@@ -46,6 +28,13 @@ export const known = (messages: ReadonlyArray<SessionMessage.Info>): ReadonlyArr
         source: typeof source === "string" ? normal(source) : undefined,
       }))
     })
+  })
+
+export const listed = (entries: ReadonlyArray<FileSystem.Entry>): ReadonlyArray<Known> =>
+  entries.flatMap((entry) => {
+    if (entry.type !== "file") return []
+    const name = entry.path.slice(entry.path.lastIndexOf("/") + 1)
+    return [{ file: { path: entry.path, name, mime: entry.mime ?? Drive.typeOf(name), size: entry.size ?? 0 } }]
   })
 
 export const find = (files: ReadonlyArray<Known>, text: string) => {
