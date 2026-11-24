@@ -31,7 +31,7 @@ Each page gets the same four changes: trim it, rewrite it more concisely, update
 | Voice           | "You", US English, Ren is "it".                                                                                                                                                                                      |
 | Writing rules   | The Notion style guidelines (Sources), Diátaxis for page purpose and the no-ai-slop rules for sentences (§6).                                                                                                        |
 | Screenshots     | Light (`<name>.png`) and dark (`<name>.dark.png`), following the reader's theme. Captured from a local Ren seeded with the Northwind organization and its member Maya Shen. Tiles use 16:10 crops of the main panel. |
-| Video           | Only for multi-step flows: Quickstart, connecting an app.                                                                                                                                                            |
+| Video           | Only for the Quickstart. Screenshot rules are in §6.                                                                                                                                                                 |
 | Welcome         | The hero line "Build your agent factory", then How Ren is organized, Use from anywhere and Working with Ren. Read next comes from the sidebar (§6).                                                                  |
 | Removed         | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                                                                    |
 | Method          | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab.                                              |
@@ -757,6 +757,17 @@ Commit 1 adds this file. Every later commit follows it.
 - **Beta.** Use the `Beta` badge on a page or section. Never document a feature that has not shipped.
 - **Private services.** Call them only "the inference service" and "the integrations service".
 - **Facts.** Check every fact against `main` before the page ships. Write no stubs or "coming soon" pages.
+- **Screenshots.** Add one only when it shows what the text cannot:
+  - A control that is hidden or has no label: a button that shows on hover (**Send now**, the edit pencil), an icon-only menu.
+  - A state the reader must recognise: a permission card, a queued message.
+  - Information carried by colour or layout: a diff in Split view.
+  - A menu with many options and their descriptions: the `@` mention menu.
+
+  Use text, a table or nothing for a button that names itself, a menu that one sentence can list, a step that the numbered steps cover, and reference lists such as file types or shortcuts.
+
+  One overview screenshot at the top of the page shows the whole screen; do not repeat a part it already shows. Crop to the part the section is about, with enough around it to show where it is: a panel crop includes the edge of the chat. Show the state the reader acts in: the hover state, the open menu. Seed real data: real model names and titles, no "Stub title". Video only for the Quickstart.
+
+- **Icon-only buttons.** Write the icon in backticks, like a shortcut: `⋯`, `✎`.
 
 ## 7. Plan
 

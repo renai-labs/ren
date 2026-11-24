@@ -32,3 +32,14 @@ The marketing site and the docs at `useren.ai/docs`.
 - **Beta.** Use the `Beta` badge on a page or section. Never document a feature that has not shipped.
 - **Private services.** Call them only "the inference service" and "the integrations service".
 - **Facts.** Check every fact against `main` before the page ships. Write no stubs and no "coming soon" pages.
+- **Screenshots.** Add one only when it shows what the text cannot:
+  - A control that is hidden or has no label: a button that shows on hover (**Send now**, the edit pencil), an icon-only menu.
+  - A state the reader must recognise: a permission card, a queued message.
+  - Information carried by colour or layout: a diff in Split view.
+  - A menu with many options and their descriptions: the `@` mention menu.
+
+  Use text, a table or nothing for a button that names itself, a menu that one sentence can list, a step that the numbered steps cover, and reference lists such as file types or shortcuts.
+
+  One overview screenshot at the top of the page shows the whole screen; do not repeat a part it already shows. Crop to the part the section is about, with enough around it to show where it is: a panel crop includes the edge of the chat. Show the state the reader acts in: the hover state, the open menu. Seed real data: real model names and titles, no "Stub title". Video only for the Quickstart.
+
+- **Icon-only buttons.** Write the icon in backticks, like a shortcut: `⋯`, `✎`.
