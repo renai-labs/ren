@@ -104,7 +104,7 @@ function RunRow(props: {
 }) {
   const run = props.run
   const session = run.sessionId
-  const webhook = props.webhook
+  const request = props.webhook && run.requestId ? { webhook: props.webhook, id: run.requestId } : undefined
   return (
     <TableRow className={session ? "relative cursor-pointer" : undefined}>
       <TableCell className="align-top">{run.trigger}</TableCell>
@@ -126,11 +126,12 @@ function RunRow(props: {
           >
             Open chat
           </Button>
-        ) : webhook && run.requestId ? (
+        ) : null}
+        {!session && request ? (
           <Link
             to="/spaces/$spaceId/automations/webhooks/$webhookId"
-            params={{ spaceId: webhook.spaceId, webhookId: webhook.id }}
-            search={{ tab: "requests", request: run.requestId }}
+            params={{ spaceId: request.webhook.spaceId, webhookId: request.webhook.id }}
+            search={{ tab: "requests", request: request.id }}
             className="text-sm hover:underline"
           >
             Details
@@ -241,7 +242,7 @@ function FallbackSelect(props: { value: string | null; onChange: (fallback: stri
       ? [
           {
             value: other,
-            label: `Run it as ${members.find((member) => member.id === other)?.name ?? "another member"}`,
+            label: `Run it as ${members.member(other)?.name ?? "another member"}`,
           },
         ]
       : []),
@@ -250,7 +251,7 @@ function FallbackSelect(props: { value: string | null; onChange: (fallback: stri
     <Select
       items={items}
       value={props.value ?? "debug"}
-      onValueChange={(value) => props.onChange(value === "debug" || value === null ? null : String(value))}
+      onValueChange={(value) => props.onChange(value === "debug" || value === null ? null : value)}
     >
       <SelectTrigger size="sm" aria-label="If the owner leaves the space">
         <SelectValue />
@@ -292,6 +293,7 @@ function TriggerSection(props: {
   const preset = Automations.presetOfDraft(draft)
   const presets = useAppPresets(draft.spaceId)
   const saved = props.automation
+  const webhook = saved?.webhook
   const remove = saved ? undefined : () => props.onChange({ trigger: undefined })
   const scheduleRow = cadence ? (
     <ScheduleTrigger
@@ -304,15 +306,15 @@ function TriggerSection(props: {
   const webhookRow =
     kind === "webhook" ? (
       <WebhookTrigger
-        webhook={saved?.webhook}
-        label={webhookLabelOf(preset, presets, saved?.webhook)}
+        webhook={webhook}
+        label={webhookLabelOf(preset, presets, webhook)}
         spaceId={draft.spaceId}
         onCopyUrl={(webhook) => void actions.copyUrl(webhook)}
         onCopyAuthHeader={(webhook) => void actions.copyAuthHeader(webhook)}
         onRemove={remove}
       />
     ) : null
-  const add = saved?.webhook ? null : (
+  const add = webhook ? null : (
     <AddTrigger
       current={preset ? Automations.presetKey(preset) : kind}
       only={saved ? "schedule" : undefined}
@@ -333,7 +335,7 @@ function TriggerSection(props: {
   return (
     <Section title="Trigger">
       <TriggerList add={add}>{scheduleRow ?? webhookRow}</TriggerList>
-      <TriggerWarning webhook={saved?.webhook} active={draft.active} />
+      <TriggerWarning webhook={webhook} active={draft.active} />
     </Section>
   )
 }
