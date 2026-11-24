@@ -104,7 +104,7 @@ function OpenFile(props: { path: string; onOpen: (path: string) => void }) {
   return (
     <Button
       variant="ghost"
-      size="icon-xs"
+      size="icon-sm"
       aria-label={`Open ${props.path}`}
       className="text-muted-foreground"
       onClick={() => props.onOpen(props.path)}
@@ -166,7 +166,7 @@ function Changes(props: {
           <div className="ml-auto flex items-center gap-1">{props.display.tools}</div>
           <Button
             variant="ghost"
-            size="xs"
+            size="sm"
             className="text-muted-foreground"
             onClick={() => setCollapsed(folded ? new Set() : new Set(files.map((file) => file.id)))}
           >
