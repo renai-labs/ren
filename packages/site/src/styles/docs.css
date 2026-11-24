@@ -674,62 +674,6 @@ html.light .docs-when-dark {
   border-radius: 6px;
 }
 
-.docs-page-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 48px;
-  font-size: 13px;
-  color: var(--ren-color-text-secondary);
-}
-
-.docs-page-meta a {
-  border: 0;
-  padding-inline: 0;
-  font-size: 13px;
-}
-
-#nd-page > div.grid {
-  margin-top: 24px;
-}
-
-#nd-page > div.grid > a {
-  gap: 2px;
-  padding: 12px 14px;
-  border: 1px solid var(--docs-line);
-  border-radius: 8px;
-  background: transparent;
-  transition:
-    background-color 150ms ease,
-    transform 160ms var(--docs-ease-out);
-}
-
-#nd-page > div.grid > a::before {
-  content: "Previous";
-  font-size: 12px;
-  color: var(--ren-color-text-secondary);
-}
-
-#nd-page > div.grid > a.text-end::before {
-  content: "Next";
-}
-
-#nd-page > div.grid > a > p {
-  display: none;
-}
-
-#nd-page > div.grid > a:active {
-  transform: scale(0.97);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  #nd-page > div.grid > a:hover {
-    background: var(--ren-color-fill-primary);
-  }
-}
-
 #nd-toc {
   font-size: 13px;
 }
@@ -821,7 +765,7 @@ html.light .docs-when-dark {
 
 @media (min-width: 1024px) {
   .docs-entries {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

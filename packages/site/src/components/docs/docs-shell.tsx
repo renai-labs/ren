@@ -4,7 +4,7 @@ import type { AstroProviderProps } from "fumadocs-core/framework/astro"
 import type { Root } from "fumadocs-core/page-tree"
 import type { TOCItemType } from "fumadocs-core/toc"
 import { DocsLayout } from "fumadocs-ui/layouts/docs"
-import { DocsBody, DocsPage, DocsTitle, EditOnGitHub } from "fumadocs-ui/layouts/docs/page"
+import { DocsBody, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page"
 import { RootProvider } from "fumadocs-ui/provider/astro"
 import type { SectionLink } from "../../lib/docs/nav.js"
 import { withIcons } from "./icons.js"
@@ -17,7 +17,6 @@ export type DocsShellPage = {
   toc: TOCItemType[]
   url: string
   markdownUrl: string
-  editUrl: string
   hero: boolean
 }
 
@@ -70,12 +69,10 @@ export function DocsShell(props: {
           }}
           tableOfContentPopover={{ style: "clerk" }}
           breadcrumb={{ enabled: false }}
+          footer={{ enabled: false }}
         >
           {props.page.hero ? null : <DocsTitle>{props.page.title}</DocsTitle>}
           <DocsBody>{props.children}</DocsBody>
-          <div className="docs-page-meta">
-            <EditOnGitHub href={props.page.editUrl} />
-          </div>
         </DocsPage>
       </DocsLayout>
     </RootProvider>

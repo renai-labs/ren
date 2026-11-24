@@ -18,6 +18,8 @@ function lookup<T>(files: Record<string, T>, file: string) {
 
 export const image = (id: string) => lookup(images, `${id}.png`)
 
+export const darkImage = (id: string): ImageMetadata | undefined => images[`/src/assets/docs/${id}.dark.png`]
+
 export const video = (id: string) => ({
   src: lookup(videos, `${id}.mp4`),
   poster: lookup(images, `${id}.poster.png`),
