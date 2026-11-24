@@ -16,8 +16,8 @@ import Spotlights from "../../components/docs/spotlights.astro"
 import Steps from "../../components/docs/steps.astro"
 import SurfaceTabs from "../../components/docs/surface-tabs.astro"
 import Video from "../../components/docs/video.astro"
-import { navTree, sectionLinks, sectionOf } from "../../lib/docs/nav.js"
-import { type DocsPage, editUrl, pageHref, rawMarkdownPath, source } from "../../lib/docs/source.js"
+import { navTree, readNext, sectionLinks, sectionOf } from "../../lib/docs/nav.js"
+import { type DocsPage, pageHref, rawMarkdownPath, source } from "../../lib/docs/source.js"
 
 export const getStaticPaths = () =>
   source.getPages().map((page) => ({ params: { slug: page.slugs.join("/") || undefined }, props: { page } }))
@@ -30,6 +30,7 @@ const page = Astro.props.page
 const content = await render(page.data.entry)
 const section = sectionOf(page)
 const markdownUrl = rawMarkdownPath(page)
+const next = readNext(page)
 ---
 
 <DocsLayout title={page.data.title} description={page.data.description} markdownUrl={markdownUrl}>
@@ -42,11 +43,11 @@ const markdownUrl = rawMarkdownPath(page)
       title: page.data.title,
       toc: content.headings
         .filter((heading) => heading.depth >= 2 && heading.depth <= 3)
-        .map((heading) => ({ depth: heading.depth, title: heading.text, url: `#${heading.slug}` })),
+        .map((heading) => ({ depth: heading.depth, title: heading.text, url: `#${heading.slug}` }))
+        .concat(next.length > 0 ? [{ depth: 2, title: "Read next", url: "#read-next" }] : []),
       hero: page.data.hero,
       url: new URL(pageHref(page), Astro.site).href,
       markdownUrl,
-      editUrl: editUrl(page),
     }}
     sections={sectionLinks(section)}
   >
@@ -69,5 +70,23 @@ const markdownUrl = rawMarkdownPath(page)
         Video,
       }}
     />
+    {
+      next.length > 0 && (
+        <>
+          <h2 id="read-next"><a href="#read-next" class="fd-anchor">Read next</a></h2>
+          <CardGroup>
+            {next.map((item) =>
+              item.summary ? (
+                <Card title={item.title} icon={item.icon} href={item.href}>
+                  {item.summary}
+                </Card>
+              ) : (
+                <Card title={item.title} icon={item.icon} href={item.href} />
+              ),
+            )}
+          </CardGroup>
+        </>
+      )
+    }
   </DocsShell>
 </DocsLayout>

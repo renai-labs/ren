@@ -33,9 +33,6 @@ export const structuredData = (page: DocsPage) =>
 export const rawMarkdownPath = (page: DocsPage) =>
   page.slugs.length === 0 ? "/raw/docs.md" : `/raw/docs/${page.slugs.join("/")}.md`
 
-export const editUrl = (page: DocsPage) =>
-  `https://github.com/renai-labs/ren/edit/main/packages/site/${page.data.entry.filePath}`
-
 export function markdownBody(page: DocsPage) {
   const body = mdxSource(page)
     .replaceAll(/\n{3,}/g, "\n\n")

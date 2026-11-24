@@ -35,8 +35,8 @@ const DOCS: Section = {
       items: [{ slug: "spaces", label: "Overview" }, "inbox", "agents", "factory", "repositories", "compute"],
     },
     {
-      title: "Organisation",
-      items: [{ slug: "organisation", label: "Overview" }, "model-providers", "billing"],
+      title: "Organization",
+      items: [{ slug: "organization", label: "Overview" }, "model-providers", "billing"],
     },
     {
       title: "Clients",
@@ -101,6 +101,25 @@ export const navTree = (section: Section): Root => ({
     }),
   ]),
 })
+
+const TILE_HREF = /<(?:Card|Entry|Spotlight)\b[^>]*\bhref="(?<href>[^"#]+)/g
+
+export const readNext = (page: DocsPage) => {
+  const tiles = new Set([...(page.data.entry.body ?? "").matchAll(TILE_HREF)].map((match) => match.groups?.href))
+  const items = sectionOf(page).groups.flatMap((group) => group.items)
+  const index = items.findIndex((item) => slugOf(item) === page.slugs.join("/"))
+  return items
+    .slice(index + 1)
+    .map((item) => ({ item, next: pageAt(slugOf(item)) }))
+    .filter((entry) => !tiles.has(pageHref(entry.next)))
+    .slice(0, 6)
+    .map((entry) => ({
+      title: typeof entry.item === "string" ? entry.next.data.title : entry.item.label,
+      summary: entry.next.data.summary,
+      icon: entry.next.data.icon ?? "BookOpen",
+      href: pageHref(entry.next),
+    }))
+}
 
 export type SectionLink = {
   title: string

@@ -1,6 +1,6 @@
 ---
 import { getImage, Image } from "astro:assets"
-import { image } from "../../lib/docs/media.js"
+import { darkImage, image } from "../../lib/docs/media.js"
 import Frame, { type FrameProps } from "./frame.astro"
 
 interface Props extends FrameProps {
@@ -10,13 +10,16 @@ interface Props extends FrameProps {
 }
 
 const shot = image(Astro.props.shot)
+const dark = darkImage(Astro.props.shot)
 const full = await getImage({ src: shot, quality: 90 })
+const fullDark = dark && (await getImage({ src: dark, quality: 90 }))
 ---
 
 <Frame frame={Astro.props.frame} caption={Astro.props.caption}>
   <button
     type="button"
     data-zoom-src={full.src}
+    data-zoom-src-dark={fullDark?.src}
     aria-label={`Enlarge image: ${Astro.props.alt}`}
     class="block w-full cursor-zoom-in"
   >
@@ -28,8 +31,22 @@ const full = await getImage({ src: shot, quality: 90 })
       quality={90}
       loading={Astro.props.loading ?? "lazy"}
       fetchpriority={Astro.props.loading === "eager" ? "high" : "auto"}
-      class="block h-auto max-w-full"
+      class:list={["block h-auto max-w-full", dark && "docs-when-light"]}
     />
+    {
+      dark && (
+        <Image
+          src={dark}
+          alt={Astro.props.alt}
+          width={dark.width / 2}
+          densities={[1, 2]}
+          quality={90}
+          loading={Astro.props.loading ?? "lazy"}
+          fetchpriority={Astro.props.loading === "eager" ? "high" : "auto"}
+          class="docs-when-dark block h-auto max-w-full"
+        />
+      )
+    }
   </button>
 </Frame>
 
@@ -55,7 +72,9 @@ const full = await getImage({ src: shot, quality: 90 })
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof Element)) return
     const trigger = event.target.closest<HTMLElement>("[data-zoom-src]")
-    const src = trigger?.dataset.zoomSrc
+    const src = document.documentElement.classList.contains("dark")
+      ? (trigger?.dataset.zoomSrcDark ?? trigger?.dataset.zoomSrc)
+      : trigger?.dataset.zoomSrc
     if (!trigger || src === undefined) return
     const box = getLightbox()
     box.image.src = src
