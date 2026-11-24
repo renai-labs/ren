@@ -52,6 +52,7 @@ import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
 import { TaskComment } from "@ren/core/task/comment"
 import { Usage } from "@ren/core/usage"
+import { View } from "@ren/core/view"
 import { UsageIngestApi } from "@ren/protocol/usage-ingest"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpPlatform, HttpRouter } from "effect/http"
@@ -87,6 +88,7 @@ import { InfraHandler } from "./handlers/api/infra.js"
 import { InsightsHandler } from "./handlers/api/insights.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
+import { ViewHandler } from "./handlers/api/view.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { MemoryHandler } from "./handlers/api/memory.js"
 import { DriveHandler } from "./handlers/api/drive.js"
@@ -220,6 +222,7 @@ export const layer = Layer.mergeAll(
         LinkHandler,
         TaskCommentHandler,
         LabelHandler,
+        ViewHandler,
         ScheduleHandler,
         ScheduleRunHandler,
         WebhookHandler,
@@ -269,7 +272,7 @@ export const layer = Layer.mergeAll(
             webhooks,
           ]),
         ),
-        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
+        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer, View.layer).pipe(
           Layer.provide(SessionRunner.layer),
           Layer.provide(BrainRegistry.layer),
         ),
