@@ -5,174 +5,88 @@ hero: true
 description: Learn what Ren does, where you can send it work, and where to start.
 ---
 
-<Hero title="Build your agent factory" shot="chats/transcript" alt="A chat where Ren fixed a flaky checkout test">
-  Ren runs AI agents for your team. Send Ren work from the app, Slack, Linear, or a schedule. Then review what it did in
-  one place.
+<Hero
+  title="Build your agent factory"
+  shot="chats/activity"
+  alt="A chat in the Engineering space where Ren added a health check, with its steps in the Activity panel"
+>
+  Ren helps you define agents and chain them into a workflow your team can run in the cloud. Follow each agent’s work
+  step by step and monitor all your costs.
 </Hero>
 
-## Send work from anywhere
+## How Ren is organized
+
+<FactoryDiagram />
+
+| Level                               | What it is                                                                   |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| [Organization](/docs/organization/) | Your company. It holds members, billing and the settings every space shares. |
+| [Space](/docs/spaces/)              | Where a team or client works. Each person also gets a private space.         |
+| [Agent](/docs/agents/)              | A role in a space, with its own model, instructions and permissions.         |
+| [Tasks](/docs/tasks/)               | Work that people and agents share, from backlog to review.                   |
+
+## Use from anywhere
 
 <Entries>
-  <Entry title="Web app" icon="Monitor" href="/docs/#web-app">
-    Chat with Ren and review its work in your browser
+  <Entry title="App" icon="Monitor" href="/docs/chats/">
+    Chat with Ren, track tasks and set up agents in your browser
   </Entry>
   <Entry title="Slack" icon="Slack" href="/docs/channels/#slack">
     Mention Ren in a channel or send it a DM
   </Entry>
-  <Entry title="Linear" icon="Linear" href="/docs/channels/linear/">
-    Assign an issue to Ren
+  <Entry title="GitHub" icon="Github" href="/docs/channels/#github">
+    Mention Ren on a pull request or an issue
   </Entry>
-  <Entry title="CLI and MCP" icon="Code" href="/docs/developers/cli/">
-    Manage Ren from a terminal or a coding agent
+  <Entry title="Ren MCP" icon="Mcp" href="/docs/ren-mcp/">
+    Start Ren chats and tasks from Claude, ChatGPT or any MCP client
+  </Entry>
+  <Entry title="CLI" icon="Code" href="/docs/developers/cli/">
+    Manage Ren from your terminal
+  </Entry>
+  <Entry title="Mobile" icon="Mobile" href="/docs/mobile/" badge="Beta">
+    Chat with Ren, track tasks and manage your drive on iOS and Android
   </Entry>
 </Entries>
 
-## What Ren runs for you
+## Working with Ren
 
 <Spotlights>
   <Spotlight
-    title="Projects"
-    shot="projects/overview"
-    alt="A project with its repositories, apps, and channels"
-    href="/docs/concepts/projects/"
+    title="Chats"
+    shot="chats/table"
+    alt="A chat where Ren compares trial-to-paid conversion by signup source"
+    href="/docs/chats/"
   >
-    One kind of work, with its own instructions, repositories, apps, and storage.
+    Message Ren, steer its direction and follow its progress.
   </Spotlight>
-  <Spotlight title="Tasks" shot="tasks/kanban" alt="The Tasks board grouped by project" href="/docs/tasks/">
-    One list for the work of people and Ren. Start Ren on a task when the task is ready.
+  <Spotlight title="Tasks" shot="tasks/board" alt="The Tasks board grouped by status" href="/docs/tasks/">
+    Track work across your team and agents. Agents surface tasks for human review.
   </Spotlight>
   <Spotlight
-    title="Schedules"
-    shot="schedules/list"
+    title="Agent factory"
+    shot="factory/flow"
+    alt="The factory of the Engineering space: triager, fixer and reviewer"
+    href="/docs/factory/"
+  >
+    Set up agents that hand tasks to each other, and step in when they need you.
+  </Spotlight>
+  <Spotlight
+    title="Automations"
+    shot="automations/schedules"
     alt="The list of schedules with their next runs"
     href="/docs/automations/"
   >
-    Run a prompt in a project every hour, day, or week.
+    Start or continue chats on a schedule or custom external events.
   </Spotlight>
   <Spotlight
     title="Artifacts"
-    shot="artifacts/grid"
-    alt="A grid of dashboards and reports Ren built"
+    shot="artifacts/list"
+    alt="The list of artifacts, each at its own link"
     href="/docs/artifacts/"
   >
-    Dashboards and reports that Ren builds and keeps current at their own link.
+    Build and maintain custom sites with their dedicated links.
   </Spotlight>
-  <Spotlight title="Apps" shot="apps/marketplace" alt="The app marketplace" href="/docs/apps/">
-    Connect the tools your team uses, such as Gmail, Linear, or Shopify.
-  </Spotlight>
-  <Spotlight title="Skills" shot="skills/marketplace" alt="The skills marketplace" href="/docs/apps/#skills">
-    Instructions that Ren loads only when a task needs them.
+  <Spotlight title="Apps" shot="apps/catalog" alt="The Apps page with popular and engineering apps" href="/docs/apps/">
+    Connect your agents to 350+ apps or to custom ones you own.
   </Spotlight>
 </Spotlights>
-
-## Keep going
-
-<CardGroup>
-  <Card title="Quickstart" icon="Zap" href="/docs/quickstart/">
-    Make an account and give Ren its first task
-  </Card>
-  <Card title="How Ren is organized" icon="Dashboard" href="/docs/#how-ren-is-organized">
-    Organizations, spaces, projects, and chats
-  </Card>
-  <Card title="Credentials" icon="Vault" href="/docs/credentials/">
-    The accounts and keys Ren uses, and what it can see
-  </Card>
-  <Card title="Environments" icon="EnvVariable" href="/docs/machines/">
-    CPU, memory, and packages for the machine of a space
-  </Card>
-  <Card title="Move from Claude" icon="Claude" href="/docs/migrate/claude/">
-    Bring your skills and memory into Ren
-  </Card>
-</CardGroup>
-
-## How Ren is organized
-
-Ren organizes work in four levels. Each level sits inside the one above it. Use the levels to keep each team or client apart, and to give each kind of work its own setup.
-
-<FactoryDiagram />
-
-### The four levels
-
-| Level                               | What it is                                           | What it holds or decides                                    |
-| ----------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
-| [Organization](/docs/organisation/) | Your company or account                              | Members, billing, and settings that apply everywhere        |
-| [Space](/docs/spaces/)              | A team or client inside the organization             | Who can see the work. A space runs on its own machine.      |
-| [Project](/docs/concepts/projects/) | One kind of work inside a space, such as code review | The instructions, tools, and storage Ren uses for that work |
-| [Chat](/docs/chats/)                | One request to Ren inside a project                  | Everything Ren did to answer the request                    |
-
-### Spaces
-
-Each organization starts with a **General** space for all members. Each member gets a private **Personal** space. Add spaces for teams or clients.
-
-### Example: a company's internal agents
-
-Northwind's engineers share the **Engineering** space in their company's organization. Engineering has two projects:
-
-- **Code review**, with the team's repositories and review instructions.
-- **Incident triage**, with access to the on-call tools and a runbook skill.
-
-Code review uses separate chats for the login fix and the new API. Both chats share the repositories and review instructions of the project. Incident triage uses a separate project because it needs different tools and instructions.
-
-### Example: an agency serving clients
-
-Brightline is a marketing agency. Its organization is **Brightline**, with one space per client, like **Acme**. The Acme space has two projects:
-
-- **Campaign reporting**, connected to Acme's ad accounts.
-- **Content production**, with Acme's brand guidelines and assets.
-
-Campaign reporting uses separate chats for weekly reports and campaign comparisons. Only Acme's team joins the Acme space. Acme's tool accounts use space credentials. The space of another client cannot get access to Acme's work or credentials.
-
-### What else you configure
-
-Most features attach to a project or a space.
-
-| Level               | Features                                                                                                                                                                                                                                      |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project             | [Apps](/docs/apps/), [skills](/docs/apps/#skills), [custom MCPs](/docs/apps/#custom-mcps), [repositories](/docs/concepts/projects/), [channels](/docs/channels/), [schedules](/docs/automations/), and [file and memory stores](/docs/drive/) |
-| Space               | [Databases](/docs/drive/), [artifacts](/docs/artifacts/), [environments](/docs/machines/), and [tasks](/docs/tasks/)                                                                                                                          |
-| More than one level | [Credentials](/docs/credentials/) and [instructions](/docs/concepts/projects/)                                                                                                                                                                |
-
-### Good to know
-
-- Tasks attach to a space. You can assign a task to a project.
-- Credentials belong to the organization, a space, or your personal account.
-- You can set instructions on the organization, a space, and a project.
-- [Blueprints](/docs/concepts/blueprints/) add a ready-made project or space to your organization.
-
-## Web app
-
-The [web app](https://useren.ai/login) lets you chat with Ren, attach files, and review its work in your browser. Use it to follow each step of the work, answer questions from Ren, and manage Ren.
-
-### When to use the web app
-
-| Use                                      | What you do                                                                                                                |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Inspect work**                         | Expand individual steps to see the actions of Ren. Send more instructions between messages.                                |
-| **Review results**                       | Open the reports, dashboards, and files that Ren creates, next to the chat that made them.                                 |
-| **Answer questions and approve actions** | Respond in the chat.                                                                                                       |
-| **Manage Ren**                           | Create [spaces](/docs/spaces/) and [projects](/docs/concepts/projects/), invite teammates, connect apps, and map channels. |
-
-### Other surfaces
-
-| Surface                      | Use it to                                                                   |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| [Channels](/docs/channels/)  | Send requests from team conversations. Continue those chats in the web app. |
-| [CLI](/docs/developers/cli/) | Manage Ren from a terminal                                                  |
-| [MCP](/docs/developers/mcp/) | Manage Ren from another AI tool                                             |
-
-### Assign work
-
-Ren can research topics, summarize data from apps, analyze files, write code, and create reports, dashboards, and pages. For example, ask Ren to turn meeting notes into a follow-up email.
-
-| Hand off work as                 | Use it to                                    |
-| -------------------------------- | -------------------------------------------- |
-| A [chat](/docs/chats/)           | Delegate a one-off request                   |
-| A [task](/docs/tasks/)           | Track work that people and Ren share         |
-| A [schedule](/docs/automations/) | Repeat work on a timer, like a weekly report |
-
-### Good to know
-
-- [Channel](/docs/channels/) chats and [scheduled](/docs/automations/) chats cannot ask questions. They deny actions that need approval.
-- [Apps](/docs/apps/) give Ren tools.
-- Files and repositories give Ren context for the work.
-- You can continue a channel chat in the web app.
