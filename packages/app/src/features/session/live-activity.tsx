@@ -1,4 +1,5 @@
 import type { Activity } from "@ren/chat"
+import { useState } from "react"
 import { IconArrowUpRight, IconBrain, IconDeviceDesktop, IconHandStop } from "@tabler/icons-react"
 import { cn } from "cn"
 import { AppIcon } from "../../components/app-icon.js"
@@ -66,6 +67,40 @@ export function LiveActivity(props: { line: LiveLine; onOpen?: (() => void) | un
       ) : (
         <span className="flex min-w-0 items-center gap-2">{content}</span>
       )}
+    </div>
+  )
+}
+
+const narrationMs = 400
+
+const firstLine = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => line.replace(/^[#>*\-\s]+/u, "").trim())
+    .find(Boolean) ?? ""
+
+// oxlint-disable-next-line ren/no-comments -- The newest thing Ren wrote between tool calls, one grey line under the live line. Each line stays at least 400ms, and a new one crossfades over the old. The row keeps its height while the run is on, even before Ren writes anything, so nothing jumps.
+export function Narration(props: { text: string | undefined }) {
+  const text = useSteady(firstLine(props.text ?? ""), { key: (value) => value, minMs: narrationMs })
+  const [previous, setPrevious] = useState({ current: text, old: "" })
+  if (previous.current !== text) setPrevious({ current: text, old: previous.current })
+  return (
+    <div aria-live="polite" className="grid min-h-5 min-w-0 pl-6 text-sm/5 text-muted-foreground">
+      {previous.old ? (
+        <span
+          key={`old:${previous.old}`}
+          aria-hidden
+          className="col-start-1 row-start-1 animate-out truncate duration-200 ease-out fade-out-0 fill-mode-forwards motion-reduce:hidden"
+        >
+          {previous.old}
+        </span>
+      ) : null}
+      <span
+        key={text}
+        className="col-start-1 row-start-1 animate-in truncate duration-200 ease-out fade-in-0 motion-reduce:animate-none"
+      >
+        {text}
+      </span>
     </div>
   )
 }
