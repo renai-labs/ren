@@ -86,27 +86,9 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 
 Sidebar entries: 25 on the Documentation tab and 9 on the Developers tab. Supporting guides may be linked without a sidebar entry.
 
-## 3. Redirects
+## 3. Page routes
 
-The app links only to the docs root (`app/src/lib/links.ts:1`), so in-app links do not break. External links do. Every old URL gets a redirect in `astro.config.mjs` `redirects` (static output gives a meta-refresh page).
-
-| Old                                                                                                                                                      | New                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `concepts/overview`, `surfaces/web-app`                                                                                                                  | `/docs/`                            |
-| `concepts/chats`, `concepts/tasks`, `concepts/artifacts`                                                                                                 | `chats`, `tasks`, `artifacts`       |
-| `concepts/schedules`                                                                                                                                     | `automations`                       |
-| `concepts/organizations`                                                                                                                                 | `organisation`                      |
-| `concepts/spaces`                                                                                                                                        | `spaces`                            |
-| `concepts/environments`                                                                                                                                  | `machines`                          |
-| `concepts/storage`                                                                                                                                       | `drive`                             |
-| `concepts/apps`, `concepts/skills`, `concepts/custom-mcps`                                                                                               | `apps`, `skills`, `custom-mcps`     |
-| `concepts/credentials`                                                                                                                                   | `credentials`                       |
-| `concepts/channels`                                                                                                                                      | `channels`                          |
-| `concepts/channels/slack`, `concepts/channels/github`                                                                                                    | `channels/slack`, `channels/github` |
-| `surfaces/cli`, `surfaces/mcp`                                                                                                                           | `developers/cli`, `developers/mcp`  |
-| Removed pages (§4): `concepts/blueprints`, `concepts/projects`, `concepts/channels/linear`, `email`, `telegram`, `whatsapp`, `migrate/*`, `surfaces/sdk` | `/docs/`                            |
-
-The `/raw/docs/<path>.md` copies of old pages are not redirected.
+Reuse an existing route when it fits the page. Otherwise, give the page its own route. The slugs in §2 are suggestions. Link directly to the chosen route from the sidebar and other docs pages. Retired docs URLs do not need redirects.
 
 ## 4. Removals
 
@@ -817,7 +799,7 @@ One branch, one draft PR.
 
 | #           | Commit              | Contents                                                                                                                                                                          |
 | ----------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1           | Frame               | `nav.ts` groups and tabs; delete removed pages and media (§4); redirects (§3); `packages/site/AGENTS.md` (§6); move the kept pages to their new slugs unchanged.                  |
+| 1           | Frame               | `nav.ts` groups and tabs; delete removed pages and media (§4); `packages/site/AGENTS.md` (§6); set page routes and update internal links (§3).                                    |
 | Next        | Documentation pages | One commit per finalized page, in sidebar order.                                                                                                                                  |
 | Then        | Developers pages    | One commit per finalized page, in sidebar order.                                                                                                                                  |
 | After pages | Check               | `bun run build`, `bun run test`, `script/check-routes.ts`, a link check, a search of `content/docs` and `lib/docs` for removed terms (§4.4), commands (§4.5) and UI paths (§4.6). |
