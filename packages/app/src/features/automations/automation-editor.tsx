@@ -1,17 +1,8 @@
 import { useRef, useState } from "react"
 import type { WebhookInfo } from "@ren/client"
 import { Link, useBlocker, useNavigate } from "@tanstack/react-router"
-import {
-  IconAlertTriangle,
-  IconChevronRight,
-  IconCode,
-  IconCopy,
-  IconHistory,
-  IconPlayerPlay,
-  IconTrash,
-} from "@tabler/icons-react"
+import { IconChevronRight, IconCode, IconCopy, IconHistory, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
-import { Alert, AlertDescription } from "@ren/ui/alert"
 import { cn } from "cn"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
@@ -36,8 +27,8 @@ import type { Cadence } from "../../lib/schedules.js"
 import {
   useAppPresets,
   useAutomationActions,
+  useAutomation,
   useAutomationRuns,
-  useAutomations,
   type AppPreset,
   type Run,
   type Saved,
@@ -47,7 +38,6 @@ import { useMembers } from "../../lib/use-members.js"
 import { useNow } from "../../lib/use-now.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { Webhooks } from "../../lib/webhooks.js"
-import { Keyboard } from "../../platform/keyboard.js"
 import { AgentPicker } from "../../components/agent-select.js"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
@@ -72,11 +62,12 @@ function ListLink(props: { scope: Scope; children: React.ReactNode }) {
   return <Link to="/automations">{props.children}</Link>
 }
 
-function RunHistory(props: { automation: Automation | undefined }) {
+function RunHistory(props: { automation: Automation | undefined; onOpenRun: (sessionId: string) => void }) {
   const now = useNow()
   const shapeId = useShapeId("automation-run-history")
   const history = useAutomationRuns(props.automation)
   const columns = ["Trigger", "Triggered", "Status", ""]
+  if (history.failed) return <EmptyState title="Couldn’t load its runs">Reload the page to try again.</EmptyState>
   if (!history.loading && history.runs.length === 0)
     return <EmptyState title="No runs yet">Runs from the last 30 days show here.</EmptyState>
   return (
@@ -95,7 +86,7 @@ function RunHistory(props: { automation: Automation | undefined }) {
             </TableHeader>
             <TableBody>
               {history.runs.map((run) => (
-                <RunRow key={run.id} run={run} now={now} />
+                <RunRow key={run.id} run={run} webhook={props.automation?.webhook} now={now} onOpen={props.onOpenRun} />
               ))}
             </TableBody>
           </Table>
@@ -105,19 +96,44 @@ function RunHistory(props: { automation: Automation | undefined }) {
   )
 }
 
-function RunRow(props: { run: Run; now: number }) {
+function RunRow(props: {
+  run: Run
+  webhook: WebhookInfo | undefined
+  now: number
+  onOpen: (sessionId: string) => void
+}) {
   const run = props.run
+  const session = run.sessionId
+  const webhook = props.webhook
   return (
-    <TableRow>
-      <TableCell>{run.trigger}</TableCell>
-      <TableCell className="text-muted-foreground">{RelativeTime.format(run.at, props.now)}</TableCell>
-      <TableCell>
+    <TableRow className={session ? "relative cursor-pointer" : undefined}>
+      <TableCell className="align-top">{run.trigger}</TableCell>
+      <TableCell className="align-top text-muted-foreground">{RelativeTime.format(run.at, props.now)}</TableCell>
+      <TableCell className="max-w-80 align-top whitespace-normal">
         <RunStatus tone={run.tone}>{run.status}</RunStatus>
+        {run.detail ? (
+          <span className="mt-1 line-clamp-2 text-xs break-words text-muted-foreground" title={run.detail}>
+            {run.detail}
+          </span>
+        ) : null}
       </TableCell>
-      <TableCell className="text-right">
-        {run.sessionId ? (
-          <Link to="/sessions/$sessionId" params={{ sessionId: run.sessionId }} className="text-sm">
+      <TableCell className="text-right align-top">
+        {session ? (
+          <Button
+            variant="link"
+            onClick={() => props.onOpen(session)}
+            className="h-auto p-0 font-normal text-foreground after:absolute after:inset-0 focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+          >
             Open chat
+          </Button>
+        ) : webhook && run.requestId ? (
+          <Link
+            to="/spaces/$spaceId/automations/webhooks/$webhookId"
+            params={{ spaceId: webhook.spaceId, webhookId: webhook.id }}
+            search={{ tab: "requests", request: run.requestId }}
+            className="text-sm hover:underline"
+          >
+            Details
           </Link>
         ) : null}
       </TableCell>
@@ -252,13 +268,6 @@ function FallbackSelect(props: { value: string | null; onChange: (fallback: stri
   )
 }
 
-const replaceWarning = (kind: Automations.Kind | undefined, automation: Automation | undefined) => {
-  if (automation?.schedule)
-    return "Saving replaces the schedule with a webhook. The schedule’s run history stays with it."
-  if (kind === "schedule") return "Saving replaces the webhook with a schedule. Its URL stops working."
-  return "Saving replaces the webhook with a new one. Its URL stops working."
-}
-
 const webhookLabelOf = (
   preset: Automations.PresetRef | null,
   presets: ReadonlyArray<AppPreset>,
@@ -282,29 +291,31 @@ function TriggerSection(props: {
   const kind = draft.trigger?.kind
   const preset = Automations.presetOfDraft(draft)
   const presets = useAppPresets(draft.spaceId)
-  const replacing = Automations.changesKind(draft, props.automation)
+  const saved = props.automation
+  const remove = saved ? undefined : () => props.onChange({ trigger: undefined })
   const scheduleRow = cadence ? (
     <ScheduleTrigger
       cadence={cadence}
       active={draft.active}
       onChange={(patch) => props.onChange({ trigger: { kind: "schedule", cadence: { ...cadence, ...patch } } })}
-      onRemove={() => props.onChange({ trigger: undefined })}
+      onRemove={remove}
     />
   ) : null
   const webhookRow =
     kind === "webhook" ? (
       <WebhookTrigger
-        webhook={replacing ? undefined : props.automation?.webhook}
-        label={webhookLabelOf(preset, presets, props.automation?.webhook)}
+        webhook={saved?.webhook}
+        label={webhookLabelOf(preset, presets, saved?.webhook)}
         spaceId={draft.spaceId}
         onCopyUrl={(webhook) => void actions.copyUrl(webhook)}
         onCopyAuthHeader={(webhook) => void actions.copyAuthHeader(webhook)}
-        onRemove={() => props.onChange({ trigger: undefined })}
+        onRemove={remove}
       />
     ) : null
-  const add = (
+  const add = saved?.webhook ? null : (
     <AddTrigger
       current={preset ? Automations.presetKey(preset) : kind}
+      only={saved ? "schedule" : undefined}
       presets={presets}
       onSchedule={(frequency) =>
         props.onChange({ trigger: { kind: "schedule", cadence: Automations.startCadence(frequency, zone, cadence) } })
@@ -322,14 +333,7 @@ function TriggerSection(props: {
   return (
     <Section title="Trigger">
       <TriggerList add={add}>{scheduleRow ?? webhookRow}</TriggerList>
-      {replacing ? (
-        <Alert>
-          <IconAlertTriangle />
-          <AlertDescription>{replaceWarning(kind, props.automation)}</AlertDescription>
-        </Alert>
-      ) : (
-        <TriggerWarning webhook={props.automation?.webhook} active={draft.active} />
-      )}
+      <TriggerWarning webhook={saved?.webhook} active={draft.active} />
     </Section>
   )
 }
@@ -383,6 +387,7 @@ function EditorHeader(props: {
   scope: Scope
   automation: Automation | undefined
   changed: boolean
+  saving: boolean
   runs: boolean
   onSave: () => void
   onCancel: () => void
@@ -421,8 +426,8 @@ function EditorHeader(props: {
           Cancel
         </Button>
       ) : null}
-      <Button onClick={props.onSave} disabled={!props.changed || actions.saving}>
-        {actions.saving ? <Spinner data-icon="inline-start" /> : null}
+      <Button onClick={props.onSave} disabled={!props.changed || props.saving}>
+        {props.saving ? <Spinner data-icon="inline-start" /> : null}
         Save
       </Button>
       <Tooltip>
@@ -446,7 +451,15 @@ function EditorHeader(props: {
         <RowMenu
           label={`${props.name} actions`}
           items={[
-            { label: "Duplicate", icon: IconCopy, onSelect: () => actions.duplicate(automation).then(props.onOpen) },
+            ...(props.changed
+              ? []
+              : [
+                  {
+                    label: "Duplicate",
+                    icon: IconCopy,
+                    onSelect: () => actions.duplicate(automation).then(props.onOpen),
+                  },
+                ]),
             { label: "Copy as JSON", icon: IconCode, onSelect: () => actions.copyJson(automation) },
             {
               label: "Delete",
@@ -471,26 +484,15 @@ function SpaceRow(props: {
   onChange: (patch: Partial<Draft>) => void
 }) {
   const spaces = useSpaces()
-  const automation = props.automation
   return (
-    <>
-      <WorkingIn
-        spaces={spaces.joined}
-        spaceId={props.draft.spaceId}
-        label={null}
-        className="-ml-1"
-        onChange={(spaceId) => props.onChange({ spaceId, agent: Webhooks.defaultAgent })}
-      />
-      {automation && props.draft.spaceId !== automation.spaceId ? (
-        <Alert>
-          <IconAlertTriangle />
-          <AlertDescription>
-            Saving moves it to {spaces.spaceName(props.draft.spaceId)}.
-            {automation.webhook ? " Its webhook gets a new URL and auth header." : " Its run history stays here."}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-    </>
+    <WorkingIn
+      spaces={spaces.joined}
+      spaceId={props.draft.spaceId}
+      disabled={props.automation !== undefined}
+      label={null}
+      className="-ml-1"
+      onChange={(spaceId) => props.onChange({ spaceId, agent: Webhooks.defaultAgent })}
+    />
   )
 }
 
@@ -500,6 +502,7 @@ function Editor(props: {
   scope: Scope
   tab: EditorTab
   onTab: (tab: EditorTab) => void
+  onOpenRun: (sessionId: string) => void
 }) {
   const navigate = useNavigate()
   const actions = useAutomationActions()
@@ -529,6 +532,7 @@ function Editor(props: {
       : navigate({ to: "/automations" })
   }
   const save = () => {
+    if (actions.saving) return
     const problem = Automations.problemOf(draft)
     if (problem) {
       toast.error(problem)
@@ -537,16 +541,11 @@ function Editor(props: {
     void actions.save(draft, automation).then((saved) => {
       toast.success(automation ? "Automation saved" : "Automation created")
       setInitial(draft)
-      if (automation && saved.handle === automation.handle && saved.spaceId === automation.spaceId) return
+      if (automation) return
       leaving.current = true
       void open(saved)
     })
   }
-  Keyboard.useKeyDown((event) => {
-    if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey) return
-    event.preventDefault()
-    if (changed && !actions.saving) save()
-  })
   const name = Automations.nameOrDefault(draft.name)
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -555,6 +554,7 @@ function Editor(props: {
         scope={props.scope}
         automation={automation}
         changed={changed}
+        saving={actions.saving}
         runs={props.tab === "runs"}
         onSave={save}
         onCancel={() => (automation ? setDraft(initial) : void toList())}
@@ -587,7 +587,7 @@ function Editor(props: {
           <SpaceRow draft={draft} automation={automation} onChange={change} />
         </div>
         {props.tab === "runs" ? (
-          <RunHistory automation={automation} />
+          <RunHistory automation={automation} onOpenRun={props.onOpenRun} />
         ) : (
           <Settings draft={draft} automation={automation} onChange={change} />
         )}
@@ -611,20 +611,19 @@ function Editor(props: {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- Creates or edits one automation, found in the list of its space by its address.
+// oxlint-disable-next-line ren/no-comments -- Creates an automation, or edits one found in its space by its address.
 export function AutomationEditor(props: {
   spaceId: string | undefined
   slug: string
   scoped: boolean
   tab: EditorTab
   onTab: (tab: EditorTab) => void
+  onOpenRun: (sessionId: string) => void
   defaultSpace?: string | undefined
 }) {
-  const creating = props.slug === Automations.newSlug
   const spaces = useSpaces()
-  const list = useAutomations(props.spaceId)
   const scope = { scoped: props.scoped, spaceId: props.spaceId }
-  if (creating)
+  if (props.slug === Automations.newSlug || !props.spaceId)
     return (
       <Editor
         automation={undefined}
@@ -632,24 +631,42 @@ export function AutomationEditor(props: {
         scope={scope}
         tab={props.tab}
         onTab={props.onTab}
+        onOpenRun={props.onOpenRun}
       />
     )
-  const automation = list.automations?.find((each) => each.handle === props.slug)
-  if (!list.automations)
+  return <SavedEditor {...props} spaceId={props.spaceId} scope={scope} />
+}
+
+function SavedEditor(props: {
+  spaceId: string
+  slug: string
+  scope: Scope
+  tab: EditorTab
+  onTab: (tab: EditorTab) => void
+  onOpenRun: (sessionId: string) => void
+}) {
+  const found = useAutomation(props.spaceId, props.slug)
+  if (found.loading)
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
         <Spinner aria-label="Loading automation" />
       </div>
     )
-  if (!automation) return <RouteNotFound />
+  if (!found.automation)
+    return found.failed ? (
+      <EmptyState title="Couldn’t load the automation">Reload the page to try again.</EmptyState>
+    ) : (
+      <RouteNotFound />
+    )
   return (
     <Editor
-      key={automation.key}
-      automation={automation}
-      initialSpace={automation.spaceId}
-      scope={scope}
+      key={found.automation.key}
+      automation={found.automation}
+      initialSpace={found.automation.spaceId}
+      scope={props.scope}
       tab={props.tab}
       onTab={props.onTab}
+      onOpenRun={props.onOpenRun}
     />
   )
 }

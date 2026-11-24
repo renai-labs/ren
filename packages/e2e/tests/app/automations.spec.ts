@@ -16,12 +16,12 @@ const addTrigger = async (page: Browser, choice: { readonly schedule: string } |
   return page.getByRole("menuitem", { name: choice.schedule, exact: true }).click()
 }
 
-test("a member creates a daily automation, tests it, and finds the run under Runs but not in the chat list", async ({
+test("a member creates a daily automation, tests it, opens the run beside its history, and finds it under Runs but not in the chat list", async ({
   page,
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/app/automations")
-  await expect(page.getByText("No automations yet")).toBeVisible()
+  await page.goto("/automations")
+  await expect(page.getByText("No schedules yet")).toBeVisible()
 
   await page.getByRole("link", { name: "New automation" }).first().click()
   await page.getByRole("textbox", { name: "Name" }).fill("Daily report")
@@ -35,19 +35,23 @@ test("a member creates a daily automation, tests it, and finds the run under Run
   await expect(page.getByText("Test run started")).toBeVisible()
   await page.getByRole("button", { name: "Run history" }).click()
   await expect(page.getByRole("cell", { name: "Test run" })).toBeVisible({ timeout: brainStart })
-  await page.getByRole("link", { name: "Open chat" }).click()
-  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/u)
-  await expect(page.getByText("Summarize the day")).toBeVisible({ timeout: brainStart })
-  await expect(page.getByRole("link", { name: "Daily report", exact: true })).toBeVisible()
-  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+  await page.getByRole("button", { name: "Open chat" }).click()
+  await expect(page).toHaveURL(/[?&]session=ses_\w+/u)
+  const run = page.getByRole("dialog", { name: "Automation run" })
+  await expect(run.getByText("Summarize the day")).toBeVisible({ timeout: brainStart })
+  await expect(run.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+  await page.keyboard.press("Escape")
+  await expect(run).toHaveCount(0)
 
-  await page.goto("/app/automations?tab=runs")
+  await page.goto("/automations?tab=runs")
   await expect(page.getByRole("cell", { name: "Schedule" })).toBeVisible()
   await expect(page.getByRole("navigation").getByText("Summarize the day")).toHaveCount(0)
 
-  await page.goto("/app/automations")
+  await page.goto("/automations")
   await expect(page.getByRole("cell", { name: /every day/u })).toBeVisible()
   await expect(page.getByRole("cell", { name: /Active/u })).toBeVisible()
+  await page.getByRole("tab", { name: /^Webhooks/u }).click()
+  await expect(page.getByText("No webhooks yet")).toBeVisible()
 })
 
 const signup = (email: string) => ({ event: { event: "user signed up", uuid: crypto.randomUUID() }, person: { email } })
@@ -60,8 +64,8 @@ test("a member creates a webhook automation that is off, sees its first request 
     await (await page.request.get(`${serverURL}/spaces?page=1&pageSize=50`)).json(),
   )
   const spaceId = spaces.items.at(0)?.id ?? ""
-  await page.goto(`/app/spaces/${spaceId}/automations`)
-  await expect(page.getByText("No automations yet")).toBeVisible()
+  await page.goto(`/spaces/${spaceId}/automations?kind=webhooks`)
+  await expect(page.getByText("No webhooks yet")).toBeVisible()
 
   await page.getByRole("link", { name: "New automation" }).first().click()
   await page.getByRole("textbox", { name: "Name" }).fill("Signups")
@@ -87,8 +91,8 @@ test("a member creates a webhook automation that is off, sees its first request 
   await page.getByRole("button", { name: "Run history" }).click()
   expect((await send(signup("second@acme.com"))).status()).toBe(202)
   await expect(page.getByRole("cell", { name: "Started" })).toBeVisible({ timeout: brainStart })
-  await page.getByRole("link", { name: "Open chat" }).click()
-  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/u)
-  await expect(page.getByText("Greet this person.")).toBeVisible({ timeout: brainStart })
-  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+  await page.getByRole("button", { name: "Open chat" }).click()
+  const run = page.getByRole("dialog", { name: "Automation run" })
+  await expect(run.getByText("Greet this person.")).toBeVisible({ timeout: brainStart })
+  await expect(run.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 })

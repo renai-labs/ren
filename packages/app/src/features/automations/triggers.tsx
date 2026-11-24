@@ -85,11 +85,14 @@ function InlineSelect(props: {
 
 function TimeSelect(props: { value: string; onChange: (time: string) => void }) {
   return (
-    <InlineSelect
-      label="Time"
+    <Input
+      type="time"
+      aria-label="Time"
       value={props.value}
-      items={Automations.timesWith(props.value).map((time) => ({ value: time, label: time }))}
-      onChange={props.onChange}
+      onChange={(event) => {
+        if (event.target.value) props.onChange(event.target.value)
+      }}
+      className="h-8 w-auto"
     />
   )
 }
@@ -284,12 +287,15 @@ export function ScheduleTrigger(props: {
   cadence: Cadence
   active: boolean
   onChange: (patch: Partial<Cadence>) => void
-  onRemove: () => void
+  onRemove: (() => void) | undefined
 }) {
   const now = useNow()
   const next = Automations.nextRuns(props.cadence, 1, now)[0]
   return (
-    <TriggerRow kind="schedule" actions={<RemoveButton label="Remove schedule" onRemove={props.onRemove} />}>
+    <TriggerRow
+      kind="schedule"
+      actions={props.onRemove ? <RemoveButton label="Remove schedule" onRemove={props.onRemove} /> : null}
+    >
       <ScheduleSentence cadence={props.cadence} onChange={props.onChange} />
       {next && props.active ? (
         <span className="text-muted-foreground">Next run {formatRun(next, props.cadence.timeZone)}</span>
@@ -329,7 +335,7 @@ export function WebhookTrigger(props: {
   spaceId: string
   onCopyUrl: (webhook: WebhookInfo) => void
   onCopyAuthHeader: (webhook: WebhookInfo) => void
-  onRemove: () => void
+  onRemove: (() => void) | undefined
 }) {
   const webhook = props.webhook
   const signed = webhook?.parser?.signature?.kind === "header" && webhook.hasSigningSecret
@@ -339,7 +345,7 @@ export function WebhookTrigger(props: {
       actions={
         <>
           {webhook ? <WebhookSettingsLink spaceId={props.spaceId} webhook={webhook} /> : null}
-          <RemoveButton label="Remove webhook" onRemove={props.onRemove} />
+          {props.onRemove ? <RemoveButton label="Remove webhook" onRemove={props.onRemove} /> : null}
         </>
       }
     >
@@ -399,9 +405,10 @@ function PresetItem(props: { preset: AppPreset; current: boolean; onPick: (prese
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- current is "schedule", "webhook" or the key of an app’s preset.
+// oxlint-disable-next-line ren/no-comments -- current is "schedule", "webhook" or the key of an app’s preset. A saved schedule passes only "schedule": its kind is set when it is made, and only how often it runs can change.
 export function AddTrigger(props: {
   current: string | undefined
+  only: "schedule" | undefined
   presets: ReadonlyArray<AppPreset>
   onSchedule: (frequency: Frequency) => void
   onWebhook: () => void
@@ -418,7 +425,7 @@ export function AddTrigger(props: {
         }
       >
         {props.current ? <IconArrowsExchange data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-        {props.current ? "Change trigger" : "Add trigger"}
+        {props.only ? "Change schedule" : props.current ? "Change trigger" : "Add trigger"}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuGroup>
@@ -432,11 +439,13 @@ export function AddTrigger(props: {
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem disabled={props.current === "webhook"} onClick={props.onWebhook}>
-            Webhook
-            {props.current === "webhook" ? <span className="ml-auto text-xs">Current</span> : null}
-          </DropdownMenuItem>
-          {props.presets.length > 0 ? (
+          {props.only ? null : (
+            <DropdownMenuItem disabled={props.current === "webhook"} onClick={props.onWebhook}>
+              Webhook
+              {props.current === "webhook" ? <span className="ml-auto text-xs">Current</span> : null}
+            </DropdownMenuItem>
+          )}
+          {props.presets.length > 0 && !props.only ? (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>From an app</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-72">
