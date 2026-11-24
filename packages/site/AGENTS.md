@@ -14,7 +14,7 @@ The marketing site and the docs at `useren.ai/docs`.
 
 - **One page, one subject.** The title is the product's noun. Put sections in this order: definition (1 sentence), screenshot, how to use, rules and limits, when it fails, examples. Leave out a section that has no real content.
 - **Exact labels.** Write UI text in bold, exactly as the app shows it. Write paths as **Settings → Channels**. Use real numbers.
-- **Terms.** Use chat, space, secret, app account and agent. Never use session, thread, team, workspace, project, credential, key (for a secret) or connection (for an app account).
+- **Terms.** Use chat, space, secret, app account and agent. Never use session, thread, team, workspace, project, credential, key (for a secret) or connection (for an app account). A UI label keeps the app's words, such as **Start new session**.
 - **Voice.** Write to "you", in US English. Ren is "it".
 - **No code in product pages.** Link to the Developers tab.
 - **Banned words.** leverage, seamless, robust, streamline, empower, utilize, facilitate, elevate, supercharge, harness, delve, foster, cutting-edge, game changer, transformative, paramount.
@@ -28,6 +28,7 @@ The marketing site and the docs at `useren.ai/docs`.
   - Emoji in headings
   - Bold sprinkled mid-sentence
   - Clusters of em dashes
+- **No empty statements.** Cut a sentence that tells the reader nothing they can act on: what does not happen ("A new owner starts nothing"), what stays the same ("Its chats stay"), or what the page already said.
 - **Portability test.** Cut a sentence that could appear unchanged in the docs of a different product.
 - **Beta.** Use the `Beta` badge on a page or section. Never document a feature that has not shipped.
 - **Private services.** Call them only "the inference service" and "the integrations service".
