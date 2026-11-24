@@ -22,6 +22,7 @@ import { Primitive } from "./primitive.js"
 import { PullRequest } from "./pull-request.js"
 import { SessionRunner } from "./session/runner.js"
 import { TaskCard } from "./task-card.js"
+import { TaskFiles } from "./task/files.js"
 import { TaskPolicy } from "./task/policy.js"
 import { TaskFactory } from "./task/factory.js"
 import { TaskQueries } from "./task/queries.js"
@@ -249,6 +250,7 @@ export const layer = Layer.effect(
     const runner = yield* SessionRunner.Service
     const notices = yield* ChannelNotice.Service
     const cards = yield* TaskCard.Service
+    const files = yield* TaskFiles.Service
     const pulls = yield* PullRequest.Service
     const reminded = new Map<Session.ID, TaskEvent.ID>()
 
@@ -453,6 +455,8 @@ export const layer = Layer.effect(
               start: undefined,
               review: requested ? factory.reason : null,
               subtasks: [],
+              fromSpaceId: row.task.space_id,
+              spaceId: row.task.space_id,
             }
           }
           const next = yield* nextAssignment(transaction, actor, row, {
@@ -574,6 +578,8 @@ export const layer = Layer.effect(
             start: factory.start,
             review: null,
             subtasks: moved,
+            fromSpaceId: row.task.space_id,
+            spaceId: next.spaceId,
           }
         }),
       )
@@ -584,6 +590,12 @@ export const layer = Layer.effect(
           reason: assigned.review,
           sessionId: actor.agent?.sessionId,
         })
+      if (assigned.spaceId !== assigned.fromSpaceId)
+        yield* Effect.forEach(
+          [id, ...assigned.subtasks],
+          (taskId) => files.moved({ organizationId: actor.organizationId, taskId, fromSpaceId: assigned.fromSpaceId }),
+          { discard: true },
+        )
       const start = input.start ?? assigned.start ?? (assigned.agentChanged ? "continue" : "none")
       if (start === "none" || !assigned.hasAgent) {
         yield* Effect.forEach([id, ...assigned.subtasks], cards.refresh, { discard: true })

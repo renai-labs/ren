@@ -53,6 +53,7 @@ import { SessionSync } from "../../src/session-sync.js"
 import { SlackTaskActions } from "../../src/slack-task-actions.js"
 import { SlackTaskCard } from "../../src/slack-task-card.js"
 import { TaskCard } from "../../src/task-card.js"
+import { TaskFiles } from "../../src/task/files.js"
 import { Task } from "../../src/task.js"
 import { TestDrives } from "./drives.js"
 import { Host } from "./host.js"
@@ -372,6 +373,7 @@ const core = (held: boolean) =>
       Layer.mergeAll(
         notices,
         TaskCard.layerNone,
+        TaskFiles.layerNone,
         SlackTaskActions.layerNone,
         PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone)),
       ),
