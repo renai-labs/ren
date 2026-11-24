@@ -248,6 +248,12 @@ export const make = Effect.fnUntraced(function* (input: {
     for (const server of Ref.getUnsafe(applied)) if (!skip.has(server.name)) editor.set(server.name, server.config)
   })
   yield* input.context.tool.transform((editor) => {
+    if (Option.isSome(input.ren))
+      editor.namespace({
+        name: renServer,
+        description:
+          "Ren itself: the team’s spaces, chats, tasks, agents and apps, and artifacts, which are pages, sites, dashboards and apps that Ren publishes at their own URL",
+      })
     for (const each of namespaces(Ref.getUnsafe(latest), local)) editor.namespace(each)
   })
   const statuses = input.context.mcp.list().pipe(

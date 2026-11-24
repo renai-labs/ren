@@ -48,7 +48,7 @@ it.live(
         await writeFile(join(folder, "site/fonts/inter.woff2"), font)
       })
       yield* chat.tool("execute", {
-        code: 'return await tools.opencode.artifact_create({ title: "Site", directory: "site" })',
+        code: 'return await tools.ren.artifact_create({ title: "Site", directory: "site" })',
       })
       const published = [...ren.artifacts.values()]
       expect(published).toHaveLength(1)
@@ -60,19 +60,19 @@ it.live(
       expect(first.config.entry).toBe("index.html")
 
       yield* chat.tool("execute", {
-        code: `return await tools.opencode.artifact_read({ id: "${first.info.id}", directory: "copy" })`,
+        code: `return await tools.ren.artifact_read({ id: "${first.info.id}", directory: "copy" })`,
       })
       expect(yield* Effect.promise(() => Bun.file(join(folder, "copy/logo.png")).bytes())).toEqual(logo)
       expect(yield* Effect.promise(() => Bun.file(join(folder, "copy/fonts/inter.woff2")).bytes())).toEqual(font)
 
       const deep = `${"guides/".repeat(16)}résumé.md`
       yield* chat.tool("execute", {
-        code: `return await tools.opencode.artifact_create({ title: "Notes", files: { "index.md": "# Notes", "${deep}": "# Résumé" } })`,
+        code: `return await tools.ren.artifact_create({ title: "Notes", files: { "index.md": "# Notes", "${deep}": "# Résumé" } })`,
       })
       const inline = [...ren.artifacts.values()].find((artifact) => artifact.info.title === "Notes")
       if (!inline) throw new Error("The inline artifact was not published")
       yield* chat.tool("execute", {
-        code: `return await tools.opencode.artifact_read({ id: "${inline.info.id}", directory: "notes" })`,
+        code: `return await tools.ren.artifact_read({ id: "${inline.info.id}", directory: "notes" })`,
       })
       expect(yield* Effect.promise(() => Bun.file(join(folder, "notes", deep)).text())).toBe("# Résumé")
     }),

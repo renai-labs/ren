@@ -4,6 +4,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import { Tool } from "@opencode/schema/tool"
 import type { HandConnections } from "@ren/brain/hand/connections"
 import type { HandClient } from "@ren/hand-api/hand-client"
+import { HostMcp } from "@ren/host-api/host-mcp"
 import type { RenHostApi } from "@ren/host-api/ren-host-api"
 import { Artifact } from "@ren/schema/artifact"
 import { Identifier } from "@ren/schema/identifier"
@@ -13,7 +14,7 @@ import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from 
 import type { HttpApiClient } from "effect/http-api"
 import { resolve } from "node:path"
 import { HostToken } from "../../host-token.js"
-import type { OpenCodeMcp } from "./mcp.js"
+import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
 import { Tar } from "./tar.js"
 
@@ -230,9 +231,9 @@ export const make = (input: {
           }).pipe(Effect.provide(FetchHttpClient.layer), Effect.mapError(failure))
 
         yield* context.tool.transform((editor) => {
-          const options = { namespace: "opencode", codemode: true } as const
+          const options = { namespace: OpenCodeMcp.renServer, codemode: true } as const
           editor.add({
-            name: "artifact_create",
+            name: "artifact_create" satisfies HostMcp.BrainTool,
             description: `Publish an artifact: a page, site, dashboard or app the person can open and share at its own URL. Use it whenever they ask for an artifact; a loose HTML file is not one. ${prompt}`,
             input: CreateToolInput,
             output: Published,
@@ -240,7 +241,7 @@ export const make = (input: {
             execute: (args) => publish(Artifact.ID.make(`art_${Identifier.ascending()}`), args),
           })
           editor.add({
-            name: "artifact_update",
+            name: "artifact_update" satisfies HostMcp.BrainTool,
             description:
               "Replace an existing artifact’s files at the same ID and URL, from files or a directory. Find the space’s artifacts and their ids with Ren’s artifact_list tool.",
             input: UpdateToolInput,
@@ -249,7 +250,7 @@ export const make = (input: {
             execute: (args) => publish(args.id, args),
           })
           editor.add({
-            name: "artifact_read",
+            name: "artifact_read" satisfies HostMcp.BrainTool,
             description:
               "Read an artifact’s title, entry, URL and publishedDeploymentId, the base for your next artifact_update. Pass directory to get its last published files, binary files included, as a folder to change and publish again. Find the space’s artifacts and their ids with Ren’s artifact_list tool.",
             input: ReadToolInput,
@@ -284,7 +285,7 @@ export const make = (input: {
               }).pipe(Effect.mapError(failure)),
           })
           editor.add({
-            name: "artifact_delete",
+            name: "artifact_delete" satisfies HostMcp.BrainTool,
             description:
               "Stop serving an artifact. The stop runs in the background, and Ren sends its result to this chat. Ren keeps the artifact’s files and application data, and publishing it again serves it at the same URL.",
             input: DeleteToolInput,
@@ -302,7 +303,7 @@ export const make = (input: {
               ),
           })
           editor.add({
-            name: "artifact_status",
+            name: "artifact_status" satisfies HostMcp.BrainTool,
             description:
               "Read the status of one deployment or stop of an artifact. Ren sends each result to the chat that asked, so use this only when that message is missing. Ready includes its URL; failed includes its error.",
             input: Schema.Struct({ id: Artifact.ID, deploymentId: Artifact.DeploymentID }),

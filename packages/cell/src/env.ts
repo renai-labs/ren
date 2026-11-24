@@ -40,7 +40,7 @@ export const Vars = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("{}")),
   ).annotate({
     description:
-      "OpenCode’s config as JSON. Ren removes OpenCode’s Plan plugin, which puts any agent named plan in read-only Plan mode, and OpenCode’s artifact tools, which Ren’s own plugin serves under the same names.",
+      "OpenCode’s config as JSON. Ren removes OpenCode’s Plan plugin, which puts any agent named plan in read-only Plan mode, and OpenCode’s artifact tools, which Ren’s own plugin replaces in Ren MCP’s ren namespace.",
   }),
   REN_URL: Schema.optional(Schema.String),
   REN_EGRESS: Schema.optional(Schema.Literal("1")).annotate({

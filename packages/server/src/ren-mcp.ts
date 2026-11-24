@@ -56,6 +56,9 @@ const part = (location: "path" | "query" | "body", schema: Schema.Top) => {
 
 const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) => {
   const name = endpoint.identifier.replaceAll(/[.-]/gu, "_")
+  if (HostMcp.brainTools.some((tool) => tool === name)) {
+    throw new Error(`Ren MCP tool ${name} has the name of a tool that a brain serves in the ren namespace`)
+  }
   const payload = [...endpoint.payload.values()].at(0)?.schemas.at(0)
   const parts = [
     ...(endpoint.params ? [part("path", endpoint.params)] : []),
