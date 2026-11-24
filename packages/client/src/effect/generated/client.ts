@@ -1379,6 +1379,65 @@ const adaptGroupLabel = (raw: RawClient["label"]) => ({
   archive: EndpointLabelArchive(raw),
 })
 
+type ViewListRequest = Parameters<RawClient["view"]["view.list"]>[0]
+type ViewListInput = {
+  readonly type?: ViewListRequest["query"]["type"]
+  readonly spaceId?: ViewListRequest["query"]["spaceId"]
+  readonly page: ViewListRequest["query"]["page"]
+  readonly pageSize: ViewListRequest["query"]["pageSize"]
+}
+const EndpointViewList = (raw: RawClient["view"]) => (input: ViewListInput) =>
+  raw["view.list"]({
+    query: { type: input["type"], spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ViewCreateRequest = Parameters<RawClient["view"]["view.create"]>[0]
+type ViewCreateInput = {
+  readonly type: ViewCreateRequest["payload"]["type"]
+  readonly spaceId?: ViewCreateRequest["payload"]["spaceId"]
+  readonly name: ViewCreateRequest["payload"]["name"]
+  readonly shared?: ViewCreateRequest["payload"]["shared"]
+  readonly filters: ViewCreateRequest["payload"]["filters"]
+  readonly display?: ViewCreateRequest["payload"]["display"]
+}
+const EndpointViewCreate = (raw: RawClient["view"]) => (input: ViewCreateInput) =>
+  raw["view.create"]({
+    payload: {
+      type: input["type"],
+      spaceId: input["spaceId"],
+      name: input["name"],
+      shared: input["shared"],
+      filters: input["filters"],
+      display: input["display"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ViewUpdateRequest = Parameters<RawClient["view"]["view.update"]>[0]
+type ViewUpdateInput = {
+  readonly id: ViewUpdateRequest["params"]["id"]
+  readonly name?: ViewUpdateRequest["payload"]["name"]
+  readonly shared?: ViewUpdateRequest["payload"]["shared"]
+  readonly filters?: ViewUpdateRequest["payload"]["filters"]
+  readonly display?: ViewUpdateRequest["payload"]["display"]
+}
+const EndpointViewUpdate = (raw: RawClient["view"]) => (input: ViewUpdateInput) =>
+  raw["view.update"]({
+    params: { id: input["id"] },
+    payload: { name: input["name"], shared: input["shared"], filters: input["filters"], display: input["display"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ViewArchiveRequest = Parameters<RawClient["view"]["view.archive"]>[0]
+type ViewArchiveInput = { readonly id: ViewArchiveRequest["params"]["id"] }
+const EndpointViewArchive = (raw: RawClient["view"]) => (input: ViewArchiveInput) =>
+  raw["view.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupView = (raw: RawClient["view"]) => ({
+  list: EndpointViewList(raw),
+  create: EndpointViewCreate(raw),
+  update: EndpointViewUpdate(raw),
+  archive: EndpointViewArchive(raw),
+})
+
 type ScheduleListRequest = Parameters<RawClient["schedule"]["schedule.list"]>[0]
 type ScheduleListInput = {
   readonly spaceId?: ScheduleListRequest["query"]["spaceId"]
@@ -2281,6 +2340,7 @@ const adaptClient = (raw: RawClient) => ({
   "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
   link: adaptGroupLink(raw["link"]),
   label: adaptGroupLabel(raw["label"]),
+  view: adaptGroupView(raw["view"]),
   schedule: adaptGroupSchedule(raw["schedule"]),
   "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
   webhook: adaptGroupWebhook(raw["webhook"]),

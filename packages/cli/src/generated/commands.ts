@@ -495,6 +495,33 @@ export const LabelUpdate = {
 
 export const LabelArchive = { id: Argument.String("label").pipe(Argument.withDescription("Label ID")) }
 
+export const ViewList = {
+  type: Flag.Literals("type", ["task"]).pipe(Flag.optional, Flag.withDescription("Only views of this type.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  page: Flag.Finite("page").pipe(Flag.optional),
+  pageSize: Flag.Finite("page-size").pipe(Flag.optional),
+}
+
+export const ViewCreate = {
+  type: Flag.Literals("type", ["task"]).pipe(Flag.optional, Flag.withDescription("What the view lists.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  name: Flag.String("name").pipe(Flag.optional),
+  shared: Flag.Boolean("shared").pipe(
+    Flag.optional,
+    Flag.withDescription("Defaults to `false`: only you see the view."),
+  ),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const ViewUpdate = {
+  id: Argument.String("view").pipe(Argument.withDescription("View ID")),
+  name: Flag.String("name").pipe(Flag.optional),
+  shared: Flag.Boolean("shared").pipe(Flag.optional),
+  input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
+}
+
+export const ViewArchive = { id: Argument.String("view").pipe(Argument.withDescription("View ID")) }
+
 export const ScheduleList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   status: Flag.Literals("status", ["active", "paused", "ended"]).pipe(Flag.optional),
@@ -1577,6 +1604,34 @@ export const commands = [
         Command.withDescription("Archive a label"),
         Command.withHandler((input) =>
           Effect.flatMap(Effect.promise(operations), (module) => module.LabelArchive(input)),
+        ),
+      ),
+    ]),
+  ),
+  Command.make("view").pipe(
+    Command.withDescription("Manage saved views"),
+    Command.withAlias("views"),
+    Command.withSubcommands([
+      Command.make("list", ViewList).pipe(
+        Command.withDescription("List views"),
+        Command.withHandler((input) => Effect.flatMap(Effect.promise(operations), (module) => module.ViewList(input))),
+      ),
+      Command.make("create", ViewCreate).pipe(
+        Command.withDescription("Create a view"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ViewCreate(input)),
+        ),
+      ),
+      Command.make("update", ViewUpdate).pipe(
+        Command.withDescription("Update a view"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ViewUpdate(input)),
+        ),
+      ),
+      Command.make("archive", ViewArchive).pipe(
+        Command.withDescription("Archive a view"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.ViewArchive(input)),
         ),
       ),
     ]),

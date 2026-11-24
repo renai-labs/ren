@@ -215,6 +215,14 @@ import type {
   LabelUpdateOutput,
   LabelArchiveInput,
   LabelArchiveOutput,
+  ViewListInput,
+  ViewListOutput,
+  ViewCreateInput,
+  ViewCreateOutput,
+  ViewUpdateInput,
+  ViewUpdateOutput,
+  ViewArchiveInput,
+  ViewArchiveOutput,
   ScheduleListInput,
   ScheduleListOutput,
   ScheduleGetInput,
@@ -1956,6 +1964,67 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/labels/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    view: {
+      list: (input: ViewListInput, requestOptions?: RequestOptions) =>
+        request<ViewListOutput>(
+          {
+            method: "GET",
+            path: `/views`,
+            query: { type: input["type"], spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: ViewCreateInput, requestOptions?: RequestOptions) =>
+        request<ViewCreateOutput>(
+          {
+            method: "POST",
+            path: `/views`,
+            body: {
+              type: input["type"],
+              spaceId: input["spaceId"],
+              name: input["name"],
+              shared: input["shared"],
+              filters: input["filters"],
+              display: input["display"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ViewUpdateInput, requestOptions?: RequestOptions) =>
+        request<ViewUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/views/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              shared: input["shared"],
+              filters: input["filters"],
+              display: input["display"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: ViewArchiveInput, requestOptions?: RequestOptions) =>
+        request<ViewArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/views/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
