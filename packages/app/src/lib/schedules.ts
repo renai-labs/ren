@@ -1,7 +1,16 @@
 import { RelativeTime } from "@ren/util/relative-time"
-import type { ScheduleInfo, ScheduleWhen } from "@ren/client"
+import type { ScheduleInfo, ScheduleRunReason, ScheduleWhen } from "@ren/client"
 import { Cron, DateTime, Option, Result } from "effect"
 import { civilDate, formatInZone, localTimeZone, timeZones } from "@ren/ui/time"
+
+export const runReasons: Readonly<Record<ScheduleRunReason, string>> = {
+  previous_run_busy: "The previous run was still working.",
+  paused: "The schedule was paused.",
+  archived: "The schedule was deleted.",
+  owner_left: "Its owner left the space.",
+  agent_removed: "Its agent left the space.",
+  chat_archived: "Its chat was archived.",
+}
 
 export const refreshEvery = 5_000
 

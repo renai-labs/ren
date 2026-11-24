@@ -5,28 +5,83 @@ import { toast } from "@ren/ui/sonner"
 import { SessionPages } from "@ren/client/react"
 import { Automations, type Automation, type Draft } from "./automations.js"
 import { errorMessage } from "./errors.js"
+import { Pages } from "./pages.js"
 import { pickerPageSize } from "./pagination.js"
 import { RouterContext } from "./router-context.js"
-import { localTimeZone, whenOf } from "./schedules.js"
+import { localTimeZone, refreshEvery, runReasons, whenOf } from "./schedules.js"
 import { useSpaces } from "./use-spaces.js"
 import { Webhooks } from "./webhooks.js"
 
-export function useAutomations(spaceId: string | undefined) {
-  const { api } = RouterContext.useRouterContext()
-  const scope = spaceId ? { spaceId } : {}
-  const schedules = useQuery({
-    ...api.schedule.list.queryOptions({ ...scope, page: 1, pageSize: Automations.listSize }),
+type Listed<A> = {
+  readonly items: ReadonlyArray<A>
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
+}
+
+// oxlint-disable-next-line ren/no-comments -- Reads a list page by page until find picks an item or the list ends, so nothing past the first page is out of reach.
+const search = <A>(
+  list: (page: number) => Promise<Listed<A>>,
+  find: (item: A) => boolean,
+  page = 1,
+): Promise<A | undefined> =>
+  list(page).then((found) => {
+    const hit = found.items.find(find)
+    if (hit !== undefined) return hit
+    return found.page * found.pageSize < found.total ? search(list, find, page + 1) : undefined
+  })
+
+const everyItem = <A>(list: (page: number) => Promise<Listed<A>>, page = 1): Promise<ReadonlyArray<A>> =>
+  list(page).then((found) =>
+    found.page * found.pageSize < found.total
+      ? everyItem(list, page + 1).then((rest) => [...found.items, ...rest])
+      : found.items,
+  )
+
+export function useScheduleList(spaceId: string | undefined) {
+  const { client } = RouterContext.useRouterContext()
+  return useInfiniteQuery({
+    ...Pages.schedules(client, spaceId ? { spaceId } : {}),
     placeholderData: keepPreviousData,
   })
-  const webhooks = useQuery({
-    ...api.webhook.list.queryOptions({ ...scope, page: 1, pageSize: Automations.listSize }),
+}
+
+export function useWebhookList(spaceId: string | undefined) {
+  const { client } = RouterContext.useRouterContext()
+  return useInfiniteQuery({
+    ...Pages.webhooks(client, spaceId ? { spaceId } : {}),
     placeholderData: keepPreviousData,
     refetchInterval: Webhooks.refreshEvery,
   })
-  const ready = schedules.data !== undefined && webhooks.data !== undefined
+}
+
+// oxlint-disable-next-line ren/no-comments -- One automation of a space by its address: a slug, or the ID of a webhook made before automations had one trigger, whose slug a schedule also has.
+export function useAutomation(spaceId: string, handle: string) {
+  const { client } = RouterContext.useRouterContext()
+  const matches = (item: { readonly id: string; readonly slug: string }) => item.slug === handle || item.id === handle
+  const schedule = useQuery({
+    queryKey: ["schedule", "find", { spaceId, handle }],
+    queryFn: (context) =>
+      search(
+        (page) => client.schedule.list({ spaceId, page, pageSize: Automations.listSize }, { signal: context.signal }),
+        matches,
+      ).then((found) => found ?? null),
+  })
+  const webhook = useQuery({
+    queryKey: ["webhook", "find", { spaceId, handle }],
+    queryFn: (context) =>
+      search(
+        (page) => client.webhook.list({ spaceId, page, pageSize: Automations.listSize }, { signal: context.signal }),
+        matches,
+      ).then((found) => found ?? null),
+    enabled: schedule.data === null,
+  })
+  if (schedule.data) return { automation: Automations.ofSchedule(schedule.data), loading: false, failed: false }
+  if (webhook.data) return { automation: Automations.ofWebhook(webhook.data), loading: false, failed: false }
   return {
-    automations: ready ? Automations.list(schedules.data.items, webhooks.data.items) : undefined,
-    failed: schedules.isError || webhooks.isError,
+    automation: undefined,
+    loading: schedule.isPending || (schedule.data === null && webhook.isPending),
+    failed: schedule.isError || webhook.isError,
   }
 }
 
@@ -92,7 +147,7 @@ const failed = (what: string) => (error: unknown) => {
   throw error
 }
 
-// oxlint-disable-next-line ren/no-comments -- Runs next after a write; when next fails, undo takes the write back and the error stays. A save is several calls, and this keeps it from stopping halfway.
+// oxlint-disable-next-line ren/no-comments -- Runs next after a write; when next fails, undo tries to take the write back, and the error stays. It is a best effort, not a transaction: an undo can fail too.
 const thenOrUndo = <A, B>(write: Promise<A>, next: (done: A) => Promise<B>, undo: (done: A) => Promise<unknown>) =>
   write.then((done) =>
     next(done).catch((error: unknown) =>
@@ -127,9 +182,9 @@ interface Created extends Saved {
   readonly webhook?: WebhookInfo
 }
 
-// oxlint-disable-next-line ren/no-comments -- Writes a draft to the one schedule or webhook of an automation. A new trigger, a new kind of trigger or a new space makes it again and archives the old one only after the new one is saved.
+// oxlint-disable-next-line ren/no-comments -- Writes a draft to the one schedule or webhook of an automation. Its kind and its space are set when it is made.
 export function useAutomationActions() {
-  const { api, queryClient, platform } = RouterContext.useRouterContext()
+  const { api, client, platform } = RouterContext.useRouterContext()
   const createSchedule = useMutation(api.schedule.create.mutationOptions())
   const updateSchedule = useMutation(api.schedule.update.mutationOptions())
   const archiveSchedule = useMutation(api.schedule.archive.mutationOptions())
@@ -143,27 +198,13 @@ export function useAutomationActions() {
   const revealSecret = useMutation(api.webhook.revealSigningSecret.mutationOptions())
   const dryRun = useMutation(api.webhook.test.mutationOptions())
 
-  const takenIn = (spaceId: string, except?: Automation) =>
+  const takenIn = (spaceId: string) =>
     Promise.all([
-      queryClient.query({
-        ...api.schedule.list.queryOptions({ spaceId, page: 1, pageSize: Automations.listSize }),
-        staleTime: 0,
-      }),
-      queryClient.query({
-        ...api.webhook.list.queryOptions({ spaceId, page: 1, pageSize: Automations.listSize }),
-        staleTime: 0,
-      }),
-    ]).then(
-      ([schedules, webhooks]) =>
-        new Set(
-          [...schedules.items, ...webhooks.items].filter((each) => each.id !== except?.key).map((each) => each.slug),
-        ),
-    )
+      everyItem((page) => client.schedule.list({ spaceId, page, pageSize: Automations.listSize })),
+      everyItem((page) => client.webhook.list({ spaceId, page, pageSize: Automations.listSize })),
+    ]).then(([schedules, webhooks]) => new Set([...schedules, ...webhooks].map((each) => each.slug)))
 
-  const slugFor = (draft: Draft, keep: Automation | undefined) =>
-    takenIn(draft.spaceId, keep).then((taken) =>
-      keep && !taken.has(keep.slug) ? keep.slug : Automations.freeSlug(draft.name, taken),
-    )
+  const slugFor = (draft: Draft) => takenIn(draft.spaceId).then((taken) => Automations.freeSlug(draft.name, taken))
 
   const switchSchedule = (schedule: ScheduleInfo, { active }: { readonly active: boolean }) => {
     if (active && schedule.status === "paused") return resume.mutateAsync({ id: schedule.id })
@@ -266,18 +307,12 @@ export function useAutomationActions() {
     ).then(() => saved)
   }
 
-  const save = (draft: Draft, automation: Automation | undefined): Promise<Saved> => {
-    if (!automation) return slugFor(draft, undefined).then((slug) => create(draft, slug))
-    if (draft.spaceId === automation.spaceId && !Automations.changesKind(draft, automation))
-      return updateInPlace(draft, automation)
-    return slugFor(draft, draft.spaceId === automation.spaceId ? automation : undefined).then((slug) =>
-      thenOrUndo(
-        create(draft, slug),
-        (created) => archive(automation).then(() => created),
-        (created) => archive(created),
-      ),
-    )
-  }
+  const saving = useMutation({
+    mutationFn: (input: { readonly draft: Draft; readonly automation: Automation | undefined }) =>
+      input.automation
+        ? updateInPlace(input.draft, input.automation)
+        : slugFor(input.draft).then((slug) => create(input.draft, slug)),
+  })
 
   const testWebhook = async (webhook: WebhookInfo) => {
     const signature = webhook.parser?.signature ?? { kind: "none" as const }
@@ -310,15 +345,9 @@ export function useAutomationActions() {
   }
 
   return {
-    saving:
-      createSchedule.isPending ||
-      updateSchedule.isPending ||
-      createWebhook.isPending ||
-      updateWebhook.isPending ||
-      pause.isPending ||
-      resume.isPending,
+    saving: saving.isPending,
     save: (draft: Draft, automation: Automation | undefined) =>
-      save(draft, automation).catch(failed("Couldn’t save the automation")),
+      saving.mutateAsync({ draft, automation }).catch(failed("Couldn’t save the automation")),
     remove: (automation: Automation) =>
       archive(automation).then(
         () => toast.success(`${automation.name} deleted`),
@@ -347,7 +376,7 @@ export function useAutomationActions() {
         name: `${automation.name} copy`,
         active: false,
       }
-      return slugFor(draft, undefined)
+      return slugFor(draft)
         .then((slug) => create(draft, slug))
         .then((saved) => {
           toast.success(`${automation.name} duplicated`)
@@ -358,24 +387,25 @@ export function useAutomationActions() {
       navigator.clipboard.writeText(Automations.json(automation)).then(() => toast.success("Copied as JSON")),
     copyUrl: (webhook: WebhookInfo) =>
       navigator.clipboard.writeText(webhook.url).then(() => toast.success("URL copied")),
-    // oxlint-disable-next-line ren/no-comments -- The webhook checks that the x-ren-secret header equals its signing secret. Ren makes the secret once; later copies reveal it.
+    // oxlint-disable-next-line ren/no-comments -- A webhook signed by a header copies that header with its secret. An unsigned one gets the x-ren-secret header and a new secret; a webhook signed another way keeps its signature.
     copyAuthHeader: async (webhook: WebhookInfo) => {
-      const header = (secret: string) => `${Automations.authHeader}: ${secret}`
-      const copy = (secret: string) =>
-        navigator.clipboard.writeText(header(secret)).then(() => toast.success("Auth header copied"))
-      const signed = webhook.parser?.signature?.kind === "header" && webhook.hasSigningSecret
-      if (signed) {
+      const copy = (header: string, secret: string) =>
+        navigator.clipboard.writeText(`${header}: ${secret}`).then(() => toast.success("Auth header copied"))
+      const signature = webhook.parser?.signature ?? { kind: "none" as const }
+      if (signature.kind === "header" && webhook.hasSigningSecret) {
         const revealed = await revealSecret.mutateAsync({ id: webhook.id }).catch(failed("Couldn’t read the secret"))
-        return copy(revealed.secret)
+        return copy(signature.header, revealed.secret)
       }
-      const made = await setSecret.mutateAsync({ id: webhook.id }).catch(failed("Couldn’t make a secret"))
-      await updateWebhook
-        .mutateAsync({
-          id: webhook.id,
-          parser: { ...webhook.parser, signature: { kind: "header", header: Automations.authHeader } },
+      if (signature.kind !== "none" && signature.kind !== "header")
+        return toast.error("This webhook checks a different signature", {
+          description: "Change it on the webhook’s settings page.",
         })
+      const made = await setSecret.mutateAsync({ id: webhook.id }).catch(failed("Couldn’t make a secret"))
+      const header = signature.kind === "header" ? signature.header : Automations.authHeader
+      await updateWebhook
+        .mutateAsync({ id: webhook.id, parser: { ...webhook.parser, signature: { kind: "header", header } } })
         .catch(failed("Couldn’t turn on the auth header"))
-      return copy(made.secret)
+      return copy(header, made.secret)
     },
   }
 }
@@ -389,13 +419,16 @@ export interface Run {
   readonly status: string
   readonly tone: Automations.Tone
   readonly sessionId: string | null
+  readonly detail?: string | undefined
+  readonly requestId?: string | undefined
 }
 
 const scheduleRunOf = (run: ScheduleRunInfo): Run => ({
   id: run.id,
   trigger: run.trigger === "manual" ? "Test run" : "Schedule",
   at: run.startedAt ?? run.scheduledAt,
-  status: run.reason ? `Skipped · ${run.reason.replaceAll("_", " ")}` : scheduleStatus[run.status],
+  status: scheduleStatus[run.status],
+  detail: run.status === "skipped" && run.reason ? runReasons[run.reason] : (run.error ?? undefined),
   tone: Automations.runTone(run.status),
   sessionId: run.sessionId,
 })
@@ -407,6 +440,8 @@ const requestRunOf = (request: WebhookRequestInfo): Run => ({
   status: Webhooks.outcomes[request.outcome].label,
   tone: Automations.outcomeTone(request.outcome),
   sessionId: request.sessionId,
+  detail: request.reason ?? undefined,
+  requestId: request.id,
 })
 
 // oxlint-disable-next-line ren/no-comments -- The runs of one automation in the last 30 days: its schedule's runs and its webhook's requests, newest first.
@@ -417,19 +452,22 @@ export function useAutomationRuns(automation: Automation | undefined) {
   const scheduleRuns = useQuery({
     ...api["schedule-run"].list.queryOptions({ scheduleId: scheduleId ?? "", page: 1, pageSize: 50 }),
     enabled: scheduleId !== undefined,
+    refetchInterval: refreshEvery,
   })
   const requests = useQuery({
     ...api["webhook-request"].list.queryOptions({ webhookId: webhookId ?? "", page: 1, pageSize: 50 }),
     enabled: webhookId !== undefined,
     refetchInterval: Webhooks.refreshEvery,
   })
-  const waiting = [
-    { id: scheduleId, data: scheduleRuns.data },
-    { id: webhookId, data: requests.data },
-  ].some((query) => query.id !== undefined && query.data === undefined)
+  const queries = [
+    { id: scheduleId, query: scheduleRuns },
+    { id: webhookId, query: requests },
+  ].filter((each) => each.id !== undefined)
+  const failed = queries.some((each) => each.query.isError)
+  const waiting = !failed && queries.some((each) => each.query.data === undefined)
   const runs = [
     ...(scheduleRuns.data?.items ?? []).map(scheduleRunOf),
     ...(requests.data?.items ?? []).map(requestRunOf),
   ]
-  return { loading: waiting, runs: runs.toSorted((a, b) => Date.parse(b.at) - Date.parse(a.at)) }
+  return { loading: waiting, failed, runs: runs.toSorted((a, b) => Date.parse(b.at) - Date.parse(a.at)) }
 }

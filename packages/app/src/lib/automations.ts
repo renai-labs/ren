@@ -10,7 +10,9 @@ import { Webhooks } from "./webhooks.js"
 
 const SearchSchema = Schema.Struct({
   tab: Schema.optional(Schema.Literals(["automations", "runs"])),
+  kind: Schema.optional(Schema.Literals(["schedules", "webhooks"])),
   schedule: Schema.optional(Schema.String),
+  session: Schema.optional(Schema.String),
 })
 
 export type Search = typeof SearchSchema.Type
@@ -20,6 +22,7 @@ export const Search = Schema.toStandardSchemaV1(SearchSchema)
 const EditorSearchSchema = Schema.Struct({
   tab: Schema.optional(Schema.Literals(["settings", "runs"])),
   space: Schema.optional(Schema.String),
+  session: Schema.optional(Schema.String),
 })
 
 export type EditorSearch = typeof EditorSearchSchema.Type
@@ -30,9 +33,16 @@ export const newSlug = "new"
 
 export const listSize = 100
 
+export const kinds = [
+  { value: "schedules", label: "Schedules" },
+  { value: "webhooks", label: "Webhooks" },
+] as const
+
+export type ListKind = (typeof kinds)[number]["value"]
+
 export const runOrigins: ReadonlyArray<Session.Origin> = ["schedule", "webhook"]
 
-// oxlint-disable-next-line ren/no-comments -- The chats that people start. Runs of schedules and webhooks show under Automations, not in the chat list.
+// oxlint-disable-next-line ren/no-comments -- The chats that people start. Runs of schedules and webhooks show under Automations; search leaves them out, and the chat list shows them only when its filter asks for them.
 export const chatOrigins: ReadonlyArray<Session.Origin> = Session.Origin.literals.filter(
   (origin) => !runOrigins.includes(origin),
 )
@@ -55,8 +65,9 @@ export interface Automation {
 const webhookName = (webhook: WebhookInfo) =>
   webhook.preset ? `${webhook.preset.appName} · ${webhook.name}` : webhook.name
 
-const fromSchedule = (schedule: ScheduleInfo) => ({
+export const ofSchedule = (schedule: ScheduleInfo): Automation => ({
   key: schedule.id,
+  handle: schedule.slug,
   spaceId: schedule.spaceId,
   slug: schedule.slug,
   name: schedule.name,
@@ -68,8 +79,9 @@ const fromSchedule = (schedule: ScheduleInfo) => ({
   webhook: undefined,
 })
 
-const fromWebhook = (webhook: WebhookInfo) => ({
+export const ofWebhook = (webhook: WebhookInfo): Automation => ({
   key: webhook.id,
+  handle: webhook.slug,
   spaceId: webhook.spaceId,
   slug: webhook.slug,
   name: webhookName(webhook),
@@ -80,23 +92,6 @@ const fromWebhook = (webhook: WebhookInfo) => ({
   schedule: undefined,
   webhook,
 })
-
-const placeOf = (item: { readonly spaceId: string; readonly slug: string }) => `${item.spaceId}/${item.slug}`
-
-// oxlint-disable-next-line ren/no-comments -- Its address is its slug. A webhook whose slug a schedule of its space also has, made before automations had one trigger, goes by its ID.
-export const list = (
-  schedules: ReadonlyArray<ScheduleInfo>,
-  webhooks: ReadonlyArray<WebhookInfo>,
-): ReadonlyArray<Automation> => {
-  const scheduled = new Set(schedules.map(placeOf))
-  return [
-    ...schedules.map((schedule) => ({ ...fromSchedule(schedule), handle: schedule.slug })),
-    ...webhooks.map((webhook) => ({
-      ...fromWebhook(webhook),
-      handle: scheduled.has(placeOf(webhook)) ? webhook.id : webhook.slug,
-    })),
-  ].toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-}
 
 export type Kind = "schedule" | "webhook"
 
@@ -222,13 +217,6 @@ export const problemOf = (draft: Draft) => {
   ].find((check) => check.failed)?.message
 }
 
-// oxlint-disable-next-line ren/no-comments -- A webhook cannot change between custom and an app’s preset, or between presets, so those changes make it again too.
-export const changesKind = (draft: Draft, automation: Automation | undefined) =>
-  automation !== undefined &&
-  draft.trigger !== undefined &&
-  (draft.trigger.kind !== kindOf(automation) ||
-    JSON.stringify(presetOfDraft(draft)) !== JSON.stringify(presetOf(automation.webhook)))
-
 const agentChange = (agentId: string | undefined, current: string | null) =>
   (agentId ?? null) === current ? {} : { agentId: agentId ?? null }
 
@@ -296,10 +284,6 @@ export const json = (automation: Automation) =>
     null,
     2,
   )
-
-const hours = Array.from({ length: 24 }, (_, hour) => `${`${hour}`.padStart(2, "0")}:00`)
-
-export const timesWith = (time: string) => (hours.includes(time) ? hours : [...hours, time].toSorted())
 
 // oxlint-disable-next-line ren/no-comments -- The next times a schedule runs, for the trigger row and the cron editor.
 export const nextRuns = (cadence: Cadence, count: number, now: number): ReadonlyArray<string> => {
