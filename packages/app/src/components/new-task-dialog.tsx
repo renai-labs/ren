@@ -1,6 +1,7 @@
 import { Tasks } from "@ren/client/react"
 import { Breadcrumb } from "./breadcrumb.js"
 import {
+  useEffect,
   useId,
   useRef,
   useState,
@@ -414,5 +415,58 @@ export function NewTaskDialog(props: {
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+export function SubtaskComposer(props: {
+  parent: { id: string; identifier: string }
+  spaceId: string
+  onClose: () => void
+}) {
+  const titleRef = useRef<HTMLTextAreaElement>(null)
+  const form = useTaskForm(props.spaceId, props.parent.id, titleRef)
+  useEffect(() => titleRef.current?.focus(), [titleRef])
+  return (
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape closes the inline form, as it closes a dialog
+    <form
+      aria-label={`New sub-task of ${props.parent.identifier}`}
+      className="mt-2 flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3"
+      onKeyDownCapture={submitShortcut}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return
+        if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return
+        event.preventDefault()
+        props.onClose()
+      }}
+      onSubmit={(event) => form.submit(event, props.spaceId, props.onClose)}
+    >
+      <TitleField
+        ref={titleRef}
+        value={form.draft.title}
+        missing={form.missing}
+        className="min-h-6 text-sm md:text-sm"
+        onChange={form.setTitle}
+      />
+      <MarkdownEditor
+        value={form.draft.description}
+        label="Sub-task description"
+        placeholder="Add description…"
+        media={form.held.hold}
+        className="[&_.tiptap]:min-h-6"
+        onChange={(description) => form.set({ description })}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <TaskChips draft={form.draft} spaceId={props.spaceId} className="p-0" onChange={form.set} />
+        <div className="ml-auto flex items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={form.pending}>
+            {form.pending ? <Spinner data-icon="inline-start" /> : null}
+            Create
+          </Button>
+        </div>
+      </div>
+    </form>
   )
 }

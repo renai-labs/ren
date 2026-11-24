@@ -7,7 +7,7 @@ import { EditableText } from "./editable-text.js"
 import { cn } from "cn"
 
 export function Root(props: {
-  ancestors: readonly { key: string; content: ReactNode }[]
+  ancestors: readonly { key: string; content: ReactNode; className?: string }[]
   ancestorsFrom?: "md"
   children: ReactNode
 }) {
@@ -20,11 +20,12 @@ export function Root(props: {
               className={cn(
                 "shrink-0 [&_a]:flex [&_a]:items-center [&_a]:gap-1.5",
                 props.ancestorsFrom === "md" && "max-md:hidden",
+                item.className,
               )}
             >
               {item.content}
             </BreadcrumbItem>
-            <BreadcrumbSeparator className={cn(props.ancestorsFrom === "md" && "max-md:hidden")} />
+            <BreadcrumbSeparator className={cn(props.ancestorsFrom === "md" && "max-md:hidden", item.className)} />
           </Fragment>
         ))}
         <BreadcrumbItem aria-current="page" className="[&_h2]:text-sm [&_h2]:font-normal">

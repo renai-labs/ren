@@ -74,6 +74,7 @@ import {
 } from "@ren/ui/dropdown-menu"
 import type { CatalogApp } from "../lib/apps.js"
 import { useCopy } from "../lib/use-copy.js"
+import { VideoUrl } from "../lib/video-url.js"
 import { ImageThumbnail } from "./image-set.js"
 import { markdownClipboard } from "./markdown-clipboard.js"
 import { MarkdownContext, MarkdownLink, sentMentionLinks } from "./markdown-link.js"
@@ -166,6 +167,21 @@ function PlainImage(props: { src: string; alt: string | undefined }) {
   const [failed, setFailed] = useState(false)
   if (failed) return <span className="text-muted-foreground">{props.alt}</span>
   return <img src={props.src} alt={props.alt ?? ""} onError={() => setFailed(true)} className={inlineImage} />
+}
+
+function MarkdownVideo(props: ComponentProps<"video"> & ExtraProps) {
+  if (typeof props.src !== "string" || !props.src) return null
+  return (
+    // oxlint-disable-next-line jsx-a11y/media-has-caption -- a linked video carries no caption track
+    <video
+      src={props.src}
+      aria-label={props["aria-label"]}
+      controls
+      preload="metadata"
+      playsInline
+      className={VideoUrl.className}
+    />
+  )
 }
 
 function MarkdownImage({ node, src, alt }: ComponentProps<"img"> & ExtraProps) {
@@ -448,6 +464,18 @@ const chipPunctuation = () => (tree: MarkdownNode) =>
         wrapChip(children, index)
   })
 
+const videoLinks = () => (tree: MarkdownNode) =>
+  each(tree, (node) => {
+    const parts = (node.children ?? []).filter((child) => !isBlank(child))
+    const link = parts[0]
+    const href = link?.properties?.href
+    if (node.tagName !== "p" || parts.length !== 1 || link?.tagName !== "a" || typeof href !== "string") return
+    if (!VideoUrl.is(href)) return
+    node.tagName = "video"
+    node.properties = { src: href, ariaLabel: textOf(link) }
+    node.children = []
+  })
+
 const withRenUrls = (schema: unknown) => {
   if (typeof schema !== "object" || schema === null || !("protocols" in schema)) return schema
   const protocols = schema.protocols
@@ -499,6 +527,7 @@ const components = {
   span: MarkdownSpan,
   summary: MarkdownSummary,
   table: MarkdownTable,
+  video: MarkdownVideo,
 }
 
 const streamdownIcon = (Icon: Icon) => (props: { size?: number; className?: string | undefined }) => (
@@ -529,6 +558,7 @@ export function Markdown(props: {
   workspaceImage?: ((path: string, alt: string, options: { inline: boolean }) => ReactNode) | undefined
   fileReference?: ((text: string, code: ReactNode) => ReactNode) | undefined
   driveFile?: ((path: string, text: ReactNode, options: { image: boolean }) => ReactNode) | undefined
+  videos?: boolean | undefined
 }) {
   const id = useId()
   const apps = props.apps ?? []
@@ -540,7 +570,8 @@ export function Markdown(props: {
   }, [wantsMermaid])
   const dark = useSyncExternalStore(wantsMermaid ? subscribeDark : unsubscribed, isDark, () => false)
   const user = props.source === "user"
-  const rehype = props.workspaceImage ? workspaceRehypePlugins : rehypePlugins
+  const base = props.workspaceImage ? workspaceRehypePlugins : rehypePlugins
+  const rehype = props.videos ? [...base, videoLinks] : base
   return (
     <MarkdownContext
       value={{

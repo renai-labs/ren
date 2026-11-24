@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type RefObject } from "react"
 import { Button } from "@ren/ui/button"
 import {
   Dialog,
@@ -25,6 +25,7 @@ export function ConfirmDialog(props: {
   onOpenChange: (open: boolean) => void
   confirmation: Confirmation
   onConfirm: () => void | Promise<unknown>
+  finalFocus?: RefObject<HTMLElement | null> | undefined
 }) {
   const [pending, setPending] = useState(false)
   const confirm = async () => {
@@ -38,7 +39,7 @@ export function ConfirmDialog(props: {
   }
   return (
     <Dialog open={props.open} onOpenChange={(open) => (pending ? undefined : props.onOpenChange(open))}>
-      <DialogContent>
+      <DialogContent finalFocus={props.finalFocus ?? true}>
         <DialogHeader>
           <DialogTitle>{props.confirmation.title}</DialogTitle>
           <DialogDescription>{props.confirmation.description}</DialogDescription>

@@ -4,6 +4,7 @@ import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
 import {
   EditorContent,
+  Extension,
   NodeViewWrapper,
   ReactNodeViewRenderer,
   useEditor,
@@ -16,10 +17,12 @@ import { Placeholder } from "@tiptap/extensions"
 import { Image } from "@tiptap/extension-image"
 import { TaskItem, TaskList } from "@tiptap/extension-list"
 import { TableKit } from "@tiptap/extension-table"
-import type { EditorView } from "@tiptap/pm/view"
+import { Plugin } from "@tiptap/pm/state"
+import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view"
 import { cn } from "cn"
 import { RouterContext } from "../lib/router-context.js"
 import { DriveImage, useOpenDriveFile } from "./drive-file.js"
+import { VideoUrl } from "../lib/video-url.js"
 
 export interface Attached {
   readonly name: string
@@ -42,6 +45,47 @@ function EditorImage(props: ReactNodeViewProps) {
   )
 }
 
+const VideoLinks = Extension.create({
+  name: "videoLinks",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations: (state) => {
+            const widgets: Array<Decoration> = []
+            state.doc.descendants((node, pos) => {
+              if (node.type.name !== "paragraph") return true
+              const parts = node.content.content.filter((child) => !child.isText || child.text?.trim())
+              const link = parts.length === 1 ? parts[0]?.marks.find((mark) => mark.type.name === "link") : undefined
+              const href = textOf(link?.attrs["href"])
+              if (VideoUrl.is(href))
+                widgets.push(
+                  Decoration.widget(
+                    pos + node.nodeSize,
+                    () => {
+                      const video = document.createElement("video")
+                      video.src = href
+                      video.controls = true
+                      video.preload = "metadata"
+                      video.playsInline = true
+                      video.contentEditable = "false"
+                      video.className = VideoUrl.className
+                      video.setAttribute("aria-label", parts[0]?.text ?? href)
+                      return video
+                    },
+                    { key: `video:${href}`, side: 1, ignoreSelection: true, stopEvent: () => true },
+                  ),
+                )
+              return false
+            })
+            return DecorationSet.create(state.doc, widgets)
+          },
+        },
+      }),
+    ]
+  },
+})
+
 const Media = Image.extend({
   addNodeView() {
     return ReactNodeViewRenderer(EditorImage)
@@ -59,8 +103,8 @@ const prose = cn(
   "[&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:overscroll-contain [&_pre]:rounded-lg [&_pre]:bg-muted [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
   "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground",
   "[&_hr]:my-4",
-  "[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:gap-2",
-  "[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-medium",
+  "[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0 [&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:gap-2 [&_ul[data-type=taskList]_li>div]:min-w-0 [&_ul[data-type=taskList]_li>div]:flex-1",
+  "[&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:overscroll-x-contain [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-medium",
   "[&_p.is-editor-empty:first-child]:before:pointer-events-none [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:text-muted-foreground [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]",
 )
 
@@ -166,6 +210,7 @@ export function MarkdownEditor(props: {
         },
       }),
       Media,
+      VideoLinks,
       TaskList,
       TaskItem.configure({ nested: true }),
       TableKit,
