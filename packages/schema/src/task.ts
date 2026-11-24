@@ -7,6 +7,7 @@ import { Identifier } from "./identifier.js"
 import { Label } from "./label.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Search } from "./search.js"
 import { Session } from "./session.js"
 import { Space } from "./space.js"
 import { TaskLink } from "./task-link.js"
@@ -161,7 +162,7 @@ export const ListInput = Schema.Struct({
   priority: Schema.optional(Priority),
   agentId: Schema.optional(Agent.ID),
   ownerId: Schema.optional(Auth.UserID),
-  search: Schema.optional(Schema.String).annotate({ description: "Part of the title." }),
+  search: Search.field("the title, the description or a label, or be the task’s number (`12`, `#12` or `ENG-12`)"),
   label: Schema.optional(Label.Name).annotate({ description: "A label name, in any case." }),
   humanReview: Schema.optional(Schema.Boolean),
   linkedTo: Schema.optional(TaskLink.Url).annotate({

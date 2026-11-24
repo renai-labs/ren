@@ -5,6 +5,7 @@ import { App } from "./app.js"
 import { AppListing } from "./app-listing.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Search } from "./search.js"
 
 export const descriptionMaxLength = 50
 
@@ -75,9 +76,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  query: Schema.optional(
-    Schema.String.annotate({ description: "Match the slug, name or description, ignoring case." }),
-  ),
+  search: Search.field("the slug, the name or the description"),
   category: Schema.optional(Primitive.Slug.annotate({ description: "Match a category in any group." })),
   slugs: Schema.optional(
     Schema.Array(Primitive.Slug).annotate({ description: "Only the apps with these slugs, in slug order." }),
