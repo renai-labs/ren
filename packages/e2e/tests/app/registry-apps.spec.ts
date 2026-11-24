@@ -44,7 +44,7 @@ test("Installed in Apps loads connected apps past the first 100 on scroll", asyn
   await createOrganization(page.request, { name: "Ada Lovelace" })
   const ren = await client(page.request)
   const pages = await Promise.all(
-    [1, 2].map((page) => ren["app-registry"].list({ query: "Filler", page, pageSize: 100 })),
+    [1, 2].map((page) => ren["app-registry"].list({ search: "Filler", page, pageSize: 100 })),
   )
   for (const app of pages.flatMap((page) => page.items).slice(0, 101))
     await ren["app-profile"].create({ appId: app.id, name: "Mine", slug: "mine", kind: "private" })

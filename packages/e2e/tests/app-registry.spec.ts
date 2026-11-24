@@ -9,7 +9,7 @@ test("a member finds a listed app with the generated client, gives it a profile 
   const cookie = (await request.storageState()).cookies.map((entry) => `${entry.name}=${entry.value}`).join("; ")
   const ren = Ren.make({ baseUrl: serverURL, headers: { cookie } })
 
-  const found = await ren["app-registry"].list({ query: "documentation", category: "engineer", page: 1, pageSize: 50 })
+  const found = await ren["app-registry"].list({ search: "documentation", category: "engineer", page: 1, pageSize: 50 })
   expect(found.items.map((item) => item.slug)).toEqual(["e2e-docs"])
   const docs = await ren["app-registry"].get({ idOrSlug: "e2e-docs" })
   expect(docs).toMatchObject({

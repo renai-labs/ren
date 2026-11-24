@@ -607,13 +607,13 @@ export const AppRegistryList = (input: Command.Command.Config.Infer<typeof Comma
     ClientApi.groups["app-registry"].endpoints["app-registry.list"],
     {
       query: {
-        query: input["query"],
+        search: input["search"],
         category: input["category"],
         slugs: input["slugs"],
         page: input["page"],
         pageSize: input["pageSize"],
       },
-      labels: { query: "--query", category: "--category", slugs: "--slugs", page: "--page", pageSize: "--page-size" },
+      labels: { search: "--search", category: "--category", slugs: "--slugs", page: "--page", pageSize: "--page-size" },
     },
     (client, request) => client["app-registry"]["list"]({ ...request.query }),
   )

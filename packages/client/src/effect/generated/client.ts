@@ -894,7 +894,7 @@ const adaptGroupAppProfileReach = (raw: RawClient["app-profile-reach"]) => ({
 
 type AppRegistryListRequest = Parameters<RawClient["app-registry"]["app-registry.list"]>[0]
 type AppRegistryListInput = {
-  readonly query?: AppRegistryListRequest["query"]["query"]
+  readonly search?: AppRegistryListRequest["query"]["search"]
   readonly category?: AppRegistryListRequest["query"]["category"]
   readonly slugs?: AppRegistryListRequest["query"]["slugs"]
   readonly page: AppRegistryListRequest["query"]["page"]
@@ -903,7 +903,7 @@ type AppRegistryListInput = {
 const EndpointAppRegistryList = (raw: RawClient["app-registry"]) => (input: AppRegistryListInput) =>
   raw["app-registry.list"]({
     query: {
-      query: input["query"],
+      search: input["search"],
       category: input["category"],
       slugs: input["slugs"],
       page: input["page"],
