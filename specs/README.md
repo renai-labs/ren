@@ -24,6 +24,7 @@ Generated clients follow the protocol `HttpApi`.
 | [app/spaces.md](app/spaces.md)                                       | Inbox usage, task-card review actions, the chat panel on `FileSystem`, search across spaces                                     |
 | [tasks.md](tasks.md)                                                 | Handoff to the next agent, drag and drop, review start as a flag, dashboard                                                     |
 | [chat-list.md](chat-list.md)                                         | The app's chat filters, webhook chats, stable pages, search at scale                                                            |
+| [docs.md](docs.md)                                                   | The docs revamp: new sidebar, page by page rewrite, and every removal                                                           |
 | [cli.md](cli.md)                                                     | `ren api`, connection profiles, device login, chat and streaming                                                                |
 | [infra.md](infra.md)                                                 | Template renames; listings                                                                                                      |
 | [usage.md](usage.md)                                                 | The billing check, reconciliation, an automated usage e2e case, the PostHog and billing loops, cleanup of finished durable runs |
