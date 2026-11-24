@@ -3,6 +3,7 @@ export * as Mentions from "./mentions.js"
 import type { FileSystem } from "@ren/schema/file-system"
 import type { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { Search } from "@ren/schema/search"
 import { Schema } from "effect"
 
 export type Kind = typeof Kind.Type
@@ -75,25 +76,7 @@ export const fromRepository = (reference: {
   description: reference.description || reference.repository,
 })
 
-const named = (item: Item, query: string) =>
-  [item.label, item.handle].some((value) => value.toLowerCase().includes(query.toLowerCase()))
-
-const matches = (item: Item, query: string) =>
-  [item.label, item.handle, item.description ?? ""].some((value) => value.toLowerCase().includes(query.toLowerCase()))
-
-export const suggest = (input: {
-  readonly agents: ReadonlyArray<Item>
-  readonly skills: ReadonlyArray<Item>
-  readonly apps: ReadonlyArray<Item>
-  readonly files: ReadonlyArray<Item>
-  readonly query: string
-}): ReadonlyArray<Item> => {
-  const listed = [
-    ...[...input.agents, ...input.skills].filter((item) => matches(item, input.query)),
-    ...input.apps.filter((item) => named(item, input.query)),
-  ]
-  return [...listed, ...input.files.filter((file) => !listed.some((item) => key(item) === key(file)))]
-}
+export const named = (item: Item, query: string) => Search.matches(query, item.label, item.handle)
 
 const groupSize = 5
 

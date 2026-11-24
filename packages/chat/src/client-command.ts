@@ -1,6 +1,7 @@
 export * as ClientCommand from "./client-command.js"
 
 import type { SessionCatalog } from "@ren/schema/session/catalog"
+import { Search } from "@ren/schema/search"
 
 export type ID =
   | "model.choose"
@@ -82,6 +83,4 @@ export const suggestions = (
         aliases: item.aliases,
       })),
     ...brain.map((item) => ({ value: item.name, trigger: item.name, description: item.description })),
-  ].filter((item: Suggestion) =>
-    [item.trigger, ...(item.aliases ?? [])].some((name) => name.toLowerCase().includes(query.toLowerCase())),
-  )
+  ].filter((item: Suggestion) => Search.matches(query, item.trigger, ...(item.aliases ?? [])))

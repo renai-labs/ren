@@ -2,40 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { Mentions } from "../src/mentions.js"
 
 const general = Mentions.fromAgent({ id: "general", name: "General", mode: "subagent", hidden: false })
-const explore = Mentions.fromAgent({
-  id: "explore",
-  name: "Explore",
-  description: "Searches the codebase",
-  mode: "subagent",
-  hidden: false,
-})
 const notes = Mentions.fromSkill({ id: "release-notes", name: "Release notes" })
 const plan = Mentions.fromFile({ path: "docs/plan.md", type: "file" })
-const github = Mentions.fromApp({ id: "app_github", slug: "github", name: "GitHub", description: "Code hosting" })
-
-describe("Mentions suggestions", () => {
-  test("lists agents, then skills, then apps, then files, filtering names, descriptions of agents and skills, and not file search results", () => {
-    expect(
-      Mentions.suggest({ agents: [general, explore], skills: [notes], apps: [github], files: [plan], query: "" }).map(
-        Mentions.key,
-      ),
-    ).toEqual(["agent:general", "agent:explore", "skill:release-notes", "app:app_github", "file:docs/plan.md"])
-    expect(
-      Mentions.suggest({
-        agents: [general, explore],
-        skills: [notes],
-        apps: [github],
-        files: [plan],
-        query: "code",
-      }).map(Mentions.key),
-    ).toEqual(["agent:explore", "file:docs/plan.md"])
-    expect(
-      Mentions.suggest({ agents: [general, explore], skills: [notes], apps: [github], files: [], query: "git" }).map(
-        Mentions.key,
-      ),
-    ).toEqual(["app:app_github"])
-  })
-})
 
 describe("Mentions tokens", () => {
   test("inserts a file at the cursor and separates it from the previous word", () => {
