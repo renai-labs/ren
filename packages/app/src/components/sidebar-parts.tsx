@@ -345,6 +345,10 @@ export function SpaceEntry(props: {
 
 const rangeIcons = { today: IconCalendarEvent, week: IconCalendarWeek, month: IconCalendarMonth } as const
 
+// oxlint-disable-next-line ren/no-comments -- Runs of schedules and webhooks stay out of the chat list until its filter asks for them by where they started.
+const chatFilter = (filter: SessionPages.Filter): SessionPages.Filter =>
+  filter.origin ? filter : { ...filter, origin: [...Automations.chatOrigins] }
+
 const chatProperties = (
   spaces: ReadonlyArray<{ id: string; name: string; kind?: string | undefined }>,
 ): FilterProperty[] => [
@@ -366,13 +370,7 @@ const chatProperties = (
       icon: status.value === "busy" ? IconProgress : IconCircle,
     })),
   },
-  {
-    key: "origin",
-    label: "Started from",
-    any: "Anywhere",
-    icon: IconRoute,
-    options: origins.filter((origin) => Automations.chatOrigins.some((each) => each === origin.value)),
-  },
+  { key: "origin", label: "Started from", any: "Anywhere", icon: IconRoute, options: [...origins] },
   {
     key: "updated",
     label: "Updated",
@@ -446,7 +444,7 @@ export function ChatsList(props: { path: string; filters: Filters; filtered: boo
   const { client } = RouterContext.useRouterContext()
   const me = useMe()
   const chatPages = useInfiniteQuery({
-    ...SessionPages.options(client, ChatFilters.toFilter(props.filters, me.user.id)),
+    ...SessionPages.options(client, chatFilter(ChatFilters.toFilter(props.filters, me.user.id))),
     placeholderData: keepPreviousData,
   })
   const chats = chatPages.data?.pages.flatMap((page) => page.items) ?? []
