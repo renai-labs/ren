@@ -64,7 +64,7 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [uncontrolledWidth, setUncontrolledWidth] = React.useState<number | undefined>(undefined)
-  const [resizing, setResizingState] = React.useState(false)
+  const [resizingState, setResizingState] = React.useState(false)
   const [dragWidth, setDragWidth] = React.useState<number | undefined>(undefined)
   const drag = React.useRef<{ active: boolean; width: number | undefined }>({ active: false, width: undefined })
   const width = dragWidth ?? widthProp ?? uncontrolledWidth
@@ -139,12 +139,24 @@ function SidebarProvider({
       openMobile,
       width,
       setWidth,
-      resizing,
+      resizing: resizingState,
       setResizing,
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, width, setWidth, resizing, setResizing],
+    [
+      state,
+      open,
+      setOpen,
+      isMobile,
+      openMobile,
+      setOpenMobile,
+      toggleSidebar,
+      width,
+      setWidth,
+      resizingState,
+      setResizing,
+    ],
   )
 
   return (
@@ -158,7 +170,7 @@ function SidebarProvider({
             ...style,
           } as React.CSSProperties
         }
-        data-resizing={resizing ? "" : undefined}
+        data-resizing={resizingState ? "" : undefined}
         className={cn(
           "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar data-resizing:cursor-col-resize data-resizing:select-none data-resizing:*:**:transition-none",
           className,

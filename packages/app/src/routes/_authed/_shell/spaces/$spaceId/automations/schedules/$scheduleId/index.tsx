@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/automations/schedules/$scheduleId/")({
+  head: () => ({ meta: [{ title: "Automations · Ren" }] }),
   beforeLoad: async (options) => {
     const schedule = await options.context.queryClient
       .query(options.context.api.schedule.get.queryOptions({ idOrSlug: options.params.scheduleId }))

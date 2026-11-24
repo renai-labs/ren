@@ -409,6 +409,7 @@ function MembersTab(props: {
   const rows = useMembers()
     .members.filter((member) => FilterMatch.passes(props.filters, { role: [member.role] }))
     .filter((member) => Search.matches(props.query, member.name, member.email))
+    // oxlint-disable-next-line oxc/no-map-spread -- the members are cached query data, so each row copies one instead of changing it
     .map((member) => ({ ...member, you: member.id === me.user.id }))
   const shown = useShown(rows)
   const remove = async (memberId: string, name: string) => {

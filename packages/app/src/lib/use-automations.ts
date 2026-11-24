@@ -29,6 +29,9 @@ const search = <A>(
     return found.page * found.pageSize < found.total ? search(list, find, page + 1) : undefined
   })
 
+const findKey = (resource: "schedule" | "webhook", input: { readonly spaceId: string; readonly handle: string }) =>
+  [resource, "find", input] as const
+
 const everyItem = <A>(list: (page: number) => Promise<Listed<A>>, page = 1): Promise<ReadonlyArray<A>> =>
   list(page).then((found) =>
     found.page * found.pageSize < found.total
@@ -58,7 +61,7 @@ export function useAutomation(spaceId: string, handle: string) {
   const { client } = RouterContext.useRouterContext()
   const matches = (item: { readonly id: string; readonly slug: string }) => item.slug === handle || item.id === handle
   const schedule = useQuery({
-    queryKey: ["schedule", "find", { spaceId, handle }],
+    queryKey: findKey("schedule", { spaceId, handle }),
     queryFn: (context) =>
       search(
         (page) => client.schedule.list({ spaceId, page, pageSize: Automations.listSize }, { signal: context.signal }),
@@ -66,7 +69,7 @@ export function useAutomation(spaceId: string, handle: string) {
       ).then((found) => found ?? null),
   })
   const webhook = useQuery({
-    queryKey: ["webhook", "find", { spaceId, handle }],
+    queryKey: findKey("webhook", { spaceId, handle }),
     queryFn: (context) =>
       search(
         (page) => client.webhook.list({ spaceId, page, pageSize: Automations.listSize }, { signal: context.signal }),

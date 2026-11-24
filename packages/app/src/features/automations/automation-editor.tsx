@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import type { WebhookInfo } from "@ren/client"
 import { Link, useBlocker, useNavigate } from "@tanstack/react-router"
+import { Equal } from "effect"
 import { IconChevronRight, IconCode, IconCopy, IconHistory, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
 import { cn } from "cn"
@@ -513,7 +514,7 @@ function Editor(props: {
   )
   const [draft, setDraft] = useState(initial)
   const automation = props.automation
-  const changed = JSON.stringify(draft) !== JSON.stringify(initial)
+  const changed = !Equal.equals(draft, initial)
   const change = (patch: Partial<Draft>) => setDraft((previous) => ({ ...previous, ...patch }))
   const leaving = useRef(false)
   const blocker = useBlocker({

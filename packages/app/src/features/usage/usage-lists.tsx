@@ -18,6 +18,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { useMembers, type Member } from "../../lib/use-members.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { useNow } from "../../lib/use-now.js"
+import { UsageModel } from "./usage-model.js"
 import { UsageQuery } from "./usage-query.js"
 import type { UsageSearch } from "./usage-search.js"
 
@@ -37,11 +38,9 @@ const muted = "size-4 text-muted-foreground"
 const nameOf = (by: UsageSearch.Breakdown, row: InsightsRow, member: Member | undefined) => {
   if (by === "space") return row.key === null ? "Inference keys" : (row.label ?? row.key)
   if (by === "member" && row.key !== null) return member?.name ?? row.label ?? "Former member"
-  if (by === "model" && row.key !== null) return shortModel(row.key)
+  if (by === "model" && row.key !== null) return UsageModel.short(row.key)
   return row.key ?? "Compute & other"
 }
-
-export const shortModel = (model: string) => model.split("/").at(-1) ?? model
 
 export function ModelIcon(props: { model: string }) {
   return <ProviderIcon provider={props.model.split("/")[0] ?? props.model} />
@@ -51,7 +50,7 @@ export function AgentIcon(props: { name: string }) {
   return props.name === "ren" ? (
     <Logomark className="size-4" />
   ) : (
-    <DefaultIcon kind="skill" name={props.name} className="size-4 rounded" />
+    <DefaultIcon kind="skill" name={props.name} className="size-4 rounded-sm" />
   )
 }
 
@@ -98,6 +97,7 @@ function Row(props: { by: UsageSearch.Breakdown; row: InsightsRow; fill: number 
       <span
         aria-hidden
         className="absolute inset-y-0.5 left-0 rounded-md bg-muted/70"
+        // oxlint-disable-next-line react/forbid-dom-props -- the bar's width is this row's share of the largest cost
         style={{ width: `${Math.max(props.fill, 0.5)}%` }}
       />
       <span className="relative flex min-w-0 items-center gap-2.5">
@@ -131,14 +131,45 @@ function UsageList(props: { scope: Insights.Scope; search: UsageSearch.Search; b
   const [open, setOpen] = useState(false)
   const title = titles[props.by]
   const pending = query.isPending || (props.by === "agent" && agents.isPending)
-  const rows =
-    pending || !query.data
-      ? Array.from({ length: shown }, (_, index) => sample(index))
-      : props.by === "agent"
-        ? query.data.rows.filter((row) => row.key !== null && names.has(row.key))
-        : query.data.rows
+  const loaded =
+    props.by === "agent" ? query.data?.rows.filter((row) => row.key !== null && names.has(row.key)) : query.data?.rows
+  const rows = pending || !loaded ? Array.from({ length: shown }, (_, index) => sample(index)) : loaded
   const largest = Math.max(0, ...rows.map(Insights.cost))
   const hidden = rows.length - shown
+  const content = () => {
+    if (query.isError)
+      return (
+        <div className="flex flex-col items-start gap-3 px-3 pb-2 text-sm text-muted-foreground">
+          Couldn’t load {title.toLowerCase()}.
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+            Try again
+          </Button>
+        </div>
+      )
+    if (rows.length === 0) return <p className="px-3 pb-2 text-sm text-muted-foreground">No usage in this period.</p>
+    return (
+      <div className="flex flex-col gap-1">
+        <ul aria-label={`Cost by ${title.toLowerCase()}`} className="flex flex-col gap-0.5">
+          {(open ? rows : rows.slice(0, shown)).map((row, index) => (
+            <li key={row.key ?? `none-${index}`}>
+              <Row by={props.by} row={row} fill={largest > 0 ? (Insights.cost(row) / largest) * 100 : 0} />
+            </li>
+          ))}
+        </ul>
+        {hidden > 0 ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start text-muted-foreground"
+            aria-expanded={open}
+            onClick={() => setOpen((was) => !was)}
+          >
+            {open ? "Show fewer" : `Show ${hidden} more`}
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
   return (
     <Card className={cn("gap-3 px-2 pt-5 pb-2 transition-opacity", query.isPlaceholderData && "opacity-60")}>
       <div className="flex items-baseline justify-between gap-3 px-3">
@@ -146,37 +177,7 @@ function UsageList(props: { scope: Insights.Scope; search: UsageSearch.Search; b
         <span className="text-xs text-muted-foreground">Cost</span>
       </div>
       <Loading id={shapeId} loading={pending} label={`Loading ${title.toLowerCase()}`}>
-        {query.isError ? (
-          <div className="flex flex-col items-start gap-3 px-3 pb-2 text-sm text-muted-foreground">
-            Couldn’t load {title.toLowerCase()}.
-            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
-              Try again
-            </Button>
-          </div>
-        ) : rows.length === 0 ? (
-          <p className="px-3 pb-2 text-sm text-muted-foreground">No usage in this period.</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <ul aria-label={`Cost by ${title.toLowerCase()}`} className="flex flex-col gap-0.5">
-              {(open ? rows : rows.slice(0, shown)).map((row, index) => (
-                <li key={row.key ?? `none-${index}`}>
-                  <Row by={props.by} row={row} fill={largest > 0 ? (Insights.cost(row) / largest) * 100 : 0} />
-                </li>
-              ))}
-            </ul>
-            {hidden > 0 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="self-start text-muted-foreground"
-                aria-expanded={open}
-                onClick={() => setOpen((was) => !was)}
-              >
-                {open ? "Show fewer" : `Show ${hidden} more`}
-              </Button>
-            ) : null}
-          </div>
-        )}
+        {content()}
       </Loading>
     </Card>
   )

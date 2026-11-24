@@ -40,27 +40,11 @@ export function MappingsTable(props: {
           {props.mappings.map((mapping) => (
             <TableRow key={mapping.id} className="relative">
               <TableCell>
-                <span className="flex items-center gap-2.5">
-                  {mapping.provider === "slack" ? (
-                    <IconHash className="size-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChannelMark provider={mapping.provider} className="size-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <Button
-                    variant="ghost"
-                    disabled={props.busy || !props.editableSpaceIds.includes(mapping.space.id)}
-                    title={mapping.placeName}
-                    aria-label={`Edit ${mapping.placeName}`}
-                    onClick={() => props.onEdit(mapping.id)}
-                    className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-                  >
-                    {mapping.provider === "github" ? (
-                      <PlaceName provider={mapping.provider} name={mapping.placeName} />
-                    ) : (
-                      mapping.placeName
-                    )}
-                  </Button>
-                </span>
+                <MappingPlace
+                  mapping={mapping}
+                  disabled={props.busy || !props.editableSpaceIds.includes(mapping.space.id)}
+                  onEdit={props.onEdit}
+                />
               </TableCell>
               <TableCell>
                 <span className="flex items-center gap-2 text-muted-foreground">
@@ -88,5 +72,31 @@ export function MappingsTable(props: {
         </TableBody>
       </Table>
     </TableCard>
+  )
+}
+
+function MappingPlace(props: { mapping: ChannelMappingInfo; disabled: boolean; onEdit: (id: string) => void }) {
+  return (
+    <span className="flex items-center gap-2.5">
+      {props.mapping.provider === "slack" ? (
+        <IconHash className="size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <ChannelMark provider={props.mapping.provider} className="size-4 shrink-0 text-muted-foreground" />
+      )}
+      <Button
+        variant="ghost"
+        disabled={props.disabled}
+        title={props.mapping.placeName}
+        aria-label={`Edit ${props.mapping.placeName}`}
+        onClick={() => props.onEdit(props.mapping.id)}
+        className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
+      >
+        {props.mapping.provider === "github" ? (
+          <PlaceName provider={props.mapping.provider} name={props.mapping.placeName} />
+        ) : (
+          props.mapping.placeName
+        )}
+      </Button>
+    </span>
   )
 }
