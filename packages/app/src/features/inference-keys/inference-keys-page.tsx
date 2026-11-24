@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import type { RenInferenceKey, RenInferenceKeyStatus, RenInferenceKeyUsage } from "@ren/client"
@@ -316,11 +317,10 @@ function filtered(
     ownerOf: ((key: RenInferenceKey) => string) | undefined
   },
 ) {
-  const needle = filters.query.toLowerCase()
   return keys.filter(
     (key) =>
       (filters.status === "all" || isLive(key)) &&
-      `${key.name} ${key.prefix} ${filters.ownerOf?.(key) ?? ""}`.toLowerCase().includes(needle),
+      Search.matches(filters.query, key.name, key.prefix, filters.ownerOf?.(key)),
   )
 }
 

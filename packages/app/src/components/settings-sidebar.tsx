@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { useRef, useState } from "react"
 import { cn } from "cn"
 import { useQuery } from "@tanstack/react-query"
@@ -104,13 +105,10 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
     event.preventDefault()
     search.current?.focus()
   })
-  const needle = query.trim().toLowerCase()
   const sections = settingsSections
     .map((group) => ({
       label: group.label,
-      items: group.items.filter(
-        (item) => (admin || !("admin" in item)) && (!needle || item.label.toLowerCase().includes(needle)),
-      ),
+      items: group.items.filter((item) => (admin || !("admin" in item)) && Search.matches(query, item.label)),
     }))
     .filter((group) => group.items.length > 0)
   return (

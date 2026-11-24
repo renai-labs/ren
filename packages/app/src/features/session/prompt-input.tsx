@@ -11,6 +11,7 @@ import {
 import { Composer, ComposerHistory, Mentions, type ChatSession } from "@ren/chat"
 import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
+import { Search } from "@ren/schema/search"
 import { SessionMessage } from "@ren/schema/session/message"
 import { cn } from "cn"
 import type { Suggest } from "./use-composer-suggestions.js"
@@ -270,8 +271,8 @@ function AppsStrip(props: {
   )
 }
 
-const matchesAppName = (_appId: string, search: string, names?: ReadonlyArray<string>) =>
-  names?.some((name) => name.toLowerCase().includes(search.trim().toLowerCase())) ? 1 : 0
+const matchesAppName = (_appId: string, search: string, names: ReadonlyArray<string> = []) =>
+  Search.matches(search, ...names) ? 1 : 0
 
 function AppStatusItem(props: {
   app: Pick<CatalogApp, "id" | "name" | "icon">

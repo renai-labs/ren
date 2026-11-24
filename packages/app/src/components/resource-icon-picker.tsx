@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { Suspense, use, useDeferredValue, useRef, useState, type ReactNode } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { IconPhotoUp, IconSearch, IconTrash } from "@tabler/icons-react"
@@ -73,12 +74,8 @@ function Glyphs(props: {
   onPick: (icon: string) => void
 }) {
   const [query, setQuery] = useState("")
-  const search = useDeferredValue(query.trim().toLowerCase())
-  const shown = search
-    ? ResourceIcons.glyphs.filter(
-        (glyph) => glyph.label.toLowerCase().includes(search) || glyph.keywords.includes(search),
-      )
-    : ResourceIcons.glyphs
+  const search = useDeferredValue(query)
+  const shown = ResourceIcons.glyphs.filter((glyph) => Search.matches(search, glyph.label, glyph.keywords))
   return (
     <div className="flex flex-col gap-2">
       <SearchField label="Search icons" value={query} onChange={setQuery} />

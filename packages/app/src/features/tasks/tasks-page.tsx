@@ -42,7 +42,7 @@ import { formatShortDate } from "@ren/ui/time"
 import { cn } from "cn"
 import { useState, type ComponentType } from "react"
 import type { TaskInfo } from "@ren/client"
-import { Tasks } from "@ren/client/react"
+import { Debounce, Tasks } from "@ren/client/react"
 import { FilterMatch } from "@ren/util/filter-match"
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "@ren/ui/sonner"
@@ -321,8 +321,10 @@ export function TasksPage(props: {
   const me = useMe()
   const views = useTaskView({ search, spaceId, setSearch: props.setSearch })
   const filters = views.filters
+  const [query, setQuery] = useState("")
+  const words = Debounce.useValue(query.trim(), 250)
   const tasks = useQuery({
-    ...Tasks.all(client, Tasks.listInput(filters, spaceId)),
+    ...Tasks.all(client, Tasks.searchInput(Tasks.listInput(filters, spaceId), words)),
     placeholderData: keepPreviousData,
     ...Loader.required,
   })
@@ -338,17 +340,14 @@ export function TasksPage(props: {
     members: members.members,
     labels,
   }
-  const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<string[]>([])
   const [archiving, setArchiving] = useState(false)
   const update = useMutation(api.task.update.mutationOptions())
   const assign = useMutation(api.task.assign.mutationOptions())
   const archive = useMutation(api.task.archive.mutationOptions())
-  const needle = query.trim().toLowerCase()
   const roots: ReadonlyArray<TaskInfo> = tasks.data?.items ?? []
   const visible = roots
     .filter((task) => FilterMatch.passes(filters, Tasks.filterValues(task, me.user.id)))
-    .filter((task) => !needle || `${task.identifier} ${task.title}`.toLowerCase().includes(needle))
     .toSorted(Tasks.order(display))
   const bulk = async (ids: ReadonlyArray<string>, run: (id: string) => Promise<unknown>, done: string) => {
     const results = await Promise.allSettled(ids.map(run))
@@ -464,7 +463,7 @@ export function TasksPage(props: {
             spaceId={spaceId}
             loading={loading}
             stale={stale}
-            filtered={visible.length < roots.length}
+            filtered={visible.length < roots.length || words !== ""}
             onClearFilters={clearFilters}
             properties={properties}
             idWidth={idWidth}

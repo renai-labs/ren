@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { useRef, useState, type KeyboardEvent } from "react"
 import type { SpaceInfo } from "@ren/client"
 import { IconChevronDown, IconCube, IconLock } from "@tabler/icons-react"
@@ -21,7 +22,7 @@ export function WorkingIn(props: {
   const [active, setActive] = useState<string>()
   const list = useRef<HTMLDivElement>(null)
   const chosen = props.spaces.find((space) => space.id === props.spaceId)
-  const matches = props.spaces.filter((space) => space.name.toLowerCase().includes(query.trim().toLowerCase()))
+  const matches = props.spaces.filter((space) => Search.matches(query, space.name))
   const groups = [
     { label: "Personal", spaces: matches.filter(isPersonal) },
     { label: "Shared", spaces: matches.filter((space) => !isPersonal(space)) },
