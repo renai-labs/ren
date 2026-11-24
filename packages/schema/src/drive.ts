@@ -146,5 +146,24 @@ export const uploadsOf = (sessionId: string, messageId: string) => `${chatsFolde
 
 export const outputsOf = (sessionId: string) => `${chatsFolder}${sessionId}/outputs`
 
+export const tasksFolder = "tasks/"
+
+export const taskFolder = (identifier: string) => `${tasksFolder}${identifier}`
+
+const spaceScheme = "drive:space/"
+
+const decode = Option.liftThrowable(decodeURIComponent)
+
+export const spaceLink = (path: string) => `${spaceScheme}${path.split("/").map(encodeURIComponent).join("/")}`
+
+export const linkedPath = (href: string) =>
+  href.startsWith(spaceScheme) ? Option.getOrUndefined(decode(href.slice(spaceScheme.length))) : undefined
+
+export const imageNames = (markdown: string) =>
+  markdown.replaceAll(/!\[([^\]]*)\]\(<?drive:space\/([^)>]+)>?\)/gu, (_, alt: string, path: string) => {
+    const name = path.split("/").at(-1) ?? path
+    return `🖼 ${alt || Option.getOrElse(decode(name), () => name)}`
+  })
+
 export const typeOf = (name: string) =>
   /\.[cm]?ts$/iu.test(name) ? "text/typescript" : Option.getOrElse(Mime.getType(name), () => "application/octet-stream")
