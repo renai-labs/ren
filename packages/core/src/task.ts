@@ -472,7 +472,7 @@ export const layer = Layer.effect(
                 agent_id: next.agentId,
                 owner_id: next.ownerId,
                 updated_at: sql`now()`,
-                ...(!next.agentId && { human_review: false, human_review_reason: null }),
+                ...(row.task.agent_id && !next.agentId && { human_review: false, human_review_reason: null }),
               })
               .where(eq(Database.Schema.task.id, id))
             yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
