@@ -10,16 +10,18 @@ export function ChannelsSettingsPage() {
   const { api } = RouterContext.useRouterContext()
   const installs = useSuspenseQuery(Channels.installsOptions(api)).data.items
   const offered = useSuspenseQuery(api["channel-connect"]["channel-provider"].list.queryOptions()).data.items
+  const installedBy = new Map(installs.map((install) => [install.provider, install]))
+  const offeredIds = new Set(offered.map((provider) => provider.id))
   const sections = Channels.sections
     .map((section) => ({
       title: section.title,
       rows: section.providers
         .map((id) => ({
           provider: Channels.byId[id],
-          installed: installs.find((install) => install.provider === id),
-          offered: offered.some((provider) => provider.id === id),
+          installed: installedBy.get(id),
+          offered: offeredIds.has(id),
         }))
-        .filter((row) => row.installed || row.offered),
+        .filter((row) => row.installed !== undefined || row.offered),
     }))
     .filter((section) => section.rows.length > 0)
   return (

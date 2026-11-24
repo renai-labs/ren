@@ -67,7 +67,7 @@ export function MembersTable<Row extends MemberRow>(props: {
                       {row.you ? <span className="text-xs text-muted-foreground">You</span> : null}
                     </span>
                   </TableCell>
-                  <TableCell className="whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
+                  <TableCell className="[overflow-wrap:anywhere] whitespace-normal text-muted-foreground">
                     {row.email.split(beforeAt).map((part, index) => (
                       <Fragment key={part}>
                         {index > 0 ? <wbr /> : null}

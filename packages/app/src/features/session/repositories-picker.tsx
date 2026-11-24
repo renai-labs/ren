@@ -39,10 +39,9 @@ const keyOf = (reference: Reference) => `repository:${reference.alias}`
 
 function RepositoriesPalette(props: {
   references: ReadonlyArray<Reference>
-  canAdd: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: () => void
+  onAdd?: () => void
 }) {
   const { platform } = RouterContext.useRouterContext()
   const [query, setQuery] = useState("")
@@ -53,13 +52,13 @@ function RepositoriesPalette(props: {
   )
   const rows: ReadonlyArray<Row> = [
     ...matches.map((reference) => ({ key: keyOf(reference), reference })),
-    ...(props.canAdd ? [{ key: "add" as const, reference: null }] : []),
+    ...(props.onAdd ? [{ key: "add" as const, reference: null }] : []),
   ]
   const current = rows.find((row) => row.key === active) ?? rows[0]
   const pick = (row: Row) => {
     props.onOpenChange(false)
     if (row.reference) platform.openExternal(row.reference.repository)
-    else props.onAdd()
+    else props.onAdd?.()
   }
   const move = (delta: number) => {
     if (rows.length === 0) return
@@ -167,10 +166,9 @@ export function RepositoriesPicker(props: { spaceId: string | undefined; disable
       </Button>
       <RepositoriesPalette
         references={references}
-        canAdd={settings.data?.canUpdate === true}
         open={open}
         onOpenChange={setOpen}
-        onAdd={() => setAdding(true)}
+        {...(settings.data?.canUpdate === true && { onAdd: () => setAdding(true) })}
       />
       {adding ? <RepositoriesDialog spaceId={spaceId} onClose={() => setAdding(false)} /> : null}
     </>

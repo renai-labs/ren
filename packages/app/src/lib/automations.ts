@@ -4,7 +4,7 @@ import type { ScheduleInfo, ScheduleRunStatus, ScheduleWhen, WebhookInfo, Webhoo
 import { Primitive } from "@ren/schema/primitive"
 import { Session } from "@ren/schema/session"
 import { Slug } from "@ren/util/slug"
-import { Cron, Option, Result, Schema } from "effect"
+import { Cron, DateTime, Equal, Option, Result, Schema } from "effect"
 import { cadenceOf, dateKey, describe, whenOf, type Cadence, type Frequency } from "./schedules.js"
 import { Webhooks } from "./webhooks.js"
 
@@ -38,11 +38,11 @@ export const kinds = [
 
 export type ListKind = (typeof kinds)[number]["value"]
 
-export const runOrigins: ReadonlyArray<Session.Origin> = ["schedule", "webhook"]
+const runOrigins: ReadonlySet<Session.Origin> = new Set(["schedule", "webhook"])
 
 // oxlint-disable-next-line ren/no-comments -- The chats that people start. Runs of schedules and webhooks show in each automation's run history; search leaves them out, and the chat list shows them only when its filter asks for them.
 export const chatOrigins: ReadonlyArray<Session.Origin> = Session.Origin.literals.filter(
-  (origin) => !runOrigins.includes(origin),
+  (origin) => !runOrigins.has(origin),
 )
 
 // oxlint-disable-next-line ren/no-comments -- An automation is one schedule or one webhook of a space: a name, the instructions for the agent and its one trigger.
@@ -91,10 +91,6 @@ export const ofWebhook = (webhook: WebhookInfo): Automation => ({
   webhook,
 })
 
-export type Kind = "schedule" | "webhook"
-
-export const kindOf = (automation: Automation): Kind => (automation.schedule ? "schedule" : "webhook")
-
 export const isActive = (automation: Automation) =>
   automation.schedule?.status === "active" || automation.webhook?.mode === "live"
 
@@ -128,11 +124,11 @@ export interface PresetRef {
   readonly preset: string
 }
 
-export type Trigger =
+type Trigger =
   | { readonly kind: "schedule"; readonly cadence: Cadence }
   | { readonly kind: "webhook"; readonly preset: PresetRef | null }
 
-export type Target = ScheduleInfo["target"]
+type Target = ScheduleInfo["target"]
 
 export interface Draft {
   readonly spaceId: string
@@ -195,7 +191,7 @@ export const startCadence = (frequency: Frequency, zone: string, current: Cadenc
 const sameWhen = (cadence: Cadence, when: ScheduleWhen) =>
   Option.match(whenOf(cadence), {
     onNone: () => false,
-    onSome: (next) => JSON.stringify(next) === JSON.stringify(when),
+    onSome: (next) => Equal.equals(next, when),
   })
 
 export const problemOf = (draft: Draft) => {
@@ -227,7 +223,7 @@ export const scheduleChanges = (draft: Draft, current: ScheduleInfo, when: Sched
     ...(message === current.message ? {} : { message }),
     ...(draft.trigger?.kind === "schedule" && sameWhen(draft.trigger.cadence, current.when) ? {} : { when }),
     ...agentChange(Webhooks.agentIdOf(draft.agent), current.agentId),
-    ...(JSON.stringify(draft.target) === JSON.stringify(current.target) ? {} : { target: draft.target }),
+    ...(Equal.equals(draft.target, current.target) ? {} : { target: draft.target }),
   }
 }
 
@@ -292,13 +288,13 @@ export const nextRuns = (cadence: Cadence, count: number, now: number): Readonly
   if (Result.isFailure(parsed)) return []
   const next = Option.liftThrowable(Cron.next)
   const runs: Array<string> = []
-  let from = new Date(now)
+  let from: DateTime.DateTime.Input = now
   while (runs.length < count) {
     const found = next(parsed.success, from)
     if (Option.isNone(found)) break
     if (when.until && found.value.getTime() > Date.parse(when.until)) break
     runs.push(found.value.toISOString())
-    from = new Date(found.value.getTime() + 1000)
+    from = DateTime.addDuration(DateTime.fromDateUnsafe(found.value), "1 second")
   }
   return runs
 }

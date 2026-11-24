@@ -7,7 +7,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { useMembers } from "../../lib/use-members.js"
 import { pickerPageSize } from "../../lib/pagination.js"
 import { useNow } from "../../lib/use-now.js"
-import { AgentIcon, ModelIcon, shortModel } from "./usage-lists.js"
+import { AgentIcon, ModelIcon } from "./usage-lists.js"
 import { UsageQuery } from "./usage-query.js"
 import type { UsageSearch } from "./usage-search.js"
 
@@ -95,7 +95,7 @@ export function UsageFilter(props: {
       single: true,
       options: (models.data?.rows ?? []).flatMap((row) =>
         row.key
-          ? [{ value: row.key, label: shortModel(row.key), icon: () => <ModelIcon model={row.key ?? ""} /> }]
+          ? [{ value: row.key, label: Insights.shortModel(row.key), icon: () => <ModelIcon model={row.key ?? ""} /> }]
           : [],
       ),
     },

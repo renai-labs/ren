@@ -38,55 +38,73 @@ export function MappingsTable(props: {
             </TableEmpty>
           ) : null}
           {props.mappings.map((mapping) => (
-            <TableRow key={mapping.id} className="relative">
-              <TableCell>
-                <span className="flex items-center gap-2.5">
-                  {mapping.provider === "slack" ? (
-                    <IconHash className="size-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChannelMark provider={mapping.provider} className="size-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <Button
-                    variant="ghost"
-                    disabled={props.busy || !props.editableSpaceIds.includes(mapping.space.id)}
-                    title={mapping.placeName}
-                    aria-label={`Edit ${mapping.placeName}`}
-                    onClick={() => props.onEdit(mapping.id)}
-                    className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
-                  >
-                    {mapping.provider === "github" ? (
-                      <PlaceName provider={mapping.provider} name={mapping.placeName} />
-                    ) : (
-                      mapping.placeName
-                    )}
-                  </Button>
-                </span>
-              </TableCell>
-              <TableCell>
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <IconCube className="size-4 shrink-0" />
-                  <span className="truncate" title={mapping.space.name}>
-                    {mapping.space.name}
-                  </span>
-                </span>
-              </TableCell>
-              <TableCell>
-                <span className="relative flex justify-end">
-                  {props.busy || !props.editableSpaceIds.includes(mapping.space.id) ? null : (
-                    <RowMenu
-                      label={`${mapping.placeName} actions`}
-                      items={[
-                        { label: "Edit", icon: IconPencil, onSelect: () => props.onEdit(mapping.id) },
-                        { label: "Unlink", icon: IconLinkOff, onSelect: () => props.onRemove(mapping) },
-                      ]}
-                    />
-                  )}
-                </span>
-              </TableCell>
-            </TableRow>
+            <MappingRow
+              key={mapping.id}
+              mapping={mapping}
+              editable={!props.busy && props.editableSpaceIds.includes(mapping.space.id)}
+              onEdit={() => props.onEdit(mapping.id)}
+              onRemove={() => props.onRemove(mapping)}
+            />
           ))}
         </TableBody>
       </Table>
     </TableCard>
+  )
+}
+
+function MappingRow(props: {
+  mapping: ChannelMappingInfo
+  editable: boolean
+  onEdit: () => void
+  onRemove: () => void
+}) {
+  const mapping = props.mapping
+  return (
+    <TableRow className="relative">
+      <TableCell>
+        <span className="flex items-center gap-2.5">
+          {mapping.provider === "slack" ? (
+            <IconHash className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChannelMark provider={mapping.provider} className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <Button
+            variant="ghost"
+            disabled={!props.editable}
+            title={mapping.placeName}
+            aria-label={`Edit ${mapping.placeName}`}
+            onClick={props.onEdit}
+            className="block h-auto min-w-0 justify-start truncate rounded-none border-0 p-0 text-left font-normal after:absolute after:inset-0 hover:bg-transparent focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50 active:not-aria-[haspopup]:scale-none"
+          >
+            {mapping.provider === "github" ? (
+              <PlaceName provider={mapping.provider} name={mapping.placeName} />
+            ) : (
+              mapping.placeName
+            )}
+          </Button>
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="flex items-center gap-2 text-muted-foreground">
+          <IconCube className="size-4 shrink-0" />
+          <span className="truncate" title={mapping.space.name}>
+            {mapping.space.name}
+          </span>
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="relative flex justify-end">
+          {props.editable ? (
+            <RowMenu
+              label={`${mapping.placeName} actions`}
+              items={[
+                { label: "Edit", icon: IconPencil, onSelect: props.onEdit },
+                { label: "Unlink", icon: IconLinkOff, onSelect: props.onRemove },
+              ]}
+            />
+          ) : null}
+        </span>
+      </TableCell>
+    </TableRow>
   )
 }

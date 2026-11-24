@@ -11,7 +11,7 @@ const places = new Map<string, ReadonlyArray<Spot> | undefined>()
 
 const bottomSlack = 8
 
-export const atBottom = (viewport: HTMLElement) =>
+const atBottom = (viewport: HTMLElement) =>
   viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= bottomSlack
 
 export const placeOf = (sessionID: string) => places.get(sessionID)

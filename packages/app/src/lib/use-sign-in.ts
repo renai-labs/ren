@@ -18,7 +18,7 @@ export function useSignIn(onOpened?: (item: AppProfileItem) => void, onFailed?: 
   const platform = Platform.usePlatform()
   const { api } = RouterContext.useRouterContext()
   const connect = useMutation(api["credential-connect"].credential.connect.mutationOptions())
-  const wait = useMutation({ mutationKey: ["credential-connect", "wait"], mutationFn: closed })
+  const wait = useMutation({ mutationFn: closed })
   return {
     pending: connect.isPending,
     start: (
