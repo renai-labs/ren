@@ -1,14 +1,11 @@
-import type { BillingSummary, RenInferenceConnection } from "@ren/client"
+import type { BillingSummary } from "@ren/client"
 import { IconChevronRight } from "@tabler/icons-react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import type { ReactNode } from "react"
 import { formatUsd } from "@ren/ui/format"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
 import { useShapeId } from "../../components/page.js"
-import { ProviderMark } from "../../components/provider-mark.js"
-import { StatusBadge } from "../../components/status-badge.js"
 import { Insights } from "../../lib/insights.js"
 import { RouterContext } from "../../lib/router-context.js"
 
@@ -19,17 +16,6 @@ const sampleBilling: BillingSummary = {
   pendingPlan: null,
   availableMicroUsd: 1_000_000,
   grantedMicroUsd: 1_000_000,
-}
-
-const sampleConnection: RenInferenceConnection = {
-  id: "sample",
-  label: "Team subscription",
-  providerName: "Anthropic",
-  iconUrl: "",
-  status: { tone: "ok", label: "Connected" },
-  canManage: false,
-  canReconnect: false,
-  meters: [{ key: "sample", title: "Current session", percent: 0 }],
 }
 
 const item =
@@ -59,50 +45,15 @@ function Credits(props: { billing: BillingSummary }) {
   )
 }
 
-function Subscription(props: { connection: RenInferenceConnection }) {
-  const connection = props.connection
-  const meter = connection.meters.find((each) => each.percent !== null)
-  const detail: ReactNode =
-    connection.status.tone !== "ok" ? (
-      <StatusBadge tone={connection.status.tone}>{connection.status.label}</StatusBadge>
-    ) : meter ? (
-      <span className="text-muted-foreground tabular-nums">
-        {meter.title} {meter.percent}%
-      </span>
-    ) : null
-  return (
-    <Link to="/settings/providers" className={item}>
-      <ProviderMark provider={connection.providerName} />
-      <span>{connection.label}</span>
-      {detail}
-      <Chevron />
-    </Link>
-  )
-}
-
 export function UsageBalances() {
   const { api } = RouterContext.useRouterContext()
   const billing = useQuery({ ...api.billing.get.queryOptions(), retry: false })
-  const connections = useQuery({ ...api["ren-inference"].connection.list.queryOptions(), retry: false })
   const shapeId = useShapeId("usage-balances")
-  const pending = billing.isPending || connections.isPending
-  const summary = pending ? sampleBilling : billing.data
-  const subscriptions = pending ? [sampleConnection] : (connections.data ?? [])
-  if (!summary && subscriptions.length === 0) return null
+  const summary = billing.isPending ? sampleBilling : billing.data
+  if (!summary) return null
   return (
-    <Loading id={shapeId} loading={pending} label="Loading credits and subscriptions">
-        <ul aria-label="Credits and subscriptions" className="flex items-center gap-1">
-          {summary ? (
-            <li>
-              <Credits billing={summary} />
-            </li>
-          ) : null}
-          {subscriptions.map((connection) => (
-            <li key={connection.id}>
-              <Subscription connection={connection} />
-            </li>
-          ))}
-        </ul>
+    <Loading id={shapeId} loading={billing.isPending} label="Loading credits">
+      <Credits billing={summary} />
     </Loading>
   )
 }
