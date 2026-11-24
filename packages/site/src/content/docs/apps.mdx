@@ -12,7 +12,7 @@ An app connects Ren to a service like Gmail, Linear, HubSpot, or Shopify. For ex
 
 ## How apps work
 
-An app gives Ren tools through one or more MCP servers. It can also include [skills](/docs/skills/) that explain how to use those tools. You connect the account or key that the app needs.
+An app gives Ren tools through one or more MCP servers. It can also include [skills](/docs/apps/#skills) that explain how to use those tools. You connect the account or key that the app needs.
 
 Add an app to a [space](/docs/spaces/) to make it available in every chat of that space. An **account** holds the sign-ins and keys of an app. Several spaces can use the same account.
 
@@ -87,7 +87,7 @@ Create an app when the service you need is not in the list. An app you create ca
 
 </Steps>
 
-Ren adds the app to its space with a first account, and opens the app's page. A key or token that you typed in the dialog goes into that account, never into the app itself. For the details of MCP servers and their sign-ins, see [Custom MCPs](/docs/custom-mcps/). For skill folders, see [Skills](/docs/skills/).
+Ren adds the app to its space with a first account, and opens the app's page. A key or token that you typed in the dialog goes into that account, never into the app itself. For the details of MCP servers and their sign-ins, see [Custom MCPs](/docs/apps/#custom-mcps). For skill folders, see [Skills](/docs/apps/#skills).
 
 {/* Media placeholder (detail `apps/create`): The Create app dialog with an MCP server URL checked, OAuth 2.0 picked, a dropped skill, and **Create and sign in**. Answers: how do I make an app for a service that Ren does not list? */}
 
@@ -189,3 +189,194 @@ Connect cards work only in the web app, not in channels. Connect the account fro
 ### “Couldn’t reach the server” when you create an app
 
 Ren could not read the MCP server at that address. Check the address. You can still create the app, and connect it later.
+
+## Skills
+
+A skill is a reusable set of instructions for a type of task. Its folder contains `SKILL.md` and optional supporting files, such as templates or scripts. Ren reads the description in every chat, but loads the full instructions only when the request needs them.
+
+This example `SKILL.md` is for release notes:
+
+```md
+---
+name: release-notes
+description: Write release notes from merged pull requests. Use when asked for release notes or a changelog.
+---
+
+Group changes under Features, Fixes, and Internal.
+Link each item to its pull request.
+Skip dependency bumps unless they fix a security issue.
+```
+
+### Skill or instructions
+
+| Use                                              | For                                                                                     | When Ren reads it       |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------- |
+| Project [instructions](/docs/concepts/projects/) | Rules for every chat in a project, such as tone or which repository to work in          | On every turn           |
+| A skill                                          | A procedure that only some requests need, or a procedure that you want in many projects | When a request needs it |
+| The chat prompt                                  | A one-off request                                                                       | In that chat            |
+
+If you paste the same steps again and again, make them a skill.
+
+### Write a skill
+
+`SKILL.md` starts with frontmatter between two `---` lines. Ren checks it with the [Agent Skills](https://agentskills.io) rules:
+
+| Field                                  | Rule                                                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `name`                                 | Required. Up to 64 characters: lowercase letters, digits, and single hyphens. It must equal the folder name. |
+| `description`                          | Required. Up to 1,024 characters that say when to use the skill                                              |
+| `compatibility`                        | Optional. Up to 500 characters                                                                               |
+| `license`, `allowed-tools`, `metadata` | Optional                                                                                                     |
+
+No other fields are allowed. Every other file in the folder must be text in UTF-8, such as Markdown, scripts, or templates.
+
+If the skill needs a key, list its env name under `metadata.requiredCredentials`. Each account of the app then asks for its value:
+
+```md
+---
+name: release-notes
+description: Write release notes from merged pull requests.
+metadata:
+  requiredCredentials:
+    - kind: env
+      name: GITHUB_TOKEN
+---
+```
+
+### Add skills to an app
+
+A skill reaches a space through an [app](/docs/apps/). An app can hold only skills, or skills with the MCP servers whose tools they explain.
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+<Steps>
+
+1. Open **Apps** and select **Create app**. To add skills to an app you made, open it and select **Edit**.
+2. Under **Skills**, drop one or more skill folders on the dialog, or select **Choose folder**. A folder that holds several skill folders adds each of them.
+3. To use a skill that lives on GitHub, select **From GitHub** and paste the link to its folder, such as `https://github.com/acme/skills/tree/main/release-notes`.
+4. With no MCP server, the app takes the name and description of the first skill. Change them if you like.
+5. Pick the space under **Add to**, and select **Create app**.
+
+</Steps>
+
+{/* Media placeholder (detail `skills/drop`): The Skills drop zone of the Create app dialog with a refused folder and its reasons. Answers: why was my skill folder not added? */}
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Create a skill called release-notes from the rules I just gave you, and add it to this space." />
+
+Ren writes the `SKILL.md` for you.
+
+</Fragment>
+</SurfaceTabs>
+
+If a folder breaks a rule, Ren adds nothing from that drop and lists every reason, for example:
+
+```text
+✕ Couldn’t add “release”
+  • Skill name 'Release_Notes' must be lowercase
+  • Directory name 'release' must match skill name 'Release_Notes'
+  • assets/logo.png is not a text file
+```
+
+Fix the folder and drop it again. A dropped skill with the name of a skill already in the app replaces it.
+
+### Sources
+
+| Source   | How it works                                                                                                          | Use it for                 |
+| -------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| A folder | You drop or choose a folder. Ren stores a copy of its files in the app.                                               | Skills you write yourself  |
+| GitHub   | You paste the link to a folder. Ren fetches the files from the repository, at the branch, tag, or commit in the link. | Skills you maintain in git |
+
+A skill from a branch follows that branch: new commits change the skill without an edit of the app. Link to a commit to fix its content.
+
+### Edit or remove a skill
+
+Open the app that holds the skill and select **Edit**. To change a skill, drop its folder again. To remove it, select its trash icon. Then select **Save**. Spaces that use the app get the change in their next chat.
+
+To take a skill out of every space, remove it from its app, or archive the app.
+
+### Troubleshooting
+
+#### Two skills have the same name or similar instructions
+
+If two apps in a space have skills with the same `name`, Ren loads only the skill of the app that your organization added first. Skills with different names but similar instructions both load. Ren then picks one by its description. Fix: make each description say when to use that skill.
+
+### Good to know
+
+- Only members of the space that owns an app can change its skills.
+- To see the skills of an app as YAML, with their files, select **Spec** in the dialog.
+
+## Custom MCPs
+
+A custom MCP connects Ren to a server that no [app](/docs/apps/) covers yet. MCP is a protocol that gives agents access to tools. For example, an internal documentation server can give search tools to every chat of a space.
+
+You add a custom MCP by creating an app for it. The app can hold more than one MCP server, and [skills](/docs/apps/#skills) that explain how to use their tools.
+
+### Remote and local servers
+
+| Kind       | What you paste                                     | Example                                      |
+| ---------- | -------------------------------------------------- | -------------------------------------------- |
+| **Remote** | The address of a server that Ren reaches over HTTP | `https://mcp.acme.dev/mcp`                   |
+| **Local**  | A command that runs on the machine of the space    | `npx -y @modelcontextprotocol/server-github` |
+
+Ren reads a remote server as soon as you paste its address. It finds how the server signs in, its name, description, and icon, and the tools that it lists without a sign-in. A local server starts only in a chat, so Ren does not read it first.
+
+### Add an MCP server
+
+<SurfaceTabs>
+<Fragment slot="app">
+
+<Steps>
+
+1. Open **Apps** and select **Create app**.
+2. Paste the server's address or command. For an address, wait for **Checking…** to end. Ren shows the server's name and the number of tools that it found.
+3. Check **Auth**. Ren picks it from the server; you can change it.
+4. For a local server, add its **Env** values and the names of its **Secrets**.
+5. To add a second server, select **Add MCP server**.
+6. Pick the space under **Add to**, then select **Create app** or **Create and sign in**.
+
+</Steps>
+
+Select **More** on a server to change its scopes, client ID, name, or description.
+
+</Fragment>
+<Fragment slot="ask-ren">
+
+<AskRen prompt="Make an app for our docs MCP server at https://mcp.acme.dev/mcp and add it to this space." />
+
+</Fragment>
+</SurfaceTabs>
+
+If Ren cannot reach the server, it shows **Couldn’t reach the server. Check the URL, or create anyway.** You can create the app and fix the address later with **Edit**.
+
+### Authentication
+
+For a remote server, choose how Ren signs in:
+
+| Auth         | What you give                                                         |
+| ------------ | --------------------------------------------------------------------- |
+| No Auth      | Nothing. Use this for public servers.                                 |
+| OAuth 2.0    | A sign-in on the provider's page. **Create and sign in** opens it.    |
+| Bearer Token | A token that Ren sends as `Authorization: Bearer …` (coming soon)     |
+| API Key      | A key that Ren sends in the header that you name, such as `X-API-Key` |
+| Basic Auth   | A user name and password (not supported for now)                      |
+
+A key or token that you type in the dialog goes into the app's first account in its space. It never becomes part of the app, so anyone who reads or edits the app does not see it.
+
+A local server's **Env** values are part of the app, and everyone who can see the app can read them. Put a key in **Secrets** instead: each account asks for its value when you connect it.
+
+### Tools
+
+The app's page lists the tools of each remote server. Some servers list their tools only after a sign-in; the page then shows **Tools show after you sign in.** A local server shows **Tools show after the first chat.**
+
+### Connect its credentials
+
+If the server needs a credential that you did not type when you created the app, connect it from the app's page or from the card that Ren shows in a chat. See [Apps](/docs/apps/#connect-an-account) and [Credentials](/docs/credentials/).
+
+### Good to know
+
+- Only members of the space that owns the app can edit, move, or archive it.
+- To see or paste the whole app as YAML or JSON, select **Spec** in the dialog. See [Spec mode](/docs/apps/#spec-mode).
