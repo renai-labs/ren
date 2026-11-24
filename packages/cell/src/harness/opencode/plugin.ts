@@ -56,6 +56,7 @@ import { OpenCodeCopies } from "./copies.js"
 import { OpenCodeHandTools } from "./hand-tools.js"
 import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
+import { OpenCodeUnshownFiles } from "./unshown-files.js"
 import type { HarnessConfig } from "../config.js"
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 keys a skill by its id and an MCP's tools by the server key with each character outside [A-Za-z0-9_-] as "_"; a later registration silently replaces an earlier one with the same name.
@@ -236,6 +237,8 @@ const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
 
 const maxErrorDepth = 8
+
+const clockSkew = 2_000
 
 const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
   const failure = HandConnections.failureOf(value)
@@ -603,7 +606,7 @@ export const make = (
             editor.add({
               name: SessionMessage.showFileTool,
               description:
-                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced. An .html file of at most 5 MB is shown as a page in a sandboxed frame, for a visual answer such as a chart, a table or a layout. When the person asks for an artifact, or a page to open or share, publish it with artifact_create instead. Write it as one self-contained file: CSS and scripts inline, images as data URIs. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. The page shows inline in the reply, as wide as the reply (about 720px on a computer, 360px on a phone) and as tall as its content, on the chat’s background. Leave html, body and the outer element without a background, an outer card or border, a banner title or side padding; Ren adds an 8px gutter. A box that needs its own background gets 16px padding and `var(--radius)` corners. Give charts fixed pixel heights, use fluid widths, and let the content set the height: no `vh` units and no `height: 100%` on html or body. Use the app’s CSS variables, never fixed colors, so the page fits light and dark themes: `--background`, `--foreground`, `--muted`, `--muted-foreground`, `--card`, `--card-foreground`, `--secondary`, `--secondary-foreground`, `--accent`, `--accent-foreground`, `--primary`, `--primary-foreground`, `--destructive`, `--border`, `--ring`, `--chart-1` to `--chart-6`, `--radius`, `--font-sans` and `--font-mono`. The base styles set the background, the text color, the font and 14px text.",
+                "Show a file to the person as a card in the chat, which they can preview and download. Use it for each file you made for them, such as a report, a chart or a spreadsheet, and always for an HTML page you made: never only name or link one. In your answer, name each file in code formatting, such as `report.pdf`, so the person can open it. The file is copied to the chat’s outputs in the space’s drive, and a file of the same name there is replaced. An .html file of at most 5 MB is shown as a page in a sandboxed frame, for a visual answer such as a chart, a table or a layout. When the person asks for an artifact, or a page to open or share, publish it with artifact_create instead. Write it as one self-contained file: CSS and scripts inline, images as data URIs. The page cannot load remote images or call the network, and its scripts may come only from cdn.jsdelivr.net, unpkg.com or cdnjs.cloudflare.com. The page shows inline in the reply, as wide as the reply (about 720px on a computer, 360px on a phone) and as tall as its content, on the chat’s background. Leave html, body and the outer element without a background, an outer card or border, a banner title or side padding; Ren adds an 8px gutter. A box that needs its own background gets 16px padding and `var(--radius)` corners. Give charts fixed pixel heights, use fluid widths, and let the content set the height: no `vh` units and no `height: 100%` on html or body. Use the app’s CSS variables, never fixed colors, so the page fits light and dark themes: `--background`, `--foreground`, `--muted`, `--muted-foreground`, `--card`, `--card-foreground`, `--secondary`, `--secondary-foreground`, `--accent`, `--accent-foreground`, `--primary`, `--primary-foreground`, `--destructive`, `--border`, `--ring`, `--chart-1` to `--chart-6`, `--radius`, `--font-sans` and `--font-mono`. The base styles set the background, the text color, the font and 14px text.",
               input: Schema.Struct({
                 path: Schema.NonEmptyString.annotate({ description: "The path of the file on the environment." }),
               }),
@@ -613,11 +616,46 @@ export const make = (
                 onSpaceDrive((client) =>
                   DriveFiles.show(client, spaceDrive, sessionId, resolve(folder, args.path)),
                 ).pipe(
-                  Effect.map((file) => ({ output: file, metadata: { file } })),
+                  Effect.map((file) => ({
+                    output: file,
+                    metadata: { file },
+                    content: `Showed ${file.name} to the person as a card; it is at ${file.path} in the space’s drive. In your answer, name it as \`${file.name}\` so they can open it.`,
+                  })),
                   Effect.mapError((error) => new Tool.Error({ message: error.message })),
                 ),
             })
           })
+          yield* context.session.hook("experimental.idle", (event) =>
+            Effect.gen(function* () {
+              if (event.sessionID !== sessionId || event.background.length > 0) return
+              if (!hasWorkspace || Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.drives?.type !== "mounts")
+                return
+              const unshown = OpenCodeUnshownFiles.of(
+                yield* context.session.context({ sessionID: event.sessionID }),
+                folder,
+              )
+              if (!unshown?.paths.length) return
+              const changed = yield* onSpaceDrive((client) =>
+                Effect.filter(unshown.paths, (path) =>
+                  client["files.stat"]({ path }).pipe(
+                    Effect.map((info) => info.type === "file" && info.modifiedAtMs >= unshown.since - clockSkew),
+                    Effect.orElseSucceed(() => false),
+                  ),
+                ),
+              )
+              if (changed.length === 0) return
+              yield* context.session.synthetic({
+                sessionID: event.sessionID,
+                text: OpenCodeUnshownFiles.prompt(changed, folder),
+                description: "Showing the files Ren made",
+                metadata: { [OpenCodeUnshownFiles.marker]: true },
+              })
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Ren could not check for files it made and did not show", cause),
+              ),
+            ),
+          )
           yield* context.session.hook("context", (event) =>
             Effect.gen(function* () {
               const metadata = yield* metadataOf(context.session, event.sessionID)
