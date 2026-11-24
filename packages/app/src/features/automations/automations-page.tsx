@@ -1,7 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router"
 import { Page } from "../../components/page.js"
 import { AutomationEditor, type EditorTab } from "./automation-editor.js"
-import { AutomationsList, NewAutomationButton, type Tab } from "./automations-list.js"
+import { AutomationsList, NewAutomationButton } from "./automations-list.js"
 import type { Automations } from "../../lib/automations.js"
 
 const globalList = getRouteApi("/_authed/_shell/automations/")
@@ -19,11 +19,8 @@ export function AutomationsPage() {
     <Page title="Automations" description="Agents that run on a schedule, or when another app sends a request.">
       <AutomationsList
         spaceId={undefined}
-        tab={search.tab ?? "automations"}
-        onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined, kind: search.kind } })}
         kind={search.kind ?? "schedules"}
         onKind={(kind) => void navigate({ search: { kind: kindParam(kind) } })}
-        onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
         actions={<NewAutomationButton spaceId={undefined} />}
       />
     </Page>
@@ -37,11 +34,8 @@ export function SpaceAutomationsTab() {
   return (
     <AutomationsList
       spaceId={spaceId}
-      tab={search.tab ?? "automations"}
-      onTab={(tab: Tab) => void navigate({ search: { tab: tab === "runs" ? "runs" : undefined, kind: search.kind } })}
       kind={search.kind ?? "schedules"}
       onKind={(kind) => void navigate({ search: { kind: kindParam(kind) } })}
-      onOpenRun={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
       actions={<NewAutomationButton spaceId={spaceId} />}
     />
   )

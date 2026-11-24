@@ -1,5 +1,4 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
-import { RunSheet } from "./-run-sheet.js"
 import { AutomationsPage } from "../../../../features/automations/automations-page.js"
 import { Automations } from "../../../../lib/automations.js"
 
@@ -15,19 +14,5 @@ export const Route = createFileRoute("/_authed/_shell/automations/")({
     if (schedule)
       throw redirect({ to: "/automations/$spaceId/$slug", params: { spaceId: schedule.spaceId, slug: schedule.slug } })
   },
-  component: RouteComponent,
+  component: AutomationsPage,
 })
-
-function RouteComponent() {
-  const session = Route.useSearch().session
-  const navigate = Route.useNavigate()
-  return (
-    <>
-      <AutomationsPage />
-      <RunSheet
-        session={session}
-        onClose={() => void navigate({ search: (previous) => ({ ...previous, session: undefined }), replace: true })}
-      />
-    </>
-  )
-}

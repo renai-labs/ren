@@ -2,14 +2,12 @@ import type { ScheduleInfo, ScheduleRunInfo, WebhookInfo, WebhookRequestInfo } f
 import { keepPreviousData, useMutation, useQueries, useQuery, useInfiniteQuery } from "@tanstack/react-query"
 import { Option } from "effect"
 import { toast } from "@ren/ui/sonner"
-import { SessionPages } from "@ren/client/react"
 import { Automations, type Automation, type Draft } from "./automations.js"
 import { errorMessage } from "./errors.js"
 import { Pages } from "./pages.js"
 import { pickerPageSize } from "./pagination.js"
 import { RouterContext } from "./router-context.js"
 import { localTimeZone, refreshEvery, runReasons, whenOf } from "./schedules.js"
-import { useSpaces } from "./use-spaces.js"
 import { Webhooks } from "./webhooks.js"
 
 type Listed<A> = {
@@ -83,22 +81,6 @@ export function useAutomation(spaceId: string, handle: string) {
     loading: schedule.isPending || (schedule.data === null && webhook.isPending),
     failed: schedule.isError || webhook.isError,
   }
-}
-
-// oxlint-disable-next-line ren/no-comments -- The chats that schedules and webhooks started in these spaces, newest first.
-export function useRuns(options: { readonly spaceId: string | undefined }) {
-  const { client } = RouterContext.useRouterContext()
-  const spaces = useSpaces()
-  const spaceIds = options.spaceId ? [options.spaceId] : spaces.joined.map((space) => space.id)
-  return useInfiniteQuery({
-    ...SessionPages.options(client, {
-      spaceId: spaceIds,
-      origin: [...Automations.runOrigins],
-      orderBy: "created",
-    }),
-    enabled: spaceIds.length > 0,
-    placeholderData: keepPreviousData,
-  })
 }
 
 export interface AppPreset extends Automations.PresetRef {
