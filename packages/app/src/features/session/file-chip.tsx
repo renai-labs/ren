@@ -5,6 +5,9 @@ import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { FileChip } from "@ren/ui/file-chip"
+import { FileIcon } from "@ren/ui/file-icon"
+import { FileName } from "@ren/util/file-name"
+import { cn } from "cn"
 import { AsyncResult } from "effect/reactivity"
 import { useCopy } from "../../lib/use-copy.js"
 import { useOpenDriveFile } from "./file-outputs.js"
@@ -32,6 +35,15 @@ export function WorkspaceFileChip(props: {
     >
       {props.children}
     </FileChip>
+  )
+}
+
+function Named(props: { name: string; mime?: string | undefined; text: string }) {
+  return (
+    <>
+      <FileIcon name={props.name} mime={props.mime} className="mr-1 inline-block size-[1.1em] align-[-0.2em]" />
+      {props.text}
+    </>
   )
 }
 
@@ -67,7 +79,7 @@ function ExistingFile(props: { root: Session.ID; path: string; text: string; fal
       line={InlineCodeKind.parsePathLineSuffix(props.text).selection?.start}
       className={props.className}
     >
-      {props.text}
+      <Named name={FileName.base(found.value)} text={props.text} />
     </WorkspaceFileChip>
   )
 }
@@ -80,13 +92,13 @@ export function InlineFile(props: {
   fallback: ReactNode
   code: boolean
 }) {
-  const className = props.code ? "bg-muted px-1 py-0.5 text-[90%]" : "font-sans"
+  const className = cn("whitespace-nowrap", props.code ? "bg-muted px-1 py-0.5 text-[90%]" : "font-sans")
   const drive = props.drive
   const file = drive && FileMentions.find(drive.files, props.text)
   if (drive && file)
     return (
       <DriveFileChip spaceId={drive.spaceId} file={file} className={className}>
-        {props.text}
+        <Named name={file.name} mime={file.mime} text={props.text} />
       </DriveFileChip>
     )
   const path = props.computer ? InlineCodeKind.workspacePath(props.text) : undefined
