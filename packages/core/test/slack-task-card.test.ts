@@ -343,7 +343,7 @@ describe("SlackTaskCard", () => {
   )
 
   it.live(
-    "the details show the description, links and sessions only in a mapped channel; an unknown task is not found",
+    "the details show the description with drive images as their names, links and sessions only in a mapped channel; an unknown task is not found",
     () =>
       Effect.gen(function* () {
         const tasks = yield* Task.Service
@@ -354,7 +354,8 @@ describe("SlackTaskCard", () => {
         const created = yield* tasks.create(build, {
           spaceId: o.factory.id,
           title: "Fix the deploy",
-          description: "The deploy fails at 10:02.",
+          description:
+            "The deploy fails at 10:02.\n\n![](drive:space/tasks/X-1/deploy%20log.png) ![The error](drive:space/tasks/X-1/error.png)",
           links: ["https://github.com/acme/web/pull/41"],
         })
         const requested = (place: string, externalId: string) =>
@@ -370,7 +371,9 @@ describe("SlackTaskCard", () => {
         yield* requested(found.channel, created.id)
         yield* until(() => calls("entity.presentDetails").length === before + 1)
         const full = entityIn(calls("entity.presentDetails").at(-1)?.params.metadata)
-        expect(full.entity_payload.fields.description?.value).toBe("The deploy fails at 10:02.")
+        expect(full.entity_payload.fields.description?.value).toBe(
+          "The deploy fails at 10:02.\n\n🖼 deploy log.png 🖼 The error",
+        )
         expect(full.entity_payload.custom_fields.map((field) => field.key)).toEqual([
           "pull_request",
           "latest_session",

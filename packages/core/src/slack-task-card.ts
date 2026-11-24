@@ -3,6 +3,7 @@ export * as SlackTaskCard from "./slack-task-card.js"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import type { Channel } from "@ren/schema/channel"
+import { Drive } from "@ren/schema/drive"
 import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
@@ -401,7 +402,7 @@ export const layer = Layer.effect(
             ...(card.priority && { priority: { value: priorityText[card.priority] } }),
             ...(options.titled &&
               options.detailed &&
-              card.description && { description: { value: card.description, format: "markdown" } }),
+              card.description && { description: { value: Drive.imageNames(card.description), format: "markdown" } }),
             ...(activity && { date_updated: { value: seconds(activity.at) } }),
           },
           custom_fields: [...summaryFields(app, card), ...(options.detailed ? detailFields(app, card, options) : [])],
