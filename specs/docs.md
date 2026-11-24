@@ -36,40 +36,40 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 
 **One page per feature.** When a feature appears at both organisation and space level, give it one page in **Work**, **Integrations**, **Behavior** or **Admin**. On that page, show what a reader can do at each level and where the steps differ. Use task headings, such as “Invite someone to the organisation” and “Add someone to a space” on **Members**.
 
-The **Organisation** and **Space** overviews link directly to the relevant heading on the shared page. For example, link from Space to **Members → Add someone to a space**. Reserve the two groups for work specific to that level: **Billing** belongs under Organisations; **Inbox**, **Agents**, and **Factory** belong under Spaces.
+The **Organisation** and **Space** overviews link directly to the relevant heading on the shared page. For example, link from Space to **Members → Add someone to a space**. Reserve the two groups for work specific to that level: **Billing** belongs under **Organisation**; **Inbox**, **Agents**, and **Factory** belong under **Space**. The first page of each group is labelled **Overview**.
 
 Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organisation or in one space. **Billing** answers “How do I change our plan?”
 
-| Group         | Page            | Slug              | Source                                              |
-| ------------- | --------------- | ----------------- | --------------------------------------------------- |
-| Get started   | Welcome         | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
-|               | Quickstart      | `quickstart`      | `quickstart`                                        |
-|               | Models          | `models`          | New                                                 |
-| Work          | Chat            | `chats`           | `concepts/chats`                                    |
-|               | Tasks           | `tasks`           | `concepts/tasks`                                    |
-|               | Automations     | `automations`     | `concepts/schedules`                                |
-|               | Drive           | `drive`           | `concepts/storage`                                  |
-|               | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
-| Integrations  | Apps            | `apps`            | `concepts/apps`                                     |
-|               | Credentials     | `credentials`     | `concepts/credentials`                              |
-|               | Channels        | `channels`        | `concepts/channels/index`                           |
-| Behavior      | Instructions    | `instructions`    | New                                                 |
-|               | Memory          | `memory`          | Parts of `concepts/storage`                         |
-|               | Permissions     | `permissions`     | New                                                 |
-| Admin         | Machines        | `machines`        | `concepts/environments`                             |
-|               | Usage           | `usage`           | New                                                 |
-|               | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
-| Spaces        | Space           | `spaces`          | `concepts/spaces`                                   |
-|               | Inbox           | `inbox`           | New                                                 |
-|               | Agents          | `agents`          | New                                                 |
-|               | Factory         | `factory`         | New                                                 |
-|               | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
-|               | Compute         | `compute`         | Space compute settings from `concepts/environments` |
-| Organisations | Organisation    | `organisation`    | Parts of `concepts/organizations`                   |
-|               | Model Providers | `model-providers` | New                                                 |
-|               | Billing         | `billing`         | New                                                 |
-| Clients       | Ren MCP         | `ren-mcp`         | New                                                 |
-|               | Mobile app      | `mobile`          | New                                                 |
+| Group        | Page            | Slug              | Source                                              |
+| ------------ | --------------- | ----------------- | --------------------------------------------------- |
+| Get started  | Welcome         | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
+|              | Quickstart      | `quickstart`      | `quickstart`                                        |
+|              | Models          | `models`          | New                                                 |
+| Work         | Chat            | `chats`           | `concepts/chats`                                    |
+|              | Tasks           | `tasks`           | `concepts/tasks`                                    |
+|              | Automations     | `automations`     | `concepts/schedules`                                |
+|              | Drive           | `drive`           | `concepts/storage`                                  |
+|              | Artifacts       | `artifacts`       | `concepts/artifacts`                                |
+| Integrations | Apps            | `apps`            | `concepts/apps`                                     |
+|              | Credentials     | `credentials`     | `concepts/credentials`                              |
+|              | Channels        | `channels`        | `concepts/channels/index`                           |
+| Behavior     | Instructions    | `instructions`    | New                                                 |
+|              | Memory          | `memory`          | Parts of `concepts/storage`                         |
+|              | Permissions     | `permissions`     | New                                                 |
+| Admin        | Machines        | `machines`        | `concepts/environments`                             |
+|              | Usage           | `usage`           | New                                                 |
+|              | Members         | `members`         | `concepts/organizations`, `concepts/spaces`         |
+| Space        | Overview        | `spaces`          | `concepts/spaces`                                   |
+|              | Inbox           | `inbox`           | New                                                 |
+|              | Agents          | `agents`          | New                                                 |
+|              | Factory         | `factory`         | New                                                 |
+|              | Repositories    | `repositories`    | Parts of `concepts/projects`                        |
+|              | Compute         | `compute`         | Space compute settings from `concepts/environments` |
+| Organisation | Overview        | `organisation`    | Parts of `concepts/organizations`                   |
+|              | Model Providers | `model-providers` | New                                                 |
+|              | Billing         | `billing`         | New                                                 |
+| Clients      | Ren MCP         | `ren-mcp`         | New                                                 |
+|              | Mobile app      | `mobile`          | New                                                 |
 
 ### Developers tab
 
@@ -116,7 +116,7 @@ Everything that leaves the docs, so the new version can be compared with the old
 
 ### 4.2 Sidebar
 
-Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Organisations** and **Spaces**. Add **Clients** for Ren MCP and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
+Replace **Work with Ren** with four groups of shared features: **Work**, **Integrations**, **Behavior** and **Admin**. Replace **Organize** with **Space** and **Organisation**. Add **Clients** for Ren MCP and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -594,7 +594,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 - Owners and removals. Leave organization. Delete account (7 days).
 - Cover organisation membership and space access in separate task sections. Give each a stable heading for overview links.
 
-### Organisations
+### Organisation
 
 **Organisation**
 
@@ -608,7 +608,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 - Show how to manage the organisation’s plan and subscription. Link to Usage for the spending breakdown.
 
-### Spaces
+### Space
 
 **Space**
 
