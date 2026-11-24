@@ -23,8 +23,6 @@ Source: `packages/site/src/content/docs`, sidebar in `packages/site/src/lib/docs
 | Video           | Only for multi-step flows: Quickstart, connecting an app.                                                                                                               |
 | Welcome         | Keeps its skeleton and the hero line "Build your agent factory". It absorbs "How Ren is organized".                                                                     |
 | Models          | Written from what is true today. It grows later.                                                                                                                        |
-| Support         | `support@renai.build`.                                                                                                                                                  |
-| FAQ             | Stays, kept short. Setup problems move to Troubleshooting.                                                                                                              |
 | Removed         | Blueprints, Projects, Linear, Email, Telegram, WhatsApp, the Move to Ren group (Claude, GPT, Cursor, Devin), SDK.                                                       |
 | Method          | Page by page. One page is analyzed, drafted and finalized with the owner before the next one starts (§7). Same method for the Documentation tab and the Developers tab. |
 | Shipping        | One draft PR. Commit 1 is the frame (§7), then one commit per finalized page, the Documentation tab first.                                                              |
@@ -42,40 +40,36 @@ The **Organisation** and **Space** overviews link directly to the relevant headi
 
 Split pages when the reader’s job changes. **Usage** answers “What did our agents spend?” across the organisation or in one space. **Billing** answers “How do I change our plan?”
 
-| Group         | Page               | Slug              | Source                                              |
-| ------------- | ------------------ | ----------------- | --------------------------------------------------- |
-| Get started   | Welcome            | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
-|               | Quickstart         | `quickstart`      | `quickstart`                                        |
-|               | Models             | `models`          | New                                                 |
-| Work with Ren | Chat               | `chats`           | `concepts/chats`                                    |
-|               | Tasks              | `tasks`           | `concepts/tasks`                                    |
-|               | Automations        | `automations`     | `concepts/schedules`                                |
-|               | Drive              | `drive`           | `concepts/storage`                                  |
-|               | Artifacts          | `artifacts`       | `concepts/artifacts`                                |
-|               | Apps               | `apps`            | `concepts/apps`                                     |
-|               | Credentials        | `credentials`     | `concepts/credentials`                              |
-|               | Channels           | `channels`        | `concepts/channels/index`                           |
-|               | Permissions        | `permissions`     | New                                                 |
-|               | Memory             | `memory`          | Parts of `concepts/storage`                         |
-|               | Machines           | `machines`        | `concepts/environments`                             |
-|               | Usage              | `usage`           | New                                                 |
-|               | Members            | `members`         | `concepts/organizations`, `concepts/spaces`         |
-| Organisations | Organisation       | `organisation`    | Parts of `concepts/organizations`                   |
-|               | Model Providers    | `model-providers` | New                                                 |
-|               | Billing            | `billing`         | New                                                 |
-| Spaces        | Space              | `spaces`          | `concepts/spaces`                                   |
-|               | Inbox              | `inbox`           | New                                                 |
-|               | Agents             | `agents`          | New                                                 |
-|               | Factory            | `factory`         | New                                                 |
-|               | Repositories       | `repositories`    | Parts of `concepts/projects`                        |
-|               | Compute            | `compute`         | Space compute settings from `concepts/environments` |
-| Resources     | Instructions       | `instructions`    | New                                                 |
-|               | Claude & ChatGPT   | `claude-chatgpt`  | New                                                 |
-|               | Security & privacy | `security`        | New                                                 |
-|               | Mobile app         | `mobile`          | New                                                 |
-|               | FAQ                | `faq`             | `faq`                                               |
-|               | Troubleshooting    | `troubleshooting` | New                                                 |
-|               | Support            | `support`         | New                                                 |
+| Group         | Page             | Slug              | Source                                              |
+| ------------- | ---------------- | ----------------- | --------------------------------------------------- |
+| Get started   | Welcome          | `/docs/`          | `index`, `concepts/overview`, `surfaces/web-app`    |
+|               | Quickstart       | `quickstart`      | `quickstart`                                        |
+|               | Models           | `models`          | New                                                 |
+| Work with Ren | Chat             | `chats`           | `concepts/chats`                                    |
+|               | Tasks            | `tasks`           | `concepts/tasks`                                    |
+|               | Automations      | `automations`     | `concepts/schedules`                                |
+|               | Drive            | `drive`           | `concepts/storage`                                  |
+|               | Artifacts        | `artifacts`       | `concepts/artifacts`                                |
+|               | Apps             | `apps`            | `concepts/apps`                                     |
+|               | Credentials      | `credentials`     | `concepts/credentials`                              |
+|               | Channels         | `channels`        | `concepts/channels/index`                           |
+|               | Instructions     | `instructions`    | New                                                 |
+|               | Permissions      | `permissions`     | New                                                 |
+|               | Memory           | `memory`          | Parts of `concepts/storage`                         |
+|               | Machines         | `machines`        | `concepts/environments`                             |
+|               | Usage            | `usage`           | New                                                 |
+|               | Members          | `members`         | `concepts/organizations`, `concepts/spaces`         |
+| Organisations | Organisation     | `organisation`    | Parts of `concepts/organizations`                   |
+|               | Model Providers  | `model-providers` | New                                                 |
+|               | Billing          | `billing`         | New                                                 |
+| Spaces        | Space            | `spaces`          | `concepts/spaces`                                   |
+|               | Inbox            | `inbox`           | New                                                 |
+|               | Agents           | `agents`          | New                                                 |
+|               | Factory          | `factory`         | New                                                 |
+|               | Repositories     | `repositories`    | Parts of `concepts/projects`                        |
+|               | Compute          | `compute`         | Space compute settings from `concepts/environments` |
+| Clients       | Claude & ChatGPT | `claude-chatgpt`  | New                                                 |
+|               | Mobile app       | `mobile`          | New                                                 |
 
 ### Developers tab
 
@@ -91,7 +85,7 @@ Split pages when the reader’s job changes. **Usage** answers “What did our a
 |             | The `.ren` folder | `developers/ren-folder`      | New                          |
 |             | llms.txt          | `developers/llms-txt`        | `developers/llms-txt`        |
 
-Sidebar entries: 32 on the Documentation tab and 9 on the Developers tab. `nav.ts` fails the production build for a page that has no sidebar entry, so every page has one. Skills and Custom MCPs are sections of **Apps**. Slack and GitHub are sections of **Channels**.
+Sidebar entries: 28 on the Documentation tab and 9 on the Developers tab. `nav.ts` fails the production build for a page that has no sidebar entry, so every page has one. Skills and Custom MCPs are sections of **Apps**. Slack and GitHub are sections of **Channels**.
 
 ## 3. Page routes
 
@@ -118,10 +112,11 @@ Everything that leaves the docs, so the new version can be compared with the old
 | `surfaces/sdk`               | The SDK is no longer supported.                                          |                                                                            |
 | `concepts/overview`          | Merged.                                                                  | A section of Welcome                                                       |
 | `surfaces/web-app`           | Merged.                                                                  | Welcome's "Use from anywhere"                                              |
+| `faq`                        | Dropped with Security & privacy, Troubleshooting and Support.            |                                                                            |
 
 ### 4.2 Sidebar
 
-Keep **Work with Ren** and rebuild it around shared features. Replace **Organize** with **Organisations** and **Spaces**. Keep **Resources** for the pages in §5 Supporting topics. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
+Keep **Work with Ren** and rebuild it around shared features. Replace **Organize** with **Organisations** and **Spaces**. Add **Clients** for Claude & ChatGPT and the Mobile app. Move entries from **Tools and access** and **Channels** to their feature pages. Remove **Move to Ren**. The final labels and order for both tabs are in §2. A topic absent from the sidebar can still be linked from a feature page.
 
 ### 4.3 Sections and statements, by page
 
@@ -295,16 +290,16 @@ Keep **Work with Ren** and rebuild it around shared features. Replace **Organize
 | **⋯ → Move to another space**                         | **Change owner**                            |
 | "Paste the address from the sign-in tab … **Finish**" |                                             |
 | "Connect cards work only in the web app"              | Web and mobile                              |
-| Section "Troubleshooting"                             | Moved to the Troubleshooting page           |
+| Section "Troubleshooting"                             | The page's When it fails section            |
 | `apps/connect-an-app` video                           | New video                                   |
 
 **`concepts/skills`**
 
-| Removed                                                                          | Replaced by                       |
-| -------------------------------------------------------------------------------- | --------------------------------- |
-| "Project instructions"                                                           | Space instructions                |
-| "The app that your organization added first" wins a name clash **(unconfirmed)** |                                   |
-| Section "Troubleshooting"                                                        | Moved to the Troubleshooting page |
+| Removed                                                                          | Replaced by                      |
+| -------------------------------------------------------------------------------- | -------------------------------- |
+| "Project instructions"                                                           | Space instructions               |
+| "The app that your organization added first" wins a name clash **(unconfirmed)** |                                  |
+| Section "Troubleshooting"                                                        | The page's When it fails section |
 
 **`concepts/custom-mcps`**
 
@@ -344,16 +339,16 @@ Keep **Work with Ren** and rebuild it around shared features. Replace **Organize
 
 **`concepts/channels/slack`**
 
-| Removed                                                                                                                                                                                                                                                                                                                          | Replaced by                              |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| **Settings → Mentions**                                                                                                                                                                                                                                                                                                          | `/settings/channels/slack`               |
-| `ren slack …`                                                                                                                                                                                                                                                                                                                    |                                          |
-| The project **@Ren** tab, "one channel per project"                                                                                                                                                                                                                                                                              | The space **Channels** page              |
-| The task list and follow-up buttons (line 101)                                                                                                                                                                                                                                                                                   |                                          |
-| Section "Automatic summaries, profiles, and suggestions"                                                                                                                                                                                                                                                                         |                                          |
-| The "Connect to Ren" button flow                                                                                                                                                                                                                                                                                                 |                                          |
-| Troubleshooting messages that name a project **(unconfirmed)**: "This channel isn't connected to a Ren project yet.", "Neither your Slack account nor the channel's fallback user is a member of this project's space.", "The project connected to this channel no longer exists.", "Your private Ren project isn't set up yet." | v2 messages, on the Troubleshooting page |
-| `channels/slack/install`, `channels/slack/map-channel` images                                                                                                                                                                                                                                                                    | New captures                             |
+| Removed                                                                                                                                                                                                                                                                                                                          | Replaced by                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **Settings → Mentions**                                                                                                                                                                                                                                                                                                          | `/settings/channels/slack`                            |
+| `ren slack …`                                                                                                                                                                                                                                                                                                                    |                                                       |
+| The project **@Ren** tab, "one channel per project"                                                                                                                                                                                                                                                                              | The space **Channels** page                           |
+| The task list and follow-up buttons (line 101)                                                                                                                                                                                                                                                                                   |                                                       |
+| Section "Automatic summaries, profiles, and suggestions"                                                                                                                                                                                                                                                                         |                                                       |
+| The "Connect to Ren" button flow                                                                                                                                                                                                                                                                                                 |                                                       |
+| Troubleshooting messages that name a project **(unconfirmed)**: "This channel isn't connected to a Ren project yet.", "Neither your Slack account nor the channel's fallback user is a member of this project's space.", "The project connected to this channel no longer exists.", "Your private Ren project isn't set up yet." | v2 messages, in the When it fails section of Channels |
+| `channels/slack/install`, `channels/slack/map-channel` images                                                                                                                                                                                                                                                                    | New captures                                          |
 
 **`concepts/channels/github`**
 
@@ -373,18 +368,9 @@ Keep **Work with Ren** and rebuild it around shared features. Replace **Organize
 
 - All sections, `ren linear …`, and the images `channels/linear/install`, `channels/linear/map-project`, `channels/email/address`, `channels/telegram/link`.
 
-**`faq`**
+**`faq` (whole page)**
 
-| Removed                                                       | Replaced by                                                 |
-| ------------------------------------------------------------- | ----------------------------------------------------------- |
-| "Chats of its projects", "project permissions"                | Space and agent permissions                                 |
-| "Nobody can join a private space"                             |                                                             |
-| Answer to "Can an admin read my personal credentials?"        | Admins can list and remove them, but cannot read the values |
-| Answer to "How big is the machine?": Medium, 2 vCPU, 2 GB     | Machines page                                               |
-| Question "Why did the machine not use my environment change?" | Machines page ("Change pending")                            |
-| Default model order "project, space, organization"            | Space → Organization → Ren                                  |
-| Answer to "Why did my schedules stop?": credits               | Pause reasons                                               |
-| Machine, chat and schedule setup questions                    | Troubleshooting page                                        |
+- Every question and answer. Setup problems go to the When it fails section of each feature page.
 
 **`migrate/claude`, `migrate/gpt` (whole pages)**
 
@@ -654,7 +640,7 @@ What each page must cover. Facts come from the 23 Nov audit. Each one is checked
 
 ### Supporting topics
 
-Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sections of **Channels**. The other topics are pages in the **Resources** group (§2).
+Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sections of **Channels**. Instructions is a page under **Work with Ren**. Claude & ChatGPT and Mobile app are pages in the **Clients** group (§2).
 
 **Instructions**
 
@@ -687,31 +673,11 @@ Skills and Custom MCPs become sections of **Apps**. Slack and GitHub become sect
 
 - A non-technical setup for the Ren MCP: add the URL, sign in, pick an organization. Links to `developers/mcp`.
 
-**Security & privacy**
-
-- Secrets never reach the machine (placeholders, egress, website allow-lists).
-- Private spaces and access rules.
-- Chats deleted 30 days after last activity.
-- Account deletion. Name the inference service and integrations service only in those words.
-
 **Mobile app**
 
 - iOS and Android.
 - Sign-in, chats, tasks, drive and artifacts, connecting apps, updates, deleting your account.
 - Labelled Beta.
-
-**FAQ**
-
-- Short answers only.
-- Fix: project permissions, machine sizes, the defaults order, credits pausing schedules, admins and secrets.
-
-**Troubleshooting**
-
-- Setup failures moved from the FAQ and from the Apps, Slack and GitHub troubleshooting sections.
-
-**Support**
-
-- `support@renai.build` and `/feedback` in a chat.
 
 ### Developers
 
@@ -836,7 +802,7 @@ The owner answers these in step 2 (Ask) of the page they belong to (§7.1).
 | Can the app add links to a task?                                       | Tasks                               |
 | Which app wins when two skills share a name?                           | Skills                              |
 | GitHub's "Needs attention" flow, and which email it matches senders on | GitHub                              |
-| The exact Slack error messages in v2                                   | Slack, Troubleshooting              |
+| The exact Slack error messages in v2                                   | Channels                            |
 
 ## 9. Out of scope
 

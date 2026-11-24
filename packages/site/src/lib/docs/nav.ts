@@ -28,6 +28,7 @@ const DOCS: Section = {
         "apps",
         "credentials",
         "channels",
+        "instructions",
         "permissions",
         "memory",
         { slug: "machines", label: "Machines" },
@@ -44,8 +45,8 @@ const DOCS: Section = {
       items: [{ slug: "spaces", label: "Space" }, "inbox", "agents", "factory", "repositories", "compute"],
     },
     {
-      title: "Resources",
-      items: ["instructions", "claude-chatgpt", "security", "mobile", "faq", "troubleshooting", "support"],
+      title: "Clients",
+      items: ["claude-chatgpt", "mobile"],
     },
   ],
 }
