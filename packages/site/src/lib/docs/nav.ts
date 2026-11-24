@@ -16,31 +16,37 @@ const DOCS: Section = {
   icon: "BookOpen",
   home: "",
   groups: [
-    {
-      title: "Get started",
-      items: ["", "quickstart", { slug: "concepts/overview", label: "How Ren is organized" }, "surfaces/web-app"],
-    },
+    { title: "Get started", items: ["", "quickstart", "models"] },
     {
       title: "Work with Ren",
       items: [
-        "chats",
+        { slug: "chats", label: "Chat" },
         "tasks",
-        "automations",
-        "drive",
+        { slug: "automations", label: "Automations" },
+        { slug: "drive", label: "Drive" },
         "artifacts",
         "apps",
-        "skills",
-        "custom-mcps",
         "credentials",
         "channels",
-        "channels/slack",
-        "channels/github",
-        "machines",
+        "permissions",
+        "memory",
+        { slug: "machines", label: "Machines" },
+        "usage",
+        "members",
       ],
     },
-    { title: "Organisations", items: ["organisation"] },
-    { title: "Spaces", items: ["spaces"] },
-    { title: "Resources", items: ["faq"] },
+    {
+      title: "Organisations",
+      items: [{ slug: "organisation", label: "Organisation" }, "model-providers", "billing"],
+    },
+    {
+      title: "Spaces",
+      items: [{ slug: "spaces", label: "Space" }, "inbox", "agents", "factory", "repositories", "compute"],
+    },
+    {
+      title: "Resources",
+      items: ["instructions", "claude-chatgpt", "security", "mobile", "faq", "troubleshooting", "support"],
+    },
   ],
 }
 
@@ -51,8 +57,11 @@ const DEVELOPERS: Section = {
   home: "developers/cli",
   groups: [
     { title: "Get started", items: ["developers/cli", "developers/mcp"] },
-    { title: "Guides", items: ["developers/inference-setup"] },
-    { title: "Reference", items: ["developers/llms-txt"] },
+    { title: "Guides", items: ["developers/ren-as-code", "developers/inference-setup", "developers/scripting"] },
+    {
+      title: "Reference",
+      items: ["developers/cli-commands", "developers/mcp-tools", "developers/ren-folder", "developers/llms-txt"],
+    },
   ],
 }
 
