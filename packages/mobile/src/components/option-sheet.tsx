@@ -1,3 +1,4 @@
+import { Search } from "@ren/schema/search"
 import { useState, type ComponentProps, type ReactNode } from "react"
 import { Pressable, ScrollView, View } from "react-native"
 import CheckIcon from "react-native-heroicons/mini/CheckIcon"
@@ -50,7 +51,7 @@ function OptionList(props: {
   const [query, setQuery] = useState("")
   const typed = query.trim()
   const needle = typed.toLowerCase()
-  const matches = props.options.filter((option) => option.label.toLowerCase().includes(needle))
+  const matches = props.options.filter((option) => Search.matches(typed, option.label))
   const creatable =
     Boolean(props.onCreate) && typed !== "" && !props.options.some((option) => option.label.toLowerCase() === needle)
   const groups = [...new Set(matches.map((option) => option.group))]

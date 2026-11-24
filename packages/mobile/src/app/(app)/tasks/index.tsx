@@ -1,5 +1,5 @@
 import type { TaskInfo } from "@ren/client"
-import { Tasks } from "@ren/client/react"
+import { Debounce, Tasks } from "@ren/client/react"
 import { Task } from "@ren/schema/task"
 import { FilterMatch } from "@ren/util/filter-match"
 import IconGhostFilled from "@tabler/icons-react-native/IconGhostFilled"
@@ -7,7 +7,7 @@ import IconX from "@tabler/icons-react-native/IconX"
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
 import { Stack, useRouter } from "expo-router"
-import { useDeferredValue, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { ActivityIndicator, Pressable, SectionList, View } from "react-native"
 import AdjustmentsHorizontalIcon from "react-native-heroicons/mini/AdjustmentsHorizontalIcon"
 import ArchiveBoxIcon from "react-native-heroicons/mini/ArchiveBoxIcon"
@@ -201,8 +201,10 @@ export default function TasksScreen() {
   const router = useRouter()
   const [display, setDisplay] = Preferences.usePreference(displayPreference)
   const filters = display.filters
+  const [query, setQuery] = useState("")
+  const words = Debounce.useValue(query.trim(), 250)
   const tasks = useQuery({
-    ...Tasks.all(Api.client, Tasks.listInput(filters)),
+    ...Tasks.all(Api.client, Tasks.searchInput(Tasks.listInput(filters), words)),
     placeholderData: keepPreviousData,
   })
   const update = useMutation(Api.query.task.update.mutationOptions())
@@ -213,19 +215,16 @@ export default function TasksScreen() {
   )
   const lookups = useTaskLookups(roots.map((task) => task.spaceId))
   const [searching, setSearching] = useState(false)
-  const [query, setQuery] = useState("")
-  const needle = useDeferredValue(query.trim().toLowerCase())
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(["status:done", "status:dismissed"]))
   const [open, setOpen] = useState<"display" | "new">()
   const [statusFor, setStatusFor] = useState<TaskInfo>()
   const [menuFor, setMenuFor] = useState<TaskInfo>()
   const [pulling, setPulling] = useState(false)
   const properties = filterProperties(lookups)
-  const filtered = isFiltered(filters) || needle !== ""
+  const filtered = isFiltered(filters) || words !== ""
 
   const visible = roots
     .filter((task) => FilterMatch.passes(filters, Tasks.filterValues(task)))
-    .filter((task) => !needle || `${task.identifier} ${task.title}`.toLowerCase().includes(needle))
     .toSorted(Tasks.order(display))
   const sections = groupsFor(lookups)
     [display.groupBy].map((group) => {
