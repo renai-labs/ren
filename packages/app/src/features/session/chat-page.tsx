@@ -324,6 +324,7 @@ export function ChatPage() {
     workspace: {
       openTerminal: () => requestPanel({ kind: "terminal" }),
       openFile: (path) => requestPanel({ kind: "files", path }),
+      openBrowser: () => requestPanel({ kind: "browser" }),
     },
     onRename: () => setRenaming(true),
     onNew: (spaceId) => void navigate({ to: "/", search: spaceId ? { spaceId } : {} }),
@@ -405,6 +406,8 @@ export function ChatPage() {
             saved={workspace.panel}
             messages={chat.messages}
             request={request}
+            browserIds={chat.browserIds}
+            open={panel}
             maximized={maximized}
             onMaximize={workspace.setMaximized}
             onMention={mentionFile}
