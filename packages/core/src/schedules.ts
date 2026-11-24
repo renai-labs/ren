@@ -568,14 +568,13 @@ export const layer = Layer.effect(
     )
 
     const list = Effect.fn("Schedules.list")(function* (actor: Actor.Info, input: Schedule.ListInput) {
-      const search = input.search?.trim()
       const where = and(
         visibleTo(actor),
         input.spaceId ? eq(schedule.space_id, input.spaceId) : undefined,
         input.status === "paused" ? isNotNull(schedule.paused_reason) : undefined,
         input.status === "active" ? and(isNull(schedule.paused_reason), isNotNull(schedule.next_run_at)) : undefined,
         input.status === "ended" ? and(isNull(schedule.paused_reason), isNull(schedule.next_run_at)) : undefined,
-        search ? or(ilike(schedule.name, `%${search}%`), ilike(schedule.message, `%${search}%`)) : undefined,
+        Database.search(input.search, (pattern) => [ilike(schedule.name, pattern), ilike(schedule.message, pattern)]),
       )
       return yield* database
         .transaction((transaction) =>

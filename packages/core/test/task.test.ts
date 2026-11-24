@@ -158,19 +158,32 @@ describe("Task", () => {
     }),
   )
 
-  it.live("search matches part of a title in any case, and % and _ match only themselves", () =>
-    Effect.gen(function* () {
-      const tasks = yield* Task.Service
-      const o = yield* org
-      const login = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Fix the login page" })
-      const discount = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Show a 10% discount" })
-      yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Add SSO" })
-      const ids = (search: string) =>
-        tasks.list(o.ada, { ...page, search }).pipe(Effect.map((result) => result.items.map((task) => task.id)))
-      expect(yield* ids("LOGIN")).toEqual([login.id])
-      expect(yield* ids("10%")).toEqual([discount.id])
-      expect(yield* ids("_")).toEqual([])
-    }),
+  it.live(
+    "search needs every word in the title, the description, a label or the task's number, and % and _ match only themselves",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const o = yield* org
+        const login = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Fix the login page" })
+        const signup = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: "Fix the signup page",
+          description: "The login link is broken",
+          labels: ["Frontend"],
+        })
+        const discount = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Show a 10% discount" })
+        const sso = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Add SSO", parentId: login.id })
+        const ids = (search: string) =>
+          tasks.list(o.ada, { ...page, search }).pipe(Effect.map((result) => result.items.map((task) => task.id)))
+        expect(yield* ids("page LOGIN")).toEqual([signup.id, login.id])
+        expect(yield* ids("  fix   SIGNUP ")).toEqual([signup.id])
+        expect(yield* ids("front broken")).toEqual([signup.id])
+        expect(yield* ids("10%")).toEqual([discount.id])
+        expect(yield* ids("_")).toEqual([])
+        expect(yield* ids(`#${sso.number}`)).toEqual([sso.id])
+        expect(yield* ids(`${sso.identifier.toLowerCase()} sso`)).toEqual([sso.id])
+        expect(yield* ids(`covid-${sso.number}`)).toEqual([])
+      }),
   )
 
   it.live("an archived task leaves lists and get, and its trail stays", () =>

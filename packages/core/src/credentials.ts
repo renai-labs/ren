@@ -757,9 +757,7 @@ export const layer = Layer.effect(
           input.owner ? eq(table.owner, input.owner) : undefined,
           input.spaceId ? eq(table.space_id, input.spaceId) : undefined,
           input.type ? eq(table.type, input.type) : undefined,
-          input.search
-            ? or(ilike(table.label, `%${input.search}%`), ilike(table.name, `%${input.search}%`))
-            : undefined,
+          Database.search(input.search, (pattern) => [ilike(table.label, pattern), ilike(table.name, pattern)]),
         )
         const rows = yield* database.db
           .select({ row: table, accountName: users.name })
