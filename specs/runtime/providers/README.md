@@ -256,9 +256,9 @@ Gateway names:
 | Own key      | `<provider>/<model>` (`openai/gpt-6.1-sol`)                |
 | Subscription | `seat/<vendor>/<model>` (`seat/anthropic/claude-opus-5-5`) |
 
-### 6.3 The LiteLLM plug-in (self-hosted Ren)
+### 6.3 The LiteLLM plug-in (self-hosted Ren, later)
 
-`core/src/model-provider/litellm.ts`. Settings: `LITELLM_URL`, `LITELLM_KEY`.
+Not built in this work. It shows that the contract fits a self-hosted Ren; build it with the self-hosting work. `core/src/model-provider/litellm.ts`. Settings: `LITELLM_URL`, `LITELLM_KEY`.
 
 | Member                                 | Value                                                                                                                                                                                               |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -411,16 +411,16 @@ Gateway → Ren core: `POST /internal/inference/changed {card, organizationId?}`
 
 ## 12. Work in Ren, by package
 
-| Package              | Work                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema`             | `ModelProvider.Card` and its fields; provider settings shapes (card, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                                                         |
-| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                                                                                                |
-| `core`               | `ModelProvider` (contract, registry, layer); plug-ins `model-provider/gateway.ts` and `model-provider/litellm.ts`; the list job on `changed`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
-| `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                                                     |
-| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                                                          |
-| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                                                 |
-| `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                                                       |
-| `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                                                |
+| Package              | Work                                                                                                                                                                                                                                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema`             | `ModelProvider.Card` and its fields; provider settings shapes (card, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                            |
+| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                                                                   |
+| `core`               | `ModelProvider` (contract, registry, layer); the plug-in `model-provider/gateway.ts`; the list job on `changed`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
+| `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                        |
+| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                             |
+| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                    |
+| `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                          |
+| `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                   |
 
 ## 13. Tests
 
@@ -440,11 +440,11 @@ Pending (Ren side):
 
 Only rules that the code does not show:
 
-| Package | Test                                                                                                                                                                                                                                                            |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`  | the registry refuses a duplicate card; an organization's list from settings and two plug-ins; a `changed` for all organizations notifies only those whose list changed; the LiteLLM plug-in reads `/model/info` from a local LiteLLM; the default model setting |
-| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                                                                                                                 |
-| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                                                                                                                      |
+| Package | Test                                                                                                                                                                                                                             |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`  | the registry refuses a duplicate card; an organization's list from settings and two plug-ins (a test plug-in as the second); a `changed` for all organizations notifies only those whose list changed; the default model setting |
+| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                                                                                  |
+| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                                                                                       |
 
 ### 13.3 End-to-end (`packages/e2e/chaos`)
 
@@ -475,13 +475,13 @@ Only rules that the code does not show:
 
 ## 15. Build order (Ren side)
 
-| Step | Work                                                                                                             | Done when                                                                                                    |
-| ---- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 1    | `ModelProvider` contract and registry, the gateway and LiteLLM plug-ins, organization tables, the list job, push | a provider change reaches only affected organizations' pickers; a self-hosted Ren lists its LiteLLM's models |
-| 2    | Providers API (schema, db, core, protocol, server)                                                               | cards, keys and switches round-trip; members cannot change cards                                             |
-| 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                                      | the Playwright journeys of §13.4 pass                                                                        |
-| 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress                      | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2                                                      |
-| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases                     | §13.3 passes                                                                                                 |
+| Step | Work                                                                                                | Done when                                                        |
+| ---- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1    | `ModelProvider` contract and registry, the gateway plug-in, organization tables, the list job, push | a provider change reaches only affected organizations' pickers   |
+| 2    | Providers API (schema, db, core, protocol, server)                                                  | cards, keys and switches round-trip; members cannot change cards |
+| 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                         | the Playwright journeys of §13.4 pass                            |
+| 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress         | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2          |
+| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases        | §13.3 passes                                                     |
 
 ## 16. Settled details
 
