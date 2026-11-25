@@ -22,11 +22,11 @@ const pageSize = 100
 
 export const refreshEvery = 5000
 
-export const working = (task: Pick<TaskInfo, "session">) => task.session?.state === "working"
+const idleEvery = 15_000
 
-// oxlint-disable-next-line ren/no-comments -- Tasks change on their own only while an agent works on one, so only then is it worth polling; otherwise a list refreshes when it mounts stale, on window focus and after any task mutation.
-export const pollWhileWorking = (tasks: ReadonlyArray<Pick<TaskInfo, "session">> | undefined) =>
-  tasks?.some(working) ? refreshEvery : false
+// oxlint-disable-next-line ren/no-comments -- A list downloads every task it shows, so it refreshes every 5 s only while an agent works on one of them and every 15 s otherwise.
+const listEvery = (tasks: ReadonlyArray<TaskInfo> | undefined) =>
+  tasks?.some((task) => task.session?.state === "working") ? refreshEvery : idleEvery
 
 const statuses = ["backlog", "todo", "in_progress", "done", "dismissed"] as const satisfies ReadonlyArray<
   TaskInfo["status"]
@@ -199,7 +199,7 @@ export const all = (client: Client, input: Filter) =>
       )
       return { items: [first, ...rest].flatMap((result) => result.items), total: first.total }
     },
-    refetchInterval: (query) => pollWhileWorking(query.state.data?.items),
+    refetchInterval: (query) => listEvery(query.state.data?.items),
   })
 
 export const activity = (client: Client, taskId: string) =>
@@ -214,4 +214,5 @@ export const activity = (client: Client, taskId: string) =>
         if (page * result.pageSize >= result.total || result.items.length === 0) return items
       }
     },
+    refetchInterval: refreshEvery,
   })

@@ -1,7 +1,6 @@
 import type { WebhookInfo, WebhookRequestInfo, WebhookRequestOutcome } from "@ren/client"
 import { keepPreviousData, useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
-import { useEffect, useRef } from "react"
 import { IconAlertTriangle } from "@tabler/icons-react"
 import { Schema } from "effect"
 import { toast } from "@ren/ui/sonner"
@@ -38,26 +37,6 @@ const outcomeItems = [
 
 const fromJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 
-// oxlint-disable-next-line ren/no-comments -- The request list polls; the counts beside it refresh only when a new request arrives, instead of polling too.
-function useCountsFollow(webhookId: string, newest: string | undefined) {
-  const { api, queryClient } = RouterContext.useRouterContext()
-  const seen = useRef(newest)
-  useEffect(() => {
-    if (seen.current === newest) return
-    seen.current = newest
-    // ast-grep-ignore: no-manual-invalidation -- webhook requests arrive from outside, not from a generated mutation
-    void queryClient.invalidateQueries({
-      queryKey: api["webhook-request"].list.queryKey(),
-      predicate: (query) => {
-        const input = query.queryKey[2]
-        return typeof input === "object" && input !== null && "webhookId" in input && "pageSize" in input
-          ? input.webhookId === webhookId && input.pageSize === 1
-          : false
-      },
-    })
-  }, [api, queryClient, webhookId, newest])
-}
-
 export function WebhookRequests(props: { webhook: WebhookInfo }) {
   const { api } = RouterContext.useRouterContext()
   const search = route.useSearch()
@@ -74,7 +53,6 @@ export function WebhookRequests(props: { webhook: WebhookInfo }) {
     refetchInterval: Webhooks.refreshEvery,
   })
   const items = requests.data?.items ?? []
-  useCountsFollow(props.webhook.id, items.at(0)?.id)
   const selected = items.find((item) => item.id === search.request)
   const rejectedRun = items.findIndex((item) => item.outcome !== "rejected")
   const rejected = rejectedRun === -1 ? items.length : rejectedRun
@@ -139,6 +117,7 @@ function RequestsToolbar(props: { webhook: WebhookInfo; outcome: WebhookRequestO
     queries: Webhooks.replayable.map((outcome) => ({
       ...api["webhook-request"].list.queryOptions({ webhookId: props.webhook.id, outcome, page: 1, pageSize: 1 }),
       select: (page: { readonly total: number }) => page.total,
+      refetchInterval: Webhooks.refreshEvery,
     })),
   })
   const replay = useMutation(api.webhook.replay.mutationOptions())

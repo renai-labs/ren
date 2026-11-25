@@ -39,7 +39,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. A
 
 - `features/session/use-chat.ts` (`useChat`) returns one object for a chat: the route's chat page and the task page's session sheet both render a chat from it, and its sections take narrow values from it. It reads the chat state through `ChatReact.useView`.
 - `features/tasks/use-task-view.ts` (`useTaskView`) returns the views, the selected one and the filters it shows, which the tasks page and its view tabs share.
-- Until tasks have a realtime subscription, task list, task detail and task activity poll every 5 seconds only while an agent works on a task they show (`Tasks.pollWhileWorking` in `@ren/client/react`). Otherwise they refresh when they mount stale, when the window regains focus and after a task mutation.
+- Task detail and task activity refresh every 5 seconds (`refreshEvery` in `@ren/client/react`'s `Tasks`), until tasks have a realtime subscription. The task list downloads every task it shows, so it refreshes every 5 seconds while an agent works on one of them and every 15 seconds otherwise.
 
 ## Testing
 

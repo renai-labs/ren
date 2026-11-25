@@ -111,7 +111,7 @@ export function TaskPage(props: {
   const openSession = props.onOpenSession
   const stored = useSuspenseQuery({
     ...api.task.get.queryOptions({ idOrSlug: props.taskId }),
-    refetchInterval: (query) => Tasks.pollWhileWorking(query.state.data && [query.state.data]),
+    refetchInterval: Tasks.refreshEvery,
     ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), Tasks.allKey()], props.taskId),
   }).data
   const update = useMutation(api.task.update.mutationOptions())
@@ -755,7 +755,7 @@ function SubtaskList(props: { task: TaskInfo }) {
   const task = props.task
   const listed = useQuery({
     ...api.task.list.queryOptions(Tasks.subtasksInput(task.id)),
-    refetchInterval: (query) => Tasks.pollWhileWorking([task, ...(query.state.data?.items ?? [])]),
+    refetchInterval: Tasks.refreshEvery,
   })
   const subtasks = listed.data?.items ?? []
   const total = task.subtasks?.total ?? 0
