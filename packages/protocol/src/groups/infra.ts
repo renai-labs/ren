@@ -1,5 +1,5 @@
 import { Infra } from "@ren/schema/infra"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
@@ -50,5 +50,6 @@ export const InfraGroup = HttpApiGroup.make("infra")
   )
   .middleware(ActiveOrganization)
   .middleware(Authentication)
+  .annotate(HttpApi.PayloadParseOptions, { onExcessProperty: "error" })
   .annotate(Exposure, "sdk")
   .annotateMerge(OpenApi.annotations({ title: "infra" }))
