@@ -11,6 +11,7 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => new Date())
     .notNull(),
+  organizationLimit: integer("organization_limit"),
 })
 
 export const session = pgTable(

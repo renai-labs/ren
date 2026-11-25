@@ -175,6 +175,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
+    ORGANIZATION_LIMIT: "10",
     SANDBOX_PROVIDER: "local",
     // oxlint-disable-next-line ren/no-comments -- OpenCode compares a chat's real paths with its folder, so the folder must not sit under a symlink such as macOS's /var.
     LOCAL_BRAIN_ROOT: path.join(realpathSync(os.tmpdir()), `${name}-brains`),

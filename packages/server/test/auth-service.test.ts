@@ -357,6 +357,27 @@ describe("Auth", () => {
     }),
   )
 
+  testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true", ORGANIZATION_LIMIT: "1" })).live(
+    "limits the organizations a user owns to ORGANIZATION_LIMIT or their own limit, and joining one takes no place",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        const create = (slug: string, session: string) =>
+          post("/organization/create", { name: slug, slug }, session).pipe(Effect.map((response) => response.status))
+        const owner = sessionCookie(yield* register("ida@gmail.com", "Ida Rhodes"))
+        expect(yield* create("ida-side", owner)).toBe(403)
+
+        yield* sql`update "user" set organization_limit = 2 where email = 'ida@gmail.com'`
+        expect(yield* create("ida-side", owner)).toBe(200)
+        expect(yield* create("ida-third", owner)).toBe(403)
+
+        const invited = yield* post("/organization/invite-member", { email: "joan@gmail.com", role: "member" }, owner)
+        const joiner = sessionCookie(yield* register("joan@gmail.com", "Joan Clarke"))
+        yield* post("/organization/accept-invitation", { invitationId: (yield* json(invited)).id }, joiner)
+        expect(yield* create("joan-own", joiner)).toBe(200)
+      }),
+  )
+
   testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true", APP_URL: "http://localhost:5173/app/" })).live(
     "emails the invitation link and preserves the app path prefix",
     () =>
@@ -457,6 +478,7 @@ describe("Auth", () => {
           mcpResource: "http://localhost:4000/mcp",
           fetchClientMetadataResource: () => Promise.resolve(new Response(null, { status: 404 })),
           requireEmailVerification: true,
+          organizationLimit: 1,
           sendEmail: () => {},
           logFailure: () => Promise.resolve(),
           signupGuard: {

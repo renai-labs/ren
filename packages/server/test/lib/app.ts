@@ -99,6 +99,7 @@ export const config = {
   GOOGLE_CLIENT_ID: "google-client-id",
   GOOGLE_CLIENT_SECRET: "google-client-secret",
   APP_URL: `${origin}/app`,
+  ORGANIZATION_LIMIT: "10",
 }
 
 export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readonly<Record<string, string>>) =>
