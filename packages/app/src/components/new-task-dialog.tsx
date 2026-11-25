@@ -5,11 +5,11 @@ import {
   useId,
   useRef,
   useState,
-  type FormEvent,
   type ReactElement,
   type ReactNode,
   type Ref,
   type RefObject,
+  type SubmitEvent,
 } from "react"
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import { useMutation } from "@tanstack/react-query"
@@ -291,7 +291,7 @@ function useTaskForm(spaceId: string, parentId: string | undefined, titleRef: Re
       set({ title })
       setMissing(false)
     },
-    submit: (event: FormEvent<HTMLFormElement>, target: string, onCreated: () => void) => {
+    submit: (event: SubmitEvent<HTMLFormElement>, target: string, onCreated: () => void) => {
       event.preventDefault()
       if (!draft.title.trim()) {
         setMissing(true)
