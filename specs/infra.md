@@ -2,25 +2,27 @@
 
 A `.ren/` folder declares a whole organization. `ren infra validate`, `plan`, `apply` and `pull` are built (`packages/cli`, `core/src/infra-specs.ts`). `Infra.Spec` in `@ren/schema` (`schema/src/infra.ts`) is the one definition of the folder and is the authority for its shape.
 
-Apply works today for org settings, the organization's environment templates (`environments.yaml`, keyed by template name), shared spaces with their runtime (`brainScope`, `brain` and `hand` in `space.yaml`, naming templates by name), agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (created as listening; the mode, URL token and signing secret stay live state), GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
+Apply works today for org settings, the organization's environment templates (`environments.yaml`, keyed by template name), shared spaces with their runtime (`brainScope`, `brain` and `hand` in `space.yaml`, naming templates by name), agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (with their `mode`; the URL token and signing secret stay live state), GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
 
 ## 1. Parts that apply refuses
 
 `plan` reports each of these as a problem, or leaves it as it is (`core/src/infra-specs.ts`, `core/src/infra-specs/environments.ts`):
 
-| Part                                                    | Today                                                                     |
-| ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `deploy.yaml` `spaces.<slug>.timezone`                  | "Infra does not apply the timezone of a space yet."                       |
-| A brain or hand that names a template with no image yet | A problem: apply does not wait for a build. Apply again once it is built. |
-| Archiving a template that a space outside the spec uses | A problem, as for any space whose brains or chats still run on it.        |
-| A renamed environment template                          | Archive and create: templates have no `renamedFrom`.                      |
-| One-time schedules and schedules that send to a chat    | Not managed: apply leaves them as they are.                               |
-| Linear channel mappings                                 | Not managed: Ren has no Linear channel provider yet.                      |
+| Part                                                    | Today                                                                                                       |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `deploy.yaml` `spaces.<slug>.timezone`                  | "Infra does not apply the timezone of a space yet."                                                         |
+| A brain or hand that names a template with no image yet | A problem: apply does not wait for a build. Apply again once it is built.                                   |
+| Archiving a template that a space outside the spec uses | A problem, as for any space whose brains or chats still run on it.                                          |
+| A renamed environment template                          | Archive and create: templates have no `renamedFrom`.                                                        |
+| A webhook that is declared `live` and cannot go live    | A problem: its signature needs a signing secret that it does not have, or its app no longer has the preset. |
+| One-time schedules and schedules that send to a chat    | Not managed: apply leaves them as they are.                                                                 |
+| Linear channel mappings                                 | Not managed: Ren has no Linear channel provider yet.                                                        |
 
 Rules that hold for these parts:
 
 1. The spec contains no value that belongs to one deployment. `deploy.yaml` binds each slot of the spec to a real value, so two organizations can use one spec with different bindings. Machine providers are the exception: a template's config is specific to its provider, so the template and a space's `brain.provider` name the provider in the spec. A space that names no brain provider gets the deployment's, and `pull` omits it when it is the deployment's. A plan for a deployment that lacks a provider reports a problem.
 2. The spec wins. Apply overwrites a change that someone made in the UI; the plan shows that change first. Apply archives a row that the spec no longer declares and never hard-deletes it. Channel mappings are the exception: a mapping has no archived state, so apply removes it the way unmapping a place in the app does, and the row is deleted.
+3. `mode` in `webhooks.yaml` is `listening` or `live`. Without it, the webhook is listening. Apply makes a webhook that is declared `live` live in the step that creates it. Apply cannot set a signing secret: apply the webhook as listening, set the secret in the app, then declare it `live`. A mode that changed in Ren since the last pull or apply, by a person or by Ren itself (for example after the parser broke), plans as changed in Ren. Apply leaves it, and `pull` writes it into the folder. A change of only the mode keeps the owner of the webhook, unless the owner left the space. A change to the message, the parser or the agent makes the person who applies it the owner.
 
 ## 2. Listings and seeds
 
