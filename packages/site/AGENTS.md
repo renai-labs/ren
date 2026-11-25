@@ -20,6 +20,7 @@ The marketing site and the docs at `useren.ai/docs`.
 - **Voice.** Write to "you", in US English. Ren is "it".
 - **Recommend, do not forbid.** When Ren allows something that another feature does better, name where it belongs: "For code, use a repository", not "Do not keep a git repository in Drive".
 - **No code in product pages.** Link to the Developers tab.
+- **One coding tool at a time.** When steps differ by coding tool, put `<HarnessPicker>` with tabs for the tools at the top of that section and one `<Harness>` per tool, instead of a table or a section per tool. Logos are in `public/logos/harnesses`.
 - **Developer pages.** Write for a junior developer. Use text, code examples, tables and navigation cards. Do not use screenshots. Say why a rule exists when the reason is short. Gloss a term such as brain, hand or digest in a clause where the page first needs it. Leave out protocol names, limits and cases that most readers never meet; put one that matters beside the step it affects. Use one word for one thing on a page. The overview assumes readers know Ren from the product docs and introduces the developer guides and references.
 - **Banned words.** leverage, seamless, robust, streamline, empower, utilize, facilitate, elevate, supercharge, harness, delve, foster, cutting-edge, game changer, transformative, paramount.
 - **Banned patterns.**

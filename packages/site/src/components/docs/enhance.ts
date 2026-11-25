@@ -34,3 +34,26 @@ document.addEventListener("astro:after-swap", () => {
   const viewport = document.querySelector<HTMLElement>(SIDEBAR_VIEWPORT)
   if (viewport) viewport.scrollTop = sidebarScroll
 })
+
+const HARNESS_KEY = "ren-docs-harness"
+
+function showHarness(id: string) {
+  if (!document.querySelector(`[data-harness-pick="${id}"]`)) return
+  for (const button of document.querySelectorAll<HTMLElement>("[data-harness-pick]"))
+    button.setAttribute("aria-selected", String(button.dataset.harnessPick === id))
+  for (const panel of document.querySelectorAll<HTMLElement>("[data-harness]"))
+    panel.hidden = panel.dataset.harness !== id
+}
+
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return
+  const id = event.target.closest<HTMLElement>("[data-harness-pick]")?.dataset.harnessPick
+  if (!id) return
+  localStorage.setItem(HARNESS_KEY, id)
+  showHarness(id)
+})
+
+const restoreHarness = () => showHarness(localStorage.getItem(HARNESS_KEY) ?? "")
+
+restoreHarness()
+document.addEventListener("astro:after-swap", restoreHarness)

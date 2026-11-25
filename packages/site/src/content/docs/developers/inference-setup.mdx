@@ -9,23 +9,97 @@ description: Point Claude Code, Codex, OpenCode, Pi or Hermes at Ren's models wi
 ## Before you start
 
 - [Install the CLI and sign in](/docs/developers/cli/). Any member of the organization can run setup.
-- Install the tool you want to set up: Claude Code (`claude-code`), Codex (`codex`), OpenCode (`opencode`), Pi (`pi`) or Hermes (`hermes`). The name in parentheses is what you pass to the command.
+- Install the tool you want to set up.
 
 Calls made with your key are billed to your organization. To run them on your organization's Claude or ChatGPT subscription instead, an admin connects it in **Settings → Providers**; see [Models](/docs/model-providers/#run-on-your-own-subscription).
 
-## Set up a tool
+## Set up your tool
+
+Setup asks Ren which changes your tool needs for your organization's current models. It prints each file it would change, with the lines it adds (`+`) and removes (`-`), then asks you to type `yes`. Pick your tool:
+
+<HarnessPicker tools={["claude-code", "codex", "opencode", "pi", "hermes"]} />
+
+<Harness id="claude-code" first>
+
+```sh
+ren inference setup claude-code
+```
+
+It edits `~/.claude/settings.json`. When it's done, it tells you where the backup is and how to check the tool:
+
+```text
+Set up claude-code.
+Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
+Check it: claude -p 'which model are you?'
+```
+
+</Harness>
+
+<Harness id="codex">
+
+```sh
+ren inference setup codex
+```
+
+It edits `~/.codex/config.toml`, and writes Ren's own profile to `~/.codex/ren.config.toml` and Ren's model list to `~/.codex/ren-models.json`. When it's done, it tells you where the backup is and how to check the tool:
+
+```text
+Set up codex.
+Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
+Check it: codex --profile ren
+```
+
+The model list has to match your Codex version, so setup looks for `codex` on your `PATH`. If it can't find it, it skips the list and says so. Ren's models still work by name; once Codex is on your `PATH`, run `ren inference sync` to add the list.
+
+</Harness>
+
+<Harness id="opencode">
 
 ```sh
 ren inference setup opencode
 ```
 
-Setup asks Ren which changes that tool needs for your organization's current models. It prints each file it would change, with the lines it adds (`+`) and removes (`-`), then asks you to type `yes`. When it's done, it tells you where the backup is and how to check the tool:
+It edits `~/.config/opencode/opencode.jsonc`. When it's done, it tells you where the backup is and how to check the tool:
 
 ```text
 Set up opencode.
 Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
 Check it: opencode run --model ren/anthropic/claude-sonnet-5-5 'say hello'
 ```
+
+</Harness>
+
+<Harness id="pi">
+
+```sh
+ren inference setup pi
+```
+
+It edits `~/.pi/agent/models.json`. When it's done, it tells you where the backup is and how to check the tool:
+
+```text
+Set up pi.
+Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
+Check it: pi --provider ren --model anthropic/claude-sonnet-5-5 -p 'hello'
+```
+
+</Harness>
+
+<Harness id="hermes">
+
+```sh
+ren inference setup hermes
+```
+
+It edits `~/.hermes/config.yaml`, and puts the key in `~/.hermes/.env`. When it's done, it tells you where the backup is and how to check the tool:
+
+```text
+Set up hermes.
+Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
+Check it: hermes -z 'hello'
+```
+
+</Harness>
 
 Run that check command. Then confirm the call reached Ren:
 
@@ -34,6 +108,8 @@ ren inference key usage --period 7d
 ```
 
 It lists the calls, tokens and charges of each key, by model. **Settings → Providers → Inference keys** shows the same in the app.
+
+Setup touches only Ren's entries, so your comments, key order and other providers stay as they are. It uses your newest active inference key, or creates one named `ren on <your computer's name>` that never expires. It writes the key into the tool's files, makes those files readable only by you, and never prints the key. To list your keys without their values, run `ren inference key list`.
 
 ## Options
 
@@ -44,22 +120,6 @@ It lists the calls, tokens and charges of each key, by model. **Settings → Pro
 | `--with-optional` | Also applies changes that replace one of the tool's defaults, such as its model                                              |
 | `--key-env <VAR>` | Names the variable that holds the key, for a tool that reads it from the environment                                         |
 | `--undo`          | Restores the files of the newest backup. See [Undo](#undo).                                                                  |
-
-## What changes
-
-Setup only edits files in your home folder:
-
-| Tool        | Files                                                                          |
-| ----------- | ------------------------------------------------------------------------------ |
-| Claude Code | `~/.claude/settings.json`                                                      |
-| Codex       | `~/.codex/config.toml`, `~/.codex/ren.config.toml`, `~/.codex/ren-models.json` |
-| OpenCode    | `~/.config/opencode/opencode.jsonc`                                            |
-| Pi          | `~/.pi/agent/models.json`                                                      |
-| Hermes      | `~/.hermes/config.yaml`, `~/.hermes/.env`                                      |
-
-It touches only Ren's entries, so your comments, key order and other providers stay as they are. Anything that belongs entirely to Ren, such as Codex's `ren` profile, is replaced on each run.
-
-Setup uses your newest active inference key. If you have none, it creates one named `ren on <your computer's name>` that never expires. It writes the key into the tool's file, makes that file readable only by you, and never prints the key. To list your keys without their values, run `ren inference key list`.
 
 ## Sync
 
@@ -77,11 +137,7 @@ Sync repeats the setup of every tool you set up on this computer, with the optio
 ren inference setup --undo
 ```
 
-After you type `yes`, it restores each file from the newest backup and deletes each file that setup created:
-
-```text
-Restored 1 file of the opencode setup.
-```
+After you type `yes`, it restores each file from the newest backup and deletes each file that setup created.
 
 Undo leaves two things in place:
 

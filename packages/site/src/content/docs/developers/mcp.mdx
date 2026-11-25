@@ -8,7 +8,61 @@ The Ren MCP server lets Claude Code, Codex or any other MCP client manage your R
 
 ## Add the server
 
-Add a remote server to your client with this URL:
+The server is at `https://api.useren.ai/mcp`. You don't need an API key: your client signs in to Ren with OAuth. Pick your client:
+
+<HarnessPicker tools={["claude-code", "codex", "opencode", "hermes", "other"]} />
+
+<Harness id="claude-code" first>
+
+Add Ren for every project:
+
+```sh
+claude mcp add --transport http --scope user ren https://api.useren.ai/mcp
+```
+
+Then start Claude Code, run `/mcp`, select **ren** and choose **Authenticate**.
+
+</Harness>
+
+<Harness id="codex">
+
+Add Ren to `~/.codex/config.toml`, then sign in:
+
+```sh
+codex mcp add ren --url https://api.useren.ai/mcp
+codex mcp login ren
+```
+
+The Codex app and IDE extension share this setup.
+
+</Harness>
+
+<Harness id="opencode">
+
+Add Ren for every project:
+
+```sh
+opencode mcp add ren --global --url https://api.useren.ai/mcp
+```
+
+Then start OpenCode, run `/mcps`, select **ren** and sign in.
+
+</Harness>
+
+<Harness id="hermes">
+
+Add Ren to `~/.hermes/config.yaml`, then sign in:
+
+```sh
+hermes mcp add ren --url https://api.useren.ai/mcp --auth oauth
+hermes mcp login ren
+```
+
+</Harness>
+
+<Harness id="other">
+
+Add a remote server with this URL. If your client asks for a transport, choose Streamable HTTP.
 
 ```text
 https://api.useren.ai/mcp
@@ -27,11 +81,13 @@ Many clients take a JSON entry like this one. Check your client's docs for its f
 }
 ```
 
-If your client asks for a transport, choose Streamable HTTP. You don't need an API key or headers, because the client signs in with OAuth.
+Your client must support OAuth client ID metadata documents, which MCP added in its 2025-11-25 version.
+
+</Harness>
 
 ## Sign in
 
-The first time the client calls Ren, it opens your browser. Sign in to Ren, pick the **Organization** and click **Allow**.
+When your client signs in, your browser opens. Sign in to Ren, pick the **Organization** and click **Allow**.
 
 The client then works as you in that organization, so it can do what you can do in the app. It renews its access on its own. To switch organizations, sign the client out of Ren and sign in again.
 
@@ -67,8 +123,8 @@ Tools can't add, change or remove a [secret](/docs/credentials/), and can't set 
 
 A tool error starts with the error's type, such as `NotFoundError: Space not found.`
 
-| What you see                                        | Fix                                                                                                                                                                                                                                                                          |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Sign-in fails before your browser opens             | Your client can't sign in the way Ren needs. Ren uses OAuth client ID metadata documents, which MCP added in its 2025-11-25 version, and doesn't support the older dynamic client registration. Update the client, try another one, or use the [CLI](/docs/developers/cli/). |
-| The client lists no Ren tools                       | Sign the client out of Ren and sign in again.                                                                                                                                                                                                                                |
-| `NotFoundError` for a space you can open in the app | The client is signed in to another organization. Sign in again and pick the organization of that space.                                                                                                                                                                      |
+| What you see                                        | Fix                                                                                                                                                                                                         |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign-in fails before your browser opens             | Your client doesn't support OAuth client ID metadata documents, and Ren doesn't support the older dynamic client registration. Update the client, try another one, or use the [CLI](/docs/developers/cli/). |
+| The client lists no Ren tools                       | Sign the client out of Ren and sign in again.                                                                                                                                                               |
+| `NotFoundError` for a space you can open in the app | The client is signed in to another organization. Sign in again and pick the organization of that space.                                                                                                     |
