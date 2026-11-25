@@ -21,6 +21,7 @@ import { Signer } from "../src/signer.js"
 import { Space } from "../src/space.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { TranscriptCodec } from "../src/transcript-codec.js"
+import { Onboarding } from "../src/onboarding.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
@@ -55,7 +56,11 @@ const models = Models.layer([RenInferenceProvider.make]).pipe(
 )
 
 const it = testEffect(
-  Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(
+    Session.layer,
+    Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
+    SpaceProvisioning.layer,
+  ).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
     Layer.provideMerge(Billing.layerNone),

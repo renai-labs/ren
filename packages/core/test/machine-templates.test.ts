@@ -27,6 +27,7 @@ import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/hand-provider.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
+import { Onboarding } from "../src/onboarding.js"
 
 const probe = await Effect.runPromise(TestProvider.make())
 
@@ -84,7 +85,7 @@ const it = testEffect(
       Layer.provide(Bundles.layer),
       Layer.provide([Signer.layerLocal, Layer.succeed(HttpClient.HttpClient, TestProvider.executors([probe, built]))]),
     ),
-    Space.layer,
+    Space.layer.pipe(Layer.provide(Onboarding.layer)),
     SpaceProvisioning.layer,
   ).pipe(
     Layer.provideMerge(

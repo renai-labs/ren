@@ -13,6 +13,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
+import { Onboarding } from "../src/onboarding.js"
 import { Space } from "../src/space.js"
 import { SpaceInviteLink } from "../src/space/invite-link.js"
 import { SpaceJoinRequest } from "../src/space/join-request.js"
@@ -28,7 +29,10 @@ const it = testEffect(
     SpaceInviteLink.layer,
     SpaceJoinRequest.layer,
     SpaceProvisioning.layer,
-  ).pipe(Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)), Layer.provideMerge(Testing.layer)),
+  ).pipe(
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, Onboarding.layer)),
+    Layer.provideMerge(Testing.layer),
+  ),
 )
 
 const page = { page: 1, pageSize: 50 }
@@ -595,6 +599,30 @@ describe("Space factory", () => {
             .where(eq(Database.Schema.space.id, factory.id)),
         ).toEqual([{ factory: stored }])
       }),
+  )
+
+  it.live("saving a factory that chains two agents completes the organization's factory.created onboarding step", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const onboarding = yield* Onboarding.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* user(organizationId)
+      const space = yield* spaces.create(ada, { name: "Factory" })
+      const plan = yield* Seed.agent({ organizationId, spaceId: space.id }, "plan", { isSubagent: false })
+      const build = yield* Seed.agent({ organizationId, spaceId: space.id }, "build", { isSubagent: false })
+      const created = Effect.map(
+        onboarding.get(ada),
+        (info) =>
+          info.organization.steps.find((state) => state.step === Onboarding.steps.organization.factoryCreated)
+            ?.completedAt ?? null,
+      )
+      yield* spaces.update(ada, space.id, { factory: { maxHandoffs: 5, agents: [{ agentId: plan }] } })
+      expect(yield* created).toBeNull()
+      yield* spaces.update(ada, space.id, {
+        factory: { maxHandoffs: 5, agents: [{ agentId: plan, to: [{ agentId: build }] }, { agentId: build }] },
+      })
+      expect(yield* created).not.toBeNull()
+    }),
   )
 })
 

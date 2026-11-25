@@ -28,6 +28,7 @@ import { TaskActivity } from "../../src/task/activity.js"
 import { TaskComment } from "../../src/task/comment.js"
 import { TaskFiles } from "../../src/task/files.js"
 import { View } from "../../src/view.js"
+import { Onboarding } from "../../src/onboarding.js"
 import { testEffect } from "./effect.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
@@ -56,7 +57,7 @@ export const harness = (
       Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer, View.layer).pipe(
         Layer.provideMerge(
           Layer.mergeAll(
-            Space.layer,
+            Space.layer.pipe(Layer.provide(Onboarding.layer)),
             SpaceMember.layer,
             SessionRunner.layer,
             TaskFiles.layerNone,

@@ -17,6 +17,7 @@ import { AppQueries } from "./app/queries.js"
 import { BrainProvider } from "./brain-provider.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
+import { Onboarding } from "./onboarding.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -177,6 +178,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const control = yield* EgressControl.Service
+    const onboarding = yield* Onboarding.Service
 
     const visibleTo = (actor: Actor.Info) =>
       and(
@@ -320,7 +322,7 @@ export const layer = Layer.effect(
         )
       }),
       update: Effect.fn("Space.update")(function* (actor: Actor.Info, id: Space.ID, input: Space.UpdateInput) {
-        return yield* database.transaction((transaction) =>
+        const saved = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const visible = yield* findVisible(transaction, actor, id)
             if (!visible || visible.row.space.archived_at) return yield* notFound
@@ -369,6 +371,9 @@ export const layer = Layer.effect(
             return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )
+        if ((input.factory?.agents.length ?? 0) >= 2)
+          yield* onboarding.record(actor.organizationId, Onboarding.steps.organization.factoryCreated)
+        return saved
       }),
       changeSlug: Effect.fn("Space.changeSlug")(function* (actor: Actor.Info, id: Space.ID, slug: string) {
         return yield* database.transaction((transaction) =>

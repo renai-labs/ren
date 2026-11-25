@@ -51,7 +51,7 @@ afterAll(() => tokens.stop(true))
 const it = testEffect(
   Layer.mergeAll(
     CredentialRefresh.layer,
-    Space.layer.pipe(Layer.provide(BrainProviders.none)),
+    Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
     App.layer.pipe(Layer.provideMerge(Onboarding.layer)),
