@@ -26,6 +26,7 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { SandboxEgress } from "../src/sandbox-egress.js"
 import { MachineNetwork } from "../src/machine-network.js"
 import { Bundles } from "../src/bundles.js"
+import { Onboarding } from "../src/onboarding.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { Signer } from "../src/signer.js"
 import { Configured } from "./lib/configured.js"
@@ -80,6 +81,7 @@ const it = testEffect(
             Layer.provide([
               process.env.REN_ARTIFACT_CLOUDFLARE_LIVE === "1" ? ArtifactCloudflare.layer : ArtifactWorkerd.layer,
               Access.layer,
+              Onboarding.layer,
             ]),
             Layer.provide(TestDrives.layer),
           ),
