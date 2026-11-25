@@ -8,6 +8,7 @@ import { Agent } from "../src/agent.js"
 import { AgentMembership } from "../src/agent/membership.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { InfraSpecs } from "../src/infra-specs.js"
+import { Onboarding } from "../src/onboarding.js"
 import { OrganizationSettings } from "../src/organization-settings.js"
 import { Schedules } from "../src/schedules.js"
 import { Space } from "../src/space.js"
@@ -118,6 +119,27 @@ describe("InfraSpecs", () => {
         problems: [],
         lock: pulled.lock,
       })
+    }),
+  )
+
+  it.live("an apply that changes something completes iac.applied; one with nothing to change does not", () =>
+    Effect.gen(function* () {
+      const infra = yield* InfraSpecs.Service
+      const onboarding = yield* Onboarding.Service
+      const o = yield* org
+      const applied = Effect.map(
+        onboarding.get(o.admin),
+        (info) =>
+          info.organization.steps.find((state) => state.step === Onboarding.steps.organization.iacApplied)
+            ?.completedAt ?? null,
+      )
+      const apply = (input: Effect.Success<ReturnType<typeof InfraFixture.pulled>>) =>
+        Effect.flatMap(infra.plan(o.admin, input), (plan) => infra.apply(o.admin, { ...input, digest: plan.digest }))
+      const pulled = yield* InfraFixture.pulled(o.admin)
+      yield* apply(pulled)
+      expect(yield* applied).toBeNull()
+      yield* apply({ ...pulled, spec: spec({ home: { name: "Home" }, support: { name: "Support" } }) })
+      expect(yield* applied).not.toBeNull()
     }),
   )
 

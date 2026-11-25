@@ -27,6 +27,7 @@ import { InfraProfiles } from "./infra-specs/profiles.js"
 import { InfraSchedules } from "./infra-specs/schedules.js"
 import { InfraWebhooks } from "./infra-specs/webhooks.js"
 import { InfraVersions } from "./infra-specs/versions.js"
+import { Onboarding } from "./onboarding.js"
 import { OrganizationSettings } from "./organization-settings.js"
 import { Primitive } from "./primitive.js"
 import { Space } from "./space.js"
@@ -206,6 +207,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const spaces = yield* Space.Service
+    const onboarding = yield* Onboarding.Service
     const spaceSettings = yield* SpaceSettings.Service
     const organizationSettings = yield* OrganizationSettings.Service
     const agents = yield* Agent.Service
@@ -1213,11 +1215,10 @@ export const layer = Layer.effect(
           return yield* new Primitive.Conflict({
             message: `${conflicts.map((change) => change.path).join(", ")} changed in Ren and in the folder. Pull and merge them, or apply with force.`,
           })
-        yield* Effect.forEach(
-          result.steps.filter((entry) => entry.verdict === "apply" || entry.verdict === "conflict"),
-          (entry) => entry.step.run.pipe(at(entry.step.change.path)),
-          { discard: true },
-        )
+        const applying = result.steps.filter((entry) => entry.verdict === "apply" || entry.verdict === "conflict")
+        yield* Effect.forEach(applying, (entry) => entry.step.run.pipe(at(entry.step.change.path)), { discard: true })
+        if (applying.length > 0)
+          yield* onboarding.record(actor.organizationId, Onboarding.steps.organization.iacApplied)
         const after = yield* load(actor, input)
         const settled = liveResources(after, diff(actor, after, input).aliases)
         return {
