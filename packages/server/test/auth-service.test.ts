@@ -6,6 +6,7 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { SlackApp } from "@ren/core/slack-app"
 import { Mailer } from "@ren/core/mailer"
+import { Onboarding } from "@ren/core/onboarding"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { SignupGuard } from "@ren/core/signup-guard"
@@ -57,6 +58,7 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
     ),
     Layer.provideMerge(BillingEnrollment.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))),
+    Layer.provideMerge(Onboarding.layer),
     Layer.provideMerge(Layer.mergeAll(GitHubAccounts.layerNone, SlackApp.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
@@ -184,6 +186,24 @@ describe("Auth", () => {
         select count(*)::int as n from space_pending_member
         where space_id = ${spaceId} and archived_at is null`
       expect([...memberships, ...pending]).toEqual([{ n: 1 }, { n: 0 }])
+    }),
+  )
+
+  it.live("completes member.joined as the person who accepts an email invitation", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      const owner = sessionCookie(yield* register("mary@example.org", "Mary"))
+      const organizationId = (yield* get("/get-session", owner)).session.activeOrganizationId
+      const invitation = yield* json(
+        yield* post("/organization/invite-member", { email: "dorothy@example.org", role: "member" }, owner),
+      )
+      const invitee = sessionCookie(yield* register("dorothy@example.org", "Dorothy"))
+      yield* post("/organization/accept-invitation", { invitationId: invitation.id }, invitee)
+      const userId = (yield* get("/get-session", invitee)).user.id
+      const rows = yield* sql<{ joined: boolean }>`
+        select jsonb_exists(steps, ${`member.joined:${userId}`}) as joined from onboarding
+        where organization_id = ${organizationId} and user_id is null`
+      expect(rows).toEqual([{ joined: true }])
     }),
   )
 
@@ -451,6 +471,7 @@ describe("Auth", () => {
             archiveMemberships: () => Promise.resolve(),
             forgetInferenceMember: () => Promise.resolve(),
             enrollInBilling: () => Promise.resolve(),
+            recordMemberJoined: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)

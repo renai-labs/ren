@@ -62,6 +62,7 @@ export interface Input {
       organizationId: string,
       input: { readonly name: string; readonly ownerEmail: string },
     ) => Promise<void>
+    readonly recordMemberJoined: (organizationId: string, userId: string) => Promise<void>
   }
 }
 
@@ -331,6 +332,7 @@ export const make = (input: Input) => {
       afterAcceptInvitation: async (data) => {
         await input.provisioning.createInitialMemberships(data.organization.id, data.user)
         await input.provisioning.activatePendingMemberships(data.organization.id, data.user)
+        await input.provisioning.recordMemberJoined(data.organization.id, data.user.id)
       },
       afterRemoveMember: async (data) => {
         await input.provisioning.archiveMemberships(data.organization.id, data.user.id)
