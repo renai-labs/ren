@@ -35,15 +35,17 @@ A mention counts in:
 - a new comment, or a comment that you edit to add `@renagent`,
 - the title or description of an issue or pull request, when you open, edit or reopen it.
 
-Ren ignores mentions from bots.
+A mention in a review comment on a line continues the chat of the pull request, and Ren replies to that comment. Ren ignores a mention in the summary of a review, and mentions from bots.
+
+When Ren creates a task in a chat that started on an issue or a pull request, it links the task to it.
 
 ## Where Ren works
 
-| Message from                                              | Space                                                           |
-| --------------------------------------------------------- | --------------------------------------------------------------- |
-| An issue or pull request linked to a [task](/docs/tasks/) | The space of the task                                           |
-| A linked repository                                       | The linked space                                                |
-| Any other repository                                      | The oldest space of the organization, such as **General Space** |
+| Message from                                              | Space                 |
+| --------------------------------------------------------- | --------------------- |
+| An issue or pull request linked to a [task](/docs/tasks/) | The space of the task |
+| A linked repository                                       | The linked space      |
+| Any other repository                                      | **General Space**     |
 
 ## Who Ren runs as
 
