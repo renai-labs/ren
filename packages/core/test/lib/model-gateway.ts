@@ -32,6 +32,21 @@ export const make = Effect.fnUntraced(function* (options: {
   const minted = yield* Ref.make(new Map<string, { readonly key: string; readonly expiresAt: DateTime.Utc }>())
   const calls = yield* Ref.make({ models: 0, grants: 0 })
   const enabled = yield* Ref.make(new Map<string, ReadonlyArray<Auth.OrganizationID>>())
+  const settings = yield* Ref.make(new Map<string, Readonly<Record<string, ModelGateway.ProviderSettings>>>())
+  const keys = yield* Ref.make(new Map<string, string>())
+  const keyAt = (providerId: string, organizationId: string) => `${providerId}\u0000${organizationId}`
+  const change = (
+    providerId: string,
+    organizationId: string,
+    next: (current: ModelGateway.ProviderSettings) => ModelGateway.ProviderSettings,
+  ) =>
+    Ref.update(settings, (all) => {
+      const providers = all.get(organizationId) ?? {}
+      return new Map(all).set(organizationId, {
+        ...providers,
+        [providerId]: next(providers[providerId] ?? { enabled: true, method: "key", off: [] }),
+      })
+    })
   const lifetime = options.keyLifetime ?? Duration.hours(6)
   const listOf = (providerId: string, organizationId?: string) => `${providerId}\u0000${organizationId ?? ""}`
 
@@ -65,11 +80,48 @@ export const make = Effect.fnUntraced(function* (options: {
         yield* Ref.update(minted, (all) => new Map(all).set(input.brainId, fresh))
         return { _tag: "Minted" as const, key: Redacted.make(fresh.key), expiresAt: fresh.expiresAt }
       }),
+    // oxlint-disable-next-line ren/no-comments -- The gateway is the only store of the settings (Providers P29).
+    settings: (organizationId) => Effect.map(Ref.get(settings), (all) => all.get(organizationId) ?? {}),
+    configure: (providerId, organizationId, next) =>
+      change(providerId, organizationId, (current) => ({ ...next, ...(current.key && { key: current.key }) })),
+    // oxlint-disable-next-line ren/no-comments -- The vendor takes the key `good-…`; any other key gets the vendor's message.
+    test: (_, __, fields) =>
+      Effect.succeed(
+        Object.values(fields).some((value) => Redacted.value(value).startsWith("good"))
+          ? { ok: true }
+          : { ok: false, message: "Invalid API Key" },
+      ),
+    connect: (providerId, organizationId, fields, savedBy) =>
+      Effect.gen(function* () {
+        const key = Object.values(fields)
+          .map(Redacted.value)
+          .find((value) => value.startsWith("good"))
+        if (!key) return yield* new ModelGateway.Rejected({ message: "Invalid API Key" })
+        const saved = { last4: key.slice(-4), testedAt: yield* DateTime.now }
+        yield* Ref.update(keys, (all) => new Map(all).set(keyAt(providerId, organizationId), key))
+        yield* change(providerId, organizationId, (current) => ({ ...current, key: { ...saved, savedBy } }))
+        return saved
+      }),
+    disconnect: (providerId, organizationId) =>
+      Effect.gen(function* () {
+        yield* Ref.update(keys, (all) => {
+          const next = new Map(all)
+          next.delete(keyAt(providerId, organizationId))
+          return next
+        })
+        yield* change(providerId, organizationId, (current) => ({
+          enabled: current.enabled,
+          ...(current.method && { method: current.method }),
+          off: current.off,
+        }))
+      }),
   }
 
   return {
     gateway,
     calls: Ref.get(calls),
+    keyOf: (providerId: string, organizationId: Auth.OrganizationID) =>
+      Effect.map(Ref.get(keys), (all) => all.get(keyAt(providerId, organizationId))),
     // oxlint-disable-next-line ren/no-comments -- Sets a provider's models (for one organization, or for all) and says so on `changed`, as a gateway does.
     setModels: (providerId: string, listed: ModelGateway.Listed, organizationId?: Auth.OrganizationID) =>
       Effect.gen(function* () {

@@ -379,6 +379,22 @@ export type RenInferenceHarnessTarget =
   | { kind: "hermes-provider-configuration" }
   | { kind: "hermes-environment" }
 
+export type ModelGatewayPayer = "ren" | "customer"
+
+export type ModelsMethod = "key" | "subscription"
+
+export type ModelGatewayField = {
+  name: string
+  label: string
+  secret: boolean
+  multiline?: boolean
+  placeholder?: string
+}
+
+export type ProviderTestResult = { ok: boolean; message?: string }
+
+export type ModelsPrice = { input: number; output: number; cacheRead?: number; cacheWrite?: number }
+
 export type BillingSummary = {
   plan: string
   planStatus: string | null
@@ -974,6 +990,7 @@ export type RenInferenceConnection = {
   id: string
   label: string
   providerName: string
+  providerId?: string
   iconUrl: string
   status: { label: string; tone: RenInferenceTone }
   plan?: string
@@ -1071,6 +1088,23 @@ export type RenInferenceHarnessOperation =
 export type RenInferenceHarnessVerificationStep =
   | { kind: "file-exists"; target: RenInferenceHarnessTarget }
   | { kind: "models-reachable" }
+
+export type ProviderAvailable = {
+  id: string
+  name: string
+  mark: string
+  modelCount: number
+  fields: Array<ModelGatewayField>
+  added: boolean
+}
+
+export type ProviderModel = {
+  id: string
+  name: string
+  price?: ModelsPrice | undefined
+  free: boolean
+  enabled: boolean
+}
 
 export type BillingInvoice = {
   id: string
@@ -1457,6 +1491,8 @@ export type RenInferenceCreatedKey = {
   baseUrl: string
 }
 
+export type ProviderKey = { last4: string; testedAt: string; savedBy: RenInferenceKeyOwner | null }
+
 export type RenInferenceKeyUsage = {
   keyId: string
   charged: number
@@ -1473,6 +1509,8 @@ export type RenInferenceHarnessPlan = {
   }
   warnings: Array<string>
 }
+
+export type ProviderModelList = { canManage: boolean; models: Array<ProviderModel> }
 
 export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
@@ -1645,6 +1683,22 @@ export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize:
 
 export type RenInferenceKeyList = { baseUrl: string; keys: Array<RenInferenceKey> }
 
+export type ProviderInfo = {
+  id: string
+  name: string
+  mark: string
+  payer: ModelGatewayPayer
+  builtIn: boolean
+  enabled: boolean
+  method?: ModelsMethod
+  methods: Array<ModelsMethod>
+  fields: Array<ModelGatewayField>
+  key: ProviderKey | null
+  seats: Array<RenInferenceConnection>
+  modelCount: number
+  canManage: boolean
+}
+
 export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelPlaceInfo = {
@@ -1773,6 +1827,8 @@ export type SessionMessageTool = {
 export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
+
+export type ProviderPage = { providers: Array<ProviderInfo>; available: Array<ProviderAvailable> }
 
 export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
@@ -9466,6 +9522,51 @@ export type RenInferenceHarnessPlanInput = {
 }
 
 export type RenInferenceHarnessPlanOutput = RenInferenceHarnessPlan
+
+export type ProviderListOutput = ProviderPage
+
+export type ProviderUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly enabled?: {
+    readonly enabled?: boolean | undefined
+    readonly method?: ("key" | "subscription") | undefined
+  }["enabled"]
+  readonly method?: {
+    readonly enabled?: boolean | undefined
+    readonly method?: ("key" | "subscription") | undefined
+  }["method"]
+}
+
+export type ProviderUpdateOutput = ProviderPage
+
+export type ProviderTestInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly fields: { readonly fields: { readonly [x: string]: string } }["fields"]
+}
+
+export type ProviderTestOutput = ProviderTestResult
+
+export type ProviderKeySaveInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly fields: { readonly fields: { readonly [x: string]: string } }["fields"]
+}
+
+export type ProviderKeySaveOutput = ProviderPage
+
+export type ProviderKeyRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ProviderKeyRemoveOutput = ProviderPage
+
+export type ProviderModelsListInput = { readonly id: { readonly id: string }["id"] }
+
+export type ProviderModelsListOutput = ProviderModelList
+
+export type ProviderModelsUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly models: { readonly models: ReadonlyArray<{ readonly id: string; readonly enabled: boolean }> }["models"]
+}
+
+export type ProviderModelsUpdateOutput = ProviderModelList
 
 export type BillingGetOutput = BillingSummary
 

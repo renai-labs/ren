@@ -46,6 +46,9 @@ export const Provider = Schema.Struct({
   }),
   auth: Schema.NonEmptyArray(Auth),
   models: Scope,
+  modelCount: Schema.optionalKey(Schema.Int).annotate({
+    description: "How many models the provider offers, for the Connect provider page.",
+  }),
 }).annotate({
   identifier: "ModelGateway.Provider",
   description: "One provider a model gateway offers, such as Ren, Anthropic or Groq.",

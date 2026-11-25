@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { Access } from "@ren/core/access"
 import { Billing } from "@ren/core/billing"
 import { AccountDeletion } from "@ren/core/account-deletion"
 import { BillingEnrollment } from "@ren/core/billing-enrollment"
@@ -6,14 +7,19 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { SlackApp } from "@ren/core/slack-app"
 import { Mailer } from "@ren/core/mailer"
+import { ModelLists } from "@ren/core/model-lists"
+import { ModelGateway } from "@ren/core/model-gateway"
+import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { Postmark, testEffect } from "@ren/core/testing"
 import { AuthDatabase } from "@ren/db/auth-database"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Space } from "@ren/schema/space"
 import { getAuthTables } from "better-auth/db"
+import { inArray } from "drizzle-orm"
 import { ConfigProvider, Deferred, Effect, Fiber, Layer, Option, Queue, Schedule } from "effect"
 import { HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
@@ -57,6 +63,12 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
       RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
     ),
     Layer.provideMerge(BillingEnrollment.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))),
+    Layer.provideMerge(
+      ProviderSettings.layer.pipe(
+        Layer.provide(ModelLists.layer.pipe(Layer.provideMerge(ModelGateway.layer([])))),
+        Layer.provide([RenInference.layerNone, Access.layer]),
+      ),
+    ),
     Layer.provideMerge(Layer.mergeAll(GitHubAccounts.layerNone, SlackApp.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
@@ -68,6 +80,7 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
           POSTMARK_SERVER_TOKEN: "postmark-token",
           EMAIL_FROM: "Ren <hello@ren.ai>",
           EMAIL_INVITE_FROM: "Ren <invites@ren.ai>",
+          REN_DEFAULT_MODEL: "ren/vendor/default-model",
           ...overrides,
         }),
         { asPrimary: true },
@@ -221,6 +234,32 @@ describe("Auth", () => {
       )
       expect(statuses).toEqual([403, 403, 403, 403])
     }),
+  )
+
+  it.live(
+    "starts the default organization and each created one on the deployment's default model (Providers P15)",
+    () =>
+      Effect.gen(function* () {
+        const session = sessionCookie(yield* register("radia@example.net", "Radia Perlman"))
+        const first = (yield* get("/get-session", session)).session.activeOrganizationId
+        const created = yield* post("/organization/create", { name: "Spanning Tree", slug: "spanning" }, session).pipe(
+          Effect.flatMap(json),
+        )
+        const database = yield* Database.Service
+        const rows = yield* database.db
+          .select({
+            organizationId: Database.Schema.settings.organization_id,
+            settings: Database.Schema.settings.settings,
+          })
+          .from(Database.Schema.settings)
+          .where(inArray(Database.Schema.settings.organization_id, [first, created.id]))
+        expect(rows.map((row) => [row.organizationId === first ? "default" : "created", row.settings.model])).toEqual(
+          expect.arrayContaining([
+            ["default", { endpointId: "ren", modelId: "vendor/default-model" }],
+            ["created", { endpointId: "ren", modelId: "vendor/default-model" }],
+          ]),
+        )
+      }),
   )
 
   it.live("signs back in to the organization used last", () =>
@@ -431,6 +470,7 @@ describe("Auth", () => {
             archiveMemberships: () => Promise.resolve(),
             forgetInferenceMember: () => Promise.resolve(),
             enrollInBilling: () => Promise.resolve(),
+            applyDefaultModel: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)

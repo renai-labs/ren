@@ -15,6 +15,10 @@ const exceptions = new Map([
     "mcp-inspect",
     "Reads a remote MCP server live, before any app declares it: not a stored record, which no primitive operation addresses.",
   ],
+  [
+    "provider",
+    "The organization's providers: their settings and model switches live in the provider's gateway, and a key passes through Ren to the gateway without a record. No primitive operation is a key test or a key that Ren never stores.",
+  ],
   ["health", "Server status for clients and load balancers."],
   ["feedback", "Sends a person’s or an agent’s feedback to the Ren team, and stores no record."],
   ["me", "The signed-in user and their active organization."],

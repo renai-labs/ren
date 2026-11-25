@@ -49,6 +49,7 @@ import { ModelLists } from "@ren/core/model-lists"
 import { ModelGateway } from "@ren/core/model-gateway"
 import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
 import { Models } from "@ren/core/models"
+import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
@@ -169,6 +170,7 @@ const artifactProvider = Layer.unwrap(
 const models = Layer.unwrap(
   Effect.map(RenGateway.configured, (isConfigured) =>
     Models.layer.pipe(
+      Layer.provideMerge(ProviderSettings.layer),
       Layer.provideMerge(ModelLists.layerJob),
       Layer.provideMerge(ModelLists.layer),
       Layer.provideMerge(ModelGateway.layer(isConfigured ? [RenGateway.gateway] : [])),

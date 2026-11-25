@@ -3,15 +3,44 @@ export * as ModelGateway from "./model-gateway.js"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Changed, Field, Listed, Provider } from "@ren/schema/model-gateway"
+import type { Models } from "@ren/schema/models"
 import type { Space } from "@ren/schema/space"
 import { Context, type DateTime, Effect, Layer, Option, type Redacted, Schema, type Stream } from "effect"
 
 export { Changed, Field, Listed, Provider }
 
+// oxlint-disable-next-line ren/no-comments -- The vendor refused a key, or the fields are not the provider's: the person can fix it.
+export class Rejected extends Schema.TaggedError<Rejected>()("ModelGateway.Rejected", { message: Schema.String }) {}
+
 export class Unavailable extends Schema.TaggedError<Unavailable>()("ModelGateway.Unavailable", {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}
+
+// oxlint-disable-next-line ren/no-comments -- No method: a provider the deployment connects (`operator`).
+export interface Settings {
+  readonly enabled: boolean
+  readonly method?: Models.Method
+  readonly off: ReadonlyArray<string>
+}
+
+export interface Fields {
+  readonly [name: string]: Redacted.Redacted
+}
+
+export interface Saved {
+  readonly last4: string
+  readonly testedAt: DateTime.Utc
+}
+
+export interface Key extends Saved {
+  readonly savedBy?: typeof Auth.MemberID.Type
+}
+
+// oxlint-disable-next-line ren/no-comments -- Providers P29: a provider's settings as the gateway keeps them. Ren core keeps none.
+export interface ProviderSettings extends Settings {
+  readonly key?: Key
+}
 
 export interface GrantInput {
   readonly brainId: Brain.ID
@@ -37,6 +66,29 @@ export interface Gateway {
   readonly organizations: (provider: string) => Effect.Effect<ReadonlyArray<Auth.OrganizationID>, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- Idempotent per brain: the same valid key until it nears expiry, also after Ren core restarts (the contract suite checks it).
   readonly grant: (input: GrantInput) => Effect.Effect<Grant, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- Providers P29: the organization's settings of each provider it added or changed. A provider not in the answer has its defaults: on, its first method, no key, every model on.
+  readonly settings: (
+    organizationId: Auth.OrganizationID,
+  ) => Effect.Effect<Readonly<Record<string, ProviderSettings>>, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- Providers P29: writes a provider's settings; the gateway allows only what is on and connected (§6.4.1).
+  readonly configure: (
+    provider: string,
+    organizationId: Auth.OrganizationID,
+    settings: Settings,
+  ) => Effect.Effect<void, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- A key provider: test the fields without saving; save them after a passing test; remove them. Ren never stores the fields.
+  readonly test: (
+    provider: string,
+    organizationId: Auth.OrganizationID,
+    fields: Fields,
+  ) => Effect.Effect<{ readonly ok: boolean; readonly message?: string }, Unavailable | Rejected>
+  readonly connect: (
+    provider: string,
+    organizationId: Auth.OrganizationID,
+    fields: Fields,
+    savedBy: typeof Auth.MemberID.Type,
+  ) => Effect.Effect<Saved, Unavailable | Rejected>
+  readonly disconnect: (provider: string, organizationId: Auth.OrganizationID) => Effect.Effect<void, Unavailable>
 }
 
 export interface Owned {

@@ -311,6 +311,19 @@ import type {
   RenInferenceKeySecretOutput,
   RenInferenceHarnessPlanInput,
   RenInferenceHarnessPlanOutput,
+  ProviderListOutput,
+  ProviderUpdateInput,
+  ProviderUpdateOutput,
+  ProviderTestInput,
+  ProviderTestOutput,
+  ProviderKeySaveInput,
+  ProviderKeySaveOutput,
+  ProviderKeyRemoveInput,
+  ProviderKeyRemoveOutput,
+  ProviderModelsListInput,
+  ProviderModelsListOutput,
+  ProviderModelsUpdateInput,
+  ProviderModelsUpdateOutput,
   BillingGetOutput,
   BillingPlanListOutput,
   BillingInvoiceListInput,
@@ -2629,6 +2642,93 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    provider: {
+      list: (requestOptions?: RequestOptions) =>
+        request<ProviderListOutput>(
+          {
+            method: "GET",
+            path: `/providers`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ProviderUpdateInput, requestOptions?: RequestOptions) =>
+        request<ProviderUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/providers/${encodeURIComponent(input.id)}`,
+            body: { enabled: input["enabled"], method: input["method"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      test: (input: ProviderTestInput, requestOptions?: RequestOptions) =>
+        request<ProviderTestOutput>(
+          {
+            method: "POST",
+            path: `/providers/${encodeURIComponent(input.id)}/test`,
+            body: { fields: input["fields"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      key: {
+        save: (input: ProviderKeySaveInput, requestOptions?: RequestOptions) =>
+          request<ProviderKeySaveOutput>(
+            {
+              method: "PUT",
+              path: `/providers/${encodeURIComponent(input.id)}/key`,
+              body: { fields: input["fields"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        remove: (input: ProviderKeyRemoveInput, requestOptions?: RequestOptions) =>
+          request<ProviderKeyRemoveOutput>(
+            {
+              method: "DELETE",
+              path: `/providers/${encodeURIComponent(input.id)}/key`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      models: {
+        list: (input: ProviderModelsListInput, requestOptions?: RequestOptions) =>
+          request<ProviderModelsListOutput>(
+            {
+              method: "GET",
+              path: `/providers/${encodeURIComponent(input.id)}/models`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        update: (input: ProviderModelsUpdateInput, requestOptions?: RequestOptions) =>
+          request<ProviderModelsUpdateOutput>(
+            {
+              method: "PATCH",
+              path: `/providers/${encodeURIComponent(input.id)}/models`,
+              body: { models: input["models"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     billing: {
       get: (requestOptions?: RequestOptions) =>

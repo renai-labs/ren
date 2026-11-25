@@ -91,6 +91,7 @@ import { DriveHandler } from "./handlers/api/drive.js"
 import { FilesHandler } from "./handlers/api/files.js"
 import { MachineTemplateHandler, MachineProviderHandler } from "./handlers/api/machine-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
+import { ProviderHandler } from "./handlers/api/provider.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { WebhookHandler, WebhookRequestHandler } from "./handlers/api/webhook.js"
@@ -225,6 +226,7 @@ export const layer = Layer.mergeAll(
         OAuthSessionHandler,
         OAuthAppHandler,
         RenInferenceHandler,
+        ProviderHandler,
         BillingHandler,
         ChannelInstallHandler,
         ChannelMappingHandler,

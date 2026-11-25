@@ -29,6 +29,7 @@ import { LinkGroup } from "./groups/link.js"
 import { MeGroup } from "./groups/me.js"
 import { MemoryGroup } from "./groups/memory.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
+import { ProviderGroup } from "./groups/provider.js"
 import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { ScheduleGroup, ScheduleRunGroup } from "./groups/schedule.js"
 import { WebhookGroup, WebhookRequestGroup } from "./groups/webhook.js"
@@ -86,6 +87,7 @@ export const Api = HttpApi.make("server")
   .add(OAuthSessionGroup)
   .add(OAuthAppGroup)
   .add(RenInferenceGroup)
+  .add(ProviderGroup)
   .add(BillingGroup)
   .add(ChannelInstallGroup)
   .add(ChannelMappingGroup)

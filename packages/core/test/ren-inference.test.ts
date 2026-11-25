@@ -98,6 +98,7 @@ describe("RenGateway with the Ren Inference Service (Providers §6.2, §10)", ()
         }
         replies.set("/v1/providers", () => Response.json([renCard]))
         replies.set("/v1/providers/ren/models", () => Response.json({ revision: "r1", models: [model] }))
+        replies.set("/v1/providers/settings", () => Response.json({}))
         replies.set("/v1/keys", () => Response.json({ key: "key-brain", expiresAt }))
         seen.length = 0
 
@@ -114,6 +115,7 @@ describe("RenGateway with the Ren Inference Service (Providers §6.2, §10)", ()
         ).toEqual([["ren", "https://llm.ren.test/v1", "key-brain", [model]]])
         expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([
           ["/v1/providers", null, { org: "ren" }],
+          ["/v1/providers/settings", null, { org: owner.organizationId }],
           ["/v1/providers/ren/models", null, { org: "ren" }],
           ["/v1/keys", { brainId, spaceId: owner.spaceId }, { org: owner.organizationId }],
         ])

@@ -61,6 +61,7 @@ export interface Input {
       organizationId: string,
       input: { readonly name: string; readonly ownerEmail: string },
     ) => Promise<void>
+    readonly applyDefaultModel: (organizationId: string) => Promise<void>
   }
 }
 
@@ -173,6 +174,9 @@ const provisionOrganization =
       (error: unknown) => input.logFailure("Default organization provisioning failed", error, session.userId),
     )
     if (!organization) return { data: session }
+    await input.provisioning
+      .applyDefaultModel(organization.id)
+      .catch((error: unknown) => input.logFailure("Default model failed", error, session.userId))
     if (organization.user) {
       await input.provisioning
         .createInitialMemberships(organization.id, organization.user)
@@ -307,11 +311,13 @@ export const make = (input: Input) => {
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
     organizationHooks: {
-      afterCreateOrganization: (data) =>
-        input.provisioning.enrollInBilling(data.organization.id, {
+      afterCreateOrganization: async (data) => {
+        await input.provisioning.applyDefaultModel(data.organization.id)
+        await input.provisioning.enrollInBilling(data.organization.id, {
           name: data.organization.name,
           ownerEmail: data.user.email,
-        }),
+        })
+      },
       afterAddMember: (data) => input.provisioning.createInitialMemberships(data.organization.id, data.user),
       afterAcceptInvitation: async (data) => {
         await input.provisioning.createInitialMemberships(data.organization.id, data.user)
