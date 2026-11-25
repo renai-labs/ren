@@ -435,7 +435,7 @@ body {
 .docs-foot-row:active,
 .docs-page-action:active,
 .docs-entry:active,
-.docs-card:active,
+.docs-pager-link:active,
 .docs-spotlight:active {
   transform: scale(0.97);
 }
@@ -781,7 +781,7 @@ html.light .docs-when-dark {
 }
 
 .docs-entry,
-.docs-card,
+.docs-pager-link,
 .docs-spotlight {
   display: flex;
   flex-direction: column;
@@ -798,7 +798,7 @@ html.light .docs-when-dark {
 
 @media (hover: hover) and (pointer: fine) {
   .docs-entry:hover,
-  .docs-card:hover,
+  .docs-pager-link:hover,
   .docs-spotlight:hover {
     border-color: color-mix(in srgb, var(--ren-color-text-primary) 18%, transparent);
   }
@@ -826,7 +826,7 @@ html.light .docs-when-dark {
 }
 
 .docs-entry-title,
-.docs-card-title,
+.docs-pager-title,
 .docs-spotlight-title {
   font-size: 13px;
   font-weight: var(--ren-font-weight-medium);
@@ -834,7 +834,6 @@ html.light .docs-when-dark {
 }
 
 .docs-entry-body,
-.docs-card-body,
 .docs-spotlight-body {
   font-size: 13px;
   line-height: 1.45;
@@ -885,34 +884,25 @@ html.light .docs-when-dark {
   padding-inline: 14px;
 }
 
-.docs-cards {
+.docs-pager {
   display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 48px;
 }
 
-@media (min-width: 640px) {
-  .docs-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1024px) {
-  .docs-cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.docs-card {
+.docs-pager-link {
   gap: 2px;
   padding: 14px;
 }
 
-.docs-card-icon {
-  width: 16px;
-  height: 16px;
-  margin-bottom: 10px;
+.docs-pager-next {
+  grid-column: 2;
+  text-align: right;
+}
+
+.docs-pager-label {
+  font-size: 12px;
   color: var(--ren-color-text-secondary);
 }
 
@@ -958,7 +948,7 @@ html.light .docs-when-dark {
   .docs-foot-row,
   .docs-page-action,
   .docs-entry,
-  .docs-card,
+  .docs-pager-link,
   .docs-spotlight {
     transition-property: background-color, border-color, color;
   }

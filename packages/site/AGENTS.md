@@ -7,9 +7,9 @@ The marketing site and the docs at `useren.ai/docs`.
 - Pages are in `src/content/docs`. The route is the file path: `tasks.mdx` is `/docs/tasks/`.
 - Add each page to the sidebar in `src/lib/docs/nav.ts`. A production build fails for a page that is not there.
 - Screenshots and videos are in `src/assets/docs`. Delete a file when no page shows it.
-- Every page ends with **Read next**: the next six pages of its sidebar tab. `readNext` in `src/lib/docs/nav.ts` makes it. Never write one in a page.
+- Every page ends with links to the previous and next pages of its sidebar tab. `pager` in `src/lib/docs/nav.ts` makes them. Never write them in a page.
 - Give each page of a sidebar tab its own icon, from the filled set in `@ren/ui/heroicons`.
-- Give each page a `summary` of at most 8 words. Read next cards show it. `description` stays a full sentence for search results and `llms.txt`.
+- Give each page a `description`: a full sentence for search results and `llms.txt`.
 
 ## Writing rules
 
