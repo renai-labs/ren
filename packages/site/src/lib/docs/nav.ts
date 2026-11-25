@@ -89,12 +89,7 @@ const DEVELOPERS: Section = {
     },
     {
       title: "Reference",
-      items: [
-        "developers/cli-commands",
-        "developers/api",
-        "developers/llms-txt",
-        "developers/self-hosting",
-      ],
+      items: ["developers/cli-commands", "developers/api", "developers/llms-txt", "developers/self-hosting"],
     },
   ],
 }
@@ -125,6 +120,8 @@ if (unlisted.length > 0 && !import.meta.env.DEV) {
 
 export const sectionOf = (page: DocsPage) => sectionBySlug.get(page.slugs.join("/")) ?? DOCS
 
+const titleOf = (item: NavItem, page: DocsPage) => (typeof item === "string" ? page.data.title : item.label)
+
 export const navTree = (section: Section): Root => ({
   name: section.title,
   children: section.groups.flatMap((group): Node[] => [
@@ -133,7 +130,7 @@ export const navTree = (section: Section): Root => ({
       const page = pageAt(slugOf(item))
       return {
         type: "page",
-        name: typeof item === "string" ? page.data.title : item.label,
+        name: titleOf(item, page),
         url: pageHref(page),
         icon: page.data.icon,
       }
@@ -141,23 +138,16 @@ export const navTree = (section: Section): Root => ({
   ]),
 })
 
-const TILE_HREF = /<(?:Card|Entry|Spotlight)\b[^>]*\bhref="(?<href>[^"#]+)/g
-
-export const readNext = (page: DocsPage) => {
-  const tiles = new Set([...(page.data.entry.body ?? "").matchAll(TILE_HREF)].map((match) => match.groups?.href))
+export const pager = (page: DocsPage) => {
   const items = sectionOf(page).groups.flatMap((group) => group.items)
   const index = items.findIndex((item) => slugOf(item) === page.slugs.join("/"))
-  return items
-    .slice(index + 1)
-    .map((item) => ({ item, next: pageAt(slugOf(item)) }))
-    .filter((entry) => !tiles.has(pageHref(entry.next)))
-    .slice(0, 6)
-    .map((entry) => ({
-      title: typeof entry.item === "string" ? entry.next.data.title : entry.item.label,
-      summary: entry.next.data.summary,
-      icon: entry.next.data.icon ?? "BookOpen",
-      href: pageHref(entry.next),
-    }))
+  const link = (offset: number) => {
+    const item = index + offset >= 0 ? items[index + offset] : null
+    if (!item) return null
+    const target = pageAt(slugOf(item))
+    return { title: titleOf(item, target), href: pageHref(target) }
+  }
+  return { previous: link(-1), next: link(1) }
 }
 
 export type SectionLink = {
