@@ -36,7 +36,7 @@ const DOCS: Section = {
     },
     {
       title: "Organization",
-      items: [{ slug: "organization", label: "Overview" }, "model-providers", "billing"],
+      items: [{ slug: "organization", label: "Overview" }, { slug: "model-providers", label: "Models" }, "billing"],
     },
     {
       title: "Clients",
