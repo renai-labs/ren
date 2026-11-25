@@ -14,7 +14,7 @@ import {
 } from "@ren/ui/attachment"
 import { Link } from "@ren/ui/link"
 import { ImageTrigger } from "../../components/image-set.js"
-import { blockImage, inlineImage } from "../../components/markdown.js"
+import { blockImage, inlineImage } from "../../components/markdown-image.js"
 import { MediaLoading, MediaUnavailable } from "../../components/media-unavailable.js"
 import { errorStatus } from "../../lib/errors.js"
 import { formatBytes } from "../../lib/format.js"

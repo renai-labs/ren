@@ -11,6 +11,9 @@ export const Route = createFileRoute("/_authed/_shell/tasks/$taskId/")({
     Loader.start(
       context.queryClient.query(context.api.task.get.queryOptions({ idOrSlug: options.params.taskId })),
       context.queryClient.query(Tasks.activity(context.client, options.params.taskId)),
+      ...(options.params.taskId.startsWith("tsk_")
+        ? [context.queryClient.query(context.api.task.list.queryOptions(Tasks.subtasksInput(options.params.taskId)))]
+        : []),
     )
   },
 })

@@ -22,6 +22,12 @@ const pageSize = 100
 
 export const refreshEvery = 5000
 
+export const working = (task: Pick<TaskInfo, "session">) => task.session?.state === "working"
+
+// oxlint-disable-next-line ren/no-comments -- Tasks change on their own only while an agent works on one, so only then is it worth polling; otherwise a list refreshes when it mounts stale, on window focus and after any task mutation.
+export const pollWhileWorking = (tasks: ReadonlyArray<Pick<TaskInfo, "session">> | undefined) =>
+  tasks?.some(working) ? refreshEvery : false
+
 const statuses = ["backlog", "todo", "in_progress", "done", "dismissed"] as const satisfies ReadonlyArray<
   TaskInfo["status"]
 >
@@ -176,21 +182,24 @@ export const createInput = (form: Draft, spaceId: string, parentId?: string): Ta
   ...(form.labels.length > 0 && { labels: form.labels }),
 })
 
+export const subtasksInput = (parentId: string): TaskListInput => ({ parentId, includeDone: true, page: 1, pageSize })
+
 export const allKey = (input?: Filter) => (input ? (["task", "all", input] as const) : (["task", "all"] as const))
 
 export const all = (client: Client, input: Filter) =>
   queryOptions({
     queryKey: allKey(input),
     queryFn: async (context) => {
-      const items: TaskInfo[] = []
-      for (let page = 1; ; page++) {
-        // oxlint-disable-next-line no-await-in-loop -- pages fetched in order until total reached
-        const result = await client.task.list({ ...input, page, pageSize }, { signal: context.signal })
-        items.push(...result.items)
-        if (page * result.pageSize >= result.total || result.items.length === 0) return { items, total: result.total }
-      }
+      const first = await client.task.list({ ...input, page: 1, pageSize }, { signal: context.signal })
+      const pages = first.items.length === 0 ? 1 : Math.ceil(first.total / first.pageSize)
+      const rest = await Promise.all(
+        Array.from({ length: Math.max(0, pages - 1) }, (_, index) =>
+          client.task.list({ ...input, page: index + 2, pageSize }, { signal: context.signal }),
+        ),
+      )
+      return { items: [first, ...rest].flatMap((result) => result.items), total: first.total }
     },
-    refetchInterval: refreshEvery,
+    refetchInterval: (query) => pollWhileWorking(query.state.data?.items),
   })
 
 export const activity = (client: Client, taskId: string) =>
@@ -205,5 +214,4 @@ export const activity = (client: Client, taskId: string) =>
         if (page * result.pageSize >= result.total || result.items.length === 0) return items
       }
     },
-    refetchInterval: refreshEvery,
   })

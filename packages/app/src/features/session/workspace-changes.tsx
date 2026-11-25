@@ -196,7 +196,7 @@ function Changes(props: {
 
 function Bar(props: { children?: ReactNode; actions: ReactNode }) {
   return (
-    <div className="@container/bar flex h-10 shrink-0 items-center gap-2 px-3 not-has-[>div>*]:hidden">
+    <div className="@container/bar hidden h-10 shrink-0 items-center gap-2 px-3 has-[>div>*]:flex">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">{props.children}</div>
       <div className="flex shrink-0 items-center gap-1">{props.actions}</div>
     </div>

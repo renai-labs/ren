@@ -5,6 +5,7 @@ import {
   use,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -24,10 +25,10 @@ import {
   useIsCodeFenceIncomplete,
   type DiagramPlugin,
   type ExtraProps,
+  type MathPlugin,
   type MermaidErrorComponentProps,
   type UrlTransform,
 } from "streamdown"
-import { math } from "@streamdown/math"
 import {
   IconAlertOctagon,
   IconAlertTriangle,
@@ -73,14 +74,24 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import type { CatalogApp } from "../lib/apps.js"
+import { blockImage, inlineImage } from "./markdown-image.js"
 import { useCopy } from "../lib/use-copy.js"
 import { VideoUrl } from "../lib/video-url.js"
 import { ImageThumbnail } from "./image-set.js"
 import { markdownClipboard } from "./markdown-clipboard.js"
 import { MarkdownContext, MarkdownLink, sentMentionLinks } from "./markdown-link.js"
 
-export const blockImage = "max-h-96 max-w-full rounded-md border object-contain"
-export const inlineImage = "inline-block h-auto max-h-96 max-w-full object-contain align-middle"
+let mathLoad: Promise<MathPlugin | null> | undefined
+const loadMath = () =>
+  (mathLoad ??= import("@streamdown/math").then(
+    (module) => module.math,
+    () => {
+      mathLoad = undefined
+      return null
+    },
+  ))
+
+const mathLike = /\$|\\\(|\\\[/u
 
 let mermaidLoad: Promise<DiagramPlugin | null> | undefined
 const loadMermaid = () =>
@@ -546,7 +557,11 @@ const streamdownIcons = {
   ZoomOutIcon: streamdownIcon(IconMinus),
 }
 
-const streamAnimation = { animation: "fadeIn", duration: 180, easing: "ease-out", sep: "word" } as const
+const controls = { code: false, table: false, mermaid: true } as const
+
+const linkSafety = { enabled: false } as const
+
+const noApps: ReadonlyArray<CatalogApp> = []
 
 export function Markdown(props: {
   children: string
@@ -561,28 +576,40 @@ export function Markdown(props: {
   videos?: boolean | undefined
 }) {
   const id = useId()
-  const apps = props.apps ?? []
+  const apps = props.apps ?? noApps
   const text = TexMath.rewrite(props.children)
   const [mermaid, setMermaid] = useState<DiagramPlugin | null>(null)
+  const [math, setMath] = useState<MathPlugin | null>(null)
+  const wantsMath = mathLike.test(text)
+  useEffect(() => {
+    if (wantsMath) void loadMath().then(setMath)
+  }, [wantsMath])
   const wantsMermaid = Fences.split(text).some((part) => part.closed && part.info === "mermaid")
   useEffect(() => {
     if (wantsMermaid) void loadMermaid().then(setMermaid)
   }, [wantsMermaid])
   const dark = useSyncExternalStore(wantsMermaid ? subscribeDark : unsubscribed, isDark, () => false)
   const user = props.source === "user"
-  const base = props.workspaceImage ? workspaceRehypePlugins : rehypePlugins
-  const rehype = props.videos ? [...base, videoLinks] : base
+  const workspace = props.workspaceImage !== undefined
+  const videos = props.videos === true
+  // oxlint-disable-next-line ren/no-comments -- Streamdown re-renders every block of a message when these change identity, which on each streamed chunk made every finished block and earlier message render again.
+  const rehype = useMemo(() => {
+    const base = workspace ? workspaceRehypePlugins : rehypePlugins
+    return [...(user ? userRehypePlugins : videos ? [...base, videoLinks] : base), headingIds(id)]
+  }, [user, workspace, videos, id])
+  const plugins = useMemo(() => ({ ...(math && { math }), ...(mermaid && { mermaid }) }), [math, mermaid])
+  const remarkRehypeOptions = useMemo(() => ({ clobberPrefix: `${id}-` }), [id])
+  const streaming = props.streaming === true
+  const diagrams = mermaid !== null
+  const workspaceImage = props.workspaceImage
+  const fileReference = props.fileReference
+  const driveFile = props.driveFile
+  const context = useMemo(
+    () => ({ apps, streaming, mermaid: diagrams, workspaceImage, fileReference, driveFile }),
+    [apps, streaming, diagrams, workspaceImage, fileReference, driveFile],
+  )
   return (
-    <MarkdownContext
-      value={{
-        apps,
-        streaming: props.streaming === true,
-        mermaid: mermaid !== null,
-        workspaceImage: props.workspaceImage,
-        fileReference: props.fileReference,
-        driveFile: props.driveFile,
-      }}
-    >
+    <MarkdownContext value={context}>
       <div
         data-slot="markdown"
         data-markdown={id}
@@ -602,17 +629,16 @@ export function Markdown(props: {
       >
         <Streamdown
           dir="auto"
-          controls={{ code: false, table: false, mermaid: true }}
+          controls={controls}
           urlTransform={urlTransform}
-          rehypePlugins={[...(user ? userRehypePlugins : rehype), headingIds(id)]}
+          rehypePlugins={rehype}
           remarkPlugins={user ? userRemarkPlugins : remarkPlugins}
           components={components}
           isAnimating={props.streaming === true}
-          animated={user ? false : streamAnimation}
-          remarkRehypeOptions={{ clobberPrefix: `${id}-` }}
-          plugins={{ math, ...(mermaid ? { mermaid } : {}) }}
+          remarkRehypeOptions={remarkRehypeOptions}
+          plugins={plugins}
           mermaid={dark ? mermaidOptions.dark : mermaidOptions.light}
-          linkSafety={{ enabled: false }}
+          linkSafety={linkSafety}
           icons={streamdownIcons}
         >
           {Fences.mapProse(mentionLinks(text, apps), (prose) =>

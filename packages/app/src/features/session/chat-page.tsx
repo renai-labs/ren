@@ -26,7 +26,7 @@ import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { ChatWorkspace } from "../../lib/chat-workspace.js"
 import { Preference } from "../../lib/preference.js"
 import { cn } from "cn"
-import { useChat } from "./use-chat.js"
+import { useChat, useChatComposer } from "./use-chat.js"
 import { useFind } from "./use-find.js"
 import type { Session } from "@ren/schema/session"
 import { useAgents } from "../../lib/use-agents.js"
@@ -124,6 +124,7 @@ function ChatComposer(props: {
   onDock: (node: HTMLDivElement | null) => void
 }) {
   const chat = props.chat
+  const composer = useChatComposer(chat)
   const column = useRef<HTMLDivElement>(null)
   const terminal = useTerminalShells(chat.root)
   return (
@@ -165,10 +166,10 @@ function ChatComposer(props: {
           textareaRef={props.onComposer}
           placement="chat"
           spaceId={chat.spaceId}
-          value={chat.draft}
-          onChange={chat.setDraft}
-          files={chat.files}
-          onSubmit={chat.send}
+          value={composer.draft}
+          onChange={composer.setDraft}
+          files={composer.files}
+          onSubmit={composer.send}
           onChooseModel={chat.canChooseModel ? () => chat.setPicking(true) : undefined}
           boot={chat.bootStatus}
           preparing={chat.preparing}
@@ -176,7 +177,7 @@ function ChatComposer(props: {
           onRetryNow={chat.retryNow}
           running={chat.running}
           onStop={chat.stop}
-          suggest={chat.suggest}
+          suggest={composer.suggest}
           queue={<QueuedMessages items={chat.queued} onRemove={chat.removeQueued} onSendNow={chat.sendQueuedNow} />}
           history={chat.shellHistory}
           apps={chat.apps}
@@ -184,7 +185,7 @@ function ChatComposer(props: {
             chat.canChooseModel ? (
               <ModelPicker
                 models={chat.models}
-                value={chat.model}
+                value={composer.model}
                 loading={chat.modelsLoading}
                 onChange={chat.chooseModel}
                 open={chat.picking}
@@ -336,7 +337,7 @@ export function ChatPage() {
       }),
     onArchived: () => void navigate({ to: "/" }),
   })
-  const updateDraft = chat.files.update
+  const updateDraft = chat.draftStore.update
   const mentionFile = (path: string) =>
     updateDraft((draft) => Composer.withText(draft, Mentions.insertFile(draft.text, path, draft.text.length).text))
   const width = Preference.usePreference(ChatPreferences.panelWidth)

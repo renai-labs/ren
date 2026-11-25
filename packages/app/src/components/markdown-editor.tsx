@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Drive } from "@ren/schema/drive"
 import { Button } from "@ren/ui/button"
 import { Input } from "@ren/ui/input"
@@ -199,8 +199,13 @@ export function MarkdownEditor(props: {
     baseline.current = next
     props.onCommit?.(next)
   }
-  const editor = useEditor({
-    extensions: [
+  const uploads = useRef(upload)
+  useEffect(() => {
+    uploads.current = upload
+  })
+  // oxlint-disable-next-line ren/no-comments -- Tiptap reconfigures the editor whenever these change identity, which on every render of a form around it (each keystroke in a title) cost a full editor update.
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         link: {
           openOnClick: false,
@@ -217,19 +222,29 @@ export function MarkdownEditor(props: {
       Markdown,
       Placeholder.configure({ placeholder: props.placeholder }),
     ],
+    [props.placeholder],
+  )
+  const editorProps = useMemo(
+    () => ({
+      attributes: { "aria-label": props.label },
+      handlePaste: (view: EditorView, event: ClipboardEvent) =>
+        uploads.current ? insert(view, uploads.current, [...(event.clipboardData?.files ?? [])]) : false,
+      handleDrop: (view: EditorView, event: DragEvent) => {
+        const files = [...(event.dataTransfer?.files ?? [])]
+        const current = uploads.current
+        if (!current || files.length === 0) return false
+        event.preventDefault()
+        return insert(view, current, files, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos)
+      },
+    }),
+    [props.label],
+  )
+  const editor = useEditor({
+    extensions,
     content: props.value,
     contentType: "markdown",
     editable,
-    editorProps: {
-      attributes: { "aria-label": props.label },
-      handlePaste: (view, event) => (upload ? insert(view, upload, [...(event.clipboardData?.files ?? [])]) : false),
-      handleDrop: (view, event) => {
-        const files = [...(event.dataTransfer?.files ?? [])]
-        if (!upload || files.length === 0) return false
-        event.preventDefault()
-        return insert(view, upload, files, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos)
-      },
-    },
+    editorProps,
     onCreate: (event) => {
       baseline.current = markdownOf(event.editor)
     },

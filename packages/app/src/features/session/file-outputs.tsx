@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "cn"
 import { DriveFilePreview } from "../../components/file-preview/drive-file-view.js"
 import { useNear } from "../../components/file-preview/page-field.js"
+import { useSeen } from "../../lib/use-seen.js"
 import { parseCsv } from "../../components/file-preview/xlsx.js"
 import { Markdown } from "../../components/markdown.js"
 import { MediaPlayer } from "../../components/media-player.js"
@@ -130,12 +131,12 @@ const metaOf = (file: SessionMessage.DriveFile) => `${labelOf(file)} · ${format
 
 const textBytes = 64 * 1024
 
-function useFileText(spaceId: string | undefined, file: SessionMessage.DriveFile) {
+function useFileText(spaceId: string | undefined, file: SessionMessage.DriveFile, near: boolean) {
   const drive = useDriveFile(spaceId, file)
   return useQuery({
     // ast-grep-ignore: no-query-key-literal -- reads the file's bytes through its signed drive link, not the API
     queryKey: ["file-output-text", spaceId, file.path, file.size],
-    enabled: Boolean(spaceId),
+    enabled: near && Boolean(spaceId),
     staleTime: Infinity,
     retry: false,
     queryFn: async (context) => new TextDecoder().decode(await drive.bytes(context.signal, textBytes)),
@@ -192,11 +193,12 @@ const imageMaxHeight = 360
 function OutputImage(props: {
   spaceId: string | undefined
   file: SessionMessage.DriveFile
+  near: boolean
   onOpen: () => void
   className?: string | undefined
 }) {
   const storage = Platform.usePlatform().storage
-  const drive = useDriveFile(props.spaceId, props.file)
+  const drive = useDriveFile(props.spaceId, props.file, { near: props.near })
   const width = PageHeights.get(storage, sizeKey(props.file, "w"))
   const height = PageHeights.get(storage, sizeKey(props.file, "h"))
   const [loaded, setLoaded] = useState(false)
@@ -273,8 +275,8 @@ const arrive = "animate-in fade-in-0 slide-in-from-bottom-1 duration-200 ease-ou
 const previewRows = 6
 const previewLines = 14
 
-function TablePreview(props: { spaceId: string | undefined; file: SessionMessage.DriveFile }) {
-  const text = useFileText(props.spaceId, props.file)
+function TablePreview(props: { spaceId: string | undefined; file: SessionMessage.DriveFile; near: boolean }) {
+  const text = useFileText(props.spaceId, props.file, props.near)
   if (!text.data) return <Skeleton className="h-40 rounded-none bg-muted/30" />
   const whole = props.file.size <= textBytes
   const rows = parseCsv(text.data)
@@ -316,8 +318,13 @@ function TablePreview(props: { spaceId: string | undefined; file: SessionMessage
   )
 }
 
-function TextPreview(props: { spaceId: string | undefined; file: SessionMessage.DriveFile; kind: Kind }) {
-  const text = useFileText(props.spaceId, props.file)
+function TextPreview(props: {
+  spaceId: string | undefined
+  file: SessionMessage.DriveFile
+  kind: Kind
+  near: boolean
+}) {
+  const text = useFileText(props.spaceId, props.file, props.near)
   if (!text.data) return <Skeleton className="h-40 rounded-none bg-muted/30" />
   const lines = text.data.split("\n")
   const head = lines.slice(0, previewLines).join("\n")
@@ -353,12 +360,17 @@ const bodyKinds: ReadonlySet<Kind> = new Set<Kind>([
   "pdf",
 ])
 
-function PreviewBody(props: { spaceId: string | undefined; file: SessionMessage.DriveFile; onOpen: () => void }) {
+function PreviewBody(props: {
+  spaceId: string | undefined
+  file: SessionMessage.DriveFile
+  near: boolean
+  onOpen: () => void
+}) {
   const kind = kindOf(props.file)
   if (kind === "image")
     return (
       <div className="flex justify-center p-2">
-        <OutputImage spaceId={props.spaceId} file={props.file} onOpen={props.onOpen} />
+        <OutputImage spaceId={props.spaceId} file={props.file} near={props.near} onOpen={props.onOpen} />
       </div>
     )
   if (kind === "video" || kind === "audio")
@@ -367,14 +379,14 @@ function PreviewBody(props: { spaceId: string | undefined; file: SessionMessage.
         <MediaPlayer spaceId={props.spaceId} file={props.file} kind={kind} />
       </div>
     )
-  if (kind === "table") return <TablePreview spaceId={props.spaceId} file={props.file} />
+  if (kind === "table") return <TablePreview spaceId={props.spaceId} file={props.file} near={props.near} />
   if (kind === "pdf")
     return (
       <div className="flex justify-center bg-muted/20 p-4">
         <PdfPreview spaceId={props.spaceId} file={props.file} />
       </div>
     )
-  return <TextPreview spaceId={props.spaceId} file={props.file} kind={kind} />
+  return <TextPreview spaceId={props.spaceId} file={props.file} kind={kind} near={props.near} />
 }
 
 function PreviewCard(props: {
@@ -383,7 +395,8 @@ function PreviewCard(props: {
   fresh: boolean
   onArrived: () => void
 }) {
-  const drive = useDriveFile(props.spaceId, props.file)
+  const seen = useSeen()
+  const drive = useDriveFile(props.spaceId, props.file, { near: false })
   const open = useOpen(props.spaceId, props.file)
   const kind = kindOf(props.file)
   const body = !drive.deleted && bodyKinds.has(kind)
@@ -396,6 +409,7 @@ function PreviewCard(props: {
     )
   return (
     <div
+      ref={seen.ref}
       className={cn("group/output overflow-hidden rounded-xl border bg-card", props.fresh && arrive)}
       onAnimationEnd={props.onArrived}
     >
@@ -421,7 +435,7 @@ function PreviewCard(props: {
           </span>
         )}
       </div>
-      {body ? <PreviewBody spaceId={props.spaceId} file={props.file} onOpen={open.open} /> : null}
+      {body ? <PreviewBody spaceId={props.spaceId} file={props.file} near={seen.seen} onOpen={open.open} /> : null}
       {open.dialog}
     </div>
   )

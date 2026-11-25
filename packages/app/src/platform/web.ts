@@ -13,6 +13,22 @@ const decodeShared = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.String, value: Schema.UndefinedOr(Schema.String) }),
 )
 
+const readMethods = new Set(["GET", "HEAD"])
+
+// oxlint-disable-next-line ren/no-comments -- The server tags its logs with the request's session replay. A custom header costs reads a CORS preflight (a full extra round trip), so only writes carry it: they send JSON and are preflighted anyway.
+function replayHeaders(
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1],
+  analytics: Analytics.Interface | undefined,
+) {
+  const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase()
+  const replay = readMethods.has(method) ? undefined : analytics?.replaySession()
+  if (!replay) return {}
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+  headers.set("x-posthog-session-id", replay)
+  return { headers }
+}
+
 export function createWebPlatform(stores: {
   readonly large?: DraftStore.Large | undefined
   readonly chatCache?: Platform.ChatCache | undefined
@@ -31,16 +47,16 @@ export function createWebPlatform(stores: {
     else if (event.key.startsWith(prefix)) notify(event.key.slice(prefix.length))
   })
   const serverUrl = import.meta.env.VITE_REN_API_URL ?? window.location.origin
-  return {
-    ...(posthogKey && {
-      analytics: Analytics.make({
+  const analytics = posthogKey
+    ? Analytics.make({
         key: posthogKey,
         apiHost: import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com",
         ...(posthogUiHost && { uiHost: posthogUiHost }),
-        serverHost: new URL(serverUrl).hostname,
         autocaptureUrls: ProductEvents.autocaptureUrls,
-      }),
-    }),
+      })
+    : undefined
+  return {
+    ...(analytics && { analytics }),
     platform: "web",
     serverUrl,
     appUrl: window.location.origin,
@@ -49,7 +65,7 @@ export function createWebPlatform(stores: {
       : undefined,
     fetch: Object.assign(
       (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
-        globalThis.fetch(input, { ...init, credentials: "include" }),
+        globalThis.fetch(input, { ...init, ...replayHeaders(input, init, analytics), credentials: "include" }),
       globalThis.fetch,
     ),
     upload: async (form, file, options) => {

@@ -353,7 +353,10 @@ export function TaskActivity(props: { task: TaskInfo; onOpenSession: (sessionId:
   const { client } = RouterContext.useRouterContext()
   const names = useNames()
   const now = useNow()
-  const activity = useQuery(Tasks.activity(client, props.task.id))
+  const activity = useQuery({
+    ...Tasks.activity(client, props.task.id),
+    refetchInterval: Tasks.pollWhileWorking([props.task]),
+  })
   return (
     <section className="flex flex-col gap-5">
       <h2 className="text-md font-semibold">Activity</h2>

@@ -38,7 +38,11 @@ export function useDriveDownload(spaceId: string | undefined) {
     })
 }
 
-export function useDriveFile(spaceId: string | undefined, file: SessionMessage.DriveFile) {
+export function useDriveFile(
+  spaceId: string | undefined,
+  file: SessionMessage.DriveFile,
+  options?: { readonly near?: boolean },
+) {
   const { platform, queryClient } = RouterContext.useRouterContext()
   const [gone, setGone] = useState(false)
   const [reloaded, setReloaded] = useState(false)
@@ -48,7 +52,7 @@ export function useDriveFile(spaceId: string | undefined, file: SessionMessage.D
   const save = useDriveDownload(spaceId)
   const shown = useQuery({
     ...link("inline"),
-    enabled: Boolean(spaceId) && !gone && (image || playableKind(file.mime) !== undefined),
+    enabled: Boolean(spaceId) && !gone && (options?.near ?? true) && (image || playableKind(file.mime) !== undefined),
   })
   const fail = (error: unknown) => {
     if (errorStatus(error) === 404) setGone(true)
