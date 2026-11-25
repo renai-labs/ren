@@ -159,6 +159,28 @@ describe("Memory", () => {
     }),
   )
 
+  it.live("appending to the root keeps what it had, even when two appends land at the same time", () =>
+    Effect.gen(function* () {
+      const memory = yield* Memory.Service
+      const owner = yield* Seed.owner()
+      const ada = { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] }
+      const spaceId = owner.spaceId
+      yield* memory.appendRoot(ada, { spaceId, content: "- Ship on Fridays.\n" })
+      expect((yield* memory.read(ada, { spaceId, path: Memory.root })).content).toBe("- Ship on Fridays.\n")
+      yield* Effect.all(
+        [
+          memory.appendRoot(ada, { spaceId, content: "- Lives in Lisbon." }),
+          memory.appendRoot(ada, { spaceId, content: "- Builds Ren." }),
+        ],
+        { concurrency: "unbounded" },
+      )
+      const content = (yield* memory.read(ada, { spaceId, path: Memory.root })).content
+      expect(content).toStartWith("- Ship on Fridays.\n\n")
+      expect(content).toContain("- Lives in Lisbon.")
+      expect(content).toContain("- Builds Ren.")
+    }),
+  )
+
   it.live(
     "a non-member cannot see a space’s memory; an agent edits only its own space’s and only reads the organization’s (memory M4 to M6)",
     () =>

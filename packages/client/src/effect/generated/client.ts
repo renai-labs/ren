@@ -2081,6 +2081,21 @@ const adaptGroupBilling = (raw: RawClient["billing"]) => ({
 const EndpointOnboardingGet = (raw: RawClient["onboarding"]) => () =>
   raw["onboarding.get"]({}).pipe(Effect.mapError(mapClientError))
 
+type OnboardingReportRequest = Parameters<RawClient["onboarding"]["onboarding.report"]>[0]
+type OnboardingReportInput = { readonly step: OnboardingReportRequest["payload"]["step"] }
+const EndpointOnboardingReport = (raw: RawClient["onboarding"]) => (input: OnboardingReportInput) =>
+  raw["onboarding.report"]({ payload: { step: input["step"] } }).pipe(Effect.mapError(mapClientError))
+
+type OnboardingImportMemoryRequest = Parameters<RawClient["onboarding"]["onboarding.importMemory"]>[0]
+type OnboardingImportMemoryInput = {
+  readonly spaceId: OnboardingImportMemoryRequest["payload"]["spaceId"]
+  readonly content: OnboardingImportMemoryRequest["payload"]["content"]
+}
+const EndpointOnboardingImportMemory = (raw: RawClient["onboarding"]) => (input: OnboardingImportMemoryInput) =>
+  raw["onboarding.importMemory"]({ payload: { spaceId: input["spaceId"], content: input["content"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
 type OnboardingDismissRequest = Parameters<RawClient["onboarding"]["onboarding.dismiss"]>[0]
 type OnboardingDismissInput = { readonly checklist: OnboardingDismissRequest["payload"]["checklist"] }
 const EndpointOnboardingDismiss = (raw: RawClient["onboarding"]) => (input: OnboardingDismissInput) =>
@@ -2088,6 +2103,8 @@ const EndpointOnboardingDismiss = (raw: RawClient["onboarding"]) => (input: Onbo
 
 const adaptGroupOnboarding = (raw: RawClient["onboarding"]) => ({
   get: EndpointOnboardingGet(raw),
+  report: EndpointOnboardingReport(raw),
+  importMemory: EndpointOnboardingImportMemory(raw),
   dismiss: EndpointOnboardingDismiss(raw),
 })
 

@@ -28,6 +28,10 @@ export interface Interface {
     actor: Actor.Info,
     input: Memory.EditInput,
   ) => Effect.Effect<Memory.File, Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid>
+  readonly appendRoot: (
+    actor: Actor.Info,
+    input: { readonly spaceId?: Space.ID | undefined; readonly content: string },
+  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden>
   readonly delete: (
     actor: Actor.Info,
     input: Memory.PathInput,
@@ -220,6 +224,15 @@ export const layer = Layer.effect(
           }),
         )
         return { path: input.path, content: files[input.path] ?? "" }
+      }),
+      appendRoot: Effect.fn("Memory.appendRoot")(function* (
+        actor: Actor.Info,
+        input: { readonly spaceId?: Space.ID | undefined; readonly content: string },
+      ) {
+        yield* change(actor, input.spaceId, (files) => {
+          const current = files[root]?.trimEnd()
+          return Effect.succeed({ ...files, [root]: current ? `${current}\n\n${input.content}` : input.content })
+        })
       }),
       delete: remove,
       fileSystem: {

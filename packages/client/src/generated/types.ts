@@ -424,7 +424,7 @@ export type BillingCheckout = { checkoutUrl: string }
 
 export type OnboardingOrganizationStep = "slack.connected" | "member.joined"
 
-export type OnboardingPersonalStep = "gmail.connected"
+export type OnboardingPersonalStep = "github.starred" | "gmail.connected" | "memory.imported"
 
 export type ChannelInstallID = string
 
@@ -9802,6 +9802,17 @@ export type BillingCancelOutput = void
 export type BillingPortalOutput = BillingLink
 
 export type OnboardingGetOutput = OnboardingInfo
+
+export type OnboardingReportInput = { readonly step: { readonly step: "github.starred" }["step"] }
+
+export type OnboardingReportOutput = OnboardingInfo
+
+export type OnboardingImportMemoryInput = {
+  readonly spaceId: { readonly spaceId: string; readonly content: string }["spaceId"]
+  readonly content: { readonly spaceId: string; readonly content: string }["content"]
+}
+
+export type OnboardingImportMemoryOutput = OnboardingInfo
 
 export type OnboardingDismissInput = {
   readonly checklist: { readonly checklist: "organization" | "personal" }["checklist"]

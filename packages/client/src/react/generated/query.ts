@@ -162,6 +162,8 @@ import type {
   BillingInvoiceUrlInput,
   BillingSubscribeInput,
   BillingChangePlanInput,
+  OnboardingReportInput,
+  OnboardingImportMemoryInput,
   OnboardingDismissInput,
   ChannelInstallListInput,
   ChannelInstallUpdateInput,
@@ -1791,6 +1793,22 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["onboarding", "get"] as const,
             queryFn: (context) => client["onboarding"]["get"]({ signal: context.signal }),
+          }),
+      },
+      report: {
+        mutationKey: () => ["onboarding", "report"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["onboarding", "report"] as const,
+            mutationFn: (input: OnboardingReportInput) => client["onboarding"]["report"](input),
+          }),
+      },
+      importMemory: {
+        mutationKey: () => ["onboarding", "importMemory"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["onboarding", "importMemory"] as const,
+            mutationFn: (input: OnboardingImportMemoryInput) => client["onboarding"]["importMemory"](input),
           }),
       },
       dismiss: {
