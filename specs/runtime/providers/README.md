@@ -218,26 +218,27 @@ Two rules for `grant`:
 1. It is idempotent per brain. It gives the same valid key until the key is near its expiry, also after Ren core restarts. The gateway keeps each brain's key (`Litellm.ensureBrainKey`, ren-inference `litellm/index.ts:28-53`). A LiteLLM plug-in finds its key by alias (`brain-<id>`).
 2. A minted key has an expiry. The type requires it: a `Minted` grant without `expiresAt` does not compile.
 
-Each plug-in runs the contract suite `contract(name, make)` in `core/test/lib/model-provider.ts`:
+Each plug-in runs the contract suite `contract(name, options)` in `core/test/lib/model-provider.ts`, against the real service behind it (`RenGateway`: a running Ren Inference Service, `core/test/ren-inference-live.slow.test.ts`):
 
 | Case                                                         | Shows                                 |
 | ------------------------------------------------------------ | ------------------------------------- |
 | `grant(A)` two times                                         | the same key                          |
 | make the plug-in again over the same server, then `grant(A)` | the same key after a Ren core restart |
-| `grant(A)` and `grant(B)`                                    | two keys (`Minted` only)              |
-| a `Minted` grant                                             | `expiresAt` is in the future          |
-| `TestClock` into the renewal window, then `grant(A)`         | a new key before the old one expires  |
+| `grant(A)` and `grant(B)`, both `Minted`                     | two keys, each expiring in the future |
+
+Ren core renews a `Minted` key from its `expiresAt` (`core/test/models.test.ts`); when the plug-in mints a new key near expiry is the plug-in's own rule.
 
 A card:
 
-| Field    | Values                                                                                                                                                                                |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`     | unique over all plug-ins: `ren`, `groq`, `anthropic`, …                                                                                                                               |
-| `name`   | `Groq`                                                                                                                                                                                |
-| `mark`   | the logo id                                                                                                                                                                           |
-| `payer`  | `ren` or `customer`                                                                                                                                                                   |
-| `auth`   | one or more of: `key` with its fields (name, label, secret, multiline, placeholder); `subscription` with its sign-in label; `operator` (no form: the deployment holds the credential) |
-| `models` | `shared` (the same list for every organization) or `organization` (depends on the organization: seats)                                                                                |
+| Field      | Values                                                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | unique over all plug-ins: `ren`, `groq`, `anthropic`, …                                                                                                                               |
+| `name`     | `Groq`                                                                                                                                                                                |
+| `mark`     | the logo id                                                                                                                                                                           |
+| `payer`    | `ren` or `customer`                                                                                                                                                                   |
+| `protocol` | how a brain calls the card's models, unless a model says otherwise                                                                                                                    |
+| `auth`     | one or more of: `key` with its fields (name, label, secret, multiline, placeholder); `subscription` with its sign-in label; `operator` (no form: the deployment holds the credential) |
+| `models`   | `shared` (the same list for every organization) or `organization` (depends on the organization: seats)                                                                                |
 
 The app renders a card's fields and meters as data. It knows no provider.
 
