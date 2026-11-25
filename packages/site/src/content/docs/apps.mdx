@@ -199,7 +199,7 @@ A skill is a folder with a `SKILL.md` file and optional files, such as templates
 
 If you paste the same steps again and again, make them a skill.
 
-For the skill format, see [The `.ren` folder](/docs/developers/ren-folder/).
+`SKILL.md` starts with a `name` and a `description`. The name has up to 64 lowercase letters, digits and hyphens, and matches the folder name. The description has up to 1,024 characters. Every file in the folder must be text.
 
 <Screenshot
   shot="apps/skill-refused"
@@ -218,7 +218,7 @@ An app can include other apps of your organization, such as one sales app that i
 
 **Advanced** holds settings that most apps do not need: packages and build commands that Ren installs on the machine, env names for **Secrets**, how long Ren waits for each MCP server, and webhooks, which open in **Spec**.
 
-**Spec** shows the whole app as YAML, and takes YAML or JSON. **Form** and **Spec** edit the same app. For the format, see [Ren as code](/docs/developers/ren-as-code/).
+**Spec** shows the whole app as YAML, and takes YAML or JSON. **Form** and **Spec** edit the same app.
 
 ## Edit, change the owner or archive an app
 

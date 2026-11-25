@@ -59,14 +59,8 @@ const DEVELOPERS: Section = {
   home: "developers/cli",
   groups: [
     { title: "Get started", items: ["developers/cli", "developers/mcp"] },
-    {
-      title: "Guides",
-      items: ["developers/ren-as-code", "developers/inference-setup", "developers/scripting"],
-    },
-    {
-      title: "Reference",
-      items: ["developers/cli-commands", "developers/mcp-tools", "developers/ren-folder", "developers/llms-txt"],
-    },
+    { title: "Guides", items: ["developers/inference-setup"] },
+    { title: "Reference", items: ["developers/llms-txt"] },
   ],
 }
 

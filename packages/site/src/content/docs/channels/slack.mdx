@@ -20,7 +20,7 @@ Mention `@Ren` in a Slack channel, or send Ren a direct message. Each Slack thre
 
 1. Open **Settings → Channels → Slack**.
 
-2. Select **Connect Slack** and approve Ren in your Slack workspace.
+2. Select **Connect Slack** and approve Ren in your Slack workspace. If your workspace requires app approval, a Slack admin approves Ren.
 
 </Steps>
 
@@ -35,18 +35,16 @@ Any member can connect Slack. That person becomes the fallback user of Slack cha
 | A Slack channel  | Mention `@Ren` | Reply in the Slack thread and mention `@Ren` again          |
 | A direct message | Send a message | Reply in its Slack thread. A new message starts a new chat. |
 
-Ren reacts 👀 when it starts, then ✅ when it is done or ❌ when it fails. If only 👀 shows, open the chat in the app.
-
 When you mention Ren in a Slack thread, it reads the messages since its last mention, up to 12,000 characters and 10 files.
 
 ## Where Ren works
 
-| Message from                              | Space                                                           |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| A thread linked to a [task](/docs/tasks/) | The space of the task                                           |
-| A linked Slack channel                    | The linked space                                                |
-| Any other Slack channel                   | The oldest space of the organization, such as **General Space** |
-| A direct message                          | Your personal space                                             |
+| Message from                              | Space                 |
+| ----------------------------------------- | --------------------- |
+| A thread linked to a [task](/docs/tasks/) | The space of the task |
+| A linked Slack channel                    | The linked space      |
+| Any other Slack channel                   | **General Space**     |
+| A direct message                          | Your personal space   |
 
 ## Who Ren runs as
 
@@ -66,6 +64,8 @@ Connecting Slack also gives Ren Slack tools, such as sending a message or search
 ## Task cards
 
 When you paste the link of a [task](/docs/tasks/) in Slack, Ren shows a card with its title and status. In a thread linked to a task, the card stays up to date. Its buttons act as the person who selects them.
+
+When Ren creates a task in a chat that started in a Slack thread, it links the task to the thread.
 
 ## Good to know
 
