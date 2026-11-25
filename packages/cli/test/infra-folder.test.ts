@@ -247,7 +247,7 @@ describe("InfraFolder.validate", () => {
       "spaces/engineering/agents/helper/agent.yaml: description: A subagent needs a description, so other agents know when to use it.",
       "spaces/engineering/agents/ren/agent.yaml: The name ren is reserved.",
       'spaces/engineering/schedules.yaml: nightly.agent: Schedule "nightly" in space "engineering" runs on agent "review", which is not in the space.',
-      'spaces/engineering/space.yaml: brain.environment: The brain of space "engineering" names environment template "Python", which the spec does not declare.',
+      'spaces/engineering/space.yaml: brain.environment: The brain of space "engineering" names environment template "Python", which the folder does not declare.',
       'spaces/engineering/space.yaml: factory.agents.0.agent: Agent "helper" is a subagent, so it cannot be in the factory. Pick another agent.',
     ])
   })
@@ -262,7 +262,7 @@ describe("InfraFolder.validate", () => {
     const result = await InfraFolder.validate(root)
 
     expect(result.problems.map(Output.formatProblem)).toEqual([
-      'deploy.yaml: spaces.ops: The spec declares no space "ops".',
+      'deploy.yaml: spaces.ops: The folder declares no space "ops".',
     ])
   })
 
@@ -293,9 +293,7 @@ describe("InfraFolder.validate", () => {
 
     expect(missing.problems).toEqual(result.problems)
 
-    expect(result.problems.map(Output.formatProblem)).toEqual([
-      ".: No spec here. An org spec has org.yaml, and a private spec has space.yaml.",
-    ])
+    expect(result.problems.map(Output.formatProblem)).toEqual([".: No Ren folder here: it needs org.yaml."])
   })
 })
 

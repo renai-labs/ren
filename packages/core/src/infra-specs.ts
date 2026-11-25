@@ -228,7 +228,9 @@ export const layer = Layer.effect(
     const authorize = (actor: Actor.Info, action: string) =>
       access.isAllowed({ actor, action, resource: Access.organization })
         ? Effect.void
-        : Effect.fail(new Primitive.Forbidden({ message: "Only organization admins can use the org spec." }))
+        : Effect.fail(
+            new Primitive.Forbidden({ message: "Only organization owners and admins can plan, apply or pull." }),
+          )
 
     const runtimeOf = (runtime: Runtime) => ({
       ...(runtime.brainScope !== "space" && { brainScope: runtime.brainScope }),
@@ -1043,7 +1045,7 @@ export const layer = Layer.effect(
           .filter((slug) => !(slug in input.spec.spaces))
           .map((slug) => ({
             path: `deploy.yaml/spaces/${slug}`,
-            message: `deploy.yaml binds space “${slug}”, which the spec does not declare.`,
+            message: `deploy.yaml binds space “${slug}”, which the folder does not declare.`,
           })),
       )
 

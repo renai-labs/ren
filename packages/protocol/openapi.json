@@ -15425,7 +15425,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space.",
+            "description": "The part of the organization that a folder manages today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15465,8 +15465,8 @@
             }
           }
         },
-        "description": "Return the organization settings and the shared spaces as an org spec, with the resources that the folder should write and remove. A resource that changed in the folder and in Ren is a conflict. Needs an organization admin.",
-        "summary": "Pull the org spec",
+        "description": "Return the organization settings and the shared spaces as a folder’s contents, with the resources that the folder should write and remove. A resource that changed in the folder and in Ren is a conflict. Needs an organization admin.",
+        "summary": "Pull the organization’s setup",
         "requestBody": {
           "content": {
             "application/json": {
@@ -15524,8 +15524,8 @@
             }
           }
         },
-        "description": "Return the changes that would make the organization match the spec, the problems that stop it, and the digest that apply needs.",
-        "summary": "Plan an org spec",
+        "description": "Return the changes that would make the organization match the folder, the problems that stop it, and the digest that apply needs.",
+        "summary": "Plan changes to the organization’s setup",
         "requestBody": {
           "content": {
             "application/json": {
@@ -15613,8 +15613,8 @@
             }
           }
         },
-        "description": "Plan the spec again and write its changes, when the digest matches. A conflict refuses the apply unless force is set. A failed write stops apply and names its change; the writes before it stay.",
-        "summary": "Apply an org spec",
+        "description": "Plan the folder again and write its changes, when the digest matches. A conflict refuses the apply unless force is set. A failed write stops apply and names its change; the writes before it stay.",
+        "summary": "Apply the organization’s setup",
         "requestBody": {
           "content": {
             "application/json": {
@@ -17932,7 +17932,7 @@
               },
               "fallback": {
                 "type": "boolean",
-                "description": "Run a sender that Ren cannot match to a space member as the mapping’s fallback user. Apply keeps that user while they can act in the mapping’s space, and otherwise, as for a new mapping, uses the person who applies the spec. On by default, off by default for a public GitHub repository."
+                "description": "Run a sender that Ren cannot match to a space member as the mapping’s fallback user. Apply keeps that user while they can act in the mapping’s space, and otherwise, as for a new mapping, uses the person who applies the folder. On by default, off by default for a public GitHub repository."
               },
               "triggers": {
                 "type": "object",
@@ -17973,7 +17973,7 @@
               },
               "fallback": {
                 "type": "boolean",
-                "description": "Run a sender that Ren cannot match to a space member as the mapping’s fallback user. Apply keeps that user while they can act in the mapping’s space, and otherwise, as for a new mapping, uses the person who applies the spec. On by default, off by default for a public GitHub repository."
+                "description": "Run a sender that Ren cannot match to a space member as the mapping’s fallback user. Apply keeps that user while they can act in the mapping’s space, and otherwise, as for a new mapping, uses the person who applies the folder. On by default, off by default for a public GitHub repository."
               },
               "triggers": {
                 "type": "object",
@@ -17999,7 +17999,7 @@
             "additionalProperties": false
           }
         ],
-        "description": "A channel that maps a place to a space. The spec maps the channels that a person installed in Ren."
+        "description": "A channel that maps a place to a space. The folder maps the channels that a person installed in Ren."
       },
       "Channel.Provider": {
         "type": "string",
@@ -20432,7 +20432,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file>, deploy.yaml/profiles/<app>/<profile> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
+            "description": "Where the folder declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file>, deploy.yaml/profiles/<app>/<profile> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
           },
           "from": {
             "type": "string",
@@ -20847,7 +20847,7 @@
         },
         "required": ["bindings", "spec", "lock", "write", "remove", "conflicts"],
         "additionalProperties": false,
-        "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space."
+        "description": "The part of the organization that a folder manages today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space."
       },
       "Infra.PulledApp": {
         "type": "object",

@@ -14,9 +14,9 @@ export const InfraGroup = HttpApiGroup.make("infra")
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "infra.pull",
-        summary: "Pull the org spec",
+        summary: "Pull the organization’s setup",
         description:
-          "Return the organization settings and the shared spaces as an org spec, with the resources that the folder should write and remove. A resource that changed in the folder and in Ren is a conflict. Needs an organization admin.",
+          "Return the organization settings and the shared spaces as a folder’s contents, with the resources that the folder should write and remove. A resource that changed in the folder and in Ren is a conflict. Needs an organization admin.",
       }),
     ),
   )
@@ -28,9 +28,9 @@ export const InfraGroup = HttpApiGroup.make("infra")
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "infra.plan",
-        summary: "Plan an org spec",
+        summary: "Plan changes to the organization’s setup",
         description:
-          "Return the changes that would make the organization match the spec, the problems that stop it, and the digest that apply needs.",
+          "Return the changes that would make the organization match the folder, the problems that stop it, and the digest that apply needs.",
       }),
     ),
   )
@@ -42,9 +42,9 @@ export const InfraGroup = HttpApiGroup.make("infra")
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "infra.apply",
-        summary: "Apply an org spec",
+        summary: "Apply the organization’s setup",
         description:
-          "Plan the spec again and write its changes, when the digest matches. A conflict refuses the apply unless force is set. A failed write stops apply and names its change; the writes before it stay.",
+          "Plan the folder again and write its changes, when the digest matches. A conflict refuses the apply unless force is set. A failed write stops apply and names its change; the writes before it stay.",
       }),
     ),
   )

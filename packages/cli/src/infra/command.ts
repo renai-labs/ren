@@ -171,7 +171,7 @@ export const validate = Effect.fn("InfraCommand.validate")(function* (
   const result = yield* Effect.tryPromise(() => InfraFolder.validate(resolve(input.folder)))
   if (result.kind === "invalid") return yield* Output.Failure.problems(result.problems)
   const output = yield* Output.Service
-  yield* output.result(Schema.Struct({ valid: Schema.Literal(true) }), { valid: true }, "The spec is valid.")
+  yield* output.result(Schema.Struct({ valid: Schema.Literal(true) }), { valid: true }, "The folder is valid.")
 })
 
 export const plan = Effect.fn("InfraCommand.plan")(function* (

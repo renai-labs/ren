@@ -326,7 +326,7 @@ describe("InfraSpecs channels", () => {
         problems: [
           {
             path: "spaces/home/channels/sales",
-            message: "This Slack place is mapped to a space that the spec does not manage. Unmap it there first.",
+            message: "This Slack place is mapped to a space that the folder does not manage. Unmap it there first.",
           },
         ],
       })
