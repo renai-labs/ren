@@ -23461,16 +23461,22 @@
       },
       "Onboarding.OrganizationStep": {
         "type": "string",
-        "enum": ["slack.connected", "member.joined"],
+        "enum": [
+          "slack.connected",
+          "github.connected",
+          "member.joined",
+          "artifact.created",
+          "schedule.created",
+          "webhook.created",
+          "factory.created",
+          "custom-app.created",
+          "iac.applied"
+        ],
         "description": "An action that counts toward the organization’s onboarding, in the order the checklist shows it."
       },
       "Onboarding.PersonalStep": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": ["gmail.connected"]
-          }
-        ],
+        "type": "string",
+        "enum": ["gmail.connected", "granola.connected", "github.app.connected", "drive.connected", "apps.connected"],
         "description": "An action that counts toward a person’s own onboarding in the organization, in checklist order."
       },
       "Onboarding.Step": {

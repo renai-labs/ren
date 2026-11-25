@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Effect, Exit, Layer, Option, Queue, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Queue, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Billing } from "../src/billing.js"
 import { DurableRunner } from "../src/durable-runner.js"
@@ -51,50 +51,62 @@ const layer = (rewards: unknown) =>
 
 const it = testEffect(
   layer({
-    [Onboarding.steps.organization.memberJoined]: { microUsd: 5_000_000 },
-    [Onboarding.steps.organization.slackConnected]: { microUsd: 10_000_000 },
-    [Onboarding.steps.personal.gmailConnected]: { microUsd: 2_000_000 },
+    [Onboarding.steps.organization.slackConnected]: { microUsd: 3_000_000 },
+    [Onboarding.steps.organization.githubConnected]: { microUsd: 3_000_000 },
+    [Onboarding.steps.organization.memberJoined]: { microUsd: 1_000_000, upTo: 2 },
+    [Onboarding.steps.personal.appsConnected]: { microUsd: 3_000_000 },
   }),
 )
 
+const grant = (org: string, microUsd: number, key: string) => ({ org, body: { microUsd, key } })
+
 describe("OnboardingRewards", () => {
-  it.live("grants an organization step's configured credits the first time it completes, and nothing else", () =>
+  it.live("pays an organization step once, the first time it completes", () =>
     Effect.gen(function* () {
       const onboarding = yield* Onboarding.Service
       const organizationId = yield* Seed.organization()
-      yield* onboarding.record(organizationId, Onboarding.steps.organization.memberJoined)
-      expect(yield* Queue.take(grants)).toEqual({
-        org: organizationId,
-        body: { microUsd: 5_000_000, key: `onboarding:${Onboarding.steps.organization.memberJoined}` },
-      })
-      yield* onboarding.record(organizationId, Onboarding.steps.organization.memberJoined)
       yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
-      expect(yield* Queue.take(grants)).toEqual({
-        org: organizationId,
-        body: { microUsd: 10_000_000, key: `onboarding:${Onboarding.steps.organization.slackConnected}` },
-      })
+      yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
+      expect(yield* Queue.take(grants)).toEqual(grant(organizationId, 3_000_000, "onboarding:slack.connected"))
+      yield* onboarding.record(organizationId, Onboarding.steps.organization.githubConnected)
+      expect(yield* Queue.take(grants)).toEqual(grant(organizationId, 3_000_000, "onboarding:github.connected"))
+      yield* onboarding.record(organizationId, Onboarding.steps.organization.artifactCreated)
       expect(yield* Queue.size(grants)).toBe(0)
     }),
   )
 
-  it.live("credits the organization once for each member who completes a personal step", () =>
+  it.live("pays a personal step once for each member who completes it", () =>
     Effect.gen(function* () {
       const onboarding = yield* Onboarding.Service
       const organizationId = yield* Seed.organization()
       const ada = yield* Seed.actor(organizationId, "owner")
       const grace = yield* Seed.actor(organizationId, "member")
-      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.gmailConnected)
-      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.gmailConnected)
-      yield* onboarding.recordPersonal(grace, Onboarding.steps.personal.gmailConnected)
+      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.appsConnected)
+      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.appsConnected)
+      expect(yield* Queue.take(grants)).toEqual(
+        grant(organizationId, 3_000_000, `onboarding:apps.connected:${ada.userId}`),
+      )
+      yield* onboarding.recordPersonal(grace, Onboarding.steps.personal.appsConnected)
+      expect(yield* Queue.take(grants)).toEqual(
+        grant(organizationId, 3_000_000, `onboarding:apps.connected:${grace.userId}`),
+      )
+      expect(yield* Queue.size(grants)).toBe(0)
+    }),
+  )
+
+  it.live("pays for each member who joins, once each, up to the reward's limit", () =>
+    Effect.gen(function* () {
+      const onboarding = yield* Onboarding.Service
+      const organizationId = yield* Seed.organization()
+      const joined = (who: string) =>
+        onboarding.record(organizationId, Onboarding.steps.organization.memberJoined, { occurrence: who })
+      yield* joined("usr_ada")
+      yield* joined("usr_ada")
+      yield* joined("usr_grace")
+      yield* joined("usr_joan")
       expect(yield* Queue.takeN(grants, 2)).toEqual(
         expect.arrayContaining(
-          [ada, grace].map((person) => ({
-            org: organizationId,
-            body: {
-              microUsd: 2_000_000,
-              key: `onboarding:${Onboarding.steps.personal.gmailConnected}:${person.userId}`,
-            },
-          })),
+          ["usr_ada", "usr_grace"].map((who) => grant(organizationId, 1_000_000, `onboarding:member.joined:${who}`)),
         ),
       )
       expect(yield* Queue.size(grants)).toBe(0)
@@ -104,23 +116,32 @@ describe("OnboardingRewards", () => {
   it.live("gives nothing for a step completed before its reward was configured", () =>
     Effect.gen(function* () {
       const organizationId = yield* Seed.organization()
+      const ada = yield* Seed.actor(organizationId, "owner")
       yield* Effect.flatMap(Onboarding.Service, (onboarding) =>
-        onboarding.record(organizationId, Onboarding.steps.organization.memberJoined),
+        Effect.all([
+          onboarding.record(organizationId, Onboarding.steps.organization.slackConnected),
+          ...(["gmail", "granola", "github"] as const).map((slug) =>
+            onboarding.recordPersonal(ada, Onboarding.appSteps[slug]),
+          ),
+        ]),
       ).pipe(Effect.provide(Layer.fresh(Onboarding.layer)))
       const onboarding = yield* Onboarding.Service
-      yield* onboarding.record(organizationId, Onboarding.steps.organization.memberJoined)
       yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
-      expect((yield* Queue.take(grants)).body).toMatchObject({
-        key: `onboarding:${Onboarding.steps.organization.slackConnected}`,
-      })
+      yield* onboarding.recordPersonal(ada, Onboarding.appSteps["google-drive"])
+      yield* onboarding.record(organizationId, Onboarding.steps.organization.githubConnected)
+      expect(yield* Queue.take(grants)).toEqual(grant(organizationId, 3_000_000, "onboarding:github.connected"))
       expect(yield* Queue.size(grants)).toBe(0)
     }),
   )
 
-  it.live("refuses to start with a reward for a step that does not exist", () =>
+  testEffect(
+    layer({ "made.up": { microUsd: 1 }, [Onboarding.steps.organization.slackConnected]: { microUsd: 2 } }),
+  ).live("ignores a reward for a step that does not exist and pays the others", () =>
     Effect.gen(function* () {
-      const started = yield* Effect.exit(Layer.build(Layer.fresh(layer({ "made.up": { microUsd: 1 } }))))
-      expect(Exit.isFailure(started)).toBe(true)
+      const onboarding = yield* Onboarding.Service
+      const organizationId = yield* Seed.organization()
+      yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
+      expect(yield* Queue.take(grants)).toEqual(grant(organizationId, 2, "onboarding:slack.connected"))
     }),
   )
 })

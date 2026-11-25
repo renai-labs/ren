@@ -9,12 +9,32 @@ export type ID = typeof ID.Type
 export const steps = {
   organization: {
     slackConnected: "slack.connected",
+    githubConnected: "github.connected",
     memberJoined: "member.joined",
+    artifactCreated: "artifact.created",
+    scheduleCreated: "schedule.created",
+    webhookCreated: "webhook.created",
+    factoryCreated: "factory.created",
+    customAppCreated: "custom-app.created",
+    iacApplied: "iac.applied",
   },
   personal: {
     gmailConnected: "gmail.connected",
+    granolaConnected: "granola.connected",
+    githubAppConnected: "github.app.connected",
+    driveConnected: "drive.connected",
+    appsConnected: "apps.connected",
   },
 } as const
+
+export const appSteps = {
+  gmail: steps.personal.gmailConnected,
+  granola: steps.personal.granolaConnected,
+  github: steps.personal.githubAppConnected,
+  "google-drive": steps.personal.driveConnected,
+} as const satisfies Readonly<Record<string, string>>
+
+export const appsNeeded = 3
 
 export const OrganizationStep = Schema.Literals(Object.values(steps.organization)).annotate({
   identifier: "Onboarding.OrganizationStep",
