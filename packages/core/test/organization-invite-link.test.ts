@@ -138,7 +138,7 @@ describe("OrganizationInviteLink", () => {
   )
 
   it.live(
-    "someone joining through a link completes the member.joined onboarding step; a member gaining spaces does not",
+    "someone joining through a link completes the member.joined onboarding step as that member; a member gaining spaces does not",
     () =>
       Effect.gen(function* () {
         const links = yield* OrganizationInviteLink.Service
@@ -159,6 +159,12 @@ describe("OrganizationInviteLink", () => {
         const newcomer = yield* stranger()
         yield* links.accept(newcomer, link.token, yield* addAsMember(newcomer, added))
         expect(yield* joined).not.toBeNull()
+        const database = yield* Database.Service
+        const [row] = yield* database.db
+          .select({ steps: Database.Schema.onboarding.steps })
+          .from(Database.Schema.onboarding)
+          .where(eq(Database.Schema.onboarding.organization_id, organizationId))
+        expect(Object.keys(row?.steps ?? {})).toContain(`${Onboarding.steps.organization.memberJoined}:${newcomer}`)
       }),
   )
 

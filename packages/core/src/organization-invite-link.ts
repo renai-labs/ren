@@ -311,7 +311,9 @@ export const layer = Layer.effect(
           Effect.provideService(EgressControl.Service, control),
         )
         if (accepted.isNewMember)
-          yield* onboarding.record(accepted.joined.organizationId, Onboarding.steps.organization.memberJoined)
+          yield* onboarding.record(accepted.joined.organizationId, Onboarding.steps.organization.memberJoined, {
+            occurrence: userId,
+          })
         return accepted.joined
       }),
     })
