@@ -1,17 +1,12 @@
 export * as Onboarding from "./onboarding.js"
 
-import type { ChannelProvider, OnboardingChecklist, OnboardingInfo, OnboardingReportInput } from "@ren/client"
+import type { ChannelProvider, OnboardingChecklist, OnboardingInfo } from "@ren/client"
 import { githubUrl } from "./links.js"
 
 export type Guide = "infra"
 
 export type Action =
-  | {
-      readonly kind: "external"
-      readonly label: string
-      readonly href: string
-      readonly report?: OnboardingReportInput["step"]
-    }
+  | { readonly kind: "external"; readonly label: string; readonly href: string }
   | { readonly kind: "app"; readonly label: string; readonly slug: string }
   | { readonly kind: "channel"; readonly label: string; readonly provider: ChannelProvider }
   | { readonly kind: "provider"; readonly label: string }
@@ -76,7 +71,7 @@ export const personal: ReadonlyArray<Task> = [
     title: "Star Ren on GitHub",
     description: "Star renai-labs/ren to follow each release.",
     reward: { usd: 2 },
-    action: { kind: "external", label: "Star on GitHub", href: githubUrl, report: "github.starred" },
+    action: { kind: "external", label: "Star on GitHub", href: githubUrl },
   },
   {
     id: "apps.connected",

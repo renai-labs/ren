@@ -1,5 +1,4 @@
 import { useRef, useState } from "react"
-import { useMutation, useQuery } from "@tanstack/react-query"
 import { Button } from "@ren/ui/button"
 import {
   CodeBlock,
@@ -18,11 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@ren/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
-import { toast } from "@ren/ui/sonner"
-import { Spinner } from "@ren/ui/spinner"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Textarea } from "@ren/ui/textarea"
-import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 
@@ -53,18 +49,11 @@ If no date is known, use [unknown] instead.
 - After the code block, state whether this is the complete set or if more remain.`
 
 export function ImportMemoryDialog(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { api } = RouterContext.useRouterContext()
+  const { platform } = RouterContext.useRouterContext()
   const space = useSpaces().joined.find((joined) => joined.kind === "private")
-  const save = useMutation(api.onboarding.importMemory.mutationOptions())
-  const imported = useQuery({
-    ...api.onboarding.get.queryOptions(),
-    select: (info) =>
-      info.personal.steps.some((state) => state.step === "memory.imported" && state.completedAt !== null),
-  }).data
   const [content, setContent] = useState("")
-  const [error, setError] = useState("")
+  const [problem, setError] = useState("")
   const field = useRef<HTMLTextAreaElement>(null)
-  const problem = error || (save.isError ? `Couldn’t add it to memory. ${errorMessage(save.error)}` : "")
   return (
     <Dialog
       open={props.open}
@@ -88,16 +77,13 @@ export function ImportMemoryDialog(props: { open: boolean; onOpenChange: (open: 
               setError("Ren adds memory to your personal space, and you don’t have one.")
               return
             }
-            save.mutate(
-              { spaceId: space.id, content: content.trim() },
-              {
-                onSuccess: () => {
-                  if (imported) toast.success("Memory imported", { description: `Added to ${space.name}.` })
-                  setContent("")
-                  props.onOpenChange(false)
-                },
-              },
-            )
+            const search = new URLSearchParams({
+              prompt: `Save this to my memory:\n\n${content.trim()}`,
+              spaceId: space.id,
+            })
+            platform.openExternal(`${platform.appUrl}/?${search.toString()}`)
+            setContent("")
+            props.onOpenChange(false)
           }}
         >
           <DialogHeader>
@@ -121,6 +107,7 @@ export function ImportMemoryDialog(props: { open: boolean; onOpenChange: (open: 
             </Field>
             <Field data-invalid={problem !== "" || undefined}>
               <FieldLabel htmlFor="import-memory-content">2. Paste the results to add them to your memory</FieldLabel>
+              <FieldDescription>Ren saves them to your memory in a new chat.</FieldDescription>
               <Textarea
                 ref={field}
                 id="import-memory-content"
@@ -137,10 +124,7 @@ export function ImportMemoryDialog(props: { open: boolean; onOpenChange: (open: 
           </FieldGroup>
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose>
-            <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Add to memory
-            </Button>
+            <Button type="submit">Add to memory</Button>
           </DialogFooter>
         </form>
       </DialogContent>

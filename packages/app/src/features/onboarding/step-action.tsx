@@ -24,7 +24,7 @@ interface Row {
 
 export function StepAction(props: Row & { action: Onboarding.Action }) {
   const action = props.action
-  if (action.kind === "external") return <ExternalAction action={action} row={props} />
+  if (action.kind === "external") return <ExternalAction href={action.href} row={props} />
   if (action.kind === "channel") return <ChannelAction provider={action.provider} row={props} />
   if (action.kind === "provider") return <ProviderAction row={props} />
   if (action.kind === "app") return <AppAction slug={action.slug} row={props} />
@@ -53,20 +53,9 @@ function RowButton(props: { row: Row; pending?: boolean; trail?: "open" | "exter
   )
 }
 
-function ExternalAction(props: { action: Extract<Onboarding.Action, { readonly kind: "external" }>; row: Row }) {
-  const { api, platform } = RouterContext.useRouterContext()
-  const report = useMutation(api.onboarding.report.mutationOptions())
-  const step = props.action.report
-  return (
-    <RowButton
-      row={props.row}
-      trail="external"
-      onClick={() => {
-        platform.openExternal(props.action.href)
-        if (step) report.mutate({ step })
-      }}
-    />
-  )
+function ExternalAction(props: { href: string; row: Row }) {
+  const { platform } = RouterContext.useRouterContext()
+  return <RowButton row={props.row} trail="external" onClick={() => platform.openExternal(props.href)} />
 }
 
 function ChannelAction(props: { provider: ChannelProvider; row: Row }) {
