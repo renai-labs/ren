@@ -1,0 +1,7 @@
+---
+import type { HarnessId } from "./harnesses.js"
+
+type Props = { id: HarnessId; first?: boolean }
+---
+
+<div data-harness={Astro.props.id} hidden={!Astro.props.first}><slot /></div>

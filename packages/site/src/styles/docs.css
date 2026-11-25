@@ -116,6 +116,48 @@ html[data-backdrop="5"] {
   margin-top: 0;
 }
 
+.docs-harness-tabs {
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  overflow-x: auto;
+  box-shadow: inset 0 -1px 0 var(--docs-line);
+}
+
+.docs-harness-tabs button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 10px;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  color: var(--ren-color-text-secondary);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.docs-harness-tabs button[aria-selected="true"] {
+  border-color: var(--ren-color-text-primary);
+  color: var(--ren-color-text-primary);
+  font-weight: var(--ren-font-weight-medium);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docs-harness-tabs button:hover {
+    color: var(--ren-color-text-primary);
+  }
+}
+
+.docs-harness-logo {
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: var(--logo) center / contain no-repeat;
+}
+
 .docs-alt {
   margin-top: 16px;
   border: 1px solid var(--docs-line);

@@ -1,0 +1,18 @@
+---
+import { HARNESSES, type HarnessId } from "./harnesses.js"
+
+type Props = { tools: HarnessId[] }
+
+const tools = HARNESSES.filter((harness) => Astro.props.tools.includes(harness.id))
+---
+
+<div class="docs-harness-tabs not-prose" role="tablist" aria-label="Your coding tool">
+  {
+    tools.map((harness, index) => (
+      <button type="button" role="tab" data-harness-pick={harness.id} aria-selected={index === 0 ? "true" : "false"}>
+        <span class="docs-harness-logo" style={`--logo: url("/logos/harnesses/${harness.id}.svg")`} aria-hidden="true" />
+        {harness.label}
+      </button>
+    ))
+  }
+</div>
