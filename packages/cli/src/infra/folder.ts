@@ -51,8 +51,7 @@ const inSpace = (space: string, rest: ReadonlyArray<string>): Place => {
   }
   if (kind === "apps" && rest.length >= 2) return inApp(`${space}/apps/${rest.at(1)}`, rest.slice(2))
   if (kind === "memory") return [`${space}/memory`, []]
-  if (kind === "environment" || records.some((record) => record === kind))
-    return [`${space}/${kind}.yaml`, rest.slice(1)]
+  if (records.some((record) => record === kind)) return [`${space}/${kind}.yaml`, rest.slice(1)]
   if (isInstructions(rest)) return [`${space}/instructions.md`, []]
   return [`${space}/space.yaml`, rest]
 }
@@ -60,6 +59,7 @@ const inSpace = (space: string, rest: ReadonlyArray<string>): Place => {
 const locate = (keys: ReadonlyArray<string>): Place => {
   if (keys.at(0) === "org") return isInstructions(keys.slice(1)) ? ["instructions.md", []] : ["org.yaml", keys.slice(1)]
   if (keys.at(0) === "memory") return ["memory", []]
+  if (keys.at(0) === "environments") return [environmentsFile, keys.slice(1)]
   if (keys.at(0) !== "spaces" || keys.length < 2) return [".", keys]
   return inSpace(`spaces/${keys.at(1)}`, keys.slice(2))
 }
@@ -70,6 +70,8 @@ const list = async (root: string) =>
 const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/u
 
 const lockFile = "ren.lock"
+
+const environmentsFile = "environments.yaml"
 
 export const lock = async (
   root: string,
@@ -196,9 +198,7 @@ export const validate = async (root: string): Promise<Validated> => {
   const space = async (folder: string) => {
     const value = await settled(folder, "space.yaml")
     if (!Predicate.isObject(value)) return value
-    const owned = await Promise.all(
-      [...records, "environment"].map(async (kind) => [kind, await yaml(`${folder}${kind}.yaml`)] as const),
-    )
+    const owned = await Promise.all(records.map(async (kind) => [kind, await yaml(`${folder}${kind}.yaml`)] as const))
     return {
       ...value,
       ...Object.fromEntries(owned.filter(([, value]) => !Predicate.isUndefined(value))),
@@ -220,9 +220,11 @@ export const validate = async (root: string): Promise<Validated> => {
       ],
     }
 
+  const environments = await yaml(environmentsFile)
   const input = {
     org: await settled("", "org.yaml"),
     memory: await textFiles("memory/", "A memory"),
+    ...(!Predicate.isUndefined(environments) && { environments }),
     spaces: await entries(children(files, "spaces/"), (slug) => space(`spaces/${slug}/`)),
   }
   const deploy = await yaml("deploy.yaml")
@@ -394,6 +396,17 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
       }),
     )
   await memory("", pulled.spec.memory)
+
+  const environments = under("environments/")
+  if (environments.length > 0) {
+    const file = join(root, environmentsFile)
+    await record(
+      file,
+      replaced(await parsed(file), environments, (name) =>
+        writes.has(`environments/${name}`) ? pulled.spec.environments[name] : undefined,
+      ),
+    )
+  }
 
   if (writes.has("org")) {
     const org = compact(pulled.spec.org.settings)

@@ -64,6 +64,7 @@ describe("InfraSpecs", () => {
         spec: {
           org: { settings: { ...empty, instructions: "Be brief." } },
           memory: { "memory.md": "" },
+          environments: {},
           spaces: {
             home: {
               name: "Home",

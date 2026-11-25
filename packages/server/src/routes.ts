@@ -263,6 +263,7 @@ export const layer = Layer.mergeAll(
         InfraSpecs.layer.pipe(
           Layer.provide([
             Space.layer,
+            MachineTemplates.layer,
             AgentMembership.layer,
             settingsAndAgents,
             App.layer,

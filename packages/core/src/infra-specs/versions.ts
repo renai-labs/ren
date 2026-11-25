@@ -5,6 +5,7 @@ import type { App } from "@ren/schema/app"
 import type { Channel } from "@ren/schema/channel"
 import { Factory } from "@ren/schema/factory"
 import type { Infra } from "@ren/schema/infra"
+import type { MachineTemplate } from "@ren/schema/machine-template"
 import type { OrganizationSettings } from "@ren/schema/organization-settings"
 import type { Schedule } from "@ren/schema/schedule"
 import type { Webhook } from "@ren/schema/webhook"
@@ -13,6 +14,7 @@ import { Predicate, Struct } from "effect"
 import { AppValidation } from "../app/validation.js"
 import { InfraApps } from "./apps.js"
 import { InfraChannels } from "./channels.js"
+import { InfraEnvironments } from "./environments.js"
 import { InfraMemory } from "./memory.js"
 import { InfraProfiles } from "./profiles.js"
 import { InfraSchedules } from "./schedules.js"
@@ -21,6 +23,7 @@ import { InfraWebhooks } from "./webhooks.js"
 export interface Source {
   readonly org: OrganizationSettings.UpdateInput
   readonly memory: Readonly<Record<string, string>>
+  readonly environments: Readonly<Record<string, MachineTemplate.Declaration>>
   readonly spaces: Readonly<
     Record<
       string,
@@ -75,6 +78,10 @@ export const resources = (source: Source, live?: Resources): Resources => {
     spaces.flatMap(([slug, space]) => Object.entries(pick(space)).map(([name, value]) => ({ slug, name, value })))
   return new Map<string, Resource>([
     ["org", { kind: "organization", value: source.org }],
+    ...Object.entries(source.environments).map(([name, declaration]): [string, Resource] => [
+      InfraEnvironments.path(name),
+      { kind: "environment", value: InfraEnvironments.canonical(declaration) },
+    ]),
     ...spaces.map(([slug, space]): [string, Resource] => [
       `spaces/${slug}`,
       {

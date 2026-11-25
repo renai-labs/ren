@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { Infra } from "@ren/schema/infra"
+import { Schema } from "effect"
 import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -20,6 +22,7 @@ describe("InfraFolder.validate", () => {
       "org.yaml": "settings:\n  permissions:\n    - { action: bash, resource: '*', effect: ask }\n",
       "instructions.md": "Be brief.\n",
       "deploy.yaml": "organization: acme\n",
+      "environments.yaml": "Python:\n  provider: docker\n  config:\n    image: python:3.13\n",
       "spaces/engineering/space.yaml": "name: Engineering\nuses:\n  agents: [triage]\n",
       "spaces/engineering/instructions.md": "Ship it.\n",
       "spaces/engineering/agents/build/agent.yaml": "description: Writes the code.\n",
@@ -48,6 +51,14 @@ describe("InfraFolder.validate", () => {
       permissions: [{ action: "bash", resource: "*", effect: "ask" }],
       references: [],
     })
+    expect(Schema.encodeSync(Infra.Spec)(result.spec).environments).toEqual({
+      Python: {
+        provider: "docker",
+        config: { image: "python:3.13" },
+        sessionsPerEnvironment: 8,
+        networking: { type: "unrestricted" },
+      },
+    })
     const engineering = result.spec.spaces["engineering"]
     expect(engineering?.settings.instructions).toBe("Ship it.")
     expect(engineering?.uses.agents).toEqual(["triage"])
@@ -75,6 +86,7 @@ describe("InfraFolder.validate", () => {
   test("reports each problem at the file and field that hold it", async () => {
     const root = await folder({
       "org.yaml": "settings: {}\n",
+      "environments.yaml": "Python:\n  provider: docker\n  config: {}\n  sessionsPerEnvironment: 0\n",
       "spaces/engineering/space.yaml": "description: No name.\n",
       "spaces/engineering/agents/build/agent.yaml": "isSubagent: maybe\n",
       "spaces/engineering/agents/ren/agent.yaml": "{}\n",
@@ -92,6 +104,7 @@ describe("InfraFolder.validate", () => {
     const result = await InfraFolder.validate(root)
 
     expect(result.problems.map(Output.formatProblem)).toEqual([
+      "environments.yaml: Python.sessionsPerEnvironment: Use 1 to 100 sessions per environment.",
       "memory/logo.png: A memory holds text files only.",
       "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
       "spaces/engineering/space.yaml: name: Missing key",
@@ -164,6 +177,14 @@ describe("InfraFolder.write", () => {
     spec: {
       org: { settings: { instructions: "Be brief.", permissions: [], references: [] } },
       memory: { "memory.md": "" },
+      environments: {
+        Python: {
+          provider: "docker",
+          config: { image: "python:3.13" },
+          sessionsPerEnvironment: 2,
+          networking: { type: "unrestricted" as const },
+        },
+      },
       spaces: {
         engineering: {
           name: "Engineering",
@@ -240,6 +261,7 @@ describe("InfraFolder.write", () => {
     lock: { organization: "acme", resources: {} },
     write: [
       "deploy.yaml/spaces/engineering/profiles/github/acme",
+      "environments/Python",
       "memory/memory.md",
       "org",
       "spaces/engineering",
@@ -268,6 +290,7 @@ describe("InfraFolder.write", () => {
     expect(result.bindings?.organization).toBe("acme")
     expect(result.spec.org.settings).toEqual(pulled.spec.org.settings)
     expect(result.spec.memory).toEqual(pulled.spec.memory)
+    expect(Schema.encodeSync(Infra.Spec)(result.spec).environments).toEqual(pulled.spec.environments)
     expect(result.spec.spaces["engineering"]).toMatchObject(pulled.spec.spaces.engineering)
     expect(result.spec.spaces["home"]).toMatchObject(pulled.spec.spaces.home)
     expect(await Bun.file(join(root, "spaces/engineering/agents/build/agent.yaml")).text()).toBe(
@@ -305,6 +328,7 @@ describe("InfraFolder.write", () => {
 
   test("removes the spaces, agents, memory files and instructions that pull removes, and keeps every other file", async () => {
     const root = await folder({
+      "environments.yaml": "Old:\n  provider: docker\n  config: {}\n",
       "spaces/old/space.yaml": "name: Old\n",
       "spaces/engineering/agents/lint/agent.yaml": "{}\n",
       "spaces/engineering/schedules.yaml": "{}\n",
@@ -316,13 +340,22 @@ describe("InfraFolder.write", () => {
 
     await InfraFolder.write(root, {
       ...pulled,
-      remove: ["spaces/engineering/agents/lint", "spaces/engineering/memory/stale.md", "spaces/old"],
+      remove: [
+        "environments/Old",
+        "spaces/engineering/agents/lint",
+        "spaces/engineering/memory/stale.md",
+        "spaces/old",
+      ],
     })
 
     const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: root }))).toSorted()
+    expect(Object.keys(Bun.YAML.parse(await Bun.file(join(root, "environments.yaml")).text()) ?? {})).toEqual([
+      "Python",
+    ])
     expect(files).toEqual([
       "README.md",
       "deploy.yaml",
+      "environments.yaml",
       "instructions.md",
       "memory/memory.md",
       "org.yaml",
