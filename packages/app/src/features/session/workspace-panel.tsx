@@ -360,7 +360,7 @@ export function WorkspacePanel(props: {
                     size="icon-sm"
                     aria-label={`Close ${label}`}
                     onClick={() => close(tab.id)}
-                    className="absolute top-1/2 right-1 size-5 -translate-y-1/2 rounded-sm text-muted-foreground opacity-0 transition-[color,background-color,opacity] group-hover/tab:opacity-100 tab-has-active:opacity-100 focus-visible:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
+                    className="absolute top-1/2 right-1 size-5 -translate-y-1/2 rounded-sm text-muted-foreground opacity-0 transition-[color,background-color,opacity] group-hover/tab:opacity-100 group-has-[[data-active]]/tab:opacity-100 focus-visible:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
                   >
                     <IconX />
                   </Button>
